@@ -1,6 +1,5 @@
 import { DaemonClient, type FetchFunction } from './client.js'
 import { type Command, parseCommand, UsageError } from './command.js'
-import { claudeCodeHookSettings } from './hooks.js'
 import {
   DEFAULT_URL,
   formatEventLog,
@@ -11,6 +10,7 @@ import {
   formatWorkspaceRemoved,
   USAGE,
 } from './format.js'
+import { claudeCodeHookSettings } from './hooks.js'
 
 export type CliIo = {
   stdout: (text: string) => void

@@ -134,9 +134,9 @@ describe('planHookEvents', () => {
 describe('hookInputSchema', () => {
   it('needs an event name and drops the fields it does not read', () => {
     expect(hookInputSchema.safeParse({}).success).toBe(false)
-    expect(hookInputSchema.parse({ hook_event_name: 'Stop', tool_input: { command: 'ls' } })).toEqual(
-      { hook_event_name: 'Stop' },
-    )
+    expect(
+      hookInputSchema.parse({ hook_event_name: 'Stop', tool_input: { command: 'ls' } }),
+    ).toEqual({ hook_event_name: 'Stop' })
   })
 })
 

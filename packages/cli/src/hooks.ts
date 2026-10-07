@@ -19,8 +19,6 @@ export function claudeCodeHookSettings(daemonUrl: string) {
   }
 
   return {
-    hooks: Object.fromEntries(
-      CLAUDE_CODE_HOOK_EVENTS.map((event) => [event, [{ hooks: [hook] }]]),
-    ),
+    hooks: Object.fromEntries(CLAUDE_CODE_HOOK_EVENTS.map((event) => [event, [{ hooks: [hook] }]])),
   }
 }
