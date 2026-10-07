@@ -1,32 +1,40 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
+import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
+import { WorkspaceService } from './workspace-service.js'
 
 const TOKEN = 'test-token'
 const authorization = { authorization: `Bearer ${TOKEN}` }
 
-let dataDir: string
+let repo: TestRepo
 let index: TaskIndex
 let app: FastifyInstance
 
 beforeEach(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-server-'))
+  repo = createTestRepo()
+  const dataDir = join(repo.root, 'data')
+  mkdirSync(dataDir)
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
-  app = await buildServer({ service, bus, token: TOKEN })
+  const workspaces = new WorkspaceService({
+    tasks: service,
+    repoDir: repo.dir,
+    worktreesDir: join(repo.root, 'worktrees'),
+  })
+  app = await buildServer({ service, workspaces, bus, token: TOKEN })
 })
 
 afterEach(async () => {
   await app.close()
   index.close()
-  rmSync(dataDir, { recursive: true, force: true })
+  repo.cleanup()
 })
 
 describe('isAuthorized', () => {
@@ -210,5 +218,104 @@ describe('task events', () => {
       payload: { source: 'human', type: 'task.readied' },
     })
     expect(response.statusCode).toBe(404)
+  })
+
+  it.each(['task.created', 'workspace.created', 'workspace.removed'])(
+    'does not let a client send %s',
+    async (type) => {
+      await createTask()
+      const response = await app.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/events',
+        headers: authorization,
+        payload: { source: 'human', type },
+      })
+      expect(response.statusCode).toBe(400)
+    },
+  )
+})
+
+describe('workspaces', () => {
+  async function createTask(): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+  }
+
+  it('creates a workspace and removes it again', async () => {
+    await createTask()
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    expect(created.statusCode).toBe(201)
+    const { workspace, branch } = created.json().task
+    expect(branch).toBe('helmsman/t-0001-fix-the-bug')
+    expect(existsSync(workspace)).toBe(true)
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace?deleteBranch=true',
+      headers: authorization,
+    })
+    expect(removed.statusCode).toBe(200)
+    expect(removed.json()).toMatchObject({
+      branchDeleted: true,
+      task: { workspace: null, branch: null },
+    })
+    expect(existsSync(workspace)).toBe(false)
+  })
+
+  it('answers 409 for a second workspace', async () => {
+    await createTask()
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+
+    expect(again.statusCode).toBe(409)
+    expect(again.json().error).toBe('conflict')
+  })
+
+  it('answers 409 when there is no workspace to remove', async () => {
+    await createTask()
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(409)
+  })
+
+  it('answers 404 for an unknown task', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0099/workspace',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(404)
+  })
+
+  it('answers 400 for a deleteBranch value that is not true or false', async () => {
+    await createTask()
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace?deleteBranch=maybe',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('needs the token', async () => {
+    const response = await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace' })
+    expect(response.statusCode).toBe(401)
   })
 })

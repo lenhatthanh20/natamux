@@ -20,10 +20,16 @@ export const createTaskInputSchema = taskSchema.pick({
   dependsOn: true,
 })
 
+const DAEMON_ONLY_EVENT_TYPES: readonly string[] = [
+  'task.created',
+  'workspace.created',
+  'workspace.removed',
+]
+
 export const applyEventInputSchema = taskEventSchema
   .pick({ source: true, type: true, payload: true })
-  .refine((input) => input.type !== 'task.created', {
-    message: 'task.created is recorded by the daemon, not sent by clients',
+  .refine((input) => !DAEMON_ONLY_EVENT_TYPES.includes(input.type), {
+    message: 'This event is recorded by the daemon, not sent by clients',
     path: ['type'],
   })
 
@@ -33,6 +39,11 @@ export type ApplyEventInput = z.input<typeof applyEventInputSchema>
 export type ApplyEventResult = {
   task: Task
   accepted: boolean
+}
+
+export type WorkspaceChange = {
+  workspace: string | null
+  branch: string | null
 }
 
 export class TaskNotFoundError extends Error {
@@ -123,6 +134,30 @@ export class TaskService {
     this.index.appendEvent(event, accepted)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted })
     return { task: updated, accepted }
+  }
+
+  // Records where the task's working copy lives. Called by the workspace service.
+  recordWorkspace(taskId: string, change: WorkspaceChange): Task {
+    const task = this.getTask(taskId)
+    const event: TaskEvent = {
+      taskId,
+      source: 'system',
+      type: change.workspace === null ? 'workspace.removed' : 'workspace.created',
+      at: this.timestamp(),
+      payload: { workspace: change.workspace ?? task.workspace, branch: change.branch },
+    }
+    const updated: Task = {
+      ...task,
+      workspace: change.workspace,
+      branch: change.branch,
+      updatedAt: event.at,
+    }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.index.appendEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
   }
 
   private timestamp(): string {

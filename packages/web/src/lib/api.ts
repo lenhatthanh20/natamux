@@ -7,6 +7,11 @@ export type SendEventResult = {
   accepted: boolean
 }
 
+export type RemoveWorkspaceResult = {
+  task: Task
+  branchDeleted: boolean
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -95,6 +100,18 @@ export function createApi(
         }),
       )
       return { task: taskSchema.parse(body.task), accepted: body.accepted === true }
+    },
+
+    async createWorkspace(taskId: string): Promise<Task> {
+      const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/workspace`))
+      return taskSchema.parse(body.task)
+    },
+
+    async removeWorkspace(taskId: string): Promise<RemoveWorkspaceResult> {
+      const body = asRecord(
+        await request('DELETE', `/tasks/${encodeURIComponent(taskId)}/workspace?deleteBranch=true`),
+      )
+      return { task: taskSchema.parse(body.task), branchDeleted: body.branchDeleted === true }
     },
   }
 }

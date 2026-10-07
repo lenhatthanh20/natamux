@@ -279,6 +279,71 @@ describe('runCli', () => {
     })
   })
 
+  describe('workspace', () => {
+    const withWorkspace = makeTask({
+      workspace: '/work/.helmsman/worktrees/T-0001',
+      branch: 'helmsman/t-0001-fix-the-dashboard',
+    })
+
+    it('creates a workspace and prints its folder and branch', async () => {
+      const result = await run(['workspace', 'create', 'T-0001'], {
+        handler: () => jsonResponse({ task: withWorkspace }, 201),
+      })
+
+      expect(result.calls[0]).toMatchObject({
+        url: 'http://127.0.0.1:4317/tasks/T-0001/workspace',
+        method: 'POST',
+      })
+      expect(result.stdout).toContain('Created the workspace of T-0001')
+      expect(result.stdout).toContain('helmsman/t-0001-fix-the-dashboard')
+      expect(result.stdout).toContain('/work/.helmsman/worktrees/T-0001')
+    })
+
+    it('removes a workspace and says whether the branch was deleted', async () => {
+      const result = await run(['workspace', 'remove', 'T-0001', '--yes', '--delete-branch'], {
+        handler: () =>
+          jsonResponse({ task: makeTask({ workspace: null, branch: null }), branchDeleted: true }),
+      })
+
+      expect(result.calls[0]).toMatchObject({
+        url: 'http://127.0.0.1:4317/tasks/T-0001/workspace?deleteBranch=true',
+        method: 'DELETE',
+      })
+      expect(result.stdout).toBe('Removed the workspace of T-0001. The branch was deleted.\n')
+    })
+
+    it('says when the branch is kept', async () => {
+      const result = await run(['workspace', 'remove', 'T-0001', '--yes'], {
+        handler: () =>
+          jsonResponse({
+            task: makeTask({ workspace: null, branch: 'helmsman/t-0001-fix' }),
+            branchDeleted: false,
+          }),
+      })
+
+      expect(result.calls[0]?.url).toContain('deleteBranch=false')
+      expect(result.stdout).toContain('The branch helmsman/t-0001-fix is kept.')
+    })
+
+    it('does not call the daemon without --yes', async () => {
+      const result = await run(['workspace', 'remove', 'T-0001'])
+      expect(result.code).toBe(EXIT_USAGE)
+      expect(result.calls).toEqual([])
+    })
+
+    it('shows the reason when git refuses', async () => {
+      const result = await run(['workspace', 'remove', 'T-0001', '--yes'], {
+        handler: () =>
+          jsonResponse(
+            { error: 'conflict', message: 'git worktree failed: contains modified files' },
+            409,
+          ),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toContain('contains modified files')
+    })
+  })
+
   describe('failures', () => {
     it('shows the message of an unknown task', async () => {
       const result = await run(['task', 'show', 'T-0099'], {

@@ -83,6 +83,18 @@ function installDaemon(initial: Task[]) {
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated, accepted: applied.accepted })
     }
+    const workspacePath = /^\/api\/tasks\/(T-\d+)\/workspace(\?.*)?$/.exec(path)
+    const workspaceTask = tasks.find((task) => task.id === workspacePath?.[1])
+    if (workspaceTask && (method === 'POST' || method === 'DELETE')) {
+      const creating = method === 'POST'
+      const updated: Task = {
+        ...workspaceTask,
+        workspace: creating ? `/work/${workspaceTask.id}` : null,
+        branch: creating ? `helmsman/${workspaceTask.id.toLowerCase()}` : null,
+      }
+      tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
+      return creating ? json({ task: updated }, 201) : json({ task: updated, branchDeleted: true })
+    }
     return json({ message: 'Not found' }, 404)
   })
 
@@ -172,6 +184,29 @@ describe('App', () => {
     expect(
       calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
     ).toBe(true)
+  })
+
+  it('creates a workspace from the details and removes it after a second click', async () => {
+    const { calls } = installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Create workspace' }))
+    expect(await within(details).findByText('/work/T-0001')).toBeTruthy()
+
+    await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
+    expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
+    await user.click(within(details).getByRole('button', { name: /Click again/ }))
+
+    expect(await within(details).findByText('Workspace removed.')).toBeTruthy()
+    expect(within(details).queryByText('/work/T-0001')).toBeNull()
+    expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
   })
 
   it('adds a task from the title field', async () => {

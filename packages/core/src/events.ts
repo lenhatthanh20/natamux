@@ -18,6 +18,8 @@ export const EVENT_TYPES = [
   'review.approved',
   'review.changes-requested',
   'state.overridden',
+  'workspace.created',
+  'workspace.removed',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -51,6 +53,13 @@ export type DerivedTaskState = {
   rejected: TaskEvent[]
 }
 
+// Events the daemon records without a change of state.
+export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
+  'task.created',
+  'workspace.created',
+  'workspace.removed',
+]
+
 export type AppliedEvent = {
   state: TaskState
   accepted: boolean
@@ -58,7 +67,7 @@ export type AppliedEvent = {
 
 // An event that does not fit the current state is not accepted and leaves the state as it is.
 export function applyTaskEvent(state: TaskState, event: TaskEvent): AppliedEvent {
-  if (event.type === 'task.created') {
+  if (RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
     return { state, accepted: true }
   }
 

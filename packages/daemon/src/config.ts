@@ -8,6 +8,8 @@ export type DaemonConfig = {
   host: string
   port: number
   dataDir: string
+  repoDir: string
+  worktreesDir: string
   token: string
   tokenWasGenerated: boolean
 }
@@ -20,11 +22,14 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
   }
 
   const configuredToken = env.HELMSMAN_TOKEN?.trim()
+  const dataDir = env.HELMSMAN_DATA_DIR?.trim() || join(cwd, '.helmsman')
 
   return {
     host: LOOPBACK_HOST,
     port,
-    dataDir: env.HELMSMAN_DATA_DIR?.trim() || join(cwd, '.helmsman'),
+    dataDir,
+    repoDir: env.HELMSMAN_REPO_DIR?.trim() || cwd,
+    worktreesDir: env.HELMSMAN_WORKTREES_DIR?.trim() || join(dataDir, 'worktrees'),
     token: configuredToken || randomBytes(24).toString('base64url'),
     tokenWasGenerated: !configuredToken,
   }
