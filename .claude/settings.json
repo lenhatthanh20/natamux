@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "deny": [
+      "Bash(pnpm:*)",
+      "Bash(pnpx:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(bun:*)",
+      "Bash(bunx:*)",
+      "Bash(node:*)",
+      "Bash(deno:*)",
+      "Bash(corepack:*)"
+    ]
+  }
+}
