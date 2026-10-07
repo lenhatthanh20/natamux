@@ -19,7 +19,7 @@ pnpm install
 Set in `pnpm-workspace.yaml`:
 
 - `minimumReleaseAge: 1440` — skip package versions published in the last 24 hours.
-- `strictDepBuilds: true` — fail when a dependency has an unapproved install script. Approve only what is needed with `onlyBuiltDependencies`. Today that is `better-sqlite3`. `esbuild` is in `ignoredBuiltDependencies`.
+- `strictDepBuilds: true` — fail when a dependency has an unapproved install script. Approve only what is needed with `onlyBuiltDependencies`. Nothing is approved today; `esbuild` is in `ignoredBuiltDependencies`. SQLite comes from Node itself (`node:sqlite`), so it needs Node 22.13 or newer.
 
 ## Checks
 

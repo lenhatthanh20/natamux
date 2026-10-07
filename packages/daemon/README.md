@@ -15,7 +15,7 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 ## Storage
 
 - Tasks are markdown files with YAML front matter: `<data dir>/tasks/T-0001.md`. They are the source of truth.
-- `<data dir>/index.sqlite` is a cache of the task files plus the event log. It is rebuilt from the files at start. The event log is not rebuilt.
+- `<data dir>/index.sqlite` (Node's built-in `node:sqlite`, Node 22.13 or newer) is a cache of the task files plus the event log. The task cache is rebuilt from the files at start. The event log is not rebuilt.
 
 ## API
 
