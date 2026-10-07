@@ -14,6 +14,7 @@ Commands:
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
   workspace remove <id>      Remove the worktree of a task (needs --yes)
+  hooks claude-code          Print Claude Code settings that report a task's progress
   help                       Show this help
 
 Options:
@@ -33,8 +34,9 @@ Options:
 Event types: ${SENDABLE_EVENT_TYPES.join(', ')}
 
 Environment:
-  HELMSMAN_TOKEN        Token of the daemon (required)
+  HELMSMAN_TOKEN        Token of the daemon (required, except for hooks claude-code)
   HELMSMAN_URL          Address of the daemon (default: ${DEFAULT_URL})
+  HELMSMAN_TASK_ID      Set it where Claude Code runs: the task its hooks report on
 `
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {

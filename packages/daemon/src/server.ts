@@ -1,8 +1,9 @@
 import { timingSafeEqual } from 'node:crypto'
 import websocket from '@fastify/websocket'
-import { taskIdSchema, taskStateSchema } from '@helmsman/core'
+import { TASK_ID_HEADER, taskIdSchema, taskStateSchema } from '@helmsman/core'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { ClaudeCodeHookService, hookInputSchema } from './claude-code-hooks.js'
 import type { EventBus } from './event-bus.js'
 import { GitError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
@@ -48,6 +49,7 @@ function clientErrorStatus(error: unknown): number | undefined {
 
 export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
+  const hooks = new ClaudeCodeHookService(options.service)
   await app.register(websocket)
 
   // Browsers cannot set headers on a WebSocket, so only /events accepts ?token=.
@@ -107,6 +109,16 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/events', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return options.service.applyEvent(id, request.body)
+  })
+
+  // Claude Code posts here from its hooks. Always answer 200 with an empty object, so a hook
+  // that matches no task or changes nothing never shows up as an error in Claude Code.
+  app.post('/hooks/claude-code', async (request) => {
+    const input = hookInputSchema.parse(request.body)
+    const header = request.headers[TASK_ID_HEADER.toLowerCase()]
+    const taskIdHeader = (Array.isArray(header) ? header[0] : header)?.trim() || undefined
+    hooks.handle(input, taskIdHeader)
+    return {}
   })
 
   app.post('/tasks/:id/workspace', async (request, reply) => {

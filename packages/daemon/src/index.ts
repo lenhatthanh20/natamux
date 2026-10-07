@@ -1,3 +1,4 @@
+export * from './claude-code-hooks.js'
 export * from './config.js'
 export * from './event-bus.js'
 export * from './git.js'
