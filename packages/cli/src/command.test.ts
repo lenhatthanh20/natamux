@@ -166,6 +166,44 @@ describe('parseCommand', () => {
     })
   })
 
+  describe('workspace', () => {
+    it('creates a workspace', () => {
+      expect(parseCommand(['workspace', 'create', 'T-1'])).toEqual({
+        name: 'workspace.create',
+        id: 'T-1',
+        json: false,
+      })
+    })
+
+    it('removes a workspace only with --yes', () => {
+      expect(() => parseCommand(['workspace', 'remove', 'T-1'])).toThrow(/--yes/)
+      expect(parseCommand(['workspace', 'remove', 'T-1', '--yes'])).toEqual({
+        name: 'workspace.remove',
+        id: 'T-1',
+        deleteBranch: false,
+        json: false,
+      })
+    })
+
+    it('reads --delete-branch', () => {
+      expect(
+        parseCommand(['workspace', 'remove', 'T-1', '--yes', '--delete-branch']),
+      ).toMatchObject({ deleteBranch: true })
+    })
+
+    it('needs a valid task id and a known command', () => {
+      expect(() => parseCommand(['workspace', 'create'])).toThrow(/task id is required/)
+      expect(() => parseCommand(['workspace', 'create', 'nope'])).toThrow(/not a task id/)
+      expect(() => parseCommand(['workspace', 'list'])).toThrow(/Unknown workspace command/)
+    })
+  })
+
+  it('does not let a user send an event that only the daemon records', () => {
+    expect(() => parseCommand(['event', 'T-1', 'workspace.created'])).toThrow(
+      /event type must be one of/,
+    )
+  })
+
   describe('events', () => {
     it('shows the event log of a task', () => {
       expect(parseCommand(['events', 'T-1'])).toEqual({

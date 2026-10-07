@@ -6,6 +6,8 @@ import {
   formatEventResult,
   formatTask,
   formatTaskList,
+  formatWorkspaceCreated,
+  formatWorkspaceRemoved,
   USAGE,
 } from './format.js'
 
@@ -91,6 +93,26 @@ async function execute(command: Command, client: DaemonClient, io: CliIo): Promi
         printJson(io, events)
       } else {
         io.stdout(`${formatEventLog(events)}\n`)
+      }
+      return
+    }
+
+    case 'workspace.create': {
+      const task = await client.createWorkspace(command.id)
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`${formatWorkspaceCreated(task)}\n`)
+      }
+      return
+    }
+
+    case 'workspace.remove': {
+      const result = await client.removeWorkspace(command.id, command.deleteBranch)
+      if (command.json) {
+        printJson(io, result)
+      } else {
+        io.stdout(`${formatWorkspaceRemoved(result)}\n`)
       }
       return
     }

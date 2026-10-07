@@ -4,16 +4,20 @@ import { taskIdSchema, taskStateSchema } from '@helmsman/core'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { EventBus } from './event-bus.js'
+import { GitError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
+import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
 
 type ServerOptions = {
   service: TaskService
+  workspaces: WorkspaceService
   bus: EventBus
   token: string
 }
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
+const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 
 export function isAuthorized(provided: string | undefined, token: string): boolean {
   if (provided === undefined) {
@@ -66,6 +70,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof TaskNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
+    if (error instanceof WorkspaceConflictError || error instanceof GitError) {
+      return reply.code(409).send({ error: 'conflict', message: error.message })
+    }
     const status = clientErrorStatus(error)
     if (status !== undefined) {
       const message = error instanceof Error ? error.message : 'Bad request'
@@ -100,6 +107,18 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/events', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return options.service.applyEvent(id, request.body)
+  })
+
+  app.post('/tasks/:id/workspace', async (request, reply) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const task = await options.workspaces.create(id)
+    return reply.code(201).send({ task })
+  })
+
+  app.delete('/tasks/:id/workspace', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const query = removeWorkspaceQuerySchema.parse(request.query)
+    return options.workspaces.remove(id, { deleteBranch: query.deleteBranch === 'true' })
   })
 
   app.get('/events', { websocket: true }, (socket) => {

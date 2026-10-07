@@ -35,6 +35,11 @@ export type SendEventResult = {
   accepted: boolean
 }
 
+export type RemoveWorkspaceResult = {
+  task: Task
+  branchDeleted: boolean
+}
+
 export class ApiError extends Error {
   readonly status: number
 
@@ -140,6 +145,22 @@ export class DaemonClient {
         event: taskEventSchema.parse(stored.event),
       }
     })
+  }
+
+  async createWorkspace(id: string): Promise<Task> {
+    const body = asRecord(
+      await this.request('POST', `${this.taskPath(id)}/workspace`),
+      'created workspace',
+    )
+    return taskSchema.parse(body.task)
+  }
+
+  async removeWorkspace(id: string, deleteBranch: boolean): Promise<RemoveWorkspaceResult> {
+    const body = asRecord(
+      await this.request('DELETE', `${this.taskPath(id)}/workspace?deleteBranch=${deleteBranch}`),
+      'removed workspace',
+    )
+    return { task: taskSchema.parse(body.task), branchDeleted: body.branchDeleted === true }
   }
 
   private taskPath(id: string): string {
