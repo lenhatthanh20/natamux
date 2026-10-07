@@ -11,5 +11,8 @@
     "lint": "biome check packages && pnpm -r --if-present run typecheck",
     "format": "biome check --write packages",
     "test": "pnpm -r --if-present run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15"
   }
 }
