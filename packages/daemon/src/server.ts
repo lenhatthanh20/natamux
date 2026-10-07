@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type { EventBus } from './event-bus.js'
 import { GitError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
-import { type WorkspaceService, WorkspaceConflictError } from './workspace-service.js'
+import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
 
 type ServerOptions = {
   service: TaskService
