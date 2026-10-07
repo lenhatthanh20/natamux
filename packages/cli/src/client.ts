@@ -172,9 +172,10 @@ export class DaemonClient {
     try {
       response = await this.fetchFunction(`${this.baseUrl}${path}`, {
         method,
+        // The daemon refuses a request that says it is JSON but has no body.
         headers: {
           authorization: `Bearer ${this.token}`,
-          'content-type': 'application/json',
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       })

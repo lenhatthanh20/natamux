@@ -145,6 +145,7 @@ describe('runCli', () => {
 
       expect(result.code).toBe(EXIT_OK)
       expect(result.stdout).toBe('Created T-0001  Fix the dashboard\n')
+      expect(result.calls[0]?.headers['content-type']).toBe('application/json')
       expect(result.calls[0]).toMatchObject({
         url: 'http://127.0.0.1:4317/tasks',
         method: 'POST',
@@ -294,6 +295,8 @@ describe('runCli', () => {
         url: 'http://127.0.0.1:4317/tasks/T-0001/workspace',
         method: 'POST',
       })
+      // No body, so no JSON content type: the daemon answers 400 to that.
+      expect(result.calls[0]?.headers['content-type']).toBeUndefined()
       expect(result.stdout).toContain('Created the workspace of T-0001')
       expect(result.stdout).toContain('helmsman/t-0001-fix-the-dashboard')
       expect(result.stdout).toContain('/work/.helmsman/worktrees/T-0001')
@@ -309,6 +312,7 @@ describe('runCli', () => {
         url: 'http://127.0.0.1:4317/tasks/T-0001/workspace?deleteBranch=true',
         method: 'DELETE',
       })
+      expect(result.calls[0]?.headers['content-type']).toBeUndefined()
       expect(result.stdout).toBe('Removed the workspace of T-0001. The branch was deleted.\n')
     })
 
