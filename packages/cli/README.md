@@ -24,6 +24,13 @@ helmsman workspace create T-0001
 helmsman workspace remove T-0001 --yes --delete-branch
 ```
 
+```sh
+export HELMSMAN_TOKEN=<token> HELMSMAN_TASK_ID=T-0001
+claude --settings "$(helmsman hooks claude-code)"
+```
+
+`hooks claude-code` prints Claude Code settings that report the session's progress to the daemon, so the task moves between running, needs input and in review by itself. It needs no token to print and never writes the token into the output. See `docs/claude-code-adapter.md`.
+
 `workspace create` makes a git worktree and a branch for the task. `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has files that are not committed. With `--delete-branch` the branch goes too, but only when it is fully merged.
 
 Add `--json` to any command to print JSON. `helmsman help` lists every option and event type.

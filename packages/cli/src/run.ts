@@ -1,5 +1,6 @@
 import { DaemonClient, type FetchFunction } from './client.js'
 import { type Command, parseCommand, UsageError } from './command.js'
+import { claudeCodeHookSettings } from './hooks.js'
 import {
   DEFAULT_URL,
   formatEventLog,
@@ -136,6 +137,13 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
 
   if (command.name === 'help') {
     io.stdout(USAGE)
+    return EXIT_OK
+  }
+
+  // This command only prints settings, so it needs no token and does not call the daemon.
+  if (command.name === 'hooks.claude-code') {
+    const settings = claudeCodeHookSettings(env.HELMSMAN_URL?.trim() || DEFAULT_URL)
+    printJson(io, settings)
     return EXIT_OK
   }
 
