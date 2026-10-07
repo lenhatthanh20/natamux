@@ -87,8 +87,9 @@ agent: claude-code
 branch: helmsman/t-0042-fix-timezone
 workspace: <path>
 pr: null
-depends_on: []
-created: 2026-10-08T09:00:00Z
+dependsOn: []
+createdAt: 2026-10-08T09:00:00Z
+updatedAt: 2026-10-08T09:00:00Z
 ---
 Task description in markdown. Run notes are appended below.
 ```
