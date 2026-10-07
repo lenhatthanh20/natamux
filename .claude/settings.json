@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "default",
     "deny": [
       "Bash(pnpm:*)",
       "Bash(pnpx:*)",
@@ -12,6 +11,10 @@
       "Bash(node:*)",
       "Bash(deno:*)",
       "Bash(corepack:*)"
-    ]
+    ],
+    "defaultMode": "default"
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
   }
 }
