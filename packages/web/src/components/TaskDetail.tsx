@@ -44,7 +44,11 @@ export function TaskDetail({ task, now, busy, feedback, onAction, onClose }: Tas
           <p className="font-mono text-muted">{task.id}</p>
           <h2 className="text-base font-semibold break-words">{task.title}</h2>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-muted hover:text-ink">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md px-2 py-1 text-muted hover:text-ink"
+        >
           Close
         </button>
       </header>
@@ -85,7 +89,9 @@ export function TaskDetail({ task, now, busy, feedback, onAction, onClose }: Tas
           <span className="font-mono">{task.branch ?? '-'}</span>
         </Field>
         <Field label="Labels">{task.labels.length > 0 ? task.labels.join(', ') : '-'}</Field>
-        <Field label="Depends on">{task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}</Field>
+        <Field label="Depends on">
+          {task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}
+        </Field>
         <Field label="Pull request">{task.pr ?? '-'}</Field>
         <Field label="Updated">{formatAge(task.updatedAt, now)}</Field>
       </dl>

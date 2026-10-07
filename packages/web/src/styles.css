@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 :root {
   color-scheme: light dark;
@@ -39,8 +39,8 @@
   --color-band-ink: var(--band-ink);
   --color-band-muted: var(--band-muted);
   --color-signal: var(--signal);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 
 body {
@@ -71,88 +71,88 @@ body {
 }
 
 .state-chip::before {
-  content: '';
+  content: "";
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
   background: currentColor;
 }
 
-[data-state='draft'] {
+[data-state="draft"] {
   --chip-bg: #e4e8ed;
   --chip-fg: #566678;
 }
-[data-state='draft']::before {
+[data-state="draft"]::before {
   background: transparent;
   box-shadow: inset 0 0 0 2px currentColor;
 }
-[data-state='ready'] {
+[data-state="ready"] {
   --chip-bg: #d7eef5;
   --chip-fg: #07546f;
 }
-[data-state='running'] {
+[data-state="running"] {
   --chip-bg: #d9f2e1;
   --chip-fg: #12622f;
 }
-[data-state='running']::before {
+[data-state="running"]::before {
   animation: running-pulse 2s ease-in-out infinite;
 }
-[data-state='needs-input'] {
+[data-state="needs-input"] {
   --chip-bg: #fde9bd;
   --chip-fg: #7a4300;
 }
-[data-state='review'] {
+[data-state="review"] {
   --chip-bg: #dbe6fb;
   --chip-fg: #1a3fa0;
 }
-[data-state='blocked'] {
+[data-state="blocked"] {
   --chip-bg: #ebe3fa;
   --chip-fg: #5a2aa8;
 }
-[data-state='failed'] {
+[data-state="failed"] {
   --chip-bg: #fbdcd8;
   --chip-fg: #a02318;
 }
-[data-state='done'] {
+[data-state="done"] {
   --chip-bg: #e4e8ed;
   --chip-fg: #566678;
 }
-[data-state='cancelled'] {
+[data-state="cancelled"] {
   --chip-bg: #e4e8ed;
   --chip-fg: #7b8896;
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-state='draft'],
-  [data-state='done'] {
+  [data-state="draft"],
+  [data-state="done"] {
     --chip-bg: #1d2e40;
     --chip-fg: #9fb2c5;
   }
-  [data-state='cancelled'] {
+  [data-state="cancelled"] {
     --chip-bg: #1d2e40;
     --chip-fg: #7f93a6;
   }
-  [data-state='ready'] {
+  [data-state="ready"] {
     --chip-bg: #0f3445;
     --chip-fg: #7fd0ec;
   }
-  [data-state='running'] {
+  [data-state="running"] {
     --chip-bg: #123a22;
     --chip-fg: #7fdc9f;
   }
-  [data-state='needs-input'] {
+  [data-state="needs-input"] {
     --chip-bg: #3d2c0c;
     --chip-fg: #f5b83d;
   }
-  [data-state='review'] {
+  [data-state="review"] {
     --chip-bg: #1a2c57;
     --chip-fg: #9db9ff;
   }
-  [data-state='blocked'] {
+  [data-state="blocked"] {
     --chip-bg: #2d1f52;
     --chip-fg: #c4a8ff;
   }
-  [data-state='failed'] {
+  [data-state="failed"] {
     --chip-bg: #4a1a16;
     --chip-fg: #ff9d92;
   }
@@ -169,7 +169,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-state='running']::before {
+  [data-state="running"]::before {
     animation: none;
   }
 }
