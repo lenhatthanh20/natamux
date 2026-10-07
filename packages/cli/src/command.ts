@@ -3,11 +3,17 @@ import {
   EVENT_SOURCES,
   EVENT_TYPES,
   type EventType,
+  RECORD_ONLY_EVENT_TYPES,
   TASK_PRIORITIES,
   TASK_STATES,
   type TaskState,
   taskIdSchema,
 } from '@helmsman/core'
+
+// The daemon records some events itself, so a client cannot send them.
+export const SENDABLE_EVENT_TYPES = EVENT_TYPES.filter(
+  (type) => !RECORD_ONLY_EVENT_TYPES.includes(type),
+)
 
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 export type EventSource = (typeof EVENT_SOURCES)[number]
@@ -35,6 +41,8 @@ export type Command =
       json: boolean
     }
   | { name: 'event.list'; id: string; json: boolean }
+  | { name: 'workspace.create'; id: string; json: boolean }
+  | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
 export class UsageError extends Error {
   constructor(message: string) {
@@ -90,6 +98,8 @@ function parseOptions(argv: readonly string[]) {
         state: { type: 'string' },
         source: { type: 'string' },
         payload: { type: 'string' },
+        yes: { type: 'boolean' },
+        'delete-branch': { type: 'boolean' },
       },
     })
   } catch (error) {
@@ -157,7 +167,7 @@ export function parseCommand(argv: readonly string[]): Command {
     return {
       name: 'event.send',
       id,
-      type: oneOf(type, EVENT_TYPES, 'The event type'),
+      type: oneOf(type, SENDABLE_EVENT_TYPES, 'The event type'),
       source: oneOf(values.source ?? 'human', EVENT_SOURCES, '--source'),
       payload: values.payload === undefined ? {} : payloadObject(values.payload),
       json,
@@ -167,6 +177,23 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'events') {
     noExtraArguments(rest)
     return { name: 'event.list', id: taskId(second), json }
+  }
+
+  if (group === 'workspace') {
+    if (second !== 'create' && second !== 'remove') {
+      throw new UsageError(`Unknown workspace command "${second ?? ''}". Use create or remove`)
+    }
+    const id = taskId(rest[0])
+    noExtraArguments(rest.slice(1))
+    if (second === 'create') {
+      return { name: 'workspace.create', id, json }
+    }
+    if (values.yes !== true) {
+      throw new UsageError(
+        'Removing a workspace deletes its worktree folder. Add --yes to confirm.',
+      )
+    }
+    return { name: 'workspace.remove', id, deleteBranch: values['delete-branch'] === true, json }
   }
 
   throw new UsageError(`Unknown command "${group}"`)

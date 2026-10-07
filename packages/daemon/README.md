@@ -11,6 +11,8 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 | `HELMSMAN_PORT` | `4317` | Port, bound to `127.0.0.1` only |
 | `HELMSMAN_TOKEN` | random per run, printed at start | Required on every request |
 | `HELMSMAN_DATA_DIR` | `<cwd>/.helmsman` | Task files and the SQLite index |
+| `HELMSMAN_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
+| `HELMSMAN_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
 
 ## Storage
 
@@ -29,6 +31,8 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /tasks/:id` | One task |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
+| `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. Answers 409 if the task has one, is done or cancelled, or git refuses |
+| `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Git refuses when it has files that are not committed (409). The branch is deleted only when it is fully merged. Returns `{ task, branchDeleted }` |
 | `GET /events` (WebSocket) | Live task changes. Use `?token=<token>` because browsers cannot set headers |
 
 An event that does not fit the task's current state is recorded with `accepted: false` and does not change the task.

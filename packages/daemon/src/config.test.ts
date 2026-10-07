@@ -40,6 +40,23 @@ describe('loadConfig', () => {
     expect(config.dataDir).toBe('/work/repo/.helmsman')
   })
 
+  it('uses the working directory as the repository and keeps worktrees in the data directory', () => {
+    const config = loadConfig({}, '/work/repo')
+    expect(config.repoDir).toBe('/work/repo')
+    expect(config.worktreesDir).toBe('/work/repo/.helmsman/worktrees')
+  })
+
+  it('follows a data directory that is set, and lets the repository and worktrees be set', () => {
+    const moved = loadConfig({ HELMSMAN_DATA_DIR: '/data' }, '/work/repo')
+    expect(moved.worktreesDir).toBe('/data/worktrees')
+
+    const explicit = loadConfig(
+      { HELMSMAN_REPO_DIR: '/other/repo', HELMSMAN_WORKTREES_DIR: '/trees' },
+      '/work/repo',
+    )
+    expect(explicit).toMatchObject({ repoDir: '/other/repo', worktreesDir: '/trees' })
+  })
+
   it.each(['abc', '1.5', '-1', '70000'])('rejects the port %j', (port) => {
     expect(() => loadConfig({ HELMSMAN_PORT: port }, '/work/repo')).toThrow(/HELMSMAN_PORT/)
   })

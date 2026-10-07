@@ -82,6 +82,26 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  const workspaceMutation = useMutation({
+    mutationFn: async ({ taskId, action }: { taskId: string; action: 'create' | 'remove' }) => {
+      if (action === 'create') {
+        return { task: await api.createWorkspace(taskId), message: null }
+      }
+      const { task, branchDeleted } = await api.removeWorkspace(taskId)
+      return {
+        task,
+        message: branchDeleted
+          ? 'Workspace removed.'
+          : 'Workspace removed. The branch is kept because it has commits that are not merged.',
+      }
+    },
+    onSuccess: ({ task, message }) => {
+      mergeTask(task)
+      setFeedback(message)
+    },
+    onError: (error) => setFeedback(error.message),
+  })
+
   const visibleTasks = useMemo(
     () => filterTasks(tasks, stateFilter, search),
     [tasks, stateFilter, search],
@@ -256,9 +276,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               key={selectedTask.id}
               task={selectedTask}
               now={now}
-              busy={eventMutation.isPending}
+              busy={eventMutation.isPending || workspaceMutation.isPending}
               feedback={feedback}
               onAction={(action) => runAction(selectedTask, action)}
+              onCreateWorkspace={() => {
+                setFeedback(null)
+                workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create' })
+              }}
+              onRemoveWorkspace={() => {
+                setFeedback(null)
+                workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
+              }}
               onClose={() => setDetailOpen(false)}
             />
           )}

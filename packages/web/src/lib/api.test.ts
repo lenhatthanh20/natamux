@@ -77,6 +77,28 @@ describe('createApi', () => {
     })
   })
 
+  it('creates a workspace for a task', async () => {
+    const withWorkspace = { ...task, workspace: '/work/T-0001', branch: 'helmsman/t-0001-example' }
+    const { calls, fetchFunction } = fakeFetch(() => json({ task: withWorkspace }, 201))
+
+    const created = await createApi('secret', fetchFunction).createWorkspace('T-0001')
+
+    expect(created).toEqual(withWorkspace)
+    expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001/workspace', method: 'POST' })
+  })
+
+  it('removes a workspace and reports whether the branch was deleted', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task, branchDeleted: true }))
+
+    const result = await createApi('secret', fetchFunction).removeWorkspace('T-0001')
+
+    expect(result).toEqual({ task, branchDeleted: true })
+    expect(calls[0]).toMatchObject({
+      url: '/api/tasks/T-0001/workspace?deleteBranch=true',
+      method: 'DELETE',
+    })
+  })
+
   it('throws an ApiError with the status when the daemon rejects the token', async () => {
     const { fetchFunction } = fakeFetch(() => json({ error: 'unauthorized' }, 401))
 
