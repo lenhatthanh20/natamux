@@ -1,0 +1,188 @@
+# Helmsman — Feature Plan
+
+Status: draft v0.1. Helmsman is an independent product. Other tools are used as reference only; no code, text or structure is copied.
+
+## 1. Vision
+
+Helmsman is an Agent Development Environment (ADE) built around one question: **what is every agent doing right now, and which one needs me?**
+
+- Run many coding agents in parallel, each in its own isolated workspace.
+- Manage the work as tasks, not as terminal tabs.
+- Show the state of every task in one glance on a dashboard.
+
+Tagline: *The next generation of an ADE.*
+
+## 2. Principles
+
+- Task first. A task owns its workspace, its agent runs, its diff and its pull request.
+- Status is a fact, not a guess. It comes from agent events (hooks, exit codes, git, CI), never from parsing terminal text when an event exists.
+- Agent-agnostic. Any CLI agent can run. Claude Code gets the deepest support first.
+- Local first. Data lives on the user's machine, in plain files where possible.
+- Keyboard first, fast to open, fast to read.
+- Small surface. Few features done well beats a long list.
+
+## 3. Reference research
+
+Findings come from third-party comparison articles and project pages. They are not verified against each product. Re-check before relying on any row.
+
+| Tool | Notable features | What Helmsman takes from it |
+|---|---|---|
+| Orca (stablyai/orca, MIT) | Parallel worktrees; many CLI agents; GitHub and Linear tasks; SSH worktrees; CLI that agents can drive; supervised orchestration (run, task, dispatch, worker_done, escalation); plugin API with panels and events; mobile companion | Agents can drive the app through a CLI; worktree-per-task; plugin panels; status events |
+| Conductor | Strong UX; worktree per agent; diff-first review; one-click PR; CI checks inline; closed source, Mac only | Diff-first review; one-click PR; polished first run |
+| Superset | Any CLI agent; works on main branch too; built-in browser; terminal multiplexing; one-click PR; open source | Not forcing a worktree for every task; stable performance |
+| Emdash | 30+ agents; local or remote worktrees; task intake from GitHub, Linear, Jira and others; reusable prompts and skills; shared MCP config; scheduled runs | Task intake from trackers; reusable prompts; scheduled runs |
+| Vibe Kanban | Kanban board; issue to workspace; inline diff comments the agent can act on; rebase conflict help; PR with generated description. The company shut down in April 2026; the project continues in the community | Board view; review comments that go back to the agent |
+| Claude Squad | Terminal app; tmux plus worktrees; agent-agnostic | A terminal-only mode is possible later |
+| Cursor (Agents Window) | Up to 8 parallel agents; local, worktree, cloud and SSH; background agents | A single window for all agent runs |
+| Warp (Oz) | Terminal-first; cloud orchestrator for background work; agents can attach to live PTY sessions | Optional remote and background runs (later) |
+| Zed | Tabbed parallel agent threads | Fast switching without losing scroll or context |
+| Sculptor | Container isolation; pairing mode | Optional container isolation (later) |
+| Nimbalyst (was Crystal) | Parallel sessions plus visual editing of markdown and mockups. Crystal was deprecated in February 2026 | Rich markdown view for task notes |
+
+Lesson from the market: several free ADEs stopped or shut down. Helmsman must have a clear reason to exist and a clear way to be paid for (see section 9).
+
+## 4. Differentiators
+
+1. **Dashboard built for glancing.** A "needs me" queue first, everything else second.
+2. **Task model with approval gates.** A task can pause for a human at chosen points (plan approved, review, ready to merge).
+3. **Event-based status.** Reliable state from Claude Code hooks and git, not screen scraping.
+4. **Plain-file tasks.** Tasks are readable files in the repo, so they work with git, grep and any editor.
+
+Open question: is the combination in 1–4 strong enough on its own? Validate with 5–10 target users before building past the MVP.
+
+## 5. Feature list
+
+Tags: **MVP** = first usable release. **v1** = first public release. **Later** = after feedback.
+
+### 5.1 Workspaces and agents
+
+| Feature | Tag |
+|---|---|
+| Add a git repo; list its branches | MVP |
+| Create a workspace for a task (git worktree, branch named from the task) | MVP |
+| Option: run a task in the main checkout, no worktree | v1 |
+| Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters) | MVP |
+| Embedded terminal per workspace (multiple tabs) | MVP |
+| Setup script per repo (install deps, copy env files) when a workspace is created | v1 |
+| Port allocation per workspace so dev servers do not clash | v1 |
+| Clean up a workspace: confirm first, then remove worktree and branch | MVP |
+| Fan-out: one prompt to several agents, compare results, keep the winner | v1 |
+| SSH and remote workspaces | Later |
+| Container isolation | Later |
+| Scheduled and background runs | Later |
+
+### 5.2 Task management
+
+Scope: tasks only. No sprints, no teams, no rosters, no diaries.
+
+| Feature | Tag |
+|---|---|
+| Task fields: id, title, description, state, priority, labels, agent, workspace, branch, PR link, created and updated time | MVP |
+| States: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` | MVP |
+| Create a task from the app, the CLI, or an agent | MVP |
+| Subtasks (one level) | v1 |
+| Dependencies between tasks (a task waits until others are `done`) | v1 |
+| Approval gates: a task can require a human decision before it moves on | v1 |
+| Task notes as markdown, with a run log | MVP |
+| Reusable task templates and prompts | v1 |
+| Import tasks from GitHub issues | v1 |
+| Import from Linear, Jira and others | Later |
+| Search and filter by state, label, agent | MVP |
+
+State changes come from events first (agent finished, agent asked a question, CI failed, PR merged). A human can always override a state.
+
+### 5.3 Dashboard (task status at a glance)
+
+The dashboard is the home screen.
+
+Goals:
+- Answer "what needs me?" in under 3 seconds.
+- Update live, with no refresh.
+- Work in the desktop app and in a plain browser tab.
+
+| Element | Tag |
+|---|---|
+| **Needs me** strip at the top: tasks in `needs-input`, `review`, `failed`, `blocked`, sorted by waiting time | MVP |
+| Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status | MVP |
+| Counts per state in a header bar; click to filter | MVP |
+| Board view (columns by state), toggle with the table | v1 |
+| One-line live summary per running task (what the agent is doing now) | v1 |
+| Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
+| Desktop and system notifications when a task needs me or finishes | MVP |
+| Compact "wall" mode for a second monitor | Later |
+| Mobile-friendly read-only page (reachable on the local network) | Later |
+| History and stats (tasks per day, time in each state) | Later |
+
+### 5.4 Review and delivery
+
+| Feature | Tag |
+|---|---|
+| Diff view per task (unified and split) | MVP |
+| Inline comments that are sent back to the agent as a follow-up prompt | v1 |
+| Commit from the app with a message draft | v1 |
+| One-click push and PR creation (GitHub first) | v1 |
+| CI status shown on the task | v1 |
+| Rebase or merge conflict help | Later |
+| Built-in browser to preview the running app | Later |
+
+### 5.5 Agent integration
+
+| Feature | Tag |
+|---|---|
+| Adapter interface: how to start, how to send a prompt, how to read status | MVP |
+| Claude Code adapter using its hooks for status events | MVP |
+| Generic adapter for any CLI (status from process and output idle time) | v1 |
+| Helmsman CLI that agents can call: create task, update state, ask a question, report done | MVP |
+| Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
+| Account and usage display per agent | Later |
+
+### 5.6 Extensibility and sharing
+
+| Feature | Tag |
+|---|---|
+| Plugin API: panels, commands, event subscriptions | Later |
+| Share task templates and skills as files | Later |
+| Team sync of tasks | Later |
+
+## 6. Non-goals
+
+- Sprint planning, retrospectives, team rosters, diaries.
+- A code editor that competes with VS Code or Cursor.
+- A knowledge or memory base. Many tools already do this, and it is not the focus.
+- Hosting or reselling model compute. Users bring their own agent subscriptions.
+
+## 7. Release plan
+
+1. **MVP**: daemon, CLI, Claude Code adapter, worktree tasks, terminal, task states, dashboard (table plus needs-me strip), diff view, notifications. Runs in a browser tab, no desktop shell.
+2. **v1**: desktop app (Electron, macOS and Windows), board view, approval gates, dependencies, GitHub import and PR, inline review comments, templates, generic adapter, Claude Code plugin.
+3. **Later**: remote workspaces, scheduling, plugin API, mobile read-only page, team sync.
+
+## 8. Success checks for the MVP
+
+- Start 3 agents on 3 tasks from one repo in under 2 minutes.
+- The dashboard shows the right state for each within 2 seconds of a change.
+- A user can name which task needs them from the dashboard alone.
+- Closing and reopening the app restores all tasks and states.
+
+## 9. Product and business notes
+
+- License and pricing are not decided. Options: open source core with a paid team tier, or source-available. Decide before the first public release.
+- Keep the name, code and text independent from any employer or other product. Do not use the names Orca or Atlas.
+- Orca is MIT licensed. If any Orca code is ever reused, keep its copyright and license notice.
+- Check the author's employment contract on outside work before publishing. This is a personal responsibility, not a design item.
+
+## 10. Open questions
+
+- Which agent CLIs work well on Windows? Check before listing them as supported.
+- Is the Claude Code hook event set rich enough for every state? Verify before the adapter design is fixed.
+- Should gates be per task or per template?
+- Which tracker comes first after GitHub?
+
+## Sources
+
+- Orca: https://github.com/stablyai/orca
+- ADE comparisons: https://superset.sh/compare/best-agent-development-environment
+- Open source agent workspaces: https://nimbalyst.com/blog/open-source-agent-workspace-alternatives-2026/
+- Cursor Agents Window: https://cursor.com/changelog/3-0
+- Vibe Kanban: https://vibecodinghub.org/tools/vibe-kanban
+- Parallel agent tools overview: https://dev.to/stravukarl/best-tools-for-managing-parallel-ai-coding-agents-in-2026-14l8
