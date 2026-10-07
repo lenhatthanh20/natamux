@@ -6,3 +6,6 @@ coverage/
 .DS_Store
 *.sqlite
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+/.helmsman/
