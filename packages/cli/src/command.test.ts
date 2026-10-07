@@ -198,6 +198,18 @@ describe('parseCommand', () => {
     })
   })
 
+  describe('hooks', () => {
+    it('prints the Claude Code settings', () => {
+      expect(parseCommand(['hooks', 'claude-code'])).toEqual({ name: 'hooks.claude-code' })
+    })
+
+    it('rejects an unknown tool and extra arguments', () => {
+      expect(() => parseCommand(['hooks'])).toThrow(/Unknown hooks command/)
+      expect(() => parseCommand(['hooks', 'cursor'])).toThrow(/Unknown hooks command/)
+      expect(() => parseCommand(['hooks', 'claude-code', 'extra'])).toThrow(/Unexpected argument/)
+    })
+  })
+
   it('does not let a user send an event that only the daemon records', () => {
     expect(() => parseCommand(['event', 'T-1', 'workspace.created'])).toThrow(
       /event type must be one of/,

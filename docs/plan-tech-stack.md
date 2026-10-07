@@ -65,10 +65,9 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 
 Status must come from events, not screen scraping.
 
-- **Claude Code adapter:** register hooks (for example session start, notification, stop) that call `helmsman event …`. The daemon maps events to task states (`running`, `needs-input`, `review`).
-- **Generic adapter:** use process exit code and output-idle time. Mark states as "estimated" in the UI.
+- **Native adapters:** each agent's hooks are turned into four signals (prompt sent, waiting for the user, turn ended, failed) by a small adapter. Claude Code's `http` hooks post straight to the daemon (`POST /hooks/claude-code`); agents that can only run a command use `helmsman hook <agent>`, which forwards the hook's JSON. See `agent-adapters.md` for what each agent offers and the design, and `claude-code-adapter.md` for the Claude Code mapping.
+- **Generic adapter:** use process exit code, output-idle time and terminal bell. Mark states as "estimated" in the UI.
 - **Git and CI:** watch the worktree for diff size; poll the GitHub API for PR and CI state.
-- **Verify before building:** confirm the exact hook names and payloads in the current Claude Code docs. They are not fixed in this plan.
 
 Event shape (draft): `{ taskId, source, type, at, payload }`. The task file holds the current state. Each event is applied to that state and logged in SQLite, accepted or not. The log is append-only and is not rebuilt from the files.
 

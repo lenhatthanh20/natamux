@@ -16,7 +16,7 @@ Tagline: *The next generation of an ADE.*
 
 - Task first. A task owns its workspace, its agent runs, its diff and its pull request.
 - Status is a fact, not a guess. It comes from agent events (hooks, exit codes, git, CI), never from parsing terminal text when an event exists.
-- Agent-agnostic. Any CLI agent can run. Claude Code gets the deepest support first.
+- Agent-agnostic. Helmsman is for the public, so it works with the agents people already use: Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, OpenCode and any other command line agent. Exact states come from each agent's hooks; an agent without hooks is followed through its terminal. See `agent-adapters.md`.
 - Local first. Data lives on the user's machine, in plain files where possible.
 - Keyboard first, fast to open, fast to read.
 - Small surface. Few features done well beats a long list.
@@ -129,9 +129,13 @@ Goals:
 
 | Feature | Tag |
 |---|---|
-| Adapter interface: how to start, how to send a prompt, how to read status | MVP |
+| Adapter interface: one function per agent that turns its hook input into a signal (prompt sent, waiting for the user, turn ended, failed) | MVP |
 | Claude Code adapter using its hooks for status events | MVP |
-| Generic adapter for any CLI (status from process and output idle time) | v1 |
+| `helmsman hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
+| Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks | v1 |
+| Generic adapter for any CLI (status from process and output idle time, terminal bell) | v1 |
+| OpenCode plugin | v1 |
+| Agent Client Protocol (ACP) client | Later |
 | Helmsman CLI that agents can call: create task, update state, ask a question, report done | MVP |
 | Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
 | Account and usage display per agent | Later |

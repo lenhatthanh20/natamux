@@ -41,6 +41,7 @@ export type Command =
       json: boolean
     }
   | { name: 'event.list'; id: string; json: boolean }
+  | { name: 'hooks.claude-code' }
   | { name: 'workspace.create'; id: string; json: boolean }
   | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
@@ -177,6 +178,14 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'events') {
     noExtraArguments(rest)
     return { name: 'event.list', id: taskId(second), json }
+  }
+
+  if (group === 'hooks') {
+    if (second !== 'claude-code') {
+      throw new UsageError(`Unknown hooks command "${second ?? ''}". Use claude-code`)
+    }
+    noExtraArguments(rest)
+    return { name: 'hooks.claude-code' }
   }
 
   if (group === 'workspace') {
