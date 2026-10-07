@@ -56,7 +56,11 @@ describe('createApi', () => {
     const created = await createApi('secret', fetchFunction).createTask('Example')
 
     expect(created).toEqual(task)
-    expect(calls[0]).toMatchObject({ url: '/api/tasks', method: 'POST', body: { title: 'Example' } })
+    expect(calls[0]).toMatchObject({
+      url: '/api/tasks',
+      method: 'POST',
+      body: { title: 'Example' },
+    })
     expect(calls[0]?.headers.get('content-type')).toBe('application/json')
   })
 
@@ -89,9 +93,9 @@ describe('createApi', () => {
       json({ error: 'not_found', message: 'Task T-0099 does not exist' }, 404),
     )
 
-    await expect(createApi('secret', fetchFunction).sendEvent('T-0099', 'task.readied')).rejects.toThrow(
-      'Task T-0099 does not exist',
-    )
+    await expect(
+      createApi('secret', fetchFunction).sendEvent('T-0099', 'task.readied'),
+    ).rejects.toThrow('Task T-0099 does not exist')
   })
 
   it('says when the daemon cannot be reached', async () => {

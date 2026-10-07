@@ -4,13 +4,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { createApi, isUnauthorized } from '../lib/api'
-import {
-  actionsFor,
-  filterTasks,
-  needsMeTasks,
-  type TaskAction,
-  upsertTask,
-} from '../lib/tasks'
+import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { useViewStore } from '../lib/view-store'
 import { NeedsMeStrip } from './NeedsMeStrip'
 import { StateFilter } from './StateFilter'
@@ -81,7 +75,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       api.sendEvent(taskId, type),
     onSuccess: ({ task, accepted }) => {
       mergeTask(task)
-      setFeedback(accepted ? null : `The daemon did not accept that change. ${task.id} stays ${task.state}.`)
+      setFeedback(
+        accepted ? null : `The daemon did not accept that change. ${task.id} stays ${task.state}.`,
+      )
     },
     onError: (error) => setFeedback(error.message),
   })
@@ -216,7 +212,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             className="text-muted"
             title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
           >
-            {liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting' : 'Reconnecting'}
+            {liveStatus === 'live'
+              ? 'Live'
+              : liveStatus === 'connecting'
+                ? 'Connecting'
+                : 'Reconnecting'}
           </span>
           <button type="button" onClick={onSignOut} className="text-muted hover:text-ink">
             Sign out

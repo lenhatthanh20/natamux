@@ -162,12 +162,16 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('heading', { name: '1 task needs you' })
 
-    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }))
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: /Approve/ }))
 
     expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
-    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events')).toBe(true)
+    expect(
+      calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
+    ).toBe(true)
   })
 
   it('adds a task from the title field', async () => {
@@ -215,6 +219,8 @@ describe('App', () => {
       })
     })
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: '2 tasks need you' })).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: '2 tasks need you' })).toBeTruthy(),
+    )
   })
 })
