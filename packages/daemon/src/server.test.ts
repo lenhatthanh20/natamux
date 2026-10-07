@@ -360,7 +360,10 @@ describe('Claude Code hooks', () => {
   it('moves the task named in the header, and answers with an empty object', async () => {
     await createTask()
 
-    const started = await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-helmsman-task': 'T-0001' })
+    const started = await post(
+      { hook_event_name: 'UserPromptSubmit' },
+      { 'x-helmsman-task': 'T-0001' },
+    )
     expect(started.statusCode).toBe(200)
     expect(started.json()).toEqual({})
     expect(await stateOf('T-0001')).toBe('running')
