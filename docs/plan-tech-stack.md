@@ -49,7 +49,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 | Terminal UI | xterm.js | Standard in-browser terminal |
 | Git | Shell out to the `git` binary | Worktree support is complete there; no heavy library |
 | Storage: tasks | Markdown files with YAML front matter in `.helmsman/tasks/` of each repo | Human-readable, diffable, git-friendly |
-| Storage: runtime | SQLite (`better-sqlite3`, or Node built-in `node:sqlite` if stable enough) | Fast queries, event log, index of the task files |
+| Storage: runtime | SQLite through Node's built-in `node:sqlite` (Node 22.13 or newer) | Fast queries, event log, index of the task files. No native package to install. Marked "active development" in Node 22, so keep all SQL in one file (`task-index.ts`) |
 | Index rule | The SQLite index is a cache that can be rebuilt from the files | No lock-in, easy recovery |
 | UI framework | React + Vite | Large ecosystem, fast dev loop |
 | UI components | Tailwind CSS + shadcn/ui primitives | Quick to build a clean, consistent dashboard |
@@ -70,7 +70,7 @@ Status must come from events, not screen scraping.
 - **Git and CI:** watch the worktree for diff size; poll the GitHub API for PR and CI state.
 - **Verify before building:** confirm the exact hook names and payloads in the current Claude Code docs. They are not fixed in this plan.
 
-Event shape (draft): `{ taskId, source, type, at, payload }`. Events are append-only in SQLite; the current state is derived from them.
+Event shape (draft): `{ taskId, source, type, at, payload }`. The task file holds the current state. Each event is applied to that state and logged in SQLite, accepted or not. The log is append-only and is not rebuilt from the files.
 
 ## 5. Data model (draft)
 
@@ -188,6 +188,5 @@ helmsman/
 ## 11. Open decisions
 
 - CodeMirror or Monaco for diffs.
-- `better-sqlite3` or `node:sqlite`.
 - License: open source core or source-available (see `plan-features.md`, section 9).
 - Whether to reuse any part of Orca (MIT). Default: write from scratch and use it for ideas only.

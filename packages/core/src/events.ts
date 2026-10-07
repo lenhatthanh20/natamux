@@ -51,31 +51,39 @@ export type DerivedTaskState = {
   rejected: TaskEvent[]
 }
 
-// Events are applied in the given order. An event that does not fit the
-// current state is skipped and returned in `rejected`, never thrown.
+export type AppliedEvent = {
+  state: TaskState
+  accepted: boolean
+}
+
+// An event that does not fit the current state is not accepted and leaves the state as it is.
+export function applyTaskEvent(state: TaskState, event: TaskEvent): AppliedEvent {
+  if (event.type === 'task.created') {
+    return { state, accepted: true }
+  }
+
+  if (event.type === 'state.overridden') {
+    const target = taskStateSchema.safeParse(event.payload.to)
+    return target.success ? { state: target.data, accepted: true } : { state, accepted: false }
+  }
+
+  const target = TARGET_STATE[event.type]
+  if (target !== undefined && canTransition(state, target)) {
+    return { state: target, accepted: true }
+  }
+  return { state, accepted: false }
+}
+
+// Events are applied in the given order. Events that are not accepted are
+// returned in `rejected`, never thrown.
 export function deriveTaskState(events: readonly TaskEvent[]): DerivedTaskState {
   let state: TaskState = 'draft'
   const rejected: TaskEvent[] = []
 
   for (const event of events) {
-    if (event.type === 'task.created') {
-      continue
-    }
-
-    if (event.type === 'state.overridden') {
-      const target = taskStateSchema.safeParse(event.payload.to)
-      if (target.success) {
-        state = target.data
-      } else {
-        rejected.push(event)
-      }
-      continue
-    }
-
-    const target = TARGET_STATE[event.type]
-    if (target !== undefined && canTransition(state, target)) {
-      state = target
-    } else {
+    const applied = applyTaskEvent(state, event)
+    state = applied.state
+    if (!applied.accepted) {
       rejected.push(event)
     }
   }
