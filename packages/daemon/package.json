@@ -19,6 +19,16 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@helmsman/core": "workspace:*"
+    "@fastify/websocket": "^11.3.3",
+    "@helmsman/core": "workspace:*",
+    "fastify": "^5.12.5",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
   }
 }

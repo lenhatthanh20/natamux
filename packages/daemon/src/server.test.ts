@@ -76,7 +76,11 @@ describe('tasks', () => {
     expect(created.statusCode).toBe(201)
     expect(created.json().task).toMatchObject({ id: 'T-0001', title: 'Fix the dashboard' })
 
-    const fetched = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    const fetched = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
     expect(fetched.statusCode).toBe(200)
     expect(fetched.json().task.id).toBe('T-0001')
 
@@ -101,7 +105,11 @@ describe('tasks', () => {
   })
 
   it('returns 404 for an unknown task', async () => {
-    const response = await app.inject({ method: 'GET', url: '/tasks/T-0099', headers: authorization })
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0099',
+      headers: authorization,
+    })
     expect(response.statusCode).toBe(404)
   })
 
@@ -142,7 +150,11 @@ describe('task events', () => {
     expect(applied.statusCode).toBe(200)
     expect(applied.json()).toMatchObject({ accepted: true, task: { state: 'ready' } })
 
-    const ready = await app.inject({ method: 'GET', url: '/tasks?state=ready', headers: authorization })
+    const ready = await app.inject({
+      method: 'GET',
+      url: '/tasks?state=ready',
+      headers: authorization,
+    })
     expect(ready.json().tasks).toHaveLength(1)
   })
 
@@ -174,10 +186,9 @@ describe('task events', () => {
       headers: authorization,
     })
 
-    expect(response.json().events.map((entry: { event: { type: string } }) => entry.event.type)).toEqual([
-      'task.created',
-      'task.readied',
-    ])
+    expect(
+      response.json().events.map((entry: { event: { type: string } }) => entry.event.type),
+    ).toEqual(['task.created', 'task.readied'])
   })
 
   it('rejects an unknown event type with 400', async () => {
