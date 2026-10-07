@@ -20,7 +20,11 @@ helmsman task show T-0001
 helmsman event T-0001 task.readied
 helmsman event T-0001 agent.asked --source agent --payload '{"question":"Which branch?"}'
 helmsman events T-0001
+helmsman workspace create T-0001
+helmsman workspace remove T-0001 --yes --delete-branch
 ```
+
+`workspace create` makes a git worktree and a branch for the task. `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has files that are not committed. With `--delete-branch` the branch goes too, but only when it is fully merged.
 
 Add `--json` to any command to print JSON. `helmsman help` lists every option and event type.
 

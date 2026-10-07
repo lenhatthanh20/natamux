@@ -22,6 +22,7 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 - Counts per state. Click one to filter the table.
 - The task table, newest update first, updating live over the daemon's WebSocket.
 - Details of one task with the actions that fit its state (approve, request changes, retry, unblock, cancel). Cancel asks twice.
+- A workspace field: create a git worktree and a branch for the task, or remove it (asks twice).
 
 ## Keyboard
 

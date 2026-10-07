@@ -9,6 +9,8 @@ type TaskDetailProps = {
   busy: boolean
   feedback: string | null
   onAction: (action: TaskAction) => void
+  onCreateWorkspace: () => void
+  onRemoveWorkspace: () => void
   onClose: () => void
 }
 
@@ -21,9 +23,29 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-export function TaskDetail({ task, now, busy, feedback, onAction, onClose }: TaskDetailProps) {
+export function TaskDetail({
+  task,
+  now,
+  busy,
+  feedback,
+  onAction,
+  onCreateWorkspace,
+  onRemoveWorkspace,
+  onClose,
+}: TaskDetailProps) {
   const [confirming, setConfirming] = useState(false)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const actions = actionsFor(task.state)
+  const isFinished = task.state === 'done' || task.state === 'cancelled'
+
+  const removeWorkspace = () => {
+    if (!confirmingRemove) {
+      setConfirmingRemove(true)
+      return
+    }
+    setConfirmingRemove(false)
+    onRemoveWorkspace()
+  }
 
   const runAction = (action: TaskAction) => {
     if (action.confirm && !confirming) {
@@ -87,6 +109,46 @@ export function TaskDetail({ task, now, busy, feedback, onAction, onClose }: Tas
         <Field label="Agent">{task.agent ?? '-'}</Field>
         <Field label="Branch">
           <span className="font-mono">{task.branch ?? '-'}</span>
+        </Field>
+        <Field label="Workspace">
+          {task.workspace === null ? (
+            <span className="flex flex-wrap items-center gap-2">
+              <span>-</span>
+              {!isFinished && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onCreateWorkspace}
+                  className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
+                >
+                  Create workspace
+                </button>
+              )}
+            </span>
+          ) : (
+            <span className="flex flex-col items-start gap-2">
+              <span className="font-mono break-all">{task.workspace}</span>
+              <span className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={removeWorkspace}
+                  className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
+                >
+                  {confirmingRemove ? 'Delete the worktree folder? Click again' : 'Remove workspace'}
+                </button>
+                {confirmingRemove && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingRemove(false)}
+                    className="px-2 text-muted"
+                  >
+                    Keep workspace
+                  </button>
+                )}
+              </span>
+            </span>
+          )}
         </Field>
         <Field label="Labels">{task.labels.length > 0 ? task.labels.join(', ') : '-'}</Field>
         <Field label="Depends on">
