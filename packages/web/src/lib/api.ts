@@ -103,9 +103,7 @@ export function createApi(
     },
 
     async createWorkspace(taskId: string): Promise<Task> {
-      const body = asRecord(
-        await request('POST', `/tasks/${encodeURIComponent(taskId)}/workspace`),
-      )
+      const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/workspace`))
       return taskSchema.parse(body.task)
     },
 

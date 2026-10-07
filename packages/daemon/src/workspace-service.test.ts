@@ -57,7 +57,9 @@ describe('slugify and branchNameFor', () => {
   })
 
   it('builds a branch name from the task id and title', () => {
-    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe('helmsman/t-0042-fix-the-bug')
+    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe(
+      'helmsman/t-0042-fix-the-bug',
+    )
   })
 })
 
@@ -113,7 +115,10 @@ describe('create', () => {
   it('lets only one of two requests at the same time through', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
 
-    const results = await Promise.allSettled([workspaces.create(task.id), workspaces.create(task.id)])
+    const results = await Promise.allSettled([
+      workspaces.create(task.id),
+      workspaces.create(task.id),
+    ])
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     const failure = results.find((result) => result.status === 'rejected')
