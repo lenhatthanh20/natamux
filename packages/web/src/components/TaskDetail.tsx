@@ -135,7 +135,9 @@ export function TaskDetail({
                   onClick={removeWorkspace}
                   className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
                 >
-                  {confirmingRemove ? 'Delete the worktree folder? Click again' : 'Remove workspace'}
+                  {confirmingRemove
+                    ? 'Delete the worktree folder? Click again'
+                    : 'Remove workspace'}
                 </button>
                 {confirmingRemove && (
                   <button
