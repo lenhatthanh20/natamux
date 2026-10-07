@@ -1,4 +1,10 @@
-import { type Task, type TaskEvent, type TaskState, taskEventSchema, taskSchema } from '@helmsman/core'
+import {
+  type Task,
+  type TaskEvent,
+  type TaskState,
+  taskEventSchema,
+  taskSchema,
+} from '@helmsman/core'
 import type { TaskPriority } from './command.js'
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
