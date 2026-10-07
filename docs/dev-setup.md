@@ -33,7 +33,10 @@ Run `build` first: packages import each other through their built `dist` folders
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: frozen install, then `build`, `lint` and `test`, in that order. The root scripts use `--if-present`, so a package without one of them is skipped.
 
+## Run the daemon and the dashboard
+
+See `packages/web/README.md`. The dev container forwards port 5173 (the dashboard). The daemon stays on `127.0.0.1:4317` inside the codespace and is reached through the dashboard's `/api` proxy.
+
 ## Not set up yet
 
 - License: undecided. See `docs/plan-features.md`, section 9.
-- Forwarded ports: add when the daemon and dashboard exist.
