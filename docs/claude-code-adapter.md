@@ -52,6 +52,10 @@ claude --settings "$(helmsman hooks claude-code)"
 
 `helmsman hooks claude-code` prints the settings JSON: one `http` hook for each event above, pointing at `$HELMSMAN_URL` (default `http://127.0.0.1:4317`). The token and the task id are never written into it.
 
+## Known gap
+
+`Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Planned: a "no sign of life" rule for running tasks. See `agent-adapters.md`.
+
 ## Not verified
 
 - Whether `--settings` adds these hooks to the ones from other settings files, or replaces them. Check before relying on it.

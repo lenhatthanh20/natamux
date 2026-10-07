@@ -59,14 +59,38 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 Same for every agent: the `HELMSMAN_TASK_ID` environment variable first, then the workspace that holds the agent's working directory (`cwd`, or one of Cursor's `workspace_roots`).
 
+## How other ADEs do it
+
+Read from their open source code on 2026-10-08 (GitHub). Names of files are in the repositories named below.
+
+| ADE | How it learns the state of an agent | Agents it covers |
+|---|---|---|
+| **Orca** (`stablyai/orca`) | A local hook server fed by hooks it installs itself at startup. States: `working`, `blocked`, `waiting`, `done`. A second source: the terminal title (OSC), with per-agent rules and spinner glyphs. It also guesses an interrupt, because an agent can miss its "cancelled" hook. | Many (Claude Code, Codex, Gemini, Cursor, OpenCode, Pi, Droid, Grok and more) |
+| **Superset** (`superset-sh/superset`) | One shared `notify.sh` script, registered as a hook in each agent's **global** config (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, ...). A PATH wrapper per agent sets `SUPERSET_AGENT_ID`. The script posts to a local URL from `SUPERSET_HOST_AGENT_HOOK_URL`. | Claude Code, Codex, Cursor, Gemini, Copilot, Droid, Mastra, Grok, Kimi, Vibe, OpenCode |
+| **Emdash** (`generalaction/emdash`) | Events `start`, `stop`, `notification`, `error` with a source of `hook` or `input` (the user typed in the terminal). Statuses `idle`, `working`, `awaiting-input`, `error`, `completed`. Notification types are the same as Claude Code's. | Many |
+| **Claude Squad** (`smtg-ai/claude-squad`) | Reads the tmux pane. A change in a hash of the pane text means "working". A fixed text per agent means "waiting" (for Claude Code `No, and tell Claude what to do differently`, for Aider `(Y)es/(N)o/(D)on't ask again`). It presses Enter on the trust prompt by itself. | Claude Code, Aider, Codex, Gemini, others |
+| **Vibe Kanban** (`BloopAI/vibe-kanban`) | Does not use the terminal screen. One "executor" per agent runs it in a machine-readable mode: Claude Code with `--output-format=stream-json`, `--input-format=stream-json` and `--permission-prompt-tool=stdio`; Codex through its app-server JSON-RPC; an ACP executor for others. It has its own approval service for tool use and questions. | Claude Code, Codex, Copilot, Cursor, Droid, Gemini, OpenCode, Qwen, Amp, ACP |
+
+So there are three real approaches: hooks (Orca, Superset, Emdash), reading the screen (Claude Squad, and Orca's title rules as a second source), and driving the agent through its structured protocol (Vibe Kanban).
+
+### What to take from them
+
+- **Hooks are the main source.** Three of five do it, and it matches the plan.
+- **Guard every hook with an environment variable.** Superset registers hooks in global agent settings and wrote down the result (`HOOKS_INVESTIGATION.md`): for Droid, Codex and others the hook ran in every session on the machine, outside Superset too, with a visible hook line in the agent's UI. Their fix is a command that does nothing unless a Superset variable is set. Helmsman: `helmsman hook <agent>` must exit 0 at once when `HELMSMAN_TOKEN` is not set, and Helmsman should prefer per-session settings (`claude --settings`, or settings that Helmsman passes when it starts the agent) over editing global files. If a user chooses a global install, offer an uninstall.
+- **An interrupted run leaves no event.** Orca guesses an interrupt because agents miss their cancel hook. Claude Code's docs say `Stop` does not fire when the user interrupts. So a task can stay "running" after Esc. Codex has an `Interrupt` hook. Helmsman needs a "no sign of life" rule for running tasks (for example: no hook for some minutes, shown as stale on the dashboard), and to use `Interrupt` where it exists.
+- **The terminal is a useful second source.** Orca reads terminal titles, Claude Squad reads the screen text. Both are fragile: a text change in the agent breaks them. Use them only as the fallback tier, marked as estimated, and prefer the generic signals (output going quiet, bell, OSC 9) over the exact words of one agent.
+- **Driving the agent through a protocol is exact but costly.** Vibe Kanban needs a separate executor for each agent and owns the whole interface, with no native terminal. Helmsman should not write one per agent. ACP is the one shared protocol; use it later.
+- **Orca's size is a warning.** Its hook code alone is dozens of files (pane identity, freshness, races, remote hosts). Keep Helmsman to the four signals and add detail only when a real case needs it.
+
 ## Order of work
 
-1. Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `helmsman hook <agent>` and `POST /hooks/:agent`. Claude Code keeps working.
-2. Add Codex (its input is the same shape, so it is the cheapest second adapter).
+1. Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `helmsman hook <agent>` (guarded: it does nothing without `HELMSMAN_TOKEN`) and `POST /hooks/:agent`. Claude Code keeps working.
+2. Add Codex (its input is the same shape, so it is the cheapest second adapter). Use its `Interrupt` hook.
 3. Add Gemini CLI.
-4. Add Cursor and Copilot CLI after reading their payloads in full.
-5. The agent runner with Tier 1 detection.
-6. OpenCode plugin, then ACP.
+4. Add a "no sign of life" rule for running tasks, shown as stale on the dashboard.
+5. Add Cursor and Copilot CLI after reading their payloads in full.
+6. The agent runner with Tier 1 detection (output quiet, bell, OSC 9).
+7. OpenCode plugin, then ACP.
 
 Each adapter needs a real session to check it. Until then it is tested only against fake input.
 
