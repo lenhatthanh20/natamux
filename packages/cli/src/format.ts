@@ -1,4 +1,4 @@
-import { EVENT_SOURCES, EVENT_TYPES, type Task, TASK_PRIORITIES, TASK_STATES } from '@helmsman/core'
+import { EVENT_SOURCES, EVENT_TYPES, TASK_PRIORITIES, TASK_STATES, type Task } from '@helmsman/core'
 import type { SendEventResult, StoredEvent } from './client.js'
 
 export const DEFAULT_URL = 'http://127.0.0.1:4317'
