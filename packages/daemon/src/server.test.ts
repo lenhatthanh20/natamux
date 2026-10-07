@@ -319,3 +319,81 @@ describe('workspaces', () => {
     expect(response.statusCode).toBe(401)
   })
 })
+
+describe('Claude Code hooks', () => {
+  async function createTask(): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+  }
+
+  async function stateOf(taskId: string): Promise<string> {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tasks/${taskId}`,
+      headers: authorization,
+    })
+    return response.json().task.state
+  }
+
+  function post(payload: unknown, headers: Record<string, string> = {}) {
+    return app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, ...headers },
+      payload: payload as Record<string, unknown>,
+    })
+  }
+
+  it('needs the token', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      payload: { hook_event_name: 'Stop' },
+    })
+    expect(response.statusCode).toBe(401)
+  })
+
+  it('moves the task named in the header, and answers with an empty object', async () => {
+    await createTask()
+
+    const started = await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-helmsman-task': 'T-0001' })
+    expect(started.statusCode).toBe(200)
+    expect(started.json()).toEqual({})
+    expect(await stateOf('T-0001')).toBe('running')
+
+    await post({ hook_event_name: 'Stop' }, { 'x-helmsman-task': 'T-0001' })
+    expect(await stateOf('T-0001')).toBe('review')
+  })
+
+  it('finds the task by the workspace of the working directory', async () => {
+    await createTask()
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const workspace: string = created.json().task.workspace
+
+    await post({ hook_event_name: 'UserPromptSubmit', cwd: `${workspace}/src` })
+
+    expect(await stateOf('T-0001')).toBe('running')
+  })
+
+  it('answers 200 and changes nothing for a directory that belongs to no task', async () => {
+    await createTask()
+
+    const response = await post({ hook_event_name: 'UserPromptSubmit', cwd: '/elsewhere' })
+
+    expect(response.statusCode).toBe(200)
+    expect(await stateOf('T-0001')).toBe('draft')
+  })
+
+  it('answers 400 when the event name is missing', async () => {
+    const response = await post({ cwd: '/elsewhere' })
+    expect(response.statusCode).toBe(400)
+  })
+})
