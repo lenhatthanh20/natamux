@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { deriveTaskState, type EventType, type TaskEvent, taskEventSchema } from './events.js'
+import {
+  applyTaskEvent,
+  deriveTaskState,
+  type EventType,
+  type TaskEvent,
+  taskEventSchema,
+} from './events.js'
 
 function event(type: EventType, payload: Record<string, unknown> = {}): TaskEvent {
   return { taskId: 'T-1', source: 'system', type, at: '2026-10-08T09:00:00Z', payload }
@@ -79,6 +85,43 @@ describe('deriveTaskState', () => {
   it('rejects an override with no target state', () => {
     const bad = event('state.overridden')
     expect(deriveTaskState([bad]).rejected).toEqual([bad])
+  })
+})
+
+describe('applyTaskEvent', () => {
+  it('accepts an event that fits the state and returns the new state', () => {
+    expect(applyTaskEvent('ready', event('agent.started'))).toEqual({
+      state: 'running',
+      accepted: true,
+    })
+  })
+
+  it('keeps the state when the event does not fit', () => {
+    expect(applyTaskEvent('ready', event('agent.finished'))).toEqual({
+      state: 'ready',
+      accepted: false,
+    })
+  })
+
+  it('accepts task.created without changing the state', () => {
+    expect(applyTaskEvent('draft', event('task.created'))).toEqual({
+      state: 'draft',
+      accepted: true,
+    })
+  })
+
+  it('accepts an override to any valid state', () => {
+    expect(applyTaskEvent('done', event('state.overridden', { to: 'running' }))).toEqual({
+      state: 'running',
+      accepted: true,
+    })
+  })
+
+  it('does not accept an override to an unknown state', () => {
+    expect(applyTaskEvent('done', event('state.overridden', { to: 'nope' }))).toEqual({
+      state: 'done',
+      accepted: false,
+    })
   })
 })
 
