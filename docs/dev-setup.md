@@ -21,8 +21,11 @@ Set in `pnpm-workspace.yaml`:
 - `minimumReleaseAge: 1440` — skip package versions published in the last 24 hours.
 - `strictDepBuilds: true` — fail when a dependency has an unapproved install script. Approve only what is needed (for example `node-pty`) with `onlyBuiltDependencies`.
 
+## CI
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: frozen install, then `lint`, `build` and `test`. The root scripts use `--if-present`, so a package without one of them is skipped.
+
 ## Not set up yet
 
-- CI: add after the first package with dependencies and a lockfile exist.
 - License: undecided. See `docs/plan-features.md`, section 9.
 - Forwarded ports: add when the daemon and dashboard exist.
