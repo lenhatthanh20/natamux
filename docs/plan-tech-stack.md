@@ -55,7 +55,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 | UI components | Tailwind CSS + shadcn/ui primitives | Quick to build a clean, consistent dashboard |
 | UI state | TanStack Query for server data; Zustand for local UI state | Small and well understood |
 | Diff view | CodeMirror 6 merge view, or Monaco diff editor (**Decide**) | Both render split and unified diffs |
-| CLI | A small TypeScript CLI (`commander` or similar) calling the daemon | Agents can use it from any shell |
+| CLI | A small TypeScript CLI using Node's built-in `parseArgs` and `fetch`, no extra package | Agents can use it from any shell |
 | Lint and format | Biome | One fast tool instead of two |
 | Unit tests | Vitest | Same toolchain as Vite |
 | UI and end-to-end tests | Playwright | Drives the real dashboard |
