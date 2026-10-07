@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite'
 import {
   type Task,
   type TaskEvent,
@@ -5,7 +6,6 @@ import {
   taskEventSchema,
   taskSchema,
 } from '@helmsman/core'
-import Database from 'better-sqlite3'
 
 const SCHEMA = `
 create table if not exists tasks_index (
@@ -59,11 +59,11 @@ type EventRow = {
 
 // The task files are the source of truth. This index is a cache of them plus the event log.
 export class TaskIndex {
-  private readonly db: Database.Database
+  private readonly db: DatabaseSync
 
   constructor(path: string) {
-    this.db = new Database(path)
-    this.db.pragma('journal_mode = WAL')
+    this.db = new DatabaseSync(path)
+    this.db.exec('pragma journal_mode = wal')
     this.db.exec(SCHEMA)
   }
 
@@ -83,13 +83,17 @@ export class TaskIndex {
   }
 
   replaceAllTasks(tasks: readonly Task[]): void {
-    const replace = this.db.transaction((rows: readonly Task[]) => {
+    this.db.exec('begin')
+    try {
       this.db.exec('delete from tasks_index')
-      for (const task of rows) {
+      for (const task of tasks) {
         this.upsertTask(task)
       }
-    })
-    replace(tasks)
+      this.db.exec('commit')
+    } catch (error) {
+      this.db.exec('rollback')
+      throw error
+    }
   }
 
   listTasks(state?: TaskState): Task[] {
