@@ -380,7 +380,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
                   }}
                   onViewChanges={() => openChanges(selectedTask.id)}
-              onStartAgent={() => agentMutation.mutate(selectedTask)}
+                  onStartAgent={() => agentMutation.mutate(selectedTask)}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
