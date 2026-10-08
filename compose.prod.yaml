@@ -54,6 +54,13 @@ services:
     image: helmsman-web:local
     ports:
       - "${HELMSMAN_BIND:-127.0.0.1}:${HELMSMAN_PORT:-8080}:8080"
+    # `up --wait` returns only when nginx answers.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
       daemon:
         condition: service_healthy

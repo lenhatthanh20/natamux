@@ -105,10 +105,10 @@ Goals:
 | **Needs me** strip at the top: tasks in `needs-input`, `review`, `failed`, `blocked`, sorted by waiting time | MVP |
 | A running task with no sign of life for 10 minutes is marked "quiet" and listed in the strip | MVP |
 | Details of a task: what happened, from whom and when (activity list) | MVP |
-| Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done except elapsed time | MVP |
+| Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done; elapsed time is the age of the task | MVP |
 | Counts per state in a header bar; click to filter | MVP |
 | Board view (columns by state), toggle with the table. Done; the choice is kept per browser | v1 |
-| One-line live summary per running task (what the agent is doing now) | v1 |
+| One-line live summary per running task (what the agent is doing now). Done for Claude Code: the tool it is about to run (`PreToolUse`), such as "Edit src/a.ts", under the title of a running task | v1 |
 | Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
 | Desktop and system notifications when a task needs me or finishes. Done in the browser: a notification when a task starts to wait while the tab is in the background, and the count in the tab title | MVP |
 | Compact "wall" mode for a second monitor | Later |
@@ -120,7 +120,7 @@ Goals:
 | Feature | Tag |
 |---|---|
 | Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base | MVP |
-| Inline comments that are sent back to the agent as a follow-up prompt. Done per file: a comment under the diff is pasted into the agent's terminal as its next prompt. Next: comments on a line | v1 |
+| Inline comments that are sent back to the agent as a follow-up prompt. Done: a comment under the diff, about the file and the line the cursor is on, is pasted into the agent's terminal as its next prompt | v1 |
 | Commit from the app with a message draft. Done: commit all changes with a message. Next: a drafted message | v1 |
 | One-click push and PR creation (GitHub first). Done: push, and a pull request through `gh` whose address is kept on the task | v1 |
 | CI status shown on the task. Done: the daemon reads each open pull request with `gh pr view` once a minute; the table shows its state and checks, and a merged pull request finishes a task in review | v1 |
