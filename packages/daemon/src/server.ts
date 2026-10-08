@@ -205,6 +205,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.code(201).send({ task: options.templates.createTask(id, request.body) })
   })
 
+  // What the agent of each task does now, from its last hook.
+  app.get('/activity', async () => ({ activity: hooks.activity() }))
+
   app.get('/repos', async () => ({ repos: options.repos.list() }))
 
   app.post('/repos', async (request, reply) => {

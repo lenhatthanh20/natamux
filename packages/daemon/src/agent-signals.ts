@@ -10,6 +10,8 @@ export type NormalizedHook = {
   signal: AgentSignal
   cwd?: string
   details: Record<string, unknown>
+  // One line on what the agent does now, such as "Edit src/a.ts". Shown on the dashboard.
+  summary?: string
 }
 
 // One adapter per agent. `normalize` throws a ZodError for input that is not a hook of this agent,

@@ -10,6 +10,8 @@ type TaskTableProps = {
   diffStats?: Readonly<Record<string, DiffStat>>
   // Every task, to tell whether a task still waits for others. The rows can be filtered.
   allTasks?: readonly Task[]
+  // What the agent of each task does now.
+  activity?: Readonly<Record<string, string>>
   onSelect: (id: string) => void
 }
 
@@ -39,6 +41,7 @@ export function TaskTable({
   selectedId,
   diffStats = {},
   allTasks = tasks,
+  activity = {},
   onSelect,
 }: TaskTableProps) {
   if (tasks.length === 0) {
@@ -51,7 +54,7 @@ export function TaskTable({
 
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-surface">
-      <table className="w-full min-w-[48rem] border-collapse text-left">
+      <table className="w-full min-w-[52rem] border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-muted">
             <th className="px-3 py-2 font-medium">Task</th>
@@ -60,6 +63,7 @@ export function TaskTable({
             <th className="px-3 py-2 font-medium">Branch</th>
             <th className="px-3 py-2 text-right font-medium">Changes</th>
             <th className="px-3 py-2 font-medium">Pull request</th>
+            <th className="px-3 py-2 text-right font-medium">Age</th>
             <th className="px-3 py-2 text-right font-medium">Last activity</th>
           </tr>
         </thead>
@@ -74,7 +78,7 @@ export function TaskTable({
                 <button
                   type="button"
                   onClick={() => onSelect(task.id)}
-                  className="flex w-full min-w-0 items-baseline gap-3 text-left"
+                  className="flex w-full min-w-0 flex-wrap items-baseline gap-x-3 text-left"
                 >
                   <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
@@ -84,6 +88,11 @@ export function TaskTable({
                   )}
                   {task.parentId !== null && (
                     <span className="shrink-0 text-muted">part of {task.parentId}</span>
+                  )}
+                  {task.state === 'running' && activity[task.id] !== undefined && (
+                    <span className="w-full truncate pl-[4.75rem] font-mono text-xs text-muted">
+                      {activity[task.id]}
+                    </span>
                   )}
                 </button>
               </td>
@@ -117,6 +126,9 @@ export function TaskTable({
                     )}
                   </span>
                 )}
+              </td>
+              <td className="px-3 py-2 text-right text-muted" title={task.createdAt}>
+                {formatAge(task.createdAt, now).replace(' ago', '')}
               </td>
               <td className="px-3 py-2 text-right text-muted">{formatAge(task.updatedAt, now)}</td>
             </tr>

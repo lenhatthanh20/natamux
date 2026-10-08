@@ -54,6 +54,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /templates` | Task templates, sorted by name: `{ templates: [{ id, name, title, description, priority, labels }] }`. Each is a markdown file in `<data dir>/templates` |
 | `POST /templates` | Body `{ name, title, description?, priority?, labels? }`. Saves a template; its id comes from the name, and a template with the same name is replaced. Answers 201 |
 | `POST /templates/:id/tasks` | Body `{ title }`. A new draft task with the template's notes, priority and labels. Answers 201, or 404 for an unknown template |
+| `GET /activity` | What the agent of each task does now, from its last hook: `{ activity: { 'T-0001': { text: 'Edit src/a.ts', at } } }`. Kept in memory; a task drops out when its agent's turn ends or it asks the user |
 | `GET /diffstats` | The size of the work of every task with a workspace: `{ stats: { 'T-0001': { files, added, removed } } }`, counted from where the branch left the branch of the main checkout, uncommitted changes included. Files git does not track yet are not counted |
 | `GET /github/issues` | Open issues of the repository, from `gh issue list` (at most 100): `{ issues: [{ number, title, body, url, labels, taskId }] }`. `taskId` names the task made from the issue, or is null |
 | `POST /github/issues/import` | Body `{ numbers }`. Makes a draft task from each open issue that was not imported yet: its title, its body plus `Imported from <url>` as notes, its labels. Returns `{ tasks }` |
