@@ -24,6 +24,7 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
     },
     write: (data) => pty.write(data),
     resize: (cols, rows) => pty.resize(cols, rows),
-    kill: () => pty.kill(),
+    // Windows has no signals; the shell is ended outright there.
+    kill: (signal) => pty.kill(process.platform === 'win32' ? undefined : signal),
   }
 }

@@ -1,3 +1,4 @@
+import type { ISearchOptions } from '@xterm/addon-search'
 import type { ITheme } from '@xterm/xterm'
 import type { ResolvedTheme } from './theme'
 
@@ -58,3 +59,24 @@ export function terminalTheme(theme: ResolvedTheme): ITheme {
 export const MIN_CONTRAST_RATIO = 4.5
 export const TERMINAL_FONT_SIZE = 13
 export const TERMINAL_LINE_HEIGHT = 1.3
+
+type FindDecorations = NonNullable<ISearchOptions['decorations']>
+
+// The search addon only counts matches when it draws them, and wants #RRGGBB colors.
+export function findDecorations(theme: ResolvedTheme): FindDecorations {
+  return theme === 'dark'
+    ? {
+        matchBackground: '#4d4220',
+        matchOverviewRuler: '#e8c15a',
+        activeMatchBackground: '#8a6a12',
+        activeMatchBorder: '#f5d47a',
+        activeMatchColorOverviewRuler: '#f5d47a',
+      }
+    : {
+        matchBackground: '#f6e7a8',
+        matchOverviewRuler: '#8a5a00',
+        activeMatchBackground: '#f0c040',
+        activeMatchBorder: '#8a5a00',
+        activeMatchColorOverviewRuler: '#8a5a00',
+      }
+}

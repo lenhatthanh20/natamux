@@ -1,13 +1,25 @@
 import { type DiffStat, portRange, type Task } from '@helmsman/core'
-import { ArrowLeft, Ban, Copy, FileDiff, FolderMinus, Pencil, Play, Save, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  Ban,
+  Copy,
+  CopyPlus,
+  FileDiff,
+  FolderMinus,
+  Pencil,
+  Play,
+  RotateCcw,
+  Save,
+  X,
+} from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import type { DetailsMode } from '../lib/layout-mode'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
-import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
-import { toast } from '../lib/toasts'
+import { copyText } from '../lib/clipboard'
+import { actionsFor, agentAction, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { CompareTries } from './CompareTries'
-import { FanOutForm } from './FanOutForm'
+import { FanOutDialog } from './FanOutForm'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
 import { Subtasks } from './Subtasks'
@@ -68,13 +80,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function copy(text: string, what: string) {
-  navigator.clipboard
-    ?.writeText(text)
-    .then(() => toast(`Copied the ${what}.`))
-    .catch(() => toast(`Could not copy the ${what}.`, 'error'))
-}
-
 export function TaskDetail({
   task,
   now,
@@ -102,12 +107,15 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
-  const [asking, setAsking] = useState<'cancel' | 'remove' | null>(null)
+  const [asking, setAsking] = useState<'cancel' | 'remove' | 'tries' | null>(null)
   const actions = actionsFor(task.state)
   const stateActions = actions.filter((action) => !action.confirm)
   const cancelAction = actions.find((action) => action.confirm)
   const isFinished = task.state === 'done' || task.state === 'cancelled'
   const ports = portRange(task.id)
+  const agentButton = agentAction(task)
+  // Copies of a task that works now would run beside its own agent.
+  const canFanOut = onFanOut !== undefined && !isFinished && agentButton !== null
 
   return (
     <aside
@@ -130,6 +138,9 @@ export function TaskDetail({
             ...(onSaveTemplate === undefined
               ? []
               : [{ label: 'Save as template', icon: Save, onSelect: onSaveTemplate }]),
+            ...(canFanOut
+              ? [{ label: 'Run more tries...', icon: CopyPlus, onSelect: () => setAsking('tries') }]
+              : []),
             ...(cancelAction === undefined
               ? []
               : [
@@ -208,22 +219,37 @@ export function TaskDetail({
         {!isFinished && (
           <Section title="Agent">
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={busy || waitingFor.length > 0}
-                onClick={onStartAgent}
-                data-tip="Creates the workspace when there is none, then starts Claude Code in its terminal"
-                className={button(task.workspace === null ? 'primary' : 'secondary')}
-              >
-                <Play size={13} aria-hidden="true" />
-                Start Claude Code
-              </button>
-              <span className="text-muted">{task.agent ?? 'No agent yet'}</span>
+              {agentButton !== null && (
+                <button
+                  type="button"
+                  disabled={busy || waitingFor.length > 0}
+                  onClick={onStartAgent}
+                  data-tip={
+                    agentButton === 'restart'
+                      ? 'Starts Claude Code again in the terminal of the workspace'
+                      : 'Creates the workspace when there is none, then starts Claude Code in its terminal'
+                  }
+                  className={button(task.workspace === null ? 'primary' : 'secondary')}
+                >
+                  {agentButton === 'restart' ? (
+                    <RotateCcw size={13} aria-hidden="true" />
+                  ) : (
+                    <Play size={13} aria-hidden="true" />
+                  )}
+                  {agentButton === 'restart' ? 'Restart agent' : 'Start agent'}
+                </button>
+              )}
+              <span className="text-muted">
+                {task.agent === null
+                  ? 'No agent yet'
+                  : agentButton === null
+                    ? `${task.agent} is working here`
+                    : task.agent}
+              </span>
             </div>
             {waitingFor.length > 0 && (
               <p className="text-muted">Waits for {waitingFor.join(', ')} to be done.</p>
             )}
-            {onFanOut !== undefined && <FanOutForm busy={busy} onFanOut={onFanOut} />}
           </Section>
         )}
 
@@ -275,7 +301,7 @@ export function TaskDetail({
                       label="Copy the folder path"
                       icon={Copy}
                       size="xs"
-                      onClick={() => copy(task.workspace ?? '', 'folder path')}
+                      onClick={() => copyText(task.workspace ?? '', 'the folder path')}
                       className="-my-1"
                     />
                   </span>
@@ -380,6 +406,9 @@ export function TaskDetail({
         <Timeline taskId={task.id} updatedAt={task.updatedAt} loadEvents={loadEvents} />
       </div>
 
+      {asking === 'tries' && onFanOut !== undefined && (
+        <FanOutDialog busy={busy} onFanOut={onFanOut} onClose={() => setAsking(null)} />
+      )}
       {asking === 'remove' && (
         <ConfirmDialog
           title="Remove the workspace?"
