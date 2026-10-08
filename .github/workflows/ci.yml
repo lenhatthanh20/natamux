@@ -41,6 +41,43 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
+  # The product ships to macOS and Windows. Windows may fail at first, so it does not block a merge.
+  os:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:coverage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: packages/*/coverage
+          if-no-files-found: error
+
   audit:
     runs-on: ubuntu-latest
     steps:
