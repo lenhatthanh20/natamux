@@ -138,7 +138,7 @@ Goals:
 | Generic adapter for any CLI (status from process and output idle time, terminal bell) | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
-| Helmsman CLI that agents can call: create task, update state, ask a question, report done | MVP |
+| Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
 | Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
 | Account and usage display per agent | Later |
 
