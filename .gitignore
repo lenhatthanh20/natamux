@@ -8,4 +8,4 @@ coverage/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
-/.helmsman/
+.helmsman/
