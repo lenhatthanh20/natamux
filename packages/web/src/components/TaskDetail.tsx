@@ -21,6 +21,8 @@ type TaskDetailProps = {
   onStartAgent: () => void
   onEdit: (changes: TaskChanges) => void
   onCheckPullRequest: () => void
+  // Tasks this one depends on that are not done yet.
+  waitingFor?: readonly string[]
   onClose: () => void
 }
 
@@ -46,6 +48,7 @@ export function TaskDetail({
   onStartAgent,
   onEdit,
   onCheckPullRequest,
+  waitingFor = [],
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -158,7 +161,7 @@ export function TaskDetail({
             {!isFinished && (
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || waitingFor.length > 0}
                 onClick={onStartAgent}
                 title="Creates the workspace when there is none, then starts Claude Code in its terminal"
                 className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
@@ -221,6 +224,9 @@ export function TaskDetail({
         <Field label="Labels">{task.labels.length > 0 ? task.labels.join(', ') : '-'}</Field>
         <Field label="Depends on">
           {task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}
+          {waitingFor.length > 0 && (
+            <span className="block text-muted">Waits for {waitingFor.join(', ')} to be done.</span>
+          )}
         </Field>
         <Field label="Pull request">
           {task.pr === null ? (

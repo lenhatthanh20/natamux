@@ -1,4 +1,4 @@
-import type { EventType, Task } from '@helmsman/core'
+import { type EventType, type Task, waitingOn } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveTasks } from '../hooks/useLiveTasks'
@@ -435,6 +435,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     now={now}
                     selectedId={selectedId}
                     diffStats={diffStatsQuery.data}
+                    allTasks={tasks}
                     onSelect={chooseTask}
                   />
                 </div>
@@ -444,6 +445,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   now={now}
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
+                  allTasks={tasks}
                   onSelect={chooseTask}
                 />
               )}
@@ -474,6 +476,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onStartAgent={() => agentMutation.mutate(selectedTask)}
                   onEdit={(changes) => editMutation.mutate({ taskId: selectedTask.id, changes })}
                   onCheckPullRequest={() => pullRequestMutation.mutate(selectedTask.id)}
+                  waitingFor={waitingOn(selectedTask, tasks)}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
