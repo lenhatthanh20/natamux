@@ -16,6 +16,8 @@ scripts/dev.sh demo
 
 Open port 5173 and sign in with the token `devtoken`. The demo task has a workspace with commits and changes. See [docs/docker.md](docs/docker.md).
 
+For tasks in every state with agents at work, run `scripts/dev.sh seed`. It starts the daemon with `scripts/fake-agent.sh` in place of Claude Code, which is not in the dev image. The next `scripts/dev.sh up` goes back to `claude`.
+
 ## What it does
 
 - **Tasks**: draft → ready → running → needs input / review → done, with an activity log. Edit notes, priority, labels; subtasks; dependencies; templates; import open GitHub issues.
