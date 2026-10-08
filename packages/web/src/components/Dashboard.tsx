@@ -406,7 +406,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <nav aria-label="Tasks" className="flex w-72 shrink-0 flex-col border-r border-line bg-sidebar">
+      <nav
+        aria-label="Tasks"
+        className="flex w-72 shrink-0 flex-col border-r border-line bg-sidebar"
+      >
         <div className="flex items-center gap-2 px-3 pt-3 pb-2">
           <h1 className="flex-1 font-semibold">Helmsman</h1>
           <span

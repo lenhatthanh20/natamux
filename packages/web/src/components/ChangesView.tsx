@@ -372,9 +372,7 @@ export function ChangesView({
                 No changes. The workspace matches its last commit.
               </p>
             )}
-            {current !== null && file.isPending && (
-              <p className="text-muted">Reading the file.</p>
-            )}
+            {current !== null && file.isPending && <p className="text-muted">Reading the file.</p>}
             {file.isError && <p role="alert">{file.error.message}</p>}
             {file.data && <FileBody file={file.data} sideBySide={sideBySide} onLine={setLine} />}
             {current !== null && (
