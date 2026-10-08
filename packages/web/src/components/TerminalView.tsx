@@ -116,7 +116,14 @@ export default function TerminalView({ connect }: TerminalViewProps) {
 
     const input = terminal.onData((data) => send({ type: 'input', data }))
     const resized = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
-    const observer = new ResizeObserver(() => fit.fit())
+    const observer = new ResizeObserver(() => {
+      // A hidden terminal has no size yet, and xterm throws while it measures nothing.
+      try {
+        fit.fit()
+      } catch {
+        // The next resize, when it shows again, fits it.
+      }
+    })
     observer.observe(element)
     terminal.focus()
 
