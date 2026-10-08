@@ -1,52 +1,53 @@
 import type { Task } from '@helmsman/core'
-import { formatAge, isQuiet, needsMeTasks } from '../lib/tasks'
-import { StateBadge } from './StateBadge'
+import { formatAge, isQuiet, STATE_LABEL } from '../lib/tasks'
+import { SidebarTaskRow } from './SidebarTaskRow'
 
 type NeedsMeStripProps = {
-  tasks: readonly Task[]
+  // The tasks that wait for the user, the longest wait first.
+  waiting: readonly Task[]
   now: Date
-  selectedId: string | null
-  onSelect: (id: string) => void
+  currentId: string | null
+  onOpen: (id: string) => void
 }
 
-export function NeedsMeStrip({ tasks, now, selectedId, onSelect }: NeedsMeStripProps) {
-  const waiting = needsMeTasks(tasks, now)
+// The top of the sidebar: the one place to look to know which task needs you.
+export function NeedsMeStrip({ waiting, now, currentId, onOpen }: NeedsMeStripProps) {
   const headline =
     waiting.length === 0
       ? 'Nothing needs you.'
       : `${waiting.length} ${waiting.length === 1 ? 'task needs' : 'tasks need'} you`
 
   return (
-    <section aria-labelledby="needs-me-heading" className="bg-band text-band-ink">
-      <div className="mx-auto max-w-7xl px-4 py-4">
-        <h2 id="needs-me-heading" className="text-xl font-semibold">
-          {headline}
-        </h2>
-        {waiting.length > 0 && (
-          <ul className="mt-3 divide-y divide-white/10 border-t border-white/10">
-            {waiting.map((task) => (
-              <li key={task.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(task.id)}
-                  aria-current={task.id === selectedId}
-                  className="flex w-full items-center gap-3 border-l-4 border-signal py-2 pr-2 pl-3 text-left hover:bg-white/5 aria-[current=true]:bg-white/10"
-                >
-                  <span className="w-20 shrink-0 font-mono text-band-muted">{task.id}</span>
-                  <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
-                    {task.title}
-                  </span>
-                  <StateBadge state={task.state} />
-                  <span className="w-28 shrink-0 text-right text-band-muted">
-                    {isQuiet(task, now) ? 'quiet' : 'waiting'}{' '}
-                    {formatAge(task.updatedAt, now).replace(' ago', '')}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <section
+      aria-labelledby="needs-me-heading"
+      data-waiting={waiting.length > 0}
+      className="group/needs flex flex-col gap-0.5 rounded-md p-1 data-[waiting=true]:bg-signal/10 data-[waiting=true]:ring-1 data-[waiting=true]:ring-signal/40"
+    >
+      <h2
+        id="needs-me-heading"
+        className="px-2 py-1 text-xs font-semibold text-muted group-data-[waiting=true]/needs:text-ink"
+      >
+        {headline}
+      </h2>
+      {waiting.length > 0 && (
+        <ul className="flex flex-col">
+          {waiting.map((task) => {
+            const age = formatAge(task.updatedAt, now).replace(' ago', '')
+            return (
+              <SidebarTaskRow
+                key={task.id}
+                task={task}
+                now={now}
+                current={task.id === currentId}
+                note={
+                  isQuiet(task, now) ? `quiet for ${age}` : `${STATE_LABEL[task.state]}, ${age}`
+                }
+                onOpen={onOpen}
+              />
+            )
+          })}
+        </ul>
+      )}
     </section>
   )
 }

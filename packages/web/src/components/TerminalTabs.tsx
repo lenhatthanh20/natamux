@@ -36,7 +36,7 @@ export function TerminalTabs({ taskId, connect, loadTerminals, closeTerminal }: 
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div role="tablist" aria-label="Shells" className="flex flex-wrap items-center gap-1">
         {names.map((name) => (
           <span key={name} className="flex items-center">
@@ -45,7 +45,7 @@ export function TerminalTabs({ taskId, connect, loadTerminals, closeTerminal }: 
               role="tab"
               aria-selected={active === name}
               onClick={() => setActive(name)}
-              className="rounded-md px-3 py-1 text-muted hover:text-ink aria-selected:bg-accent/15 aria-selected:text-ink"
+              className="rounded-md px-2.5 py-1 text-muted hover:text-ink aria-selected:bg-selected aria-selected:text-ink"
             >
               Shell {name}
             </button>
@@ -64,7 +64,7 @@ export function TerminalTabs({ taskId, connect, loadTerminals, closeTerminal }: 
         <button
           type="button"
           onClick={addShell}
-          className="rounded-md border border-line px-2 py-1 hover:border-accent"
+          className="rounded-md px-2 py-1 text-muted hover:bg-hover hover:text-ink"
         >
           New shell
         </button>

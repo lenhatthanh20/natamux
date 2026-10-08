@@ -5,6 +5,7 @@ import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
+import { sidebarGroups } from '../lib/sidebar-groups'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
@@ -12,7 +13,9 @@ import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
+import { NoWorkspace } from './NoWorkspace'
 import { RepoPanel } from './RepoPanel'
+import { SidebarGroups } from './SidebarGroups'
 import { StateFilter } from './StateFilter'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
@@ -81,7 +84,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   // The repository of new tasks and of issue imports. Empty: the daemon's own.
   const [newRepo, setNewRepo] = useState('')
   const [reposOpen, setReposOpen] = useState(false)
-  const branchesRepo = tasks.find((task) => task.id === selectedId)?.repo ?? undefined
+  const branchesRepo =
+    tasks.find((task) => task.id === (changesTaskId ?? selectedId))?.repo ?? undefined
   const branchesQuery = useQuery({
     queryKey: ['branches', branchesRepo],
     queryFn: () => api.listBranches(branchesRepo),
@@ -258,8 +262,23 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   )
   const selectedTask = tasks.find((task) => task.id === selectedId) ?? null
   const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
-  const selectedGroup = selectedTask === null ? null : tryGroup(selectedTask)
-  const selectedTries = selectedGroup === null ? [] : triesOf(selectedGroup, tasks)
+  // The open workspace's task, or else the task chosen in the list.
+  const detailTask = changesTask ?? selectedTask
+  const detailGroup = detailTask === null ? null : tryGroup(detailTask)
+  const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
+  // The tasks that need the user ignore the search: they must stay in sight.
+  const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
+  const shownGroups = useMemo(
+    () => sidebarGroups(filterTasks(tasks, null, search), now),
+    [tasks, search, now],
+  )
+  const busy =
+    eventMutation.isPending ||
+    workspaceMutation.isPending ||
+    agentMutation.isPending ||
+    editMutation.isPending ||
+    pullRequestMutation.isPending ||
+    fanOutMutation.isPending
 
   const runAction = (task: Task, action: TaskAction) => {
     setFeedback(null)
@@ -270,6 +289,27 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setFeedback(null)
     select(id)
     setDetailOpen(true)
+  }
+
+  // Opens the task's workspace in the main area: the agent's terminal while it works, else the
+  // changes.
+  const openTask = (id: string) => {
+    const task = tasks.find((candidate) => candidate.id === id)
+    chooseTask(id)
+    openChanges(
+      id,
+      task?.state === 'running' || task?.state === 'needs-input' ? 'terminal' : 'changes',
+    )
+  }
+
+  // The repository and issue panels sit above the task list, so a workspace makes way for them.
+  const togglePanel = (open: boolean, setOpen: (open: boolean) => void) => {
+    if (changesTaskId !== null) {
+      closeChanges()
+      setOpen(true)
+      return
+    }
+    setOpen(!open)
   }
 
   useEffect(() => {
@@ -360,78 +400,142 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     document.title = waitingCount > 0 ? `(${waitingCount}) Helmsman` : 'Helmsman'
   }, [waitingCount])
 
+  const liveText =
+    liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting' : 'Reconnecting'
+  const footerButton = 'hover:text-ink'
+
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2">
-          <h1 className="mr-2 text-base font-semibold">Helmsman</h1>
-          <form onSubmit={submitNewTask} className="flex min-w-[14rem] flex-1 gap-2">
-            {repos.length > 1 && (
-              <select
-                value={newRepo}
-                onChange={(event) => setNewRepo(event.target.value)}
-                aria-label="Repository"
-                className="rounded-md border border-line bg-canvas px-2 py-1.5"
-              >
-                {repos.map((repo) => (
-                  <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                    {repo.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            {(templatesQuery.data?.length ?? 0) > 0 && (
-              <select
-                value={templateId}
-                onChange={(event) => setTemplateId(event.target.value)}
-                aria-label="Template"
-                className="rounded-md border border-line bg-canvas px-2 py-1.5"
-              >
-                <option value="">No template</option>
-                {templatesQuery.data?.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            )}
+    <div className="flex h-screen overflow-hidden">
+      <nav aria-label="Tasks" className="flex w-72 shrink-0 flex-col border-r border-line bg-sidebar">
+        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+          <h1 className="flex-1 font-semibold">Helmsman</h1>
+          <span
+            className="flex items-center gap-1.5 text-xs text-muted"
+            title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
+          >
+            <span
+              aria-hidden="true"
+              className={
+                liveStatus === 'live'
+                  ? 'h-2 w-2 rounded-full bg-[#2f9e5b]'
+                  : 'h-2 w-2 rounded-full bg-signal'
+              }
+            />
+            {liveText}
+          </span>
+        </div>
+
+        <form onSubmit={submitNewTask} className="flex flex-col gap-1.5 px-3">
+          <div className="flex gap-1.5">
             <input
               ref={newTaskRef}
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
-              placeholder="New task title (n)"
+              placeholder="New task (n)"
               aria-label="New task title"
-              className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-3 py-1.5"
+              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1"
             />
             <button
               type="submit"
+              aria-label="Add task"
+              title="Add task"
               disabled={createMutation.isPending}
-              className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
+              className="w-8 rounded-md bg-accent text-base leading-none font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              Add task
+              +
             </button>
-          </form>
+          </div>
+          {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+            <div className="flex gap-1.5">
+              {repos.length > 1 && (
+                <select
+                  value={newRepo}
+                  onChange={(event) => setNewRepo(event.target.value)}
+                  aria-label="Repository"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                >
+                  {repos.map((repo) => (
+                    <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                      {repo.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {(templatesQuery.data?.length ?? 0) > 0 && (
+                <select
+                  value={templateId}
+                  onChange={(event) => setTemplateId(event.target.value)}
+                  aria-label="Template"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                >
+                  <option value="">No template</option>
+                  {templatesQuery.data?.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+        </form>
+
+        <div className="px-3 pt-2">
           <input
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search (/)"
             aria-label="Search tasks"
-            className="w-48 rounded-md border border-line bg-canvas px-3 py-1.5"
+            className="w-full rounded-md border border-line bg-surface px-2 py-1"
           />
+        </div>
+
+        <div className="px-2 pt-2">
+          <button
+            type="button"
+            aria-pressed={changesTask === null}
+            onClick={closeChanges}
+            className="flex w-full justify-between rounded-md px-2 py-1 font-medium hover:bg-hover aria-pressed:bg-selected"
+          >
+            <span>All tasks</span>
+            <span className="text-muted">{tasks.length}</span>
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 py-2">
+          <NeedsMeStrip
+            waiting={allGroups.needsMe}
+            now={now}
+            currentId={changesTaskId}
+            onOpen={openTask}
+          />
+          <SidebarGroups
+            open={shownGroups.open}
+            finished={shownGroups.finished}
+            now={now}
+            currentId={changesTaskId}
+            allTasks={tasks}
+            diffStats={diffStatsQuery.data}
+            activity={activityQuery.data}
+            onOpen={openTask}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-xs text-muted">
           <button
             type="button"
             aria-expanded={reposOpen}
-            onClick={() => setReposOpen((open) => !open)}
-            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+            onClick={() => togglePanel(reposOpen, setReposOpen)}
+            className={footerButton}
           >
             Repos
           </button>
           <button
             type="button"
             aria-expanded={importOpen}
-            onClick={() => setImportOpen((open) => !open)}
-            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+            onClick={() => togglePanel(importOpen, setImportOpen)}
+            className={footerButton}
           >
             Import issues
           </button>
@@ -440,55 +544,47 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               type="button"
               onClick={notifications.askPermission}
               title="A system notification when a task starts to wait for you"
-              className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+              className={footerButton}
             >
               Notify me
             </button>
           )}
           {notifications.permission === 'denied' && (
-            <span className="text-muted" title="Allow notifications for this page in the browser">
+            <span title="Allow notifications for this page in the browser">
               Notifications blocked
             </span>
           )}
-          <span
-            className="flex items-center gap-1.5 text-muted"
-            title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
-          >
-            <span
-              aria-hidden="true"
-              className={
-                liveStatus === 'live'
-                  ? 'h-2 w-2 rounded-full bg-accent'
-                  : 'h-2 w-2 rounded-full bg-signal'
-              }
-            />
-            {liveStatus === 'live'
-              ? 'Live'
-              : liveStatus === 'connecting'
-                ? 'Connecting'
-                : 'Reconnecting'}
-          </span>
-          <button type="button" onClick={onSignOut} className="text-muted hover:text-ink">
+          <button type="button" onClick={onSignOut} className={`ml-auto ${footerButton}`}>
             Sign out
           </button>
         </div>
-      </header>
+      </nav>
 
-      <NeedsMeStrip tasks={tasks} now={now} selectedId={selectedId} onSelect={chooseTask} />
-
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
         {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
-          <p role="alert" className="font-medium">
+          <p role="alert" className="border-b border-line px-4 py-2 font-medium">
             {tasksQuery.error.message}
           </p>
         )}
         {feedback !== null && !detailOpen && (
-          <p role="status" className="font-medium">
+          <p role="status" className="border-b border-line px-4 py-2 font-medium">
             {feedback}
           </p>
         )}
 
-        {changesTask ? (
+        {changesTask && changesTask.workspace === null ? (
+          <NoWorkspace
+            key={changesTask.id}
+            task={changesTask}
+            busy={busy}
+            canStart={
+              changesTask.state !== 'done' &&
+              changesTask.state !== 'cancelled' &&
+              waitingOn(changesTask, tasks).length === 0
+            }
+            onStartAgent={() => agentMutation.mutate(changesTask)}
+          />
+        ) : changesTask ? (
           <ChangesView
             key={changesTask.id}
             task={changesTask}
@@ -525,71 +621,66 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             }}
             loadTerminals={() => api.listTerminals(changesTask.id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
-            onClose={closeChanges}
           />
         ) : (
           <>
-            {reposOpen && (
-              <RepoPanel
-                repos={repos}
-                onAdd={async (path, name) => {
-                  await api.addRepo(path, name)
-                  await reposQuery.refetch()
-                }}
-                onClose={() => setReposOpen(false)}
-              />
-            )}
-            {importOpen && (
-              <IssueImport
-                repo={newRepo || undefined}
-                loadIssues={() => api.listIssues(newRepo || undefined)}
-                importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
-                onImported={(created) => {
-                  for (const task of created) {
-                    mergeTask(task)
-                  }
-                  setFeedback(
-                    created.length === 1
-                      ? 'Imported 1 issue.'
-                      : `Imported ${created.length} issues.`,
-                  )
-                }}
-                onClose={() => setImportOpen(false)}
-              />
-            )}
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
+              <h2 className="font-semibold">All tasks</h2>
               <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-              <div className="flex gap-1">
+              <div className="ml-auto flex gap-1">
                 {(['table', 'board'] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
                     aria-pressed={layout === option}
                     onClick={() => setLayout(option)}
-                    className="rounded-md border border-line px-3 py-1 capitalize hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent/10"
+                    className="rounded-md px-2.5 py-0.5 text-muted capitalize hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
                   >
                     {option}
                   </button>
                 ))}
               </div>
             </div>
-
-            <div
-              className={detailOpen && selectedTask ? 'grid gap-4 lg:grid-cols-[1fr_24rem]' : ''}
-            >
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+              {reposOpen && (
+                <RepoPanel
+                  repos={repos}
+                  onAdd={async (path, name) => {
+                    await api.addRepo(path, name)
+                    await reposQuery.refetch()
+                  }}
+                  onClose={() => setReposOpen(false)}
+                />
+              )}
+              {importOpen && (
+                <IssueImport
+                  repo={newRepo || undefined}
+                  loadIssues={() => api.listIssues(newRepo || undefined)}
+                  importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
+                  onImported={(created) => {
+                    for (const task of created) {
+                      mergeTask(task)
+                    }
+                    setFeedback(
+                      created.length === 1
+                        ? 'Imported 1 issue.'
+                        : `Imported ${created.length} issues.`,
+                    )
+                  }}
+                  onClose={() => setImportOpen(false)}
+                />
+              )}
               {tasksQuery.isPending ? (
                 <p className="text-muted">Loading tasks.</p>
               ) : layout === 'board' ? (
-                <div className="min-w-0">
-                  <TaskBoard
-                    tasks={visibleTasks}
-                    now={now}
-                    selectedId={selectedId}
-                    diffStats={diffStatsQuery.data}
-                    allTasks={tasks}
-                    onSelect={chooseTask}
-                  />
-                </div>
+                <TaskBoard
+                  tasks={visibleTasks}
+                  now={now}
+                  selectedId={selectedId}
+                  diffStats={diffStatsQuery.data}
+                  allTasks={tasks}
+                  onSelect={chooseTask}
+                />
               ) : (
                 <TaskTable
                   tasks={visibleTasks}
@@ -601,55 +692,45 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onSelect={chooseTask}
                 />
               )}
-              {detailOpen && selectedTask && (
-                <TaskDetail
-                  key={selectedTask.id}
-                  task={selectedTask}
-                  now={now}
-                  busy={
-                    eventMutation.isPending ||
-                    workspaceMutation.isPending ||
-                    agentMutation.isPending ||
-                    editMutation.isPending ||
-                    pullRequestMutation.isPending ||
-                    fanOutMutation.isPending
-                  }
-                  feedback={feedback}
-                  loadEvents={() => api.listEvents(selectedTask.id)}
-                  onAction={(action) => runAction(selectedTask, action)}
-                  onCreateWorkspace={(base) => {
-                    setFeedback(null)
-                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create', base })
-                  }}
-                  branches={branchesQuery.data}
-                  onRemoveWorkspace={() => {
-                    setFeedback(null)
-                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
-                  }}
-                  onViewChanges={() => openChanges(selectedTask.id)}
-                  onStartAgent={() => agentMutation.mutate(selectedTask)}
-                  onEdit={(changes) => editMutation.mutate({ taskId: selectedTask.id, changes })}
-                  onCheckPullRequest={() => pullRequestMutation.mutate(selectedTask.id)}
-                  waitingFor={waitingOn(selectedTask, tasks)}
-                  onSaveTemplate={() => templateMutation.mutate(selectedTask)}
-                  subtasks={tasks.filter((task) => task.parentId === selectedTask.id)}
-                  onAddSubtask={(title) =>
-                    subtaskMutation.mutate({ parentId: selectedTask.id, title })
-                  }
-                  onSelectTask={chooseTask}
-                  tries={selectedTries}
-                  diffStats={diffStatsQuery.data}
-                  onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: selectedTries })}
-                  onFanOut={(count, start) =>
-                    fanOutMutation.mutate({ task: selectedTask, count, start })
-                  }
-                  onClose={() => setDetailOpen(false)}
-                />
-              )}
             </div>
           </>
         )}
       </main>
+
+      {detailOpen && detailTask && (
+        <TaskDetail
+          key={detailTask.id}
+          task={detailTask}
+          now={now}
+          busy={busy}
+          feedback={feedback}
+          loadEvents={() => api.listEvents(detailTask.id)}
+          onAction={(action) => runAction(detailTask, action)}
+          onCreateWorkspace={(base) => {
+            setFeedback(null)
+            workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
+          }}
+          branches={branchesQuery.data}
+          onRemoveWorkspace={() => {
+            setFeedback(null)
+            workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
+          }}
+          onViewChanges={() => openChanges(detailTask.id)}
+          onStartAgent={() => agentMutation.mutate(detailTask)}
+          onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
+          onCheckPullRequest={() => pullRequestMutation.mutate(detailTask.id)}
+          waitingFor={waitingOn(detailTask, tasks)}
+          onSaveTemplate={() => templateMutation.mutate(detailTask)}
+          subtasks={tasks.filter((task) => task.parentId === detailTask.id)}
+          onAddSubtask={(title) => subtaskMutation.mutate({ parentId: detailTask.id, title })}
+          onSelectTask={changesTask ? openTask : chooseTask}
+          tries={detailTries}
+          diffStats={diffStatsQuery.data}
+          onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: detailTries })}
+          onFanOut={(count, start) => fanOutMutation.mutate({ task: detailTask, count, start })}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
     </div>
   )
 }

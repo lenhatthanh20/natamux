@@ -11,18 +11,18 @@ export function StateFilter({ tasks, active, onToggle }: StateFilterProps) {
   const counts = countByState(tasks)
 
   return (
-    <ul className="flex flex-wrap gap-2" aria-label="Filter by state">
-      {TASK_STATES.map((state) => (
+    <ul className="flex flex-wrap gap-1" aria-label="Filter by state">
+      {TASK_STATES.filter((state) => counts[state] > 0 || active === state).map((state) => (
         <li key={state}>
           <button
             type="button"
             aria-pressed={active === state}
             onClick={() => onToggle(state)}
-            disabled={counts[state] === 0 && active !== state}
-            className="flex items-center gap-2 rounded-md border border-line bg-surface px-2 py-1 hover:border-accent disabled:opacity-40 aria-pressed:border-accent aria-pressed:ring-1 aria-pressed:ring-accent"
+            className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-muted hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
           >
+            <span className="state-dot" data-state={state} aria-hidden="true" />
+            <span>{STATE_LABEL[state]}</span>
             <span className="font-semibold">{counts[state]}</span>
-            <span className="text-muted">{STATE_LABEL[state]}</span>
           </button>
         </li>
       ))}
