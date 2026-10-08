@@ -226,7 +226,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
 
-    socket.on('message', (raw) => {
+    socket.on('message', (raw: { toString: () => string }) => {
       let data: unknown
       try {
         data = JSON.parse(raw.toString())
