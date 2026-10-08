@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   MAX_SESSIONS,
+  NoTerminalError,
   SCROLLBACK_CHARS,
   TerminalLimitError,
   TerminalService,
@@ -49,6 +50,8 @@ describe('TerminalService', () => {
         PATH: '/bin',
         HELMSMAN_TOKEN: 'secret',
         HELMSMAN_TASK_ID: 'T-0001',
+        HELMSMAN_PORT: '20010',
+        PORT: '20010',
         TERM: 'xterm-256color',
       },
     })
@@ -190,6 +193,22 @@ describe('several terminals of a task', () => {
     expect(ptys).toHaveLength(2)
     expect(ptys[1]?.written).toEqual(['claude\r'])
     expect(service.isOpen('T-0001', '1')).toBe(true)
+  })
+})
+
+describe('paste', () => {
+  it('pastes text into the first shell and presses Enter', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+
+    service.paste('T-0001', 'Rename it.\nThen test.')
+
+    expect(ptys[0]?.written).toEqual(['\x1b[200~Rename it.\nThen test.\x1b[201~\r'])
+  })
+
+  it('refuses a task without an open shell', () => {
+    const { service } = setup()
+    expect(() => service.paste('T-0001', 'x')).toThrow(NoTerminalError)
   })
 })
 
