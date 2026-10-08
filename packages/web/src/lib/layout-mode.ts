@@ -28,7 +28,12 @@ type LayoutInput = {
   coarse: boolean
 }
 
-export function decideLayout({ width, sidebarWidth, detailsWidth, coarse }: LayoutInput): LayoutMode {
+export function decideLayout({
+  width,
+  sidebarWidth,
+  detailsWidth,
+  coarse,
+}: LayoutInput): LayoutMode {
   if (width === null) {
     return { ...DESKTOP_LAYOUT, coarse }
   }

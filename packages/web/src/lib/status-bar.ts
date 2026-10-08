@@ -15,10 +15,14 @@ export type Condensed = {
 
 // Every step takes something away. Labels go first, lowest priority first, then the items
 // themselves go into the menu in the same order.
-export function condenseSteps(items: readonly StatusItem[]): Array<{ id: string; kind: 'label' | 'fold' }> {
+export function condenseSteps(
+  items: readonly StatusItem[],
+): Array<{ id: string; kind: 'label' | 'fold' }> {
   const lowFirst = [...items].sort((a, b) => b.priority - a.priority)
   return [
-    ...lowFirst.filter((item) => item.hasLabel).map((item) => ({ id: item.id, kind: 'label' as const })),
+    ...lowFirst
+      .filter((item) => item.hasLabel)
+      .map((item) => ({ id: item.id, kind: 'label' as const })),
     ...lowFirst.map((item) => ({ id: item.id, kind: 'fold' as const })),
   ]
 }

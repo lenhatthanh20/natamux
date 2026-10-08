@@ -1,4 +1,12 @@
-import { Bell, BellOff, Download, Ellipsis, FolderGit2, Keyboard, type LucideIcon } from 'lucide-react'
+import {
+  Bell,
+  BellOff,
+  Download,
+  Ellipsis,
+  FolderGit2,
+  Keyboard,
+  type LucideIcon,
+} from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { LiveStatus } from '../hooks/useLiveTasks'
 import type { NotifyPermission } from '../hooks/useTaskNotifications'

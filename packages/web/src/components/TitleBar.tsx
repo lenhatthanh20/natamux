@@ -58,7 +58,9 @@ export function TitleBar({
   liveOk,
 }: TitleBarProps) {
   return (
-    <header className={`hm-titlebar flex shrink-0 items-center gap-2 border-b border-line bg-shell px-2 text-sm text-ink-2 ${phone ? 'h-11' : 'h-9'}`}>
+    <header
+      className={`hm-titlebar flex shrink-0 items-center gap-2 border-b border-line bg-shell px-2 text-sm text-ink-2 ${phone ? 'h-11' : 'h-9'}`}
+    >
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-1.5">
         <span className="relative shrink-0">
           {phone ? (
