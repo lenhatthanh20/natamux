@@ -1,4 +1,3 @@
-import { isMac } from './keys'
 import {
   COMMANDS,
   type Command,
@@ -7,6 +6,7 @@ import {
   type FocusKind,
   runnable,
 } from './commands'
+import { isMac } from './keys'
 import {
   isSingleKey,
   matchesShortcut,
