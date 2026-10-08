@@ -44,9 +44,8 @@ export function SidebarGroups({
   return (
     <>
       {open.map((group) => (
-        <div
+        <section
           key={group.state}
-          role="group"
           aria-labelledby={`sidebar-${group.state}`}
           className="flex flex-col gap-0.5"
         >
@@ -69,7 +68,7 @@ export function SidebarGroups({
               />
             ))}
           </ul>
-        </div>
+        </section>
       ))}
       {finished.length > 0 && (
         <details>
