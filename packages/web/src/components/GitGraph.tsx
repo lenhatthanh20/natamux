@@ -119,7 +119,10 @@ export function GitGraph({ graph, now }: GitGraphProps) {
               <span className="shrink-0 font-mono text-xs text-muted" title={commit.hash}>
                 {commit.hash.slice(0, 7)}
               </span>
-              <span className="w-16 shrink-0 text-right text-muted" title={commit.date}>
+              <span
+                className="w-20 shrink-0 whitespace-nowrap text-right text-muted"
+                title={commit.date}
+              >
                 {formatAge(commit.date, now)}
               </span>
             </li>

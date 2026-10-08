@@ -284,6 +284,7 @@ describe('parseRefs', () => {
     ['HEAD', []],
     ['HEAD -> helmsman/t-0001', ['helmsman/t-0001']],
     ['HEAD -> main, tag: v1, origin/main', ['main', 'tag: v1', 'origin/main']],
+    ['origin/main, origin/HEAD', ['origin/main']],
   ])('reads %j', (decoration, refs) => {
     expect(parseRefs(decoration)).toEqual(refs)
   })
