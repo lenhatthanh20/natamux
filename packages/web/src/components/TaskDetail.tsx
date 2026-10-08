@@ -4,6 +4,7 @@ import type { StoredEvent, TaskChanges } from '../lib/api'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { PathText } from './PathText'
+import { FanOutForm } from './FanOutForm'
 import { StateBadge } from './StateBadge'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
@@ -24,6 +25,7 @@ type TaskDetailProps = {
   // Tasks this one depends on that are not done yet.
   waitingFor?: readonly string[]
   onSaveTemplate?: () => void
+  onFanOut?: (count: number, start: boolean) => void
   onClose: () => void
 }
 
@@ -51,6 +53,7 @@ export function TaskDetail({
   onCheckPullRequest,
   waitingFor = [],
   onSaveTemplate,
+  onFanOut,
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -184,6 +187,11 @@ export function TaskDetail({
             )}
           </span>
         </Field>
+        {!isFinished && onFanOut !== undefined && (
+          <Field label="Fan out">
+            <FanOutForm busy={busy} onFanOut={onFanOut} />
+          </Field>
+        )}
         <Field label="Branch">{task.branch === null ? '-' : <PathText path={task.branch} />}</Field>
         <Field label="Workspace">
           {task.workspace === null ? (
