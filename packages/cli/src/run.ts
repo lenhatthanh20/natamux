@@ -10,6 +10,7 @@ import {
   formatWorkspaceRemoved,
   USAGE,
 } from './format.js'
+import { forwardHook } from './forward-hook.js'
 import { claudeCodeHookSettings } from './hooks.js'
 
 export type CliIo = {
@@ -21,6 +22,8 @@ export type CliOptions = {
   env: Record<string, string | undefined>
   io: CliIo
   fetch?: FetchFunction
+  // Where `helmsman hook` reads the JSON of the agent's hook. Defaults to an empty input.
+  readStdin?: () => Promise<string>
 }
 
 export const EXIT_OK = 0
@@ -130,13 +133,26 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
   } catch (error) {
     if (error instanceof UsageError) {
       io.stderr(`${error.message}\nRun "helmsman help" for usage.\n`)
-      return EXIT_USAGE
+      // `helmsman hook` runs inside an agent, which treats exit code 2 as "block this action".
+      return argv[0] === 'hook' ? EXIT_OK : EXIT_USAGE
     }
     throw error
   }
 
   if (command.name === 'help') {
     io.stdout(USAGE)
+    return EXIT_OK
+  }
+
+  // Always exit 0 and print nothing: it runs inside an agent and must never get in its way.
+  if (command.name === 'hook.forward') {
+    await forwardHook({
+      agent: command.agent,
+      env,
+      readStdin: options.readStdin ?? (async () => ''),
+      fetch: options.fetch ?? fetch,
+      debug: io.stderr,
+    })
     return EXIT_OK
   }
 

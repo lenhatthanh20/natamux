@@ -29,6 +29,8 @@ export HELMSMAN_TOKEN=<token> HELMSMAN_TASK_ID=T-0001
 claude --settings "$(helmsman hooks claude-code)"
 ```
 
+`helmsman hook <agent>` is for an agent that can only run a command as its hook: it reads the hook's JSON on stdin and sends it to `POST /hooks/<agent>` of the daemon. It does nothing unless `HELMSMAN_TOKEN` is set (so it is harmless in a session that is not Helmsman's), always exits 0 and prints nothing, so it can never get in the agent's way. Set `HELMSMAN_DEBUG=1` to see why a hook did not arrive. It does not use the proxy variables.
+
 `hooks claude-code` prints Claude Code settings that report the session's progress to the daemon, so the task moves between running, needs input and in review by itself. It needs no token to print and never writes the token into the output. See `docs/claude-code-adapter.md`.
 
 `workspace create` makes a git worktree and a branch for the task. `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has files that are not committed. With `--delete-branch` the branch goes too, but only when it is fully merged.
