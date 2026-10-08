@@ -1,6 +1,7 @@
 import type { Task, TaskState } from '@helmsman/core'
 import { create } from 'zustand'
 import { type PaneLayout, parsePaneLayout } from './panes'
+import type { Route } from './route'
 import type { TaskSort } from './tasks'
 
 export type WorkspaceTab = 'changes' | 'history' | 'terminal'
@@ -14,9 +15,11 @@ const TAB_KEY = 'helmsman.tab-by-task'
 const PANE_LAYOUT_KEY = 'helmsman.pane-layout'
 const SHOW_FINISHED_KEY = 'helmsman.show-finished'
 const SEEN_KEY = 'helmsman.seen-state'
+const RECENT_KEY = 'helmsman.recent'
 // Old tasks do not need a remembered answer forever.
 const MAX_REMEMBERED_DETAILS = 200
 const MAX_REMEMBERED_SEEN = 1000
+const MAX_RECENT = 20
 
 // The layout is a per-browser choice. Storage can be missing or blocked; then it is the table.
 function savedLayout(): Layout {
@@ -167,6 +170,30 @@ function saveSeen(seen: Record<string, TaskState>): void {
   }
 }
 
+function savedRecent(): string[] {
+  try {
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(RECENT_KEY) ?? '[]')
+    return Array.isArray(value)
+      ? value.filter((id): id is string => typeof id === 'string').slice(0, MAX_RECENT)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecent(ids: readonly string[]): void {
+  try {
+    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(ids))
+  } catch {
+    // Not kept; the next visit starts with no recent workspaces.
+  }
+}
+
+// The workspaces that were opened, newest first, each once.
+export function withRecent(current: readonly string[], taskId: string): string[] {
+  return [taskId, ...current.filter((id) => id !== taskId)].slice(0, MAX_RECENT)
+}
+
 // Sets one task's entry. The newest answers stay when there are too many.
 function withEntry<T>(
   current: Readonly<Record<string, T>>,
@@ -239,8 +266,14 @@ type ViewData = {
   drawerOpen: boolean
   // The task whose changed files are shown instead of the task list.
   changesTaskId: string | null
-  // The tab that the workspace view opens on.
+  // The tab that the workspace view opens on, and follows the tab that is shown.
   changesTab: WorkspaceTab
+  // The file that the Changes tab shows. Null: the first one.
+  changesFile: string | null
+  // The workspaces that were opened, newest first.
+  recent: string[]
+  // A shell that the next view of a workspace should focus, asked for by the jump palette.
+  shellRequest: { taskId: string; name: string; at: number } | null
   // The tab the user picked last in each workspace.
   tabByTask: Record<string, WorkspaceTab>
   // Columns of the agents grid.
@@ -268,6 +301,11 @@ type ViewActions = {
   setSidebarOpen: (open: boolean) => void
   setDrawerOpen: (open: boolean) => void
   openChanges: (taskId: string, tab?: WorkspaceTab) => void
+  setChangesFile: (file: string | null) => void
+  requestShell: (taskId: string, name: string) => void
+  clearShellRequest: () => void
+  // Makes the view match an address: the address bar, a back button or a link.
+  applyRoute: (route: Route) => void
   rememberTab: (taskId: string, tab: WorkspaceTab) => void
   setPaneLayout: (layout: PaneLayout) => void
   closeChanges: () => void
@@ -289,6 +327,9 @@ export const initialViewData: ViewData = {
   drawerOpen: false,
   changesTaskId: null,
   changesTab: 'changes',
+  changesFile: null,
+  recent: [],
+  shellRequest: null,
   tabByTask: {},
   paneLayout: 'auto',
   layout: 'table',
@@ -302,6 +343,7 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   layout: savedLayout(),
   showFinished: savedShowFinished(),
   seenState: savedSeen(),
+  recent: savedRecent(),
   pinned: savedPinned(),
   sidebarOpen: savedSidebarOpen(),
   detailOpenByTask: savedDetailOpen(),
@@ -340,15 +382,62 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   },
   setDrawerOpen: (open) => set({ drawerOpen: open }),
   openChanges: (taskId, tab = 'changes') =>
-    set({ changesTaskId: taskId, changesTab: tab, agentsOpen: false }),
+    set((current) => {
+      const recent = withRecent(current.recent, taskId)
+      saveRecent(recent)
+      return {
+        changesTaskId: taskId,
+        changesTab: tab,
+        changesFile: null,
+        agentsOpen: false,
+        recent,
+      }
+    }),
+  setChangesFile: (changesFile) => set({ changesFile }),
+  requestShell: (taskId, name) => set({ shellRequest: { taskId, name, at: Date.now() } }),
+  clearShellRequest: () => set({ shellRequest: null }),
+  applyRoute: (route) =>
+    set((current) => {
+      if (route.kind === 'workspace') {
+        const recent = withRecent(current.recent, route.id)
+        saveRecent(recent)
+        return {
+          changesTaskId: route.id,
+          changesTab: route.tab,
+          changesFile: route.file,
+          agentsOpen: false,
+          selectedId: route.id,
+          recent,
+        }
+      }
+      if (route.kind === 'agents') {
+        return { agentsOpen: true, changesTaskId: null }
+      }
+      if (route.kind === 'task') {
+        const detailOpenByTask = withDetailOpen(current.detailOpenByTask, route.id, true)
+        saveDetailOpen(detailOpenByTask)
+        return { changesTaskId: null, agentsOpen: false, selectedId: route.id, detailOpenByTask }
+      }
+      // A list address shows no details: the address of the details is /t/<id>.
+      const layout: Layout = route.kind === 'board' ? 'board' : 'table'
+      saveLayout(layout)
+      const open = current.selectedId !== null && current.detailOpenByTask[current.selectedId]
+      const detailOpenByTask =
+        current.selectedId !== null && open
+          ? withDetailOpen(current.detailOpenByTask, current.selectedId, false)
+          : current.detailOpenByTask
+      saveDetailOpen(detailOpenByTask)
+      return { layout, changesTaskId: null, agentsOpen: false, detailOpenByTask }
+    }),
   rememberTab: (taskId, tab) =>
     set((current) => {
+      const shown = current.changesTaskId === taskId ? { changesTab: tab } : {}
       if (current.tabByTask[taskId] === tab) {
-        return current
+        return shown
       }
       const tabByTask = withTab(current.tabByTask, taskId, tab)
       saveTabs(tabByTask)
-      return { tabByTask }
+      return { tabByTask, ...shown }
     }),
   setPaneLayout: (paneLayout) => {
     savePaneLayout(paneLayout)

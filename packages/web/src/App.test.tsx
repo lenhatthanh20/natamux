@@ -1030,6 +1030,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'New workspace' }))
     const dialog = screen.getByRole('dialog', { name: 'New workspace' })
     await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
+    await user.click(within(dialog).getByRole('button', { name: 'Advanced' }))
     await user.type(within(dialog).getByLabelText('Prompt for the agent'), 'Keep the old URL')
     await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
 
@@ -1218,6 +1219,131 @@ describe('App', () => {
 
     await user.keyboard('?')
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()
+  })
+
+  it('opens the command palette with Ctrl+K, finds a task and opens its workspace', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0001',
+        title: 'Fix timezone bug',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0001',
+        branch: 'helmsman/t-0001',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('{Control>}k{/Control}')
+    const palette = screen.getByRole('dialog', { name: 'Command palette' })
+    await user.keyboard('timezone')
+    expect(within(palette).getAllByRole('option')[0]?.textContent).toContain('T-0001')
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByRole('region', { name: 'Changes of T-0001' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull()
+  })
+
+  it('opens the palette from the title bar, and the jump palette from the needs-you pill', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: /Search or run a command/ }),
+    )
+    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull()
+
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: '1 needs you' }),
+    )
+    const jump = screen.getByRole('dialog', { name: 'Jump to a workspace' })
+    expect(within(jump).getByRole('button', { name: 'Remove the Needs you scope' })).toBeTruthy()
+  })
+
+  it('runs a command from the palette', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.keyboard('>board{Enter}')
+    expect(await screen.findByRole('radio', { name: 'Board', checked: true })).toBeTruthy()
+  })
+
+  it('leaves single keys to a field and to open layers', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByLabelText('New task title'))
+    await user.keyboard('c?n')
+    expect((screen.getByLabelText('New task title') as HTMLInputElement).value).toBe('c?n')
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    await user.keyboard('{Escape}')
+    await user.keyboard('c')
+    expect(screen.getByRole('dialog', { name: 'New workspace' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    await user.keyboard('?')
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()
+  })
+
+  it('lists the keys of the registry in the shortcut sheet and filters them', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('?')
+    const sheet = screen.getByRole('dialog', { name: 'Keyboard shortcuts' })
+    expect(within(sheet).getByText('Open the command palette')).toBeTruthy()
+    expect(within(sheet).getByText('Jump to a workspace')).toBeTruthy()
+    expect(within(sheet).getByText('Maximize or restore the focused pane')).toBeTruthy()
+    await user.keyboard('jump')
+    expect(within(sheet).queryByText('Open the command palette')).toBeNull()
+    expect(within(sheet).getByText('Jump to a workspace')).toBeTruthy()
+  })
+
+  it('switches the workspace tab with the number keys', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0001',
+        title: 'Fix timezone bug',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0001',
+        branch: 'helmsman/t-0001',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    useViewStore.getState().openChanges('T-0001', 'terminal')
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
+    await user.keyboard('3')
+    expect(within(view).getByRole('tab', { name: 'History' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    await user.keyboard('2')
+    expect(within(view).getByRole('tab', { name: 'Changes' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
   })
 
   it('sorts the table from the column headers and says which column is sorted', async () => {

@@ -1,6 +1,7 @@
 import type { Repo } from '@helmsman/core'
-import { FolderGit2 } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { CircleAlert, FolderGit2 } from 'lucide-react'
+import { type FormEvent, useId, useState } from 'react'
+import { repoPathProblem } from '../lib/issues'
 import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { inputLg } from './ui/styles'
@@ -17,10 +18,18 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [touched, setTouched] = useState(false)
+  const problemId = useId()
+  // The full-path rule shows after the field was left; the daemon's answer shows at once.
+  const problem = (touched ? repoPathProblem(path) : null) ?? error
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (path.trim() === '' || adding) {
+      return
+    }
+    if (repoPathProblem(path) !== null) {
+      setTouched(true)
       return
     }
     setAdding(true)
@@ -59,11 +68,27 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
           <span className="text-xs font-medium text-muted">Folder</span>
           <input
             value={path}
-            onChange={(event) => setPath(event.target.value)}
+            onChange={(event) => {
+              setPath(event.target.value)
+              setError(null)
+            }}
+            onBlur={() => setTouched(true)}
             placeholder="/path/to/the/repository"
             aria-label="Repository folder"
-            className={`${inputLg} font-mono`}
+            aria-invalid={problem !== null}
+            aria-describedby={problem === null ? undefined : problemId}
+            className={`${inputLg} font-mono ${problem === null ? '' : 'border-danger-text!'}`}
           />
+          {problem !== null && (
+            <span
+              id={problemId}
+              role="alert"
+              className="flex items-start gap-1.5 text-xs text-danger-text"
+            >
+              <CircleAlert size={12} aria-hidden="true" className="mt-0.5 shrink-0" />
+              {problem}
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Name</span>
@@ -75,18 +100,14 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
             className={inputLg}
           />
         </label>
-        {error !== null && (
-          <p role="alert" className="text-remove">
-            {error}
-          </p>
-        )}
         <div className="flex justify-end pt-1">
           <Button
             type="submit"
             variant="primary"
             size="md"
             shortcut="Mod+Enter"
-            disabled={adding || path.trim() === ''}
+            busy={adding}
+            disabledReason={path.trim() === '' ? 'Enter the folder first' : undefined}
           >
             Add repository
           </Button>

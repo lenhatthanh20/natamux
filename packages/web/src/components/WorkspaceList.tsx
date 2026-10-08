@@ -2,6 +2,7 @@ import type { DiffStat, Repo, Task, TaskState } from '@helmsman/core'
 import { ChevronRight, FolderGit2, FolderPlus, Pin, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useRovingFocus } from '../hooks/useRovingFocus'
+import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import { isUnseen } from '../lib/view-store'
 import { collapsedHint, DEFAULT_REPO_ID, workspaceGroups } from '../lib/workspace-groups'
@@ -194,7 +195,7 @@ export function WorkspaceList({
           label="Add a workspace"
           icon={Plus}
           size="xs"
-          shortcut="c"
+          shortcut={shortcutOf('workspace.new')}
           onClick={() => onNewWorkspace()}
         />
       </div>

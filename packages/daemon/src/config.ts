@@ -10,6 +10,8 @@ export type DaemonConfig = {
   dataDir: string
   repoDir: string
   worktreesDir: string
+  // The built dashboard's index.html, for deep links. Undefined: the daemon serves no page.
+  webIndexPath: string | undefined
   token: string
   tokenWasGenerated: boolean
 }
@@ -31,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
     dataDir,
     repoDir: env.HELMSMAN_REPO_DIR?.trim() || cwd,
     worktreesDir: env.HELMSMAN_WORKTREES_DIR?.trim() || join(dataDir, 'worktrees'),
+    webIndexPath: env.HELMSMAN_WEB_INDEX?.trim() || undefined,
     token: configuredToken || randomBytes(24).toString('base64url'),
     tokenWasGenerated: !configuredToken,
   }

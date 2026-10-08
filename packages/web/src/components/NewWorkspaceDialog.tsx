@@ -1,9 +1,12 @@
 import type { Repo, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import type { NewWorkspaceInput } from '../lib/api'
+import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { Button } from './ui/Button'
+import { Combobox } from './ui/Combobox'
 import { Dialog } from './ui/Dialog'
 import { Select } from './ui/Select'
 import { inputLg, textarea } from './ui/styles'
@@ -12,6 +15,8 @@ type NewWorkspaceDialogProps = {
   repos: readonly Pick<Repo, 'id' | 'name'>[]
   // The repository picked when the dialog opens; the first one without it.
   initialRepo?: string
+  // A name to start with, from the palette.
+  initialTitle?: string
   loadBranches: (repo?: string) => Promise<{ branches: string[]; current: string | null }>
   create: (input: NewWorkspaceInput) => Promise<Task>
   onCreated: (task: Task) => void
@@ -24,16 +29,18 @@ const FIELD_LABEL = 'text-xs font-medium text-muted'
 export function NewWorkspaceDialog({
   repos,
   initialRepo,
+  initialTitle = '',
   loadBranches,
   create,
   onCreated,
   onClose,
 }: NewWorkspaceDialogProps) {
-  const [title, setTitle] = useState('')
+  const [title, setTitle] = useState(initialTitle)
   const [repo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
   const [prompt, setPrompt] = useState('')
+  const [advanced, setAdvanced] = useState(false)
   const repoParam = repo === DEFAULT_REPO_ID ? undefined : repo
 
   const branches = useQuery({
@@ -50,10 +57,16 @@ export function NewWorkspaceDialog({
         ...(agent === '' || prompt.trim() === '' ? {} : { prompt: prompt.trim() }),
       }),
     onSuccess: (task) => {
+      if (base !== '') {
+        rememberBase(repo, base)
+      }
       onCreated(task)
       onClose()
     },
   })
+
+  const current = branches.data?.current ?? null
+  const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo))
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -79,63 +92,57 @@ export function NewWorkspaceDialog({
             variant="primary"
             size="md"
             shortcut="Mod+Enter"
-            disabled={title.trim() === '' || making.isPending}
+            busy={making.isPending}
+            disabledReason={title.trim() === '' ? 'Enter a name' : undefined}
           >
-            {making.isPending ? 'Making the workspace…' : 'Create workspace'}
+            {making.isPending ? 'Making the workspace' : 'Create workspace'}
           </Button>
         </>
       }
     >
       <form id="new-workspace" onSubmit={submit} className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <span className={FIELD_LABEL}>Repository</span>
+          <Select
+            value={repo}
+            onChange={(event) => {
+              setRepo(event.target.value)
+              setBase('')
+            }}
+            aria-label="Repository of the workspace"
+            fieldSize="md"
+            className="w-full"
+          >
+            {repos.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
+        </div>
         <label className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Name</span>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Fix the login redirect"
+            data-autofocus
             aria-label="Workspace name"
             className={inputLg}
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <span className={FIELD_LABEL}>Repository</span>
-            <Select
-              value={repo}
-              onChange={(event) => {
-                setRepo(event.target.value)
-                setBase('')
-              }}
-              aria-label="Repository of the workspace"
-              fieldSize="md"
-              className="w-full"
-            >
-              {repos.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className={FIELD_LABEL}>Branch from</span>
-            <Select
-              value={base}
-              onChange={(event) => setBase(event.target.value)}
-              aria-label="Branch to start from"
-              fieldSize="md"
-              className="w-full"
-            >
-              <option value="">{branches.data?.current ?? 'The current branch'}</option>
-              {(branches.data?.branches ?? [])
-                .filter((name) => name !== branches.data?.current)
-                .map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-            </Select>
-          </div>
+        <div className="flex flex-col gap-1">
+          <span className={FIELD_LABEL}>Branch from</span>
+          <Combobox
+            label="Branch to start from"
+            placeholder={current ?? 'The current branch'}
+            fieldSize="md"
+            options={options}
+            value={base === '' ? (current ?? '') : base}
+            onChange={(name) => setBase(name === current ? '' : name)}
+            collapsedGroups={[TASK_BRANCH_GROUP]}
+            disabled={branches.data === undefined}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Agent</span>
@@ -151,17 +158,34 @@ export function NewWorkspaceDialog({
           </Select>
         </div>
         {agent !== '' && (
-          <label className="flex flex-col gap-1">
-            <span className={FIELD_LABEL}>What should the agent do?</span>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={4}
-              placeholder="Optional. The agent starts with this prompt, and it becomes the task's notes."
-              aria-label="Prompt for the agent"
-              className={`${textarea} resize-y`}
-            />
-          </label>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              aria-expanded={advanced}
+              onClick={() => setAdvanced((open) => !open)}
+              className="focus-inset -ml-1 flex h-7 w-fit items-center gap-1 rounded-md px-1 text-xs font-medium text-ink-2 hover:text-ink"
+            >
+              <ChevronRight
+                size={12}
+                aria-hidden="true"
+                className={advanced ? 'rotate-90' : undefined}
+              />
+              Advanced
+            </button>
+            {advanced && (
+              <label className="flex flex-col gap-1">
+                <span className={FIELD_LABEL}>What should the agent do?</span>
+                <textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  rows={4}
+                  placeholder="Optional. The agent starts with this prompt, and it becomes the task's notes."
+                  aria-label="Prompt for the agent"
+                  className={`${textarea} resize-y`}
+                />
+              </label>
+            )}
+          </div>
         )}
         {making.isError && (
           <p role="alert" className="text-remove">

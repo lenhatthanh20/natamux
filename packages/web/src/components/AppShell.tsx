@@ -1,4 +1,5 @@
 import { type ReactNode, type RefObject, useEffect, useRef } from 'react'
+import { useAppEvent } from '../lib/app-events'
 import type { DetailsMode, LayoutMode } from '../lib/layout-mode'
 import { ResizeHandle } from './ui/ResizeHandle'
 
@@ -160,45 +161,32 @@ function Sheet({
   )
 }
 
-// F6 and Shift+F6 move between the parts: sidebar, main, details, status bar.
+// F6 and Shift+F6 move between the parts: sidebar, main, details, status bar. The keys are
+// commands, see lib/commands.ts.
 function usePartCycling(root: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'F6' || event.ctrlKey || event.metaKey || event.altKey) {
-        return
-      }
-      if (document.querySelector('[role="dialog"], [role="menu"]')) {
-        return
-      }
-      const parts = [...(root.current?.querySelectorAll<HTMLElement>('[data-part]') ?? [])].sort(
-        (a, b) =>
-          PART_ORDER.indexOf(a.dataset.part ?? '') - PART_ORDER.indexOf(b.dataset.part ?? ''),
-      )
-      if (parts.length === 0) {
-        return
-      }
-      event.preventDefault()
-      const at = parts.findIndex((part) => part.contains(document.activeElement))
-      const step = event.shiftKey ? -1 : 1
-      const target =
-        parts[
-          (at === -1 ? (step === 1 ? 0 : parts.length - 1) : at + step + parts.length) %
-            parts.length
-        ]
-      if (target === undefined) {
-        return
-      }
-      const inner = target.querySelector<HTMLElement>(FOCUSABLE)
-      if (inner !== null) {
-        inner.focus()
-      } else {
-        target.tabIndex = -1
-        target.focus()
-      }
+  useAppEvent<number>('focus-part', (step) => {
+    const parts = [...(root.current?.querySelectorAll<HTMLElement>('[data-part]') ?? [])].sort(
+      (a, b) => PART_ORDER.indexOf(a.dataset.part ?? '') - PART_ORDER.indexOf(b.dataset.part ?? ''),
+    )
+    if (parts.length === 0) {
+      return
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [root])
+    const at = parts.findIndex((part) => part.contains(document.activeElement))
+    const target =
+      parts[
+        (at === -1 ? (step === 1 ? 0 : parts.length - 1) : at + step + parts.length) % parts.length
+      ]
+    if (target === undefined) {
+      return
+    }
+    const inner = target.querySelector<HTMLElement>(FOCUSABLE)
+    if (inner !== null) {
+      inner.focus()
+    } else {
+      target.tabIndex = -1
+      target.focus()
+    }
+  })
 }
 
 // The frame of the app, section 3.1 of the UI spec: title bar, sidebar, main, details and status
