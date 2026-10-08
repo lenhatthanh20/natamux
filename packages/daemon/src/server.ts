@@ -14,6 +14,7 @@ import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { AgentRunner } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
+import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TerminalLimitError, type TerminalService } from './terminal-service.js'
 import {
@@ -27,6 +28,7 @@ type ServerOptions = {
   workspaces: WorkspaceService
   terminals: TerminalService
   agents: AgentRunner
+  pullRequests: PullRequestWatcher
   bus: EventBus
   token: string
 }
@@ -228,6 +230,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/pull-request', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { task: await options.workspaces.openPullRequest(id) }
+  })
+
+  // Asks GitHub now instead of waiting for the next minute.
+  app.post('/tasks/:id/pull-request/refresh', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: await options.pullRequests.check(id) }
   })
 
   app.post('/tasks/:id/terminal/ticket', async (request) => {

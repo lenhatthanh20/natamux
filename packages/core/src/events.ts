@@ -26,6 +26,10 @@ export const EVENT_TYPES = [
   'pr.opened',
   'agent.launched',
   'task.edited',
+  'pr.merged',
+  'pr.closed',
+  'ci.passed',
+  'ci.failed',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -52,6 +56,8 @@ const TARGET_STATE: Partial<Record<EventType, TaskState>> = {
   'agent.failed': 'failed',
   'review.approved': 'done',
   'review.changes-requested': 'running',
+  // A merged pull request finishes a task that waits for review.
+  'pr.merged': 'done',
 }
 
 export type DerivedTaskState = {
@@ -70,6 +76,9 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'pr.opened',
   'agent.launched',
   'task.edited',
+  'pr.closed',
+  'ci.passed',
+  'ci.failed',
 ]
 
 export type AppliedEvent = {

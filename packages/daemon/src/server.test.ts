@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { addBareOrigin, createTestRepo, type TestRepo } from './git-repo.fixture.js'
+import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -44,7 +45,20 @@ beforeEach(async () => {
     claudeSettingsPath: '/data/claude-code-settings.json',
     platform: 'linux',
   })
-  app = await buildServer({ service, workspaces, terminals, agents, bus, token: TOKEN })
+  const pullRequests = new PullRequestWatcher({
+    tasks: service,
+    cwd: repo.dir,
+    gh: async () => JSON.stringify({ state: 'MERGED', isDraft: false, statusCheckRollup: [] }),
+  })
+  app = await buildServer({
+    service,
+    workspaces,
+    terminals,
+    agents,
+    pullRequests,
+    bus,
+    token: TOKEN,
+  })
 })
 
 afterEach(async () => {
@@ -852,5 +866,23 @@ describe('edit a task', () => {
       payload: { title: 'x' },
     })
     expect(unknown.statusCode).toBe(404)
+  })
+})
+
+describe('pull request status', () => {
+  it('asks GitHub now for a task with a pull request', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const none = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/pull-request/refresh',
+      headers: authorization,
+    })
+    expect(none.statusCode).toBe(200)
+    expect(none.json().task.prStatus).toBeNull()
   })
 })

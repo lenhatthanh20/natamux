@@ -120,6 +120,9 @@ describe('applyTaskEvent', () => {
     'pr.opened',
     'agent.launched',
     'task.edited',
+    'pr.closed',
+    'ci.passed',
+    'ci.failed',
   ] as const)('accepts %s in any state without changing it', (type) => {
     expect(applyTaskEvent('running', event(type))).toEqual({ state: 'running', accepted: true })
     expect(applyTaskEvent('done', event(type))).toEqual({ state: 'done', accepted: true })
@@ -169,5 +172,13 @@ describe('taskEventSchema', () => {
       at: 'yesterday',
     })
     expect(result.success).toBe(false)
+  })
+
+  it('finishes a task in review when its pull request is merged, and only then', () => {
+    expect(applyTaskEvent('review', event('pr.merged'))).toEqual({ state: 'done', accepted: true })
+    expect(applyTaskEvent('running', event('pr.merged'))).toEqual({
+      state: 'running',
+      accepted: false,
+    })
   })
 })
