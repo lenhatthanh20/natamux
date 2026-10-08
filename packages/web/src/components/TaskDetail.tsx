@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import { portRange, type Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
@@ -234,6 +234,12 @@ export function TaskDetail({
             </span>
           )}
         </Field>
+        {task.workspace !== null && (
+          <Field label="Ports">
+            {portRange(task.id).first} to {portRange(task.id).last}
+            <span className="block text-muted">PORT in its terminals is the first one.</span>
+          </Field>
+        )}
         <Field label="Labels">{task.labels.length > 0 ? task.labels.join(', ') : '-'}</Field>
         <Field label="Depends on">
           {task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}
