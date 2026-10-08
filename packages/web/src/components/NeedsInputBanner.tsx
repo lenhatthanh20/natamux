@@ -24,7 +24,7 @@ export function NeedsInputBanner({
       className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-y border-signal-line bg-signal-soft px-4 py-1"
     >
       <CircleQuestionMark size={ICON.md} aria-hidden="true" className="shrink-0 text-signal" />
-      <p className="min-w-0 flex-1 basis-60 truncate text-ink" data-tip-overflow>
+      <p className="line-clamp-2 min-w-0 flex-1 basis-60 text-ink" data-tip-overflow>
         {bannerText(question)}
       </p>
       <div className="flex items-center gap-2">

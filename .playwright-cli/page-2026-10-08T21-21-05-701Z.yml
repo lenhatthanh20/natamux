@@ -1,0 +1,100 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - link "Skip to main content" [ref=f1e4] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=f1e5]:
+      - generic [ref=f1e6]:
+        - button "Open the menu" [ref=f1e1632] [cursor=pointer]
+        - generic [ref=f1e13]: T-0022
+      - generic [ref=f1e21]:
+        - button "6 need you" [ref=f1e133] [cursor=pointer]
+        - button "Search" [ref=f1e1634] [cursor=pointer]
+        - button "New workspace" [ref=f1e22] [cursor=pointer]
+        - button "Show details" [ref=f1e1360] [cursor=pointer]
+    - main [ref=f1e81]:
+      - region "Changes of T-0022" [ref=f1e1361]:
+        - generic [ref=f1e1362]:
+          - generic [ref=f1e1363]: T-0022
+          - heading "[pr3] banner check" [level=2] [ref=f1e1364]
+          - generic [ref=f1e1365]: Needs input
+          - button "Git actions" [ref=f1e1638] [cursor=pointer]
+        - status [ref=f1e1382]:
+          - paragraph [ref=f1e1386]: "The agent asks: Keep the old ticket format for one release, or drop it now?"
+          - generic [ref=f1e1387]:
+            - button "Answer in terminal" [ref=f1e1388] [cursor=pointer]
+            - button "Resume" [ref=f1e1389] [cursor=pointer]
+        - generic [ref=f1e1390]:
+          - tablist "View" [ref=f1e1391]:
+            - tab "Terminal" [selected] [ref=f1e1392] [cursor=pointer]
+            - tab "Changes" [ref=f1e1396] [cursor=pointer]
+            - tab "History" [ref=f1e1399] [cursor=pointer]
+          - button "New shell" [ref=f1e1646] [cursor=pointer]
+        - tabpanel "Terminal" [ref=f1e1650]:
+          - generic [ref=f1e1651]:
+            - group "Shells" [ref=f1e1652]:
+              - button "Shell 1" [pressed] [ref=f1e1654] [cursor=pointer]
+              - button "Shell 2" [ref=f1e1655] [cursor=pointer]
+            - region "Shell 1" [ref=f1e1657]:
+              - generic [ref=f1e1659]:
+                - generic [ref=f1e1660]: Needs input
+                - generic [ref=f1e1666]: Shell 1
+                - generic [ref=f1e1667]: Agent
+                - generic [ref=f1e1668]: Needs your input
+                - button "Maximize Shell 1" [ref=f1e1669] [cursor=pointer]
+              - region "Terminal screen" [ref=f1e1677]:
+                - generic [ref=f1e1680]:
+                  - textbox "Terminal input" [active] [ref=f1e1681]
+                  - generic [aria-hidden] [ref=f1e1682]:
+                    - generic [ref=f1e1683]: "settings.json' 'ask: test the banner'"
+                    - generic [ref=f1e1685]: ╭────────────────────────────────────────────
+                    - generic [ref=f1e1687]: ──╮
+                    - generic [ref=f1e1689]:
+                      - generic [ref=f1e1690]: │
+                      - generic [ref=f1e1692]: Fake agent
+                      - generic [ref=f1e1693]: ", a stand-in for Claude Code in d"
+                    - generic [ref=f1e1694]:
+                      - generic [ref=f1e1695]: ev
+                      - generic [ref=f1e1696]: │
+                    - generic [ref=f1e1697]: ╰────────────────────────────────────────────
+                    - generic [ref=f1e1699]: ──╯
+                    - generic [ref=f1e1702]:
+                      - generic [ref=f1e1703]: ">"
+                      - generic [ref=f1e1704]: test the banner
+                    - generic [ref=f1e1706]:
+                      - generic [ref=f1e1707]: ●
+                      - generic [ref=f1e1709]: Read
+                      - generic [ref=f1e1710]: README.md
+                    - generic [ref=f1e1711]:
+                      - generic [ref=f1e1712]: ●
+                      - generic [ref=f1e1714]: Edit
+                      - generic [ref=f1e1715]: notes/T-0022.md
+                    - generic [ref=f1e1716]: +1 line
+                    - generic [ref=f1e1719]:
+                      - generic [ref=f1e1720]: ●
+                      - generic [ref=f1e1722]: Bash
+                      - generic [ref=f1e1723]: (pnpm --filter @helmsman/web test)
+                    - generic [ref=f1e1724]: ✓ 121 passed
+                    - generic [ref=f1e1728]:
+                      - generic [ref=f1e1729]: ●
+                      - generic [ref=f1e1731]: Read
+                      - generic [ref=f1e1732]: README.md
+                    - generic [ref=f1e1733]:
+                      - generic [ref=f1e1734]: ●
+                      - generic [ref=f1e1736]: Edit
+                      - generic [ref=f1e1737]: notes/T-0022.md
+                    - generic [ref=f1e1738]: +1 line
+                    - generic [ref=f1e1741]:
+                      - generic [ref=f1e1742]: ●
+                      - generic [ref=f1e1744]: Bash
+                      - generic [ref=f1e1745]: (pnpm --filter @helmsman/web test)
+                    - generic [ref=f1e1746]: ✓ 122 passed
+                    - generic [ref=f1e1750]:
+                      - generic [ref=f1e1751]: "?"
+                      - generic [ref=f1e1752]: Keep the old ticket format for one release,
+                    - generic [ref=f1e1753]: or drop it now?
+                    - generic [ref=f1e1755]: (type an answer and press Enter)
+                    - generic [ref=f1e1757]: ">"
+  - list
+  - generic [ref=f1e1760]:
+    - alert
+    - alert
