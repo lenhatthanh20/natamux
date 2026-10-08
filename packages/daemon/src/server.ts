@@ -20,7 +20,12 @@ import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
-import { MAIN_TERMINAL, TerminalLimitError, type TerminalService } from './terminal-service.js'
+import {
+  MAIN_TERMINAL,
+  NoTerminalError,
+  TerminalLimitError,
+  type TerminalService,
+} from './terminal-service.js'
 import {
   FileNotChangedError,
   WorkspaceConflictError,
@@ -48,6 +53,7 @@ const fanOutBodySchema = z.object({
   count: z.number().int().min(1).max(MAX_TRIES),
   start: z.boolean().default(false),
 })
+const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
@@ -145,6 +151,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof GitError ||
       error instanceof OutsideWorkspaceError ||
       error instanceof TerminalLimitError ||
+      error instanceof NoTerminalError ||
       error instanceof NothingToCommitError ||
       error instanceof GitHubError ||
       error instanceof TaskWaitingError
@@ -263,6 +270,15 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { count, start } = fanOutBodySchema.parse(request.body)
     const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
     return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
+  })
+
+  // A review comment for the agent: pasted into its terminal as the next prompt.
+  app.post('/tasks/:id/agent/message', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { text } = messageBodySchema.parse(request.body)
+    options.service.getTask(id)
+    options.terminals.paste(id, text)
+    return { task: options.service.recordReviewComment(id, text) }
   })
 
   app.post('/tasks/:id/commit', async (request) => {

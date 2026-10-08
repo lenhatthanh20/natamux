@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import type { TerminalServerMessage, TerminalSize } from '@helmsman/core'
+import { portRange, type TerminalServerMessage, type TerminalSize } from '@helmsman/core'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
 // a fake, so they do not need the native module.
@@ -17,6 +17,13 @@ export type SpawnPty = (
 
 export type TerminalClient = {
   send: (message: TerminalServerMessage) => void
+}
+
+export class NoTerminalError extends Error {
+  constructor(taskId: string) {
+    super(`${taskId} has no open terminal. Start the agent first`)
+    this.name = 'NoTerminalError'
+  }
 }
 
 export class TerminalLimitError extends Error {
@@ -130,6 +137,16 @@ export class TerminalService {
     this.ensure(taskId, MAIN_TERMINAL, size).pty.write(`${line}\r`)
   }
 
+  // Pastes text into the first shell and presses Enter, so the agent there takes it as its next
+  // prompt. Bracketed paste keeps line breaks from sending the text early.
+  paste(taskId: string, text: string): void {
+    const session = this.sessions.get(sessionKey(taskId, MAIN_TERMINAL))
+    if (!session) {
+      throw new NoTerminalError(taskId)
+    }
+    session.pty.write(`\x1b[200~${text}\x1b[201~\r`)
+  }
+
   input(taskId: string, data: string, terminal = MAIN_TERMINAL): void {
     this.sessions.get(sessionKey(taskId, terminal))?.pty.write(data)
   }
@@ -169,7 +186,14 @@ export class TerminalService {
       ...size,
       cwd,
       // The task id lets `helmsman hook` name the task even when the agent changes folders.
-      env: { ...this.env, TERM: 'xterm-256color', HELMSMAN_TASK_ID: taskId },
+      // PORT is the first port of the task's own block, for a dev server.
+      env: {
+        ...this.env,
+        TERM: 'xterm-256color',
+        HELMSMAN_TASK_ID: taskId,
+        HELMSMAN_PORT: String(portRange(taskId).first),
+        PORT: String(portRange(taskId).first),
+      },
     })
     const key = sessionKey(taskId, terminal)
     const session: Session = { taskId, terminal, pty, scrollback: '', clients: new Set() }

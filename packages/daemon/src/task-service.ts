@@ -250,6 +250,25 @@ export class TaskService {
     return updated
   }
 
+  // Writes down a review comment that was sent to the agent of the task.
+  recordReviewComment(taskId: string, text: string): Task {
+    const task = this.getTask(taskId)
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'review.commented',
+      at: this.timestamp(),
+      payload: { text },
+    }
+    const updated: Task = { ...task, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.index.appendEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
   // Writes down that an agent was started in the task's terminal, and names it on the task.
   recordAgentLaunch(taskId: string, agent: string): Task {
     const task = this.getTask(taskId)

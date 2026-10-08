@@ -123,6 +123,7 @@ describe('applyTaskEvent', () => {
     'pr.closed',
     'ci.passed',
     'ci.failed',
+    'review.commented',
   ] as const)('accepts %s in any state without changing it', (type) => {
     expect(applyTaskEvent('running', event(type))).toEqual({ state: 'running', accepted: true })
     expect(applyTaskEvent('done', event(type))).toEqual({ state: 'done', accepted: true })
