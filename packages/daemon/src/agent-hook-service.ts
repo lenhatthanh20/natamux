@@ -1,4 +1,4 @@
-import { sep } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import { type EventType, type Task, taskIdSchema } from '@helmsman/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { planSignalEvents } from './agent-signals.js'
@@ -19,8 +19,10 @@ export class UnknownAgentError extends Error {
   }
 }
 
+// path.relative also handles mixed slashes and the case of drive letters on Windows.
 function isInside(folder: string, path: string): boolean {
-  return path === folder || path.startsWith(folder.endsWith(sep) ? folder : `${folder}${sep}`)
+  const rest = relative(folder, path)
+  return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
 }
 
 export class AgentHookService {
