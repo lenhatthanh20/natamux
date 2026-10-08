@@ -173,18 +173,53 @@ export function ChangesView({
   }
 
   const tabClass =
-    'rounded-md px-2.5 py-1 font-medium text-muted hover:text-ink aria-selected:bg-selected aria-selected:text-ink'
+    '-mb-px border-b-2 border-transparent px-2.5 py-1.5 font-medium text-muted hover:text-ink aria-selected:border-accent aria-selected:text-ink'
   const toolButton =
     'rounded-md border border-line px-2.5 py-1 hover:border-accent disabled:opacity-50'
 
   return (
     <section aria-label={`Changes of ${task.id}`} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2">
-        <h2 className="min-w-0 truncate font-semibold">
-          <span className="font-mono font-normal text-muted">{task.id}</span> {task.title}
-        </h2>
-        <StateBadge state={task.state} />
-        <div role="tablist" aria-label="View" className="flex gap-1">
+      <header className="flex flex-col gap-1 border-b border-line px-4 pt-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="min-w-0 flex-1 truncate font-semibold">
+            <span className="font-mono font-normal text-muted">{task.id}</span> {task.title}
+          </h2>
+          <StateBadge state={task.state} />
+          <button
+            type="button"
+            disabled={gitAction.isPending || task.branch === null}
+            onClick={() => gitAction.mutate('push')}
+            title={task.branch === null ? undefined : `Push ${task.branch} to origin`}
+            className={toolButton}
+          >
+            Push
+          </button>
+          {task.pr === null ? (
+            <button
+              type="button"
+              disabled={gitAction.isPending || task.branch === null}
+              onClick={() => gitAction.mutate('pull-request')}
+              className={toolButton}
+            >
+              Create pull request
+            </button>
+          ) : (
+            <a href={task.pr} target="_blank" rel="noreferrer" className={toolButton}>
+              Open pull request
+            </a>
+          )}
+        </div>
+        {(gitAction.isPending || notice !== null) && (
+          <p>
+            {gitAction.isPending && <span className="text-muted">Working.</span>}
+            {notice !== null && (
+              <span role="status" className="font-medium">
+                {notice}
+              </span>
+            )}
+          </p>
+        )}
+        <div role="tablist" aria-label="View" className="flex gap-2">
           <button
             type="button"
             role="tab"
@@ -213,46 +248,6 @@ export function ChangesView({
             History
           </button>
         </div>
-        <div className="ml-auto flex min-w-0 items-center gap-2">
-          <span
-            className="min-w-0 max-w-[18rem] truncate font-mono text-xs text-muted"
-            title={task.branch ?? undefined}
-          >
-            {task.branch ?? 'No branch'}
-          </span>
-          <button
-            type="button"
-            disabled={gitAction.isPending || task.branch === null}
-            onClick={() => gitAction.mutate('push')}
-            className={toolButton}
-          >
-            Push
-          </button>
-          {task.pr === null ? (
-            <button
-              type="button"
-              disabled={gitAction.isPending || task.branch === null}
-              onClick={() => gitAction.mutate('pull-request')}
-              className={toolButton}
-            >
-              Create pull request
-            </button>
-          ) : (
-            <a href={task.pr} target="_blank" rel="noreferrer" className={toolButton}>
-              Open pull request
-            </a>
-          )}
-        </div>
-        {(gitAction.isPending || notice !== null) && (
-          <p className="w-full">
-            {gitAction.isPending && <span className="text-muted">Working.</span>}
-            {notice !== null && (
-              <span role="status" className="font-medium">
-                {notice}
-              </span>
-            )}
-          </p>
-        )}
       </header>
 
       {tab === 'terminal' && (
@@ -290,8 +285,8 @@ export function ChangesView({
           className="grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-auto p-4 lg:grid-cols-[17rem_1fr] lg:grid-rows-1"
         >
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span className="flex-1 text-muted">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="flex-1 whitespace-nowrap text-muted">
                 {changes.data ? countLabel(list.length) : 'Reading changes.'}
               </span>
               <button
