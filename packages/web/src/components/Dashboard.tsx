@@ -7,6 +7,7 @@ import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
+import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
@@ -170,6 +171,29 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  // Keeps one try of a fan-out: the other tries that are not finished are cancelled.
+  const keepTryMutation = useMutation({
+    mutationFn: async ({ kept, tries }: { kept: Task; tries: Task[] }) => {
+      const cancelled: Task[] = []
+      for (const other of triesToCancel(kept, tries)) {
+        cancelled.push((await api.sendEvent(other.id, 'task.cancelled')).task)
+      }
+      return cancelled
+    },
+    onMutate: () => setFeedback(null),
+    onSuccess: (cancelled) => {
+      for (const task of cancelled) {
+        mergeTask(task)
+      }
+      setFeedback(
+        cancelled.length === 1
+          ? 'Cancelled 1 other try.'
+          : `Cancelled ${cancelled.length} other tries.`,
+      )
+    },
+    onError: (error) => setFeedback(error.message),
+  })
+
   const editMutation = useMutation({
     mutationFn: ({ taskId, changes }: { taskId: string; changes: TaskChanges }) =>
       api.updateTask(taskId, changes),
@@ -222,6 +246,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   )
   const selectedTask = tasks.find((task) => task.id === selectedId) ?? null
   const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
+  const selectedGroup = selectedTask === null ? null : tryGroup(selectedTask)
+  const selectedTries = selectedGroup === null ? [] : triesOf(selectedGroup, tasks)
 
   const runAction = (task: Task, action: TaskAction) => {
     setFeedback(null)
@@ -566,6 +592,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     subtaskMutation.mutate({ parentId: selectedTask.id, title })
                   }
                   onSelectTask={chooseTask}
+                  tries={selectedTries}
+                  diffStats={diffStatsQuery.data}
+                  onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: selectedTries })}
                   onFanOut={(count, start) =>
                     fanOutMutation.mutate({ task: selectedTask, count, start })
                   }
