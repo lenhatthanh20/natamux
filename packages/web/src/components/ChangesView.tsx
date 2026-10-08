@@ -17,7 +17,6 @@ const TerminalView = lazy(() => import('./TerminalView'))
 
 const REFRESH_MS = 10_000
 
-
 type ChangesViewProps = {
   task: Task
   now: Date
