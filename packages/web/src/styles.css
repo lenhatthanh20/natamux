@@ -510,16 +510,16 @@
   -webkit-app-region: drag;
 }
 
+:root[data-window="inactive"] .hm-titlebar {
+  color: var(--muted);
+}
+
 :root[data-shell="electron"][data-platform="mac"] .hm-titlebar {
   padding-left: 76px;
 }
 
 :root[data-shell="electron"][data-platform="win"] .hm-titlebar {
   padding-right: 140px;
-}
-
-:root[data-window="inactive"] .hm-titlebar {
-  color: var(--muted);
 }
 
 :root[data-shell="electron"] .hm-titlebar :is(button, a, input, [role="button"]) {
