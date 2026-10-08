@@ -1,4 +1,4 @@
-import { onMac } from './chords'
+import { isMac } from './keys'
 import {
   COMMANDS,
   type Command,
@@ -56,7 +56,7 @@ export function mayFire(
   command: Command,
   shortcut: string,
   focus: FocusKind,
-  mac = onMac(),
+  mac = isMac(),
 ): boolean {
   const allowed = command.focus ?? defaultFocus(shortcut)
   if (!allowed.includes(focus)) {
@@ -71,7 +71,7 @@ export function mayFire(
 export function findCommand(
   event: ShortcutEvent,
   context: CommandContext,
-  mac = onMac(),
+  mac = isMac(),
   commands: readonly Command[] = COMMANDS,
 ): Command | null {
   for (const command of commands) {
@@ -114,7 +114,7 @@ const NO_ACTIONS = new Proxy({} as CommandContext['actions'], {
 // page, where the dispatcher runs the command.
 export function keyBelongsToShell(
   event: ShortcutEvent,
-  mac = onMac(),
+  mac = isMac(),
   commands: readonly Command[] = COMMANDS,
 ): boolean {
   const context = { state: { ...published, focus: 'terminal' as const }, actions: NO_ACTIONS }

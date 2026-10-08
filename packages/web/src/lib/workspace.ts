@@ -44,14 +44,6 @@ export function pullRequestButton(
   return { label }
 }
 
-// A long branch name keeps its beginning and its end, which is where the ticket and the slug are.
-export function splitMiddle(text: string, tail = 10): { head: string; tail: string } {
-  if (text.length <= tail * 2) {
-    return { head: text, tail: '' }
-  }
-  return { head: text.slice(0, -tail), tail: text.slice(-tail) }
-}
-
 // What the agent asked, from the newest "agent.asked" event that carries a message.
 export function latestQuestion(events: readonly StoredEvent[]): string | null {
   for (const { event } of [...events].reverse()) {
