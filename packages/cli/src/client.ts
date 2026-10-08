@@ -160,9 +160,13 @@ export class DaemonClient {
     return taskSchema.parse(body.task)
   }
 
-  async createWorkspace(id: string): Promise<Task> {
+  async createWorkspace(id: string, base?: string): Promise<Task> {
     const body = asRecord(
-      await this.request('POST', `${this.taskPath(id)}/workspace`),
+      await this.request(
+        'POST',
+        `${this.taskPath(id)}/workspace`,
+        base === undefined ? undefined : { base },
+      ),
       'created workspace',
     )
     return taskSchema.parse(body.task)

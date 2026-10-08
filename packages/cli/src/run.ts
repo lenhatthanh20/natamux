@@ -139,7 +139,7 @@ async function execute(command: Command, client: DaemonClient, io: CliIo): Promi
     }
 
     case 'workspace.create': {
-      const task = await client.createWorkspace(command.id)
+      const task = await client.createWorkspace(command.id, command.base)
       if (command.json) {
         printJson(io, task)
       } else {

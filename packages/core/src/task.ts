@@ -29,6 +29,8 @@ export const taskSchema = z.object({
   pr: z.url().nullable().default(null),
   prStatus: pullRequestStatusSchema.nullable().default(null),
   dependsOn: z.array(taskIdSchema).default([]),
+  // The task this one is a part of. One level only: a subtask has no subtasks.
+  parentId: taskIdSchema.nullable().default(null),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

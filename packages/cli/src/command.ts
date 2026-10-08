@@ -59,7 +59,7 @@ export type Command =
   | { name: 'event.list'; id: string; json: boolean }
   | { name: 'hooks.claude-code' }
   | { name: 'hook.forward'; agent: string }
-  | { name: 'workspace.create'; id: string; json: boolean }
+  | { name: 'workspace.create'; id: string; base?: string; json: boolean }
   | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
 export class UsageError extends Error {
@@ -121,6 +121,7 @@ function parseOptions(argv: readonly string[]) {
         title: { type: 'string' },
         prompt: { type: 'string' },
         task: { type: 'string' },
+        base: { type: 'string' },
       },
     })
   } catch (error) {
@@ -284,7 +285,7 @@ export function parseCommand(argv: readonly string[]): Command {
     const id = taskId(rest[0])
     noExtraArguments(rest.slice(1))
     if (second === 'create') {
-      return { name: 'workspace.create', id, json }
+      return { name: 'workspace.create', id, base: values.base, json }
     }
     if (values.yes !== true) {
       throw new UsageError(

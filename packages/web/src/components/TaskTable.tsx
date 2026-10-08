@@ -82,6 +82,9 @@ export function TaskTable({
                   <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
                   <WaitsFor ids={waitingOn(task, allTasks)} />
+                  {task.parentId !== null && (
+                    <span className="shrink-0 text-muted">part of {task.parentId}</span>
+                  )}
                   {task.state === 'running' && activity[task.id] !== undefined && (
                     <span className="w-full truncate pl-[4.75rem] font-mono text-xs text-muted">
                       {activity[task.id]}
