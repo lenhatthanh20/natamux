@@ -4,6 +4,7 @@ import { claudeCodeHookSettings } from '@helmsman/core'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
+import { IssueImporter } from './issue-importer.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer } from './server.js'
@@ -52,6 +53,7 @@ const app = await buildServer({
   terminals,
   agents,
   pullRequests,
+  issues: new IssueImporter({ tasks: service, cwd: config.repoDir }),
   bus,
   token: config.token,
 })

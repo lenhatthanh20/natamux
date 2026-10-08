@@ -85,7 +85,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Approval gates: a task can require a human decision before it moves on | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
 | Reusable task templates and prompts | v1 |
-| Import tasks from GitHub issues | v1 |
+| Import tasks from GitHub issues. Done: pick open issues (`gh issue list`) and make draft tasks; an issue is imported once | v1 |
 | Import from Linear, Jira and others | Later |
 | Search and filter by state, label, agent | MVP |
 
