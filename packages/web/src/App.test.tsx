@@ -1,4 +1,4 @@
-import { applyTaskEvent, type EventType, type Task } from '@helmsman/core'
+import { applyTaskEvent, type EventType, type Task, type TaskEvent } from '@helmsman/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,6 +49,16 @@ function json(data: unknown, status = 200): Response {
 function installDaemon(initial: Task[]) {
   let tasks = [...initial]
   const calls: Call[] = []
+  const log: { accepted: boolean; event: TaskEvent }[] = initial.map((task) => ({
+    accepted: true,
+    event: {
+      taskId: task.id,
+      source: 'system',
+      type: 'task.created',
+      at: task.createdAt,
+      payload: {},
+    },
+  }))
 
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
@@ -71,15 +81,25 @@ function installDaemon(initial: Task[]) {
     const eventPath = /^\/api\/tasks\/(T-\d+)\/events$/.exec(path)
     const taskId = eventPath?.[1]
     const target = tasks.find((task) => task.id === taskId)
+    if (method === 'GET' && target) {
+      const events = log
+        .filter((entry) => entry.event.taskId === target.id)
+        .map((entry, index) => ({ seq: index + 1, ...entry }))
+      return json({ events })
+    }
     if (method === 'POST' && target && body.type) {
-      const applied = applyTaskEvent(target.state, {
+      const event: TaskEvent = {
         taskId: target.id,
         source: 'human',
         type: body.type,
         at: '2026-10-08T12:00:00.000Z',
         payload: {},
-      })
-      const updated = applied.accepted ? { ...target, state: applied.state } : target
+      }
+      const applied = applyTaskEvent(target.state, event)
+      log.push({ accepted: applied.accepted, event })
+      const updated = applied.accepted
+        ? { ...target, state: applied.state, updatedAt: event.at }
+        : target
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated, accepted: applied.accepted })
     }
@@ -198,15 +218,64 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: 'Create workspace' }))
-    expect(await within(details).findByText('/work/T-0001')).toBeTruthy()
+    expect(await within(details).findByTitle('/work/T-0001')).toBeTruthy()
 
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
     await user.click(within(details).getByRole('button', { name: /Click again/ }))
 
     expect(await within(details).findByText('Workspace removed.')).toBeTruthy()
-    expect(within(details).queryByText('/work/T-0001')).toBeNull()
+    expect(within(details).queryByTitle('/work/T-0001')).toBeNull()
     expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
+  })
+
+  it('lists what happened to a task, newest first, and adds a line after an action', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const activity = await within(details).findByRole('region', { name: 'Activity' })
+    expect(within(activity).getByText(/Task created/)).toBeTruthy()
+
+    await user.click(within(details).getByRole('button', { name: /Approve/ }))
+
+    await waitFor(() => {
+      const lines = within(activity).getAllByRole('listitem')
+      expect(lines.map((line) => line.textContent)).toEqual([
+        expect.stringContaining('Approved'),
+        expect.stringContaining('Task created'),
+      ])
+    })
+  })
+
+  it('shows the workspace of a task in its details', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0001',
+        title: 'Fix timezone bug',
+        state: 'running',
+        workspace: '/work/.helmsman/worktrees/T-0001',
+        branch: 'helmsman/t-0001-fix-timezone-bug',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+
+    expect(within(details).getByTitle('/work/.helmsman/worktrees/T-0001')).toBeTruthy()
+    expect(within(details).getByTitle('helmsman/t-0001-fix-timezone-bug')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {

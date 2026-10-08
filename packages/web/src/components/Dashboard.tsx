@@ -229,9 +229,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             className="w-48 rounded-md border border-line bg-canvas px-3 py-1.5"
           />
           <span
-            className="text-muted"
+            className="flex items-center gap-1.5 text-muted"
             title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
           >
+            <span
+              aria-hidden="true"
+              className={
+                liveStatus === 'live'
+                  ? 'h-2 w-2 rounded-full bg-accent'
+                  : 'h-2 w-2 rounded-full bg-signal'
+              }
+            />
             {liveStatus === 'live'
               ? 'Live'
               : liveStatus === 'connecting'
@@ -278,6 +286,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               now={now}
               busy={eventMutation.isPending || workspaceMutation.isPending}
               feedback={feedback}
+              loadEvents={() => api.listEvents(selectedTask.id)}
               onAction={(action) => runAction(selectedTask, action)}
               onCreateWorkspace={() => {
                 setFeedback(null)
