@@ -64,7 +64,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters). Done: Claude Code, with its hooks given through `--settings` | MVP |
 | Embedded terminal per workspace (multiple tabs). Done: several shells per task, as tabs; each keeps running when the dashboard closes, with recent output on reconnect. The agent runs in shell 1 | MVP |
 | Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.helmsman-setup` (or `.helmsman-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
-| Port allocation per workspace so dev servers do not clash | v1 |
+| Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `HELMSMAN_PORT` | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |
 | Fan-out: one prompt to several agents, compare results, keep the winner | v1 |
 | SSH and remote workspaces | Later |
