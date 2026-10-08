@@ -559,7 +559,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onOpen={openTask}
             />
           </div>
-
         </nav>
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">

@@ -12,8 +12,8 @@ import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
 import { AgentComment } from './AgentComment'
 import { GitGraph } from './GitGraph'
-import { StateBadge } from './StateBadge'
 import { ShellPanes } from './ShellPanes'
+import { StateBadge } from './StateBadge'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
