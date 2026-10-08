@@ -63,6 +63,8 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       return
     }
     const terminal = new Terminal({
+      // The search addon marks its matches with decorations, which are a proposed API.
+      allowProposedApi: true,
       cursorBlink: true,
       fontFamily: MONO_FONT,
       fontSize: TERMINAL_FONT_SIZE * uiZoom(),

@@ -1,0 +1,574 @@
+- generic [ref=e1]:
+  - generic [ref=e11]:
+    - link "Skip to main content" [ref=e12] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=e13]:
+      - generic [ref=e14]:
+        - button "Hide sidebar" [pressed] [ref=e16] [cursor=pointer]
+        - heading "Helmsman" [level=1] [ref=e19]
+        - generic [ref=e21]: All tasks
+      - button "Search or run a command /" [ref=e23] [cursor=pointer]:
+        - generic [ref=e27]: Search or run a command
+        - generic [ref=e28]: /
+      - generic [ref=e29]:
+        - button "4 need you" [ref=e30] [cursor=pointer]
+        - button "New workspace" [ref=e31] [cursor=pointer]
+        - button "Select a task to show its details" [disabled] [ref=e33] [cursor=pointer]
+    - generic [ref=e36]:
+      - navigation "Workspaces" [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - textbox "Search tasks" [ref=e42]:
+              - /placeholder: Filter tasks
+            - generic [ref=e43]: /
+          - generic [ref=e44]:
+            - button "All tasks 21" [pressed] [ref=e45] [cursor=pointer]:
+              - generic [ref=e49]: All tasks
+              - generic [ref=e50]: "21"
+            - button "Agents 4" [ref=e51] [cursor=pointer]:
+              - generic [ref=e57]: Agents
+              - generic [ref=e58]: "4"
+        - region [ref=e60]:
+          - heading "4 tasks need you" [level=2] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - button "Failed Retry pushes on network errors 2h T-0010 Failed, 2h" [ref=e64] [cursor=pointer]:
+                - generic [ref=e65]:
+                  - generic [ref=e67]: Failed
+                  - generic [ref=e68]: Retry pushes on network errors
+                  - generic [ref=e69]: 2h
+                - generic [ref=e70]:
+                  - generic [ref=e71]: T-0010
+                  - generic [ref=e72]: Failed, 2h
+            - listitem [ref=e73]:
+              - button "In review CSV export for the task table 2h T-0009 In review, 2h" [ref=e74] [cursor=pointer]:
+                - generic [ref=e75]:
+                  - generic [ref=e77]: In review
+                  - generic [ref=e78]: CSV export for the task table
+                  - generic [ref=e79]: 2h
+                - generic [ref=e80]:
+                  - generic [ref=e81]: T-0009
+                  - generic [ref=e82]: In review, 2h
+            - listitem [ref=e83]:
+              - button "Blocked Windows path tests for repos 1h T-0011 Blocked, 1h" [ref=e84] [cursor=pointer]:
+                - generic [ref=e85]:
+                  - generic [ref=e87]: Blocked
+                  - generic [ref=e88]: Windows path tests for repos
+                  - generic [ref=e89]: 1h
+                - generic [ref=e90]:
+                  - generic [ref=e91]: T-0011
+                  - generic [ref=e92]: Blocked, 1h
+            - listitem [ref=e93]:
+              - button "In review [audit] workspace check 1h T-0018 In review, 1h" [ref=e94] [cursor=pointer]:
+                - generic [ref=e95]:
+                  - generic [ref=e97]: In review
+                  - generic [ref=e98]: "[audit] workspace check"
+                  - generic [ref=e99]: 1h
+                - generic [ref=e100]:
+                  - generic [ref=e101]: T-0018
+                  - generic [ref=e102]: In review, 1h
+        - region [ref=e104]:
+          - generic [ref=e105]:
+            - heading "Workspaces" [level=2] [ref=e106]
+            - button "Add a repository" [ref=e107] [cursor=pointer]
+            - button "Add a workspace" [ref=e110] [cursor=pointer]
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - button "helmsman 11" [expanded] [ref=e114] [cursor=pointer]:
+                - generic [ref=e122]: helmsman
+                - generic [ref=e123]: "11"
+              - button "New workspace in helmsman" [ref=e124] [cursor=pointer]
+            - list [ref=e126]:
+              - listitem [ref=e127]:
+                - button "Draft [audit] backlog task no workspace audit-backlog-task-no-workspace 1h" [ref=e128] [cursor=pointer]:
+                  - generic [ref=e129]:
+                    - generic [ref=e130]: Draft
+                    - generic [ref=e141]: "[audit] backlog task no workspace"
+                  - generic [ref=e142]:
+                    - generic [ref=e143]: audit-backlog-task-no-workspace
+                    - generic [ref=e144]: 1h
+                - button "Actions for T-0021" [ref=e146] [cursor=pointer]
+              - listitem [ref=e151]:
+                - button "Ready [audit] nav check audit-nav-check 1h" [ref=e152] [cursor=pointer]:
+                  - generic [ref=e153]:
+                    - generic [ref=e154]: Ready
+                    - generic [ref=e158]: "[audit] nav check"
+                  - generic [ref=e159]:
+                    - generic [ref=e160]: audit-nav-check
+                    - generic [ref=e161]: 1h
+                - button "Actions for T-0019" [ref=e163] [cursor=pointer]
+              - listitem [ref=e168]:
+                - button "In review [audit] workspace check audit-workspace-check +2 −0 1h" [ref=e169] [cursor=pointer]:
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: In review
+                    - generic [ref=e176]: "[audit] workspace check"
+                  - generic [ref=e177]:
+                    - generic [ref=e178]: audit-workspace-check
+                    - generic [ref=e179]:
+                      - generic [ref=e180]: "+2"
+                      - generic [ref=e181]: −0
+                    - generic [ref=e182]: 1h
+                - button "Actions for T-0018" [ref=e184] [cursor=pointer]
+              - listitem [ref=e189]:
+                - button "Blocked Windows path tests for repos windows-path-tests-for-repos 1h" [ref=e190] [cursor=pointer]:
+                  - generic [ref=e191]:
+                    - generic [ref=e192]: Blocked
+                    - generic [ref=e196]: Windows path tests for repos
+                  - generic [ref=e197]:
+                    - generic [ref=e198]: windows-path-tests-for-repos
+                    - generic [ref=e199]: 1h
+                - button "Actions for T-0011" [ref=e201] [cursor=pointer]
+              - listitem [ref=e206]:
+                - button "Failed Retry pushes on network errors retry-pushes-on-network-errors 2h" [ref=e207] [cursor=pointer]:
+                  - generic [ref=e208]:
+                    - generic [ref=e209]: Failed
+                    - generic [ref=e215]: Retry pushes on network errors
+                  - generic [ref=e216]:
+                    - generic [ref=e217]: retry-pushes-on-network-errors
+                    - generic [ref=e218]: 2h
+                - button "Actions for T-0010" [ref=e220] [cursor=pointer]
+              - listitem [ref=e225]:
+                - button "In review CSV export for the task table csv-export-for-the-task-table 2h" [ref=e226] [cursor=pointer]:
+                  - generic [ref=e227]:
+                    - generic [ref=e228]: In review
+                    - generic [ref=e233]: CSV export for the task table
+                  - generic [ref=e234]:
+                    - generic [ref=e235]: csv-export-for-the-task-table
+                    - generic [ref=e236]: 2h
+                - button "Actions for T-0009" [ref=e238] [cursor=pointer]
+              - listitem [ref=e243]:
+                - button "Running Fix token refresh race in the daemon fix-token-refresh-race-in-the-daemon 1m" [ref=e244] [cursor=pointer]:
+                  - generic [ref=e245]:
+                    - generic [ref=e246]: Running
+                    - generic [ref=e250]: Fix token refresh race in the daemon
+                  - generic [ref=e251]:
+                    - generic [ref=e252]: fix-token-refresh-race-in-the-daemon
+                    - generic [ref=e253]: 1m
+                - button "Actions for T-0008" [ref=e255] [cursor=pointer]
+              - listitem [ref=e260]:
+                - button "Running Split terminal panes split-terminal-panes 1m" [ref=e261] [cursor=pointer]:
+                  - generic [ref=e262]:
+                    - generic [ref=e263]: Running
+                    - generic [ref=e267]: Split terminal panes
+                  - generic [ref=e268]:
+                    - generic [ref=e269]: split-terminal-panes
+                    - generic [ref=e270]: 1m
+                - button "Actions for T-0007" [ref=e272] [cursor=pointer]
+              - listitem [ref=e277]:
+                - button "Running Drag tasks between board columns drag-tasks-between-board-columns 1m" [ref=e278] [cursor=pointer]:
+                  - generic [ref=e279]:
+                    - generic [ref=e280]: Running
+                    - generic [ref=e284]: Drag tasks between board columns
+                  - generic [ref=e285]:
+                    - generic [ref=e286]: drag-tasks-between-board-columns
+                    - generic [ref=e287]: 1m
+                - button "Actions for T-0006" [ref=e289] [cursor=pointer]
+              - listitem [ref=e294]:
+                - button "Running Command palette opened with Cmd+K command-palette-opened-with-cmd-k 1m" [ref=e295] [cursor=pointer]:
+                  - generic [ref=e296]:
+                    - generic [ref=e297]: Running
+                    - generic [ref=e301]: Command palette opened with Cmd+K
+                  - generic [ref=e302]:
+                    - generic [ref=e303]: command-palette-opened-with-cmd-k
+                    - generic [ref=e304]: 1m
+                - button "Actions for T-0005" [ref=e306] [cursor=pointer]
+              - listitem [ref=e311]:
+                - 'button "Ready Demo: changes and history demo-changes-and-history 2h" [ref=e312] [cursor=pointer]':
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: Ready
+                    - generic [ref=e318]: "Demo: changes and history"
+                  - generic [ref=e319]:
+                    - generic [ref=e320]: demo-changes-and-history
+                    - generic [ref=e321]: 2h
+                - button "Actions for T-0002" [ref=e323] [cursor=pointer]
+              - listitem [ref=e328]:
+                - group [ref=e329]:
+                  - generic "3 finished" [ref=e330]
+      - separator "Resize the sidebar" [ref=e333]
+      - main [ref=e335]:
+        - generic [ref=e336]:
+          - heading "All tasks" [level=2] [ref=e337]
+          - list "Filter by state" [ref=e338]:
+            - listitem [ref=e339]:
+              - button "Draft 5" [ref=e340] [cursor=pointer]:
+                - generic [ref=e342]: Draft
+                - generic [ref=e343]: "5"
+            - listitem [ref=e344]:
+              - button "Ready 4" [ref=e345] [cursor=pointer]:
+                - generic [ref=e347]: Ready
+                - generic [ref=e348]: "4"
+            - listitem [ref=e349]:
+              - button "Running 4" [ref=e350] [cursor=pointer]:
+                - generic [ref=e352]: Running
+                - generic [ref=e353]: "4"
+            - listitem [ref=e354]:
+              - button "In review 2" [ref=e355] [cursor=pointer]:
+                - generic [ref=e357]: In review
+                - generic [ref=e358]: "2"
+            - listitem [ref=e359]:
+              - button "Blocked 1" [ref=e360] [cursor=pointer]:
+                - generic [ref=e362]: Blocked
+                - generic [ref=e363]: "1"
+            - listitem [ref=e364]:
+              - button "Failed 1" [ref=e365] [cursor=pointer]:
+                - generic [ref=e367]: Failed
+                - generic [ref=e368]: "1"
+            - listitem [ref=e369]:
+              - button "Done 1" [ref=e370] [cursor=pointer]:
+                - generic [ref=e372]: Done
+                - generic [ref=e373]: "1"
+            - listitem [ref=e374]:
+              - button "Cancelled 3" [ref=e375] [cursor=pointer]:
+                - generic [ref=e377]: Cancelled
+                - generic [ref=e378]: "3"
+          - radiogroup "Layout" [ref=e380]:
+            - radio "Table" [checked] [ref=e381] [cursor=pointer]
+            - radio "Board" [ref=e384] [cursor=pointer]
+        - generic [ref=e387]:
+          - generic [ref=e388]:
+            - textbox "New task title" [ref=e389]:
+              - /placeholder: Add a task to the backlog (n)
+            - button "Add task" [disabled] [ref=e390] [cursor=pointer]
+          - table [ref=e393]:
+            - rowgroup [ref=e394]:
+              - row [ref=e395]:
+                - columnheader "Task" [ref=e396]
+                - columnheader "State" [ref=e397]
+                - columnheader "Agent" [ref=e398]
+                - columnheader "Branch" [ref=e399]
+                - columnheader "Changes" [ref=e400]
+                - columnheader "Pull request" [ref=e401]
+                - columnheader "Age" [ref=e402]
+                - columnheader "Last activity" [ref=e403]
+            - rowgroup [ref=e404]:
+              - row [ref=e405]:
+                - cell [ref=e406]:
+                  - button "T-0008 Fix token refresh race in the daemon" [ref=e407] [cursor=pointer]:
+                    - generic [ref=e408]: T-0008
+                    - generic [ref=e409]: Fix token refresh race in the daemon
+                - cell "Running" [ref=e410]
+                - cell "claude-code" [ref=e413]
+                - cell "helmsman/t-0008-fix-token-refresh-race-in-the-daemon" [ref=e414]
+                - cell "-" [ref=e415]
+                - cell "-" [ref=e416]
+                - cell "2h" [ref=e417]
+                - cell "1m ago" [ref=e418]
+              - row [ref=e419]:
+                - cell [ref=e420]:
+                  - button "T-0006 Drag tasks between board columns" [ref=e421] [cursor=pointer]:
+                    - generic [ref=e422]: T-0006
+                    - generic [ref=e423]: Drag tasks between board columns
+                - cell "Running" [ref=e424]
+                - cell "claude-code" [ref=e427]
+                - cell "helmsman/t-0006-drag-tasks-between-board-columns" [ref=e428]
+                - cell "-" [ref=e429]
+                - cell "-" [ref=e430]
+                - cell "2h" [ref=e431]
+                - cell "1m ago" [ref=e432]
+              - row [ref=e433]:
+                - cell [ref=e434]:
+                  - button "T-0007 Split terminal panes" [ref=e435] [cursor=pointer]:
+                    - generic [ref=e436]: T-0007
+                    - generic [ref=e437]: Split terminal panes
+                - cell "Running" [ref=e438]
+                - cell "claude-code" [ref=e441]
+                - cell "helmsman/t-0007-split-terminal-panes" [ref=e442]
+                - cell "-" [ref=e443]
+                - cell "-" [ref=e444]
+                - cell "2h" [ref=e445]
+                - cell "1m ago" [ref=e446]
+              - row [ref=e447]:
+                - cell [ref=e448]:
+                  - button "T-0005 Command palette opened with Cmd+K" [ref=e449] [cursor=pointer]:
+                    - generic [ref=e450]: T-0005
+                    - generic [ref=e451]: Command palette opened with Cmd+K
+                - cell "Running" [ref=e452]
+                - cell "claude-code" [ref=e455]
+                - cell "helmsman/t-0005-command-palette-opened-with-cmd-k" [ref=e456]
+                - cell "-" [ref=e457]
+                - cell "-" [ref=e458]
+                - cell "2h" [ref=e459]
+                - cell "1m ago" [ref=e460]
+              - row [ref=e461]:
+                - cell [ref=e462]:
+                  - button "T-0021 [audit] backlog task no workspace" [ref=e463] [cursor=pointer]:
+                    - generic [ref=e464]: T-0021
+                    - generic [ref=e465]: "[audit] backlog task no workspace"
+                - cell "Draft" [ref=e466]
+                - cell "-" [ref=e469]
+                - cell "helmsman/t-0021-audit-backlog-task-no-workspace" [ref=e470]
+                - cell "-" [ref=e471]
+                - cell "-" [ref=e472]
+                - cell "1h" [ref=e473]
+                - cell "1h ago" [ref=e474]
+              - row [ref=e475]:
+                - cell [ref=e476]:
+                  - button "T-0020 [audit] sub one part of T-0019" [ref=e477] [cursor=pointer]:
+                    - generic [ref=e478]: T-0020
+                    - generic [ref=e479]: "[audit] sub one"
+                    - generic [ref=e480]: part of T-0019
+                - cell "Draft" [ref=e481]
+                - cell "-" [ref=e484]
+                - cell "-" [ref=e485]
+                - cell "-" [ref=e486]
+                - cell "-" [ref=e487]
+                - cell "1h" [ref=e488]
+                - cell "1h ago" [ref=e489]
+              - row [ref=e490]:
+                - cell [ref=e491]:
+                  - button "T-0019 [audit] nav check" [ref=e492] [cursor=pointer]:
+                    - generic [ref=e493]: T-0019
+                    - generic [ref=e494]: "[audit] nav check"
+                - cell "Ready" [ref=e495]
+                - cell "-" [ref=e498]
+                - cell "helmsman/t-0019-audit-nav-check" [ref=e499]
+                - cell "-" [ref=e500]
+                - cell "-" [ref=e501]
+                - cell "1h" [ref=e502]
+                - cell "1h ago" [ref=e503]
+              - row [ref=e504]:
+                - cell [ref=e505]:
+                  - button "T-0018 [audit] workspace check" [ref=e506] [cursor=pointer]:
+                    - generic [ref=e507]: T-0018
+                    - generic [ref=e508]: "[audit] workspace check"
+                - cell "In review" [ref=e509]
+                - cell "claude-code" [ref=e512]
+                - cell "helmsman/t-0018-audit-workspace-check" [ref=e513]
+                - cell "+2 −0" [ref=e514]:
+                  - generic [ref=e515]:
+                    - generic [ref=e516]: "+2"
+                    - generic [ref=e517]: −0
+                - cell "-" [ref=e518]
+                - cell "1h" [ref=e519]
+                - cell "1h ago" [ref=e520]
+              - row [ref=e521]:
+                - cell [ref=e522]:
+                  - button "T-0011 Windows path tests for repos" [ref=e523] [cursor=pointer]:
+                    - generic [ref=e524]: T-0011
+                    - generic [ref=e525]: Windows path tests for repos
+                - cell "Blocked" [ref=e526]
+                - cell "claude-code" [ref=e529]
+                - cell "helmsman/t-0011-windows-path-tests-for-repos" [ref=e530]
+                - cell "-" [ref=e531]
+                - cell "-" [ref=e532]
+                - cell "2h" [ref=e533]
+                - cell "1h ago" [ref=e534]
+              - row [ref=e535]:
+                - cell [ref=e536]:
+                  - button "T-0009 CSV export for the task table" [ref=e537] [cursor=pointer]:
+                    - generic [ref=e538]: T-0009
+                    - generic [ref=e539]: CSV export for the task table
+                - cell "In review" [ref=e540]
+                - cell "claude-code" [ref=e543]
+                - cell "helmsman/t-0009-csv-export-for-the-task-table" [ref=e544]
+                - cell "-" [ref=e545]
+                - cell "-" [ref=e546]
+                - cell "2h" [ref=e547]
+                - cell "2h ago" [ref=e548]
+              - row [ref=e549]:
+                - cell [ref=e550]:
+                  - button "T-0010 Retry pushes on network errors" [ref=e551] [cursor=pointer]:
+                    - generic [ref=e552]: T-0010
+                    - generic [ref=e553]: Retry pushes on network errors
+                - cell "Failed" [ref=e554]
+                - cell "claude-code" [ref=e557]
+                - cell "helmsman/t-0010-retry-pushes-on-network-errors" [ref=e558]
+                - cell "-" [ref=e559]
+                - cell "-" [ref=e560]
+                - cell "2h" [ref=e561]
+                - cell "2h ago" [ref=e562]
+              - row [ref=e563]:
+                - cell [ref=e564]:
+                  - button "T-0015 Show the diff of a workspace" [ref=e565] [cursor=pointer]:
+                    - generic [ref=e566]: T-0015
+                    - generic [ref=e567]: Show the diff of a workspace
+                - cell "Done" [ref=e568]
+                - cell "-" [ref=e571]
+                - cell "-" [ref=e572]
+                - cell "-" [ref=e573]
+                - cell "-" [ref=e574]
+                - cell "2h" [ref=e575]
+                - cell "2h ago" [ref=e576]
+              - row [ref=e577]:
+                - cell [ref=e578]:
+                  - button "T-0017 Tag the release part of T-0014" [ref=e579] [cursor=pointer]:
+                    - generic [ref=e580]: T-0017
+                    - generic [ref=e581]: Tag the release
+                    - generic [ref=e582]: part of T-0014
+                - cell "Draft" [ref=e583]
+                - cell "-" [ref=e586]
+                - cell "-" [ref=e587]
+                - cell "-" [ref=e588]
+                - cell "-" [ref=e589]
+                - cell "2h" [ref=e590]
+                - cell "2h ago" [ref=e591]
+              - row [ref=e592]:
+                - cell [ref=e593]:
+                  - button "T-0016 Write the changelog part of T-0014" [ref=e594] [cursor=pointer]:
+                    - generic [ref=e595]: T-0016
+                    - generic [ref=e596]: Write the changelog
+                    - generic [ref=e597]: part of T-0014
+                - cell "Draft" [ref=e598]
+                - cell "-" [ref=e601]
+                - cell "-" [ref=e602]
+                - cell "-" [ref=e603]
+                - cell "-" [ref=e604]
+                - cell "2h" [ref=e605]
+                - cell "2h ago" [ref=e606]
+              - row [ref=e607]:
+                - cell [ref=e608]:
+                  - button "T-0014 Release notes for 0.2 waits for T-0009" [ref=e609] [cursor=pointer]:
+                    - generic [ref=e610]: T-0014
+                    - generic [ref=e611]: Release notes for 0.2
+                    - generic [ref=e612]: waits for T-0009
+                - cell "Ready" [ref=e613]
+                - cell "-" [ref=e616]
+                - cell "-" [ref=e617]
+                - cell "-" [ref=e618]
+                - cell "-" [ref=e619]
+                - cell "2h" [ref=e620]
+                - cell "2h ago" [ref=e621]
+              - row [ref=e622]:
+                - cell [ref=e623]:
+                  - button "T-0012 Electron shell spike" [ref=e624] [cursor=pointer]:
+                    - generic [ref=e625]: T-0012
+                    - generic [ref=e626]: Electron shell spike
+                - cell "Ready" [ref=e627]
+                - cell "-" [ref=e630]
+                - cell "-" [ref=e631]
+                - cell "-" [ref=e632]
+                - cell "-" [ref=e633]
+                - cell "2h" [ref=e634]
+                - cell "2h ago" [ref=e635]
+              - row [ref=e636]:
+                - cell [ref=e637]:
+                  - button "T-0013 Codex adapter" [ref=e638] [cursor=pointer]:
+                    - generic [ref=e639]: T-0013
+                    - generic [ref=e640]: Codex adapter
+                - cell "Draft" [ref=e641]
+                - cell "-" [ref=e644]
+                - cell "-" [ref=e645]
+                - cell "-" [ref=e646]
+                - cell "-" [ref=e647]
+                - cell "2h" [ref=e648]
+                - cell "2h ago" [ref=e649]
+              - row [ref=e650]:
+                - cell [ref=e651]:
+                  - 'button "T-0002 Demo: changes and history" [ref=e652] [cursor=pointer]':
+                    - generic [ref=e653]: T-0002
+                    - generic [ref=e654]: "Demo: changes and history"
+                - cell "Ready" [ref=e655]
+                - cell "claude-code" [ref=e658]
+                - cell "helmsman/t-0002-demo-changes-and-history" [ref=e659]
+                - cell "-" [ref=e660]
+                - cell "-" [ref=e661]
+                - cell "8h" [ref=e662]
+                - cell "2h ago" [ref=e663]
+              - row [ref=e664]:
+                - cell [ref=e665]:
+                  - 'button "T-0004 Demo: changes and history (try 3)" [ref=e666] [cursor=pointer]':
+                    - generic [ref=e667]: T-0004
+                    - generic [ref=e668]: "Demo: changes and history (try 3)"
+                - cell "Cancelled" [ref=e669]
+                - cell "claude-code" [ref=e672]
+                - cell "helmsman/t-0004-demo-changes-and-history-try-3" [ref=e673]
+                - cell "-" [ref=e674]
+                - cell "-" [ref=e675]
+                - cell "2h" [ref=e676]
+                - cell "2h ago" [ref=e677]
+              - row [ref=e678]:
+                - cell [ref=e679]:
+                  - 'button "T-0003 Demo: changes and history (try 2)" [ref=e680] [cursor=pointer]':
+                    - generic [ref=e681]: T-0003
+                    - generic [ref=e682]: "Demo: changes and history (try 2)"
+                - cell "Cancelled" [ref=e683]
+                - cell "claude-code" [ref=e686]
+                - cell "helmsman/t-0003-demo-changes-and-history-try-2" [ref=e687]
+                - cell "-" [ref=e688]
+                - cell "-" [ref=e689]
+                - cell "2h" [ref=e690]
+                - cell "2h ago" [ref=e691]
+              - row [ref=e692]:
+                - cell [ref=e693]:
+                  - button "T-0001 Thu docker" [ref=e694] [cursor=pointer]:
+                    - generic [ref=e695]: T-0001
+                    - generic [ref=e696]: Thu docker
+                - cell "Cancelled" [ref=e697]
+                - cell "-" [ref=e700]
+                - cell "helmsman/t-0001-thu-docker" [ref=e701]
+                - cell "-" [ref=e702]
+                - cell "-" [ref=e703]
+                - cell "13h" [ref=e704]
+                - cell "12h ago" [ref=e705]
+    - contentinfo [ref=e707]:
+      - status [ref=e708]:
+        - generic [ref=e710]: Live
+      - button "4 running" [ref=e711] [cursor=pointer]
+      - button "4 need you" [ref=e713] [cursor=pointer]
+      - button "Repos" [ref=e715] [cursor=pointer]
+      - button "Import issues" [ref=e722] [cursor=pointer]
+      - button "Notify me" [ref=e727] [cursor=pointer]
+      - button "Keyboard shortcuts" [ref=e732] [cursor=pointer]
+      - button "Account" [ref=e735] [cursor=pointer]
+  - list
+  - generic [ref=e740]:
+    - button "Close the dialog" [ref=e741]
+    - dialog [ref=e742]:
+      - banner [ref=e743]:
+        - generic [ref=e744]:
+          - heading "New workspace" [level=2] [ref=e745]
+          - paragraph [ref=e746]: A git worktree on its own branch, with a task to follow it.
+        - button "Close" [ref=e747] [cursor=pointer]
+      - generic [ref=e752]:
+        - generic [ref=e753]:
+          - generic [ref=e754]: Name
+          - textbox "Workspace name" [active] [ref=e755]:
+            - /placeholder: Fix the login redirect
+        - generic [ref=e756]:
+          - generic [ref=e757]:
+            - generic [ref=e758]: Repository
+            - combobox "Repository of the workspace" [ref=e760]:
+              - option "helmsman" [selected]
+          - generic [ref=e761]:
+            - generic [ref=e762]: Branch from
+            - combobox "Branch to start from" [ref=e764]:
+              - option "main" [selected]
+              - option "chore/ci-checks"
+              - option "feat/changes-diff"
+              - option "feat/cli"
+              - option "feat/core-task-model"
+              - option "feat/daemon-task-store"
+              - option "feat/git-graph"
+              - option "feat/terminal"
+              - option "feat/web"
+              - option "feat/workspaces"
+              - option "helmsman/t-0001-thu-docker"
+              - option "helmsman/t-0001-thu-hook-claude-code"
+              - option "helmsman/t-0002-demo-changes-and-history"
+              - option "helmsman/t-0003-demo-changes-and-history-try-2"
+              - option "helmsman/t-0004-demo-changes-and-history-try-3"
+              - option "helmsman/t-0005-command-palette-opened-with-cmd-k"
+              - option "helmsman/t-0006-drag-tasks-between-board-columns"
+              - option "helmsman/t-0007-split-terminal-panes"
+              - option "helmsman/t-0008-fix-token-refresh-race-in-the-daemon"
+              - option "helmsman/t-0009-csv-export-for-the-task-table"
+              - option "helmsman/t-0010-retry-pushes-on-network-errors"
+              - option "helmsman/t-0011-windows-path-tests-for-repos"
+              - option "helmsman/t-0018-audit-workspace-check"
+              - option "helmsman/t-0019-audit-nav-check"
+              - option "helmsman/t-0021-audit-backlog-task-no-workspace"
+        - generic [ref=e765]:
+          - generic [ref=e766]: Agent
+          - combobox "Agent" [ref=e768]:
+            - option "Claude Code" [selected]
+            - option "No agent, a plain shell"
+        - generic [ref=e769]:
+          - generic [ref=e770]: What should the agent do?
+          - textbox "Prompt for the agent" [ref=e771]:
+            - /placeholder: Optional. The agent starts with this prompt, and it becomes the task's notes.
+      - contentinfo [ref=e772]:
+        - button "Cancel" [ref=e773] [cursor=pointer]
+        - button "Create workspace" [disabled]:
+          - text: Create workspace
+          - generic [aria-hidden]:
+            - generic: ⌘↵
