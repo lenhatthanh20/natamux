@@ -1,0 +1,62 @@
+# Production: HELMSMAN_TOKEN=<long random value> HELMSMAN_REPO=/path/to/repo \
+#   docker compose -f compose.prod.yaml up -d --build
+# One address serves the dashboard and the API (/api): http://localhost:8080
+# Read docs/docker.md first.
+name: helmsman
+
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  daemon:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: docker/prod.Dockerfile
+      target: daemon
+    image: helmsman-daemon:local
+    environment:
+      HELMSMAN_TOKEN: ${HELMSMAN_TOKEN:?Set HELMSMAN_TOKEN to a long random value}
+      # git refuses a folder that another user owns, unless it is listed.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /repo
+    volumes:
+      - ${HELMSMAN_REPO:?Set HELMSMAN_REPO to the git repository}:/repo
+      - helmsman-data:/data
+    # Not published: only the web container reaches it.
+    expose:
+      - "4317"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4317/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  web:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: docker/prod.Dockerfile
+      target: web
+    image: helmsman-web:local
+    ports:
+      - "${HELMSMAN_BIND:-127.0.0.1}:${HELMSMAN_PORT:-8080}:8080"
+    depends_on:
+      daemon:
+        condition: service_healthy
+
+volumes:
+  helmsman-data:

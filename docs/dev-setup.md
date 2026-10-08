@@ -35,7 +35,13 @@ Run `build` first: packages import each other through their built `dist` folders
 
 ## Run the daemon and the dashboard
 
-See `packages/web/README.md`. The dev container forwards port 5173 (the dashboard). The daemon stays on `127.0.0.1:4317` inside the codespace and is reached through the dashboard's `/api` proxy.
+With Docker (one command, and the ports are forwarded out of the codespace):
+
+```sh
+docker compose up
+```
+
+See `docs/docker.md`, which also covers the production setup. Without Docker, see `packages/web/README.md`: the dev container forwards port 5173 (the dashboard), and the daemon stays on `127.0.0.1:4317` and is reached through the dashboard's `/api` proxy.
 
 ## Not set up yet
 

@@ -1,0 +1,14 @@
+.git
+.github
+.devcontainer
+.claude
+.helmsman
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+.env*
+!.env.example
+docs
+*.md

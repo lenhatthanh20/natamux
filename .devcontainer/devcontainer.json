@@ -6,11 +6,18 @@
       "version": "22",
       "pnpmVersion": "10.33.0"
     },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/sshd:1": {},
     "ghcr.io/devcontainers/features/copilot-cli:1": {}
   },
-  "forwardPorts": [5173],
+  "postCreateCommand": "pnpm install --frozen-lockfile && pnpm build",
+  "forwardPorts": [5173, 4317, 8080],
+  "portsAttributes": {
+    "5173": { "label": "Helmsman dashboard (dev)", "onAutoForward": "notify" },
+    "4317": { "label": "Helmsman daemon (dev)", "onAutoForward": "silent" },
+    "8080": { "label": "Helmsman (production compose)", "onAutoForward": "silent" }
+  },
   "hostRequirements": {
     "cpus": 2
   }
