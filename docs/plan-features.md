@@ -58,7 +58,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 
 | Feature | Tag |
 |---|---|
-| Add a git repo; list its branches | MVP |
+| Add a git repo; list its branches. Done for the one repository of the daemon: its local branches are listed, and a workspace can start from any of them. Next: more than one repository | MVP |
 | Create a workspace for a task (git worktree, branch named from the task) | MVP |
 | Option: run a task in the main checkout, no worktree | v1 |
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters). Done: Claude Code, with its hooks given through `--settings` | MVP |
@@ -80,7 +80,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Task fields: id, title, description, state, priority, labels, agent, workspace, branch, PR link, created and updated time | MVP |
 | States: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` | MVP |
 | Create a task from the app, the CLI, or an agent | MVP |
-| Subtasks (one level) | v1 |
+| Subtasks (one level). Done: add them in the details of a task, which counts how many are done; a subtask shows its parent | v1 |
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
 | Approval gates: a task can require a human decision before it moves on | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
@@ -139,7 +139,7 @@ Goals:
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
 | Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
-| Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
+| Helmsman plugin for Claude Code (skills that use the CLI). Done: `plugins/helmsman`, with a `helmsman-task` skill, installable from this repository as a marketplace | v1 |
 | Account and usage display per agent | Later |
 
 ### 5.6 Extensibility and sharing

@@ -1049,3 +1049,38 @@ describe('agent activity', () => {
     expect(response.json().activity['T-0001'].text).toBe('Edit a.ts')
   })
 })
+
+describe('branches', () => {
+  it('lists branches and makes a workspace from one', async () => {
+    const listed = await app.inject({ method: 'GET', url: '/git/branches', headers: authorization })
+    expect(listed.json()).toEqual({ branches: ['main'], current: 'main' })
+
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+      payload: { base: 'main' },
+    })
+    expect(created.statusCode).toBe(201)
+
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Another' },
+    })
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0002/workspace',
+      headers: authorization,
+      payload: { base: 'nope' },
+    })
+    expect(missing.statusCode).toBe(409)
+  })
+})

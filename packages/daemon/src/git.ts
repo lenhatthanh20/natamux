@@ -552,6 +552,19 @@ export async function readDiffStat(worktreePath: string, base: string | null): P
   return parseNumstat(await git(worktreePath, ['diff', '--numstat', from, '--']))
 }
 
+// The local branches of a repository, sorted, and the one its checkout is on.
+export async function listBranches(
+  repoDir: string,
+): Promise<{ branches: string[]; current: string | null }> {
+  const output = await git(repoDir, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])
+  const branches = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .sort((a, b) => a.localeCompare(b))
+  return { branches, current: await currentBranch(repoDir) }
+}
+
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.
 export async function deleteMergedBranch(repoDir: string, branch: string): Promise<boolean> {
   try {
