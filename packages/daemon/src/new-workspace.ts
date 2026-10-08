@@ -22,7 +22,10 @@ export type NewWorkspaceInput = {
 
 // The quick way to start work: a task that is ready at once, its worktree, and the agent when one
 // is chosen. The base branch is checked first, so a typo leaves no task behind.
-export async function newWorkspace(parts: NewWorkspaceParts, input: NewWorkspaceInput): Promise<Task> {
+export async function newWorkspace(
+  parts: NewWorkspaceParts,
+  input: NewWorkspaceInput,
+): Promise<Task> {
   if (
     input.base !== undefined &&
     !(await parts.workspaces.branches(input.repo ?? null)).branches.includes(input.base)

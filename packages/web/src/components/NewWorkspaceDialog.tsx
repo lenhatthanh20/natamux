@@ -100,7 +100,7 @@ export function NewWorkspaceDialog({
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Repository</span>
             <Select
               value={repo}
@@ -117,8 +117,8 @@ export function NewWorkspaceDialog({
                 </option>
               ))}
             </Select>
-          </label>
-          <label className="flex flex-col gap-1">
+          </div>
+          <div className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Branch from</span>
             <Select
               value={base}
@@ -135,9 +135,9 @@ export function NewWorkspaceDialog({
                   </option>
                 ))}
             </Select>
-          </label>
+          </div>
         </div>
-        <label className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Agent</span>
           <Select
             value={agent}
@@ -148,7 +148,7 @@ export function NewWorkspaceDialog({
             <option value="claude-code">Claude Code</option>
             <option value="">No agent, a plain shell</option>
           </Select>
-        </label>
+        </div>
         {agent !== '' && (
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>What should the agent do?</span>

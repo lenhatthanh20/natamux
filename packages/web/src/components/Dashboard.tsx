@@ -42,8 +42,8 @@ import { TaskTable } from './TaskTable'
 import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
 import { Select } from './ui/Select'
 import { button, input, kbd } from './ui/styles'
-import { WorkspaceList } from './WorkspaceList'
 import { Toaster } from './ui/Toaster'
+import { WorkspaceList } from './WorkspaceList'
 
 const TASKS_KEY = ['tasks']
 const NOW_INTERVAL_MS = 30_000
@@ -628,56 +628,56 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
                 <form onSubmit={submitNewTask} className="flex flex-wrap items-center gap-2">
-            <input
-              ref={newTaskRef}
-              value={newTitle}
-              onChange={(event) => setNewTitle(event.target.value)}
-              placeholder="Add a task to the backlog (n)"
-              aria-label="New task title"
-              className={`${input} min-w-64 flex-1`}
-            />
-            {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
-              <div className="flex gap-2">
-                {repos.length > 1 && (
-                  <Select
-                    value={newRepo}
-                    onChange={(event) => setNewRepo(event.target.value)}
-                    aria-label="Repository"
-                    className="w-40 [&_select]:h-8"
+                  <input
+                    ref={newTaskRef}
+                    value={newTitle}
+                    onChange={(event) => setNewTitle(event.target.value)}
+                    placeholder="Add a task to the backlog (n)"
+                    aria-label="New task title"
+                    className={`${input} min-w-64 flex-1`}
+                  />
+                  {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+                    <div className="flex gap-2">
+                      {repos.length > 1 && (
+                        <Select
+                          value={newRepo}
+                          onChange={(event) => setNewRepo(event.target.value)}
+                          aria-label="Repository"
+                          className="w-40 [&_select]:h-8"
+                        >
+                          {repos.map((repo) => (
+                            <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                              {repo.name}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                      {(templatesQuery.data?.length ?? 0) > 0 && (
+                        <Select
+                          value={templateId}
+                          onChange={(event) => setTemplateId(event.target.value)}
+                          aria-label="Template"
+                          className="w-40 [&_select]:h-8"
+                        >
+                          <option value="">No template</option>
+                          {templatesQuery.data?.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={createMutation.isPending || newTitle.trim() === ''}
+                    className={button('secondary', 'md')}
                   >
-                    {repos.map((repo) => (
-                      <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                        {repo.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-                {(templatesQuery.data?.length ?? 0) > 0 && (
-                  <Select
-                    value={templateId}
-                    onChange={(event) => setTemplateId(event.target.value)}
-                    aria-label="Template"
-                    className="w-40 [&_select]:h-8"
-                  >
-                    <option value="">No template</option>
-                    {templatesQuery.data?.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={createMutation.isPending || newTitle.trim() === ''}
-              className={button('secondary', 'md')}
-            >
-              <Plus size={14} aria-hidden="true" />
-              Add task
-            </button>
-          </form>
+                    <Plus size={14} aria-hidden="true" />
+                    Add task
+                  </button>
+                </form>
                 {tasksQuery.isPending ? (
                   <p className="text-muted">Loading tasks.</p>
                 ) : layout === 'board' ? (
