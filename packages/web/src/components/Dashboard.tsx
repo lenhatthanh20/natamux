@@ -1,5 +1,17 @@
 import { type EventType, type Task, waitingOn } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Bell,
+  BellOff,
+  Download,
+  FolderGit2,
+  LayoutList,
+  LogOut,
+  Moon,
+  Plus,
+  Search,
+  Sun,
+} from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
@@ -8,6 +20,7 @@ import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
+import { applyTheme, savedTheme, type Theme } from '../lib/theme'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
@@ -56,6 +69,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const [newTitle, setNewTitle] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [theme, setTheme] = useState<Theme>(savedTheme)
   const searchRef = useRef<HTMLInputElement>(null)
   const newTaskRef = useRef<HTMLInputElement>(null)
 
@@ -402,166 +416,146 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const liveText =
     liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting' : 'Reconnecting'
-  const footerButton = 'hover:text-ink'
+  const runningCount = tasks.filter((task) => task.state === 'running').length
+  const footerButton =
+    'flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink aria-expanded:text-ink'
+  const iconButton = 'rounded-md p-1.5 hover:bg-hover hover:text-ink'
+  const switchTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    applyTheme(next)
+    setTheme(next)
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <nav
-        aria-label="Tasks"
-        className="flex w-72 shrink-0 flex-col border-r border-line bg-sidebar"
-      >
-        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-          <h1 className="flex-1 font-semibold">Helmsman</h1>
-          <span
-            className="flex items-center gap-1.5 text-xs text-muted"
-            title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
-          >
-            <span
-              aria-hidden="true"
-              className={
-                liveStatus === 'live'
-                  ? 'h-2 w-2 rounded-full bg-[#2f9e5b]'
-                  : 'h-2 w-2 rounded-full bg-signal'
-              }
-            />
-            {liveText}
-          </span>
-        </div>
-
-        <form onSubmit={submitNewTask} className="flex flex-col gap-1.5 px-3">
-          <div className="flex gap-1.5">
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Tasks"
+          className="flex w-72 shrink-0 flex-col gap-3 border-r border-line bg-sidebar px-2 pt-3"
+        >
+          <form onSubmit={submitNewTask} className="flex flex-col gap-1.5 px-1">
+            <div className="flex items-center gap-2">
+              <h1 className="flex-1 px-1 font-semibold tracking-tight">Helmsman</h1>
+              <button
+                type="submit"
+                aria-label="Add task"
+                title="Add task"
+                disabled={createMutation.isPending}
+                className="rounded-md border border-line bg-raised p-1.5 hover:border-muted disabled:opacity-50"
+              >
+                <Plus size={14} aria-hidden="true" />
+              </button>
+            </div>
             <input
               ref={newTaskRef}
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
-              placeholder="New task (n)"
+              placeholder="New task title (n)"
               aria-label="New task title"
-              className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1"
+              className="min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5"
             />
-            <button
-              type="submit"
-              aria-label="Add task"
-              title="Add task"
-              disabled={createMutation.isPending}
-              className="w-8 rounded-md bg-accent text-base leading-none font-semibold text-white hover:opacity-90 disabled:opacity-50"
-            >
-              +
-            </button>
+            {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+              <div className="flex gap-1.5">
+                {repos.length > 1 && (
+                  <select
+                    value={newRepo}
+                    onChange={(event) => setNewRepo(event.target.value)}
+                    aria-label="Repository"
+                    className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                  >
+                    {repos.map((repo) => (
+                      <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                        {repo.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {(templatesQuery.data?.length ?? 0) > 0 && (
+                  <select
+                    value={templateId}
+                    onChange={(event) => setTemplateId(event.target.value)}
+                    aria-label="Template"
+                    className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                  >
+                    <option value="">No template</option>
+                    {templatesQuery.data?.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+          </form>
+
+          <label className="mx-1 flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-muted">
+            <Search size={14} aria-hidden="true" />
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+              aria-label="Search tasks"
+              className="min-w-0 flex-1 bg-transparent text-ink outline-none"
+            />
+            <kbd className="font-mono text-xs">/</kbd>
+          </label>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+            <NeedsMeStrip
+              waiting={allGroups.needsMe}
+              now={now}
+              currentId={changesTaskId}
+              onOpen={openTask}
+            />
+            <SidebarGroups
+              open={shownGroups.open}
+              finished={shownGroups.finished}
+              now={now}
+              currentId={changesTaskId}
+              allTasks={tasks}
+              diffStats={diffStatsQuery.data}
+              activity={activityQuery.data}
+              onOpen={openTask}
+            />
           </div>
-          {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
-            <div className="flex gap-1.5">
-              {repos.length > 1 && (
-                <select
-                  value={newRepo}
-                  onChange={(event) => setNewRepo(event.target.value)}
-                  aria-label="Repository"
-                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
-                >
-                  {repos.map((repo) => (
-                    <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                      {repo.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {(templatesQuery.data?.length ?? 0) > 0 && (
-                <select
-                  value={templateId}
-                  onChange={(event) => setTemplateId(event.target.value)}
-                  aria-label="Template"
-                  className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
-                >
-                  <option value="">No template</option>
-                  {templatesQuery.data?.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-        </form>
 
-        <div className="px-3 pt-2">
-          <input
-            ref={searchRef}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search (/)"
-            aria-label="Search tasks"
-            className="w-full rounded-md border border-line bg-surface px-2 py-1"
-          />
-        </div>
-
-        <div className="px-2 pt-2">
-          <button
-            type="button"
-            aria-pressed={changesTask === null}
-            onClick={closeChanges}
-            className="flex w-full justify-between rounded-md px-2 py-1 font-medium hover:bg-hover aria-pressed:bg-selected"
-          >
-            <span>All tasks</span>
-            <span className="text-muted">{tasks.length}</span>
-          </button>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 py-2">
-          <NeedsMeStrip
-            waiting={allGroups.needsMe}
-            now={now}
-            currentId={changesTaskId}
-            onOpen={openTask}
-          />
-          <SidebarGroups
-            open={shownGroups.open}
-            finished={shownGroups.finished}
-            now={now}
-            currentId={changesTaskId}
-            allTasks={tasks}
-            diffStats={diffStatsQuery.data}
-            activity={activityQuery.data}
-            onOpen={openTask}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-xs text-muted">
-          <button
-            type="button"
-            aria-expanded={reposOpen}
-            onClick={() => togglePanel(reposOpen, setReposOpen)}
-            className={footerButton}
-          >
-            Repos
-          </button>
-          <button
-            type="button"
-            aria-expanded={importOpen}
-            onClick={() => togglePanel(importOpen, setImportOpen)}
-            className={footerButton}
-          >
-            Import issues
-          </button>
-          {notifications.permission === 'default' && (
+          <div className="flex items-center gap-1 border-t border-line py-2 text-muted">
             <button
               type="button"
-              onClick={notifications.askPermission}
-              title="A system notification when a task starts to wait for you"
-              className={footerButton}
+              aria-pressed={changesTask === null}
+              onClick={closeChanges}
+              className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
             >
-              Notify me
+              <LayoutList size={14} aria-hidden="true" />
+              <span className="flex-1 text-left">All tasks</span>
+              <span className="text-xs">{tasks.length}</span>
             </button>
-          )}
-          {notifications.permission === 'denied' && (
-            <span title="Allow notifications for this page in the browser">
-              Notifications blocked
-            </span>
-          )}
-          <button type="button" onClick={onSignOut} className={`ml-auto ${footerButton}`}>
-            Sign out
-          </button>
-        </div>
-      </nav>
+            <button
+              type="button"
+              aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+              onClick={switchTheme}
+              className={iconButton}
+            >
+              {theme === 'dark' ? (
+                <Sun size={15} aria-hidden="true" />
+              ) : (
+                <Moon size={15} aria-hidden="true" />
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={onSignOut}
+              className={iconButton}
+            >
+              <LogOut size={15} aria-hidden="true" />
+            </button>
+          </div>
+        </nav>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
         {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
@@ -734,6 +728,62 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           onClose={() => setDetailOpen(false)}
         />
       )}
+      </div>
+
+      <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sidebar px-3 py-1 text-xs text-muted">
+        <span
+          className="flex items-center gap-1.5"
+          title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
+        >
+          <span
+            aria-hidden="true"
+            className={`h-1.5 w-1.5 rounded-full ${liveStatus === 'live' ? 'bg-add' : 'bg-signal'}`}
+          />
+          {liveText}
+        </span>
+        <span>{runningCount} running</span>
+        {waitingCount > 0 && <span className="text-signal">{waitingCount} need you</span>}
+        <span className="flex-1" />
+        <button
+          type="button"
+          aria-expanded={reposOpen}
+          onClick={() => togglePanel(reposOpen, setReposOpen)}
+          className={footerButton}
+        >
+          <FolderGit2 size={13} aria-hidden="true" />
+          Repos
+        </button>
+        <button
+          type="button"
+          aria-expanded={importOpen}
+          onClick={() => togglePanel(importOpen, setImportOpen)}
+          className={footerButton}
+        >
+          <Download size={13} aria-hidden="true" />
+          Import issues
+        </button>
+        {notifications.permission === 'default' && (
+          <button
+            type="button"
+            onClick={notifications.askPermission}
+            title="A system notification when a task starts to wait for you"
+            className={footerButton}
+          >
+            <Bell size={13} aria-hidden="true" />
+            Notify me
+          </button>
+        )}
+        {notifications.permission === 'denied' && (
+          <span
+            className="flex items-center gap-1.5"
+            title="Allow notifications for this page in the browser"
+          >
+            <BellOff size={13} aria-hidden="true" />
+            Notifications blocked
+          </span>
+        )}
+        <span className="font-mono">n new · / search · j k move · Esc back</span>
+      </footer>
     </div>
   )
 }
