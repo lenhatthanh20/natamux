@@ -49,6 +49,7 @@ beforeEach(async () => {
     terminals,
     claudeSettingsPath: '/data/claude-code-settings.json',
     platform: 'linux',
+    launchDir: dataDir,
   })
   const pullRequests = new PullRequestWatcher({
     tasks: service,
@@ -875,7 +876,7 @@ describe('start an agent', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json().task.agent).toBe('claude-code')
-    expect(ptys[0]?.written[0]).toContain('claude --settings')
+    expect(ptys[0]?.written[0]).toContain('agent-launch-')
   })
 
   it('answers 404 for an agent it cannot start and 409 without a workspace', async () => {

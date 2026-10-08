@@ -13,6 +13,11 @@ vi.mock('./components/MonacoDiff', () => ({
     createElement('pre', { 'aria-label': `Changes in ${path}` }, `${original} -> ${modified}`),
 }))
 
+vi.mock('./components/MonacoFile', () => ({
+  default: ({ path, kind, text }: { path: string; kind: string; text: string }) =>
+    createElement('pre', { 'aria-label': `New file ${path}` }, `${kind}: ${text}`),
+}))
+
 vi.mock('./components/TerminalView', () => ({
   default: () => createElement('p', null, 'Terminal stand-in'),
 }))
@@ -163,10 +168,11 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     }
     if (/^\/api\/tasks\/T-\d+\/changes\/file\?/.test(path) && method === 'GET') {
       const requested = new URL(path, 'http://daemon').searchParams.get('path') ?? ''
+      const isNew = requested === 'notes.md'
       return json({
         path: requested,
-        status: 'M',
-        original: 'old line',
+        status: isNew ? 'U' : 'M',
+        original: isNew ? null : 'old line',
         modified: 'new line',
         binary: false,
         tooLarge: false,
@@ -561,7 +567,7 @@ describe('App', () => {
     ).toBe(true)
 
     await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
-    expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
+    expect(await within(view).findByLabelText('New file notes.md')).toBeTruthy()
 
     await user.type(within(view).getByLabelText(/for the agent/), 'Keep the old name')
     await user.click(within(view).getByRole('button', { name: 'Send to agent' }))
@@ -571,7 +577,7 @@ describe('App', () => {
 
     await user.type(within(view).getByLabelText('Commit message'), 'Fix the parser')
     await user.click(within(view).getByRole('button', { name: 'Commit all' }))
-    expect(await within(view).findByText('Committed.')).toBeTruthy()
+    expect(await screen.findByText('Committed 2 files.')).toBeTruthy()
     expect(
       calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/commit'),
     ).toBe(true)
@@ -601,6 +607,95 @@ describe('App', () => {
     expect(screen.getByRole('table')).toBeTruthy()
   })
 
+  it('shows the question of a waiting agent, and resumes it', async () => {
+    const { calls } = installDaemon(
+      [
+        makeTask({
+          id: 'T-0001',
+          title: 'Fix timezone bug',
+          state: 'needs-input',
+          workspace: '/work/T-0001',
+          branch: 'helmsman/t-0001',
+        }),
+      ],
+      [
+        {
+          taskId: 'T-0001',
+          source: 'agent',
+          type: 'agent.asked',
+          at: '2026-10-08T10:00:00.000Z',
+          payload: { message: 'Which test runner?' },
+        },
+      ],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'View changes' }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(await within(view).findByText('The agent asks: Which test runner?')).toBeTruthy()
+
+    await user.click(within(view).getByRole('button', { name: 'Answer in terminal' }))
+    expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+
+    await user.click(within(view).getByRole('button', { name: 'Resume' }))
+    await waitFor(() =>
+      expect(
+        calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
+      ).toBe(true),
+    )
+  })
+
+  it('shows the commits ahead on Push, and says why Push is off when there is no branch', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0001',
+        title: 'Fix timezone bug',
+        workspace: '/work/T-0001',
+        branch: 'helmsman/t-0001',
+      }),
+      makeTask({ id: 'T-0003', title: 'No branch yet', workspace: '/work/T-0003' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    await user.click(
+      within(screen.getByRole('complementary', { name: 'Details of T-0001' })).getByRole('button', {
+        name: 'View changes',
+      }),
+    )
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(await within(view).findByRole('button', { name: 'Push ↑1' })).toBeTruthy()
+
+    await user.keyboard('{Escape}')
+    await user.click(
+      within(await screen.findByRole('table')).getByRole('button', { name: /No branch yet/ }),
+    )
+    await user.click(
+      within(screen.getByRole('complementary', { name: 'Details of T-0003' })).getByRole('button', {
+        name: 'View changes',
+      }),
+    )
+    const bare = await screen.findByRole('region', { name: 'Changes of T-0003' })
+    const push = within(bare).getByRole('button', { name: 'Push' })
+    expect(push.getAttribute('aria-disabled')).toBe('true')
+    expect(push.getAttribute('data-tip')).toBe('This task has no branch to push')
+  })
+
   it('starts Claude Code: makes the workspace, then opens its terminal', async () => {
     const { calls } = installDaemon([
       makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'ready' }),
@@ -614,7 +709,7 @@ describe('App', () => {
       within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
-    await user.click(within(details).getByRole('button', { name: 'Start Claude Code' }))
+    await user.click(within(details).getByRole('button', { name: 'Start agent' }))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
@@ -710,7 +805,7 @@ describe('App', () => {
 
     expect(await within(screen.getByRole('table')).findByText('waits for T-0002')).toBeTruthy()
     expect(
-      within(details).getByRole('button', { name: 'Start Claude Code' }).hasAttribute('disabled'),
+      within(details).getByRole('button', { name: 'Start agent' }).hasAttribute('disabled'),
     ).toBe(true)
   })
 
@@ -761,8 +856,11 @@ describe('App', () => {
 
     await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
-    await user.selectOptions(within(details).getByLabelText('Number of tries'), '1')
-    await user.click(within(details).getByRole('button', { name: 'Fan out' }))
+    await user.click(within(details).getByRole('button', { name: 'More actions for T-0001' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Run more tries...' }))
+    const dialog = screen.getByRole('dialog', { name: 'Run more tries' })
+    await user.selectOptions(within(dialog).getByLabelText('Number of tries'), '1')
+    await user.click(within(dialog).getByRole('button', { name: 'Run tries' }))
 
     expect(await screen.findByText('Made 1 try.')).toBeTruthy()
     expect((screen.getByLabelText('Search tasks') as HTMLInputElement).value).toBe('tries-t-0001')
@@ -911,7 +1009,7 @@ describe('App', () => {
     expect(await within(pane).findByText('Terminal stand-in')).toBeTruthy()
 
     await user.click(within(pane).getByRole('button', { name: 'Close Agent of T-0002' }))
-    expect(within(grid).getByText(/No agent works or waits now/)).toBeTruthy()
+    expect(within(grid).getByText('No agent is working')).toBeTruthy()
 
     await user.keyboard('{Escape}')
     expect(await screen.findByRole('table')).toBeTruthy()

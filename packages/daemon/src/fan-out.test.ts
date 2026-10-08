@@ -39,6 +39,7 @@ beforeEach(() => {
     terminals,
     claudeSettingsPath: '/data/settings.json',
     platform: 'linux',
+    launchDir: dataDir,
   })
   parts = { tasks, workspaces, agents }
 })
@@ -86,6 +87,6 @@ describe('fanOut', () => {
       expect(task.workspace).not.toBeNull()
     }
     expect(ptys).toHaveLength(2)
-    expect(ptys[0]?.written[0]).toContain('claude --settings')
+    expect(ptys[0]?.written[0]).toContain('agent-launch-')
   })
 })

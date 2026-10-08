@@ -1,6 +1,8 @@
 import type { GitGraph as GitGraphData } from '@helmsman/core'
+import { RefreshCw } from 'lucide-react'
 import { layoutGraph } from '../lib/graph-layout'
 import { formatAge } from '../lib/tasks'
+import { IconButton } from './ui/IconButton'
 
 const ROW_HEIGHT = 28
 const LANE_WIDTH = 14
@@ -36,21 +38,28 @@ function aheadLabel(graph: GitGraphData): string {
   return `${commits} ahead of ${graph.base}, ${graph.behind} behind.`
 }
 
+// More names than this would push the message out of its row.
+const MAX_REFS = 2
+
 type GitGraphProps = {
   graph: GitGraphData
   now: Date
+  onRefresh: () => void
 }
 
-export function GitGraph({ graph, now }: GitGraphProps) {
+export function GitGraph({ graph, now, onRefresh }: GitGraphProps) {
   const { rows, width } = layoutGraph(graph.commits)
   const svgWidth = Math.max(1, width) * LANE_WIDTH
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-muted">
-        {aheadLabel(graph)}
-        {graph.truncated && ` Only the newest ${graph.commits.length} commits are shown.`}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-muted">
+          {aheadLabel(graph)}
+          {graph.truncated && ` Only the newest ${graph.commits.length} commits are shown.`}
+        </p>
+        <IconButton label="Refresh" icon={RefreshCw} shortcut="Shift+R" onClick={onRefresh} />
+      </div>
 
       <ol aria-label="Commits" className="rounded-md border border-line bg-surface py-1">
         {rows.map(({ commit, lane, through, into, out }) => {
@@ -100,15 +109,27 @@ export function GitGraph({ graph, now }: GitGraphProps) {
                 />
               </svg>
               <span className="flex min-w-0 flex-1 items-center gap-2">
-                {commit.refs.map((ref) => (
+                {commit.refs.slice(0, MAX_REFS).map((ref) => (
                   <span
                     key={ref}
-                    className="shrink-0 rounded border border-line px-1.5 font-mono text-xs"
+                    data-tip={ref}
+                    className="max-w-40 shrink-0 truncate rounded border border-line px-1.5 font-mono text-xs"
                   >
                     {ref}
                   </span>
                 ))}
-                <span className={`truncate ${isHead ? 'font-semibold' : ''}`} data-tip-overflow>
+                {commit.refs.length > MAX_REFS && (
+                  <span
+                    data-tip={commit.refs.slice(MAX_REFS).join(', ')}
+                    className="shrink-0 rounded border border-line px-1.5 font-mono text-xs text-muted"
+                  >
+                    +{commit.refs.length - MAX_REFS}
+                  </span>
+                )}
+                <span
+                  className={`min-w-0 truncate ${isHead ? 'font-semibold' : ''}`}
+                  data-tip-overflow
+                >
                   {commit.subject}
                 </span>
               </span>

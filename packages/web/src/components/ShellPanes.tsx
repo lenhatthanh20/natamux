@@ -1,56 +1,121 @@
-import type { TerminalSize } from '@helmsman/core'
+import type { TaskState, TerminalSize } from '@helmsman/core'
 import { useQuery } from '@tanstack/react-query'
-import { Columns2 } from 'lucide-react'
+import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
-import { MAX_PANES } from '../lib/panes'
+import { columnsFor, MAX_PANES, paneSpan } from '../lib/panes'
+import { terminalShortcut } from '../lib/terminal-keys'
 import { nextTerminalName, terminalNames } from '../lib/terminal-tabs'
+import { toast } from '../lib/toasts'
+import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
+import { Button } from './ui/Button'
 
 type ShellPanesProps = {
   taskId: string
+  state: TaskState
+  // Set when an agent was started in this workspace. Shell 1 is the agent's.
+  agent: string | null
+  // The line after the title of Shell 1, for example "Running · Edit a.ts".
+  stateText?: string
   connect: (size: TerminalSize, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
   closeTerminal: (terminal: string) => Promise<string[]>
+  // A new number puts the keyboard in Shell 1.
+  focusToken?: number
+  // Where "New shell" goes: the right end of the tab row, which the parent owns.
+  actionsSlot: HTMLElement | null
 }
 
-// The shells of one task, side by side. The agent runs in shell 1, so it cannot be closed here.
-export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: ShellPanesProps) {
+// The shells of one task, side by side.
+export function ShellPanes({
+  taskId,
+  state,
+  agent,
+  stateText,
+  connect,
+  loadTerminals,
+  closeTerminal,
+  focusToken,
+  actionsSlot,
+}: ShellPanesProps) {
   const open = useQuery({ queryKey: ['terminals', taskId], queryFn: loadTerminals })
   const [added, setAdded] = useState<string[]>([])
+  // Shells that are being closed. They leave the screen at once, not when the list is read again.
+  const [closing, setClosing] = useState<string[]>([])
   const [shown, setShown] = useState('1')
+  const [maximized, setMaximized] = useState<string | null>(null)
+  const [gridRef, gridWidth] = useElementWidth<HTMLDivElement>()
   const phone = usePhone()
-  const names = terminalNames(open.data ?? [], added)
+  const names = terminalNames(
+    (open.data ?? []).filter((name) => !closing.includes(name)),
+    added,
+  )
 
   // On a phone one terminal fills the screen, and chips switch between them.
   const active = names.includes(shown) ? shown : (names[0] ?? '1')
+  const focused = maximized !== null && names.includes(maximized) ? maximized : null
+  const visible = names.filter((name) =>
+    focused === null ? !phone || name === active : name === focused,
+  )
+  const columns = focused === null ? columnsFor('auto', visible.length, gridWidth) : 1
+  const full = names.length >= MAX_PANES
 
   const addShell = () => {
+    if (full) {
+      return
+    }
     const name = nextTerminalName(names)
     setAdded((current) => [...current, name])
+    setClosing((current) => current.filter((item) => item !== name))
     setShown(name)
+    setMaximized(null)
   }
 
   const closeShell = async (name: string) => {
+    setClosing((current) => [...current, name])
     setAdded((current) => current.filter((item) => item !== name))
-    await closeTerminal(name)
-    await open.refetch()
+    if (maximized === name) {
+      setMaximized(null)
+    }
+    try {
+      await closeTerminal(name)
+      await open.refetch()
+    } catch (error) {
+      toast(`Could not close Shell ${name}.`, 'error', {
+        detail: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setClosing((current) => current.filter((item) => item !== name))
+    }
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <span className="flex-1">Shell 1 runs the agent. More shells open side by side.</span>
-        <button
-          type="button"
-          onClick={addShell}
-          disabled={names.length >= MAX_PANES}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-hover hover:text-ink disabled:opacity-50"
-        >
-          <Columns2 size={13} aria-hidden="true" />
-          New shell
-        </button>
-      </div>
+    // biome-ignore lint/a11y/noStaticElementInteractions: the shortcut works from any pane inside.
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-2"
+      onKeyDown={(event) => {
+        if (terminalShortcut(event.nativeEvent) === 'new-shell') {
+          event.preventDefault()
+          addShell()
+        }
+      }}
+    >
+      {actionsSlot !== null &&
+        createPortal(
+          <Button
+            variant="ghost"
+            icon={SquareSplitHorizontal}
+            onClick={addShell}
+            disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
+            data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
+          >
+            New shell
+          </Button>,
+          actionsSlot,
+        )}
       {phone && names.length > 1 && (
         <fieldset className="flex min-w-0 gap-1.5 overflow-x-auto">
           <legend className="sr-only">Shells</legend>
@@ -67,22 +132,40 @@ export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: Sh
           ))}
         </fieldset>
       )}
-      <div className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))]">
-        {names.map((name) => (
-          <TerminalPane
-            key={name}
-            hidden={phone && name !== active}
-            label={`Shell ${name}`}
-            header={
-              <span className="font-medium">
-                Shell {name}
-                {name === '1' && <span className="font-normal text-muted"> · agent</span>}
-              </span>
-            }
-            connect={(size) => connect(size, name)}
-            onClose={name === '1' ? undefined : () => void closeShell(name)}
-          />
-        ))}
+      <div
+        ref={gridRef}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
+      >
+        {names.map((name) => {
+          const isAgent = name === '1' && agent !== null
+          const index = visible.indexOf(name)
+          return (
+            <TerminalPane
+              key={name}
+              hidden={index === -1}
+              style={
+                index === -1
+                  ? undefined
+                  : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
+              }
+              label={`Shell ${name}`}
+              icon={
+                isAgent ? <StatusGlyph state={state} /> : <SquareTerminal size={14} aria-hidden />
+              }
+              title={`Shell ${name}`}
+              role={isAgent ? 'Agent' : undefined}
+              stateText={isAgent ? stateText : undefined}
+              needsInput={isAgent && state === 'needs-input'}
+              connect={(size) => connect(size, name)}
+              focusToken={name === '1' ? focusToken : undefined}
+              maximized={focused === name}
+              onToggleMaximize={() => setMaximized(focused === name ? null : name)}
+              onClose={name === '1' ? undefined : () => void closeShell(name)}
+              closeTip="Close shell (ends the process)"
+            />
+          )
+        })}
       </div>
     </div>
   )

@@ -1,9 +1,14 @@
 import type { TerminalSize } from '@helmsman/core'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { ArrowDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { MONO_FONT } from '../lib/fonts'
 import { parseTerminalMessage } from '../lib/terminal'
+import { terminalShortcut } from '../lib/terminal-keys'
 import {
   MIN_CONTRAST_RATIO,
   TERMINAL_FONT_SIZE,
@@ -12,16 +17,18 @@ import {
 } from '../lib/terminal-theme'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
+import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
 
 type Status = 'connecting' | 'open' | 'ended' | 'error'
 
-// The same stack as --font-mono in styles.css. xterm needs the names, not a CSS variable.
-const MONO_FONT =
-  '"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace'
+// A burst of resizes (dragging a divider) fits the terminal once, when it settles.
+const FIT_DELAY_MS = 100
 
 type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
+  // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
+  focusToken?: number
 }
 
 const STATUS_TEXT: Record<Status, string> = {
@@ -32,13 +39,16 @@ const STATUS_TEXT: Record<Status, string> = {
 }
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
-export default function TerminalView({ connect }: TerminalViewProps) {
+export default function TerminalView({ connect, focusToken }: TerminalViewProps) {
   const container = useRef<HTMLElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
   const [status, setStatus] = useState<Status>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [search, setSearch] = useState<SearchAddon | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [scrolledUp, setScrolledUp] = useState(false)
   const theme = useResolvedTheme()
   const themeRef = useRef(theme)
   themeRef.current = theme
@@ -65,8 +75,34 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     fitRef.current = fit
-    // F6 moves between the parts of the window. The shell never sees it.
-    terminal.attachCustomKeyEventHandler((event) => event.key !== 'F6')
+    const searchAddon = new SearchAddon()
+    terminal.loadAddon(searchAddon)
+    setSearch(searchAddon)
+    // Only web addresses become links, and they open in a new tab.
+    terminal.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        event.preventDefault()
+        window.open(uri, '_blank', 'noopener,noreferrer')
+      }),
+    )
+    // F6 moves between the parts of the window, and the shortcuts of the app stay out of the
+    // shell. Returning false lets the key event go on to the page.
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.key === 'F6') {
+        return false
+      }
+      const shortcut = terminalShortcut(event)
+      if (shortcut === null) {
+        return true
+      }
+      if (shortcut === 'find' && event.type === 'keydown') {
+        event.preventDefault()
+        setFindOpen(true)
+      } else if (shortcut === 'maximize') {
+        event.preventDefault()
+      }
+      return false
+    })
     terminal.open(element)
     fit.fit()
 
@@ -75,6 +111,14 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     const send = (message: object) => {
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(message))
+      }
+    }
+    // The size that the daemon knows. It hears of a size only when it changes.
+    let sentSize = { cols: terminal.cols, rows: terminal.rows }
+    const sendSize = () => {
+      if (terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
+        sentSize = { cols: terminal.cols, rows: terminal.rows }
+        send({ type: 'resize', ...sentSize })
       }
     }
 
@@ -88,7 +132,11 @@ export default function TerminalView({ connect }: TerminalViewProps) {
           return
         }
         socket = opened
-        opened.onopen = () => setStatus('open')
+        opened.onopen = () => {
+          setStatus('open')
+          // The terminal may have been fitted while the socket was opening.
+          sendSize()
+        }
         opened.onmessage = (event) => {
           const message = parseTerminalMessage(String(event.data))
           if (message?.type === 'output') {
@@ -115,14 +163,25 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       })
 
     const input = terminal.onData((data) => send({ type: 'input', data }))
-    const resized = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
+    const resized = terminal.onResize(sendSize)
+    const updateScrolled = () => {
+      const buffer = terminal.buffer.active
+      setScrolledUp(buffer.viewportY < buffer.baseY)
+    }
+    const scrolled = terminal.onScroll(updateScrolled)
+    const written = terminal.onWriteParsed(updateScrolled)
+
+    let fitTimer: ReturnType<typeof setTimeout> | undefined
     const observer = new ResizeObserver(() => {
-      // A hidden terminal has no size yet, and xterm throws while it measures nothing.
-      try {
-        fit.fit()
-      } catch {
-        // The next resize, when it shows again, fits it.
-      }
+      clearTimeout(fitTimer)
+      fitTimer = setTimeout(() => {
+        // A hidden terminal has no size yet, and xterm throws while it measures nothing.
+        try {
+          fit.fit()
+        } catch {
+          // The next resize, when it shows again, fits it.
+        }
+      }, FIT_DELAY_MS)
     })
     observer.observe(element)
     terminal.focus()
@@ -142,13 +201,18 @@ export default function TerminalView({ connect }: TerminalViewProps) {
 
     return () => {
       disposed = true
+      clearTimeout(fitTimer)
       observer.disconnect()
       input.dispose()
       resized.dispose()
+      scrolled.dispose()
+      written.dispose()
       socket?.close()
       terminal.dispose()
       terminalRef.current = null
       fitRef.current = null
+      setSearch(null)
+      setFindOpen(false)
     }
   }, [attempt])
 
@@ -167,26 +231,49 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     }
   }, [uiSize])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token is the trigger.
+  useEffect(() => {
+    terminalRef.current?.focus()
+  }, [focusToken])
+
+  const closeFind = () => {
+    setFindOpen(false)
+    terminalRef.current?.focus()
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {status !== 'open' && (
-        <div className="flex items-center gap-3 px-3 pt-2">
-          <p className="flex-1 text-xs text-muted" role="status">
+        <div className="flex h-7 shrink-0 items-center gap-3 border-b border-line px-3">
+          <p className="flex-1 truncate text-xs text-muted" role="status">
             {STATUS_TEXT[status]}
             {error !== null && ` ${error}`}
           </p>
           {(status === 'ended' || status === 'error') && (
-            <Button size="xs" onClick={() => setAttempt((value) => value + 1)}>
+            <Button variant="link" onClick={() => setAttempt((value) => value + 1)}>
               Start a new shell
             </Button>
           )}
         </div>
       )}
-      <section
-        ref={container}
-        aria-label="Terminal screen"
-        className="min-h-0 flex-1 overflow-hidden px-3 py-2"
-      />
+      <div className="hm-terminal relative flex min-h-0 flex-1 flex-col">
+        <section
+          ref={container}
+          aria-label="Terminal screen"
+          className="min-h-0 flex-1 overflow-hidden py-2 pl-2.5"
+        />
+        {findOpen && search !== null && <TerminalFind search={search} onClose={closeFind} />}
+        {scrolledUp && (
+          <Button
+            icon={ArrowDown}
+            size="xs"
+            onClick={() => terminalRef.current?.scrollToBottom()}
+            className="absolute right-4 bottom-3 z-10 rounded-full! shadow-pop"
+          >
+            Jump to latest
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { applyTaskEvent, TASK_STATES, type Task, type TaskState } from '@helmsma
 import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
+  agentAction,
   countByState,
   filterTasks,
   formatAge,
@@ -203,5 +204,22 @@ describe('formatAge', () => {
     ['2026-10-05T12:00:00.000Z', '3d ago'],
   ])('shows %s as %s', (isoTime, expected) => {
     expect(formatAge(isoTime, now)).toBe(expected)
+  })
+})
+
+describe('agentAction', () => {
+  it('starts an agent when none was started', () => {
+    expect(agentAction({ state: 'ready', agent: null })).toBe('start')
+    expect(agentAction({ state: 'draft', agent: null })).toBe('start')
+  })
+
+  it('has nothing to offer while the agent works or waits', () => {
+    expect(agentAction({ state: 'running', agent: 'claude-code' })).toBeNull()
+    expect(agentAction({ state: 'needs-input', agent: 'claude-code' })).toBeNull()
+  })
+
+  it('restarts an agent that ended or failed', () => {
+    expect(agentAction({ state: 'failed', agent: 'claude-code' })).toBe('restart')
+    expect(agentAction({ state: 'review', agent: 'claude-code' })).toBe('restart')
   })
 })
