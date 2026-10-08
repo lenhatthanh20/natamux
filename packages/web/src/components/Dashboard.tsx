@@ -193,7 +193,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }
 
-  const waitingCount = needsMeTasks(tasks).length
+  const waitingCount = needsMeTasks(tasks, now).length
   useEffect(() => {
     document.title = waitingCount > 0 ? `(${waitingCount}) Helmsman` : 'Helmsman'
   }, [waitingCount])

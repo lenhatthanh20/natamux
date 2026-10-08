@@ -15,15 +15,18 @@ export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
     queryFn: loadEvents,
   })
 
+  // "Agent is working" lines only keep the time of the last update fresh. They are not news.
+  const lines = query.data?.filter(({ event }) => event.type !== 'agent.active')
+
   return (
     <section aria-label="Activity" className="flex flex-col gap-2">
       <h3 className="font-medium">Activity</h3>
       {query.isPending && <p className="text-muted">Loading activity.</p>}
       {query.isError && <p role="alert">{query.error.message}</p>}
-      {query.data?.length === 0 && <p className="text-muted">No activity yet.</p>}
-      {query.data && query.data.length > 0 && (
+      {lines?.length === 0 && <p className="text-muted">No activity yet.</p>}
+      {lines && lines.length > 0 && (
         <ol className="flex flex-col border-l border-line">
-          {[...query.data].reverse().map(({ seq, accepted, event }) => (
+          {[...lines].reverse().map(({ seq, accepted, event }) => (
             <li
               key={seq}
               data-accepted={accepted}

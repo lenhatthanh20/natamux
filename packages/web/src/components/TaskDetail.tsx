@@ -1,7 +1,7 @@
 import type { Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent } from '../lib/api'
-import { actionsFor, formatAge, type TaskAction } from '../lib/tasks'
+import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
 import { Timeline } from './Timeline'
@@ -79,6 +79,13 @@ export function TaskDetail({
           Close
         </button>
       </header>
+
+      {isQuiet(task, now) && (
+        <p role="status" className="border-l-4 border-signal pl-3 font-medium">
+          No sign of life for {formatAge(task.updatedAt, now).replace(' ago', '')}. The agent may be
+          stuck, interrupted or closed.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {actions.map((action) => (
