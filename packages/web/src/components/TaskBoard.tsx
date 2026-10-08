@@ -1,10 +1,4 @@
-import {
-  type DiffStat,
-  needsMe,
-  type Task,
-  type TaskState,
-  waitingOn,
-} from '@helmsman/core'
+import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@helmsman/core'
 import { ChevronRight, ListTodo } from 'lucide-react'
 import { useState } from 'react'
 import { usePhone } from '../hooks/useLayoutMode'
@@ -132,19 +126,19 @@ export function TaskBoard({
       {phone && (
         <ul aria-label="Show a state" className="flex shrink-0 gap-1 overflow-x-auto px-4 pb-2">
           {columns.map((column) => (
-              <li key={column.state}>
-                <button
-                  type="button"
-                  aria-pressed={current?.state === column.state}
-                  onClick={() => setPickedState(column.state)}
-                  className="focus-inset flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium whitespace-nowrap text-muted aria-pressed:bg-selected aria-pressed:text-ink"
-                >
-                  <span className="state-dot" data-state={column.state} aria-hidden="true" />
-                  {STATE_LABEL[column.state]}
-                  <span className="tabular-nums opacity-70">{column.tasks.length}</span>
-                </button>
-              </li>
-            ))}
+            <li key={column.state}>
+              <button
+                type="button"
+                aria-pressed={current?.state === column.state}
+                onClick={() => setPickedState(column.state)}
+                className="focus-inset flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium whitespace-nowrap text-muted aria-pressed:bg-selected aria-pressed:text-ink"
+              >
+                <span className="state-dot" data-state={column.state} aria-hidden="true" />
+                {STATE_LABEL[column.state]}
+                <span className="tabular-nums opacity-70">{column.tasks.length}</span>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
       <div ref={scroller} className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4">
