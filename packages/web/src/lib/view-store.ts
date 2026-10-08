@@ -33,6 +33,10 @@ type ViewData = {
   // The tab that the workspace view opens on.
   changesTab: WorkspaceTab
   layout: Layout
+  // The grid of agent terminals is shown instead of the task list.
+  agentsOpen: boolean
+  // The tasks in that grid. Null until the user changes it.
+  agentPanes: string[] | null
 }
 
 type ViewActions = {
@@ -43,6 +47,8 @@ type ViewActions = {
   openChanges: (taskId: string, tab?: WorkspaceTab) => void
   closeChanges: () => void
   setLayout: (layout: Layout) => void
+  openAgents: () => void
+  setAgentPanes: (ids: string[]) => void
 }
 
 export const initialViewData: ViewData = {
@@ -53,6 +59,8 @@ export const initialViewData: ViewData = {
   changesTaskId: null,
   changesTab: 'changes',
   layout: 'table',
+  agentsOpen: false,
+  agentPanes: null,
 }
 
 export const useViewStore = create<ViewData & ViewActions>()((set) => ({
@@ -63,10 +71,14 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   setSearch: (search) => set({ search }),
   select: (id) => set({ selectedId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),
-  openChanges: (taskId, tab = 'changes') => set({ changesTaskId: taskId, changesTab: tab }),
-  closeChanges: () => set({ changesTaskId: null }),
+  openChanges: (taskId, tab = 'changes') =>
+    set({ changesTaskId: taskId, changesTab: tab, agentsOpen: false }),
+  // Back to the task list, from a workspace or from the agents grid.
+  closeChanges: () => set({ changesTaskId: null, agentsOpen: false }),
   setLayout: (layout) => {
     saveLayout(layout)
     set({ layout })
   },
+  openAgents: () => set({ agentsOpen: true, changesTaskId: null }),
+  setAgentPanes: (ids) => set({ agentPanes: ids }),
 }))

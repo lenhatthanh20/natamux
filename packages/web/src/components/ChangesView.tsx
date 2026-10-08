@@ -13,7 +13,7 @@ import type { WorkspaceTab } from '../lib/view-store'
 import { AgentComment } from './AgentComment'
 import { GitGraph } from './GitGraph'
 import { StateBadge } from './StateBadge'
-import { TerminalTabs } from './TerminalTabs'
+import { ShellPanes } from './ShellPanes'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
@@ -265,7 +265,7 @@ export function ChangesView({
 
       {tab === 'terminal' && (
         <div role="tabpanel" aria-label="Terminal" className="flex min-h-0 flex-1 flex-col p-2">
-          <TerminalTabs
+          <ShellPanes
             taskId={task.id}
             connect={connectTerminal}
             loadTerminals={loadTerminals}

@@ -29,7 +29,7 @@ function themeFromPage(): ITheme {
 
 const STATUS_TEXT: Record<Status, string> = {
   connecting: 'Connecting.',
-  open: 'The shell keeps running when you leave this tab.',
+  open: 'Connected.',
   ended: 'The shell ended.',
   error: 'The terminal could not start.',
 }
@@ -135,27 +135,25 @@ export default function TerminalView({ connect }: TerminalViewProps) {
   }, [attempt])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <p className="flex-1 text-xs text-muted" role="status">
-          {STATUS_TEXT[status]}
-          {error !== null && ` ${error}`}
-        </p>
-        {(status === 'ended' || status === 'error') && (
-          <button
-            type="button"
-            onClick={() => setAttempt((value) => value + 1)}
-            className="rounded-md border border-line px-3 py-1.5 font-medium hover:border-accent"
-          >
-            Start a new shell
-          </button>
-        )}
-      </div>
-      <div
-        ref={container}
-        title="Terminal"
-        className="min-h-[16rem] flex-1 overflow-hidden rounded-lg border border-line bg-terminal p-3"
-      />
+    <div className="flex min-h-0 flex-1 flex-col">
+      {status !== 'open' && (
+        <div className="flex items-center gap-3 px-3 pt-2">
+          <p className="flex-1 text-xs text-muted" role="status">
+            {STATUS_TEXT[status]}
+            {error !== null && ` ${error}`}
+          </p>
+          {(status === 'ended' || status === 'error') && (
+            <button
+              type="button"
+              onClick={() => setAttempt((value) => value + 1)}
+              className="rounded-md border border-line px-2.5 py-1 text-xs font-medium hover:border-muted"
+            >
+              Start a new shell
+            </button>
+          )}
+        </div>
+      )}
+      <div ref={container} title="Terminal" className="min-h-0 flex-1 overflow-hidden px-3 py-2" />
     </div>
   )
 }
