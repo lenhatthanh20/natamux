@@ -11,6 +11,7 @@ import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
 import { AgentComment } from './AgentComment'
 import { GitGraph } from './GitGraph'
+import { StateBadge } from './StateBadge'
 import { TerminalTabs } from './TerminalTabs'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
@@ -32,7 +33,6 @@ type ChangesViewProps = {
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
   sendToAgent: (text: string) => Promise<Task>
-  onClose: () => void
 }
 
 const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
@@ -86,7 +86,6 @@ export function ChangesView({
   push,
   openPullRequest,
   sendToAgent,
-  onClose,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
@@ -174,27 +173,62 @@ export function ChangesView({
   }
 
   const tabClass =
-    'rounded-md px-3 py-1.5 font-medium aria-selected:bg-accent/15 aria-selected:text-ink text-muted hover:text-ink'
+    '-mb-px border-b-2 border-transparent px-2.5 py-1.5 font-medium text-muted hover:text-ink aria-selected:border-accent aria-selected:text-ink'
+  const toolButton =
+    'rounded-md border border-line px-2.5 py-1 hover:border-accent disabled:opacity-50'
 
   return (
-    <section aria-label={`Changes of ${task.id}`} className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-line px-3 py-1.5 font-medium hover:border-accent"
-        >
-          Back to tasks
-        </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-semibold">
-            <span className="font-mono text-muted">{task.id}</span> {task.title}
+    <section aria-label={`Changes of ${task.id}`} className="flex min-h-0 flex-1 flex-col">
+      <header className="flex flex-col gap-1 border-b border-line px-4 pt-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="min-w-0 flex-1 truncate font-semibold">
+            <span className="font-mono font-normal text-muted">{task.id}</span> {task.title}
           </h2>
-          <p className="text-muted">
-            {changes.data ? countLabel(list.length) : 'Reading changes.'}
-          </p>
+          <StateBadge state={task.state} />
+          <button
+            type="button"
+            disabled={gitAction.isPending || task.branch === null}
+            onClick={() => gitAction.mutate('push')}
+            title={task.branch === null ? undefined : `Push ${task.branch} to origin`}
+            className={toolButton}
+          >
+            Push
+          </button>
+          {task.pr === null ? (
+            <button
+              type="button"
+              disabled={gitAction.isPending || task.branch === null}
+              onClick={() => gitAction.mutate('pull-request')}
+              className={toolButton}
+            >
+              Create pull request
+            </button>
+          ) : (
+            <a href={task.pr} target="_blank" rel="noreferrer" className={toolButton}>
+              Open pull request
+            </a>
+          )}
         </div>
-        <div role="tablist" aria-label="View" className="flex gap-1">
+        {(gitAction.isPending || notice !== null) && (
+          <p>
+            {gitAction.isPending && <span className="text-muted">Working.</span>}
+            {notice !== null && (
+              <span role="status" className="font-medium">
+                {notice}
+              </span>
+            )}
+          </p>
+        )}
+        <div role="tablist" aria-label="View" className="flex gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'terminal'}
+            onClick={() => setTab('terminal')}
+            className={tabClass}
+          >
+            Terminal
+          </button>
           <button
             type="button"
             role="tab"
@@ -213,77 +247,11 @@ export function ChangesView({
           >
             History
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'terminal'}
-            onClick={() => setTab('terminal')}
-            className={tabClass}
-          >
-            Terminal
-          </button>
         </div>
-        {tab === 'changes' && (
-          <button
-            type="button"
-            aria-pressed={sideBySide}
-            onClick={() => setSideBySide((value) => !value)}
-            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
-          >
-            {sideBySide ? 'Side by side' : 'Inline'}
-          </button>
-        )}
-        {tab !== 'terminal' && (
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
-          >
-            Refresh
-          </button>
-        )}
       </header>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted">Branch</span>
-        <span className="font-mono">{task.branch ?? '-'}</span>
-        <button
-          type="button"
-          disabled={gitAction.isPending || task.branch === null}
-          onClick={() => gitAction.mutate('push')}
-          className="rounded-md border border-line px-3 py-1 hover:border-accent disabled:opacity-50"
-        >
-          Push
-        </button>
-        {task.pr === null ? (
-          <button
-            type="button"
-            disabled={gitAction.isPending || task.branch === null}
-            onClick={() => gitAction.mutate('pull-request')}
-            className="rounded-md border border-line px-3 py-1 hover:border-accent disabled:opacity-50"
-          >
-            Create pull request
-          </button>
-        ) : (
-          <a
-            href={task.pr}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md border border-line px-3 py-1 hover:border-accent"
-          >
-            Open pull request
-          </a>
-        )}
-        {gitAction.isPending && <span className="text-muted">Working.</span>}
-        {notice !== null && (
-          <span role="status" className="font-medium">
-            {notice}
-          </span>
-        )}
-      </div>
-
       {tab === 'terminal' && (
-        <div role="tabpanel" aria-label="Terminal">
+        <div role="tabpanel" aria-label="Terminal" className="flex min-h-0 flex-1 flex-col p-2">
           <TerminalTabs
             taskId={task.id}
             connect={connectTerminal}
@@ -294,81 +262,112 @@ export function ChangesView({
       )}
 
       {tab === 'history' && (
-        <div role="tabpanel" aria-label="History">
+        <div
+          role="tabpanel"
+          aria-label="History"
+          className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
+        >
+          <div className="flex justify-end">
+            <button type="button" onClick={refresh} className={toolButton}>
+              Refresh
+            </button>
+          </div>
           {graph.isPending && <p className="text-muted">Reading the history.</p>}
           {graph.isError && <p role="alert">{graph.error.message}</p>}
           {graph.data && <GitGraph graph={graph.data} now={now} />}
         </div>
       )}
 
-      {tab === 'changes' && changes.isError && <p role="alert">{changes.error.message}</p>}
-      {tab === 'changes' && changes.data && list.length === 0 && (
-        <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
-          No changes. The workspace matches its last commit.
-        </p>
-      )}
-
-      {tab === 'changes' && list.length > 0 && (
-        <form onSubmit={submitCommit} className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <label htmlFor="commit-message" className="sr-only">
-            Commit message
-          </label>
-          <textarea
-            id="commit-message"
-            rows={2}
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            onKeyDown={commitOnShortcut}
-            placeholder="Commit message (Ctrl+Enter to commit)"
-            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2"
-          />
-          <button
-            type="submit"
-            disabled={gitAction.isPending || message.trim() === ''}
-            className="rounded-md bg-accent px-3 py-2 font-medium text-surface disabled:opacity-50"
-          >
-            Commit all
-          </button>
-        </form>
-      )}
-
-      {tab === 'changes' && list.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-          <ul
-            aria-label="Changed files"
-            className="flex flex-col rounded-md border border-line bg-surface"
-          >
-            {list.map((entry) => {
-              const { folder, name } = splitPath(entry.path)
-              return (
-                <li key={entry.path} className="border-b border-line last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedPath(entry.path)
-                      setLine(null)
-                    }}
-                    aria-current={entry.path === current?.path}
-                    className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-accent/10 aria-[current=true]:bg-accent/10"
-                  >
-                    <span className="min-w-0 flex-1 truncate" title={entry.path}>
-                      <span className="font-medium">{name}</span>
-                      {folder !== '' && <span className="text-muted"> {folder}</span>}
-                    </span>
-                    <span
-                      title={CHANGE_LABEL[entry.status]}
-                      className={`w-4 shrink-0 text-center font-mono font-semibold ${LETTER_COLOR[entry.status]}`}
-                    >
-                      {entry.status}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+      {tab === 'changes' && (
+        <div
+          role="tabpanel"
+          aria-label="Changes"
+          className="grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-auto p-4 lg:grid-cols-[17rem_1fr] lg:grid-rows-1"
+        >
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="flex-1 whitespace-nowrap text-muted">
+                {changes.data ? countLabel(list.length) : 'Reading changes.'}
+              </span>
+              <button
+                type="button"
+                aria-pressed={sideBySide}
+                onClick={() => setSideBySide((value) => !value)}
+                className={toolButton}
+              >
+                {sideBySide ? 'Side by side' : 'Inline'}
+              </button>
+              <button type="button" onClick={refresh} className={toolButton}>
+                Refresh
+              </button>
+            </div>
+            {changes.isError && <p role="alert">{changes.error.message}</p>}
+            {list.length > 0 && (
+              <ul
+                aria-label="Changed files"
+                className="flex flex-col rounded-md border border-line bg-surface"
+              >
+                {list.map((entry) => {
+                  const { folder, name } = splitPath(entry.path)
+                  return (
+                    <li key={entry.path} className="border-b border-line last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPath(entry.path)
+                          setLine(null)
+                        }}
+                        aria-current={entry.path === current?.path}
+                        className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-hover aria-[current=true]:bg-selected"
+                      >
+                        <span className="min-w-0 flex-1 truncate" title={entry.path}>
+                          <span className="font-medium">{name}</span>
+                          {folder !== '' && <span className="text-muted"> {folder}</span>}
+                        </span>
+                        <span
+                          title={CHANGE_LABEL[entry.status]}
+                          className={`w-4 shrink-0 text-center font-mono font-semibold ${LETTER_COLOR[entry.status]}`}
+                        >
+                          {entry.status}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {list.length > 0 && (
+              <form onSubmit={submitCommit} className="flex flex-col gap-2">
+                <label htmlFor="commit-message" className="sr-only">
+                  Commit message
+                </label>
+                <textarea
+                  id="commit-message"
+                  rows={3}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={commitOnShortcut}
+                  placeholder="Commit message (Ctrl+Enter to commit)"
+                  className="rounded-md border border-line bg-surface px-3 py-2"
+                />
+                <button
+                  type="submit"
+                  disabled={gitAction.isPending || message.trim() === ''}
+                  className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                >
+                  Commit all
+                </button>
+              </form>
+            )}
+          </div>
 
           <div className="min-w-0">
-            {file.isPending && <p className="text-muted">Reading the file.</p>}
+            {changes.data && list.length === 0 && (
+              <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
+                No changes. The workspace matches its last commit.
+              </p>
+            )}
+            {current !== null && file.isPending && <p className="text-muted">Reading the file.</p>}
             {file.isError && <p role="alert">{file.error.message}</p>}
             {file.data && <FileBody file={file.data} sideBySide={sideBySide} onLine={setLine} />}
             {current !== null && (

@@ -2,29 +2,30 @@
 
 :root {
   color-scheme: light dark;
-  --canvas: #edf0f3;
+  --canvas: #fbfbfc;
   --surface: #ffffff;
-  --ink: #0b1f33;
-  --muted: #566678;
-  --line: #d5dbe2;
-  --accent: #0a6c8f;
-  --band: #0b1f33;
-  --band-ink: #f3f7fb;
-  --band-muted: #a9bacb;
-  --signal: #f5b83d;
+  --sidebar: #f3f4f6;
+  --ink: #1b1d21;
+  --muted: #69707a;
+  --line: #e2e4e8;
+  --accent: #3563e9;
+  --hover: rgb(20 24 31 / 0.05);
+  --selected: rgb(53 99 233 / 0.1);
+  --signal: #e09b12;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #0a141f;
-    --surface: #101e2d;
-    --ink: #e6edf3;
-    --muted: #8fa1b3;
-    --line: #223548;
-    --accent: #4fb4d6;
-    --band: #182a3d;
-    --band-ink: #f1f5f9;
-    --band-muted: #9fb2c5;
+    --canvas: #16181c;
+    --surface: #1c1f24;
+    --sidebar: #111316;
+    --ink: #e4e6ea;
+    --muted: #8a919c;
+    --line: #2a2e35;
+    --accent: #6c95ff;
+    --hover: rgb(255 255 255 / 0.05);
+    --selected: rgb(108 149 255 / 0.15);
+    --signal: #f0b23e;
   }
 }
 
@@ -35,9 +36,9 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
-  --color-band: var(--band);
-  --color-band-ink: var(--band-ink);
-  --color-band-muted: var(--band-muted);
+  --color-sidebar: var(--sidebar);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
   --color-signal: var(--signal);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
@@ -47,7 +48,7 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
@@ -76,6 +77,24 @@ body {
   height: 0.5rem;
   border-radius: 9999px;
   background: currentColor;
+}
+
+/* The same colors as the chips, as a dot: the sidebar has no room for a word. */
+.state-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--chip-fg);
+}
+
+.state-dot[data-state="draft"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--chip-fg);
+}
+
+.state-dot[data-state="running"] {
+  animation: running-pulse 2s ease-in-out infinite;
 }
 
 [data-state="draft"] {
@@ -125,12 +144,12 @@ body {
 @media (prefers-color-scheme: dark) {
   [data-state="draft"],
   [data-state="done"] {
-    --chip-bg: #1d2e40;
-    --chip-fg: #9fb2c5;
+    --chip-bg: #262a31;
+    --chip-fg: #a3aab5;
   }
   [data-state="cancelled"] {
-    --chip-bg: #1d2e40;
-    --chip-fg: #7f93a6;
+    --chip-bg: #262a31;
+    --chip-fg: #7d848f;
   }
   [data-state="ready"] {
     --chip-bg: #0f3445;
@@ -169,7 +188,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-state="running"]::before {
+  [data-state="running"]::before,
+  .state-dot[data-state="running"] {
     animation: none;
   }
 }
