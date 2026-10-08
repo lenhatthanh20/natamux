@@ -51,7 +51,7 @@ export function TaskTable({
 
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-surface">
-      <table className="w-full min-w-[48rem] border-collapse text-left">
+      <table className="w-full min-w-[52rem] border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-muted">
             <th className="px-3 py-2 font-medium">Task</th>
@@ -60,6 +60,7 @@ export function TaskTable({
             <th className="px-3 py-2 font-medium">Branch</th>
             <th className="px-3 py-2 text-right font-medium">Changes</th>
             <th className="px-3 py-2 font-medium">Pull request</th>
+            <th className="px-3 py-2 text-right font-medium">Age</th>
             <th className="px-3 py-2 text-right font-medium">Last activity</th>
           </tr>
         </thead>
@@ -114,6 +115,9 @@ export function TaskTable({
                     )}
                   </span>
                 )}
+              </td>
+              <td className="px-3 py-2 text-right text-muted" title={task.createdAt}>
+                {formatAge(task.createdAt, now).replace(' ago', '')}
               </td>
               <td className="px-3 py-2 text-right text-muted">{formatAge(task.updatedAt, now)}</td>
             </tr>
