@@ -4,6 +4,8 @@ import {
   type EventType,
   type FileDiff,
   fileDiffSchema,
+  type GitGraph,
+  gitGraphSchema,
   type Task,
   type TaskEvent,
   taskEventSchema,
@@ -147,6 +149,12 @@ export function createApi(
         `/tasks/${encodeURIComponent(taskId)}/changes/file?path=${encodeURIComponent(path)}`,
       )
       return fileDiffSchema.parse(body)
+    },
+
+    async getGitGraph(taskId: string): Promise<GitGraph> {
+      return gitGraphSchema.parse(
+        await request('GET', `/tasks/${encodeURIComponent(taskId)}/graph`),
+      )
     },
 
     async createWorkspace(taskId: string): Promise<Task> {

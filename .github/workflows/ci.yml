@@ -122,20 +122,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Development, build and start
-        run: |
-          export HELMSMAN_UID="$(id -u)" HELMSMAN_GID="$(id -g)"
-          docker compose up -d --build
-          for i in $(seq 1 60); do
-            curl -fsS -o /dev/null http://127.0.0.1:4317/health \
-              && curl -fsS -o /dev/null http://127.0.0.1:5173/ && break
-            sleep 3
-          done
+      - name: Development, start with the demo
+        run: scripts/dev.sh demo
       - name: Development, smoke test
         run: |
           curl -fsS http://127.0.0.1:4317/health
           curl -fsS http://127.0.0.1:5173/ | grep -q 'id="root"'
           curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:5173/api/tasks
+          curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:5173/api/tasks/T-0001/changes \
+            | grep -q 'demo/todo.txt'
+          curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:5173/api/tasks/T-0001/graph \
+            | grep -q 'Expand demo notes'
       - name: Development, logs on failure
         if: failure()
         run: docker compose logs

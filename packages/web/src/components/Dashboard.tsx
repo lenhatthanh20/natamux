@@ -277,8 +277,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           <ChangesView
             key={changesTask.id}
             task={changesTask}
+            now={now}
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
+            loadGraph={() => api.getGitGraph(changesTask.id)}
             onClose={closeChanges}
           />
         ) : (

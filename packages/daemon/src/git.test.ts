@@ -4,12 +4,16 @@ import type { ChangeEntry, ChangeStatus } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
+  currentBranch,
   deleteMergedBranch,
   GitError,
   listChanges,
   OutsideWorkspaceError,
+  parseLog,
+  parseRefs,
   parseStatus,
   readFileDiff,
+  readGitGraph,
   removeWorktree,
   statusFromCodes,
 } from './git.js'
@@ -271,5 +275,119 @@ describe('readFileDiff', () => {
     await expect(readFileDiff(worktreePath, change('link.txt', 'U'))).rejects.toThrow(
       OutsideWorkspaceError,
     )
+  })
+})
+
+describe('parseRefs', () => {
+  it.each([
+    ['', []],
+    ['HEAD', []],
+    ['HEAD -> helmsman/t-0001', ['helmsman/t-0001']],
+    ['HEAD -> main, tag: v1, origin/main', ['main', 'tag: v1', 'origin/main']],
+    ['origin/main, origin/HEAD', ['origin/main']],
+  ])('reads %j', (decoration, refs) => {
+    expect(parseRefs(decoration)).toEqual(refs)
+  })
+})
+
+describe('parseLog', () => {
+  it('reads records, parents, refs and a subject that holds the field separator', () => {
+    const output = [
+      ['b2', 'a1 c3', 'Ann', '2026-10-08T10:00:00+07:00', 'HEAD -> main', 'Merge x\x1fy'].join(
+        '\x1f',
+      ),
+      ['a1', '', 'Bob', '2026-10-07T10:00:00+07:00', '', 'init'].join('\x1f'),
+      '',
+    ].join('\0')
+
+    expect(parseLog(output, (hash) => hash === 'b2')).toEqual([
+      {
+        hash: 'b2',
+        parents: ['a1', 'c3'],
+        author: 'Ann',
+        date: '2026-10-08T10:00:00+07:00',
+        subject: 'Merge x\x1fy',
+        refs: ['main'],
+        onBranch: true,
+      },
+      {
+        hash: 'a1',
+        parents: [],
+        author: 'Bob',
+        date: '2026-10-07T10:00:00+07:00',
+        subject: 'init',
+        refs: [],
+        onBranch: false,
+      },
+    ])
+  })
+})
+
+describe('currentBranch', () => {
+  it('gives the branch of a checkout, and null when HEAD is detached', async () => {
+    expect(await currentBranch(repo.dir)).toBe('main')
+
+    runGit(repo.dir, 'checkout', '--detach')
+    expect(await currentBranch(repo.dir)).toBeNull()
+  })
+})
+
+describe('readGitGraph', () => {
+  const branch = 'helmsman/t-0001-example'
+
+  // main: init, then "main moved" after the branch started. The branch: "one", then "two".
+  async function divergedWorktree(): Promise<void> {
+    await addWorktree(repo.dir, worktreePath, branch)
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'one')
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'two')
+    runGit(repo.dir, 'commit', '--allow-empty', '-m', 'main moved')
+  }
+
+  it('shows the branch and its base, newest first, and counts ahead and behind', async () => {
+    await divergedWorktree()
+
+    const graph = await readGitGraph(worktreePath, 'main')
+
+    expect(graph).toMatchObject({ branch, base: 'main', ahead: 2, behind: 1, truncated: false })
+    expect(graph.head).toBe(runGit(worktreePath, 'rev-parse', 'HEAD').trim())
+    expect(graph.commits.map((commit) => commit.subject).sort()).toEqual([
+      'init',
+      'main moved',
+      'one',
+      'two',
+    ])
+    const bySubject = new Map(graph.commits.map((commit) => [commit.subject, commit]))
+    expect(bySubject.get('two')).toMatchObject({ onBranch: true, refs: [branch], author: 'Test' })
+    expect(bySubject.get('one')?.onBranch).toBe(true)
+    expect(bySubject.get('main moved')).toMatchObject({ onBranch: false, refs: ['main'] })
+    expect(bySubject.get('init')).toMatchObject({ onBranch: false, parents: [] })
+    expect(bySubject.get('two')?.parents).toEqual([bySubject.get('one')?.hash])
+    // Topological order: a commit always comes before its parents.
+    const order = graph.commits.map((commit) => commit.hash)
+    for (const commit of graph.commits) {
+      for (const parent of commit.parents) {
+        expect(order.indexOf(parent)).toBeGreaterThan(order.indexOf(commit.hash))
+      }
+    }
+  })
+
+  it('cuts the list at the limit and says so', async () => {
+    await divergedWorktree()
+
+    const graph = await readGitGraph(worktreePath, 'main', 2)
+
+    expect(graph.commits).toHaveLength(2)
+    expect(graph.truncated).toBe(true)
+  })
+
+  it('has no base when there is none or when the base is the branch itself', async () => {
+    await divergedWorktree()
+
+    for (const base of [null, branch]) {
+      const graph = await readGitGraph(worktreePath, base)
+      expect(graph).toMatchObject({ base: null, ahead: null, behind: null })
+      expect(graph.commits.map((commit) => commit.subject)).toEqual(['two', 'one', 'init'])
+      expect(graph.commits.every((commit) => commit.onBranch)).toBe(true)
+    }
   })
 })

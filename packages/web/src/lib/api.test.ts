@@ -163,6 +163,32 @@ describe('createApi', () => {
       'does not understand',
     )
   })
+
+  it('reads the git graph of a task', async () => {
+    const graph = {
+      branch: 'helmsman/t-0001',
+      head: 'b2',
+      base: 'main',
+      ahead: 1,
+      behind: 0,
+      truncated: false,
+      commits: [
+        {
+          hash: 'b2',
+          parents: [],
+          author: 'Ann',
+          date: '2026-10-08T09:00:00.000Z',
+          subject: 'init',
+          refs: ['main'],
+          onBranch: true,
+        },
+      ],
+    }
+    const { calls, fetchFunction } = fakeFetch(() => json(graph))
+
+    expect(await createApi('secret', fetchFunction).getGitGraph('T-0001')).toEqual(graph)
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/graph')
+  })
 })
 
 describe('isUnauthorized', () => {
