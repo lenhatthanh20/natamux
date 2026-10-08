@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PORT, LOOPBACK_HOST, loadConfig } from './config.js'
 
@@ -6,7 +7,7 @@ describe('loadConfig', () => {
     const config = loadConfig({}, '/work/repo')
     expect(config.host).toBe(LOOPBACK_HOST)
     expect(config.port).toBe(DEFAULT_PORT)
-    expect(config.dataDir).toBe('/work/repo/.helmsman')
+    expect(config.dataDir).toBe(join('/work/repo', '.helmsman'))
   })
 
   it('listens on all interfaces only when HELMSMAN_HOST says so', () => {
@@ -42,18 +43,18 @@ describe('loadConfig', () => {
     )
     expect(config.tokenWasGenerated).toBe(true)
     expect(config.port).toBe(DEFAULT_PORT)
-    expect(config.dataDir).toBe('/work/repo/.helmsman')
+    expect(config.dataDir).toBe(join('/work/repo', '.helmsman'))
   })
 
   it('uses the working directory as the repository and keeps worktrees in the data directory', () => {
     const config = loadConfig({}, '/work/repo')
     expect(config.repoDir).toBe('/work/repo')
-    expect(config.worktreesDir).toBe('/work/repo/.helmsman/worktrees')
+    expect(config.worktreesDir).toBe(join('/work/repo', '.helmsman', 'worktrees'))
   })
 
   it('follows a data directory that is set, and lets the repository and worktrees be set', () => {
     const moved = loadConfig({ HELMSMAN_DATA_DIR: '/data' }, '/work/repo')
-    expect(moved.worktreesDir).toBe('/data/worktrees')
+    expect(moved.worktreesDir).toBe(join('/data', 'worktrees'))
 
     const explicit = loadConfig(
       { HELMSMAN_REPO_DIR: '/other/repo', HELMSMAN_WORKTREES_DIR: '/trees' },
