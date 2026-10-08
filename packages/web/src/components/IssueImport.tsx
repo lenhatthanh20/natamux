@@ -1,6 +1,8 @@
 import type { GitHubIssue, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Dialog } from './ui/Dialog'
+import { button } from './ui/styles'
 
 type IssueImportProps = {
   // The repository the issues come from; it keeps the lists of repositories apart.
@@ -41,36 +43,39 @@ export function IssueImport({
 
   const count = chosen.size
   return (
-    <section
-      aria-label="Import GitHub issues"
-      className="flex flex-col gap-3 rounded-md border border-line bg-surface p-4"
+    <Dialog
+      title="Import GitHub issues"
+      description="Open issues of the repository. Each one you pick becomes a task."
+      size="md"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={button('ghost')}>
+            Close
+          </button>
+          <button
+            type="button"
+            disabled={count === 0 || importing.isPending}
+            onClick={() => importing.mutate()}
+            className={button('primary')}
+          >
+            {count === 1 ? 'Import 1 issue' : `Import ${count} issues`}
+          </button>
+        </>
+      }
     >
-      <header className="flex items-center gap-3">
-        <h2 className="flex-1 font-semibold">Open issues on GitHub</h2>
-        <button
-          type="button"
-          disabled={count === 0 || importing.isPending}
-          onClick={() => importing.mutate()}
-          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
-        >
-          {count === 1 ? 'Import 1 issue' : `Import ${count} issues`}
-        </button>
-        <button type="button" onClick={onClose} className="px-2 py-1 text-muted hover:text-ink">
-          Close
-        </button>
-      </header>
-
       {issues.isPending && <p className="text-muted">Asking GitHub.</p>}
       {issues.isError && <p role="alert">{issues.error.message}</p>}
       {importing.isError && <p role="alert">{importing.error.message}</p>}
       {issues.data?.length === 0 && <p className="text-muted">No open issues.</p>}
 
       {issues.data && issues.data.length > 0 && (
-        <ul className="flex max-h-80 flex-col overflow-y-auto">
+        <ul className="-mx-2 flex flex-col">
           {issues.data.map((issue) => (
-            <li key={issue.number} className="border-b border-line last:border-b-0">
-              <label className="flex items-baseline gap-3 py-1.5">
+            <li key={issue.number}>
+              <label className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-hover">
                 <input
+                  className="size-3.5 accent-accent"
                   type="checkbox"
                   checked={issue.taskId !== null || chosen.has(issue.number)}
                   disabled={issue.taskId !== null}
@@ -79,10 +84,7 @@ export function IssueImport({
                 <span className="w-12 shrink-0 font-mono text-muted">#{issue.number}</span>
                 <span className="min-w-0 flex-1 truncate">{issue.title || '(no title)'}</span>
                 {issue.labels.map((label) => (
-                  <span
-                    key={label}
-                    className="rounded border border-line px-1.5 text-xs text-muted"
-                  >
+                  <span key={label} className="rounded-full bg-hover px-2 py-px text-xs text-muted">
                     {label}
                   </span>
                 ))}
@@ -94,6 +96,6 @@ export function IssueImport({
           ))}
         </ul>
       )}
-    </section>
+    </Dialog>
   )
 }

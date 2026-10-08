@@ -1,5 +1,8 @@
 import type { Repo } from '@helmsman/core'
+import { FolderGit2 } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
+import { Dialog } from './ui/Dialog'
+import { button, input } from './ui/styles'
 
 type RepoPanelProps = {
   repos: readonly Repo[]
@@ -33,54 +36,59 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
   }
 
   return (
-    <section
-      aria-label="Repositories"
-      className="flex flex-col gap-3 rounded-md border border-line bg-surface p-4"
+    <Dialog
+      title="Repositories"
+      description="Folders on the daemon's machine. Each workspace is a git worktree of one of them."
+      size="md"
+      onClose={onClose}
     >
-      <header className="flex items-center gap-3">
-        <h2 className="flex-1 font-semibold">Repositories</h2>
-        <button type="button" onClick={onClose} className="px-2 py-1 text-muted hover:text-ink">
-          Close
-        </button>
-      </header>
-      <ul className="flex flex-col">
+      <ul className="-mx-2 mb-4 flex flex-col">
         {repos.map((repo) => (
-          <li
-            key={repo.id}
-            className="flex items-baseline gap-3 border-b border-line py-1 last:border-b-0"
-          >
+          <li key={repo.id} className="flex items-center gap-3 rounded-md px-2 py-1.5">
+            <FolderGit2 size={15} aria-hidden="true" className="shrink-0 text-muted" />
             <span className="font-medium">{repo.name}</span>
-            <span className="font-mono text-xs text-muted">{repo.id}</span>
             <span className="min-w-0 flex-1 truncate text-right font-mono text-xs text-muted">
               {repo.path}
             </span>
           </li>
         ))}
       </ul>
-      <form onSubmit={submit} className="flex flex-wrap gap-2">
-        <input
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          placeholder="/path/to/the/repository"
-          aria-label="Repository folder"
-          className="min-w-[16rem] flex-[2] rounded-md border border-line bg-canvas px-2 py-1.5 font-mono"
-        />
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Name (optional)"
-          aria-label="Repository name"
-          className="min-w-[8rem] flex-1 rounded-md border border-line bg-canvas px-2 py-1.5"
-        />
-        <button
-          type="submit"
-          disabled={adding || path.trim() === ''}
-          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
-        >
-          Add repository
-        </button>
+      <form onSubmit={submit} className="flex flex-col gap-2 border-t border-line pt-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Folder</span>
+          <input
+            value={path}
+            onChange={(event) => setPath(event.target.value)}
+            placeholder="/path/to/the/repository"
+            aria-label="Repository folder"
+            className={`${input} font-mono`}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Optional. The folder name is used without one."
+            aria-label="Repository name"
+            className={input}
+          />
+        </label>
+        {error !== null && (
+          <p role="alert" className="text-remove">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end pt-1">
+          <button
+            type="submit"
+            disabled={adding || path.trim() === ''}
+            className={button('primary')}
+          >
+            Add repository
+          </button>
+        </div>
       </form>
-      {error !== null && <p role="alert">{error}</p>}
-    </section>
+    </Dialog>
   )
 }

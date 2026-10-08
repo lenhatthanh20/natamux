@@ -1,6 +1,7 @@
 import type { Task, TerminalSize } from '@helmsman/core'
 import { agentPaneTasks, MAX_PANES, paneColumns } from '../lib/panes'
 import { TerminalPane } from './TerminalPane'
+import { Select } from './ui/Select'
 
 type AgentPanesProps = {
   tasks: readonly Task[]
@@ -24,15 +25,15 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
   )
 
   return (
-    <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      <header className="flex items-center gap-3 px-1">
+    <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+      <header className="flex h-9 items-center gap-3 px-2">
         <h2 className="font-semibold">Agents</h2>
         <span className="text-muted">
           {shown.length} of {MAX_PANES} panes
         </span>
         <span className="flex-1" />
         {others.length > 0 && shown.length < MAX_PANES && (
-          <select
+          <Select
             aria-label="Add a pane"
             value=""
             onChange={(event) => {
@@ -40,7 +41,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
                 onChange([...ids, event.target.value])
               }
             }}
-            className="max-w-64 rounded-md border border-line bg-surface px-2 py-1"
+            className="w-64"
           >
             <option value="">Add a pane</option>
             {others.map((task) => (
@@ -48,7 +49,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
                 {task.id} {task.title}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </header>
       {shown.length === 0 ? (

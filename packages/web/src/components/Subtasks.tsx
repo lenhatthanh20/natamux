@@ -1,6 +1,7 @@
 import type { Task } from '@helmsman/core'
 import { type FormEvent, useState } from 'react'
 import { StateBadge } from './StateBadge'
+import { button, input, sectionTitle } from './ui/styles'
 
 type SubtasksProps = {
   subtasks: readonly Task[]
@@ -23,11 +24,11 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
   }
 
   return (
-    <section aria-label="Subtasks" className="flex flex-col gap-2">
-      <h3 className="font-semibold">
+    <section aria-label="Subtasks" className="flex flex-col gap-2 border-t border-line pt-4">
+      <h3 className={`flex justify-between ${sectionTitle}`}>
         Subtasks
         {subtasks.length > 0 && (
-          <span className="ml-2 font-normal text-muted">
+          <span className="font-normal">
             {done} of {subtasks.length} done
           </span>
         )}
@@ -39,9 +40,9 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
               <button
                 type="button"
                 onClick={() => onSelect(task.id)}
-                className="flex w-full items-baseline gap-2 py-0.5 text-left hover:text-accent"
+                className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-hover"
               >
-                <span className="font-mono text-muted">{task.id}</span>
+                <span className="font-mono text-xs text-muted">{task.id}</span>
                 <span className="min-w-0 flex-1 truncate">{task.title}</span>
                 <StateBadge state={task.state} />
               </button>
@@ -55,13 +56,9 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Add a subtask"
           aria-label="New subtask title"
-          className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-2 py-1"
+          className={`${input} h-7 flex-1`}
         />
-        <button
-          type="submit"
-          disabled={busy || title.trim() === ''}
-          className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
-        >
+        <button type="submit" disabled={busy || title.trim() === ''} className={button()}>
           Add
         </button>
       </form>
