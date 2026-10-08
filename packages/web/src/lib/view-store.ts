@@ -6,6 +6,8 @@ type ViewData = {
   search: string
   selectedId: string | null
   detailOpen: boolean
+  // The task whose changed files are shown instead of the task list.
+  changesTaskId: string | null
 }
 
 type ViewActions = {
@@ -13,6 +15,8 @@ type ViewActions = {
   setSearch: (search: string) => void
   select: (id: string | null) => void
   setDetailOpen: (open: boolean) => void
+  openChanges: (taskId: string) => void
+  closeChanges: () => void
 }
 
 export const initialViewData: ViewData = {
@@ -20,6 +24,7 @@ export const initialViewData: ViewData = {
   search: '',
   selectedId: null,
   detailOpen: false,
+  changesTaskId: null,
 }
 
 export const useViewStore = create<ViewData & ViewActions>()((set) => ({
@@ -29,4 +34,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   setSearch: (search) => set({ search }),
   select: (id) => set({ selectedId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),
+  openChanges: (taskId) => set({ changesTaskId: taskId }),
+  closeChanges: () => set({ changesTaskId: null }),
 }))

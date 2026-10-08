@@ -6,6 +6,7 @@ import { useNow } from '../hooks/useNow'
 import { createApi, isUnauthorized } from '../lib/api'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { useViewStore } from '../lib/view-store'
+import { ChangesView } from './ChangesView'
 import { NeedsMeStrip } from './NeedsMeStrip'
 import { StateFilter } from './StateFilter'
 import { TaskDetail } from './TaskDetail'
@@ -31,8 +32,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
   const now = useNow(NOW_INTERVAL_MS)
-  const { stateFilter, search, selectedId, detailOpen } = useViewStore()
-  const { toggleStateFilter, setSearch, select, setDetailOpen } = useViewStore.getState()
+  const { stateFilter, search, selectedId, detailOpen, changesTaskId } = useViewStore()
+  const { toggleStateFilter, setSearch, select, setDetailOpen, openChanges, closeChanges } =
+    useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -107,6 +109,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     [tasks, stateFilter, search],
   )
   const selectedTask = tasks.find((task) => task.id === selectedId) ?? null
+  const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
 
   const runAction = (task: Task, action: TaskAction) => {
     setFeedback(null)
@@ -160,7 +163,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           }
           return
         case 'Escape':
-          setDetailOpen(false)
+          if (changesTaskId !== null) {
+            closeChanges()
+          } else {
+            setDetailOpen(false)
+          }
           return
         case '/':
           event.preventDefault()
@@ -266,40 +273,55 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           </p>
         )}
 
-        <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
+        {changesTask ? (
+          <ChangesView
+            key={changesTask.id}
+            task={changesTask}
+            loadChanges={() => api.listChanges(changesTask.id)}
+            loadFile={(path) => api.getFileDiff(changesTask.id, path)}
+            onClose={closeChanges}
+          />
+        ) : (
+          <>
+            <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
 
-        <div className={detailOpen && selectedTask ? 'grid gap-4 lg:grid-cols-[1fr_24rem]' : ''}>
-          {tasksQuery.isPending ? (
-            <p className="text-muted">Loading tasks.</p>
-          ) : (
-            <TaskTable
-              tasks={visibleTasks}
-              now={now}
-              selectedId={selectedId}
-              onSelect={chooseTask}
-            />
-          )}
-          {detailOpen && selectedTask && (
-            <TaskDetail
-              key={selectedTask.id}
-              task={selectedTask}
-              now={now}
-              busy={eventMutation.isPending || workspaceMutation.isPending}
-              feedback={feedback}
-              loadEvents={() => api.listEvents(selectedTask.id)}
-              onAction={(action) => runAction(selectedTask, action)}
-              onCreateWorkspace={() => {
-                setFeedback(null)
-                workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create' })
-              }}
-              onRemoveWorkspace={() => {
-                setFeedback(null)
-                workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
-              }}
-              onClose={() => setDetailOpen(false)}
-            />
-          )}
-        </div>
+            <div
+              className={detailOpen && selectedTask ? 'grid gap-4 lg:grid-cols-[1fr_24rem]' : ''}
+            >
+              {tasksQuery.isPending ? (
+                <p className="text-muted">Loading tasks.</p>
+              ) : (
+                <TaskTable
+                  tasks={visibleTasks}
+                  now={now}
+                  selectedId={selectedId}
+                  onSelect={chooseTask}
+                />
+              )}
+              {detailOpen && selectedTask && (
+                <TaskDetail
+                  key={selectedTask.id}
+                  task={selectedTask}
+                  now={now}
+                  busy={eventMutation.isPending || workspaceMutation.isPending}
+                  feedback={feedback}
+                  loadEvents={() => api.listEvents(selectedTask.id)}
+                  onAction={(action) => runAction(selectedTask, action)}
+                  onCreateWorkspace={() => {
+                    setFeedback(null)
+                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create' })
+                  }}
+                  onRemoveWorkspace={() => {
+                    setFeedback(null)
+                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
+                  }}
+                  onViewChanges={() => openChanges(selectedTask.id)}
+                  onClose={() => setDetailOpen(false)}
+                />
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   )

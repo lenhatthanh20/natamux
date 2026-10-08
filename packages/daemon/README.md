@@ -33,6 +33,8 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
 | `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. Answers 409 if the task has one, is done or cancelled, or git refuses |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Git refuses when it has files that are not committed (409). The branch is deleted only when it is fully merged. Returns `{ task, branchDeleted }` |
+| `GET /tasks/:id/changes` | Files changed in the workspace compared with its last commit, like VS Code Source Control. Returns `{ changes: [{ path, status, originalPath }] }`. Status is `M`, `A`, `D`, `R`, `U` (new file) or `C` (conflict). Answers 409 when the task has no workspace |
+| `GET /tasks/:id/changes/file?path=` | Both sides of one changed file: `{ path, status, original, modified, binary, tooLarge }`. The path must be one of the changes (404 otherwise). A binary file or one over 1 MB comes without text |
 | `POST /hooks/:agent` | Where an agent posts its hook, for example `/hooks/claude-code`. The adapter of that agent turns the hook into task events. Always answers `200 {}` (even for a hook that matches no task or changes nothing), `404` for an agent without an adapter, `400` for input that is not a hook of that agent. The task comes from the `X-Helmsman-Task` header or from the workspace that holds the hook's `cwd`. See `docs/agent-adapters.md` and `docs/claude-code-adapter.md` |
 | `GET /events` (WebSocket) | Live task changes. Use `?token=<token>` because browsers cannot set headers |
 

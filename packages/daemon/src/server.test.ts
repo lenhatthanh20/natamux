@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -417,5 +417,90 @@ describe('Claude Code hooks', () => {
     const response = await post({ hook_event_name: 'SessionEnd' }, { 'x-helmsman-task': 'T-0001' })
     expect(response.statusCode).toBe(200)
     expect(await stateOf('T-0001')).toBe('draft')
+  })
+})
+
+describe('changes', () => {
+  async function taskWithWorkspace(): Promise<string> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    return created.json().task.workspace
+  }
+
+  it('lists the changed files and gives both sides of one', async () => {
+    const workspace = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/changes',
+      headers: authorization,
+    })
+    expect(list.statusCode).toBe(200)
+    expect(list.json().changes).toEqual([{ path: 'notes.txt', status: 'U', originalPath: null }])
+
+    const file = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/changes/file?path=notes.txt',
+      headers: authorization,
+    })
+    expect(file.statusCode).toBe(200)
+    expect(file.json()).toMatchObject({ path: 'notes.txt', original: null, modified: 'hello\n' })
+  })
+
+  it('answers 404 for a file that is not a changed file', async () => {
+    await taskWithWorkspace()
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/changes/file?path=..%2F..%2Fetc%2Fpasswd',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(404)
+  })
+
+  it('answers 400 without a path', async () => {
+    await taskWithWorkspace()
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/changes/file',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('answers 409 for a task without a workspace, and 404 for an unknown task', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const none = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/changes',
+      headers: authorization,
+    })
+    expect(none.statusCode).toBe(409)
+
+    const unknown = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0099/changes',
+      headers: authorization,
+    })
+    expect(unknown.statusCode).toBe(404)
+  })
+
+  it('needs the token', async () => {
+    const response = await app.inject({ method: 'GET', url: '/tasks/T-0001/changes' })
+    expect(response.statusCode).toBe(401)
   })
 })

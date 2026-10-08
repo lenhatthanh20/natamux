@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
@@ -8,6 +8,7 @@ import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
   branchNameFor,
+  FileNotChangedError,
   slugify,
   WorkspaceConflictError,
   WorkspaceService,
@@ -201,5 +202,66 @@ describe('remove', () => {
     const again = await workspaces.create(task.id)
 
     expect(again.workspace).not.toBeNull()
+  })
+})
+
+describe('changes and fileDiff', () => {
+  async function taskWithWorkspace() {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    return { task, workspace: created.workspace ?? '' }
+  }
+
+  it('lists the files that changed in the workspace', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    expect(await workspaces.changes(task.id)).toEqual([])
+
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect(await workspaces.changes(task.id)).toEqual([
+      { path: 'notes.txt', status: 'U', originalPath: null },
+    ])
+  })
+
+  it('gives both sides of a changed file', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect(await workspaces.fileDiff(task.id, 'notes.txt')).toEqual({
+      path: 'notes.txt',
+      status: 'U',
+      original: null,
+      modified: 'hello\n',
+      binary: false,
+      tooLarge: false,
+    })
+  })
+
+  it.each(['missing.txt', '../repo/.git/config', '/etc/passwd', '..'])(
+    'refuses %j, which is not a changed file',
+    async (path) => {
+      const { task } = await taskWithWorkspace()
+      await expect(workspaces.fileDiff(task.id, path)).rejects.toThrow(FileNotChangedError)
+    },
+  )
+
+  it('refuses a file that was changed and then put back', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+    expect((await workspaces.changes(task.id)).length).toBe(1)
+    rmSync(join(workspace, 'notes.txt'))
+
+    await expect(workspaces.fileDiff(task.id, 'notes.txt')).rejects.toThrow(FileNotChangedError)
+  })
+
+  it('refuses a task that has no workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    await expect(workspaces.changes(task.id)).rejects.toThrow(WorkspaceConflictError)
+    await expect(workspaces.fileDiff(task.id, 'a.txt')).rejects.toThrow(WorkspaceConflictError)
+  })
+
+  it('throws TaskNotFoundError for an unknown task', async () => {
+    await expect(workspaces.changes('T-0099')).rejects.toThrow(TaskNotFoundError)
   })
 })

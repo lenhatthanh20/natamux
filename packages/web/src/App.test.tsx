@@ -1,9 +1,16 @@
 import { applyTaskEvent, type EventType, type Task, type TaskEvent } from '@helmsman/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { initialViewData, useViewStore } from './lib/view-store'
+
+// Monaco needs a real browser, so the tests use a plain stand-in.
+vi.mock('./components/MonacoDiff', () => ({
+  default: ({ path, original, modified }: { path: string; original: string; modified: string }) =>
+    createElement('pre', { 'aria-label': `Changes in ${path}` }, `${original} -> ${modified}`),
+}))
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -117,6 +124,25 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       }
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return creating ? json({ task: updated }, 201) : json({ task: updated, branchDeleted: true })
+    }
+    if (/^\/api\/tasks\/T-\d+\/changes$/.test(path) && method === 'GET') {
+      return json({
+        changes: [
+          { path: 'src/a.ts', status: 'M', originalPath: null },
+          { path: 'notes.md', status: 'U', originalPath: null },
+        ],
+      })
+    }
+    if (/^\/api\/tasks\/T-\d+\/changes\/file\?/.test(path) && method === 'GET') {
+      const requested = new URL(path, 'http://daemon').searchParams.get('path') ?? ''
+      return json({
+        path: requested,
+        status: 'M',
+        original: 'old line',
+        modified: 'new line',
+        binary: false,
+        tooLarge: false,
+      })
     }
     return json({ message: 'Not found' }, 404)
   })
@@ -354,6 +380,43 @@ describe('App', () => {
 
     expect(within(details).getByTitle('/work/.helmsman/worktrees/T-0001')).toBeTruthy()
     expect(within(details).getByTitle('helmsman/t-0001-fix-timezone-bug')).toBeTruthy()
+  })
+
+  it('opens the changes of a workspace, shows a file diff, and closes with Escape', async () => {
+    const { calls } = installDaemon([
+      makeTask({
+        id: 'T-0001',
+        title: 'Fix timezone bug',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0001',
+        branch: 'helmsman/t-0001',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'View changes' }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(await within(view).findByText('2 changed files')).toBeTruthy()
+    expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
+
+    await user.click(within(view).getByRole('button', { name: /a\.ts/ }))
+    expect(await within(view).findByText('old line -> new line')).toBeTruthy()
+    expect(
+      calls.some((call) => call.path === '/api/tasks/T-0001/changes/file?path=src%2Fa.ts'),
+    ).toBe(true)
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Changes of T-0001' })).toBeNull())
+    expect(screen.getByRole('table')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {
