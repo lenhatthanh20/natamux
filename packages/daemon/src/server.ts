@@ -14,7 +14,7 @@ import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { AgentRunner } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
-import { TaskNotFoundError, type TaskService } from './task-service.js'
+import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TerminalLimitError, type TerminalService } from './terminal-service.js'
 import {
   FileNotChangedError,
@@ -105,6 +105,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof z.ZodError) {
       return reply.code(400).send({ error: 'invalid_request', issues: error.issues })
     }
+    if (error instanceof TaskEditError) {
+      return reply.code(400).send({ error: 'invalid_request', message: error.message })
+    }
     if (error instanceof TaskNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
@@ -148,6 +151,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/tasks/:id', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { task: options.service.getTask(id) }
+  })
+
+  app.patch('/tasks/:id', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: options.service.updateTask(id, request.body) }
   })
 
   app.get('/tasks/:id/events', async (request) => {

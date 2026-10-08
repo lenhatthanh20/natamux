@@ -25,6 +25,7 @@ export const EVENT_TYPES = [
   'git.pushed',
   'pr.opened',
   'agent.launched',
+  'task.edited',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -68,6 +69,7 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'git.pushed',
   'pr.opened',
   'agent.launched',
+  'task.edited',
 ]
 
 export type AppliedEvent = {

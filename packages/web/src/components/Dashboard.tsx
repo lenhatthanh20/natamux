@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
-import { createApi, isUnauthorized } from '../lib/api'
+import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { useViewStore } from '../lib/view-store'
@@ -102,6 +102,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       mergeTask(task)
       setFeedback(message)
     },
+    onError: (error) => setFeedback(error.message),
+  })
+
+  const editMutation = useMutation({
+    mutationFn: ({ taskId, changes }: { taskId: string; changes: TaskChanges }) =>
+      api.updateTask(taskId, changes),
+    onMutate: () => setFeedback(null),
+    onSuccess: (task) => mergeTask(task),
     onError: (error) => setFeedback(error.message),
   })
 
@@ -349,7 +357,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   busy={
                     eventMutation.isPending ||
                     workspaceMutation.isPending ||
-                    agentMutation.isPending
+                    agentMutation.isPending ||
+                    editMutation.isPending
                   }
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
@@ -364,6 +373,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   }}
                   onViewChanges={() => openChanges(selectedTask.id)}
                   onStartAgent={() => agentMutation.mutate(selectedTask)}
+                  onEdit={(changes) => editMutation.mutate({ taskId: selectedTask.id, changes })}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
