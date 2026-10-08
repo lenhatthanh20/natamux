@@ -1,10 +1,22 @@
-import { type EventType, type Task, taskSchema } from '@helmsman/core'
+import {
+  type EventType,
+  type Task,
+  type TaskEvent,
+  taskEventSchema,
+  taskSchema,
+} from '@helmsman/core'
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 
 export type SendEventResult = {
   task: Task
   accepted: boolean
+}
+
+export type StoredEvent = {
+  seq: number
+  accepted: boolean
+  event: TaskEvent
 }
 
 export type RemoveWorkspaceResult = {
@@ -100,6 +112,21 @@ export function createApi(
         }),
       )
       return { task: taskSchema.parse(body.task), accepted: body.accepted === true }
+    },
+
+    async listEvents(taskId: string): Promise<StoredEvent[]> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/events`))
+      if (!Array.isArray(body.events)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.events.map((entry) => {
+        const stored = asRecord(entry)
+        return {
+          seq: Number(stored.seq),
+          accepted: stored.accepted === true,
+          event: taskEventSchema.parse(stored.event),
+        }
+      })
     },
 
     async createWorkspace(taskId: string): Promise<Task> {
