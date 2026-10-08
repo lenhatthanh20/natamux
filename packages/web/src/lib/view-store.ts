@@ -1,6 +1,8 @@
 import type { TaskState } from '@helmsman/core'
 import { create } from 'zustand'
 
+export type WorkspaceTab = 'changes' | 'history' | 'terminal'
+
 type ViewData = {
   stateFilter: TaskState | null
   search: string
@@ -8,6 +10,8 @@ type ViewData = {
   detailOpen: boolean
   // The task whose changed files are shown instead of the task list.
   changesTaskId: string | null
+  // The tab that the workspace view opens on.
+  changesTab: WorkspaceTab
 }
 
 type ViewActions = {
@@ -15,7 +19,7 @@ type ViewActions = {
   setSearch: (search: string) => void
   select: (id: string | null) => void
   setDetailOpen: (open: boolean) => void
-  openChanges: (taskId: string) => void
+  openChanges: (taskId: string, tab?: WorkspaceTab) => void
   closeChanges: () => void
 }
 
@@ -25,6 +29,7 @@ export const initialViewData: ViewData = {
   selectedId: null,
   detailOpen: false,
   changesTaskId: null,
+  changesTab: 'changes',
 }
 
 export const useViewStore = create<ViewData & ViewActions>()((set) => ({
@@ -34,6 +39,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   setSearch: (search) => set({ search }),
   select: (id) => set({ selectedId: id }),
   setDetailOpen: (open) => set({ detailOpen: open }),
-  openChanges: (taskId) => set({ changesTaskId: taskId }),
+  openChanges: (taskId, tab = 'changes') => set({ changesTaskId: taskId, changesTab: tab }),
   closeChanges: () => set({ changesTaskId: null }),
 }))

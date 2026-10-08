@@ -33,7 +33,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
   const now = useNow(NOW_INTERVAL_MS)
-  const { stateFilter, search, selectedId, detailOpen, changesTaskId } = useViewStore()
+  const { stateFilter, search, selectedId, detailOpen, changesTaskId, changesTab } = useViewStore()
   const { toggleStateFilter, setSearch, select, setDetailOpen, openChanges, closeChanges } =
     useViewStore.getState()
 
@@ -101,6 +101,22 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onSuccess: ({ task, message }) => {
       mergeTask(task)
       setFeedback(message)
+    },
+    onError: (error) => setFeedback(error.message),
+  })
+
+  // Makes the workspace first when the task has none, then opens its terminal with the agent.
+  const agentMutation = useMutation({
+    mutationFn: async (task: Task) => {
+      if (task.workspace === null) {
+        mergeTask(await api.createWorkspace(task.id))
+      }
+      return api.startAgent(task.id, 'claude-code')
+    },
+    onMutate: () => setFeedback(null),
+    onSuccess: (task) => {
+      mergeTask(task)
+      openChanges(task.id, 'terminal')
     },
     onError: (error) => setFeedback(error.message),
   })
@@ -283,6 +299,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             key={changesTask.id}
             task={changesTask}
             now={now}
+            initialTab={changesTab}
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
             loadGraph={() => api.getGitGraph(changesTask.id)}
@@ -329,7 +346,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   key={selectedTask.id}
                   task={selectedTask}
                   now={now}
-                  busy={eventMutation.isPending || workspaceMutation.isPending}
+                  busy={
+                    eventMutation.isPending ||
+                    workspaceMutation.isPending ||
+                    agentMutation.isPending
+                  }
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
                   onAction={(action) => runAction(selectedTask, action)}
@@ -342,6 +363,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
                   }}
                   onViewChanges={() => openChanges(selectedTask.id)}
+                  onStartAgent={() => agentMutation.mutate(selectedTask)}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
