@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claudeCodeAdapter, claudeCodeInputSchema } from './claude-code-hooks.js'
+import { claudeCodeAdapter, claudeCodeInputSchema, toolSummary } from './claude-code-hooks.js'
 
 function signalOf(name: string, extra: Record<string, unknown> = {}): string | undefined {
   return claudeCodeAdapter.normalize({ hook_event_name: name, ...extra })?.signal
@@ -8,6 +8,7 @@ function signalOf(name: string, extra: Record<string, unknown> = {}): string | u
 describe('claudeCodeAdapter', () => {
   it.each([
     ['UserPromptSubmit', 'prompt'],
+    ['PreToolUse', 'activity'],
     ['PostToolUse', 'activity'],
     ['PermissionRequest', 'asking'],
     ['Stop', 'turn-ended'],
@@ -32,7 +33,6 @@ describe('claudeCodeAdapter', () => {
 
   it('ignores hooks it does not use', () => {
     expect(signalOf('SessionEnd')).toBeUndefined()
-    expect(signalOf('PreToolUse')).toBeUndefined()
   })
 
   it('passes the working directory on', () => {
@@ -69,5 +69,48 @@ describe('claudeCodeInputSchema', () => {
     expect(
       claudeCodeInputSchema.parse({ hook_event_name: 'Stop', tool_input: { command: 'ls' } }),
     ).toEqual({ hook_event_name: 'Stop' })
+  })
+})
+
+describe('toolSummary', () => {
+  const summary = (tool: string, toolInput: Record<string, unknown>) =>
+    toolSummary({
+      hook_event_name: 'PreToolUse',
+      cwd: '/w',
+      tool_name: tool,
+      tool_input: toolInput,
+    })
+
+  it.each([
+    ['Edit', { file_path: '/w/src/a.ts' }, 'Edit src/a.ts'],
+    ['Read', { file_path: '/other/b.ts' }, 'Read /other/b.ts'],
+    ['Bash', { command: 'pnpm  test\n--run' }, 'Bash: pnpm test --run'],
+    ['Grep', { pattern: 'TODO' }, 'Grep TODO'],
+    ['TodoWrite', {}, 'TodoWrite'],
+  ])('says %s %j as %j', (tool, toolInput, text) => {
+    expect(summary(tool, toolInput)).toBe(text)
+  })
+
+  it('cuts a long line', () => {
+    expect(summary('Bash', { command: 'x'.repeat(200) })).toHaveLength(80)
+  })
+
+  it('has nothing to say without a tool', () => {
+    expect(toolSummary({ hook_event_name: 'Stop' })).toBeUndefined()
+  })
+
+  it('is given for the tool about to run, and for a new prompt', () => {
+    const before = claudeCodeAdapter.normalize({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' },
+    })
+    expect(before?.summary).toBe('Bash: ls')
+    expect(
+      claudeCodeAdapter.normalize({ hook_event_name: 'PostToolUse', tool_name: 'Bash' })?.summary,
+    ).toBeUndefined()
+    expect(claudeCodeAdapter.normalize({ hook_event_name: 'UserPromptSubmit' })?.summary).toBe(
+      'Reading the prompt',
+    )
   })
 })

@@ -1024,3 +1024,28 @@ describe('templates', () => {
     expect(missing.statusCode).toBe(404)
   })
 })
+
+describe('agent activity', () => {
+  it('lists what the agents do now', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-helmsman-task': 'T-0001' },
+      payload: {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: 'a.ts' },
+      },
+    })
+
+    const response = await app.inject({ method: 'GET', url: '/activity', headers: authorization })
+
+    expect(response.json().activity['T-0001'].text).toBe('Edit a.ts')
+  })
+})
