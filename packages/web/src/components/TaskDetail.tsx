@@ -102,7 +102,7 @@ export function TaskDetail({
   return (
     <aside
       aria-label={`Details of ${task.id}`}
-      className="flex flex-col gap-4 rounded-md border border-line bg-surface p-4"
+      className="flex w-[22rem] shrink-0 flex-col gap-4 overflow-y-auto border-l border-line bg-surface p-4"
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">

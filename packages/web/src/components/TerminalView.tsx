@@ -121,9 +121,9 @@ export default function TerminalView({ connect }: TerminalViewProps) {
   }, [attempt])
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center gap-3">
-        <p className="flex-1 text-muted" role="status">
+        <p className="flex-1 text-xs text-muted" role="status">
           {STATUS_TEXT[status]}
           {error !== null && ` ${error}`}
         </p>
@@ -140,7 +140,7 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       <div
         ref={container}
         title="Terminal"
-        className="h-[70vh] min-h-[24rem] overflow-hidden rounded-md border border-line bg-surface p-2"
+        className="min-h-[16rem] flex-1 overflow-hidden rounded-md border border-line bg-surface p-2"
       />
     </div>
   )

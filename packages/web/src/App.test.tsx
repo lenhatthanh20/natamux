@@ -833,6 +833,37 @@ describe('App', () => {
     expect(screen.getByRole('complementary', { name: /Details of T-000/ })).toBeTruthy()
   })
 
+  it('opens the workspace of a task from the sidebar', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    const view = await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    const empty = await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    expect(within(empty).getByText(/no workspace yet/)).toBeTruthy()
+
+    await user.click(within(sidebar).getByRole('button', { name: /All tasks/ }))
+    expect(await screen.findByRole('table')).toBeTruthy()
+  })
+
   it('shows a change that arrives over the live connection', async () => {
     installDaemon([reviewTask, runningTask])
     const user = userEvent.setup()
