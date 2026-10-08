@@ -5,6 +5,7 @@ export type WorkspaceTab = 'changes' | 'history' | 'terminal'
 export type Layout = 'table' | 'board'
 
 const LAYOUT_KEY = 'helmsman.layout'
+const PINNED_KEY = 'helmsman.pinned'
 
 // The layout is a per-browser choice. Storage can be missing or blocked; then it is the table.
 function savedLayout(): Layout {
@@ -23,6 +24,24 @@ function saveLayout(layout: Layout): void {
   }
 }
 
+// Pinned workspaces are a per-browser choice, like the layout.
+function savedPinned(): string[] {
+  try {
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(PINNED_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function savePinned(ids: readonly string[]): void {
+  try {
+    globalThis.localStorage?.setItem(PINNED_KEY, JSON.stringify(ids))
+  } catch {
+    // Not kept; the next visit starts with nothing pinned.
+  }
+}
+
 type ViewData = {
   stateFilter: TaskState | null
   search: string
@@ -37,6 +56,7 @@ type ViewData = {
   agentsOpen: boolean
   // The tasks in that grid. Null until the user changes it.
   agentPanes: string[] | null
+  pinned: string[]
 }
 
 type ViewActions = {
@@ -49,6 +69,7 @@ type ViewActions = {
   setLayout: (layout: Layout) => void
   openAgents: () => void
   setAgentPanes: (ids: string[]) => void
+  togglePin: (id: string) => void
 }
 
 export const initialViewData: ViewData = {
@@ -61,11 +82,13 @@ export const initialViewData: ViewData = {
   layout: 'table',
   agentsOpen: false,
   agentPanes: null,
+  pinned: [],
 }
 
 export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   ...initialViewData,
   layout: savedLayout(),
+  pinned: savedPinned(),
   toggleStateFilter: (state) =>
     set((current) => ({ stateFilter: current.stateFilter === state ? null : state })),
   setSearch: (search) => set({ search }),
@@ -81,4 +104,12 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   },
   openAgents: () => set({ agentsOpen: true, changesTaskId: null }),
   setAgentPanes: (ids) => set({ agentPanes: ids }),
+  togglePin: (id) =>
+    set((current) => {
+      const pinned = current.pinned.includes(id)
+        ? current.pinned.filter((item) => item !== id)
+        : [...current.pinned, id]
+      savePinned(pinned)
+      return { pinned }
+    }),
 }))

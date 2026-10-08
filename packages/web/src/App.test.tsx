@@ -93,6 +93,20 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     if (path === '/api/tasks' && method === 'GET') {
       return json({ tasks })
     }
+    if (path === '/api/workspaces' && method === 'POST') {
+      const input = JSON.parse(String(init?.body))
+      const task = makeTask({
+        id: 'T-0098',
+        title: input.title,
+        state: 'ready',
+        description: input.prompt ?? '',
+        agent: input.agent ?? null,
+        workspace: '/work/T-0098',
+        branch: 'helmsman/t-0098-new',
+      })
+      tasks = [task, ...tasks]
+      return json({ task }, 201)
+    }
     if (path === '/api/tasks' && method === 'POST') {
       const task = makeTask({
         id: 'T-0099',
@@ -295,7 +309,7 @@ const runningTask = makeTask({
 
 beforeEach(() => {
   window.localStorage.clear()
-  useViewStore.setState(initialViewData)
+  useViewStore.setState({ ...initialViewData, pinned: [] })
   useToasts.setState({ toasts: [] })
   FakeSocket.instances = []
   vi.stubGlobal('WebSocket', FakeSocket)
@@ -896,6 +910,52 @@ describe('App', () => {
 
     await user.keyboard('{Escape}')
     expect(await screen.findByRole('table')).toBeTruthy()
+  })
+
+  it('makes a workspace with an agent from the sidebar and opens its terminal', async () => {
+    const { calls } = installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'New workspace' }))
+    const dialog = screen.getByRole('dialog', { name: 'New workspace' })
+    await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
+    await user.type(within(dialog).getByLabelText('Prompt for the agent'), 'Keep the old URL')
+    await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
+    expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(
+      true,
+    )
+  })
+
+  it('pins a workspace to the top of the sidebar', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002-add-export',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Pin to the top' }))
+
+    expect(within(sidebar).getByRole('heading', { name: 'Pinned' })).toBeTruthy()
+    expect(window.localStorage.getItem('helmsman.pinned')).toBe('["T-0002"]')
   })
 
   it('shows a change that arrives over the live connection', async () => {
