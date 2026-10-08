@@ -58,11 +58,7 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
           aria-label="New subtask title"
           className={`${input} h-7 flex-1`}
         />
-        <button
-          type="submit"
-          disabled={busy || title.trim() === ''}
-          className={button()}
-        >
+        <button type="submit" disabled={busy || title.trim() === ''} className={button()}>
           Add
         </button>
       </form>

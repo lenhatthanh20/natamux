@@ -136,7 +136,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       mergeTask(task)
       select(task.id)
       setNewTitle('')
-      },
+    },
     onError: (error) => toast(error.message, 'error'),
   })
 
@@ -330,7 +330,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     )
   }
 
-  
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -702,11 +701,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadEvents={() => api.listEvents(detailTask.id)}
             onAction={(action) => runAction(detailTask, action)}
             onCreateWorkspace={(base) => {
-                        workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
+              workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
             }}
             branches={branchesQuery.data}
             onRemoveWorkspace={() => {
-                        workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
+              workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
             }}
             onViewChanges={() => openChanges(detailTask.id)}
             onStartAgent={() => agentMutation.mutate(detailTask)}
@@ -728,34 +727,30 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
       <Toaster />
       {reposOpen && (
-          <RepoPanel
-            repos={repos}
-            onAdd={async (path, name) => {
-              await api.addRepo(path, name)
-              await reposQuery.refetch()
-            }}
-            onClose={() => setReposOpen(false)}
-          />
-        )}
-        {importOpen && (
-          <IssueImport
-            repo={newRepo || undefined}
-            loadIssues={() => api.listIssues(newRepo || undefined)}
-            importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
-            onImported={(created) => {
-              for (const task of created) {
-                mergeTask(task)
-              }
-              toast(
-                created.length === 1
-                  ? 'Imported 1 issue.'
-                  : `Imported ${created.length} issues.`,
-              )
-            }}
-            onClose={() => setImportOpen(false)}
-          />
-        )}
-  
+        <RepoPanel
+          repos={repos}
+          onAdd={async (path, name) => {
+            await api.addRepo(path, name)
+            await reposQuery.refetch()
+          }}
+          onClose={() => setReposOpen(false)}
+        />
+      )}
+      {importOpen && (
+        <IssueImport
+          repo={newRepo || undefined}
+          loadIssues={() => api.listIssues(newRepo || undefined)}
+          importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
+          onImported={(created) => {
+            for (const task of created) {
+              mergeTask(task)
+            }
+            toast(created.length === 1 ? 'Imported 1 issue.' : `Imported ${created.length} issues.`)
+          }}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sidebar px-3 py-1 text-xs text-muted">
         <span
           className="flex items-center gap-1.5"

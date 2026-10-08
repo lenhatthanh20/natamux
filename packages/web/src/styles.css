@@ -109,11 +109,6 @@ kbd {
   font-size: 0.6875rem;
 }
 
-/* The terminal's own scroll area follows the page's scrollbar style. */
-.xterm .xterm-viewport {
-  background-color: transparent !important;
-}
-
 :focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
   outline-offset: 1px;
