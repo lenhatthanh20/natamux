@@ -8,6 +8,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
+import type { WorkspaceTab } from '../lib/view-store'
 import { GitGraph } from './GitGraph'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
@@ -16,11 +17,11 @@ const TerminalView = lazy(() => import('./TerminalView'))
 
 const REFRESH_MS = 10_000
 
-type Tab = 'changes' | 'history' | 'terminal'
 
 type ChangesViewProps = {
   task: Task
   now: Date
+  initialTab?: WorkspaceTab
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   loadGraph: () => Promise<GitGraphData>
@@ -62,6 +63,7 @@ function FileBody({ file, sideBySide }: { file: FileDiff; sideBySide: boolean })
 export function ChangesView({
   task,
   now,
+  initialTab = 'changes',
   loadChanges,
   loadFile,
   loadGraph,
@@ -71,7 +73,7 @@ export function ChangesView({
   openPullRequest,
   onClose,
 }: ChangesViewProps) {
-  const [tab, setTab] = useState<Tab>('changes')
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [sideBySide, setSideBySide] = useState(true)
   const [message, setMessage] = useState('')

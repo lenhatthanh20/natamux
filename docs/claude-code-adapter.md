@@ -52,6 +52,20 @@ claude --settings "$(helmsman hooks claude-code)"
 
 `helmsman hooks claude-code` prints the settings JSON: one `http` hook for each event above, pointing at `$HELMSMAN_URL` (default `http://127.0.0.1:4317`). The token and the task id are never written into it.
 
+## Start from the dashboard
+
+**Start Claude Code** in the details of a task makes the workspace when there is none, then types this into the task's terminal:
+
+```sh
+claude --settings '<data dir>/claude-code-settings.json' '<title> - <description>'
+```
+
+- The daemon writes that settings file at start. It holds the `http` hooks of `helmsman hooks claude-code`, pointed at the daemon on loopback, so nothing has to be installed in `~/.claude`.
+- The shell of the terminal has `HELMSMAN_TOKEN`, `HELMSMAN_URL` and `HELMSMAN_TASK_ID`, so the hooks name the task.
+- `HELMSMAN_CLAUDE_COMMAND` replaces `claude`, for example with a full path.
+- The task gets `agent: claude-code` and an `agent.launched` line in its activity. The first prompt then moves it to running through `UserPromptSubmit`.
+- The prompt is put on one line: the shell runs the command at the first line end.
+
 ## Known gap
 
 `Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Seen in the real session below: the last event of the test was an `agent.resumed` with no `agent.finished` after it.
