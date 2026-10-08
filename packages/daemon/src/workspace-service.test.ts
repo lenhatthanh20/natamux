@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
-import { GitError } from './git.js'
-import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
+import { GitError, NothingToCommitError, type RunGh } from './git.js'
+import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
@@ -284,5 +284,91 @@ describe('changes and fileDiff', () => {
 
   it('throws TaskNotFoundError for an unknown task', async () => {
     await expect(workspaces.changes('T-0099')).rejects.toThrow(TaskNotFoundError)
+  })
+})
+
+describe('commit, push and pull request', () => {
+  const PR_URL = 'https://github.com/owner/repo/pull/7'
+  let ghCalls: (readonly string[])[]
+
+  beforeEach(() => {
+    ghCalls = []
+    const gh: RunGh = async (_cwd, args) => {
+      ghCalls.push(args)
+      return `${PR_URL}\n`
+    }
+    workspaces = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      gh,
+    })
+  })
+
+  async function taskWithWork() {
+    const task = tasks.createTask({ title: 'Fix the bug', description: 'The details.' })
+    const created = await workspaces.create(task.id)
+    writeFileSync(join(created.workspace ?? '', 'fix.txt'), 'fixed\n')
+    return created
+  }
+
+  it('commits the changes of the workspace and logs the commit', async () => {
+    const task = await taskWithWork()
+
+    const { hash } = await workspaces.commit(task.id, 'Fix the bug')
+
+    expect(await workspaces.changes(task.id)).toEqual([])
+    expect(runGit(task.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(hash)
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'git.committed',
+      payload: { hash, subject: 'Fix the bug' },
+    })
+    await expect(workspaces.commit(task.id, 'Again')).rejects.toThrow(NothingToCommitError)
+  })
+
+  it('pushes the task branch to origin', async () => {
+    const remote = addBareOrigin(repo)
+    const task = await taskWithWork()
+    await workspaces.commit(task.id, 'Fix the bug')
+
+    const pushed = await workspaces.push(task.id)
+
+    expect(runGit(remote, 'branch', '--list', task.branch ?? '').trim()).not.toBe('')
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'git.pushed',
+      payload: { branch: task.branch },
+    })
+    expect(pushed.pr).toBeNull()
+  })
+
+  it('pushes, then opens a pull request and keeps its address', async () => {
+    addBareOrigin(repo)
+    const task = await taskWithWork()
+    await workspaces.commit(task.id, 'Fix the bug')
+
+    const updated = await workspaces.openPullRequest(task.id)
+
+    expect(updated.pr).toBe(PR_URL)
+    expect(ghCalls).toEqual([
+      ['pr', 'create', '--head', task.branch, '--title', 'Fix the bug', '--body', 'The details.'],
+    ])
+    expect(tasks.listEvents(task.id).map((entry) => entry.event.type).slice(-2)).toEqual([
+      'git.pushed',
+      'pr.opened',
+    ])
+    await expect(workspaces.openPullRequest(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+
+  it('does not ask gh when the push fails', async () => {
+    const task = await taskWithWork()
+    await expect(workspaces.openPullRequest(task.id)).rejects.toThrow(GitError)
+    expect(ghCalls).toEqual([])
+    expect(tasks.getTask(task.id).pr).toBeNull()
+  })
+
+  it('refuses a task without a workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await expect(workspaces.commit(task.id, 'x')).rejects.toThrow(WorkspaceConflictError)
+    await expect(workspaces.push(task.id)).rejects.toThrow(WorkspaceConflictError)
   })
 })

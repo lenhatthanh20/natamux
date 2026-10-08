@@ -335,6 +335,131 @@ export async function readGitGraph(
   }
 }
 
+export class NothingToCommitError extends Error {
+  constructor() {
+    super('There is nothing to commit. The workspace matches its last commit.')
+    this.name = 'NothingToCommitError'
+  }
+}
+
+// Commits every change of the worktree, files that git does not track yet included.
+export async function commitAll(
+  worktreePath: string,
+  message: string,
+): Promise<{ hash: string; subject: string }> {
+  await git(worktreePath, ['add', '--all'])
+  const staged = await git(worktreePath, ['diff', '--cached', '--name-only'])
+  if (staged.trim() === '') {
+    throw new NothingToCommitError()
+  }
+  await git(worktreePath, ['commit', '--quiet', '-m', message])
+  const [hash = '', subject = ''] = (
+    await git(worktreePath, ['log', '-1', '--format=%H%x1f%s'])
+  )
+    .trim()
+    .split(FIELD)
+  return { hash, subject }
+}
+
+// Adds settings through GIT_CONFIG_* variables, after the ones the environment already has.
+export function withGitConfig(
+  env: NodeJS.ProcessEnv,
+  entries: readonly [key: string, value: string][],
+): NodeJS.ProcessEnv {
+  const start = Number(env.GIT_CONFIG_COUNT ?? '0') || 0
+  const added: NodeJS.ProcessEnv = { GIT_CONFIG_COUNT: String(start + entries.length) }
+  entries.forEach(([key, value], offset) => {
+    added[`GIT_CONFIG_KEY_${start + offset}`] = key
+    added[`GIT_CONFIG_VALUE_${start + offset}`] = value
+  })
+  return { ...env, ...added }
+}
+
+// When git asks for a password for github.com, it asks the GitHub CLI, which uses GH_TOKEN or the
+// login of `gh auth login`. Helpers that are set up already come first.
+const GITHUB_CREDENTIALS: [string, string][] = [
+  ['credential.https://github.com.helper', '!gh auth git-credential'],
+]
+
+export async function pushBranch(worktreePath: string, branch: string): Promise<void> {
+  const args = ['push', '--set-upstream', 'origin', branch]
+  try {
+    await execFileAsync('git', args, {
+      cwd: worktreePath,
+      maxBuffer: MAX_OUTPUT_BYTES,
+      env: withGitConfig({ ...process.env, GIT_TERMINAL_PROMPT: '0' }, GITHUB_CREDENTIALS),
+    })
+  } catch (error) {
+    throw new GitError(args, errorText(error))
+  }
+}
+
+export class GitHubError extends Error {
+  constructor(detail: string) {
+    super(`GitHub CLI failed: ${detail}`)
+    this.name = 'GitHubError'
+  }
+}
+
+export type RunGh = (cwd: string, args: readonly string[]) => Promise<string>
+
+// Runs the GitHub CLI without prompts. Its errors become GitHubError.
+export const runGh: RunGh = async (cwd, args) => {
+  try {
+    const { stdout } = await execFileAsync('gh', [...args], {
+      cwd,
+      maxBuffer: MAX_OUTPUT_BYTES,
+      env: { ...process.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' },
+    })
+    return stdout
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      throw new GitHubError('gh is not installed or not on the PATH')
+    }
+    throw new GitHubError(errorText(error))
+  }
+}
+
+const PULL_REQUEST_URL = /https:\/\/\S+\/pull\/\d+/
+
+// The address of a pull request in the output of `gh pr create`, or undefined.
+export function pullRequestUrl(output: string): string | undefined {
+  return PULL_REQUEST_URL.exec(output)?.[0]
+}
+
+// Opens a pull request from `branch` into the default branch of the repository. When one is open
+// for the branch already, gives its address instead.
+export async function createPullRequest(
+  worktreePath: string,
+  request: { branch: string; title: string; body: string },
+  gh: RunGh = runGh,
+): Promise<string> {
+  let output: string
+  try {
+    output = await gh(worktreePath, [
+      'pr',
+      'create',
+      '--head',
+      request.branch,
+      '--title',
+      request.title,
+      '--body',
+      request.body,
+    ])
+  } catch (error) {
+    const existing = error instanceof GitHubError ? pullRequestUrl(error.message) : undefined
+    if (existing && /already exists/i.test(error instanceof Error ? error.message : '')) {
+      return existing
+    }
+    throw error
+  }
+  const url = pullRequestUrl(output)
+  if (!url) {
+    throw new GitHubError(`no pull request address in the answer: ${output.trim()}`)
+  }
+  return url
+}
+
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.
 export async function deleteMergedBranch(repoDir: string, branch: string): Promise<boolean> {
   try {

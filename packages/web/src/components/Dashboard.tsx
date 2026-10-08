@@ -286,6 +286,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
             loadGraph={() => api.getGitGraph(changesTask.id)}
+            commit={async (message) => {
+              const updated = await api.commitChanges(changesTask.id, message)
+              mergeTask(updated)
+              return updated
+            }}
+            push={async () => {
+              const updated = await api.pushBranch(changesTask.id)
+              mergeTask(updated)
+              return updated
+            }}
+            openPullRequest={async () => {
+              const updated = await api.openPullRequest(changesTask.id)
+              mergeTask(updated)
+              return updated
+            }}
             connectTerminal={async (size) => {
               const ticket = await api.terminalTicket(changesTask.id)
               return new WebSocket(terminalSocketUrl(window.location, changesTask.id, ticket, size))

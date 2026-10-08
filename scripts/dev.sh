@@ -44,6 +44,10 @@ wait_for_ports() {
 
 up() {
   wait_for_docker
+  # Commits from the dashboard carry your name, and a push uses the token of the codespace.
+  export HELMSMAN_GIT_NAME="${HELMSMAN_GIT_NAME:-$(git config user.name || true)}"
+  export HELMSMAN_GIT_EMAIL="${HELMSMAN_GIT_EMAIL:-$(git config user.email || true)}"
+  export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
   HELMSMAN_UID="$(id -u)" HELMSMAN_GID="$(id -g)" docker compose up -d --build
   echo "Waiting for the daemon and the dashboard..."
   wait_for_ports

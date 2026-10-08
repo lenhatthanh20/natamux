@@ -29,6 +29,18 @@ export function createTestRepo(): TestRepo {
   const dir = join(root, 'repo')
   mkdirSync(dir)
   runGit(dir, 'init', '-b', 'main')
+  // The daemon commits without the identity flags above, so the repository has its own.
+  runGit(dir, 'config', 'user.name', 'Test')
+  runGit(dir, 'config', 'user.email', 'test@example.com')
+  runGit(dir, 'config', 'commit.gpgsign', 'false')
   runGit(dir, 'commit', '--allow-empty', '-m', 'init')
   return { root, dir, cleanup: () => rmSync(root, { recursive: true, force: true }) }
+}
+
+// A bare repository next to the test repository, added as its `origin`. Returns its path.
+export function addBareOrigin(repo: TestRepo): string {
+  const remote = join(repo.root, 'origin.git')
+  runGit(repo.root, 'init', '--bare', '-b', 'main', remote)
+  runGit(repo.dir, 'remote', 'add', 'origin', remote)
+  return remote
 }

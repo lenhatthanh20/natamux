@@ -158,6 +158,27 @@ export class TaskService {
     return updated
   }
 
+  // Writes down a commit, a push or a new pull request. A pull request also sets `pr` of the task.
+  recordGit(
+    taskId: string,
+    type: 'git.committed' | 'git.pushed' | 'pr.opened',
+    payload: Record<string, string>,
+  ): Task {
+    const task = this.getTask(taskId)
+    const event: TaskEvent = { taskId, source: 'git', type, at: this.timestamp(), payload }
+    const updated: Task = {
+      ...task,
+      pr: type === 'pr.opened' && payload.url ? payload.url : task.pr,
+      updatedAt: event.at,
+    }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.index.appendEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
   // Writes down that the agent of a running task is still at work, so the time of its last update
   // is the time of its last sign of life. At most once per `minIntervalMs`, so a busy agent does
   // not fill the log. Returns whether it wrote anything.
