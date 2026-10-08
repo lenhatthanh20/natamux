@@ -175,6 +175,15 @@ describe('parseCommand', () => {
       })
     })
 
+    it('creates a workspace from a branch', () => {
+      expect(parseCommand(['workspace', 'create', 'T-1', '--base', 'release'])).toEqual({
+        name: 'workspace.create',
+        id: 'T-1',
+        base: 'release',
+        json: false,
+      })
+    })
+
     it('removes a workspace only with --yes', () => {
       expect(() => parseCommand(['workspace', 'remove', 'T-1'])).toThrow(/--yes/)
       expect(parseCommand(['workspace', 'remove', 'T-1', '--yes'])).toEqual({
