@@ -1,12 +1,25 @@
 import { join } from 'node:path'
-import type { Task } from '@helmsman/core'
-import { addWorktree, deleteMergedBranch, removeWorktree } from './git.js'
+import type { ChangeEntry, FileDiff, Task } from '@helmsman/core'
+import {
+  addWorktree,
+  deleteMergedBranch,
+  listChanges,
+  readFileDiff,
+  removeWorktree,
+} from './git.js'
 import type { TaskService } from './task-service.js'
 
 export class WorkspaceConflictError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'WorkspaceConflictError'
+  }
+}
+
+export class FileNotChangedError extends Error {
+  constructor(path: string) {
+    super(`${path} is not one of the changed files of the workspace`)
+    this.name = 'FileNotChangedError'
   }
 }
 
@@ -97,6 +110,30 @@ export class WorkspaceService {
       })
       return { task: updated, branchDeleted }
     })
+  }
+
+  // The files of the workspace that differ from its last commit.
+  async changes(taskId: string): Promise<ChangeEntry[]> {
+    return listChanges(this.workspaceOf(taskId))
+  }
+
+  // Only a file that is in the list of changes can be read: this is what keeps the request from
+  // reaching any other file.
+  async fileDiff(taskId: string, path: string): Promise<FileDiff> {
+    const workspace = this.workspaceOf(taskId)
+    const change = (await listChanges(workspace)).find((entry) => entry.path === path)
+    if (!change) {
+      throw new FileNotChangedError(path)
+    }
+    return readFileDiff(workspace, change)
+  }
+
+  private workspaceOf(taskId: string): string {
+    const task = this.tasks.getTask(taskId)
+    if (task.workspace === null) {
+      throw new WorkspaceConflictError(`${taskId} has no workspace`)
+    }
+    return task.workspace
   }
 
   private async exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T> {
