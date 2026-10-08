@@ -34,6 +34,7 @@ Options:
   --state <state>       task list: only tasks in this state (${TASK_STATES.join(', ')})
   --source <name>       event: ${EVENT_SOURCES.join(', ')} (default: human)
   --payload <json>      event: JSON object sent with the event
+  --base <branch>       workspace create: start from this local branch (default: HEAD)
   --yes                 workspace remove: confirm that the worktree folder is deleted
   --delete-branch       workspace remove: also delete the branch when it is merged
   --json                Print JSON instead of text

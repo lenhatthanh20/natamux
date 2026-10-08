@@ -308,9 +308,24 @@ export function createApi(
       return body.ticket
     },
 
-    async createWorkspace(taskId: string): Promise<Task> {
-      const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/workspace`))
+    // From `base`, a local branch, or from the checkout's HEAD when it is left out.
+    async createWorkspace(taskId: string, base?: string): Promise<Task> {
+      const body = asRecord(
+        await request(
+          'POST',
+          `/tasks/${encodeURIComponent(taskId)}/workspace`,
+          base === undefined ? undefined : { base },
+        ),
+      )
       return taskSchema.parse(body.task)
+    },
+
+    async listBranches(): Promise<{ branches: string[]; current: string | null }> {
+      const body = asRecord(await request('GET', '/git/branches'))
+      return {
+        branches: stringList(body.branches),
+        current: typeof body.current === 'string' ? body.current : null,
+      }
     },
 
     async removeWorkspace(taskId: string): Promise<RemoveWorkspaceResult> {

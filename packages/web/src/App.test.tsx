@@ -169,6 +169,9 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       tasks = [...tasks, task]
       return json({ task }, 201)
     }
+    if (path === '/api/git/branches' && method === 'GET') {
+      return json({ branches: ['main', 'release'], current: 'main' })
+    }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }

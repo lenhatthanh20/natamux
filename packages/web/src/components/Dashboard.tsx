@@ -74,6 +74,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.error, onUnauthorized])
 
+  const branchesQuery = useQuery({ queryKey: ['branches'], queryFn: () => api.listBranches() })
   const templatesQuery = useQuery({ queryKey: ['templates'], queryFn: () => api.listTemplates() })
   const [templateId, setTemplateId] = useState('')
 
@@ -102,9 +103,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   })
 
   const workspaceMutation = useMutation({
-    mutationFn: async ({ taskId, action }: { taskId: string; action: 'create' | 'remove' }) => {
+    mutationFn: async ({
+      taskId,
+      action,
+      base,
+    }: {
+      taskId: string
+      action: 'create' | 'remove'
+      base?: string
+    }) => {
       if (action === 'create') {
-        return { task: await api.createWorkspace(taskId), message: null }
+        return { task: await api.createWorkspace(taskId, base), message: null }
       }
       const { task, branchDeleted } = await api.removeWorkspace(taskId)
       return {
@@ -521,10 +530,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
                   onAction={(action) => runAction(selectedTask, action)}
-                  onCreateWorkspace={() => {
+                  onCreateWorkspace={(base) => {
                     setFeedback(null)
-                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create' })
+                    workspaceMutation.mutate({ taskId: selectedTask.id, action: 'create', base })
                   }}
+                  branches={branchesQuery.data}
                   onRemoveWorkspace={() => {
                     setFeedback(null)
                     workspaceMutation.mutate({ taskId: selectedTask.id, action: 'remove' })
