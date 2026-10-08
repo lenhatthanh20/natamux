@@ -68,7 +68,7 @@ claude --settings "$(helmsman hooks claude-code)"
 
 ## Not verified
 
-- The permission path (`PermissionRequest`, and `Notification` with `permission_prompt`). In the test, Claude Code did not ask for permission to create a file in the working directory, so those hooks never fired. Retry with an action that does ask, for example writing a file outside the working directory.
+- The permission path (`PermissionRequest`, and `Notification` with `permission_prompt`). In the test, Claude Code did not ask for permission to create a file, so those hooks never fired. The tester's guess is that the session ran in an auto permission mode (not checked). Skipped on purpose; it is covered only by tests with made-up input.
 - How fast a permission prompt moves the task to "needs input".
 - How Claude Code behaves when the daemon answers slowly. The hooks use a 5 second timeout.
 - Every other hook event (`SubagentStop`, `TaskCompleted`, `WorktreeCreate` and more). They could give finer states later.
