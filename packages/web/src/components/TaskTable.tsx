@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { DiffStat, Task } from '@helmsman/core'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { formatAge, isQuiet } from '../lib/tasks'
 import { StateBadge } from './StateBadge'
@@ -7,10 +7,24 @@ type TaskTableProps = {
   tasks: readonly Task[]
   now: Date
   selectedId: string | null
+  diffStats?: Readonly<Record<string, DiffStat>>
   onSelect: (id: string) => void
 }
 
-export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) {
+function DiffSize({ stat }: { stat: DiffStat | undefined }) {
+  if (stat === undefined || stat.files === 0) {
+    return <span className="text-muted">-</span>
+  }
+  const files = stat.files === 1 ? '1 file' : `${stat.files} files`
+  return (
+    <span title={files}>
+      <span className="text-[#12622f] dark:text-[#7fdc9f]">+{stat.added}</span>{' '}
+      <span className="text-[#a02318] dark:text-[#ff9d92]">−{stat.removed}</span>
+    </span>
+  )
+}
+
+export function TaskTable({ tasks, now, selectedId, diffStats = {}, onSelect }: TaskTableProps) {
   if (tasks.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
@@ -28,6 +42,7 @@ export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) 
             <th className="px-3 py-2 font-medium">State</th>
             <th className="px-3 py-2 font-medium">Agent</th>
             <th className="px-3 py-2 font-medium">Branch</th>
+            <th className="px-3 py-2 text-right font-medium">Changes</th>
             <th className="px-3 py-2 font-medium">Pull request</th>
             <th className="px-3 py-2 text-right font-medium">Last activity</th>
           </tr>
@@ -60,6 +75,9 @@ export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) 
               <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>
               <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-muted">
                 {task.branch ?? '-'}
+              </td>
+              <td className="px-3 py-2 text-right whitespace-nowrap font-mono">
+                <DiffSize stat={diffStats[task.id]} />
               </td>
               <td className="px-3 py-2 whitespace-nowrap">
                 {task.pr === null ? (

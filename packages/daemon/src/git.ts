@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import type {
   ChangeEntry,
   ChangeStatus,
+  DiffStat,
   FileDiff,
   GitGraph,
   GraphCommit,
@@ -527,6 +528,28 @@ export async function readPullRequestStatus(
   } catch {
     throw new GitHubError(`could not read the pull request: ${output.slice(0, 200)}`)
   }
+}
+
+// Sums `git diff --numstat`. Binary files count as files, without lines.
+export function parseNumstat(output: string): DiffStat {
+  const stat: DiffStat = { files: 0, added: 0, removed: 0 }
+  for (const line of output.split('\n')) {
+    const [added, removed] = line.split('\t')
+    if (added === undefined || removed === undefined) {
+      continue
+    }
+    stat.files += 1
+    stat.added += Number(added) || 0
+    stat.removed += Number(removed) || 0
+  }
+  return stat
+}
+
+// The worktree against the commit where its branch left `base`, or against HEAD without a base.
+export async function readDiffStat(worktreePath: string, base: string | null): Promise<DiffStat> {
+  const from =
+    base === null ? 'HEAD' : (await git(worktreePath, ['merge-base', 'HEAD', base])).trim()
+  return parseNumstat(await git(worktreePath, ['diff', '--numstat', from, '--']))
 }
 
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.

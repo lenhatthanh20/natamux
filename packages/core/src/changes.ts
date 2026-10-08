@@ -27,3 +27,13 @@ export const fileDiffSchema = z.object({
 })
 
 export type FileDiff = z.infer<typeof fileDiffSchema>
+
+// How much the workspace of a task differs from where its branch started, uncommitted changes
+// included. Files that git does not track yet are not counted.
+export const diffStatSchema = z.object({
+  files: z.number().int().nonnegative(),
+  added: z.number().int().nonnegative(),
+  removed: z.number().int().nonnegative(),
+})
+
+export type DiffStat = z.infer<typeof diffStatSchema>
