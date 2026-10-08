@@ -1009,9 +1009,15 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    expect(within(screen.getByRole('banner')).getByRole('button', { name: '1 needs you' })).toBeTruthy()
-    expect(within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 needs you' })).toBeTruthy()
-    expect(within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 running' })).toBeTruthy()
+    expect(
+      within(screen.getByRole('banner')).getByRole('button', { name: '1 needs you' }),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 needs you' }),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 running' }),
+    ).toBeTruthy()
   })
 
   it('toggles the details of the selected task from the title bar', async () => {
@@ -1024,7 +1030,9 @@ describe('App', () => {
     const toggle = screen.getByRole('button', { name: 'Select a task to show its details' })
     expect(toggle.getAttribute('aria-disabled')).toBe('true')
 
-    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }))
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
     expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Hide details' }))
     expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
@@ -1039,7 +1047,9 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    expect(screen.getByRole('link', { name: 'Skip to main content' }).getAttribute('href')).toBe('#main')
+    expect(screen.getByRole('link', { name: 'Skip to main content' }).getAttribute('href')).toBe(
+      '#main',
+    )
     expect(screen.getByRole('banner')).toBeTruthy()
     expect(screen.getByRole('main')).toBeTruthy()
     expect(screen.getByRole('contentinfo')).toBeTruthy()
@@ -1053,11 +1063,15 @@ describe('App', () => {
     await screen.findByRole('table')
 
     await user.keyboard('{F6}')
-    expect(screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement)).toBe(true)
+    expect(
+      screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement),
+    ).toBe(true)
     await user.keyboard('{F6}')
     expect(screen.getByRole('main').contains(document.activeElement)).toBe(true)
     await user.keyboard('{Shift>}{F6}{/Shift}')
-    expect(screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement)).toBe(true)
+    expect(
+      screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement),
+    ).toBe(true)
   })
 
   it('changes the UI size from the account menu', async () => {
