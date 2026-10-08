@@ -12,6 +12,7 @@ import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
+import { RepoPanel } from './RepoPanel'
 import { StateFilter } from './StateFilter'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
@@ -75,13 +76,24 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.error, onUnauthorized])
 
-  const branchesQuery = useQuery({ queryKey: ['branches'], queryFn: () => api.listBranches() })
+  const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
+  const repos = reposQuery.data ?? []
+  // The repository of new tasks and of issue imports. Empty: the daemon's own.
+  const [newRepo, setNewRepo] = useState('')
+  const [reposOpen, setReposOpen] = useState(false)
+  const branchesRepo = tasks.find((task) => task.id === selectedId)?.repo ?? undefined
+  const branchesQuery = useQuery({
+    queryKey: ['branches', branchesRepo],
+    queryFn: () => api.listBranches(branchesRepo),
+  })
   const templatesQuery = useQuery({ queryKey: ['templates'], queryFn: () => api.listTemplates() })
   const [templateId, setTemplateId] = useState('')
 
   const createMutation = useMutation({
     mutationFn: (title: string) =>
-      templateId === '' ? api.createTask(title) : api.createTaskFromTemplate(templateId, title),
+      templateId === ''
+        ? api.createTask(title, undefined, newRepo || undefined)
+        : api.createTaskFromTemplate(templateId, title),
     onSuccess: (task) => {
       mergeTask(task)
       select(task.id)
@@ -354,6 +366,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2">
           <h1 className="mr-2 text-base font-semibold">Helmsman</h1>
           <form onSubmit={submitNewTask} className="flex min-w-[14rem] flex-1 gap-2">
+            {repos.length > 1 && (
+              <select
+                value={newRepo}
+                onChange={(event) => setNewRepo(event.target.value)}
+                aria-label="Repository"
+                className="rounded-md border border-line bg-canvas px-2 py-1.5"
+              >
+                {repos.map((repo) => (
+                  <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                    {repo.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {(templatesQuery.data?.length ?? 0) > 0 && (
               <select
                 value={templateId}
@@ -393,6 +419,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             aria-label="Search tasks"
             className="w-48 rounded-md border border-line bg-canvas px-3 py-1.5"
           />
+          <button
+            type="button"
+            aria-expanded={reposOpen}
+            onClick={() => setReposOpen((open) => !open)}
+            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+          >
+            Repos
+          </button>
           <button
             type="button"
             aria-expanded={importOpen}
@@ -495,10 +529,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           />
         ) : (
           <>
+            {reposOpen && (
+              <RepoPanel
+                repos={repos}
+                onAdd={async (path, name) => {
+                  await api.addRepo(path, name)
+                  await reposQuery.refetch()
+                }}
+                onClose={() => setReposOpen(false)}
+              />
+            )}
             {importOpen && (
               <IssueImport
-                loadIssues={() => api.listIssues()}
-                importIssues={(numbers) => api.importIssues(numbers)}
+                repo={newRepo || undefined}
+                loadIssues={() => api.listIssues(newRepo || undefined)}
+                importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
                 onImported={(created) => {
                   for (const task of created) {
                     mergeTask(task)

@@ -25,6 +25,7 @@ export const createTaskInputSchema = taskSchema.pick({
   agent: true,
   dependsOn: true,
   parentId: true,
+  repo: true,
 })
 
 // The fields a person may change after a task is created. State has its own events.

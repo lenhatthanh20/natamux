@@ -27,12 +27,14 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 |---|---|
 | `GET /health` | Liveness |
 | `GET /tasks?state=<state>` | List tasks, newest update first |
-| `POST /tasks` | Create a draft task (`title` required) |
+| `POST /tasks` | Create a draft task (`title` required; also `description`, `priority`, `labels`, `agent`, `dependsOn`, `parentId`, and `repo`, a repository id from `/repos`, 404 when unknown) |
 | `GET /tasks/:id` | One task |
 | `PATCH /tasks/:id` | Body: any of `title`, `description`, `priority`, `labels`, `dependsOn`. Other fields answer 400. Logs `task.edited` with the names of the fields that changed; nothing is written when none did |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
-| `GET /git/branches` | Local branches of the repository and the one its checkout is on: `{ branches, current }` |
+| `GET /repos` | Repositories whose tasks Helmsman manages: `{ repos: [{ id, name, path }] }`. The first is always `default`, the repository the daemon was started for |
+| `POST /repos` | Body `{ path, name? }`. Adds the repository whose top folder is `path` (absolute, on the daemon's machine). Its id comes from the name or the folder name. Answers 201; 400 for a path that is not absolute, inside a repository but not its top, or added already; 409 when git finds no repository there. Kept in `<data dir>/repos.json` |
+| `GET /git/branches?repo=` | Local branches of a repository (the default one when `repo` is left out) and the one its checkout is on: `{ branches, current }` |
 | `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. Body `{ base? }`: start from that local branch instead of HEAD (409 when there is no such branch). When the worktree has a `.helmsman-setup` script (`.helmsman-setup.ps1` on Windows), it runs in the task's first terminal (`sh ./.helmsman-setup`). Answers 409 if the task has one, is done or cancelled, or git refuses |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Git refuses when it has files that are not committed (409). The branch is deleted only when it is fully merged. Returns `{ task, branchDeleted }` |
 | `GET /tasks/:id/changes` | Files changed in the workspace compared with its last commit, like VS Code Source Control. Returns `{ changes: [{ path, status, originalPath }] }`. Status is `M`, `A`, `D`, `R`, `U` (new file) or `C` (conflict). Answers 409 when the task has no workspace |

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import websocket from '@fastify/websocket'
 import {
+  repoIdSchema,
   TASK_ID_HEADER,
   type TerminalServerMessage,
   taskIdSchema,
@@ -18,6 +19,7 @@ import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
+import { RepoInputError, RepoNotFoundError, type RepoService } from './repo-service.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
 import {
@@ -40,6 +42,7 @@ type ServerOptions = {
   pullRequests: PullRequestWatcher
   issues: IssueImporter
   templates: TemplateService
+  repos: RepoService
   bus: EventBus
   token: string
 }
@@ -60,7 +63,9 @@ const startAgentBodySchema = z.object({
 })
 const importIssuesBodySchema = z.object({
   numbers: z.array(z.number().int().positive()).min(1).max(100),
+  repo: repoIdSchema.optional(),
 })
+const repoQuerySchema = z.object({ repo: repoIdSchema.optional() })
 const createWorkspaceBodySchema = z
   .object({ base: z.string().min(1).max(255).optional() })
   .optional()
@@ -143,7 +148,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof UnknownAgentError) {
       return reply.code(404).send({ error: 'unknown_agent', message: error.message })
     }
-    if (error instanceof TemplateNotFoundError) {
+    if (error instanceof RepoInputError) {
+      return reply.code(400).send({ error: 'invalid_request', message: error.message })
+    }
+    if (error instanceof TemplateNotFoundError || error instanceof RepoNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
     if (error instanceof FileNotChangedError) {
@@ -178,6 +186,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   })
 
   app.post('/tasks', async (request, reply) => {
+    const { repo } = repoQuerySchema.parse(request.body ?? {})
+    if (repo !== undefined) {
+      options.repos.get(repo)
+    }
     const task = options.service.createTask(request.body)
     return reply.code(201).send({ task })
   })
@@ -196,15 +208,27 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // What the agent of each task does now, from its last hook.
   app.get('/activity', async () => ({ activity: hooks.activity() }))
 
-  app.get('/git/branches', async () => options.workspaces.branches())
+  app.get('/repos', async () => ({ repos: options.repos.list() }))
+
+  app.post('/repos', async (request, reply) => {
+    return reply.code(201).send({ repo: await options.repos.add(request.body) })
+  })
+
+  app.get('/git/branches', async (request) => {
+    const { repo } = repoQuerySchema.parse(request.query)
+    return options.workspaces.branches(repo ?? null)
+  })
 
   app.get('/diffstats', async () => ({ stats: await options.workspaces.diffStats() }))
 
-  app.get('/github/issues', async () => ({ issues: await options.issues.list() }))
+  app.get('/github/issues', async (request) => {
+    const { repo } = repoQuerySchema.parse(request.query)
+    return { issues: await options.issues.list(repo ?? null) }
+  })
 
   app.post('/github/issues/import', async (request) => {
-    const { numbers } = importIssuesBodySchema.parse(request.body)
-    return { tasks: await options.issues.import(numbers) }
+    const { numbers, repo } = importIssuesBodySchema.parse(request.body)
+    return { tasks: await options.issues.import(numbers, repo ?? null) }
   })
 
   app.get('/tasks/:id', async (request) => {

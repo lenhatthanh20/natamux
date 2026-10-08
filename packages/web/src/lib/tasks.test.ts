@@ -25,6 +25,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     pr: null,
     prStatus: null,
     parentId: null,
+    repo: null,
     dependsOn: [],
     createdAt: '2026-10-08T09:00:00.000Z',
     updatedAt: '2026-10-08T09:00:00.000Z',

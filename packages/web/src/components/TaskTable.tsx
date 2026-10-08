@@ -83,6 +83,9 @@ export function TaskTable({
                   <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
                   <WaitsFor ids={waitingOn(task, allTasks)} />
+                  {task.repo !== null && (
+                    <span className="shrink-0 font-mono text-xs text-muted">{task.repo}</span>
+                  )}
                   {task.parentId !== null && (
                     <span className="shrink-0 text-muted">part of {task.parentId}</span>
                   )}

@@ -22,6 +22,7 @@ describe('taskSchema', () => {
       pr: null,
       prStatus: null,
       parentId: null,
+      repo: null,
       dependsOn: [],
     })
   })

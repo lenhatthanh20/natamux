@@ -34,7 +34,7 @@ beforeEach(() => {
     calls.push(args)
     return JSON.stringify(ISSUES)
   }
-  importer = new IssueImporter({ tasks, cwd: '/repo', gh })
+  importer = new IssueImporter({ tasks, repoPath: () => '/repo', gh })
 })
 
 afterEach(() => {
