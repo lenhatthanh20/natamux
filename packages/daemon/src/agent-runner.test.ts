@@ -55,7 +55,7 @@ describe('quoteArgument', () => {
   it.each([
     ['plain', 'linux', "'plain'"],
     ["it's", 'linux', "'it'\\''s'"],
-    ['$HOME `x` "y"', 'darwin', "'$HOME `x` \"y\"'"],
+    ['$HOME `x` "y"', 'darwin', '\'$HOME `x` "y"\''],
     ["it's", 'win32', "'it''s'"],
   ] as const)('quotes %j for %s', (value, platform, quoted) => {
     expect(quoteArgument(value, platform)).toBe(quoted)

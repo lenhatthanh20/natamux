@@ -364,8 +364,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   task={selectedTask}
                   now={now}
                   busy={
-                eventMutation.isPending || workspaceMutation.isPending || agentMutation.isPending
-              }
+                    eventMutation.isPending ||
+                    workspaceMutation.isPending ||
+                    agentMutation.isPending
+                  }
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
                   onAction={(action) => runAction(selectedTask, action)}
