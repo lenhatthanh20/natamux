@@ -24,6 +24,7 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `PermissionRequest` | running | `agent.asked` | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | running | `agent.asked` | needs input |
 | `PostToolUse` | needs input | `agent.resumed` | running (the permission was answered) |
+| `PreToolUse` | any | none (a sign of life) | unchanged; the tool and its file or command become the task's one-line summary, such as "Edit src/a.ts" |
 | `Stop` | running | `agent.finished` | in review |
 | `Stop` | needs input | `agent.resumed`, `agent.finished` | in review |
 | `StopFailure` | running | `agent.failed` | failed |

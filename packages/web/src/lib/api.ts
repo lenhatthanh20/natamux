@@ -228,6 +228,17 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
+    // What the agent of each task does now, by task id, such as "Edit src/a.ts".
+    async listActivity(): Promise<Record<string, string>> {
+      const activity = asRecord(asRecord(await request('GET', '/activity')).activity)
+      return Object.fromEntries(
+        Object.entries(activity).flatMap(([taskId, entry]) => {
+          const text = asRecord(entry).text
+          return typeof text === 'string' ? [[taskId, text]] : []
+        }),
+      )
+    },
+
     // The size of the work of every task with a workspace, by task id.
     async listDiffStats(): Promise<Record<string, DiffStat>> {
       const stats = asRecord(asRecord(await request('GET', '/diffstats')).stats)
