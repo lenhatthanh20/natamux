@@ -54,12 +54,23 @@ claude --settings "$(helmsman hooks claude-code)"
 
 ## Known gap
 
-`Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Planned: a "no sign of life" rule for running tasks. See `agent-adapters.md`.
+`Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Planned: a "no sign of life" rule for running tasks. See `agent-adapters.md`. Seen in the real session below: the last event of the test was an `agent.resumed` with no `agent.finished` after it.
+
+## Verified with a real session
+
+2026-10-08, Claude Code on a Mac, the daemon in a GitHub codespace, the port forwarded with `gh codespace ports forward 4317:4317`, hooks from `helmsman hooks claude-code`.
+
+- `UserPromptSubmit` on a draft task wrote `task.readied` and `agent.started`, 24 ms apart. The task went from draft to running.
+- `Stop` wrote `agent.finished` and the task went to in review. A prompt typed while in review wrote `agent.resumed`. Three such rounds all matched. Every event had the source `agent` and was accepted.
+- An interrupted prompt left the task running (the known gap above).
+- **A proxy can block the hooks.** With a proxy set on the machine, both hooks failed with "proxy refused the connection". Claude Code sends an `http` hook through the proxy, and the docs do not say that loopback is exempt for hooks. `export NO_PROXY="localhost,127.0.0.1"` and `export no_proxy="$NO_PROXY"` before starting `claude` fixed it. Many company machines have a proxy, so a user may need this. A `command` hook that runs `curl --noproxy "*"` is the other way round it.
+- **`--settings` adds to the other hooks, it does not replace them.** Claude Code reported "Ran 2 stop hooks" although these settings define one. The second came from the user's own settings. This is evidence from one session, not a statement in the docs.
 
 ## Not verified
 
-- Whether `--settings` adds these hooks to the ones from other settings files, or replaces them. Check before relying on it.
+- The permission path (`PermissionRequest`, and `Notification` with `permission_prompt`). In the test, Claude Code did not ask for permission to create a file, so those hooks never fired. The tester's guess is that the session ran in an auto permission mode (not checked). Skipped on purpose; it is covered only by tests with made-up input.
+- How fast a permission prompt moves the task to "needs input".
 - How Claude Code behaves when the daemon answers slowly. The hooks use a 5 second timeout.
 - Every other hook event (`SubagentStop`, `TaskCompleted`, `WorktreeCreate` and more). They could give finer states later.
 - A session that Claude Desktop or the VS Code extension runs: the docs say `permission_prompt` is timed differently there.
-- The adapter was written from the docs and tested against a fake daemon. It has not been tried against a real Claude Code session yet.
+- Finding the task by the working directory (no `HELMSMAN_TASK_ID`). The session in the test ran outside the workspace, so only the header path was tried.
