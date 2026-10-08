@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { addBareOrigin, createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { buildServer, isAuthorized } from './server.js'
@@ -37,7 +38,13 @@ beforeEach(async () => {
     spawn: spawner.spawn,
     workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   })
-  app = await buildServer({ service, workspaces, terminals, bus, token: TOKEN })
+  const agents = new AgentRunner({
+    tasks: service,
+    terminals,
+    claudeSettingsPath: '/data/claude-code-settings.json',
+    platform: 'linux',
+  })
+  app = await buildServer({ service, workspaces, terminals, agents, bus, token: TOKEN })
 })
 
 afterEach(async () => {
@@ -754,5 +761,52 @@ describe('commit and push', () => {
       const response = await app.inject({ method: 'POST', url })
       expect(response.statusCode).toBe(401)
     }
+  })
+})
+
+describe('start an agent', () => {
+  it('types the agent command into the task terminal', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent',
+      headers: authorization,
+      payload: { agent: 'claude-code' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json().task.agent).toBe('claude-code')
+    expect(ptys[0]?.written[0]).toContain('claude --settings')
+  })
+
+  it('answers 404 for an agent it cannot start and 409 without a workspace', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent',
+      headers: authorization,
+      payload: { agent: 'nope' },
+    })
+    expect(unknown.statusCode).toBe(404)
+
+    const none = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent',
+      headers: authorization,
+      payload: { agent: 'claude-code' },
+    })
+    expect(none.statusCode).toBe(409)
   })
 })

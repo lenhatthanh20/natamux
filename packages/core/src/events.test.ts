@@ -118,6 +118,7 @@ describe('applyTaskEvent', () => {
     'git.committed',
     'git.pushed',
     'pr.opened',
+    'agent.launched',
   ] as const)(
     'accepts %s in any state without changing it',
     (type) => {
