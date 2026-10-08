@@ -17,7 +17,7 @@ import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } fr
 import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
-import { TerminalLimitError, type TerminalService } from './terminal-service.js'
+import { MAIN_TERMINAL, TerminalLimitError, type TerminalService } from './terminal-service.js'
 import {
   FileNotChangedError,
   WorkspaceConflictError,
@@ -48,7 +48,12 @@ const importIssuesBodySchema = z.object({
   numbers: z.array(z.number().int().positive()).min(1).max(100),
 })
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
-const terminalQuerySchema = terminalSizeSchema.extend({ ticket: z.string().min(1).max(256) })
+const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is named by a number')
+const terminalQuerySchema = terminalSizeSchema.extend({
+  ticket: z.string().min(1).max(256),
+  terminal: terminalNameSchema.default(MAIN_TERMINAL),
+})
+const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
 
 // Close codes of the terminal socket, in the range that applications may use.
@@ -250,6 +255,18 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { task: await options.pullRequests.check(id) }
   })
 
+  app.get('/tasks/:id/terminals', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    options.service.getTask(id)
+    return { terminals: options.terminals.list(id) }
+  })
+
+  app.delete('/tasks/:id/terminals/:terminal', async (request) => {
+    const { id, terminal } = terminalParamsSchema.parse(request.params)
+    options.terminals.closeOne(id, terminal)
+    return { terminals: options.terminals.list(id) }
+  })
+
   app.post('/tasks/:id/terminal/ticket', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { ticket: options.terminals.issueTicket(id) }
@@ -268,6 +285,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
     const taskId = params.data.id
+    const { terminal } = query.data
     const send = (message: TerminalServerMessage) => {
       socket.send(JSON.stringify(message))
       if (message.type === 'exit') {
@@ -277,7 +295,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     let detach: () => void
     try {
-      detach = options.terminals.attach(taskId, { send }, query.data)
+      detach = options.terminals.attach(taskId, { send }, query.data, terminal)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The terminal could not start.'
       socket.send(JSON.stringify({ type: 'error', message } satisfies TerminalServerMessage))
@@ -297,9 +315,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         return
       }
       if (message.data.type === 'input') {
-        options.terminals.input(taskId, message.data.data)
+        options.terminals.input(taskId, message.data.data, terminal)
       } else {
-        options.terminals.resize(taskId, message.data)
+        options.terminals.resize(taskId, message.data, terminal)
       }
     })
     socket.on('close', () => detach())

@@ -8,13 +8,18 @@ describe('terminalSocketUrl', () => {
         cols: 80,
         rows: 24,
       }),
-    ).toBe('wss://example.dev/api/tasks/T-0001/terminal?ticket=a%2Bb%2Fc&cols=80&rows=24')
+    ).toBe(
+      'wss://example.dev/api/tasks/T-0001/terminal?ticket=a%2Bb%2Fc&cols=80&rows=24&terminal=1',
+    )
     expect(
-      terminalSocketUrl({ protocol: 'http:', host: 'localhost:5173' }, 'T-0002', 't', {
-        cols: 1,
-        rows: 2,
-      }),
-    ).toBe('ws://localhost:5173/api/tasks/T-0002/terminal?ticket=t&cols=1&rows=2')
+      terminalSocketUrl(
+        { protocol: 'http:', host: 'localhost:5173' },
+        'T-0002',
+        't',
+        { cols: 1, rows: 2 },
+        '3',
+      ),
+    ).toBe('ws://localhost:5173/api/tasks/T-0002/terminal?ticket=t&cols=1&rows=2&terminal=3')
   })
 })
 

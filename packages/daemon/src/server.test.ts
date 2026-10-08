@@ -648,6 +648,38 @@ describe('terminal', () => {
     expect(ptys[0]?.written).toEqual(['pwd\r', 'done'])
   })
 
+  it('opens a second terminal, lists the terminals and closes one', async () => {
+    await taskWithWorkspace()
+    await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
+    const second = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24&terminal=2`,
+    )
+    expect(ptys).toHaveLength(2)
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(listed.json()).toEqual({ terminals: ['1', '2'] })
+
+    const closed = closeCode(second)
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/terminals/2',
+      headers: authorization,
+    })
+    expect(removed.json()).toEqual({ terminals: ['1'] })
+    await closed
+
+    const bad = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/terminals/0',
+      headers: authorization,
+    })
+    expect(bad.statusCode).toBe(400)
+  })
+
   it('closes a socket without a valid ticket', async () => {
     await taskWithWorkspace()
     const used = await ticket()
