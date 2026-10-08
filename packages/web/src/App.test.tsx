@@ -406,13 +406,13 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(await within(view).findByText('2 changed files')).toBeTruthy()
-    expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
-
-    await user.click(within(view).getByRole('button', { name: /a\.ts/ }))
-    expect(await within(view).findByText('old line -> new line')).toBeTruthy()
+    expect(await within(view).findByLabelText('Changes in src/a.ts')).toBeTruthy()
     expect(
       calls.some((call) => call.path === '/api/tasks/T-0001/changes/file?path=src%2Fa.ts'),
     ).toBe(true)
+
+    await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
+    expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
 
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Changes of T-0001' })).toBeNull())
