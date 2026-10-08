@@ -631,10 +631,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             />
           ) : (
             <>
-              <div className="flex min-h-11 flex-wrap items-center gap-3 border-b border-line px-4 py-1.5">
-                <h2 className="font-semibold">All tasks</h2>
+              <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
+                <h2 className="shrink-0 font-semibold">All tasks</h2>
                 <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-                <div className="ml-auto flex rounded-md border border-line p-0.5">
+                <div className="ml-auto flex shrink-0 rounded-md border border-line p-0.5">
                   {(['table', 'board'] as const).map((option) => (
                     <button
                       key={option}
