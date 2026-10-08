@@ -64,7 +64,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters). Done: Claude Code, with its hooks given through `--settings` | MVP |
 | Embedded terminal per workspace (multiple tabs). Done: several shells per task, as tabs; each keeps running when the dashboard closes, with recent output on reconnect. The agent runs in shell 1 | MVP |
 | Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.helmsman-setup` (or `.helmsman-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
-| Port allocation per workspace so dev servers do not clash | v1 |
+| Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `HELMSMAN_PORT` | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |
 | Fan-out: one prompt to several agents, compare results, keep the winner | v1 |
 | SSH and remote workspaces | Later |
@@ -120,7 +120,7 @@ Goals:
 | Feature | Tag |
 |---|---|
 | Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base | MVP |
-| Inline comments that are sent back to the agent as a follow-up prompt | v1 |
+| Inline comments that are sent back to the agent as a follow-up prompt. Done per file: a comment under the diff is pasted into the agent's terminal as its next prompt. Next: comments on a line | v1 |
 | Commit from the app with a message draft. Done: commit all changes with a message. Next: a drafted message | v1 |
 | One-click push and PR creation (GitHub first). Done: push, and a pull request through `gh` whose address is kept on the task | v1 |
 | CI status shown on the task. Done: the daemon reads each open pull request with `gh pr view` once a minute; the table shows its state and checks, and a merged pull request finishes a task in review | v1 |
@@ -138,7 +138,7 @@ Goals:
 | Generic adapter for any CLI (status from process and output idle time, terminal bell) | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
-| Helmsman CLI that agents can call: create task, update state, ask a question, report done | MVP |
+| Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
 | Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
 | Account and usage display per agent | Later |
 

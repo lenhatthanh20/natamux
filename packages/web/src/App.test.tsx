@@ -206,6 +206,9 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated })
     }
+    if (/^\/api\/tasks\/T-\d+\/agent\/message$/.test(path) && method === 'POST') {
+      return json({ task: tasks[0] })
+    }
     const agentPath = /^\/api\/tasks\/(T-\d+)\/agent$/.exec(path)
     const agentTask = tasks.find((task) => task.id === agentPath?.[1])
     if (agentTask && method === 'POST') {
@@ -514,6 +517,12 @@ describe('App', () => {
 
     await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
     expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
+
+    await user.type(within(view).getByLabelText(/for the agent/), 'Keep the old name')
+    await user.click(within(view).getByRole('button', { name: 'Send to agent' }))
+    expect(await within(view).findByText('Sent to the agent.')).toBeTruthy()
+    const sent = calls.find((call) => call.path === '/api/tasks/T-0001/agent/message')
+    expect(sent).toBeTruthy()
 
     await user.type(within(view).getByLabelText('Commit message'), 'Fix the parser')
     await user.click(within(view).getByRole('button', { name: 'Commit all' }))

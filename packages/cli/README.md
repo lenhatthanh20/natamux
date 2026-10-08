@@ -22,6 +22,10 @@ helmsman event T-0001 agent.asked --source agent --payload '{"question":"Which b
 helmsman events T-0001
 helmsman workspace create T-0001
 helmsman workspace remove T-0001 --yes --delete-branch
+helmsman task edit T-0001 --title "Fix the parser" --priority urgent
+helmsman agent start T-0001 --prompt "Start with the failing test"
+helmsman ask "Should the export keep old columns?"
+helmsman done
 ```
 
 ```sh
@@ -32,6 +36,10 @@ claude --settings "$(helmsman hooks claude-code)"
 `helmsman hook <agent>` is for an agent that can only run a command as its hook: it reads the hook's JSON on stdin and sends it to `POST /hooks/<agent>` of the daemon. It does nothing unless `HELMSMAN_TOKEN` is set (so it is harmless in a session that is not Helmsman's), always exits 0 and prints nothing, so it can never get in the agent's way. Set `HELMSMAN_DEBUG=1` to see why a hook did not arrive. It does not use the proxy variables.
 
 `hooks claude-code` prints Claude Code settings that report the session's progress to the daemon, so the task moves between running, needs input and in review by itself. It needs no token to print and never writes the token into the output. See `docs/claude-code-adapter.md`.
+
+`ask` and `done` are for an agent that has no hooks: tell it to run them. They report on the task of the terminal (`HELMSMAN_TASK_ID`, which Helmsman sets in its terminals), or on `--task T-0001`. `ask` moves a running task to needs input; `done` moves it to in review.
+
+`agent start` types the agent's command into the task's terminal, as **Start Claude Code** in the dashboard does.
 
 `workspace create` makes a git worktree and a branch for the task. `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has files that are not committed. With `--delete-branch` the branch goes too, but only when it is fully merged.
 

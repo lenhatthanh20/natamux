@@ -101,6 +101,43 @@ async function execute(command: Command, client: DaemonClient, io: CliIo): Promi
       return
     }
 
+    case 'task.edit': {
+      const task = await client.updateTask(command.id, command.changes)
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`${formatTask(task)}\n`)
+      }
+      return
+    }
+
+    case 'agent.start': {
+      const task = await client.startAgent(command.id, command.agent, command.prompt)
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`Started ${command.agent} in the terminal of ${task.id}\n`)
+      }
+      return
+    }
+
+    case 'agent.ask':
+    case 'agent.done': {
+      const id = command.id ?? ''
+      const result = await client.sendEvent(
+        id,
+        command.name === 'agent.ask'
+          ? { source: 'agent', type: 'agent.asked', payload: { question: command.question } }
+          : { source: 'agent', type: 'agent.finished', payload: {} },
+      )
+      if (command.json) {
+        printJson(io, result)
+      } else {
+        io.stdout(`${formatEventResult(result)}\n`)
+      }
+      return
+    }
+
     case 'workspace.create': {
       const task = await client.createWorkspace(command.id)
       if (command.json) {
@@ -161,6 +198,16 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
     const settings = claudeCodeHookSettings(env.HELMSMAN_URL?.trim() || DEFAULT_URL)
     printJson(io, settings)
     return EXIT_OK
+  }
+
+  // `ask` and `done` run inside an agent's terminal, which knows its task.
+  if ((command.name === 'agent.ask' || command.name === 'agent.done') && command.id === undefined) {
+    const fromEnv = env.HELMSMAN_TASK_ID?.trim()
+    if (!fromEnv) {
+      io.stderr('Name the task with --task T-42, or set HELMSMAN_TASK_ID.\n')
+      return EXIT_USAGE
+    }
+    command = { ...command, id: fromEnv }
   }
 
   const token = env.HELMSMAN_TOKEN?.trim()
