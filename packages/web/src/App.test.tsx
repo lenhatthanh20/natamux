@@ -569,9 +569,8 @@ describe('App', () => {
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
     await user.click(within(view).getByRole('button', { name: 'New shell' }))
-    expect(within(view).getByRole('tab', { name: 'Shell 2' }).getAttribute('aria-selected')).toBe(
-      'true',
-    )
+    expect(within(view).getByRole('region', { name: 'Shell 1' })).toBeTruthy()
+    expect(within(view).getByRole('region', { name: 'Shell 2' })).toBeTruthy()
 
     await user.keyboard('{Escape}')
     await waitFor(() =>
@@ -861,6 +860,36 @@ describe('App', () => {
     expect(within(empty).getByText(/no workspace yet/)).toBeTruthy()
 
     await user.click(within(sidebar).getByRole('button', { name: /All tasks/ }))
+    expect(await screen.findByRole('table')).toBeTruthy()
+  })
+
+  it('shows the running agents side by side and closes a pane', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    await user.click(within(sidebar).getByRole('button', { name: /Agents/ }))
+    const grid = screen.getByRole('region', { name: 'Agents' })
+    const pane = within(grid).getByRole('region', { name: 'Agent of T-0002' })
+    expect(await within(pane).findByText('Terminal stand-in')).toBeTruthy()
+
+    await user.click(within(pane).getByRole('button', { name: 'Close Agent of T-0002' }))
+    expect(within(grid).getByText(/No agent works or waits now/)).toBeTruthy()
+
+    await user.keyboard('{Escape}')
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 

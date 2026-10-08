@@ -5,6 +5,7 @@ import {
   BellOff,
   Download,
   FolderGit2,
+  LayoutGrid,
   LayoutList,
   LogOut,
   Moon,
@@ -17,12 +18,14 @@ import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
+import { agentPaneTasks } from '../lib/panes'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { applyTheme, savedTheme, type Theme } from '../lib/theme'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
+import { AgentPanes } from './AgentPanes'
 import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
@@ -54,8 +57,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
   const now = useNow(NOW_INTERVAL_MS)
-  const { stateFilter, search, selectedId, detailOpen, changesTaskId, changesTab, layout } =
-    useViewStore()
+  const {
+    stateFilter,
+    search,
+    selectedId,
+    detailOpen,
+    changesTaskId,
+    changesTab,
+    layout,
+    agentsOpen,
+    agentPanes,
+  } = useViewStore()
   const {
     toggleStateFilter,
     setSearch,
@@ -64,6 +76,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     openChanges,
     closeChanges,
     setLayout,
+    openAgents,
+    setAgentPanes,
   } = useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
@@ -318,7 +332,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   // The repository and issue panels sit above the task list, so a workspace makes way for them.
   const togglePanel = (open: boolean, setOpen: (open: boolean) => void) => {
-    if (changesTaskId !== null) {
+    if (changesTaskId !== null || agentsOpen) {
       closeChanges()
       setOpen(true)
       return
@@ -371,7 +385,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           }
           return
         case 'Escape':
-          if (changesTaskId !== null) {
+          if (changesTaskId !== null || agentsOpen) {
             closeChanges()
           } else {
             setDetailOpen(false)
@@ -419,7 +433,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const runningCount = tasks.filter((task) => task.state === 'running').length
   const footerButton =
     'flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink aria-expanded:text-ink'
-  const iconButton = 'rounded-md p-1.5 hover:bg-hover hover:text-ink'
+  const iconButton = 'rounded-md p-1 hover:bg-hover hover:text-ink'
+  const navButton =
+    'flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink'
   const switchTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
     applyTheme(next)
@@ -502,6 +518,29 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             <kbd className="font-mono text-xs">/</kbd>
           </label>
 
+          <div className="flex flex-col gap-0.5 text-muted">
+            <button
+              type="button"
+              aria-pressed={changesTask === null && !agentsOpen}
+              onClick={closeChanges}
+              className={navButton}
+            >
+              <LayoutList size={14} aria-hidden="true" />
+              <span className="flex-1 text-left">All tasks</span>
+              <span className="text-xs">{tasks.length}</span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={agentsOpen}
+              onClick={openAgents}
+              className={navButton}
+            >
+              <LayoutGrid size={14} aria-hidden="true" />
+              <span className="flex-1 text-left">Agents</span>
+              <span className="text-xs">{agentPaneTasks(agentPanes, tasks).length}</span>
+            </button>
+          </div>
+
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
             <NeedsMeStrip
               waiting={allGroups.needsMe}
@@ -519,41 +558,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               activity={activityQuery.data}
               onOpen={openTask}
             />
-          </div>
-
-          <div className="flex items-center gap-1 border-t border-line py-2 text-muted">
-            <button
-              type="button"
-              aria-pressed={changesTask === null}
-              onClick={closeChanges}
-              className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
-            >
-              <LayoutList size={14} aria-hidden="true" />
-              <span className="flex-1 text-left">All tasks</span>
-              <span className="text-xs">{tasks.length}</span>
-            </button>
-            <button
-              type="button"
-              aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-              title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-              onClick={switchTheme}
-              className={iconButton}
-            >
-              {theme === 'dark' ? (
-                <Sun size={15} aria-hidden="true" />
-              ) : (
-                <Moon size={15} aria-hidden="true" />
-              )}
-            </button>
-            <button
-              type="button"
-              aria-label="Sign out"
-              title="Sign out"
-              onClick={onSignOut}
-              className={iconButton}
-            >
-              <LogOut size={15} aria-hidden="true" />
-            </button>
           </div>
         </nav>
 
@@ -618,6 +622,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               }}
               loadTerminals={() => api.listTerminals(changesTask.id)}
               closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
+            />
+          ) : agentsOpen ? (
+            <AgentPanes
+              tasks={tasks}
+              chosen={agentPanes}
+              onChange={setAgentPanes}
+              connect={async (taskId, size) => {
+                const ticket = await api.terminalTicket(taskId)
+                return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))
+              }}
+              onOpenTask={openTask}
             />
           ) : (
             <>
@@ -694,7 +709,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           )}
         </main>
 
-        {detailOpen && detailTask && (
+        {detailOpen && detailTask && !agentsOpen && (
           <TaskDetail
             key={detailTask.id}
             task={detailTask}
@@ -783,6 +798,28 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           </span>
         )}
         <span className="font-mono">n new · / search · j k move · Esc back</span>
+        <button
+          type="button"
+          aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+          title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+          onClick={switchTheme}
+          className={iconButton}
+        >
+          {theme === 'dark' ? (
+            <Sun size={13} aria-hidden="true" />
+          ) : (
+            <Moon size={13} aria-hidden="true" />
+          )}
+        </button>
+        <button
+          type="button"
+          aria-label="Sign out"
+          title="Sign out"
+          onClick={onSignOut}
+          className={iconButton}
+        >
+          <LogOut size={13} aria-hidden="true" />
+        </button>
       </footer>
     </div>
   )
