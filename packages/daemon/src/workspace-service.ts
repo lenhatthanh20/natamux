@@ -1,10 +1,12 @@
 import { join } from 'node:path'
-import type { ChangeEntry, FileDiff, Task } from '@helmsman/core'
+import type { ChangeEntry, FileDiff, GitGraph, Task } from '@helmsman/core'
 import {
   addWorktree,
+  currentBranch,
   deleteMergedBranch,
   listChanges,
   readFileDiff,
+  readGitGraph,
   removeWorktree,
 } from './git.js'
 import type { TaskService } from './task-service.js'
@@ -126,6 +128,12 @@ export class WorkspaceService {
       throw new FileNotChangedError(path)
     }
     return readFileDiff(workspace, change)
+  }
+
+  // The history of the task branch next to the branch that the main checkout is on.
+  async graph(taskId: string): Promise<GitGraph> {
+    const workspace = this.workspaceOf(taskId)
+    return readGitGraph(workspace, await currentBranch(this.repoDir))
   }
 
   private workspaceOf(taskId: string): string {

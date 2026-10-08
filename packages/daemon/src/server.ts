@@ -160,6 +160,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return options.workspaces.fileDiff(id, path)
   })
 
+  app.get('/tasks/:id/graph', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return options.workspaces.graph(id)
+  })
+
   app.get('/events', { websocket: true }, (socket) => {
     const unsubscribe = options.bus.subscribe((message) => {
       socket.send(JSON.stringify(message))

@@ -205,6 +205,27 @@ describe('remove', () => {
   })
 })
 
+describe('graph', () => {
+  it('shows the task branch next to the branch of the main checkout', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+
+    const graph = await workspaces.graph(task.id)
+
+    expect(graph).toMatchObject({ branch: created.branch, base: 'main', ahead: 1, behind: 0 })
+    expect(graph.commits.map((commit) => [commit.subject, commit.onBranch])).toEqual([
+      ['work', true],
+      ['init', false],
+    ])
+  })
+
+  it('refuses a task that has no workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await expect(workspaces.graph(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+})
+
 describe('changes and fileDiff', () => {
   async function taskWithWorkspace() {
     const task = tasks.createTask({ title: 'Fix the bug' })
