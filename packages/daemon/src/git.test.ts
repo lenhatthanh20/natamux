@@ -543,8 +543,14 @@ describe('summarizeChecks', () => {
 
 describe('parsePullRequestView', () => {
   it.each([
-    [{ state: 'OPEN', isDraft: false, statusCheckRollup: [] }, { state: 'open', checks: 'none' }],
-    [{ state: 'OPEN', isDraft: true, statusCheckRollup: null }, { state: 'draft', checks: 'none' }],
+    [
+      { state: 'OPEN', isDraft: false, statusCheckRollup: [] },
+      { state: 'open', checks: 'none' },
+    ],
+    [
+      { state: 'OPEN', isDraft: true, statusCheckRollup: null },
+      { state: 'draft', checks: 'none' },
+    ],
     [
       { state: 'MERGED', isDraft: false, statusCheckRollup: [{ state: 'SUCCESS' }] },
       { state: 'merged', checks: 'passing' },
