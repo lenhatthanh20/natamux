@@ -74,8 +74,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
                     title="Open the workspace"
                     className="min-w-0 truncate text-left font-medium hover:underline"
                   >
-                    <span className="font-mono font-normal text-muted">{task.id}</span>{' '}
-                    {task.title}
+                    <span className="font-mono font-normal text-muted">{task.id}</span> {task.title}
                   </button>
                 </>
               }
