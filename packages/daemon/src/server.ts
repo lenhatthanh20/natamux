@@ -11,7 +11,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
-import type { AgentRunner } from './agent-runner.js'
+import { type AgentRunner, TaskWaitingError } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
@@ -135,7 +135,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof OutsideWorkspaceError ||
       error instanceof TerminalLimitError ||
       error instanceof NothingToCommitError ||
-      error instanceof GitHubError
+      error instanceof GitHubError ||
+      error instanceof TaskWaitingError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }

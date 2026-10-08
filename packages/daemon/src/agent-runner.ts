@@ -1,7 +1,14 @@
-import type { Task } from '@helmsman/core'
+import { type Task, waitingOn } from '@helmsman/core'
 import { UnknownAgentError } from './agent-hook-service.js'
 import type { TaskService } from './task-service.js'
 import type { TerminalService } from './terminal-service.js'
+
+export class TaskWaitingError extends Error {
+  constructor(taskId: string, waiting: readonly string[]) {
+    super(`${taskId} waits for ${waiting.join(', ')} to be done`)
+    this.name = 'TaskWaitingError'
+  }
+}
 
 // Agents that Helmsman can start. Each one also has an adapter that reads its hooks.
 export const LAUNCHABLE_AGENTS = ['claude-code'] as const
@@ -54,6 +61,10 @@ export class AgentRunner {
       throw new UnknownAgentError(agent)
     }
     const task = this.tasks.getTask(taskId)
+    const waiting = waitingOn(task, this.tasks.listTasks())
+    if (waiting.length > 0) {
+      throw new TaskWaitingError(taskId, waiting)
+    }
     const text = (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
     const quote = (value: string) => quoteArgument(value, this.platform)
     const line = [

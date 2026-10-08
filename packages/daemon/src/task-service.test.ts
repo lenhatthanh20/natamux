@@ -288,6 +288,15 @@ describe('updateTask', () => {
     expect(() => service.updateTask(task.id, input)).toThrow()
   })
 
+  it('takes dependencies on tasks that exist, and refuses unknown ones and loops', () => {
+    const first = service.createTask({ title: 'First' })
+    const second = service.createTask({ title: 'Second' })
+
+    expect(service.updateTask(second.id, { dependsOn: [first.id] }).dependsOn).toEqual([first.id])
+    expect(() => service.updateTask(second.id, { dependsOn: ['T-0099'] })).toThrow(/T-0099/)
+    expect(() => service.updateTask(first.id, { dependsOn: [second.id] })).toThrow(/loop/)
+  })
+
   it('refuses a task that depends on itself', () => {
     const task = service.createTask({ title: 'First' })
     expect(() => service.updateTask(task.id, { dependsOn: [task.id] })).toThrow(/itself/)

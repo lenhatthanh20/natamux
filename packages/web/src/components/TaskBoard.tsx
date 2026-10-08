@@ -1,18 +1,27 @@
-import { type DiffStat, TASK_STATES, type Task } from '@helmsman/core'
+import { type DiffStat, TASK_STATES, type Task, waitingOn } from '@helmsman/core'
 import { pullRequestNumber } from '../lib/pull-request'
 import { formatAge, isQuiet, STATE_LABEL } from '../lib/tasks'
+import { WaitsFor } from './TaskTable'
 
 type TaskBoardProps = {
   tasks: readonly Task[]
   now: Date
   selectedId: string | null
   diffStats?: Readonly<Record<string, DiffStat>>
+  allTasks?: readonly Task[]
   onSelect: (id: string) => void
 }
 
 // The same tasks as the table, in one column per state. Empty columns of finished states are left
 // out, so the board stays narrow.
-export function TaskBoard({ tasks, now, selectedId, diffStats = {}, onSelect }: TaskBoardProps) {
+export function TaskBoard({
+  tasks,
+  now,
+  selectedId,
+  diffStats = {},
+  allTasks = tasks,
+  onSelect,
+}: TaskBoardProps) {
   const columns = TASK_STATES.map((state) => ({
     state,
     tasks: tasks.filter((task) => task.state === state),
@@ -52,6 +61,7 @@ export function TaskBoard({ tasks, now, selectedId, diffStats = {}, onSelect }: 
                   )}
                 </span>
                 <span className="font-medium break-words">{task.title}</span>
+                <WaitsFor ids={waitingOn(task, allTasks)} />
                 <span className="flex flex-wrap gap-x-3 text-muted">
                   {task.agent !== null && <span>{task.agent}</span>}
                   {stat !== undefined && stat.files > 0 && (

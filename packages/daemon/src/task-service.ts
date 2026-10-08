@@ -1,6 +1,7 @@
 import {
   applyTaskEvent,
   type EventType,
+  makesCycle,
   type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
   TASK_PRIORITIES,
@@ -148,8 +149,8 @@ export class TaskService {
   updateTask(taskId: string, rawInput: unknown): Task {
     const task = this.getTask(taskId)
     const input = updateTaskInputSchema.parse(rawInput)
-    if (input.dependsOn?.includes(taskId)) {
-      throw new TaskEditError('A task cannot depend on itself')
+    if (input.dependsOn !== undefined) {
+      this.checkDependencies(taskId, input.dependsOn)
     }
     const next = { ...task, ...input }
     const changed = EDITABLE_FIELDS.filter(
@@ -173,6 +174,18 @@ export class TaskService {
     this.index.appendEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
+  }
+
+  private checkDependencies(taskId: string, dependsOn: readonly string[]): void {
+    const tasks = this.listTasks()
+    const known = new Set(tasks.map((task) => task.id))
+    const unknown = dependsOn.filter((id) => !known.has(id))
+    if (unknown.length > 0) {
+      throw new TaskEditError(`No such task: ${unknown.join(', ')}`)
+    }
+    if (makesCycle(taskId, dependsOn, tasks)) {
+      throw new TaskEditError('These dependencies would make a loop. A task cannot wait for itself')
+    }
   }
 
   applyEvent(taskId: string, rawInput: unknown): ApplyEventResult {

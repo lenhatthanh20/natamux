@@ -614,6 +614,28 @@ describe('App', () => {
     expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
   })
 
+  it('shows that a task waits for another one', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug' }), runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Edit' }))
+    const form = within(details).getByRole('form', { name: 'Edit T-0001' })
+    await user.type(within(form).getByLabelText(/Waits for tasks/), 't-0002')
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+
+    expect(await within(screen.getByRole('table')).findByText('waits for T-0002')).toBeTruthy()
+    expect(
+      within(details).getByRole('button', { name: 'Start Claude Code' }).hasAttribute('disabled'),
+    ).toBe(true)
+  })
+
   it('adds a task from the title field', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
