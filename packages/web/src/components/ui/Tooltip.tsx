@@ -141,7 +141,13 @@ export function Tooltip() {
     const fitsTop = anchor.top - GAP - size.height >= EDGE
     const fitsBottom = anchor.bottom + GAP + size.height <= window.innerHeight - EDGE
     const side: Side =
-      shown.side === 'top' ? (fitsTop || !fitsBottom ? 'top' : 'bottom') : fitsBottom || !fitsTop ? 'bottom' : 'top'
+      shown.side === 'top'
+        ? fitsTop || !fitsBottom
+          ? 'top'
+          : 'bottom'
+        : fitsBottom || !fitsTop
+          ? 'bottom'
+          : 'top'
     const left = Math.max(
       EDGE,
       Math.min(

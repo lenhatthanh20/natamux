@@ -3,9 +3,9 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import type { NewWorkspaceInput } from '../lib/api'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
+import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { Select } from './ui/Select'
-import { Button } from './ui/Button'
 import { inputLg, textarea } from './ui/styles'
 
 type NewWorkspaceDialogProps = {
@@ -149,7 +149,7 @@ export function NewWorkspaceDialog({
             onChange={(event) => setAgent(event.target.value)}
             aria-label="Agent"
             fieldSize="md"
-              className="w-full"
+            className="w-full"
           >
             <option value="claude-code">Claude Code</option>
             <option value="">No agent, a plain shell</option>

@@ -124,7 +124,8 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
       onClose(true)
     } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && event.key !== ' ') {
       const now = Date.now()
-      const text = (now - typed.current.at > 600 ? '' : typed.current.text) + event.key.toLowerCase()
+      const text =
+        (now - typed.current.at > 600 ? '' : typed.current.text) + event.key.toLowerCase()
       typed.current = { text, at: now }
       const start = text.length === 1 ? index + 1 : index
       for (let step = 0; step < entries.length; step += 1) {
@@ -286,7 +287,12 @@ export function Menu({ label, items, revealOnHover = false }: MenuProps) {
 }
 
 type ContextMenuState = {
-  open: { label: string; items: readonly MenuItem[]; anchor: Anchor; opener: HTMLElement | null } | null
+  open: {
+    label: string
+    items: readonly MenuItem[]
+    anchor: Anchor
+    opener: HTMLElement | null
+  } | null
 }
 
 const useContextMenu = create<ContextMenuState>()(() => ({ open: null }))

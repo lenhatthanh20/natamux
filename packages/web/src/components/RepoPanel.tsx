@@ -1,8 +1,8 @@
 import type { Repo } from '@helmsman/core'
 import { FolderGit2 } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
-import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
+import { Dialog } from './ui/Dialog'
 import { inputLg } from './ui/styles'
 
 type RepoPanelProps = {

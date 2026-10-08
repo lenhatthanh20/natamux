@@ -1,5 +1,11 @@
 import { X } from 'lucide-react'
-import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useId, useRef } from 'react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from './Button'
 import { IconButton } from './IconButton'
@@ -165,7 +171,9 @@ export function Dialog({
         </header>
         {children !== undefined && <div className="overflow-y-auto px-5 py-3">{children}</div>}
         {footer !== undefined && (
-          <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>
+          <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">
+            {footer}
+          </footer>
         )}
       </div>
     </div>,

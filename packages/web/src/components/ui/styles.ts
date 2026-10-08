@@ -10,7 +10,8 @@ const BUTTON_BASE =
   'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md text-sm font-medium whitespace-nowrap select-none disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50'
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-ink text-canvas not-aria-disabled:hover:bg-ink/85 not-aria-disabled:active:bg-ink/75',
+  primary:
+    'bg-ink text-canvas not-aria-disabled:hover:bg-ink/85 not-aria-disabled:active:bg-ink/75',
   secondary:
     'border border-control bg-raised text-ink ring-contrast not-aria-disabled:hover:border-control-hover not-aria-disabled:hover:bg-[color-mix(in_srgb,var(--raised)_92%,var(--ink))] not-aria-disabled:active:bg-[color-mix(in_srgb,var(--raised)_85%,var(--ink))]',
   ghost:
