@@ -71,9 +71,17 @@ export function SidebarGroups({
         </section>
       ))}
       {finished.length > 0 && (
-        <details>
+        <details className="group/finished">
           <summary className="flex cursor-default justify-between rounded-md px-3 py-1 text-xs font-semibold text-muted hover:bg-hover">
-            <span>Done and cancelled</span>
+            <span>
+              <span
+                aria-hidden="true"
+                className="mr-1 inline-block transition-transform group-open/finished:rotate-90"
+              >
+                ›
+              </span>
+              Done and cancelled
+            </span>
             <span>{finished.length}</span>
           </summary>
           <ul className="flex flex-col opacity-75">
