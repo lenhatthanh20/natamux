@@ -32,16 +32,17 @@ import { AgentPanes } from './AgentPanes'
 import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
+import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
 import { RepoPanel } from './RepoPanel'
-import { SidebarGroups } from './SidebarGroups'
 import { StateFilter } from './StateFilter'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
 import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
 import { Select } from './ui/Select'
-import { input, kbd } from './ui/styles'
+import { button, input, kbd } from './ui/styles'
+import { WorkspaceList } from './WorkspaceList'
 import { Toaster } from './ui/Toaster'
 
 const TASKS_KEY = ['tasks']
@@ -74,6 +75,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     layout,
     agentsOpen,
     agentPanes,
+    pinned,
   } = useViewStore()
   const {
     toggleStateFilter,
@@ -85,11 +87,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setLayout,
     openAgents,
     setAgentPanes,
+    togglePin,
   } = useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(savedTheme)
+  // The new workspace dialog, with the repository it opens on. Null: closed.
+  const [newWorkspace, setNewWorkspace] = useState<{ repo?: string } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const newTaskRef = useRef<HTMLInputElement>(null)
 
@@ -296,10 +301,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
   const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
-  const shownGroups = useMemo(
-    () => sidebarGroups(filterTasks(tasks, null, search), now),
-    [tasks, search, now],
-  )
   const sidebar = useStoredWidth('helmsman.sidebar-width', 288, 232, 440)
   const details = useStoredWidth('helmsman.details-width', 368, 320, 560)
   const busy =
@@ -387,7 +388,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           return
         case 'n':
           event.preventDefault()
-          newTaskRef.current?.focus()
+          closeChanges()
+          // The field is in the task list, which may only now be shown.
+          requestAnimationFrame(() => newTaskRef.current?.focus())
+          return
+        case 'c':
+          event.preventDefault()
+          setNewWorkspace({})
           return
         default: {
           const action = selectedTask
@@ -440,61 +447,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           style={{ width: sidebar.width }}
           className="flex shrink-0 flex-col gap-3 bg-sidebar px-2 pt-3"
         >
-          <form onSubmit={submitNewTask} className="flex flex-col gap-1.5 px-1">
-            <div className="flex items-center gap-2">
-              <h1 className="flex-1 px-1 font-semibold tracking-tight">Helmsman</h1>
-              <button
-                type="submit"
-                aria-label="Add task"
-                title="Add task"
-                disabled={createMutation.isPending}
-                className="rounded-md border border-line bg-raised p-1.5 hover:border-muted disabled:opacity-50"
-              >
-                <Plus size={14} aria-hidden="true" />
-              </button>
-            </div>
-            <input
-              ref={newTaskRef}
-              value={newTitle}
-              onChange={(event) => setNewTitle(event.target.value)}
-              placeholder="New task title (n)"
-              aria-label="New task title"
-              className={input}
-            />
-            {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
-              <div className="flex gap-1.5">
-                {repos.length > 1 && (
-                  <Select
-                    value={newRepo}
-                    onChange={(event) => setNewRepo(event.target.value)}
-                    aria-label="Repository"
-                    className="flex-1"
-                  >
-                    {repos.map((repo) => (
-                      <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                        {repo.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-                {(templatesQuery.data?.length ?? 0) > 0 && (
-                  <Select
-                    value={templateId}
-                    onChange={(event) => setTemplateId(event.target.value)}
-                    aria-label="Template"
-                    className="flex-1"
-                  >
-                    <option value="">No template</option>
-                    {templatesQuery.data?.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </div>
-            )}
-          </form>
+          <div className="flex items-center gap-2 px-1">
+            <h1 className="flex-1 px-1 font-semibold tracking-tight">Helmsman</h1>
+            <button
+              type="button"
+              onClick={() => setNewWorkspace({})}
+              title="New workspace (c)"
+              className={button('secondary')}
+            >
+              <Plus size={14} aria-hidden="true" />
+              New workspace
+            </button>
+          </div>
 
           <label className="mx-1 flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-muted hover:border-line-strong focus-within:border-accent">
             <Search size={14} aria-hidden="true" />
@@ -539,15 +503,24 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               currentId={changesTaskId}
               onOpen={openTask}
             />
-            <SidebarGroups
-              open={shownGroups.open}
-              finished={shownGroups.finished}
+            <WorkspaceList
+              repos={repos}
+              tasks={search.trim() === '' ? tasks : filterTasks(tasks, null, search)}
               now={now}
               currentId={changesTaskId}
-              allTasks={tasks}
+              pinnedIds={pinned}
               diffStats={diffStatsQuery.data}
               activity={activityQuery.data}
               onOpen={openTask}
+              onViewChanges={(id) => {
+                chooseTask(id)
+                openChanges(id, 'changes')
+              }}
+              onRename={(id, title) => editMutation.mutate({ taskId: id, changes: { title } })}
+              onTogglePin={togglePin}
+              onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+              onNewWorkspace={(repo) => setNewWorkspace({ repo })}
+              onAddRepo={() => setReposOpen(true)}
             />
           </div>
         </nav>
@@ -654,6 +627,57 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+                <form onSubmit={submitNewTask} className="flex flex-wrap items-center gap-2">
+            <input
+              ref={newTaskRef}
+              value={newTitle}
+              onChange={(event) => setNewTitle(event.target.value)}
+              placeholder="Add a task to the backlog (n)"
+              aria-label="New task title"
+              className={`${input} min-w-64 flex-1`}
+            />
+            {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+              <div className="flex gap-2">
+                {repos.length > 1 && (
+                  <Select
+                    value={newRepo}
+                    onChange={(event) => setNewRepo(event.target.value)}
+                    aria-label="Repository"
+                    className="w-40 [&_select]:h-8"
+                  >
+                    {repos.map((repo) => (
+                      <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                        {repo.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                {(templatesQuery.data?.length ?? 0) > 0 && (
+                  <Select
+                    value={templateId}
+                    onChange={(event) => setTemplateId(event.target.value)}
+                    aria-label="Template"
+                    className="w-40 [&_select]:h-8"
+                  >
+                    <option value="">No template</option>
+                    {templatesQuery.data?.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={createMutation.isPending || newTitle.trim() === ''}
+              className={button('secondary', 'md')}
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add task
+            </button>
+          </form>
                 {tasksQuery.isPending ? (
                   <p className="text-muted">Loading tasks.</p>
                 ) : layout === 'board' ? (
@@ -726,6 +750,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       </div>
 
       <Toaster />
+      {newWorkspace !== null && (
+        <NewWorkspaceDialog
+          repos={repos.length > 0 ? repos : [{ id: 'default', name: 'default' }]}
+          initialRepo={newWorkspace.repo}
+          loadBranches={(repo) => api.listBranches(repo)}
+          create={(input) => api.newWorkspace(input)}
+          onCreated={(task) => {
+            mergeTask(task)
+            chooseTask(task.id)
+            openChanges(task.id, 'terminal')
+            toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
+          }}
+          onClose={() => setNewWorkspace(null)}
+        />
+      )}
       {reposOpen && (
         <RepoPanel
           repos={repos}
@@ -803,7 +842,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             Notifications blocked
           </span>
         )}
-        <span className="font-mono">n new · / search · j k move · Esc back</span>
+        <span className="font-mono">c workspace · n task · / search · j k move · Esc back</span>
         <button
           type="button"
           aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
