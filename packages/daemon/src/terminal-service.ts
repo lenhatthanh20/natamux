@@ -30,6 +30,8 @@ export class TerminalLimitError extends Error {
 export const SCROLLBACK_CHARS = 200_000
 export const MAX_SESSIONS = 20
 export const TICKET_TTL_MS = 30_000
+// The size of a shell started before any dashboard looks at it. The first resize fixes it.
+const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
 type Session = {
   pty: PtyProcess
@@ -91,7 +93,7 @@ export class TerminalService {
 
   // Starts the shell when the task has none. Returns the function that detaches the client.
   attach(taskId: string, client: TerminalClient, size: TerminalSize): () => void {
-    const session = this.sessions.get(taskId) ?? this.start(taskId, size)
+    const session = this.ensure(taskId, size)
     if (session.scrollback !== '') {
       client.send({ type: 'output', data: session.scrollback })
     }
@@ -99,6 +101,11 @@ export class TerminalService {
     return () => {
       session.clients.delete(client)
     }
+  }
+
+  // Types a command line into the task's shell, starting the shell first when needed.
+  run(taskId: string, line: string, size: TerminalSize = DEFAULT_SIZE): void {
+    this.ensure(taskId, size).pty.write(`${line}\r`)
   }
 
   input(taskId: string, data: string): void {
@@ -118,6 +125,10 @@ export class TerminalService {
     for (const session of this.sessions.values()) {
       session.pty.kill()
     }
+  }
+
+  private ensure(taskId: string, size: TerminalSize): Session {
+    return this.sessions.get(taskId) ?? this.start(taskId, size)
   }
 
   private start(taskId: string, size: TerminalSize): Session {

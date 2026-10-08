@@ -23,6 +23,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'git.committed': 'Committed',
   'git.pushed': 'Pushed',
   'pr.opened': 'Pull request opened',
+  'agent.launched': 'Agent launched',
 }
 
 export function describeEvent(type: EventType): string {

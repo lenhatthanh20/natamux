@@ -11,6 +11,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
+import type { AgentRunner } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
@@ -25,6 +26,7 @@ type ServerOptions = {
   service: TaskService
   workspaces: WorkspaceService
   terminals: TerminalService
+  agents: AgentRunner
   bus: EventBus
   token: string
 }
@@ -34,6 +36,10 @@ const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+const startAgentBodySchema = z.object({
+  agent: z.string().min(1).max(64),
+  prompt: z.string().max(20_000).optional(),
+})
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
 const terminalQuerySchema = terminalSizeSchema.extend({ ticket: z.string().min(1).max(256) })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
@@ -192,6 +198,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/tasks/:id/graph', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return options.workspaces.graph(id)
+  })
+
+  app.post('/tasks/:id/agent', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { agent, prompt } = startAgentBodySchema.parse(request.body)
+    return { task: options.agents.start(id, agent, prompt) }
   })
 
   app.post('/tasks/:id/commit', async (request) => {

@@ -1,5 +1,7 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { claudeCodeHookSettings } from '@helmsman/core'
+import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
 import { spawnShell } from './pty.js'
@@ -22,12 +24,32 @@ const workspaces = new WorkspaceService({
   worktreesDir: config.worktreesDir,
 })
 
+// Shells run on the same machine as the daemon, so they reach it on loopback. They get the token
+// and the address for `helmsman` and for the hooks of the agents they start.
+const daemonUrl = `http://127.0.0.1:${config.port}`
 const terminals = new TerminalService({
   spawn: spawnShell,
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
+  env: { ...process.env, HELMSMAN_TOKEN: config.token, HELMSMAN_URL: daemonUrl },
 })
 
-const app = await buildServer({ service, workspaces, terminals, bus, token: config.token })
+const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
+writeFileSync(claudeSettingsPath, `${JSON.stringify(claudeCodeHookSettings(daemonUrl), null, 2)}\n`)
+const agents = new AgentRunner({
+  tasks: service,
+  terminals,
+  claudeSettingsPath,
+  claudeCommand: process.env.HELMSMAN_CLAUDE_COMMAND,
+})
+
+const app = await buildServer({
+  service,
+  workspaces,
+  terminals,
+  agents,
+  bus,
+  token: config.token,
+})
 await app.listen({ host: config.host, port: config.port })
 
 console.log(`Helmsman daemon listening on http://${config.host}:${config.port}`)

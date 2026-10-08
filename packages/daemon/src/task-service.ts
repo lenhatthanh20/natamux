@@ -179,6 +179,25 @@ export class TaskService {
     return updated
   }
 
+  // Writes down that an agent was started in the task's terminal, and names it on the task.
+  recordAgentLaunch(taskId: string, agent: string): Task {
+    const task = this.getTask(taskId)
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'agent.launched',
+      at: this.timestamp(),
+      payload: { agent },
+    }
+    const updated: Task = { ...task, agent, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.index.appendEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
   // Writes down that the agent of a running task is still at work, so the time of its last update
   // is the time of its last sign of life. At most once per `minIntervalMs`, so a busy agent does
   // not fill the log. Returns whether it wrote anything.
