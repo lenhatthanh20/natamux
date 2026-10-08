@@ -196,6 +196,23 @@ describe('several terminals of a task', () => {
   })
 })
 
+describe('onOutput', () => {
+  it('hears every piece of output, with the terminal name', () => {
+    const { spawn, ptys } = fakeSpawner()
+    const heard: string[] = []
+    const service = new TerminalService({
+      spawn,
+      workspaceOf: (taskId) => `/work/${taskId}`,
+      onOutput: (taskId, terminal, data) => heard.push(`${taskId}/${terminal}:${data}`),
+    })
+    service.attach('T-0001', client(), size, '2')
+
+    ptys[0]?.emit('hi')
+
+    expect(heard).toEqual(['T-0001/2:hi'])
+  })
+})
+
 describe('paste', () => {
   it('pastes text into the first shell and presses Enter', () => {
     const { service, ptys } = setup()

@@ -1,8 +1,9 @@
-import { portRange, type Task } from '@helmsman/core'
+import { type DiffStat, portRange, type Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
+import { CompareTries } from './CompareTries'
 import { FanOutForm } from './FanOutForm'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
@@ -32,6 +33,10 @@ type TaskDetailProps = {
   onAddSubtask?: (title: string) => void
   onSelectTask?: (id: string) => void
   onFanOut?: (count: number, start: boolean) => void
+  // The task and its tries from a fan-out, when it has some.
+  tries?: readonly Task[]
+  diffStats?: Readonly<Record<string, DiffStat>>
+  onKeepTry?: (task: Task) => void
   onClose: () => void
 }
 
@@ -64,6 +69,9 @@ export function TaskDetail({
   onAddSubtask,
   onSelectTask,
   onFanOut,
+  tries = [],
+  diffStats,
+  onKeepTry,
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -331,6 +339,17 @@ export function TaskDetail({
           busy={busy}
           onSelect={(id) => onSelectTask?.(id)}
           onAdd={onAddSubtask}
+        />
+      )}
+
+      {tries.length > 1 && onKeepTry !== undefined && (
+        <CompareTries
+          tries={tries}
+          currentId={task.id}
+          diffStats={diffStats}
+          busy={busy}
+          onSelect={(id) => onSelectTask?.(id)}
+          onKeep={onKeepTry}
         />
       )}
 

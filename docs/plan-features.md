@@ -66,7 +66,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.helmsman-setup` (or `.helmsman-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
 | Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `HELMSMAN_PORT` | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |
-| Fan-out: one prompt to several agents, compare results, keep the winner. Done: **Fan out** copies a task 1 to 5 times, each with its own workspace and Claude Code; the copies share a `tries-…` label and are compared by their diffs. Next: a compare view | v1 |
+| Fan-out: one prompt to several agents, compare results, keep the winner. Done: **Fan out** copies a task 1 to 5 times, each with its own workspace and Claude Code; the copies share a `tries-…` label and are compared side by side in the details (state, diff size, pull request); **Keep this one** cancels the other tries | v1 |
 | SSH and remote workspaces | Later |
 | Container isolation | Later |
 | Scheduled and background runs | Later |
@@ -135,7 +135,7 @@ Goals:
 | Claude Code adapter using its hooks for status events | MVP |
 | `helmsman hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
 | Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks | v1 |
-| Generic adapter for any CLI (status from process and output idle time, terminal bell) | v1 |
+| Generic adapter for any CLI (status from process and output idle time, terminal bell). Done: output in a task's first terminal is a sign of life (so a silent agent shows as quiet), and the terminal bell from an agent without hooks moves a running task to needs input | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
 | Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
