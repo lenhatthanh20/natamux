@@ -103,3 +103,11 @@ Each adapter needs a real session to check it. Until then it is tested only agai
 - GitHub Copilot CLI hooks: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-hooks-reference
 - OpenCode plugins: https://opencode.ai/docs/plugins/
 - Agent Client Protocol: https://agentclientprotocol.com/overview/introduction
+
+## Agents without hooks
+
+Any agent started in a task's first terminal is followed by its output (`generic-signals.ts`):
+
+- Output is a sign of life. A running task whose terminal stays silent for 10 minutes shows as quiet.
+- The terminal bell (`\x07`) moves a running task to needs input, unless the task's agent has hooks (Claude Code).
+- `helmsman ask` and `helmsman done` let such an agent report the rest (see the plugin skill in `plugins/helmsman`).
