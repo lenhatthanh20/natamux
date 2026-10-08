@@ -2,19 +2,24 @@ import { type EventType, type Task, waitingOn } from '@helmsman/core'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Columns3, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useDelayedFlag } from '../hooks/useDelayedFlag'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFrozenOrder } from '../hooks/useFrozenOrder'
+import { useKeyboard } from '../hooks/useKeyboard'
 import { useLayoutMode, useViewportWidth } from '../hooks/useLayoutMode'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
-import { chordReachesApp, isModChord } from '../lib/chords'
+import { fireAppEvent } from '../lib/app-events'
+import type { Command, CommandActions, CommandState } from '../lib/commands'
+import { shortcutOf } from '../lib/commands'
+import { focusKind } from '../lib/dispatch'
 import { effectiveSidebarWidth } from '../lib/layout-mode'
-import { agentPaneTasks } from '../lib/panes'
+import type { PaletteScope } from '../lib/palette'
+import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import {
-  actionsFor,
   filterTasks,
   needsMeTasks,
   nextSort,
@@ -31,6 +36,7 @@ import { latestQuestion, tabToOpen } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
+import { CommandPalette, type PaletteMode } from './CommandPalette'
 import { DrawerFooter } from './DrawerFooter'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
@@ -52,6 +58,7 @@ import { ContextMenuHost } from './ui/Menu'
 import { useStoredWidth } from './ui/ResizeHandle'
 import { Segmented } from './ui/Segmented'
 import { Select } from './ui/Select'
+import { SkeletonList } from './ui/Skeleton'
 import { input } from './ui/styles'
 import { Toaster } from './ui/Toaster'
 import { Tooltip } from './ui/Tooltip'
@@ -64,13 +71,6 @@ type DashboardProps = {
   token: string
   onSignOut: () => void
   onUnauthorized: () => void
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-  )
 }
 
 export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) {
@@ -86,6 +86,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     drawerOpen,
     changesTaskId,
     changesTab,
+    changesFile,
+    recent,
     layout,
     agentsOpen,
     agentPanes,
@@ -104,6 +106,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setSidebarOpen,
     setDrawerOpen,
     openChanges,
+    setChangesFile,
+    requestShell,
     closeChanges,
     setLayout,
     openAgents,
@@ -121,7 +125,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // The new workspace dialog, with the repository it opens on. Null: closed.
-  const [newWorkspace, setNewWorkspace] = useState<{ repo?: string } | null>(null)
+  const [newWorkspace, setNewWorkspace] = useState<{ repo?: string; title?: string } | null>(null)
+  const [palette, setPalette] = useState<{
+    mode: PaletteMode
+    scope: PaletteScope
+    query: string
+  } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const newTaskRef = useRef<HTMLInputElement>(null)
 
@@ -417,10 +426,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     requestAnimationFrame(then)
   }
   const focusFilter = () => revealSidebar(() => searchRef.current?.focus())
-  const focusNeedsYou = () =>
-    revealSidebar(() =>
-      document.querySelector<HTMLElement>('[aria-labelledby="needs-me-heading"] button')?.focus(),
-    )
 
   // Opens the task's workspace in the main area: the agent's terminal while it works, else the
   // tab that was used last there. The details keep the state they had.
@@ -430,119 +435,100 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     openChanges(id, task === undefined ? 'terminal' : tabToOpen(task.state, tabByTask[id]))
   }
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return
-      }
-      // Every key belongs to the shell, Escape too (vim, less, an agent's prompt).
-      if (event.target instanceof Element && event.target.closest('.xterm')) {
-        return
-      }
-      if (isTypingTarget(event.target)) {
-        if (event.key === 'Escape' && event.target instanceof HTMLElement) {
-          event.target.blur()
-        }
-        return
-      }
+  const moveSelection = (step: number) => {
+    if (orderedTasks.length === 0) {
+      return
+    }
+    const current = orderedTasks.findIndex((task) => task.id === selectedId)
+    const next = Math.min(Math.max(current + step, 0), orderedTasks.length - 1)
+    const target = orderedTasks[next]
+    if (target) {
+      select(target.id)
+      frozen.hold()
+    }
+  }
 
-      const move = (step: number) => {
-        if (orderedTasks.length === 0) {
-          return
-        }
-        const current = orderedTasks.findIndex((task) => task.id === selectedId)
-        const next = Math.min(Math.max(current + step, 0), orderedTasks.length - 1)
-        const target = orderedTasks[next]
-        if (target) {
-          select(target.id)
-          frozen.hold()
-        }
-      }
-
-      switch (event.key) {
-        case 'j':
-        case 'ArrowDown':
-          event.preventDefault()
-          move(1)
-          return
-        case 'k':
-        case 'ArrowUp':
-          event.preventDefault()
-          move(-1)
-          return
-        case 'Enter':
-          // A focused control keeps its own Enter.
-          if (
-            selectedTask &&
-            (event.target === document.body ||
-              (event.target instanceof HTMLElement && event.target.id === 'main'))
-          ) {
-            openTask(selectedTask.id)
-          }
-          return
-        case 'i':
-          if (selectedTask) {
-            setDetailOpen(selectedTask.id, !detailOpenByTask[selectedTask.id])
-          }
-          return
-        case 'Escape':
-          if (changesTaskId !== null || agentsOpen) {
-            closeChanges()
-          } else if (selectedTask) {
-            setDetailOpen(selectedTask.id, false)
-          }
-          return
-        case '/':
-          event.preventDefault()
-          focusFilter()
-          return
-        case '?':
-          event.preventDefault()
-          setShortcutsOpen(true)
-          return
-        case 'n':
-          event.preventDefault()
-          closeChanges()
-          // The field is in the task list, which may only now be shown.
-          requestAnimationFrame(() => newTaskRef.current?.focus())
-          return
-        case 'c':
-          event.preventDefault()
-          setNewWorkspace({})
-          return
-        default: {
-          const action = selectedTask
-            ? actionsFor(selectedTask.state).find((candidate) => candidate.hotkey === event.key)
-            : undefined
-          if (selectedTask && action) {
-            runAction(selectedTask, action)
-          }
-        }
+  const addToAgents = (id: string) => {
+    const chosen = agentPaneTasks(agentPanes, tasks).map((task) => task.id)
+    if (!chosen.includes(id)) {
+      if (chosen.length >= MAX_PANES) {
+        toast(`The Agents grid holds ${MAX_PANES} panes. Close one to add ${id}.`, 'error')
+      } else {
+        setAgentPanes([...chosen, id])
       }
     }
+    openAgents()
+    afterPick()
+  }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  })
+  const commandState: Omit<CommandState, 'focus'> = {
+    workspaceOpen: changesTask !== null,
+    agentsOpen,
+    hasSelection: selectedTask !== null,
+    selectedState: selectedTask?.state ?? null,
+  }
 
-  // Mod+B and Mod+Alt+B work from any field. In a terminal off a Mac the shell keeps its Ctrl keys.
-  useEffect(() => {
-    const onChord = (event: KeyboardEvent) => {
-      const inTerminal = event.target instanceof Element && event.target.closest('.xterm') !== null
-      if (!chordReachesApp(inTerminal)) {
+  // Everything a command can do. The keys, the palette and the menus all go through it.
+  const actions: CommandActions = {
+    openPalette: (query = '') => setPalette({ mode: 'all', scope: null, query }),
+    openJump: (scope = undefined) => setPalette({ mode: 'jump', scope: scope ?? null, query: '' }),
+    toggleSidebar,
+    toggleDetails,
+    showShortcuts: () => setShortcutsOpen(true),
+    focusFilter,
+    newWorkspace: () => setNewWorkspace({}),
+    newTask: () => {
+      closeChanges()
+      // The field is in the task list, which may only now be shown.
+      requestAnimationFrame(() => newTaskRef.current?.focus())
+    },
+    moveSelection,
+    openSelected: () => {
+      if (selectedTask) {
+        openTask(selectedTask.id)
+      }
+    },
+    toggleSelectedDetails: () => {
+      if (selectedTask) {
+        setDetailOpen(selectedTask.id, !detailOpenByTask[selectedTask.id])
+      }
+    },
+    editSelected: () => {
+      if (selectedTask === null) {
         return
       }
-      if (isModChord(event, 'b')) {
-        event.preventDefault()
-        toggleSidebar()
-      } else if (isModChord(event, 'b', { alt: true })) {
-        event.preventDefault()
-        toggleDetails()
+      const shown = detailOpen && detailTask?.id === selectedTask.id
+      setDetailOpen(selectedTask.id, true)
+      // The details are drawn first, then they hear the request.
+      setTimeout(() => fireAppEvent('edit-task'), shown ? 0 : 80)
+    },
+    taskEvent: (type) => {
+      if (selectedTask) {
+        eventMutation.mutate({ taskId: selectedTask.id, type })
       }
-    }
-    window.addEventListener('keydown', onChord)
-    return () => window.removeEventListener('keydown', onChord)
-  })
+    },
+    showTab: (tab) => fireAppEvent('workspace-tab', tab),
+    back: () => {
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && focusKind(focused) === 'field') {
+        focused.blur()
+      } else if (changesTaskId !== null || agentsOpen) {
+        closeChanges()
+      } else if (selectedTask) {
+        setDetailOpen(selectedTask.id, false)
+      }
+    },
+    showAllTasks: closeChanges,
+    showAgents: openAgents,
+    setLayout: (next) => {
+      closeChanges()
+      setLayout(next)
+    },
+    openRepos: () => setReposOpen(true),
+    openImport: () => setImportOpen(true),
+  }
+
+  useKeyboard({ state: commandState, actions })
 
   const submitNewTask = (event: FormEvent) => {
     event.preventDefault()
@@ -552,6 +538,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }
 
+  const showSkeleton = useDelayedFlag(tasksQuery.isPending)
   const waitingCount = needsMeTasks(tasks, now).length
   const notifications = useTaskNotifications(tasks)
   useEffect(() => {
@@ -570,6 +557,19 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       markSeen([changesTask], true)
     }
   }, [changesTask, markSeen])
+
+  // An address can name a task that does not exist, for example one that was never made here.
+  useEffect(() => {
+    if (!tasksQuery.isSuccess) {
+      return
+    }
+    if (changesTaskId !== null && !tasks.some((task) => task.id === changesTaskId)) {
+      closeChanges()
+      toast(`There is no task ${changesTaskId}.`, 'error')
+    } else if (selectedId !== null && !tasks.some((task) => task.id === selectedId)) {
+      select(null)
+    }
+  }, [tasksQuery.isSuccess, tasks, changesTaskId, selectedId, closeChanges, select])
 
   const runningCount = tasks.filter((task) => task.state === 'running').length
   const repoNameOf = (task: Task) =>
@@ -595,7 +595,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     afterPick()
     setImportOpen(true)
   }
-  const openShortcuts = () => setShortcutsOpen(true)
+  const openShortcuts = () => actions.showShortcuts()
 
   return (
     <>
@@ -606,9 +606,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             sidebarOpen={shellLayout.sidebar === 'drawer' ? drawerOpen : sidebarOpen}
             onToggleSidebar={toggleSidebar}
             view={view}
-            onSearch={focusFilter}
+            onSearch={() => actions.openPalette()}
             needsYou={waitingCount}
-            onNeedsYou={focusNeedsYou}
+            onNeedsYou={() => actions.openJump('needs-you')}
             onNewWorkspace={() => setNewWorkspace({})}
             detailsOpen={detailOpen}
             detailsDisabledReason={
@@ -626,7 +626,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               running={runningCount}
               needsYou={waitingCount}
               onFilterRunning={() => showState('running')}
-              onNeedsYou={focusNeedsYou}
+              onNeedsYou={() => actions.openJump('needs-you')}
               onRepos={() => setReposOpen(true)}
               onImport={() => setImportOpen(true)}
               notifications={notifications}
@@ -672,33 +672,41 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 />
               }
               tree={
-                <WorkspaceList
-                  repos={repos}
-                  tasks={search.trim() === '' ? tasks : searchedTasks}
-                  allTasks={tasks}
-                  filter={search}
-                  questions={questions}
-                  seenState={seenState}
-                  now={now}
-                  currentId={changesTaskId}
-                  pinnedIds={pinned}
-                  diffStats={diffStatsQuery.data}
-                  activity={activityQuery.data}
-                  onOpen={(id) => {
-                    openTask(id)
-                    afterPick()
-                  }}
-                  onViewChanges={(id) => {
-                    chooseTask(id)
-                    openChanges(id, 'changes')
-                    afterPick()
-                  }}
-                  onRename={(id, title) => editMutation.mutate({ taskId: id, changes: { title } })}
-                  onTogglePin={togglePin}
-                  onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
-                  onNewWorkspace={(repo) => setNewWorkspace({ repo })}
-                  onAddRepo={() => setReposOpen(true)}
-                />
+                tasksQuery.isPending ? (
+                  showSkeleton && (
+                    <SkeletonList rows={5} rowHeight={44} label="Loading the workspaces" />
+                  )
+                ) : (
+                  <WorkspaceList
+                    repos={repos}
+                    tasks={search.trim() === '' ? tasks : searchedTasks}
+                    allTasks={tasks}
+                    filter={search}
+                    questions={questions}
+                    seenState={seenState}
+                    now={now}
+                    currentId={changesTaskId}
+                    pinnedIds={pinned}
+                    diffStats={diffStatsQuery.data}
+                    activity={activityQuery.data}
+                    onOpen={(id) => {
+                      openTask(id)
+                      afterPick()
+                    }}
+                    onViewChanges={(id) => {
+                      chooseTask(id)
+                      openChanges(id, 'changes')
+                      afterPick()
+                    }}
+                    onRename={(id, title) =>
+                      editMutation.mutate({ taskId: id, changes: { title } })
+                    }
+                    onTogglePin={togglePin}
+                    onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+                    onNewWorkspace={(repo) => setNewWorkspace({ repo })}
+                    onAddRepo={() => setReposOpen(true)}
+                  />
+                )
               }
               footer={
                 phone ? (
@@ -786,6 +794,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             now={now}
             initialTab={changesTab}
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
+            file={changesFile}
+            onFileChange={setChangesFile}
             activity={activityQuery.data?.[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
@@ -948,7 +958,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               className={`min-h-0 flex-1 ${layout === 'board' && visibleTasks.length > 0 ? '' : 'overflow-auto px-4 pb-4'}`}
             >
               {tasksQuery.isPending ? (
-                <p className="text-muted">Loading tasks.</p>
+                showSkeleton && <SkeletonList rows={8} rowHeight={40} label="Loading the tasks" />
               ) : tasks.length === 0 ? (
                 <EmptyState
                   icon={ListTodo}
@@ -959,7 +969,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         variant="primary"
                         size="md"
                         icon={Plus}
-                        shortcut="n"
+                        shortcut={shortcutOf('task.new')}
                         onClick={() => newTaskRef.current?.focus()}
                       >
                         Add task
@@ -967,7 +977,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       <Button
                         size="md"
                         icon={SquareTerminal}
-                        shortcut="c"
+                        shortcut={shortcutOf('workspace.new')}
                         onClick={() => setNewWorkspace({})}
                       >
                         New workspace
@@ -1043,6 +1053,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <NewWorkspaceDialog
           repos={repos.length > 0 ? repos : [{ id: 'default', name: 'default' }]}
           initialRepo={newWorkspace.repo}
+          initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
@@ -1080,6 +1091,40 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       )}
 
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
+      {palette !== null && (
+        <CommandPalette
+          mode={palette.mode}
+          initialScope={palette.scope}
+          initialQuery={palette.query}
+          tasks={tasks}
+          repos={repos.length > 1 ? repos.map(({ id, name }) => ({ id, name })) : []}
+          recent={recent}
+          now={now}
+          context={{ state: { ...commandState, focus: 'body' }, actions }}
+          loadTerminals={(taskId) => api.listTerminals(taskId)}
+          onClose={() => setPalette(null)}
+          onOpenTask={(id, shell) => {
+            openTask(id)
+            afterPick()
+            if (shell !== undefined) {
+              requestShell(id, shell)
+            }
+          }}
+          onAddToAgents={addToAgents}
+          onRunCommand={(command: Command) =>
+            command.run?.({ state: { ...commandState, focus: 'body' }, actions })
+          }
+          onCreateTask={(title) =>
+            createMutation.mutate(title, {
+              onSuccess: (task) =>
+                toast(`Added ${task.id} to the backlog.`, 'success', {
+                  actions: [{ label: 'Open', run: () => openTask(task.id) }],
+                }),
+            })
+          }
+          onNewWorkspace={setNewWorkspace}
+        />
+      )}
     </>
   )
 }

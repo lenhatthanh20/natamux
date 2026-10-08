@@ -1,5 +1,6 @@
 import { CircleUser, Keyboard, LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { shortcutOf } from '../lib/commands'
 import { applyTheme, type Theme, useThemeChoice } from '../lib/theme'
 import { applyUiSize, UI_SIZE_LABEL, UI_SIZES, useUiSize } from '../lib/ui-size'
 import { ConfirmDialog } from './ui/Dialog'
@@ -43,7 +44,12 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
             onSelect: () => applyUiSize(value),
           })),
           { type: 'separator' },
-          { label: 'Keyboard shortcuts', icon: Keyboard, shortcut: '?', onSelect: onShortcuts },
+          {
+            label: 'Keyboard shortcuts',
+            icon: Keyboard,
+            shortcut: shortcutOf('help.shortcuts'),
+            onSelect: onShortcuts,
+          },
           { type: 'separator' },
           { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => setAsking(true) },
         ]}

@@ -9,8 +9,9 @@ import {
   Rows2,
   WrapText,
 } from 'lucide-react'
-import { type KeyboardEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, lazy, Suspense, useEffect, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
+import { useAppEvent } from '../lib/app-events'
 import {
   CHANGE_LABEL,
   countLabel,
@@ -20,6 +21,7 @@ import {
   wholeFileKind,
   wrapsByDefault,
 } from '../lib/changes'
+import { shortcutOf } from '../lib/commands'
 import { AgentComment } from './AgentComment'
 import { Button } from './ui/Button'
 import { EmptyState } from './ui/EmptyState'
@@ -59,6 +61,9 @@ type ChangesPanelProps = {
   committing: boolean
   // Another git action is running: commit waits.
   gitBusy: boolean
+  // The file of the address bar, and where to report the one that shows.
+  file?: string | null
+  onFileChange?: (path: string | null) => void
 }
 
 function FileBody({
@@ -101,15 +106,6 @@ function FileBody({
   )
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
-      target.closest('.xterm, .monaco-editor') !== null)
-  )
-}
-
 // The Changes tab: the changed files, the diff of one of them, and the boxes to comment and commit.
 export function ChangesPanel({
   taskId,
@@ -119,8 +115,10 @@ export function ChangesPanel({
   onCommit,
   committing,
   gitBusy,
+  file: requestedFile = null,
+  onFileChange,
 }: ChangesPanelProps) {
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [selectedPath, setSelectedPath] = useState<string | null>(requestedFile)
   const [sideBySide, setSideBySide] = useState(true)
   const [wrapChoice, setWrapChoice] = useState<boolean | null>(null)
   const [message, setMessage] = useState('')
@@ -176,25 +174,22 @@ export function ChangesPanel({
     file.refetch()
   }
 
-  // [ and ] move between files, Shift+R reads again. Not while the user types or reads a diff.
-  const keys = useRef({ step, refresh })
-  keys.current = { step, refresh }
+  // [ and ] move between files, Shift+R reads again, Mod+Shift+A goes to the comment box. The keys
+  // are commands, see lib/commands.ts.
+  useAppEvent<number>('diff-step', (by) => step(by < 0 ? -1 : 1))
+  useAppEvent('refresh-changes', refresh)
+  useAppEvent('diff-comment', () => document.getElementById('agent-comment')?.focus())
+
+  // The address bar names the file, and follows the one that shows.
+  // Only a new address moves the selection, so selectedPath is not a trigger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
   useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) {
-        return
-      }
-      if (event.key === '[') {
-        keys.current.step(-1)
-      } else if (event.key === ']') {
-        keys.current.step(1)
-      } else if (event.key === 'R') {
-        keys.current.refresh()
-      }
+    if (requestedFile !== null && requestedFile !== selectedPath) {
+      setSelectedPath(requestedFile)
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [requestedFile])
+  const shownPath = current?.path ?? null
+  useEffect(() => onFileChange?.(shownPath), [shownPath, onFileChange])
 
   const submitCommit = async (event: { preventDefault: () => void }) => {
     event.preventDefault()
@@ -274,14 +269,14 @@ export function ChangesPanel({
       <IconButton
         label="Previous file"
         icon={ChevronUp}
-        shortcut="["
+        shortcut={shortcutOf('diff.previous')}
         disabled={list.length < 2}
         onClick={() => step(-1)}
       />
       <IconButton
         label="Next file"
         icon={ChevronDown}
-        shortcut="]"
+        shortcut={shortcutOf('diff.next')}
         disabled={list.length < 2}
         onClick={() => step(1)}
       />
@@ -340,7 +335,7 @@ export function ChangesPanel({
               label="Refresh"
               icon={RefreshCw}
               size="xs"
-              shortcut="Shift+R"
+              shortcut={shortcutOf('changes.refresh')}
               onClick={refresh}
             />
           </div>

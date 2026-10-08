@@ -63,6 +63,14 @@ describe('loadConfig', () => {
     expect(explicit).toMatchObject({ repoDir: '/other/repo', worktreesDir: '/trees' })
   })
 
+  it('takes the dashboard page from HELMSMAN_WEB_INDEX, and serves none without it', () => {
+    expect(loadConfig({}, '/work/repo').webIndexPath).toBeUndefined()
+    expect(loadConfig({ HELMSMAN_WEB_INDEX: ' ' }, '/work/repo').webIndexPath).toBeUndefined()
+    expect(
+      loadConfig({ HELMSMAN_WEB_INDEX: '/web/dist/index.html' }, '/work/repo').webIndexPath,
+    ).toBe('/web/dist/index.html')
+  })
+
   it.each(['abc', '1.5', '-1', '70000'])('rejects the port %j', (port) => {
     expect(() => loadConfig({ HELMSMAN_PORT: port }, '/work/repo')).toThrow(/HELMSMAN_PORT/)
   })

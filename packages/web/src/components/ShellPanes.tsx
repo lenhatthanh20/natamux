@@ -1,14 +1,15 @@
 import type { TaskState, TerminalSize } from '@helmsman/core'
 import { useQuery } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
+import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan } from '../lib/panes'
-import { terminalShortcut } from '../lib/terminal-keys'
 import { nextTerminalName, terminalNames } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
+import { useViewStore } from '../lib/view-store'
 import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
 import { Button } from './ui/Button'
@@ -92,17 +93,23 @@ export function ShellPanes({
     }
   }
 
+  // Ctrl+Shift+` is a command, see lib/commands.ts.
+  useAppEvent('new-shell', addShell)
+
+  // The jump palette can ask for one shell of the workspace.
+  const request = useViewStore((state) => state.shellRequest)
+  const [asked, setAsked] = useState<{ name: string; at: number } | null>(null)
+  useEffect(() => {
+    if (request !== null && request.taskId === taskId && names.includes(request.name)) {
+      setShown(request.name)
+      setMaximized(null)
+      setAsked({ name: request.name, at: request.at })
+      useViewStore.getState().clearShellRequest()
+    }
+  })
+
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: the shortcut works from any pane inside.
-    <div
-      className="flex min-h-0 flex-1 flex-col gap-2"
-      onKeyDown={(event) => {
-        if (terminalShortcut(event.nativeEvent) === 'new-shell') {
-          event.preventDefault()
-          addShell()
-        }
-      }}
-    >
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       {actionsSlot !== null &&
         createPortal(
           <Button
@@ -158,7 +165,7 @@ export function ShellPanes({
               stateText={isAgent ? stateText : undefined}
               needsInput={isAgent && state === 'needs-input'}
               connect={(size) => connect(size, name)}
-              focusToken={name === '1' ? focusToken : undefined}
+              focusToken={asked?.name === name ? asked.at : name === '1' ? focusToken : undefined}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}
               onClose={name === '1' ? undefined : () => void closeShell(name)}

@@ -13,6 +13,7 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 | `HELMSMAN_DATA_DIR` | `<cwd>/.helmsman` | Task files and the SQLite index |
 | `HELMSMAN_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
 | `HELMSMAN_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
+| `HELMSMAN_WEB_INDEX` | none | Path of the built dashboard's `index.html` (for example `packages/web/dist/index.html`). With it, deep links work, see below |
 
 ## Storage
 
@@ -61,5 +62,9 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `POST /github/issues/import` | Body `{ numbers }`. Makes a draft task from each open issue that was not imported yet: its title, its body plus `Imported from <url>` as notes, its labels. Returns `{ tasks }` |
 | `POST /hooks/:agent` | Where an agent posts its hook, for example `/hooks/claude-code`. The adapter of that agent turns the hook into task events. Always answers `200 {}` (even for a hook that matches no task or changes nothing), `404` for an agent without an adapter, `400` for input that is not a hook of that agent. The task comes from the `X-Helmsman-Task` header or from the workspace that holds the hook's `cwd`. See `docs/agent-adapters.md` and `docs/claude-code-adapter.md` |
 | `GET /events` (WebSocket) | Live task changes. Use `?token=<token>` because browsers cannot set headers |
+
+## Deep links
+
+The dashboard keeps its view in the address (`/board`, `/agents`, `/t/T-0018`, `/w/T-0018/changes?file=src/a.ts`). When `HELMSMAN_WEB_INDEX` is set, a `GET` that matches no API route and accepts `text/html` (a reload or a pasted link) is answered with that `index.html` and status 200, without a token: the page holds no data. Any other request keeps its answer: a known API route still needs the token, and an unknown path that does not accept HTML is a 404 (401 without a token). The daemon serves only this one file. It does not serve the dashboard's scripts and styles yet, so the page only works behind something that does (in development, Vite serves the dashboard and already answers deep links itself; the daemon is reached through `/api`).
 
 An event that does not fit the task's current state is recorded with `accepted: false` and does not change the task.

@@ -13,9 +13,12 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
+import { useAppEvent } from '../lib/app-events'
+import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
 import { copyText } from '../lib/clipboard'
+import { shortcutOf } from '../lib/commands'
 import type { DetailsMode } from '../lib/layout-mode'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import {
@@ -36,10 +39,10 @@ import { LABEL_CHIP } from './TaskChips'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
 import { Button } from './ui/Button'
+import { Combobox } from './ui/Combobox'
 import { ConfirmDialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
 import { Menu, type MenuItem } from './ui/Menu'
-import { Select } from './ui/Select'
 import { ICON } from './ui/styles'
 
 type TaskDetailProps = {
@@ -76,14 +79,6 @@ type TaskDetailProps = {
 export function labelText(label: string): string {
   const match = /^tries-(t-\d+)$/i.exec(label)
   return match?.[1] === undefined ? label : `Tries of ${match[1].toUpperCase()}`
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    target.closest('input, textarea, select, [contenteditable="true"], .xterm, .monaco-editor') !==
-      null
-  )
 }
 
 export function TaskDetail({
@@ -124,24 +119,8 @@ export function TaskDetail({
   const canFanOut = onFanOut !== undefined && !isFinished && agentButton !== null
   const page = mode === 'page'
 
-  // E edits, when no field or terminal has the keys.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === 'e' &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !isTypingTarget(event.target) &&
-        !document.querySelector('[role="dialog"], [role="menu"]')
-      ) {
-        event.preventDefault()
-        setEditing(true)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  // The E key is a command, see lib/commands.ts.
+  useAppEvent('edit-task', () => setEditing(true))
 
   const menu: MenuItem[] = [
     ...(onSaveTemplate === undefined
@@ -174,7 +153,12 @@ export function TaskDetail({
         {page && <IconButton label="Back" icon={ArrowLeft} onClick={onClose} />}
         <span className="flex-1 font-mono text-xs text-muted">{task.id}</span>
         {!editing && (
-          <IconButton label="Edit" icon={Pencil} shortcut="e" onClick={() => setEditing(true)} />
+          <IconButton
+            label="Edit"
+            icon={Pencil}
+            shortcut={shortcutOf('task.edit')}
+            onClick={() => setEditing(true)}
+          />
         )}
         {menu.length > 0 && <Menu label={`More actions for ${task.id}`} items={menu} size="sm" />}
         {!page && <IconButton label="Close details" icon={X} shortcut="Esc" onClick={onClose} />}
@@ -276,21 +260,15 @@ export function TaskDetail({
             {task.workspace === null ? (
               <div className="flex flex-wrap items-center gap-2">
                 {!isFinished && branches !== undefined && branches.branches.length > 1 && (
-                  <Select
-                    value={base}
-                    onChange={(event) => setBase(event.target.value)}
-                    aria-label="Start from branch"
-                    className="w-40"
-                  >
-                    <option value="">{branches.current ?? 'HEAD'}</option>
-                    {branches.branches
-                      .filter((name) => name !== branches.current)
-                      .map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                  </Select>
+                  <Combobox
+                    label="Start from branch"
+                    placeholder={branches.current ?? 'HEAD'}
+                    options={branchOptions(branches.branches, branches.current, null)}
+                    value={base === '' ? (branches.current ?? '') : base}
+                    onChange={(name) => setBase(name === branches.current ? '' : name)}
+                    collapsedGroups={[TASK_BRANCH_GROUP]}
+                    className="w-48"
+                  />
                 )}
                 {isFinished ? (
                   <span className="text-muted">No workspace.</span>

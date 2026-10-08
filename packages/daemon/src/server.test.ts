@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -23,11 +23,16 @@ let repo: TestRepo
 let index: TaskIndex
 let app: FastifyInstance
 let ptys: FakePty[]
+let webIndexPath: string
+const PAGE = '<!doctype html><title>Helmsman</title><div id="root"></div>'
 
 beforeEach(async () => {
   repo = createTestRepo()
   const dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
+  mkdirSync(join(repo.root, 'web'))
+  webIndexPath = join(repo.root, 'web', 'index.html')
+  writeFileSync(webIndexPath, PAGE)
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
@@ -74,6 +79,7 @@ beforeEach(async () => {
     repos,
     bus,
     token: TOKEN,
+    webIndexPath,
   })
 })
 
@@ -89,6 +95,54 @@ describe('isAuthorized', () => {
     expect(isAuthorized('wrong-token', TOKEN)).toBe(false)
     expect(isAuthorized('short', TOKEN)).toBe(false)
     expect(isAuthorized(undefined, TOKEN)).toBe(false)
+  })
+})
+
+describe('deep links', () => {
+  const html = { accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }
+
+  it.each(['/', '/board', '/agents', '/t/T-0018', '/w/T-0018/changes?file=src/a.ts'])(
+    'serves the dashboard page for %s, without a token',
+    async (url) => {
+      const response = await app.inject({ method: 'GET', url, headers: html })
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['content-type']).toContain('text/html')
+      expect(response.body).toBe(PAGE)
+    },
+  )
+
+  it('still asks for the token on an API route, even when the browser asks for HTML', async () => {
+    const response = await app.inject({ method: 'GET', url: '/tasks', headers: html })
+    expect(response.statusCode).toBe(401)
+    const withToken = await app.inject({
+      method: 'GET',
+      url: '/tasks',
+      headers: { ...html, ...authorization },
+    })
+    expect(withToken.json()).toEqual({ tasks: [] })
+  })
+
+  it('answers 401, or 404 with a token, for an unknown address that is not HTML', async () => {
+    const without = await app.inject({ method: 'GET', url: '/w/T-0018/changes' })
+    expect(without.statusCode).toBe(401)
+    const json = await app.inject({
+      method: 'GET',
+      url: '/w/T-0018/changes',
+      headers: { ...authorization, accept: 'application/json' },
+    })
+    expect(json.statusCode).toBe(404)
+    expect(json.json()).toMatchObject({ error: 'Not Found' })
+  })
+
+  it('does not serve the page for another method', async () => {
+    const response = await app.inject({ method: 'POST', url: '/w/T-0018/changes', headers: html })
+    expect(response.statusCode).toBe(401)
+  })
+
+  it('asks for the token again when the page file is gone', async () => {
+    renameSync(webIndexPath, `${webIndexPath}.moved`)
+    const response = await app.inject({ method: 'GET', url: '/board', headers: html })
+    expect(response.statusCode).toBe(401)
   })
 })
 
