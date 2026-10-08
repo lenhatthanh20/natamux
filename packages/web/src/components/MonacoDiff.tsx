@@ -7,6 +7,8 @@ type MonacoDiffProps = {
   original: string
   modified: string
   sideBySide: boolean
+  // The line of the new file that the cursor is on, for a comment about that line.
+  onLine?: (line: number) => void
 }
 
 function themeForScheme(): string {
@@ -14,8 +16,16 @@ function themeForScheme(): string {
 }
 
 // The diff of VS Code, read only. This default export is what ChangesView loads on demand.
-export default function MonacoDiff({ path, original, modified, sideBySide }: MonacoDiffProps) {
+export default function MonacoDiff({
+  path,
+  original,
+  modified,
+  sideBySide,
+  onLine,
+}: MonacoDiffProps) {
   const container = useRef<HTMLDivElement>(null)
+  const onLineRef = useRef(onLine)
+  onLineRef.current = onLine
 
   useEffect(() => {
     const element = container.current
@@ -39,12 +49,17 @@ export default function MonacoDiff({ path, original, modified, sideBySide }: Mon
     const modifiedModel = monaco.editor.createModel(modified, language)
     editor.setModel({ original: originalModel, modified: modifiedModel })
 
+    const cursor = editor
+      .getModifiedEditor()
+      .onDidChangeCursorPosition((event) => onLineRef.current?.(event.position.lineNumber))
+
     const scheme = window.matchMedia('(prefers-color-scheme: dark)')
     const followScheme = () => monaco.editor.setTheme(themeForScheme())
     scheme.addEventListener('change', followScheme)
 
     return () => {
       scheme.removeEventListener('change', followScheme)
+      cursor.dispose()
       // The editor must let go of the models before they are disposed.
       editor.setModel(null)
       originalModel.dispose()
