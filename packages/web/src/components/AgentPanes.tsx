@@ -28,7 +28,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
     <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col gap-2 p-2">
       <header className="flex h-9 items-center gap-3 px-2">
         <h2 className="font-semibold">Agents</h2>
-        <span className="text-muted">
+        <span className="whitespace-nowrap text-muted">
           {shown.length} of {MAX_PANES} panes
         </span>
         <span className="flex-1" />

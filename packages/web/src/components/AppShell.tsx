@@ -39,13 +39,23 @@ const PART_ORDER = ['sidebar', 'main', 'details', 'status']
 
 // A layer open over the page (the drawer or a sheet): focus moves in, Escape closes it, and
 // focus goes back to where it was. A drawer with a scrim also keeps Tab inside.
-function useLayer(ref: RefObject<HTMLElement | null>, onClose: () => void, trap: boolean) {
+// The drawer takes focus itself, not its first field, so a phone's keyboard does not pop up.
+function useLayer(
+  ref: RefObject<HTMLElement | null>,
+  onClose: () => void,
+  trap: boolean,
+  focusPanel = false,
+) {
   const close = useRef(onClose)
   close.current = onClose
   useEffect(() => {
     const element = ref.current
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    element?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+    if (focusPanel) {
+      element?.focus()
+    } else {
+      element?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+    }
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -82,7 +92,7 @@ function useLayer(ref: RefObject<HTMLElement | null>, onClose: () => void, trap:
         previous.focus()
       }
     }
-  }, [ref, trap])
+  }, [ref, trap, focusPanel])
 }
 
 function Drawer({
@@ -95,7 +105,7 @@ function Drawer({
   children: ReactNode
 }) {
   const panel = useRef<HTMLDivElement>(null)
-  useLayer(panel, onClose, true)
+  useLayer(panel, onClose, true, true)
   return (
     <div className="fixed inset-0 z-(--z-sheet) flex">
       <button
@@ -107,7 +117,8 @@ function Drawer({
       />
       <div
         ref={panel}
-        className={`hm-slide-left relative h-full border-r border-line-strong bg-sidebar shadow-modal ${phone ? 'w-[min(360px,100vw)]' : 'w-[min(300px,85vw)]'}`}
+        tabIndex={-1}
+        className={`hm-slide-left relative h-full focus:outline-none border-r border-line-strong bg-sidebar shadow-modal ${phone ? 'w-[min(360px,100vw)]' : 'w-[min(300px,85vw)]'}`}
       >
         {children}
       </div>
