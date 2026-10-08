@@ -11,7 +11,10 @@ export function StateFilter({ tasks, active, onToggle }: StateFilterProps) {
   const counts = countByState(tasks)
 
   return (
-    <ul className="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none]" aria-label="Filter by state">
+    <ul
+      className="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none]"
+      aria-label="Filter by state"
+    >
       {TASK_STATES.filter((state) => counts[state] > 0 || active === state).map((state) => (
         <li key={state}>
           <button
