@@ -596,6 +596,24 @@ describe('App', () => {
     expect(within(table).getByText('−3')).toBeTruthy()
   })
 
+  it('shows the tasks as a board, one column per state', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'board' }))
+
+    expect(screen.queryByRole('table')).toBeNull()
+    const review = screen.getByRole('region', { name: 'In review' })
+    expect(within(review).getByText('Fix timezone bug')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Done' })).toBeNull()
+
+    await user.click(within(review).getByRole('button', { name: /Fix timezone bug/ }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
   it('adds a task from the title field', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
