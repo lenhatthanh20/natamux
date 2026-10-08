@@ -28,7 +28,9 @@ jobs:
       - run: pnpm test
 
   # Node 24 is the next LTS line. Node 22 stays the one that the product targets.
+  # Runs on main only, to save Actions minutes.
   node-24:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -41,8 +43,9 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
-  # The product ships to macOS and Windows.
+  # The product ships to macOS and Windows. Runs on main only: macOS minutes cost 10x.
   os:
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
