@@ -100,7 +100,7 @@ export function WorkspaceRow({
               }
             }}
             aria-label={`New name for ${task.id}`}
-            className={`${input} h-7 w-full`}
+            className={`${input} w-full`}
           />
         </form>
       ) : (
@@ -109,7 +109,7 @@ export function WorkspaceRow({
           onClick={() => onOpen(task.id)}
           onDoubleClick={startRename}
           aria-current={current}
-          className={`flex w-full flex-col gap-0.5 rounded-lg py-1.5 pr-8 pl-2 text-left hover:bg-hover aria-[current=true]:bg-selected ${finished ? 'opacity-60' : ''}`}
+          className={`flex w-full flex-col gap-0.5 rounded-lg py-1.5 pr-8 pl-2 text-left pointer-coarse:py-3 hover:bg-hover aria-[current=true]:bg-selected ${finished ? 'opacity-60' : ''}`}
         >
           <span className="flex w-full items-center gap-2">
             <StatusGlyph state={task.state} quiet={isQuiet(task, now)} />
@@ -133,7 +133,7 @@ export function WorkspaceRow({
         </button>
       )}
       {!renaming && (
-        <span className="absolute top-1.5 right-1.5">
+        <span className="absolute top-1.5 right-1.5 pointer-coarse:top-2">
           <Menu
             label={`Actions for ${task.id}`}
             revealOnHover

@@ -78,6 +78,20 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --control-h: 1.75rem;
+  --control-h-xs: 1.5rem;
+  --control-h-md: 2rem;
+  --row-h: 1.75rem;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --control-h: 2.5rem;
+    --control-h-xs: 2.5rem;
+    --control-h-md: 2.5rem;
+    --row-h: 3rem;
+  }
 }
 
 :root[data-theme="dark"] {
@@ -450,6 +464,18 @@
   }
 }
 
+@keyframes hm-slide-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes hm-slide-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes hm-shimmer {
   from {
     background-position: 200% 0;
@@ -469,6 +495,36 @@
 
 .hm-scrim {
   animation: hm-fade var(--dur-modal) var(--ease-out);
+}
+
+.hm-slide-left {
+  animation: hm-slide-left var(--dur-modal) var(--ease-out);
+}
+
+.hm-slide-right {
+  animation: hm-slide-right var(--dur-modal) var(--ease-out);
+}
+
+/* Set by the Electron shell. In the browser none of these attributes exist. */
+:root[data-shell="electron"][data-platform="mac"] .hm-titlebar {
+  padding-left: 76px;
+}
+
+:root[data-shell="electron"][data-platform="win"] .hm-titlebar {
+  padding-right: 140px;
+}
+
+:root[data-shell="electron"] .hm-titlebar {
+  -webkit-app-region: drag;
+}
+
+:root[data-shell="electron"] .hm-titlebar :is(button, a, input, [role="button"]) {
+  -webkit-app-region: no-drag;
+}
+
+:root[data-window="inactive"] .hm-titlebar,
+:root[data-window="inactive"] .hm-titlebar :is(h1, span, svg) {
+  color: var(--muted);
 }
 
 @media (max-width: 47.99rem) {
@@ -504,7 +560,9 @@
 
   .hm-pop,
   .hm-dialog,
-  .hm-scrim {
+  .hm-scrim,
+  .hm-slide-left,
+  .hm-slide-right {
     animation: hm-fade 80ms linear;
   }
 

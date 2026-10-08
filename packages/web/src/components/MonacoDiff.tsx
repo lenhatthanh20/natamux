@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { languageForPath } from '../lib/language'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
 import { type ResolvedTheme, uiZoom, useResolvedTheme } from '../lib/theme'
+import { useUiSize } from '../lib/ui-size'
 
 type MonacoDiffProps = {
   path: string
@@ -29,9 +30,11 @@ export default function MonacoDiff({
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
   const theme = useResolvedTheme()
+  const uiSize = useUiSize()
   const themeRef = useRef(theme)
   themeRef.current = theme
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new UI size builds the editor again, with the new font size.
   useEffect(() => {
     const element = container.current
     if (!element) {
@@ -67,7 +70,7 @@ export default function MonacoDiff({
       modifiedModel.dispose()
       editor.dispose()
     }
-  }, [path, original, modified, sideBySide])
+  }, [path, original, modified, sideBySide, uiSize])
 
   useEffect(() => {
     monaco.editor.setTheme(monacoTheme(theme))

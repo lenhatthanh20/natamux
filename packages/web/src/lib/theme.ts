@@ -4,6 +4,7 @@ export type Theme = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
 const THEME_KEY = 'helmsman.theme'
+const choiceListeners = new Set<() => void>()
 
 export function parseTheme(raw: string | null | undefined): Theme {
   return raw === 'light' || raw === 'dark' ? raw : 'system'
@@ -44,6 +45,21 @@ export function applyTheme(theme: Theme): void {
   } catch {
     // Not kept; the next visit follows the system.
   }
+  for (const listener of choiceListeners) {
+    listener()
+  }
+}
+
+// What the user picked, including "system", for the menu's check mark.
+export function useThemeChoice(): Theme {
+  return useSyncExternalStore(
+    (onChange) => {
+      choiceListeners.add(onChange)
+      return () => choiceListeners.delete(onChange)
+    },
+    savedTheme,
+    () => 'system',
+  )
 }
 
 // Call once at start: a system change moves the page only while the choice is "system".

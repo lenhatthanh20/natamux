@@ -12,13 +12,16 @@ type TerminalPaneProps = {
   header: ReactNode
   connect: (size: TerminalSize) => Promise<WebSocket>
   onClose?: () => void
+  // Kept mounted, so the shell keeps running, but not drawn.
+  hidden?: boolean
 }
 
 // One terminal with a thin title bar, sized by the grid around it.
-export function TerminalPane({ label, header, connect, onClose }: TerminalPaneProps) {
+export function TerminalPane({ label, header, connect, onClose, hidden }: TerminalPaneProps) {
   return (
     <section
       aria-label={label}
+      hidden={hidden}
       className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-terminal"
     >
       <header className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">

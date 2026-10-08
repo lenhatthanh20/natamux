@@ -872,7 +872,7 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
 
     await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
     const view = await screen.findByRole('region', { name: 'Changes of T-0002' })
@@ -904,7 +904,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     await user.click(within(sidebar).getByRole('button', { name: /Agents/ }))
     const grid = screen.getByRole('region', { name: 'Agents' })
     const pane = within(grid).getByRole('region', { name: 'Agent of T-0002' })
@@ -932,7 +932,7 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(
       true,
@@ -955,7 +955,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
     await user.click(screen.getByRole('menuitem', { name: 'Pin to the top' }))
 
