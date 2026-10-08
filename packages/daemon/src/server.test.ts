@@ -10,6 +10,7 @@ import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
+import { TemplateService } from './template-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
@@ -65,6 +66,7 @@ beforeEach(async () => {
           { number: 7, title: 'From GitHub', body: '', url: 'https://github.com/o/r/issues/7' },
         ]),
     }),
+    templates: new TemplateService({ dataDir, tasks: service }),
     bus,
     token: TOKEN,
   })
@@ -952,5 +954,42 @@ describe('GitHub issues', () => {
       payload: { numbers: [] },
     })
     expect(response.statusCode).toBe(400)
+  })
+})
+
+describe('templates', () => {
+  it('saves a template and makes a task from it', async () => {
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/templates',
+      headers: authorization,
+      payload: { name: 'Bug fix', title: 'Fix', description: 'Steps', labels: ['bug'] },
+    })
+    expect(saved.statusCode).toBe(201)
+    expect(saved.json().template.id).toBe('bug-fix')
+
+    const listed = await app.inject({ method: 'GET', url: '/templates', headers: authorization })
+    expect(listed.json().templates).toMatchObject([{ id: 'bug-fix', name: 'Bug fix' }])
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/templates/bug-fix/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the login' },
+    })
+    expect(created.statusCode).toBe(201)
+    expect(created.json().task).toMatchObject({
+      title: 'Fix the login',
+      description: 'Steps',
+      labels: ['bug'],
+    })
+
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/templates/nope/tasks',
+      headers: authorization,
+      payload: { title: 'x' },
+    })
+    expect(missing.statusCode).toBe(404)
   })
 })

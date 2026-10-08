@@ -84,7 +84,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
 | Approval gates: a task can require a human decision before it moves on | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
-| Reusable task templates and prompts | v1 |
+| Reusable task templates and prompts. Done: save a task as a template (notes, priority, labels) and pick it when adding a task; templates are markdown files in `<data dir>/templates` | v1 |
 | Import tasks from GitHub issues. Done: pick open issues (`gh issue list`) and make draft tasks; an issue is imported once | v1 |
 | Import from Linear, Jira and others | Later |
 | Search and filter by state, label, agent | MVP |

@@ -11,6 +11,7 @@ import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
+import { TemplateService } from './template-service.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
 
@@ -61,6 +62,7 @@ const app = await buildServer({
   agents,
   pullRequests,
   issues: new IssueImporter({ tasks: service, cwd: config.repoDir }),
+  templates: new TemplateService({ dataDir: config.dataDir, tasks: service }),
   bus,
   token: config.token,
 })

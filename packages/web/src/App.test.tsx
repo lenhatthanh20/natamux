@@ -60,6 +60,7 @@ function json(data: unknown, status = 200): Response {
 // A small stand-in for the daemon. It applies events with the real state machine.
 function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   let tasks = [...initial]
+  let templates: { id: string; name: string; labels: string[] }[] = []
   const calls: Call[] = []
   const log: { accepted: boolean; event: TaskEvent }[] = [
     ...initial.map((task) => ({
@@ -148,6 +149,25 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         binary: false,
         tooLarge: false,
       })
+    }
+    if (path === '/api/templates' && method === 'GET') {
+      return json({ templates })
+    }
+    if (path === '/api/templates' && method === 'POST') {
+      const input = JSON.parse(String(init?.body))
+      const template = { ...input, id: 'fix-it' }
+      templates = [template]
+      return json({ template }, 201)
+    }
+    const fromTemplate = /^\/api\/templates\/([a-z-]+)\/tasks$/.exec(path)
+    if (fromTemplate && method === 'POST') {
+      const task = makeTask({
+        id: 'T-0077',
+        title: JSON.parse(String(init?.body)).title,
+        labels: templates[0]?.labels ?? [],
+      })
+      tasks = [...tasks, task]
+      return json({ task }, 201)
     }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
@@ -634,6 +654,25 @@ describe('App', () => {
     expect(
       within(details).getByRole('button', { name: 'Start Claude Code' }).hasAttribute('disabled'),
     ).toBe(true)
+  })
+
+  it('saves a task as a template and starts a new task from it', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix it', labels: ['bug'] })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Save as template' }))
+    expect(await screen.findByText('Saved as the template "Fix it".')).toBeTruthy()
+
+    await user.selectOptions(await screen.findByLabelText('Template'), 'fix-it')
+    await user.type(screen.getByLabelText('New task title'), 'Fix the login')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+
+    expect(await within(screen.getByRole('table')).findByText('Fix the login')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {
