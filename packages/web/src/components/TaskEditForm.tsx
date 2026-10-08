@@ -79,9 +79,10 @@ export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps
         />
       </label>
       <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-1">
+        <label className="flex flex-1 flex-col gap-1" htmlFor="edit-priority">
           <span className="text-muted">Priority</span>
           <Select
+            id="edit-priority"
             value={priority}
             onChange={(event) => setPriority(event.target.value as Task['priority'])}
             className="w-full"

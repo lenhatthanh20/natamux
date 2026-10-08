@@ -157,7 +157,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
         if (item.type === 'separator') {
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: separators have nothing else to tell them apart.
-            <div key={`separator-${index}`} role="separator" className="-mx-1 my-1 h-px bg-line" />
+            <hr key={`separator-${index}`} className="-mx-1 my-1 h-px border-0 bg-line" />
           )
         }
         if (item.type === 'label') {
@@ -176,8 +176,9 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
           <button
             key={item.label}
             type="button"
-            role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
-            aria-checked={item.checked}
+            {...(item.checked === undefined
+              ? { role: 'menuitem' }
+              : { role: 'menuitemcheckbox', 'aria-checked': item.checked })}
             disabled={item.disabled}
             onClick={() => {
               onClose(true)

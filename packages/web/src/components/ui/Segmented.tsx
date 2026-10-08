@@ -53,7 +53,6 @@ export function Segmented<T extends string>({
   }
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a radiogroup of buttons styled as one control.
     <div
       ref={group}
       role="radiogroup"
