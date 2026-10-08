@@ -218,14 +218,14 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: 'Create workspace' }))
-    expect(await within(details).findByText('/work/T-0001')).toBeTruthy()
+    expect(await within(details).findByTitle('/work/T-0001')).toBeTruthy()
 
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
     await user.click(within(details).getByRole('button', { name: /Click again/ }))
 
     expect(await within(details).findByText('Workspace removed.')).toBeTruthy()
-    expect(within(details).queryByText('/work/T-0001')).toBeNull()
+    expect(within(details).queryByTitle('/work/T-0001')).toBeNull()
     expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
   })
 
