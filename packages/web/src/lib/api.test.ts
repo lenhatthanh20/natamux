@@ -164,6 +164,14 @@ describe('createApi', () => {
     )
   })
 
+  it('asks for a terminal ticket with the token', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ ticket: 'abc' }))
+
+    expect(await createApi('secret', fetchFunction).terminalTicket('T-0001')).toBe('abc')
+    expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001/terminal/ticket', method: 'POST' })
+    expect(calls[0]?.headers.get('authorization')).toBe('Bearer secret')
+  })
+
   it('reads the git graph of a task', async () => {
     const graph = {
       branch: 'helmsman/t-0001',

@@ -2,6 +2,11 @@
 # Build one with --target daemon or --target web. compose.prod.yaml builds both.
 
 FROM node:22-bookworm-slim AS base
+# python3, make and g++ build node-pty when no prebuilt binary fits. They stay out of the
+# final images.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app

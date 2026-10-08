@@ -12,6 +12,10 @@ vi.mock('./components/MonacoDiff', () => ({
     createElement('pre', { 'aria-label': `Changes in ${path}` }, `${original} -> ${modified}`),
 }))
 
+vi.mock('./components/TerminalView', () => ({
+  default: () => createElement('p', null, 'Terminal stand-in'),
+}))
+
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 'T-0001',
@@ -442,6 +446,10 @@ describe('App', () => {
     expect(within(commits).getByText('helmsman/t-0001')).toBeTruthy()
     expect(within(commits).getByText('bbbbbbb')).toBeTruthy()
     expect(within(view).getByText('1 commit ahead of main, 0 behind.')).toBeTruthy()
+
+    await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
+    expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
 
     await user.keyboard('{Escape}')
     await waitFor(() =>
