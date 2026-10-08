@@ -30,6 +30,7 @@ export const EVENT_TYPES = [
   'pr.closed',
   'ci.passed',
   'ci.failed',
+  'review.commented',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -79,6 +80,7 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'pr.closed',
   'ci.passed',
   'ci.failed',
+  'review.commented',
 ]
 
 export type AppliedEvent = {
