@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ChangeEntry, FileDiff, GitGraph, Task } from '@helmsman/core'
+import type { ChangeEntry, DiffStat, FileDiff, GitGraph, Task } from '@helmsman/core'
 import {
   addWorktree,
   commitAll,
@@ -9,6 +9,7 @@ import {
   listChanges,
   pushBranch,
   type RunGh,
+  readDiffStat,
   readFileDiff,
   readGitGraph,
   removeWorktree,
@@ -136,6 +137,22 @@ export class WorkspaceService {
       throw new FileNotChangedError(path)
     }
     return readFileDiff(workspace, change)
+  }
+
+  // The size of the work in each workspace. A workspace that git cannot read is left out.
+  async diffStats(): Promise<Record<string, DiffStat>> {
+    const base = await currentBranch(this.repoDir)
+    const withWorkspace = this.tasks.listTasks().filter((task) => task.workspace !== null)
+    const entries = await Promise.all(
+      withWorkspace.map(async (task) => {
+        try {
+          return [[task.id, await readDiffStat(task.workspace ?? '', base)] as const]
+        } catch {
+          return []
+        }
+      }),
+    )
+    return Object.fromEntries(entries.flat())
   }
 
   // The history of the task branch next to the branch that the main checkout is on.
