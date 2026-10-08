@@ -29,6 +29,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'pr.closed': 'Pull request closed',
   'ci.passed': 'Checks passed',
   'ci.failed': 'Checks failed',
+  'review.commented': 'Review comment sent to the agent',
 }
 
 export function describeEvent(type: EventType): string {

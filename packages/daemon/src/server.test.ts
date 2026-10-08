@@ -682,6 +682,37 @@ describe('terminal', () => {
     expect(bad.statusCode).toBe(400)
   })
 
+  it('sends a review comment to the agent in the first terminal', async () => {
+    await taskWithWorkspace()
+    const none = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent/message',
+      headers: authorization,
+      payload: { text: 'Rename the function' },
+    })
+    expect(none.statusCode).toBe(409)
+
+    await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
+    const sent = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent/message',
+      headers: authorization,
+      payload: { text: 'Rename the function' },
+    })
+
+    expect(sent.statusCode).toBe(200)
+    expect(ptys[0]?.written).toEqual(['\x1b[200~Rename the function\x1b[201~\r'])
+    const events = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/events',
+      headers: authorization,
+    })
+    expect(events.json().events.at(-1).event).toMatchObject({
+      type: 'review.commented',
+      payload: { text: 'Rename the function' },
+    })
+  })
+
   it('closes a socket without a valid ticket', async () => {
     await taskWithWorkspace()
     const used = await ticket()

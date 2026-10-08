@@ -19,6 +19,13 @@ export type TerminalClient = {
   send: (message: TerminalServerMessage) => void
 }
 
+export class NoTerminalError extends Error {
+  constructor(taskId: string) {
+    super(`${taskId} has no open terminal. Start the agent first`)
+    this.name = 'NoTerminalError'
+  }
+}
+
 export class TerminalLimitError extends Error {
   constructor(limit: number) {
     super(`At most ${limit} terminals can be open. Close one first.`)
@@ -128,6 +135,16 @@ export class TerminalService {
   // Types a command line into the task's first shell, starting the shell first when needed.
   run(taskId: string, line: string, size: TerminalSize = DEFAULT_SIZE): void {
     this.ensure(taskId, MAIN_TERMINAL, size).pty.write(`${line}\r`)
+  }
+
+  // Pastes text into the first shell and presses Enter, so the agent there takes it as its next
+  // prompt. Bracketed paste keeps line breaks from sending the text early.
+  paste(taskId: string, text: string): void {
+    const session = this.sessions.get(sessionKey(taskId, MAIN_TERMINAL))
+    if (!session) {
+      throw new NoTerminalError(taskId)
+    }
+    session.pty.write(`\x1b[200~${text}\x1b[201~\r`)
   }
 
   input(taskId: string, data: string, terminal = MAIN_TERMINAL): void {
