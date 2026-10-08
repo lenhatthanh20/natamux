@@ -20,6 +20,14 @@ import {
   taskTemplateSchema,
 } from '@helmsman/core'
 
+export type NewWorkspaceInput = {
+  title: string
+  repo?: string
+  base?: string
+  agent?: string
+  prompt?: string
+}
+
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
 
 export type SendEventResult = {
@@ -126,6 +134,12 @@ export function createApi(
 
     async createTask(title: string, parentId?: string, repo?: string): Promise<Task> {
       const body = asRecord(await request('POST', '/tasks', { title, parentId, repo }))
+      return taskSchema.parse(body.task)
+    },
+
+    // A task, its worktree and, when one is named, its agent, in one step.
+    async newWorkspace(input: NewWorkspaceInput): Promise<Task> {
+      const body = asRecord(await request('POST', '/workspaces', input))
       return taskSchema.parse(body.task)
     },
 
