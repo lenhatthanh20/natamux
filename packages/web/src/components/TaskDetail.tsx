@@ -15,7 +15,9 @@ type TaskDetailProps = {
   feedback: string | null
   loadEvents: () => Promise<StoredEvent[]>
   onAction: (action: TaskAction) => void
-  onCreateWorkspace: () => void
+  onCreateWorkspace: (base?: string) => void
+  // Local branches a workspace can start from, and the one the checkout is on.
+  branches?: { branches: string[]; current: string | null }
   onRemoveWorkspace: () => void
   onViewChanges: () => void
   onStartAgent: () => void
@@ -44,6 +46,7 @@ export function TaskDetail({
   loadEvents,
   onAction,
   onCreateWorkspace,
+  branches,
   onRemoveWorkspace,
   onViewChanges,
   onStartAgent,
@@ -54,6 +57,7 @@ export function TaskDetail({
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
+  const [base, setBase] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const actions = actionsFor(task.state)
@@ -189,11 +193,28 @@ export function TaskDetail({
           {task.workspace === null ? (
             <span className="flex flex-wrap items-center gap-2">
               <span>-</span>
+              {!isFinished && branches !== undefined && branches.branches.length > 1 && (
+                <select
+                  value={base}
+                  onChange={(event) => setBase(event.target.value)}
+                  aria-label="Start from branch"
+                  className="rounded-md border border-line bg-canvas px-1 py-1"
+                >
+                  <option value="">{branches.current ?? 'HEAD'}</option>
+                  {branches.branches
+                    .filter((name) => name !== branches.current)
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              )}
               {!isFinished && (
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={onCreateWorkspace}
+                  onClick={() => onCreateWorkspace(base === '' ? undefined : base)}
                   className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
                 >
                   Create workspace
