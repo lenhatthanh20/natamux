@@ -72,6 +72,16 @@ services:
       HELMSMAN_DAEMON_URL: http://daemon:4317
     ports:
       - "127.0.0.1:5173:5173"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5173/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
     depends_on:
       daemon:
         condition: service_healthy
