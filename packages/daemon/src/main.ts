@@ -2,9 +2,11 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
+import { spawnShell } from './pty.js'
 import { buildServer } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
+import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
 
 const config = loadConfig(process.env, process.cwd())
@@ -20,7 +22,12 @@ const workspaces = new WorkspaceService({
   worktreesDir: config.worktreesDir,
 })
 
-const app = await buildServer({ service, workspaces, bus, token: config.token })
+const terminals = new TerminalService({
+  spawn: spawnShell,
+  workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
+})
+
+const app = await buildServer({ service, workspaces, terminals, bus, token: config.token })
 await app.listen({ host: config.host, port: config.port })
 
 console.log(`Helmsman daemon listening on http://${config.host}:${config.port}`)
@@ -31,6 +38,7 @@ if (config.tokenWasGenerated) {
 }
 
 async function shutdown(): Promise<void> {
+  terminals.closeAll()
   await app.close()
   index.close()
   process.exit(0)

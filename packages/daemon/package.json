@@ -23,6 +23,7 @@
     "@helmsman/core": "workspace:*",
     "fastify": "^5.12.5",
     "gray-matter": "^4.0.3",
+    "node-pty": "^1.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
