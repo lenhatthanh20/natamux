@@ -37,11 +37,11 @@ hook() {
 
 tool() {
   local name=$1 key=$2 value=$3
-  hook PreToolUse ",\"tool_name\":$(json "$name"),\"tool_input\":{$(json "$key"):$(json "$value")}}"
+  hook PreToolUse ",\"tool_name\":$(json "$name"),\"tool_input\":{$(json "$key"):$(json "$value")}"
   if [ "$key" = command ]; then
     printf '\e[90m●\e[0m \e[1m%s\e[0m(%s)\n' "$name" "$value"
   else
-    printf '\e[90m●\e[0m \e[1m%s\e[0m %s\n' "$name" "$value"
+    printf '\e[90m●\e[0m \e[1m%s\e[0m %s\n' "$name" "${value#"$PWD"/}"
   fi
 }
 
