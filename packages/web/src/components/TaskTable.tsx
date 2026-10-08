@@ -62,9 +62,9 @@ export function TaskTable({
             <th>Agent</th>
             <th>Branch</th>
             <th className="text-right">Changes</th>
-            <th>Pull request</th>
+            <th className="whitespace-nowrap">Pull request</th>
             <th className="text-right">Age</th>
-            <th className="text-right">Last activity</th>
+            <th className="text-right whitespace-nowrap">Last activity</th>
           </tr>
         </thead>
         <tbody>
@@ -102,7 +102,7 @@ export function TaskTable({
                   {isQuiet(task, now) && <span className="font-medium text-signal">quiet</span>}
                 </span>
               </td>
-              <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-muted">{task.agent ?? '-'}</td>
               <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-muted">
                 {task.branch ?? '-'}
               </td>
