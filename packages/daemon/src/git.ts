@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { realpath, readFile, stat } from 'node:fs/promises'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { ChangeEntry, ChangeStatus, FileDiff } from '@helmsman/core'
