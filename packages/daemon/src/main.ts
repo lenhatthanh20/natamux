@@ -8,6 +8,7 @@ import { IssueImporter } from './issue-importer.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer } from './server.js'
+import { setupCommand } from './setup-script.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { TerminalService } from './terminal-service.js'
@@ -24,6 +25,12 @@ const workspaces = new WorkspaceService({
   tasks: service,
   repoDir: config.repoDir,
   worktreesDir: config.worktreesDir,
+  onCreated: (task) => {
+    const command = task.workspace === null ? null : setupCommand(task.workspace)
+    if (command !== null) {
+      terminals.run(task.id, command)
+    }
+  },
 })
 
 // Shells run on the same machine as the daemon, so they reach it on loopback. They get the token
