@@ -1,17 +1,22 @@
-import type { ChangeEntry, FileDiff, Task } from '@helmsman/core'
+import type { ChangeEntry, FileDiff, GitGraph as GitGraphData, Task } from '@helmsman/core'
 import { useQuery } from '@tanstack/react-query'
 import { lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
+import { GitGraph } from './GitGraph'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
 
 const REFRESH_MS = 10_000
 
+type Tab = 'changes' | 'history'
+
 type ChangesViewProps = {
   task: Task
+  now: Date
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
+  loadGraph: () => Promise<GitGraphData>
   onClose: () => void
 }
 
@@ -43,7 +48,15 @@ function FileBody({ file, sideBySide }: { file: FileDiff; sideBySide: boolean })
   )
 }
 
-export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesViewProps) {
+export function ChangesView({
+  task,
+  now,
+  loadChanges,
+  loadFile,
+  loadGraph,
+  onClose,
+}: ChangesViewProps) {
+  const [tab, setTab] = useState<Tab>('changes')
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [sideBySide, setSideBySide] = useState(true)
 
@@ -63,14 +76,28 @@ export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesVie
       }
       return loadFile(current.path)
     },
-    enabled: current !== null,
+    enabled: tab === 'changes' && current !== null,
+    refetchInterval: REFRESH_MS,
+  })
+
+  const graph = useQuery({
+    queryKey: ['graph', task.id],
+    queryFn: loadGraph,
+    enabled: tab === 'history',
     refetchInterval: REFRESH_MS,
   })
 
   const refresh = () => {
     changes.refetch()
-    file.refetch()
+    if (tab === 'history') {
+      graph.refetch()
+    } else {
+      file.refetch()
+    }
   }
+
+  const tabClass =
+    'rounded-md px-3 py-1.5 font-medium aria-selected:bg-accent/15 aria-selected:text-ink text-muted hover:text-ink'
 
   return (
     <section aria-label={`Changes of ${task.id}`} className="flex flex-col gap-4">
@@ -90,14 +117,36 @@ export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesVie
             {changes.data ? countLabel(list.length) : 'Reading changes.'}
           </p>
         </div>
-        <button
-          type="button"
-          aria-pressed={sideBySide}
-          onClick={() => setSideBySide((value) => !value)}
-          className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
-        >
-          {sideBySide ? 'Side by side' : 'Inline'}
-        </button>
+        <div role="tablist" aria-label="View" className="flex gap-1">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'changes'}
+            onClick={() => setTab('changes')}
+            className={tabClass}
+          >
+            Changes
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'history'}
+            onClick={() => setTab('history')}
+            className={tabClass}
+          >
+            History
+          </button>
+        </div>
+        {tab === 'changes' && (
+          <button
+            type="button"
+            aria-pressed={sideBySide}
+            onClick={() => setSideBySide((value) => !value)}
+            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+          >
+            {sideBySide ? 'Side by side' : 'Inline'}
+          </button>
+        )}
         <button
           type="button"
           onClick={refresh}
@@ -107,14 +156,22 @@ export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesVie
         </button>
       </header>
 
-      {changes.isError && <p role="alert">{changes.error.message}</p>}
-      {changes.data && list.length === 0 && (
+      {tab === 'history' && (
+        <div role="tabpanel" aria-label="History">
+          {graph.isPending && <p className="text-muted">Reading the history.</p>}
+          {graph.isError && <p role="alert">{graph.error.message}</p>}
+          {graph.data && <GitGraph graph={graph.data} now={now} />}
+        </div>
+      )}
+
+      {tab === 'changes' && changes.isError && <p role="alert">{changes.error.message}</p>}
+      {tab === 'changes' && changes.data && list.length === 0 && (
         <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
           No changes. The workspace matches its last commit.
         </p>
       )}
 
-      {list.length > 0 && (
+      {tab === 'changes' && list.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
           <ul
             aria-label="Changed files"

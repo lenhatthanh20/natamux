@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type { ChangeEntry, ChangeStatus, FileDiff } from '@helmsman/core'
+import type { ChangeEntry, ChangeStatus, FileDiff, GitGraph, GraphCommit } from '@helmsman/core'
 
 const execFileAsync = promisify(execFile)
 
@@ -217,6 +217,120 @@ export async function readFileDiff(worktreePath: string, change: ChangeEntry): P
     modified: modifiedBuffer?.toString('utf8') ?? null,
     binary: false,
     tooLarge: false,
+  }
+}
+
+// The graph shows at most this many commits. Older ones are left out.
+export const MAX_GRAPH_COMMITS = 200
+
+const FIELD = '\x1f'
+const LOG_FORMAT = ['%H', '%P', '%an', '%aI', '%D', '%s'].join('%x1f')
+
+// The branch a checkout is on, or null when HEAD is detached.
+export async function currentBranch(cwd: string): Promise<string | null> {
+  try {
+    const name = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).trim()
+    return name === '' ? null : name
+  } catch (error) {
+    if (error instanceof GitError) {
+      return null
+    }
+    throw error
+  }
+}
+
+// "HEAD -> helmsman/t-0001, tag: v1, main" becomes ["helmsman/t-0001", "tag: v1", "main"].
+export function parseRefs(decoration: string): string[] {
+  return decoration
+    .split(', ')
+    .map((ref) => ref.trim())
+    .filter((ref) => ref !== '' && ref !== 'HEAD')
+    .map((ref) => (ref.startsWith('HEAD -> ') ? ref.slice('HEAD -> '.length) : ref))
+}
+
+// Reads `git log -z` in LOG_FORMAT: one NUL-ended record per commit, fields split by FIELD.
+export function parseLog(output: string, isOnBranch: (hash: string) => boolean): GraphCommit[] {
+  const commits: GraphCommit[] = []
+  for (const record of output.split('\0')) {
+    const fields = record.replace(/^\n/, '').split(FIELD)
+    const [hash, parents, author, date, decoration, ...subject] = fields
+    if (!hash || fields.length < 6) {
+      continue
+    }
+    commits.push({
+      hash,
+      parents: parents ? parents.split(' ') : [],
+      author: author ?? '',
+      date: date ?? '',
+      subject: subject.join(FIELD),
+      refs: parseRefs(decoration ?? ''),
+      onBranch: isOnBranch(hash),
+    })
+  }
+  return commits
+}
+
+function lines(output: string): string[] {
+  return output.split('\n').filter((line) => line !== '')
+}
+
+// The history of the worktree's branch and of `base`, newest first, in the order git draws a graph.
+export async function readGitGraph(
+  worktreePath: string,
+  base: string | null,
+  limit = MAX_GRAPH_COMMITS,
+): Promise<GitGraph> {
+  const head = (await git(worktreePath, ['rev-parse', 'HEAD'])).trim()
+  const branch = await currentBranch(worktreePath)
+  const compareTo = base === branch ? null : base
+
+  const log = await git(worktreePath, [
+    'log',
+    '-z',
+    '--topo-order',
+    `--max-count=${limit + 1}`,
+    `--format=${LOG_FORMAT}`,
+    'HEAD',
+    ...(compareTo === null ? [] : [compareTo]),
+    '--',
+  ])
+
+  let ahead: number | null = null
+  let behind: number | null = null
+  let isOnBranch = (_hash: string) => true
+  if (compareTo !== null) {
+    const counts = await git(worktreePath, [
+      'rev-list',
+      '--left-right',
+      '--count',
+      `HEAD...${compareTo}`,
+      '--',
+    ])
+    const [left, right] = counts.trim().split(/\s+/)
+    ahead = Number(left)
+    behind = Number(right)
+    const own = new Set(
+      lines(
+        await git(worktreePath, [
+          'rev-list',
+          `--max-count=${limit + 1}`,
+          `${compareTo}..HEAD`,
+          '--',
+        ]),
+      ),
+    )
+    isOnBranch = (hash) => own.has(hash)
+  }
+
+  const commits = parseLog(log, isOnBranch)
+  return {
+    branch,
+    head,
+    base: compareTo,
+    ahead,
+    behind,
+    commits: commits.slice(0, limit),
+    truncated: commits.length > limit,
   }
 }
 
