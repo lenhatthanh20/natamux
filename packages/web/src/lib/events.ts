@@ -19,6 +19,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'state.overridden': 'State set by hand',
   'workspace.created': 'Workspace created',
   'workspace.removed': 'Workspace removed',
+  'agent.active': 'Agent is working',
 }
 
 export function describeEvent(type: EventType): string {

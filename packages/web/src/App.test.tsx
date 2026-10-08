@@ -46,19 +46,22 @@ function json(data: unknown, status = 200): Response {
 }
 
 // A small stand-in for the daemon. It applies events with the real state machine.
-function installDaemon(initial: Task[]) {
+function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   let tasks = [...initial]
   const calls: Call[] = []
-  const log: { accepted: boolean; event: TaskEvent }[] = initial.map((task) => ({
-    accepted: true,
-    event: {
-      taskId: task.id,
-      source: 'system',
-      type: 'task.created',
-      at: task.createdAt,
-      payload: {},
-    },
-  }))
+  const log: { accepted: boolean; event: TaskEvent }[] = [
+    ...initial.map((task) => ({
+      accepted: true,
+      event: {
+        taskId: task.id,
+        source: 'system' as const,
+        type: 'task.created' as const,
+        at: task.createdAt,
+        payload: {},
+      },
+    })),
+    ...extraEvents.map((event) => ({ accepted: true, event })),
+  ]
 
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
@@ -128,7 +131,13 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
 }
 
 const reviewTask = makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'review' })
-const runningTask = makeTask({ id: 'T-0002', title: 'Add export', state: 'running' })
+// A running task is "quiet" after ten minutes, so this one must be recent whenever the tests run.
+const runningTask = makeTask({
+  id: 'T-0002',
+  title: 'Add export',
+  state: 'running',
+  updatedAt: new Date().toISOString(),
+})
 
 beforeEach(() => {
   window.localStorage.clear()
@@ -254,12 +263,81 @@ describe('App', () => {
     })
   })
 
+  it('counts a running task that has gone quiet among those that need the user', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0003',
+        title: 'Silent agent',
+        state: 'running',
+        updatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    const heading = await screen.findByRole('heading', { name: '1 task needs you' })
+    const strip = heading.closest('section')
+    expect(strip?.textContent).toContain('quiet')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Silent agent/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0003' })
+    expect(within(details).getByText(/No sign of life for/)).toBeTruthy()
+  })
+
+  it('does not count a running task that is quiet for less than ten minutes', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0003',
+        title: 'Busy agent',
+        state: 'running',
+        updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+  })
+
+  it('does not list "agent is working" lines in the activity of a task', async () => {
+    installDaemon(
+      [reviewTask],
+      [
+        {
+          taskId: 'T-0001',
+          source: 'agent',
+          type: 'agent.active',
+          at: '2026-10-08T09:30:00.000Z',
+          payload: {},
+        },
+      ],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const activity = await within(details).findByRole('region', { name: 'Activity' })
+
+    expect(await within(activity).findByText(/Task created/)).toBeTruthy()
+    expect(within(activity).queryByText(/Agent is working/)).toBeNull()
+  })
+
   it('shows the workspace of a task in its details', async () => {
     installDaemon([
       makeTask({
         id: 'T-0001',
         title: 'Fix timezone bug',
         state: 'running',
+        updatedAt: new Date().toISOString(),
         workspace: '/work/.helmsman/worktrees/T-0001',
         branch: 'helmsman/t-0001-fix-timezone-bug',
       }),

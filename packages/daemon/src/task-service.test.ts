@@ -113,6 +113,88 @@ describe('getTask and listEvents', () => {
   })
 })
 
+describe('recordActivity', () => {
+  let clock: Date
+  let activityService: TaskService
+  let seen: DaemonMessage[]
+
+  const later = (seconds: number) => {
+    clock = new Date(clock.getTime() + seconds * 1000)
+  }
+
+  beforeEach(() => {
+    clock = new Date('2026-10-08T09:00:00.000Z')
+    seen = []
+    const bus = new EventBus()
+    bus.subscribe((message) => seen.push(message))
+    activityService = new TaskService({ dataDir, index, bus, now: () => clock })
+  })
+
+  function startedTask() {
+    const task = activityService.createTask({ title: 'Fix it' })
+    activityService.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    activityService.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    return task
+  }
+
+  it('moves the time of the last update of a running task and logs the sign of life', () => {
+    const task = startedTask()
+    later(31)
+
+    expect(activityService.recordActivity(task.id)).toBe(true)
+
+    expect(activityService.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
+    expect(activityService.listEvents(task.id).at(-1)).toMatchObject({
+      accepted: true,
+      event: { type: 'agent.active', source: 'agent', at: '2026-10-08T09:00:31.000Z' },
+    })
+    expect(seen.at(-1)).toMatchObject({ kind: 'task.updated', accepted: true })
+  })
+
+  it('does not change the state of the task', () => {
+    const task = startedTask()
+    later(60)
+    activityService.recordActivity(task.id)
+    expect(activityService.getTask(task.id).state).toBe('running')
+  })
+
+  it('writes nothing again before the interval has passed', () => {
+    const task = startedTask()
+    later(31)
+    activityService.recordActivity(task.id)
+    const count = activityService.listEvents(task.id).length
+
+    later(10)
+
+    expect(activityService.recordActivity(task.id)).toBe(false)
+    expect(activityService.listEvents(task.id)).toHaveLength(count)
+  })
+
+  it('uses the interval it is given', () => {
+    const task = startedTask()
+    later(5)
+
+    expect(activityService.recordActivity(task.id, 60_000)).toBe(false)
+    expect(activityService.recordActivity(task.id, 1000)).toBe(true)
+  })
+
+  it.each(['draft', 'ready', 'review'])('does nothing for a task that is %s', (state) => {
+    const task = activityService.createTask({ title: 'Fix it' })
+    activityService.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: state },
+    })
+    later(3600)
+
+    expect(activityService.recordActivity(task.id)).toBe(false)
+  })
+
+  it('throws TaskNotFoundError for an unknown task', () => {
+    expect(() => activityService.recordActivity('T-0099')).toThrow(TaskNotFoundError)
+  })
+})
+
 describe('init', () => {
   it('rebuilds the index from the task files', () => {
     service.createTask({ title: 'First' })
