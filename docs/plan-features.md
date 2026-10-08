@@ -80,7 +80,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Task fields: id, title, description, state, priority, labels, agent, workspace, branch, PR link, created and updated time | MVP |
 | States: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` | MVP |
 | Create a task from the app, the CLI, or an agent | MVP |
-| Subtasks (one level) | v1 |
+| Subtasks (one level). Done: add them in the details of a task, which counts how many are done; a subtask shows its parent | v1 |
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
 | Approval gates: a task can require a human decision before it moves on | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |

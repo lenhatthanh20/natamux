@@ -138,6 +138,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  const subtaskMutation = useMutation({
+    mutationFn: ({ parentId, title }: { parentId: string; title: string }) =>
+      api.createTask(title, parentId),
+    onMutate: () => setFeedback(null),
+    onSuccess: (task) => mergeTask(task),
+    onError: (error) => setFeedback(error.message),
+  })
+
   const editMutation = useMutation({
     mutationFn: ({ taskId, changes }: { taskId: string; changes: TaskChanges }) =>
       api.updateTask(taskId, changes),
@@ -514,6 +522,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onCheckPullRequest={() => pullRequestMutation.mutate(selectedTask.id)}
                   waitingFor={waitingOn(selectedTask, tasks)}
                   onSaveTemplate={() => templateMutation.mutate(selectedTask)}
+                  subtasks={tasks.filter((task) => task.parentId === selectedTask.id)}
+                  onAddSubtask={(title) =>
+                    subtaskMutation.mutate({ parentId: selectedTask.id, title })
+                  }
+                  onSelectTask={chooseTask}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
