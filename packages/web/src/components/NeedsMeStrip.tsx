@@ -21,11 +21,11 @@ export function NeedsMeStrip({ waiting, now, currentId, onOpen }: NeedsMeStripPr
     <section
       aria-labelledby="needs-me-heading"
       data-waiting={waiting.length > 0}
-      className="group/needs flex flex-col gap-0.5 rounded-md p-1 data-[waiting=true]:bg-signal/10 data-[waiting=true]:ring-1 data-[waiting=true]:ring-signal/40"
+      className="group/needs flex flex-col gap-0.5 rounded-lg p-1 data-[waiting=true]:bg-signal-soft data-[waiting=true]:ring-1 data-[waiting=true]:ring-signal/25"
     >
       <h2
         id="needs-me-heading"
-        className="px-2 py-1 text-xs font-semibold text-muted group-data-[waiting=true]/needs:text-ink"
+        className="px-2 py-1 text-xs font-semibold text-muted group-data-[waiting=true]/needs:text-signal"
       >
         {headline}
       </h2>

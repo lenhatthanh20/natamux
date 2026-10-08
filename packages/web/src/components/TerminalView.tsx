@@ -8,7 +8,8 @@ import { parseTerminalMessage } from '../lib/terminal'
 type Status = 'connecting' | 'open' | 'ended' | 'error'
 
 // The same stack as --font-mono in styles.css. xterm needs the names, not a CSS variable.
-const MONO_FONT = 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace'
+const MONO_FONT =
+  '"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace'
 
 type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
@@ -19,7 +20,7 @@ function themeFromPage(): ITheme {
   const style = getComputedStyle(document.documentElement)
   const token = (name: string) => style.getPropertyValue(name).trim()
   return {
-    background: token('--surface'),
+    background: token('--terminal'),
     foreground: token('--ink'),
     cursor: token('--accent'),
     selectionBackground: `${token('--accent')}55`,
@@ -110,6 +111,19 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     observer.observe(element)
     terminal.focus()
 
+    // The web font may still be loading when the terminal measures its cells. Setting the font
+    // again makes it measure with the loaded one.
+    document.fonts
+      ?.load('13px "Geist Mono Variable"')
+      .then(() => {
+        if (!disposed) {
+          terminal.options.fontFamily = 'monospace'
+          terminal.options.fontFamily = MONO_FONT
+          fit.fit()
+        }
+      })
+      .catch(() => undefined)
+
     return () => {
       disposed = true
       observer.disconnect()
@@ -140,7 +154,7 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       <div
         ref={container}
         title="Terminal"
-        className="min-h-[16rem] flex-1 overflow-hidden rounded-md border border-line bg-surface p-2"
+        className="min-h-[16rem] flex-1 overflow-hidden rounded-lg border border-line bg-terminal p-3"
       />
     </div>
   )

@@ -25,7 +25,7 @@ export function NoWorkspace({ task, busy, canStart, onStartAgent }: NoWorkspaceP
           type="button"
           disabled={busy}
           onClick={onStartAgent}
-          className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
         >
           Start Claude Code
         </button>
