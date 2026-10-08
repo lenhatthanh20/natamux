@@ -9,6 +9,11 @@ describe('loadConfig', () => {
     expect(config.dataDir).toBe('/work/repo/.helmsman')
   })
 
+  it('listens on all interfaces only when HELMSMAN_HOST says so', () => {
+    expect(loadConfig({ HELMSMAN_HOST: '0.0.0.0' }, '/work/repo').host).toBe('0.0.0.0')
+    expect(loadConfig({ HELMSMAN_HOST: '  ' }, '/work/repo').host).toBe(LOOPBACK_HOST)
+  })
+
   it('generates a token when none is configured', () => {
     const first = loadConfig({}, '/work/repo')
     const second = loadConfig({}, '/work/repo')
