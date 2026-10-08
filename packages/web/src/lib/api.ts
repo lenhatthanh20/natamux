@@ -12,8 +12,10 @@ import {
   githubIssueSchema,
   type Task,
   type TaskEvent,
+  type TaskTemplate,
   taskEventSchema,
   taskSchema,
+  taskTemplateSchema,
 } from '@helmsman/core'
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -212,6 +214,26 @@ export function createApi(
       return Object.fromEntries(
         Object.entries(stats).map(([taskId, stat]) => [taskId, diffStatSchema.parse(stat)]),
       )
+    },
+
+    async listTemplates(): Promise<TaskTemplate[]> {
+      const body = asRecord(await request('GET', '/templates'))
+      if (!Array.isArray(body.templates)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.templates.map((template) => taskTemplateSchema.parse(template))
+    },
+
+    async saveTemplate(template: Omit<TaskTemplate, 'id'>): Promise<TaskTemplate> {
+      const body = asRecord(await request('POST', '/templates', template))
+      return taskTemplateSchema.parse(body.template)
+    },
+
+    async createTaskFromTemplate(templateId: string, title: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/templates/${encodeURIComponent(templateId)}/tasks`, { title }),
+      )
+      return taskSchema.parse(body.task)
     },
 
     async listIssues(): Promise<GitHubIssue[]> {

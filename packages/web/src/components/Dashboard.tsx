@@ -74,8 +74,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.error, onUnauthorized])
 
+  const templatesQuery = useQuery({ queryKey: ['templates'], queryFn: () => api.listTemplates() })
+  const [templateId, setTemplateId] = useState('')
+
   const createMutation = useMutation({
-    mutationFn: (title: string) => api.createTask(title),
+    mutationFn: (title: string) =>
+      templateId === '' ? api.createTask(title) : api.createTaskFromTemplate(templateId, title),
     onSuccess: (task) => {
       mergeTask(task)
       select(task.id)
@@ -113,6 +117,23 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onSuccess: ({ task, message }) => {
       mergeTask(task)
       setFeedback(message)
+    },
+    onError: (error) => setFeedback(error.message),
+  })
+
+  const templateMutation = useMutation({
+    mutationFn: (task: Task) =>
+      api.saveTemplate({
+        name: task.title,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        labels: task.labels,
+      }),
+    onMutate: () => setFeedback(null),
+    onSuccess: (template) => {
+      templatesQuery.refetch()
+      setFeedback(`Saved as the template "${template.name}".`)
     },
     onError: (error) => setFeedback(error.message),
   })
@@ -268,6 +289,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2">
           <h1 className="mr-2 text-base font-semibold">Helmsman</h1>
           <form onSubmit={submitNewTask} className="flex min-w-[14rem] flex-1 gap-2">
+            {(templatesQuery.data?.length ?? 0) > 0 && (
+              <select
+                value={templateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+                aria-label="Template"
+                className="rounded-md border border-line bg-canvas px-2 py-1.5"
+              >
+                <option value="">No template</option>
+                {templatesQuery.data?.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               ref={newTaskRef}
               value={newTitle}
@@ -477,6 +513,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onEdit={(changes) => editMutation.mutate({ taskId: selectedTask.id, changes })}
                   onCheckPullRequest={() => pullRequestMutation.mutate(selectedTask.id)}
                   waitingFor={waitingOn(selectedTask, tasks)}
+                  onSaveTemplate={() => templateMutation.mutate(selectedTask)}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
