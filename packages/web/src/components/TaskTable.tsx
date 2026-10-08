@@ -28,7 +28,7 @@ function DiffSize({ stat }: { stat: DiffStat | undefined }) {
   }
   const files = stat.files === 1 ? '1 file' : `${stat.files} files`
   return (
-    <span title={files}>
+    <span data-tip={files}>
       <span className="text-add">+{stat.added}</span>{' '}
       <span className="text-remove">−{stat.removed}</span>
     </span>
@@ -125,7 +125,7 @@ export function TaskTable({
                   </span>
                 )}
               </td>
-              <td className="px-3 py-2 text-right text-muted" title={task.createdAt}>
+              <td className="px-3 py-2 text-right text-muted" data-tip={task.createdAt}>
                 {formatAge(task.createdAt, now).replace(' ago', '')}
               </td>
               <td className="px-3 py-2 text-right text-muted">{formatAge(task.updatedAt, now)}</td>

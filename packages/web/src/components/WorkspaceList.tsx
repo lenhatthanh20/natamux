@@ -2,7 +2,8 @@ import type { DiffStat, Repo, Task } from '@helmsman/core'
 import { ChevronRight, FolderGit2, FolderPlus, Pin, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { workspaceGroups } from '../lib/workspace-groups'
-import { iconButton, sectionTitle } from './ui/styles'
+import { IconButton } from './ui/IconButton'
+import { sectionTitle } from './ui/styles'
 import { WorkspaceRow } from './WorkspaceRow'
 
 type WorkspaceListProps = {
@@ -75,24 +76,14 @@ export function WorkspaceList({
         <h2 id="workspaces-heading" className={`flex-1 ${sectionTitle}`}>
           Workspaces
         </h2>
-        <button
-          type="button"
-          aria-label="Add a repository"
-          title="Add a repository"
-          onClick={onAddRepo}
-          className={`${iconButton} size-6`}
-        >
-          <FolderPlus size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          aria-label="Add a workspace"
-          title="Add a workspace (c)"
+        <IconButton label="Add a repository" icon={FolderPlus} size="xs" onClick={onAddRepo} />
+        <IconButton
+          label="Add a workspace"
+          icon={Plus}
+          size="xs"
+          shortcut="c"
           onClick={() => onNewWorkspace()}
-          className={`${iconButton} size-6`}
-        >
-          <Plus size={15} aria-hidden="true" />
-        </button>
+        />
       </div>
 
       {pinned.length > 0 && (
@@ -125,15 +116,13 @@ export function WorkspaceList({
                 <span className="min-w-0 truncate font-medium">{repo.name}</span>
                 <span className="text-xs text-muted">{open.length}</span>
               </button>
-              <button
-                type="button"
-                aria-label={`New workspace in ${repo.name}`}
-                title={`New workspace in ${repo.name}`}
+              <IconButton
+                label={`New workspace in ${repo.name}`}
+                icon={Plus}
+                size="xs"
                 onClick={() => onNewWorkspace(repo.id)}
-                className={`${iconButton} size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100`}
-              >
-                <Plus size={14} aria-hidden="true" />
-              </button>
+                className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+              />
             </div>
             {!isCollapsed && (
               <ul className="flex flex-col">

@@ -2,7 +2,7 @@ import type { GitHubIssue, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Dialog } from './ui/Dialog'
-import { button } from './ui/styles'
+import { Button } from './ui/Button'
 
 type IssueImportProps = {
   // The repository the issues come from; it keeps the lists of repositories apart.
@@ -50,17 +50,18 @@ export function IssueImport({
       onClose={onClose}
       footer={
         <>
-          <button type="button" onClick={onClose} className={button('ghost')}>
+          <Button variant="ghost" size="md" onClick={onClose}>
             Close
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            shortcut="Mod+Enter"
             disabled={count === 0 || importing.isPending}
             onClick={() => importing.mutate()}
-            className={button('primary')}
           >
             {count === 1 ? 'Import 1 issue' : `Import ${count} issues`}
-          </button>
+          </Button>
         </>
       }
     >

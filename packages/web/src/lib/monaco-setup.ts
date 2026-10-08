@@ -44,18 +44,54 @@ monacoTypeScript.javascriptDefaults.setDiagnosticsOptions(noDiagnostics)
 export const LIGHT_THEME = 'helmsman-light'
 export const DARK_THEME = 'helmsman-dark'
 
-// The background of the editor is the background of the panels around it.
+// Colors from the design tokens: the editor sits on the canvas, and the diff uses green and red
+// washes that keep the text readable.
 monaco.editor.defineTheme(LIGHT_THEME, {
   base: 'vs',
   inherit: true,
   rules: [],
-  colors: { 'editor.background': '#ffffff' },
+  colors: {
+    'editor.background': '#ffffff',
+    'editorGutter.background': '#ffffff',
+    'editorLineNumber.foreground': '#8a9099',
+    'editorLineNumber.activeForeground': '#3f444c',
+    'editor.lineHighlightBackground': '#00000000',
+    'diffEditor.insertedLineBackground': '#2ea0431f',
+    'diffEditor.removedLineBackground': '#f851491f',
+    'diffEditor.insertedTextBackground': '#2ea04347',
+    'diffEditor.removedTextBackground': '#f8514947',
+    'diffEditorGutter.insertedLineBackground': '#2ea04333',
+    'diffEditorGutter.removedLineBackground': '#f8514933',
+    'diffEditor.unchangedRegionBackground': '#f6f7f9',
+    'scrollbarSlider.background': '#14181f33',
+    'scrollbarSlider.hoverBackground': '#14181f5c',
+    focusBorder: '#2f5fe0',
+  },
 })
 monaco.editor.defineTheme(DARK_THEME, {
   base: 'vs-dark',
   inherit: true,
   rules: [],
-  colors: { 'editor.background': '#101e2d' },
+  colors: {
+    'editor.background': '#111214',
+    'editorGutter.background': '#111214',
+    'editorLineNumber.foreground': '#6b6f78',
+    'editorLineNumber.activeForeground': '#b4b7be',
+    'editor.lineHighlightBackground': '#00000000',
+    'diffEditor.insertedLineBackground': '#2ea04329',
+    'diffEditor.removedLineBackground': '#f8514929',
+    'diffEditor.insertedTextBackground': '#2ea04352',
+    'diffEditor.removedTextBackground': '#f8514952',
+    'diffEditorGutter.insertedLineBackground': '#2ea0434d',
+    'diffEditorGutter.removedLineBackground': '#f851494d',
+    'diffEditor.diagonalFill': '#ffffff0d',
+    'diffEditor.unchangedRegionBackground': '#16171a',
+    'scrollbarSlider.background': '#ffffff24',
+    'scrollbarSlider.hoverBackground': '#ffffff42',
+    'editorWidget.background': '#1c1d21',
+    'editorWidget.border': '#363940',
+    focusBorder: '#7aa2ff',
+  },
 })
 
 export { monaco }
