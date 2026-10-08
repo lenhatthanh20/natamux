@@ -733,6 +733,32 @@ describe('App', () => {
     expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
   })
 
+  it('compares tries and keeps one, cancelling the others', async () => {
+    const group = 'tries-t-0001'
+    const { calls } = installDaemon([
+      makeTask({ id: 'T-0001', title: 'Speed up', labels: [group], state: 'review' }),
+      makeTask({ id: 'T-0002', title: 'Speed up (try 2)', labels: [group], state: 'review' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /T-0002\s*Speed up \(try 2\)/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0002' })
+    const tries = within(details).getByRole('region', { name: 'Tries' })
+    const keep = within(tries).getAllByRole('button', { name: 'Keep this one' })[1] as HTMLElement
+    await user.click(keep)
+    await user.click(within(tries).getByRole('button', { name: /Click again/ }))
+
+    expect(await screen.findByText('Cancelled 1 other try.')).toBeTruthy()
+    expect(
+      calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
+    ).toBe(true)
+  })
+
   it('adds a task from the title field', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
