@@ -18,6 +18,7 @@ import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
+import { newWorkspace } from './new-workspace.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoInputError, RepoNotFoundError, type RepoService } from './repo-service.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
@@ -57,6 +58,13 @@ const fanOutBodySchema = z.object({
   start: z.boolean().default(false),
 })
 const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
+const newWorkspaceBodySchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  repo: repoIdSchema.optional(),
+  base: z.string().min(1).max(255).optional(),
+  agent: z.string().min(1).max(64).optional(),
+  prompt: z.string().trim().max(20_000).optional(),
+})
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
@@ -303,6 +311,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { count, start } = fanOutBodySchema.parse(request.body)
     const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
     return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
+  })
+
+  // A task, its worktree and its agent in one step.
+  app.post('/workspaces', async (request, reply) => {
+    const input = newWorkspaceBodySchema.parse(request.body)
+    const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
+    return reply.code(201).send({ task: await newWorkspace(parts, input) })
   })
 
   // A review comment for the agent: pasted into its terminal as the next prompt.
