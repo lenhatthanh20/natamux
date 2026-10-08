@@ -43,12 +43,7 @@ describe('layoutGraph', () => {
   it('opens a second lane for a branch and joins it at the fork', () => {
     // task: t2 -> t1 -> base; main: m1 -> base
     expect(
-      shape([
-        commit('t2', ['t1']),
-        commit('m1', ['base']),
-        commit('t1', ['base']),
-        commit('base'),
-      ]),
+      shape([commit('t2', ['t1']), commit('m1', ['base']), commit('t1', ['base']), commit('base')]),
     ).toEqual({
       width: 2,
       rows: [
@@ -62,7 +57,12 @@ describe('layoutGraph', () => {
 
   it('draws a merge commit with a line to each parent', () => {
     expect(
-      shape([commit('m', ['a', 'b']), commit('b', ['base']), commit('a', ['base']), commit('base')]),
+      shape([
+        commit('m', ['a', 'b']),
+        commit('b', ['base']),
+        commit('a', ['base']),
+        commit('base'),
+      ]),
     ).toEqual({
       width: 2,
       rows: [
