@@ -308,11 +308,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const details = useStoredWidth('helmsman.details-width', 360, 320, 560)
   const viewportWidth = useViewportWidth()
   const sidebarWidth = effectiveSidebarWidth(sidebar.width, viewportWidth)
-  const layout = useLayoutMode({
+  const shellLayout = useLayoutMode({
     sidebarWidth: sidebarOpen ? sidebarWidth : 0,
     detailsWidth: details.width,
   })
-  const phone = layout.details === 'page'
+  const phone = shellLayout.details === 'page'
   const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
     eventMutation.isPending ||
@@ -334,13 +334,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   // A drawer closes when the user picks something in it.
   const afterPick = () => {
-    if (layout.sidebar === 'drawer') {
+    if (shellLayout.sidebar === 'drawer') {
       setDrawerOpen(false)
     }
   }
 
   const toggleSidebar = () => {
-    if (layout.sidebar === 'drawer') {
+    if (shellLayout.sidebar === 'drawer') {
       setDrawerOpen(!drawerOpen)
     } else {
       setSidebarOpen(!sidebarOpen)
@@ -355,7 +355,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   // Shows the sidebar if it is hidden, then runs `then` once it is on screen.
   const revealSidebar = (then: () => void) => {
-    if (layout.sidebar === 'drawer') {
+    if (shellLayout.sidebar === 'drawer') {
       setDrawerOpen(true)
     } else if (!sidebarOpen) {
       setSidebarOpen(true)
@@ -525,10 +525,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   return (
     <>
       <AppShell
-        layout={layout}
+        layout={shellLayout}
         titleBar={
           <TitleBar
-            sidebarOpen={layout.sidebar === 'drawer' ? drawerOpen : sidebarOpen}
+            sidebarOpen={shellLayout.sidebar === 'drawer' ? drawerOpen : sidebarOpen}
             onToggleSidebar={toggleSidebar}
             view={view}
             onSearch={focusFilter}
@@ -713,7 +713,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   : viewportWidth - (sidebarOpen ? sidebarWidth : 0) - details.width
               if (
                 tab === 'changes' &&
-                layout.details === 'docked' &&
+                shellLayout.details === 'docked' &&
                 main < 900 &&
                 detailOpenByTask[changesTask.id] === true
               ) {

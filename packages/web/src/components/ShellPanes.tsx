@@ -52,7 +52,8 @@ export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: Sh
         </button>
       </div>
       {phone && names.length > 1 && (
-        <div role="group" aria-label="Shells" className="flex gap-1.5 overflow-x-auto">
+        <fieldset className="flex min-w-0 gap-1.5 overflow-x-auto">
+          <legend className="sr-only">Shells</legend>
           {names.map((name) => (
             <button
               key={name}
@@ -64,7 +65,7 @@ export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: Sh
               Shell {name}
             </button>
           ))}
-        </div>
+        </fieldset>
       )}
       <div className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))]">
         {names.map((name) => (

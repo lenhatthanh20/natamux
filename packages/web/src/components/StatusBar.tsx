@@ -244,7 +244,6 @@ export function StatusBar({
   return (
     <footer
       ref={bar}
-      aria-label="Status"
       className="flex h-7 shrink-0 items-center gap-0.5 overflow-hidden border-t border-line bg-shell px-1.5"
     >
       {left

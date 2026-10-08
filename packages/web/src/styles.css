@@ -506,6 +506,10 @@
 }
 
 /* Set by the Electron shell. In the browser none of these attributes exist. */
+:root[data-shell="electron"] .hm-titlebar {
+  -webkit-app-region: drag;
+}
+
 :root[data-shell="electron"][data-platform="mac"] .hm-titlebar {
   padding-left: 76px;
 }
@@ -514,15 +518,14 @@
   padding-right: 140px;
 }
 
-:root[data-shell="electron"] .hm-titlebar {
-  -webkit-app-region: drag;
+:root[data-window="inactive"] .hm-titlebar {
+  color: var(--muted);
 }
 
 :root[data-shell="electron"] .hm-titlebar :is(button, a, input, [role="button"]) {
   -webkit-app-region: no-drag;
 }
 
-:root[data-window="inactive"] .hm-titlebar,
 :root[data-window="inactive"] .hm-titlebar :is(h1, span, svg) {
   color: var(--muted);
 }

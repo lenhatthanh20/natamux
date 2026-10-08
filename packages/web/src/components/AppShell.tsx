@@ -202,7 +202,6 @@ export function AppShell({
 }: AppShellProps) {
   const root = useRef<HTMLDivElement>(null)
   usePartCycling(root)
-  const main = useRef<HTMLElement>(null)
   const phone = layout.details === 'page'
 
   const detailsMode = details === null ? null : layout.details
@@ -212,10 +211,6 @@ export function AppShell({
     <div ref={root} className="flex h-dvh flex-col overflow-hidden">
       <a
         href="#main"
-        onClick={(event) => {
-          event.preventDefault()
-          main.current?.focus()
-        }}
         className="sr-only rounded-md bg-popover px-3 py-1.5 text-ink shadow-pop focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-tooltip)"
       >
         Skip to main content
@@ -247,7 +242,6 @@ export function AppShell({
         )}
 
         <main
-          ref={main}
           id="main"
           data-part="main"
           tabIndex={-1}
