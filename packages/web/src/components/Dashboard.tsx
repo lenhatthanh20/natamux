@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bell,
   BellOff,
+  Columns3,
   Download,
   FolderGit2,
   LayoutGrid,
@@ -10,6 +11,7 @@ import {
   LogOut,
   Moon,
   Plus,
+  Rows3,
   Search,
   Sun,
 } from 'lucide-react'
@@ -23,6 +25,7 @@ import { sidebarGroups } from '../lib/sidebar-groups'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { applyTheme, savedTheme, type Theme } from '../lib/theme'
+import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
 import { AgentPanes } from './AgentPanes'
@@ -36,6 +39,10 @@ import { StateFilter } from './StateFilter'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
+import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
+import { Select } from './ui/Select'
+import { input, kbd } from './ui/styles'
+import { Toaster } from './ui/Toaster'
 
 const TASKS_KEY = ['tasks']
 const NOW_INTERVAL_MS = 30_000
@@ -81,7 +88,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   } = useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
-  const [feedback, setFeedback] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(savedTheme)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -130,9 +136,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       mergeTask(task)
       select(task.id)
       setNewTitle('')
-      setFeedback(null)
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const eventMutation = useMutation({
@@ -140,11 +145,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       api.sendEvent(taskId, type),
     onSuccess: ({ task, accepted }) => {
       mergeTask(task)
-      setFeedback(
-        accepted ? null : `The daemon did not accept that change. ${task.id} stays ${task.state}.`,
-      )
+      if (!accepted) {
+        toast(`The daemon did not accept that change. ${task.id} stays ${task.state}.`, 'error')
+      }
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const workspaceMutation = useMutation({
@@ -170,9 +175,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     },
     onSuccess: ({ task, message }) => {
       mergeTask(task)
-      setFeedback(message)
+      if (message !== null) {
+        toast(message)
+      }
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const templateMutation = useMutation({
@@ -184,35 +191,32 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         priority: task.priority,
         labels: task.labels,
       }),
-    onMutate: () => setFeedback(null),
     onSuccess: (template) => {
       templatesQuery.refetch()
-      setFeedback(`Saved as the template "${template.name}".`)
+      toast(`Saved as the template "${template.name}".`)
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const subtaskMutation = useMutation({
     mutationFn: ({ parentId, title }: { parentId: string; title: string }) =>
       api.createTask(title, parentId),
-    onMutate: () => setFeedback(null),
     onSuccess: (task) => mergeTask(task),
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const fanOutMutation = useMutation({
     mutationFn: ({ task, count, start }: { task: Task; count: number; start: boolean }) =>
       api.fanOut(task.id, count, start),
-    onMutate: () => setFeedback(null),
     onSuccess: (created, { task }) => {
       for (const copy of created) {
         mergeTask(copy)
       }
       // The tries share a label with the task, so this search shows them side by side.
       setSearch(`tries-${task.id.toLowerCase()}`)
-      setFeedback(created.length === 1 ? 'Made 1 try.' : `Made ${created.length} tries.`)
+      toast(created.length === 1 ? 'Made 1 try.' : `Made ${created.length} tries.`)
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   // Keeps one try of a fan-out: the other tries that are not finished are cancelled.
@@ -224,33 +228,30 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       }
       return cancelled
     },
-    onMutate: () => setFeedback(null),
     onSuccess: (cancelled) => {
       for (const task of cancelled) {
         mergeTask(task)
       }
-      setFeedback(
+      toast(
         cancelled.length === 1
           ? 'Cancelled 1 other try.'
           : `Cancelled ${cancelled.length} other tries.`,
       )
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const editMutation = useMutation({
     mutationFn: ({ taskId, changes }: { taskId: string; changes: TaskChanges }) =>
       api.updateTask(taskId, changes),
-    onMutate: () => setFeedback(null),
     onSuccess: (task) => mergeTask(task),
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   const pullRequestMutation = useMutation({
     mutationFn: (taskId: string) => api.refreshPullRequest(taskId),
-    onMutate: () => setFeedback(null),
     onSuccess: (task) => mergeTask(task),
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   // Makes the workspace first when the task has none, then opens its terminal with the agent.
@@ -261,12 +262,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       }
       return api.startAgent(task.id, 'claude-code')
     },
-    onMutate: () => setFeedback(null),
     onSuccess: (task) => {
       mergeTask(task)
       openChanges(task.id, 'terminal')
     },
-    onError: (error) => setFeedback(error.message),
+    onError: (error) => toast(error.message, 'error'),
   })
 
   // The size of each task's work. Edits in a workspace do not reach the daemon as events, so
@@ -300,6 +300,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     () => sidebarGroups(filterTasks(tasks, null, search), now),
     [tasks, search, now],
   )
+  const sidebar = useStoredWidth('helmsman.sidebar-width', 288, 232, 440)
+  const details = useStoredWidth('helmsman.details-width', 368, 320, 560)
   const busy =
     eventMutation.isPending ||
     workspaceMutation.isPending ||
@@ -309,12 +311,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     fanOutMutation.isPending
 
   const runAction = (task: Task, action: TaskAction) => {
-    setFeedback(null)
     eventMutation.mutate({ taskId: task.id, type: action.type })
   }
 
   const chooseTask = (id: string) => {
-    setFeedback(null)
     select(id)
     setDetailOpen(true)
   }
@@ -328,16 +328,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       id,
       task?.state === 'running' || task?.state === 'needs-input' ? 'terminal' : 'changes',
     )
-  }
-
-  // The repository and issue panels sit above the task list, so a workspace makes way for them.
-  const togglePanel = (open: boolean, setOpen: (open: boolean) => void) => {
-    if (changesTaskId !== null || agentsOpen) {
-      closeChanges()
-      setOpen(true)
-      return
-    }
-    setOpen(!open)
   }
 
   useEffect(() => {
@@ -447,7 +437,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       <div className="flex min-h-0 flex-1">
         <nav
           aria-label="Tasks"
-          className="flex w-72 shrink-0 flex-col gap-3 border-r border-line bg-sidebar px-2 pt-3"
+          style={{ width: sidebar.width }}
+          className="flex shrink-0 flex-col gap-3 bg-sidebar px-2 pt-3"
         >
           <form onSubmit={submitNewTask} className="flex flex-col gap-1.5 px-1">
             <div className="flex items-center gap-2">
@@ -468,30 +459,30 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onChange={(event) => setNewTitle(event.target.value)}
               placeholder="New task title (n)"
               aria-label="New task title"
-              className="min-w-0 rounded-lg border border-line bg-surface px-2.5 py-1.5"
+              className={input}
             />
             {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
               <div className="flex gap-1.5">
                 {repos.length > 1 && (
-                  <select
+                  <Select
                     value={newRepo}
                     onChange={(event) => setNewRepo(event.target.value)}
                     aria-label="Repository"
-                    className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                    className="flex-1"
                   >
                     {repos.map((repo) => (
                       <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
                         {repo.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 {(templatesQuery.data?.length ?? 0) > 0 && (
-                  <select
+                  <Select
                     value={templateId}
                     onChange={(event) => setTemplateId(event.target.value)}
                     aria-label="Template"
-                    className="min-w-0 flex-1 rounded-md border border-line bg-surface px-1 py-1"
+                    className="flex-1"
                   >
                     <option value="">No template</option>
                     {templatesQuery.data?.map((template) => (
@@ -499,13 +490,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         {template.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
               </div>
             )}
           </form>
 
-          <label className="mx-1 flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-muted">
+          <label className="mx-1 flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-muted hover:border-line-strong focus-within:border-accent">
             <Search size={14} aria-hidden="true" />
             <input
               ref={searchRef}
@@ -515,7 +506,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               aria-label="Search tasks"
               className="min-w-0 flex-1 bg-transparent text-ink outline-none"
             />
-            <kbd className="font-mono text-xs">/</kbd>
+            <kbd className={kbd}>/</kbd>
           </label>
 
           <div className="flex flex-col gap-0.5 text-muted">
@@ -561,15 +552,19 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           </div>
         </nav>
 
+        <ResizeHandle
+          label="Resize the sidebar"
+          edge="right"
+          width={sidebar.width}
+          min={sidebar.min}
+          max={sidebar.max}
+          onResize={sidebar.setWidth}
+        />
+
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
           {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
             <p role="alert" className="border-b border-line px-4 py-2 font-medium">
               {tasksQuery.error.message}
-            </p>
-          )}
-          {feedback !== null && !detailOpen && (
-            <p role="status" className="border-b border-line px-4 py-2 font-medium">
-              {feedback}
             </p>
           )}
 
@@ -636,52 +631,29 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             />
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
-                <h2 className="font-semibold">All tasks</h2>
+              <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
+                <h2 className="shrink-0 font-semibold">All tasks</h2>
                 <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-                <div className="ml-auto flex gap-1">
+                <div className="ml-auto flex shrink-0 rounded-md border border-line p-0.5">
                   {(['table', 'board'] as const).map((option) => (
                     <button
                       key={option}
                       type="button"
                       aria-pressed={layout === option}
                       onClick={() => setLayout(option)}
-                      className="rounded-md px-2.5 py-0.5 text-muted capitalize hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
+                      className="flex h-6 items-center gap-1.5 rounded px-2 text-muted capitalize hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
                     >
+                      {option === 'table' ? (
+                        <Rows3 size={13} aria-hidden="true" />
+                      ) : (
+                        <Columns3 size={13} aria-hidden="true" />
+                      )}
                       {option}
                     </button>
                   ))}
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
-                {reposOpen && (
-                  <RepoPanel
-                    repos={repos}
-                    onAdd={async (path, name) => {
-                      await api.addRepo(path, name)
-                      await reposQuery.refetch()
-                    }}
-                    onClose={() => setReposOpen(false)}
-                  />
-                )}
-                {importOpen && (
-                  <IssueImport
-                    repo={newRepo || undefined}
-                    loadIssues={() => api.listIssues(newRepo || undefined)}
-                    importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
-                    onImported={(created) => {
-                      for (const task of created) {
-                        mergeTask(task)
-                      }
-                      setFeedback(
-                        created.length === 1
-                          ? 'Imported 1 issue.'
-                          : `Imported ${created.length} issues.`,
-                      )
-                    }}
-                    onClose={() => setImportOpen(false)}
-                  />
-                )}
                 {tasksQuery.isPending ? (
                   <p className="text-muted">Loading tasks.</p>
                 ) : layout === 'board' ? (
@@ -710,21 +682,29 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         </main>
 
         {detailOpen && detailTask && !agentsOpen && (
+          <ResizeHandle
+            label="Resize the details"
+            edge="left"
+            width={details.width}
+            min={details.min}
+            max={details.max}
+            onResize={details.setWidth}
+          />
+        )}
+        {detailOpen && detailTask && !agentsOpen && (
           <TaskDetail
             key={detailTask.id}
+            width={details.width}
             task={detailTask}
             now={now}
             busy={busy}
-            feedback={feedback}
             loadEvents={() => api.listEvents(detailTask.id)}
             onAction={(action) => runAction(detailTask, action)}
             onCreateWorkspace={(base) => {
-              setFeedback(null)
               workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
             }}
             branches={branchesQuery.data}
             onRemoveWorkspace={() => {
-              setFeedback(null)
               workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
             }}
             onViewChanges={() => openChanges(detailTask.id)}
@@ -745,6 +725,32 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         )}
       </div>
 
+      <Toaster />
+      {reposOpen && (
+        <RepoPanel
+          repos={repos}
+          onAdd={async (path, name) => {
+            await api.addRepo(path, name)
+            await reposQuery.refetch()
+          }}
+          onClose={() => setReposOpen(false)}
+        />
+      )}
+      {importOpen && (
+        <IssueImport
+          repo={newRepo || undefined}
+          loadIssues={() => api.listIssues(newRepo || undefined)}
+          importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
+          onImported={(created) => {
+            for (const task of created) {
+              mergeTask(task)
+            }
+            toast(created.length === 1 ? 'Imported 1 issue.' : `Imported ${created.length} issues.`)
+          }}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
+
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sidebar px-3 py-1 text-xs text-muted">
         <span
           className="flex items-center gap-1.5"
@@ -762,7 +768,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <button
           type="button"
           aria-expanded={reposOpen}
-          onClick={() => togglePanel(reposOpen, setReposOpen)}
+          onClick={() => setReposOpen(true)}
           className={footerButton}
         >
           <FolderGit2 size={13} aria-hidden="true" />
@@ -771,7 +777,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <button
           type="button"
           aria-expanded={importOpen}
-          onClick={() => togglePanel(importOpen, setImportOpen)}
+          onClick={() => setImportOpen(true)}
           className={footerButton}
         >
           <Download size={13} aria-hidden="true" />

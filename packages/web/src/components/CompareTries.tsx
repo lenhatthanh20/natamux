@@ -2,6 +2,8 @@ import type { DiffStat, Task } from '@helmsman/core'
 import { useState } from 'react'
 import { pullRequestNumber } from '../lib/pull-request'
 import { StateBadge } from './StateBadge'
+import { ConfirmDialog } from './ui/Dialog'
+import { button, sectionTitle } from './ui/styles'
 
 type CompareTriesProps = {
   tries: readonly Task[]
@@ -22,11 +24,11 @@ export function CompareTries({
   onSelect,
   onKeep,
 }: CompareTriesProps) {
-  const [confirming, setConfirming] = useState<string | null>(null)
+  const [keeping, setKeeping] = useState<Task | null>(null)
 
   return (
-    <section aria-label="Tries" className="flex flex-col gap-2">
-      <h3 className="font-semibold">Tries</h3>
+    <section aria-label="Tries" className="flex flex-col gap-2 border-t border-line pt-4">
+      <h3 className={sectionTitle}>Tries</h3>
       <table className="w-full text-left">
         <tbody>
           {tries.map((task) => {
@@ -60,17 +62,10 @@ export function CompareTries({
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => {
-                        if (confirming !== task.id) {
-                          setConfirming(task.id)
-                          return
-                        }
-                        setConfirming(null)
-                        onKeep(task)
-                      }}
-                      className="rounded-md border border-line px-2 py-0.5 hover:border-accent disabled:opacity-50"
+                      onClick={() => setKeeping(task)}
+                      className={button()}
                     >
-                      {confirming === task.id ? 'Cancel the others? Click again' : 'Keep this one'}
+                      Keep this one
                     </button>
                   )}
                 </td>
@@ -79,6 +74,15 @@ export function CompareTries({
           })}
         </tbody>
       </table>
+      {keeping !== null && (
+        <ConfirmDialog
+          title={`Keep ${keeping.id}?`}
+          description="The other tries that are not finished are cancelled."
+          confirmLabel="Cancel the others"
+          onConfirm={() => onKeep(keeping)}
+          onClose={() => setKeeping(null)}
+        />
+      )}
     </section>
   )
 }
