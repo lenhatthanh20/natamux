@@ -1,0 +1,11 @@
+{
+  "name": "helmsman",
+  "owner": { "name": "Helmsman" },
+  "plugins": [
+    {
+      "name": "helmsman",
+      "source": "./plugins/helmsman",
+      "description": "Lets Claude Code work inside a Helmsman task: read it, ask the user, report done, file follow-up tasks."
+    }
+  ]
+}

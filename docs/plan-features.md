@@ -139,7 +139,7 @@ Goals:
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
 | Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
-| Helmsman plugin for Claude Code (skills that use the CLI) | v1 |
+| Helmsman plugin for Claude Code (skills that use the CLI). Done: `plugins/helmsman`, with a `helmsman-task` skill, installable from this repository as a marketplace | v1 |
 | Account and usage display per agent | Later |
 
 ### 5.6 Extensibility and sharing
