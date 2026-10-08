@@ -40,7 +40,10 @@ export function useLayoutMode({ sidebarWidth, detailsWidth }: Inputs): LayoutMod
 } {
   const viewport = useSyncExternalStore(subscribe, width, () => null)
   const coarse = useSyncExternalStore(subscribe, isCoarse, () => false)
-  return { ...decideLayout({ width: viewport, sidebarWidth, detailsWidth, coarse }), width: viewport }
+  return {
+    ...decideLayout({ width: viewport, sidebarWidth, detailsWidth, coarse }),
+    width: viewport,
+  }
 }
 
 function isPhone(): boolean {

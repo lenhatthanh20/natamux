@@ -1,7 +1,7 @@
 import { LayoutGrid, ListTodo } from 'lucide-react'
 import type { ReactNode, Ref } from 'react'
-import { listRow } from './ui/styles'
 import { SearchField } from './ui/SearchField'
+import { listRow } from './ui/styles'
 
 type SidebarProps = {
   search: string

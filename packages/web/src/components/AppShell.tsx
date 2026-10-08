@@ -127,7 +127,9 @@ function Sheet({
   const panel = useRef<HTMLDivElement>(null)
   useLayer(panel, onClose, scrim)
   return (
-    <div className={`absolute inset-0 z-(--z-sheet) flex justify-end ${scrim ? '' : 'pointer-events-none'}`}>
+    <div
+      className={`absolute inset-0 z-(--z-sheet) flex justify-end ${scrim ? '' : 'pointer-events-none'}`}
+    >
       {scrim && (
         <button
           type="button"
@@ -158,7 +160,8 @@ function usePartCycling(root: RefObject<HTMLElement | null>) {
         return
       }
       const parts = [...(root.current?.querySelectorAll<HTMLElement>('[data-part]') ?? [])].sort(
-        (a, b) => PART_ORDER.indexOf(a.dataset.part ?? '') - PART_ORDER.indexOf(b.dataset.part ?? ''),
+        (a, b) =>
+          PART_ORDER.indexOf(a.dataset.part ?? '') - PART_ORDER.indexOf(b.dataset.part ?? ''),
       )
       if (parts.length === 0) {
         return
@@ -166,7 +169,11 @@ function usePartCycling(root: RefObject<HTMLElement | null>) {
       event.preventDefault()
       const at = parts.findIndex((part) => part.contains(document.activeElement))
       const step = event.shiftKey ? -1 : 1
-      const target = parts[(at === -1 ? (step === 1 ? 0 : parts.length - 1) : at + step + parts.length) % parts.length]
+      const target =
+        parts[
+          (at === -1 ? (step === 1 ? 0 : parts.length - 1) : at + step + parts.length) %
+            parts.length
+        ]
       if (target === undefined) {
         return
       }
@@ -185,7 +192,14 @@ function usePartCycling(root: RefObject<HTMLElement | null>) {
 
 // The frame of the app, section 3.1 of the UI spec: title bar, sidebar, main, details and status
 // bar, with the sidebar and the details changing form as the window narrows.
-export function AppShell({ layout, titleBar, statusBar, sidebar, details, children }: AppShellProps) {
+export function AppShell({
+  layout,
+  titleBar,
+  statusBar,
+  sidebar,
+  details,
+  children,
+}: AppShellProps) {
   const root = useRef<HTMLDivElement>(null)
   usePartCycling(root)
   const main = useRef<HTMLElement>(null)

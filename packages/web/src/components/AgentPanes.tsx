@@ -58,9 +58,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
           workspace.
         </p>
       ) : (
-        <div
-          className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))] max-md:auto-rows-[60vh]"
-        >
+        <div className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))] max-md:auto-rows-[60vh]">
           {shown.map((task) => (
             <TerminalPane
               key={task.id}

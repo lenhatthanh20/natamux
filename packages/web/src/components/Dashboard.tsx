@@ -313,8 +313,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     detailsWidth: details.width,
   })
   const phone = layout.details === 'page'
-  const detailOpen =
-    detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
+  const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
     eventMutation.isPending ||
     workspaceMutation.isPending ||
@@ -665,12 +664,16 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     waitingFor={waitingOn(detailTask, tasks)}
                     onSaveTemplate={() => templateMutation.mutate(detailTask)}
                     subtasks={tasks.filter((task) => task.parentId === detailTask.id)}
-                    onAddSubtask={(title) => subtaskMutation.mutate({ parentId: detailTask.id, title })}
+                    onAddSubtask={(title) =>
+                      subtaskMutation.mutate({ parentId: detailTask.id, title })
+                    }
                     onSelectTask={changesTask ? openTask : chooseTask}
                     tries={detailTries}
                     diffStats={diffStatsQuery.data}
                     onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: detailTries })}
-                    onFanOut={(count, start) => fanOutMutation.mutate({ task: detailTask, count, start })}
+                    onFanOut={(count, start) =>
+                      fanOutMutation.mutate({ task: detailTask, count, start })
+                    }
                     onClose={() => setDetailOpen(detailTask.id, false)}
                   />
                 ),
@@ -678,182 +681,182 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             : null
         }
       >
-          {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
-            <p role="alert" className="border-b border-line px-4 py-2 font-medium">
-              {tasksQuery.error.message}
-            </p>
-          )}
+        {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
+          <p role="alert" className="border-b border-line px-4 py-2 font-medium">
+            {tasksQuery.error.message}
+          </p>
+        )}
 
-          {changesTask && changesTask.workspace === null ? (
-            <NoWorkspace
-              key={changesTask.id}
-              task={changesTask}
-              busy={busy}
-              canStart={
-                changesTask.state !== 'done' &&
-                changesTask.state !== 'cancelled' &&
-                waitingOn(changesTask, tasks).length === 0
+        {changesTask && changesTask.workspace === null ? (
+          <NoWorkspace
+            key={changesTask.id}
+            task={changesTask}
+            busy={busy}
+            canStart={
+              changesTask.state !== 'done' &&
+              changesTask.state !== 'cancelled' &&
+              waitingOn(changesTask, tasks).length === 0
+            }
+            onStartAgent={() => agentMutation.mutate(changesTask)}
+          />
+        ) : changesTask ? (
+          <ChangesView
+            key={changesTask.id}
+            task={changesTask}
+            now={now}
+            initialTab={changesTab}
+            onTabChange={(tab) => {
+              // Side by side, the diff needs about 900px. The details give way.
+              const main =
+                viewportWidth === null
+                  ? Number.POSITIVE_INFINITY
+                  : viewportWidth - (sidebarOpen ? sidebarWidth : 0) - details.width
+              if (
+                tab === 'changes' &&
+                layout.details === 'docked' &&
+                main < 900 &&
+                detailOpenByTask[changesTask.id] === true
+              ) {
+                setDetailOpen(changesTask.id, false)
               }
-              onStartAgent={() => agentMutation.mutate(changesTask)}
-            />
-          ) : changesTask ? (
-            <ChangesView
-              key={changesTask.id}
-              task={changesTask}
-              now={now}
-              initialTab={changesTab}
-              onTabChange={(tab) => {
-                // Side by side, the diff needs about 900px. The details give way.
-                const main =
-                  viewportWidth === null
-                    ? Number.POSITIVE_INFINITY
-                    : viewportWidth - (sidebarOpen ? sidebarWidth : 0) - details.width
-                if (
-                  tab === 'changes' &&
-                  layout.details === 'docked' &&
-                  main < 900 &&
-                  detailOpenByTask[changesTask.id] === true
-                ) {
-                  setDetailOpen(changesTask.id, false)
-                }
-              }}
-              loadChanges={() => api.listChanges(changesTask.id)}
-              loadFile={(path) => api.getFileDiff(changesTask.id, path)}
-              loadGraph={() => api.getGitGraph(changesTask.id)}
-              commit={async (message) => {
-                const updated = await api.commitChanges(changesTask.id, message)
-                mergeTask(updated)
-                return updated
-              }}
-              push={async () => {
-                const updated = await api.pushBranch(changesTask.id)
-                mergeTask(updated)
-                return updated
-              }}
-              sendToAgent={async (text) => {
-                const updated = await api.sendToAgent(changesTask.id, text)
-                mergeTask(updated)
-                return updated
-              }}
-              openPullRequest={async () => {
-                const updated = await api.openPullRequest(changesTask.id)
-                mergeTask(updated)
-                return updated
-              }}
-              connectTerminal={async (size, terminal) => {
-                const ticket = await api.terminalTicket(changesTask.id)
-                return new WebSocket(
-                  terminalSocketUrl(window.location, changesTask.id, ticket, size, terminal),
-                )
-              }}
-              loadTerminals={() => api.listTerminals(changesTask.id)}
-              closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
-            />
-          ) : agentsOpen ? (
-            <AgentPanes
-              tasks={tasks}
-              chosen={agentPanes}
-              onChange={setAgentPanes}
-              connect={async (taskId, size) => {
-                const ticket = await api.terminalTicket(taskId)
-                return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))
-              }}
-              onOpenTask={openTask}
-            />
-          ) : (
-            <>
-              <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
-                <h2 className="shrink-0 font-semibold">All tasks</h2>
-                <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-                <div className="ml-auto">
-                  <Segmented
-                    label="Layout"
-                    value={layout}
-                    onChange={setLayout}
-                    options={[
-                      { value: 'table', label: 'Table', icon: Rows3 },
-                      { value: 'board', label: 'Board', icon: Columns3 },
-                    ]}
-                  />
-                </div>
+            }}
+            loadChanges={() => api.listChanges(changesTask.id)}
+            loadFile={(path) => api.getFileDiff(changesTask.id, path)}
+            loadGraph={() => api.getGitGraph(changesTask.id)}
+            commit={async (message) => {
+              const updated = await api.commitChanges(changesTask.id, message)
+              mergeTask(updated)
+              return updated
+            }}
+            push={async () => {
+              const updated = await api.pushBranch(changesTask.id)
+              mergeTask(updated)
+              return updated
+            }}
+            sendToAgent={async (text) => {
+              const updated = await api.sendToAgent(changesTask.id, text)
+              mergeTask(updated)
+              return updated
+            }}
+            openPullRequest={async () => {
+              const updated = await api.openPullRequest(changesTask.id)
+              mergeTask(updated)
+              return updated
+            }}
+            connectTerminal={async (size, terminal) => {
+              const ticket = await api.terminalTicket(changesTask.id)
+              return new WebSocket(
+                terminalSocketUrl(window.location, changesTask.id, ticket, size, terminal),
+              )
+            }}
+            loadTerminals={() => api.listTerminals(changesTask.id)}
+            closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
+          />
+        ) : agentsOpen ? (
+          <AgentPanes
+            tasks={tasks}
+            chosen={agentPanes}
+            onChange={setAgentPanes}
+            connect={async (taskId, size) => {
+              const ticket = await api.terminalTicket(taskId)
+              return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))
+            }}
+            onOpenTask={openTask}
+          />
+        ) : (
+          <>
+            <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
+              <h2 className="shrink-0 font-semibold">All tasks</h2>
+              <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
+              <div className="ml-auto">
+                <Segmented
+                  label="Layout"
+                  value={layout}
+                  onChange={setLayout}
+                  options={[
+                    { value: 'table', label: 'Table', icon: Rows3 },
+                    { value: 'board', label: 'Board', icon: Columns3 },
+                  ]}
+                />
               </div>
-              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
-                <form onSubmit={submitNewTask} className="flex flex-wrap items-center gap-2">
-                  <input
-                    ref={newTaskRef}
-                    value={newTitle}
-                    onChange={(event) => setNewTitle(event.target.value)}
-                    placeholder="Add a task to the backlog (n)"
-                    aria-label="New task title"
-                    className={`${input} min-w-64 flex-1`}
-                  />
-                  {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
-                    <div className="flex gap-2">
-                      {repos.length > 1 && (
-                        <Select
-                          value={newRepo}
-                          onChange={(event) => setNewRepo(event.target.value)}
-                          aria-label="Repository"
-                          className="w-40"
-                        >
-                          {repos.map((repo) => (
-                            <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                              {repo.name}
-                            </option>
-                          ))}
-                        </Select>
-                      )}
-                      {(templatesQuery.data?.length ?? 0) > 0 && (
-                        <Select
-                          value={templateId}
-                          onChange={(event) => setTemplateId(event.target.value)}
-                          aria-label="Template"
-                          className="w-40"
-                        >
-                          <option value="">No template</option>
-                          {templatesQuery.data?.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.name}
-                            </option>
-                          ))}
-                        </Select>
-                      )}
-                    </div>
-                  )}
-                  <Button
-                    type="submit"
-                    icon={Plus}
-                    busy={createMutation.isPending}
-                    disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
-                  >
-                    Add task
-                  </Button>
-                </form>
-                {tasksQuery.isPending ? (
-                  <p className="text-muted">Loading tasks.</p>
-                ) : layout === 'board' ? (
-                  <TaskBoard
-                    tasks={visibleTasks}
-                    now={now}
-                    selectedId={selectedId}
-                    diffStats={diffStatsQuery.data}
-                    allTasks={tasks}
-                    onSelect={chooseTask}
-                  />
-                ) : (
-                  <TaskTable
-                    tasks={visibleTasks}
-                    now={now}
-                    selectedId={selectedId}
-                    diffStats={diffStatsQuery.data}
-                    allTasks={tasks}
-                    activity={activityQuery.data}
-                    onSelect={chooseTask}
-                  />
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+              <form onSubmit={submitNewTask} className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={newTaskRef}
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  placeholder="Add a task to the backlog (n)"
+                  aria-label="New task title"
+                  className={`${input} min-w-64 flex-1`}
+                />
+                {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+                  <div className="flex gap-2">
+                    {repos.length > 1 && (
+                      <Select
+                        value={newRepo}
+                        onChange={(event) => setNewRepo(event.target.value)}
+                        aria-label="Repository"
+                        className="w-40"
+                      >
+                        {repos.map((repo) => (
+                          <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                            {repo.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                    {(templatesQuery.data?.length ?? 0) > 0 && (
+                      <Select
+                        value={templateId}
+                        onChange={(event) => setTemplateId(event.target.value)}
+                        aria-label="Template"
+                        className="w-40"
+                      >
+                        <option value="">No template</option>
+                        {templatesQuery.data?.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </div>
                 )}
-              </div>
-            </>
-          )}
+                <Button
+                  type="submit"
+                  icon={Plus}
+                  busy={createMutation.isPending}
+                  disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
+                >
+                  Add task
+                </Button>
+              </form>
+              {tasksQuery.isPending ? (
+                <p className="text-muted">Loading tasks.</p>
+              ) : layout === 'board' ? (
+                <TaskBoard
+                  tasks={visibleTasks}
+                  now={now}
+                  selectedId={selectedId}
+                  diffStats={diffStatsQuery.data}
+                  allTasks={tasks}
+                  onSelect={chooseTask}
+                />
+              ) : (
+                <TaskTable
+                  tasks={visibleTasks}
+                  now={now}
+                  selectedId={selectedId}
+                  diffStats={diffStatsQuery.data}
+                  allTasks={tasks}
+                  activity={activityQuery.data}
+                  onSelect={chooseTask}
+                />
+              )}
+            </div>
+          </>
+        )}
       </AppShell>
 
       <Toaster />
