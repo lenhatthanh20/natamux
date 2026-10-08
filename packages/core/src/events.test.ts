@@ -119,13 +119,10 @@ describe('applyTaskEvent', () => {
     'git.pushed',
     'pr.opened',
     'agent.launched',
-  ] as const)(
-    'accepts %s in any state without changing it',
-    (type) => {
-      expect(applyTaskEvent('running', event(type))).toEqual({ state: 'running', accepted: true })
-      expect(applyTaskEvent('done', event(type))).toEqual({ state: 'done', accepted: true })
-    },
-  )
+  ] as const)('accepts %s in any state without changing it', (type) => {
+    expect(applyTaskEvent('running', event(type))).toEqual({ state: 'running', accepted: true })
+    expect(applyTaskEvent('done', event(type))).toEqual({ state: 'done', accepted: true })
+  })
 
   it('accepts an override to any valid state', () => {
     expect(applyTaskEvent('done', event('state.overridden', { to: 'running' }))).toEqual({

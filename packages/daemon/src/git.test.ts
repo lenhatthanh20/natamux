@@ -18,10 +18,10 @@ import {
   parseStatus,
   pullRequestUrl,
   pushBranch,
+  type RunGh,
   readFileDiff,
   readGitGraph,
   removeWorktree,
-  type RunGh,
   statusFromCodes,
   withGitConfig,
 } from './git.js'
