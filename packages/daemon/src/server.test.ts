@@ -399,4 +399,23 @@ describe('Claude Code hooks', () => {
     const response = await post({ cwd: '/elsewhere' })
     expect(response.statusCode).toBe(400)
   })
+
+  it('answers 404, naming the known agents, for an agent it has no adapter for', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/hooks/nope',
+      headers: authorization,
+      payload: { hook_event_name: 'Stop' },
+    })
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toMatchObject({ error: 'unknown_agent' })
+    expect(response.json().message).toContain('claude-code')
+  })
+
+  it('answers 200 and changes nothing for a hook the adapter does not use', async () => {
+    await createTask()
+    const response = await post({ hook_event_name: 'SessionEnd' }, { 'x-helmsman-task': 'T-0001' })
+    expect(response.statusCode).toBe(200)
+    expect(await stateOf('T-0001')).toBe('draft')
+  })
 })
