@@ -240,11 +240,12 @@ export async function currentBranch(cwd: string): Promise<string | null> {
 }
 
 // "HEAD -> helmsman/t-0001, tag: v1, main" becomes ["helmsman/t-0001", "tag: v1", "main"].
+// "origin/HEAD" is left out: it only repeats the default branch of the remote.
 export function parseRefs(decoration: string): string[] {
   return decoration
     .split(', ')
     .map((ref) => ref.trim())
-    .filter((ref) => ref !== '' && ref !== 'HEAD')
+    .filter((ref) => ref !== '' && ref !== 'HEAD' && !ref.endsWith('/HEAD'))
     .map((ref) => (ref.startsWith('HEAD -> ') ? ref.slice('HEAD -> '.length) : ref))
 }
 
