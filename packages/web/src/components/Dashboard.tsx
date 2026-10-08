@@ -146,6 +146,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  const fanOutMutation = useMutation({
+    mutationFn: ({ task, count, start }: { task: Task; count: number; start: boolean }) =>
+      api.fanOut(task.id, count, start),
+    onMutate: () => setFeedback(null),
+    onSuccess: (created, { task }) => {
+      for (const copy of created) {
+        mergeTask(copy)
+      }
+      // The tries share a label with the task, so this search shows them side by side.
+      setSearch(`tries-${task.id.toLowerCase()}`)
+      setFeedback(created.length === 1 ? 'Made 1 try.' : `Made ${created.length} tries.`)
+    },
+    onError: (error) => setFeedback(error.message),
+  })
+
   const editMutation = useMutation({
     mutationFn: ({ taskId, changes }: { taskId: string; changes: TaskChanges }) =>
       api.updateTask(taskId, changes),
@@ -508,7 +523,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     workspaceMutation.isPending ||
                     agentMutation.isPending ||
                     editMutation.isPending ||
-                    pullRequestMutation.isPending
+                    pullRequestMutation.isPending ||
+                    fanOutMutation.isPending
                   }
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
@@ -532,6 +548,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     subtaskMutation.mutate({ parentId: selectedTask.id, title })
                   }
                   onSelectTask={chooseTask}
+                  onFanOut={(count, start) =>
+                    fanOutMutation.mutate({ task: selectedTask, count, start })
+                  }
                   onClose={() => setDetailOpen(false)}
                 />
               )}

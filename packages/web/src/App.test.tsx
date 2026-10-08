@@ -206,6 +206,11 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated })
     }
+    if (/^\/api\/tasks\/T-\d+\/fan-out$/.test(path) && method === 'POST') {
+      const copy = makeTask({ id: 'T-0090', title: 'Fix it (try 2)', labels: ['tries-t-0001'] })
+      tasks = [...tasks, copy]
+      return json({ tasks: [copy] }, 201)
+    }
     if (/^\/api\/tasks\/T-\d+\/agent\/message$/.test(path) && method === 'POST') {
       return json({ task: tasks[0] })
     }
@@ -705,6 +710,24 @@ describe('App', () => {
     expect(await within(subtasks).findByText('Write the notes')).toBeTruthy()
     expect(within(subtasks).getByText('0 of 1 done')).toBeTruthy()
     expect(within(screen.getByRole('table')).getByText('part of T-0001')).toBeTruthy()
+  })
+
+  it('fans a task out to more tries and shows them together', async () => {
+    const { calls } = installDaemon([makeTask({ id: 'T-0001', title: 'Fix it' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.selectOptions(within(details).getByLabelText('Number of tries'), '1')
+    await user.click(within(details).getByRole('button', { name: 'Fan out' }))
+
+    expect(await screen.findByText('Made 1 try.')).toBeTruthy()
+    expect((screen.getByLabelText('Search tasks') as HTMLInputElement).value).toBe('tries-t-0001')
+    expect(within(screen.getByRole('table')).getByText('Fix it (try 2)')).toBeTruthy()
+    expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
   })
 
   it('adds a task from the title field', async () => {

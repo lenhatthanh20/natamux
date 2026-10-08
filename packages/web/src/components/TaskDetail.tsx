@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
+import { FanOutForm } from './FanOutForm'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
 import { Subtasks } from './Subtasks'
@@ -28,6 +29,7 @@ type TaskDetailProps = {
   subtasks?: readonly Task[]
   onAddSubtask?: (title: string) => void
   onSelectTask?: (id: string) => void
+  onFanOut?: (count: number, start: boolean) => void
   onClose: () => void
 }
 
@@ -58,6 +60,7 @@ export function TaskDetail({
   subtasks = [],
   onAddSubtask,
   onSelectTask,
+  onFanOut,
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -191,6 +194,11 @@ export function TaskDetail({
             )}
           </span>
         </Field>
+        {!isFinished && onFanOut !== undefined && (
+          <Field label="Fan out">
+            <FanOutForm busy={busy} onFanOut={onFanOut} />
+          </Field>
+        )}
         <Field label="Branch">{task.branch === null ? '-' : <PathText path={task.branch} />}</Field>
         <Field label="Workspace">
           {task.workspace === null ? (
