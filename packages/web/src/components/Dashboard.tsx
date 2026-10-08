@@ -12,6 +12,7 @@ import { ChangesView } from './ChangesView'
 import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
 import { StateFilter } from './StateFilter'
+import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
 
@@ -35,9 +36,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
   const now = useNow(NOW_INTERVAL_MS)
-  const { stateFilter, search, selectedId, detailOpen, changesTaskId, changesTab } = useViewStore()
-  const { toggleStateFilter, setSearch, select, setDetailOpen, openChanges, closeChanges } =
-    useViewStore.getState()
+  const { stateFilter, search, selectedId, detailOpen, changesTaskId, changesTab, layout } =
+    useViewStore()
+  const {
+    toggleStateFilter,
+    setSearch,
+    select,
+    setDetailOpen,
+    openChanges,
+    closeChanges,
+    setLayout,
+  } = useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -397,13 +406,38 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 onClose={() => setImportOpen(false)}
               />
             )}
-            <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
+              <div className="flex gap-1">
+                {(['table', 'board'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={layout === option}
+                    onClick={() => setLayout(option)}
+                    className="rounded-md border border-line px-3 py-1 capitalize hover:border-accent aria-pressed:border-accent aria-pressed:bg-accent/10"
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div
               className={detailOpen && selectedTask ? 'grid gap-4 lg:grid-cols-[1fr_24rem]' : ''}
             >
               {tasksQuery.isPending ? (
                 <p className="text-muted">Loading tasks.</p>
+              ) : layout === 'board' ? (
+                <div className="min-w-0">
+                  <TaskBoard
+                    tasks={visibleTasks}
+                    now={now}
+                    selectedId={selectedId}
+                    diffStats={diffStatsQuery.data}
+                    onSelect={chooseTask}
+                  />
+                </div>
               ) : (
                 <TaskTable
                   tasks={visibleTasks}
