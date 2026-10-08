@@ -107,7 +107,7 @@ Goals:
 | Details of a task: what happened, from whom and when (activity list) | MVP |
 | Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done except elapsed time | MVP |
 | Counts per state in a header bar; click to filter | MVP |
-| Board view (columns by state), toggle with the table | v1 |
+| Board view (columns by state), toggle with the table. Done; the choice is kept per browser | v1 |
 | One-line live summary per running task (what the agent is doing now) | v1 |
 | Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
 | Desktop and system notifications when a task needs me or finishes. Done in the browser: a notification when a task starts to wait while the tab is in the background, and the count in the tab title | MVP |
