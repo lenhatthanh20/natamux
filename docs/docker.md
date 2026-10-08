@@ -28,6 +28,8 @@ The dev container has Docker, installs the packages and builds them when the cod
 | `logs` | Follows the logs |
 | `down` | Stops the containers. Tasks and worktrees stay |
 
+**Repos** adds more repositories by their folder on the daemon's machine. In Docker that is a folder inside the container: mount it in `compose.yaml` first.
+
 Each task's terminals get `PORT` (20000 + 10 × the task number). In the dev setup the shells run inside the `daemon` container, so a dev server started there is not reachable from the browser unless you publish that port in `compose.yaml`.
 
 `up` also passes your git name and email (`git config user.name` and `user.email`) for commits made from the dashboard, and the codespace's `GITHUB_TOKEN` as `GH_TOKEN`, so **Push** and **Create pull request** work. Set `HELMSMAN_GIT_NAME`, `HELMSMAN_GIT_EMAIL` or `GH_TOKEN` to use others.

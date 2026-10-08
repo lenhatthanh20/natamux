@@ -16,6 +16,7 @@ import {
   removeWorktree,
   runGh,
 } from './git.js'
+import type { RepoService } from './repo-service.js'
 import type { TaskService } from './task-service.js'
 
 export class WorkspaceConflictError extends Error {
@@ -36,6 +37,8 @@ type WorkspaceServiceOptions = {
   tasks: TaskService
   repoDir: string
   worktreesDir: string
+  // Other repositories; a task names its own in `repo`. Without it, every task uses repoDir.
+  repos?: RepoService
   gh?: RunGh
   // Called after a workspace is made, for example to run its setup script.
   onCreated?: (task: Task) => void
@@ -66,6 +69,7 @@ export class WorkspaceService {
   private readonly tasks: TaskService
   private readonly repoDir: string
   private readonly worktreesDir: string
+  private readonly repos: RepoService | undefined
   private readonly gh: RunGh
   private readonly onCreated: (task: Task) => void
   private readonly busy = new Set<string>()
@@ -73,6 +77,7 @@ export class WorkspaceService {
   constructor(options: WorkspaceServiceOptions) {
     this.tasks = options.tasks
     this.repoDir = options.repoDir
+    this.repos = options.repos
     this.worktreesDir = options.worktreesDir
     this.gh = options.gh ?? runGh
     this.onCreated = options.onCreated ?? (() => undefined)
@@ -83,9 +88,16 @@ export class WorkspaceService {
     return join(this.worktreesDir, taskId)
   }
 
-  // The branches a workspace can start from.
-  async branches(): Promise<{ branches: string[]; current: string | null }> {
-    return listBranches(this.repoDir)
+  // The repository folder of a task, or of a repository id (null: the default one).
+  repoDirOf(repo: string | null): string {
+    return this.repos ? this.repos.pathOf(repo) : this.repoDir
+  }
+
+  // The branches a workspace in that repository can start from.
+  async branches(
+    repo: string | null = null,
+  ): Promise<{ branches: string[]; current: string | null }> {
+    return listBranches(this.repoDirOf(repo))
   }
 
   // Makes the worktree from `base` when given (a local branch), or from the checkout's HEAD.
@@ -99,18 +111,19 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} is ${task.state}, so it gets no workspace`)
       }
 
-      if (base !== undefined && !(await listBranches(this.repoDir)).branches.includes(base)) {
+      const repoDir = this.repoDirOf(task.repo)
+      if (base !== undefined && !(await listBranches(repoDir)).branches.includes(base)) {
         throw new WorkspaceConflictError(`There is no local branch named ${base}`)
       }
       const branch = branchNameFor(task)
       const worktreePath = this.worktreePathFor(taskId)
-      await addWorktree(this.repoDir, worktreePath, branch, base)
+      await addWorktree(repoDir, worktreePath, branch, base)
 
       let created: Task
       try {
         created = this.tasks.recordWorkspace(taskId, { workspace: worktreePath, branch })
       } catch (error) {
-        await removeWorktree(this.repoDir, worktreePath).catch(() => undefined)
+        await removeWorktree(repoDir, worktreePath).catch(() => undefined)
         throw error
       }
       // The workspace is made either way; a failing setup shows up in its terminal.
@@ -131,11 +144,12 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} has no workspace`)
       }
 
-      await removeWorktree(this.repoDir, task.workspace)
+      const repoDir = this.repoDirOf(task.repo)
+      await removeWorktree(repoDir, task.workspace)
 
       const branchDeleted =
         options.deleteBranch && task.branch !== null
-          ? await deleteMergedBranch(this.repoDir, task.branch)
+          ? await deleteMergedBranch(repoDir, task.branch)
           : false
       const updated = this.tasks.recordWorkspace(taskId, {
         workspace: null,
@@ -163,11 +177,17 @@ export class WorkspaceService {
 
   // The size of the work in each workspace. A workspace that git cannot read is left out.
   async diffStats(): Promise<Record<string, DiffStat>> {
-    const base = await currentBranch(this.repoDir)
+    const bases = new Map<string | null, Promise<string | null>>()
+    const baseOf = (repo: string | null) => {
+      const known = bases.get(repo) ?? currentBranch(this.repoDirOf(repo))
+      bases.set(repo, known)
+      return known
+    }
     const withWorkspace = this.tasks.listTasks().filter((task) => task.workspace !== null)
     const entries = await Promise.all(
       withWorkspace.map(async (task) => {
         try {
+          const base = await baseOf(task.repo)
           return [[task.id, await readDiffStat(task.workspace ?? '', base)] as const]
         } catch {
           return []
@@ -180,7 +200,8 @@ export class WorkspaceService {
   // The history of the task branch next to the branch that the main checkout is on.
   async graph(taskId: string): Promise<GitGraph> {
     const workspace = this.workspaceOf(taskId)
-    return readGitGraph(workspace, await currentBranch(this.repoDir))
+    const task = this.tasks.getTask(taskId)
+    return readGitGraph(workspace, await currentBranch(this.repoDirOf(task.repo)))
   }
 
   // Commits every change of the workspace on the task branch.

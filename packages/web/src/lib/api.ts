@@ -10,6 +10,8 @@ import {
   type GitHubIssue,
   gitGraphSchema,
   githubIssueSchema,
+  type Repo,
+  repoSchema,
   type Task,
   type TaskEvent,
   type TaskTemplate,
@@ -122,8 +124,8 @@ export function createApi(
       return body.tasks.map((task) => taskSchema.parse(task))
     },
 
-    async createTask(title: string, parentId?: string): Promise<Task> {
-      const body = asRecord(await request('POST', '/tasks', { title, parentId }))
+    async createTask(title: string, parentId?: string, repo?: string): Promise<Task> {
+      const body = asRecord(await request('POST', '/tasks', { title, parentId, repo }))
       return taskSchema.parse(body.task)
     },
 
@@ -247,6 +249,19 @@ export function createApi(
       )
     },
 
+    async listRepos(): Promise<Repo[]> {
+      const body = asRecord(await request('GET', '/repos'))
+      if (!Array.isArray(body.repos)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.repos.map((repo) => repoSchema.parse(repo))
+    },
+
+    async addRepo(path: string, name?: string): Promise<Repo> {
+      const body = asRecord(await request('POST', '/repos', { path, name }))
+      return repoSchema.parse(body.repo)
+    },
+
     async listTemplates(): Promise<TaskTemplate[]> {
       const body = asRecord(await request('GET', '/templates'))
       if (!Array.isArray(body.templates)) {
@@ -267,8 +282,9 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
-    async listIssues(): Promise<GitHubIssue[]> {
-      const body = asRecord(await request('GET', '/github/issues'))
+    async listIssues(repo?: string): Promise<GitHubIssue[]> {
+      const query = repo === undefined ? '' : `?repo=${encodeURIComponent(repo)}`
+      const body = asRecord(await request('GET', `/github/issues${query}`))
       if (!Array.isArray(body.issues)) {
         throw new Error('The daemon sent an answer this dashboard does not understand.')
       }
@@ -276,8 +292,8 @@ export function createApi(
     },
 
     // Makes a draft task from each issue. Issues imported before are skipped.
-    async importIssues(numbers: readonly number[]): Promise<Task[]> {
-      const body = asRecord(await request('POST', '/github/issues/import', { numbers }))
+    async importIssues(numbers: readonly number[], repo?: string): Promise<Task[]> {
+      const body = asRecord(await request('POST', '/github/issues/import', { numbers, repo }))
       if (!Array.isArray(body.tasks)) {
         throw new Error('The daemon sent an answer this dashboard does not understand.')
       }
@@ -331,8 +347,9 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
-    async listBranches(): Promise<{ branches: string[]; current: string | null }> {
-      const body = asRecord(await request('GET', '/git/branches'))
+    async listBranches(repo?: string): Promise<{ branches: string[]; current: string | null }> {
+      const query = repo === undefined ? '' : `?repo=${encodeURIComponent(repo)}`
+      const body = asRecord(await request('GET', `/git/branches${query}`))
       return {
         branches: stringList(body.branches),
         current: typeof body.current === 'string' ? body.current : null,
