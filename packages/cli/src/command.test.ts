@@ -263,9 +263,7 @@ describe('more commands', () => {
       json: false,
     })
     expect(() => parseCommand(['task', 'edit', 'T-1'])).toThrow(UsageError)
-    expect(() => parseCommand(['task', 'edit', 'T-1', '--priority', 'someday'])).toThrow(
-      UsageError,
-    )
+    expect(() => parseCommand(['task', 'edit', 'T-1', '--priority', 'someday'])).toThrow(UsageError)
   })
 
   it('reads agent start with claude-code as the default agent', () => {
