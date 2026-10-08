@@ -105,7 +105,7 @@ Goals:
 | **Needs me** strip at the top: tasks in `needs-input`, `review`, `failed`, `blocked`, sorted by waiting time | MVP |
 | A running task with no sign of life for 10 minutes is marked "quiet" and listed in the strip | MVP |
 | Details of a task: what happened, from whom and when (activity list) | MVP |
-| Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done except elapsed time | MVP |
+| Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done; elapsed time is the age of the task | MVP |
 | Counts per state in a header bar; click to filter | MVP |
 | Board view (columns by state), toggle with the table. Done; the choice is kept per browser | v1 |
 | One-line live summary per running task (what the agent is doing now) | v1 |
