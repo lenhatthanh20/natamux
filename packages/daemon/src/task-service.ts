@@ -1,5 +1,7 @@
 import {
   applyTaskEvent,
+  type EventType,
+  type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
   TASK_PRIORITIES,
   type Task,
@@ -251,6 +253,52 @@ export class TaskService {
     this.index.upsertTask(updated)
     this.index.appendEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
+  // Keeps what GitHub says about the task's pull request. Logs only what changed: the pull request
+  // was merged (which finishes a task in review) or closed, or its checks passed or failed.
+  recordPullRequestStatus(taskId: string, status: PullRequestStatus): Task {
+    const task = this.getTask(taskId)
+    const before = task.prStatus
+    if (before?.state === status.state && before.checks === status.checks) {
+      return task
+    }
+
+    const at = this.timestamp()
+    const types: EventType[] = []
+    if (status.checks !== before?.checks && status.checks === 'passing') {
+      types.push('ci.passed')
+    }
+    if (status.checks !== before?.checks && status.checks === 'failing') {
+      types.push('ci.failed')
+    }
+    if (status.state !== before?.state && status.state === 'merged') {
+      types.push('pr.merged')
+    }
+    if (status.state !== before?.state && status.state === 'closed') {
+      types.push('pr.closed')
+    }
+
+    let state = task.state
+    const logged: { event: TaskEvent; accepted: boolean }[] = []
+    for (const type of types) {
+      const event: TaskEvent = { taskId, source: 'git', type, at, payload: { url: task.pr } }
+      const applied = applyTaskEvent(state, event)
+      state = applied.state
+      logged.push({ event, accepted: applied.accepted })
+    }
+    const updated: Task = { ...task, state, prStatus: status, updatedAt: at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    for (const { event, accepted } of logged) {
+      this.index.appendEvent(event, accepted)
+      this.bus.publish({ kind: 'task.updated', task: updated, event, accepted })
+    }
+    if (logged.length === 0) {
+      this.bus.publish({ kind: 'task.changed', task: updated })
+    }
     return updated
   }
 

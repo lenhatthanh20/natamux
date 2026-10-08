@@ -14,6 +14,7 @@ import {
   NothingToCommitError,
   OutsideWorkspaceError,
   parseLog,
+  parsePullRequestView,
   parseRefs,
   parseStatus,
   pullRequestUrl,
@@ -21,8 +22,10 @@ import {
   type RunGh,
   readFileDiff,
   readGitGraph,
+  readPullRequestStatus,
   removeWorktree,
   statusFromCodes,
+  summarizeChecks,
   withGitConfig,
 } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
@@ -520,5 +523,64 @@ describe('pull requests', () => {
   it('fails when gh answers without an address', async () => {
     const gh: RunGh = async () => 'ok'
     await expect(createPullRequest('/w', request, gh)).rejects.toThrow(GitHubError)
+  })
+})
+
+describe('summarizeChecks', () => {
+  it.each([
+    [[], 'none'],
+    [[{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { state: 'SUCCESS' }], 'passing'],
+    [[{ status: 'COMPLETED', conclusion: 'SKIPPED' }], 'passing'],
+    [[{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'SUCCESS' }], 'pending'],
+    [[{ state: 'PENDING' }], 'pending'],
+    [[{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'FAILURE' }], 'failing'],
+    [[{ state: 'ERROR' }], 'failing'],
+    [[{ status: 'COMPLETED', conclusion: 'TIMED_OUT' }], 'failing'],
+  ] as const)('reads %j as %s', (items, summary) => {
+    expect(summarizeChecks(items)).toBe(summary)
+  })
+})
+
+describe('parsePullRequestView', () => {
+  it.each([
+    [
+      { state: 'OPEN', isDraft: false, statusCheckRollup: [] },
+      { state: 'open', checks: 'none' },
+    ],
+    [
+      { state: 'OPEN', isDraft: true, statusCheckRollup: null },
+      { state: 'draft', checks: 'none' },
+    ],
+    [
+      { state: 'MERGED', isDraft: false, statusCheckRollup: [{ state: 'SUCCESS' }] },
+      { state: 'merged', checks: 'passing' },
+    ],
+    [{ state: 'CLOSED' }, { state: 'closed', checks: 'none' }],
+  ])('reads %j', (data, status) => {
+    expect(parsePullRequestView(JSON.stringify(data))).toEqual(status)
+  })
+})
+
+describe('readPullRequestStatus', () => {
+  it('asks gh for the state and the checks of the pull request', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return JSON.stringify({ state: 'OPEN', isDraft: false, statusCheckRollup: [] })
+    }
+
+    expect(await readPullRequestStatus('/repo', 'https://github.com/o/r/pull/1', gh)).toEqual({
+      state: 'open',
+      checks: 'none',
+    })
+    expect(calls).toEqual([
+      ['pr', 'view', 'https://github.com/o/r/pull/1', '--json', 'state,isDraft,statusCheckRollup'],
+    ])
+  })
+
+  it('fails with a GitHubError on an answer that is not JSON', async () => {
+    const gh: RunGh = async () => 'not json'
+    const reading = readPullRequestStatus('/repo', 'https://github.com/o/r/pull/1', gh)
+    await expect(reading).rejects.toThrow(GitHubError)
   })
 })

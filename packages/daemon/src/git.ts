@@ -2,7 +2,14 @@ import { execFile } from 'node:child_process'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type { ChangeEntry, ChangeStatus, FileDiff, GitGraph, GraphCommit } from '@helmsman/core'
+import type {
+  ChangeEntry,
+  ChangeStatus,
+  FileDiff,
+  GitGraph,
+  GraphCommit,
+  PullRequestStatus,
+} from '@helmsman/core'
 
 const execFileAsync = promisify(execFile)
 
@@ -456,6 +463,70 @@ export async function createPullRequest(
     throw new GitHubError(`no pull request address in the answer: ${output.trim()}`)
   }
   return url
+}
+
+type CheckItem = { status?: string; conclusion?: string; state?: string }
+
+const FAILED_CONCLUSIONS = [
+  'FAILURE',
+  'TIMED_OUT',
+  'CANCELLED',
+  'ACTION_REQUIRED',
+  'STARTUP_FAILURE',
+]
+
+// One word for all checks of a pull request. `statusCheckRollup` of `gh pr view` mixes check
+// runs (status and conclusion) and commit statuses (state).
+export function summarizeChecks(items: readonly CheckItem[]): PullRequestStatus['checks'] {
+  if (items.length === 0) {
+    return 'none'
+  }
+  const failed = items.some(
+    (item) =>
+      FAILED_CONCLUSIONS.includes(item.conclusion ?? '') ||
+      item.state === 'FAILURE' ||
+      item.state === 'ERROR',
+  )
+  if (failed) {
+    return 'failing'
+  }
+  const waiting = items.some((item) =>
+    item.state === undefined
+      ? item.status !== 'COMPLETED'
+      : item.state === 'PENDING' || item.state === 'EXPECTED',
+  )
+  return waiting ? 'pending' : 'passing'
+}
+
+// Reads the output of `gh pr view --json state,isDraft,statusCheckRollup`.
+export function parsePullRequestView(output: string): PullRequestStatus {
+  const data = JSON.parse(output) as {
+    state?: string
+    isDraft?: boolean
+    statusCheckRollup?: CheckItem[] | null
+  }
+  const state =
+    data.state === 'MERGED'
+      ? 'merged'
+      : data.state === 'CLOSED'
+        ? 'closed'
+        : data.isDraft
+          ? 'draft'
+          : 'open'
+  return { state, checks: summarizeChecks(data.statusCheckRollup ?? []) }
+}
+
+export async function readPullRequestStatus(
+  cwd: string,
+  url: string,
+  gh: RunGh = runGh,
+): Promise<PullRequestStatus> {
+  const output = await gh(cwd, ['pr', 'view', url, '--json', 'state,isDraft,statusCheckRollup'])
+  try {
+    return parsePullRequestView(output)
+  } catch {
+    throw new GitHubError(`could not read the pull request: ${output.slice(0, 200)}`)
+  }
 }
 
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.

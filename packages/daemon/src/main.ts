@@ -5,6 +5,7 @@ import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
 import { spawnShell } from './pty.js'
+import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -42,11 +43,15 @@ const agents = new AgentRunner({
   claudeCommand: process.env.HELMSMAN_CLAUDE_COMMAND,
 })
 
+const pullRequests = new PullRequestWatcher({ tasks: service, cwd: config.repoDir })
+pullRequests.start()
+
 const app = await buildServer({
   service,
   workspaces,
   terminals,
   agents,
+  pullRequests,
   bus,
   token: config.token,
 })
@@ -61,6 +66,7 @@ if (config.tokenWasGenerated) {
 
 async function shutdown(): Promise<void> {
   terminals.closeAll()
+  pullRequests.stop()
   await app.close()
   index.close()
   process.exit(0)

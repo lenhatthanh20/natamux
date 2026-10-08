@@ -1,4 +1,5 @@
 import type { Task } from '@helmsman/core'
+import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { formatAge, isQuiet } from '../lib/tasks'
 import { StateBadge } from './StateBadge'
 
@@ -20,13 +21,14 @@ export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) 
 
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-surface">
-      <table className="w-full min-w-[40rem] border-collapse text-left">
+      <table className="w-full min-w-[48rem] border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-muted">
             <th className="px-3 py-2 font-medium">Task</th>
             <th className="px-3 py-2 font-medium">State</th>
             <th className="px-3 py-2 font-medium">Agent</th>
             <th className="px-3 py-2 font-medium">Branch</th>
+            <th className="px-3 py-2 font-medium">Pull request</th>
             <th className="px-3 py-2 text-right font-medium">Last activity</th>
           </tr>
         </thead>
@@ -58,6 +60,22 @@ export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) 
               <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>
               <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-muted">
                 {task.branch ?? '-'}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {task.pr === null ? (
+                  <span className="text-muted">-</span>
+                ) : (
+                  <span className="flex items-baseline gap-2">
+                    <a href={task.pr} target="_blank" rel="noreferrer" className="text-accent">
+                      {pullRequestNumber(task.pr)}
+                    </a>
+                    {task.prStatus !== null && (
+                      <span className={CHECKS_COLOR[task.prStatus.checks]}>
+                        {pullRequestSummary(task)}
+                      </span>
+                    )}
+                  </span>
+                )}
               </td>
               <td className="px-3 py-2 text-right text-muted">{formatAge(task.updatedAt, now)}</td>
             </tr>

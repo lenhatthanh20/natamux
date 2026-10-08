@@ -1,6 +1,7 @@
 import type { Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
+import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
@@ -19,6 +20,7 @@ type TaskDetailProps = {
   onViewChanges: () => void
   onStartAgent: () => void
   onEdit: (changes: TaskChanges) => void
+  onCheckPullRequest: () => void
   onClose: () => void
 }
 
@@ -43,6 +45,7 @@ export function TaskDetail({
   onViewChanges,
   onStartAgent,
   onEdit,
+  onCheckPullRequest,
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -223,9 +226,24 @@ export function TaskDetail({
           {task.pr === null ? (
             '-'
           ) : (
-            <a href={task.pr} target="_blank" rel="noreferrer" className="text-accent underline">
-              {task.pr.replace(/^https:\/\/github\.com\//, '')}
-            </a>
+            <span className="flex flex-wrap items-baseline gap-2">
+              <a href={task.pr} target="_blank" rel="noreferrer" className="text-accent underline">
+                {task.pr.replace(/^https:\/\/github\.com\//, '')}
+              </a>
+              {task.prStatus !== null && (
+                <span className={CHECKS_COLOR[task.prStatus.checks]}>
+                  {pullRequestSummary(task)}
+                </span>
+              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onCheckPullRequest}
+                className="rounded-md border border-line px-2 py-0.5 hover:border-accent disabled:opacity-50"
+              >
+                Check now
+              </button>
+            </span>
           )}
         </Field>
         <Field label="Updated">{formatAge(task.updatedAt, now)}</Field>

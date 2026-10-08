@@ -114,6 +114,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  const pullRequestMutation = useMutation({
+    mutationFn: (taskId: string) => api.refreshPullRequest(taskId),
+    onMutate: () => setFeedback(null),
+    onSuccess: (task) => mergeTask(task),
+    onError: (error) => setFeedback(error.message),
+  })
+
   // Makes the workspace first when the task has none, then opens its terminal with the agent.
   const agentMutation = useMutation({
     mutationFn: async (task: Task) => {
@@ -375,7 +382,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     eventMutation.isPending ||
                     workspaceMutation.isPending ||
                     agentMutation.isPending ||
-                    editMutation.isPending
+                    editMutation.isPending ||
+                    pullRequestMutation.isPending
                   }
                   feedback={feedback}
                   loadEvents={() => api.listEvents(selectedTask.id)}
@@ -391,6 +399,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onViewChanges={() => openChanges(selectedTask.id)}
                   onStartAgent={() => agentMutation.mutate(selectedTask)}
                   onEdit={(changes) => editMutation.mutate({ taskId: selectedTask.id, changes })}
+                  onCheckPullRequest={() => pullRequestMutation.mutate(selectedTask.id)}
                   onClose={() => setDetailOpen(false)}
                 />
               )}
