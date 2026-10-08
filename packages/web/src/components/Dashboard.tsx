@@ -5,6 +5,7 @@ import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { createApi, isUnauthorized } from '../lib/api'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
+import { terminalSocketUrl } from '../lib/terminal'
 import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
 import { NeedsMeStrip } from './NeedsMeStrip'
@@ -125,6 +126,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      // Every key belongs to the shell, Escape too (vim, less, an agent's prompt).
+      if (event.target instanceof Element && event.target.closest('.xterm')) {
         return
       }
       if (isTypingTarget(event.target)) {
@@ -281,6 +286,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
             loadGraph={() => api.getGitGraph(changesTask.id)}
+            connectTerminal={async (size) => {
+              const ticket = await api.terminalTicket(changesTask.id)
+              return new WebSocket(terminalSocketUrl(window.location, changesTask.id, ticket, size))
+            }}
             onClose={closeChanges}
           />
         ) : (

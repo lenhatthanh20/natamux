@@ -11,6 +11,7 @@
     "ghcr.io/devcontainers/features/sshd:1": {},
     "ghcr.io/devcontainers/features/copilot-cli:1": {}
   },
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 build-essential",
   "postCreateCommand": "pnpm install --frozen-lockfile && pnpm build",
   "postStartCommand": "scripts/dev.sh up",
   "forwardPorts": [5173, 4317, 8080],

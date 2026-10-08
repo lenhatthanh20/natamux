@@ -62,7 +62,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Create a workspace for a task (git worktree, branch named from the task) | MVP |
 | Option: run a task in the main checkout, no worktree | v1 |
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters) | MVP |
-| Embedded terminal per workspace (multiple tabs) | MVP |
+| Embedded terminal per workspace (multiple tabs). Done: one shell per task that keeps running when the dashboard closes, with recent output on reconnect. Next: more than one tab | MVP |
 | Setup script per repo (install deps, copy env files) when a workspace is created | v1 |
 | Port allocation per workspace so dev servers do not clash | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |

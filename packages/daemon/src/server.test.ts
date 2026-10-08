@@ -7,6 +7,8 @@ import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
+import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
+import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
 
 const TOKEN = 'test-token'
@@ -15,6 +17,7 @@ const authorization = { authorization: `Bearer ${TOKEN}` }
 let repo: TestRepo
 let index: TaskIndex
 let app: FastifyInstance
+let ptys: FakePty[]
 
 beforeEach(async () => {
   repo = createTestRepo()
@@ -28,7 +31,13 @@ beforeEach(async () => {
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
   })
-  app = await buildServer({ service, workspaces, bus, token: TOKEN })
+  const spawner = fakeSpawner()
+  ptys = spawner.ptys
+  const terminals = new TerminalService({
+    spawn: spawner.spawn,
+    workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
+  })
+  app = await buildServer({ service, workspaces, terminals, bus, token: TOKEN })
 })
 
 afterEach(async () => {
@@ -542,5 +551,128 @@ describe('graph', () => {
 
     const anonymous = await app.inject({ method: 'GET', url: '/tasks/T-0001/graph' })
     expect(anonymous.statusCode).toBe(401)
+  })
+})
+
+describe('terminal', () => {
+  async function taskWithWorkspace(): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+  }
+
+  async function ticket(): Promise<string> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/terminal/ticket',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(200)
+    return response.json().ticket
+  }
+
+  type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
+
+  function nextMessage(socket: Socket): Promise<unknown> {
+    return new Promise((resolve) => {
+      socket.once('message', (data: Buffer) => resolve(JSON.parse(data.toString())))
+    })
+  }
+
+  function closeCode(socket: Socket): Promise<number> {
+    return new Promise((resolve) => {
+      socket.once('close', (code: number) => resolve(code))
+    })
+  }
+
+  it('runs a shell in the workspace and passes input and output', async () => {
+    await taskWithWorkspace()
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(await ticket())}&cols=100&rows=30`,
+    )
+    expect(ptys[0]?.options).toMatchObject({ cols: 100, rows: 30 })
+    expect(ptys[0]?.options.cwd).toContain('T-0001')
+
+    const echoed = nextMessage(socket)
+    socket.send(JSON.stringify({ type: 'input', data: 'pwd\r' }))
+    expect(await echoed).toEqual({ type: 'output', data: 'pwd\r' })
+
+    socket.send(JSON.stringify({ type: 'resize', cols: 120, rows: 40 }))
+    socket.send('not json')
+    socket.send(JSON.stringify({ type: 'input', data: 42 }))
+    // Frames arrive in order, so once this one is echoed, the ones before it were handled.
+    const marker = nextMessage(socket)
+    socket.send(JSON.stringify({ type: 'input', data: 'done' }))
+    expect(await marker).toEqual({ type: 'output', data: 'done' })
+
+    const exited = nextMessage(socket)
+    const closed = closeCode(socket)
+    ptys[0]?.exit(0)
+    expect(await exited).toEqual({ type: 'exit', code: 0 })
+    await closed
+    expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
+    expect(ptys[0]?.written).toEqual(['pwd\r', 'done'])
+  })
+
+  it('closes a socket without a valid ticket', async () => {
+    await taskWithWorkspace()
+    const used = await ticket()
+    const first = await app.injectWS(`/tasks/T-0001/terminal?ticket=${used}&cols=80&rows=24`)
+    first.terminate()
+
+    for (const query of [`ticket=${used}&cols=80&rows=24`, 'ticket=nope&cols=80&rows=24']) {
+      const socket = await app.injectWS(`/tasks/T-0001/terminal?${query}`)
+      expect(await closeCode(socket)).toBe(4401)
+    }
+    expect(ptys).toHaveLength(1)
+  })
+
+  it('does not let a ticket stand in for the token anywhere else', async () => {
+    await taskWithWorkspace()
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tasks?ticket=${await ticket()}`,
+    })
+    expect(response.statusCode).toBe(401)
+  })
+
+  it('needs the token for a ticket, and a workspace', async () => {
+    const anonymous = await app.inject({ method: 'POST', url: '/tasks/T-0001/terminal/ticket' })
+    expect(anonymous.statusCode).toBe(401)
+
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const none = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/terminal/ticket',
+      headers: authorization,
+    })
+    expect(none.statusCode).toBe(409)
+  })
+
+  it('ends the shell before the workspace is removed', async () => {
+    await taskWithWorkspace()
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`,
+    )
+    const closed = closeCode(socket)
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+
+    expect(removed.statusCode).toBe(200)
+    expect(ptys[0]?.killed).toBe(true)
+    await closed
   })
 })
