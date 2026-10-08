@@ -12,7 +12,13 @@ type EmptyStateProps = {
   tone?: 'neutral' | 'error'
 }
 
-export function EmptyState({ icon: Icon, title, children, actions, tone = 'neutral' }: EmptyStateProps) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  children,
+  actions,
+  tone = 'neutral',
+}: EmptyStateProps) {
   return (
     <div className="mx-auto flex max-w-90 flex-col items-center gap-2 px-4 py-10 text-center">
       <span className="mb-1 flex size-14 items-center justify-center rounded-full bg-raised">

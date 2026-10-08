@@ -1,8 +1,8 @@
 import type { GitHubIssue, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
+import { Dialog } from './ui/Dialog'
 
 type IssueImportProps = {
   // The repository the issues come from; it keeps the lists of repositories apart.

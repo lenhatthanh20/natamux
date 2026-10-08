@@ -218,8 +218,8 @@
   --shadow-pop: var(--shadow-1);
   --shadow-modal: var(--shadow-2);
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
-    monospace;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 
 /* Base rules sit in the base layer, so a utility class on an element always wins over them. */

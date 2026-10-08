@@ -6,7 +6,9 @@ describe('toastDuration', () => {
     expect(toastDuration({ tone: 'info' })).toBe(5000)
     expect(toastDuration({ tone: 'success' })).toBe(5000)
     expect(toastDuration({ tone: 'error' })).toBe(10_000)
-    expect(toastDuration({ tone: 'error', actions: [{ label: 'Retry', run: () => {} }] })).toBeNull()
+    expect(
+      toastDuration({ tone: 'error', actions: [{ label: 'Retry', run: () => {} }] }),
+    ).toBeNull()
   })
 })
 

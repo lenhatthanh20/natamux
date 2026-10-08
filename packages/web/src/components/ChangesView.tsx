@@ -208,12 +208,7 @@ export function ChangesView({
               Create pull request
             </Button>
           ) : (
-            <a
-              href={task.pr}
-              target="_blank"
-              rel="noreferrer"
-              className={button('secondary')}
-            >
+            <a href={task.pr} target="_blank" rel="noreferrer" className={button('secondary')}>
               <GitPullRequest size={14} aria-hidden="true" />
               Open pull request
             </a>
@@ -244,7 +239,10 @@ export function ChangesView({
       />
 
       {tab === 'terminal' && (
-        <div {...tabPanelProps('workspace', 'terminal', 'Terminal')} className="flex min-h-0 flex-1 flex-col p-2">
+        <div
+          {...tabPanelProps('workspace', 'terminal', 'Terminal')}
+          className="flex min-h-0 flex-1 flex-col p-2"
+        >
           <ShellPanes
             taskId={task.id}
             connect={connectTerminal}

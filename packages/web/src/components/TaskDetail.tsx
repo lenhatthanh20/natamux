@@ -12,11 +12,11 @@ import { StateBadge } from './StateBadge'
 import { Subtasks } from './Subtasks'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
+import { Button } from './ui/Button'
 import { ConfirmDialog } from './ui/Dialog'
+import { IconButton } from './ui/IconButton'
 import { Menu } from './ui/Menu'
 import { Select } from './ui/Select'
-import { Button } from './ui/Button'
-import { IconButton } from './ui/IconButton'
 import { button, sectionTitle } from './ui/styles'
 
 type TaskDetailProps = {
