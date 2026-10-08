@@ -2,16 +2,19 @@ import { type FormEvent, useState } from 'react'
 
 type AgentCommentProps = {
   path: string
+  // The line the cursor is on in the diff, when there is one.
+  line?: number | null
   send: (text: string) => Promise<unknown>
 }
 
-// The text the agent gets: the file first, so the agent knows where to look.
-export function commentForAgent(path: string, comment: string): string {
-  return `Review comment on ${path}:\n${comment.trim()}`
+// The text the agent gets: the file (and line) first, so the agent knows where to look.
+export function commentForAgent(path: string, comment: string, line?: number | null): string {
+  const where = line ? `${path}, line ${line}` : path
+  return `Review comment on ${where}:\n${comment.trim()}`
 }
 
 // A review comment on the file shown, pasted into the agent's terminal as its next prompt.
-export function AgentComment({ path, send }: AgentCommentProps) {
+export function AgentComment({ path, line, send }: AgentCommentProps) {
   const [comment, setComment] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -24,7 +27,7 @@ export function AgentComment({ path, send }: AgentCommentProps) {
     setSending(true)
     setStatus(null)
     try {
-      await send(commentForAgent(path, comment))
+      await send(commentForAgent(path, comment, line))
       setComment('')
       setStatus('Sent to the agent.')
     } catch (error) {
@@ -37,7 +40,8 @@ export function AgentComment({ path, send }: AgentCommentProps) {
   return (
     <form onSubmit={submit} className="mt-3 flex flex-col gap-2">
       <label htmlFor="agent-comment" className="text-muted">
-        Comment on {path} for the agent
+        Comment on {path}
+        {line ? `, line ${line},` : ''} for the agent
       </label>
       <textarea
         id="agent-comment"

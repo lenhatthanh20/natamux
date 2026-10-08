@@ -44,7 +44,15 @@ const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
   R: 'text-[#1a3fa0] dark:text-[#9db9ff]',
 }
 
-function FileBody({ file, sideBySide }: { file: FileDiff; sideBySide: boolean }) {
+function FileBody({
+  file,
+  sideBySide,
+  onLine,
+}: {
+  file: FileDiff
+  sideBySide: boolean
+  onLine: (line: number) => void
+}) {
   if (file.binary) {
     return <p className="text-muted">This file is binary. It changed, but it is not shown.</p>
   }
@@ -58,6 +66,7 @@ function FileBody({ file, sideBySide }: { file: FileDiff; sideBySide: boolean })
         original={file.original ?? ''}
         modified={file.modified ?? ''}
         sideBySide={sideBySide}
+        onLine={onLine}
       />
     </Suspense>
   )
@@ -84,6 +93,7 @@ export function ChangesView({
   const [sideBySide, setSideBySide] = useState(true)
   const [message, setMessage] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
+  const [line, setLine] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
   const changes = useQuery({
@@ -334,7 +344,10 @@ export function ChangesView({
                 <li key={entry.path} className="border-b border-line last:border-b-0">
                   <button
                     type="button"
-                    onClick={() => setSelectedPath(entry.path)}
+                    onClick={() => {
+                      setSelectedPath(entry.path)
+                      setLine(null)
+                    }}
                     aria-current={entry.path === current?.path}
                     className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-accent/10 aria-[current=true]:bg-accent/10"
                   >
@@ -357,8 +370,10 @@ export function ChangesView({
           <div className="min-w-0">
             {file.isPending && <p className="text-muted">Reading the file.</p>}
             {file.isError && <p role="alert">{file.error.message}</p>}
-            {file.data && <FileBody file={file.data} sideBySide={sideBySide} />}
-            {current !== null && <AgentComment path={current.path} send={sendToAgent} />}
+            {file.data && <FileBody file={file.data} sideBySide={sideBySide} onLine={setLine} />}
+            {current !== null && (
+              <AgentComment path={current.path} line={line} send={sendToAgent} />
+            )}
           </div>
         </div>
       )}
