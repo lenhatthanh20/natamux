@@ -135,7 +135,7 @@ Goals:
 | Claude Code adapter using its hooks for status events | MVP |
 | `helmsman hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
 | Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks | v1 |
-| Generic adapter for any CLI (status from process and output idle time, terminal bell) | v1 |
+| Generic adapter for any CLI (status from process and output idle time, terminal bell). Done: output in a task's first terminal is a sign of life (so a silent agent shows as quiet), and the terminal bell from an agent without hooks moves a running task to needs input | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
 | Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
