@@ -5,6 +5,7 @@ import {
   countByState,
   filterTasks,
   formatAge,
+  isQuiet,
   needsMeTasks,
   sortByRecent,
   upsertTask,
@@ -88,7 +89,29 @@ describe('sorting and merging', () => {
   })
 })
 
+describe('isQuiet', () => {
+  const task = makeTask({ state: 'running', updatedAt: '2026-10-08T09:00:00.000Z' })
+
+  it('is false while the last sign of life is recent', () => {
+    expect(isQuiet(task, new Date('2026-10-08T09:09:59.000Z'))).toBe(false)
+  })
+
+  it('is true once the quiet time has passed', () => {
+    expect(isQuiet(task, new Date('2026-10-08T09:10:00.000Z'))).toBe(true)
+    expect(isQuiet(task, new Date('2026-10-08T11:00:00.000Z'))).toBe(true)
+  })
+
+  it.each<TaskState>(['draft', 'ready', 'needs-input', 'review', 'blocked', 'failed', 'done'])(
+    'is never true for a task that is %s',
+    (state) => {
+      expect(isQuiet({ ...task, state }, new Date('2026-10-09T09:00:00.000Z'))).toBe(false)
+    },
+  )
+})
+
 describe('needsMeTasks', () => {
+  const now = new Date('2026-10-08T09:05:00.000Z')
+
   it('keeps only tasks that need the user, longest wait first', () => {
     const tasks = [
       makeTask({ id: 'T-0001', state: 'running' }),
@@ -96,12 +119,21 @@ describe('needsMeTasks', () => {
       makeTask({ id: 'T-0003', state: 'failed', updatedAt: '2026-10-08T08:00:00.000Z' }),
       makeTask({ id: 'T-0004', state: 'done' }),
     ]
-    expect(needsMeTasks(tasks).map((task) => task.id)).toEqual(['T-0003', 'T-0002'])
+    expect(needsMeTasks(tasks, now).map((task) => task.id)).toEqual(['T-0003', 'T-0002'])
+  })
+
+  it('adds a running task that has been quiet for a long time', () => {
+    const tasks = [
+      makeTask({ id: 'T-0001', state: 'running', updatedAt: '2026-10-08T08:30:00.000Z' }),
+      makeTask({ id: 'T-0002', state: 'running', updatedAt: '2026-10-08T09:04:00.000Z' }),
+      makeTask({ id: 'T-0003', state: 'review', updatedAt: '2026-10-08T09:00:00.000Z' }),
+    ]
+    expect(needsMeTasks(tasks, now).map((task) => task.id)).toEqual(['T-0001', 'T-0003'])
   })
 
   it('does not change the list it is given', () => {
     const tasks = [makeTask({ id: 'T-0002', state: 'review' }), makeTask({ id: 'T-0001' })]
-    needsMeTasks(tasks)
+    needsMeTasks(tasks, now)
     expect(tasks.map((task) => task.id)).toEqual(['T-0002', 'T-0001'])
   })
 })

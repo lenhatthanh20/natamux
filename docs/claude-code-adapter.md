@@ -54,7 +54,9 @@ claude --settings "$(helmsman hooks claude-code)"
 
 ## Known gap
 
-`Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Planned: a "no sign of life" rule for running tasks. See `agent-adapters.md`. Seen in the real session below: the last event of the test was an `agent.resumed` with no `agent.finished` after it.
+`Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Seen in the real session below: the last event of the test was an `agent.resumed` with no `agent.finished` after it.
+
+What Helmsman does about it: every hook of a running task, even one that changes nothing (for example `PostToolUse`), moves the time of the task's last update, at most once every 30 seconds, and logs an `agent.active` event (the dashboard does not list those). When a running task has had no update for 10 minutes, the dashboard marks it "quiet", lists it among the tasks that need you, and says it may be stuck, interrupted or closed. It is a hint, not a state: the task stays running until you or the agent change it. The 10 minutes are a guess: a long command keeps an agent silent without any hook, so such a task can be marked quiet by mistake.
 
 ## Verified with a real session
 

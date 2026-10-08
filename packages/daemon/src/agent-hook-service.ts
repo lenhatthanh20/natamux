@@ -76,6 +76,11 @@ export class AgentHookService {
       })
       applied.push(planned.type)
     }
+
+    // A hook that changes nothing still shows that a running agent is alive.
+    if (applied.length === 0) {
+      this.tasks.recordActivity(task.id)
+    }
     return { taskId: task.id, applied }
   }
 }

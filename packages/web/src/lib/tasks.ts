@@ -51,10 +51,18 @@ export function upsertTask(tasks: readonly Task[], task: Task): Task[] {
   return sortByRecent([...tasks.filter((existing) => existing.id !== task.id), task])
 }
 
-// The task that has waited longest comes first.
-export function needsMeTasks(tasks: readonly Task[]): Task[] {
+// A running task that has shown no sign of life for this long is probably stuck, interrupted or
+// closed. Ten minutes: a long command can keep an agent silent for a while without a problem.
+export const QUIET_AFTER_MS = 10 * 60 * 1000
+
+export function isQuiet(task: Task, now: Date): boolean {
+  return task.state === 'running' && now.getTime() - Date.parse(task.updatedAt) >= QUIET_AFTER_MS
+}
+
+// Tasks that need the user: waiting on them, or running but quiet. The longest wait comes first.
+export function needsMeTasks(tasks: readonly Task[], now: Date): Task[] {
   return tasks
-    .filter((task) => needsMe(task.state))
+    .filter((task) => needsMe(task.state) || isQuiet(task, now))
     .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.id.localeCompare(b.id))
 }
 

@@ -110,7 +110,7 @@ describe('applyTaskEvent', () => {
     })
   })
 
-  it.each(['task.created', 'workspace.created', 'workspace.removed'] as const)(
+  it.each(['task.created', 'workspace.created', 'workspace.removed', 'agent.active'] as const)(
     'accepts %s in any state without changing it',
     (type) => {
       expect(applyTaskEvent('running', event(type))).toEqual({ state: 'running', accepted: true })

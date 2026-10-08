@@ -77,7 +77,7 @@ So there are three real approaches: hooks (Orca, Superset, Emdash), reading the 
 
 - **Hooks are the main source.** Three of five do it, and it matches the plan.
 - **Guard every hook with an environment variable.** Superset registers hooks in global agent settings and wrote down the result (`HOOKS_INVESTIGATION.md`): for Droid, Codex and others the hook ran in every session on the machine, outside Superset too, with a visible hook line in the agent's UI. Their fix is a command that does nothing unless a Superset variable is set. Helmsman: `helmsman hook <agent>` must exit 0 at once when `HELMSMAN_TOKEN` is not set, and Helmsman should prefer per-session settings (`claude --settings`, or settings that Helmsman passes when it starts the agent) over editing global files. If a user chooses a global install, offer an uninstall.
-- **An interrupted run leaves no event.** Orca guesses an interrupt because agents miss their cancel hook. Claude Code's docs say `Stop` does not fire when the user interrupts. So a task can stay "running" after Esc. Codex has an `Interrupt` hook. Helmsman needs a "no sign of life" rule for running tasks (for example: no hook for some minutes, shown as stale on the dashboard), and to use `Interrupt` where it exists.
+- **An interrupted run leaves no event.** Orca guesses an interrupt because agents miss their cancel hook. Claude Code's docs say `Stop` does not fire when the user interrupts. So a task can stay "running" after Esc. Codex has an `Interrupt` hook. Helmsman has a "no sign of life" rule for running tasks (any hook refreshes the time of the last update; 10 minutes without one marks the task "quiet" on the dashboard), and should use `Interrupt` where it exists.
 - **The terminal is a useful second source.** Orca reads terminal titles, Claude Squad reads the screen text. Both are fragile: a text change in the agent breaks them. Use them only as the fallback tier, marked as estimated, and prefer the generic signals (output going quiet, bell, OSC 9) over the exact words of one agent.
 - **Driving the agent through a protocol is exact but costly.** Vibe Kanban needs a separate executor for each agent and owns the whole interface, with no native terminal. Helmsman should not write one per agent. ACP is the one shared protocol; use it later.
 - **Orca's size is a warning.** Its hook code alone is dozens of files (pane identity, freshness, races, remote hosts). Keep Helmsman to the four signals and add detail only when a real case needs it.
@@ -87,7 +87,7 @@ So there are three real approaches: hooks (Orca, Superset, Emdash), reading the 
 1. (Done) Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `helmsman hook <agent>` (guarded: it does nothing without `HELMSMAN_TOKEN`, always exits 0 and prints nothing) and `POST /hooks/:agent`. Claude Code keeps working.
 2. Add Codex (its input is the same shape, so it is the cheapest second adapter). Use its `Interrupt` hook.
 3. Add Gemini CLI.
-4. Add a "no sign of life" rule for running tasks, shown as stale on the dashboard.
+4. (Done) A "no sign of life" rule for running tasks, shown as "quiet" on the dashboard.
 5. Add Cursor and Copilot CLI after reading their payloads in full.
 6. The agent runner with Tier 1 detection (output quiet, bell, OSC 9).
 7. OpenCode plugin, then ACP.
