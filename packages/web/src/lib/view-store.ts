@@ -1,6 +1,7 @@
-import type { TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@helmsman/core'
 import { create } from 'zustand'
 import { type PaneLayout, parsePaneLayout } from './panes'
+import type { TaskSort } from './tasks'
 
 export type WorkspaceTab = 'changes' | 'history' | 'terminal'
 export type Layout = 'table' | 'board'
@@ -11,8 +12,11 @@ const SIDEBAR_OPEN_KEY = 'helmsman.sidebar-open'
 const DETAIL_OPEN_KEY = 'helmsman.detail-open'
 const TAB_KEY = 'helmsman.tab-by-task'
 const PANE_LAYOUT_KEY = 'helmsman.pane-layout'
+const SHOW_FINISHED_KEY = 'helmsman.show-finished'
+const SEEN_KEY = 'helmsman.seen-state'
 // Old tasks do not need a remembered answer forever.
 const MAX_REMEMBERED_DETAILS = 200
+const MAX_REMEMBERED_SEEN = 1000
 
 // The layout is a per-browser choice. Storage can be missing or blocked; then it is the table.
 function savedLayout(): Layout {
@@ -125,11 +129,52 @@ function savePaneLayout(layout: PaneLayout): void {
   }
 }
 
+function savedShowFinished(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(SHOW_FINISHED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function saveShowFinished(show: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(SHOW_FINISHED_KEY, String(show))
+  } catch {
+    // Not kept; the next visit hides the finished columns.
+  }
+}
+
+function savedSeen(): Record<string, TaskState> {
+  try {
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(SEEN_KEY) ?? '{}')
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return {}
+    }
+    return Object.fromEntries(Object.entries(value).filter(([, state]) => typeof state === 'string'))
+  } catch {
+    return {}
+  }
+}
+
+function saveSeen(seen: Record<string, TaskState>): void {
+  try {
+    globalThis.localStorage?.setItem(SEEN_KEY, JSON.stringify(seen))
+  } catch {
+    // Not kept; the next visit starts with nothing marked.
+  }
+}
+
 // Sets one task's entry. The newest answers stay when there are too many.
-function withEntry<T>(current: Readonly<Record<string, T>>, taskId: string, value: T) {
+function withEntry<T>(
+  current: Readonly<Record<string, T>>,
+  taskId: string,
+  value: T,
+  max = MAX_REMEMBERED_DETAILS,
+) {
   const { [taskId]: _old, ...rest } = current
   const entries = Object.entries({ ...rest, [taskId]: value })
-  return Object.fromEntries(entries.slice(-MAX_REMEMBERED_DETAILS))
+  return Object.fromEntries(entries.slice(-max))
 }
 
 export function withDetailOpen(
@@ -148,8 +193,37 @@ export function withTab(
   return withEntry(current, taskId, tab)
 }
 
+// A task is unseen when its state is not the one it had when the user last looked at it. A task
+// that was never recorded counts as seen: the first visit must not mark everything.
+export function isUnseen(seen: Readonly<Record<string, TaskState>>, task: Pick<Task, 'id' | 'state'>) {
+  const state = seen[task.id]
+  return state !== undefined && state !== task.state
+}
+
+// Records the state the user has seen. Tasks that are recorded already keep their entry unless
+// `overwrite` is set (the user opened that task just now).
+export function withSeen(
+  current: Readonly<Record<string, TaskState>>,
+  tasks: readonly Pick<Task, 'id' | 'state'>[],
+  overwrite: boolean,
+): Record<string, TaskState> {
+  let next = { ...current }
+  for (const task of tasks) {
+    if (overwrite || next[task.id] === undefined) {
+      next = withEntry(next, task.id, task.state, MAX_REMEMBERED_SEEN)
+    }
+  }
+  return next
+}
+
 type ViewData = {
   stateFilter: TaskState | null
+  // The order of the table. Null is the default order.
+  sort: TaskSort
+  // Done and cancelled columns on the board.
+  showFinished: boolean
+  // The state each task had when the user last looked at it.
+  seenState: Record<string, TaskState>
   search: string
   selectedId: string | null
   // Whether the details of each task are open. A task without an entry has them closed.
@@ -176,6 +250,11 @@ type ViewData = {
 
 type ViewActions = {
   toggleStateFilter: (state: TaskState) => void
+  setStateFilter: (state: TaskState | null) => void
+  setSort: (sort: TaskSort) => void
+  setShowFinished: (show: boolean) => void
+  // Marks tasks as seen in their current state. `overwrite`: the user looked at them just now.
+  markSeen: (tasks: readonly Pick<Task, 'id' | 'state'>[], overwrite?: boolean) => void
   // Shows the task list with only this state.
   showState: (state: TaskState) => void
   setSearch: (search: string) => void
@@ -195,6 +274,9 @@ type ViewActions = {
 
 export const initialViewData: ViewData = {
   stateFilter: null,
+  sort: null,
+  showFinished: false,
+  seenState: {},
   search: '',
   selectedId: null,
   detailOpenByTask: {},
@@ -213,6 +295,8 @@ export const initialViewData: ViewData = {
 export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   ...initialViewData,
   layout: savedLayout(),
+  showFinished: savedShowFinished(),
+  seenState: savedSeen(),
   pinned: savedPinned(),
   sidebarOpen: savedSidebarOpen(),
   detailOpenByTask: savedDetailOpen(),
@@ -220,6 +304,22 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   paneLayout: savedPaneLayout(),
   toggleStateFilter: (state) =>
     set((current) => ({ stateFilter: current.stateFilter === state ? null : state })),
+  setStateFilter: (stateFilter) => set({ stateFilter }),
+  setSort: (sort) => set({ sort }),
+  setShowFinished: (showFinished) => {
+    saveShowFinished(showFinished)
+    set({ showFinished })
+  },
+  markSeen: (tasks, overwrite = false) =>
+    set((current) => {
+      const seenState = withSeen(current.seenState, tasks, overwrite)
+      const changed = Object.keys(seenState).some((id) => seenState[id] !== current.seenState[id])
+      if (!changed) {
+        return current
+      }
+      saveSeen(seenState)
+      return { seenState }
+    }),
   showState: (state) => set({ stateFilter: state, changesTaskId: null, agentsOpen: false }),
   setSearch: (search) => set({ search }),
   select: (id) => set({ selectedId: id }),

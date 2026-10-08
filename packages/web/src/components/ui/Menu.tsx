@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { formatShortcut } from '../../lib/keys'
 import { IconButton } from './IconButton'
-import { ICON, type IconButtonSize } from './styles'
+import { button, ICON, type IconButtonSize } from './styles'
 
 export type MenuAction = {
   type?: 'item'
@@ -214,6 +214,10 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
   )
 }
 
+function ShownIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon size={ICON.xs} aria-hidden="true" />
+}
+
 type MenuProps = {
   // The trigger's name for screen readers, for example "Actions for T-0004".
   label: string
@@ -222,6 +226,10 @@ type MenuProps = {
   revealOnHover?: boolean
   // The button defaults to "..." at 24px.
   icon?: LucideIcon
+  // A button with this text (and the icon before it) instead of an icon-only one.
+  text?: string
+  // Told when the list opens or closes, for example to hide what shares the trigger's place.
+  onOpenChange?: (open: boolean) => void
   size?: IconButtonSize
   tipSide?: 'top' | 'bottom'
   className?: string
@@ -233,12 +241,20 @@ export function Menu({
   items,
   revealOnHover = false,
   icon = Ellipsis,
+  text,
+  onOpenChange,
   size = 'xs',
   tipSide,
   className = '',
 }: MenuProps) {
   const [open, setOpen] = useState<{ anchor: Anchor; focus: 'first' | 'last' } | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
+  const openChange = useRef(onOpenChange)
+  openChange.current = onOpenChange
+  const isOpen = open !== null
+  useEffect(() => {
+    openChange.current?.(isOpen)
+  }, [isOpen])
 
   const show = (focus: 'first' | 'last') => {
     if (trigger.current) {
@@ -256,36 +272,55 @@ export function Menu({
   closeRef.current = close
   const stableClose = useRef((restoreFocus: boolean) => closeRef.current(restoreFocus)).current
 
+  const onTriggerClick = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+    if (open === null) {
+      show('first')
+    } else {
+      close(false)
+    }
+  }
+  const onTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      show(event.key === 'ArrowUp' ? 'last' : 'first')
+    }
+  }
+
   return (
     <>
-      <IconButton
-        ref={trigger}
-        label={label}
-        icon={icon}
-        size={size}
-        tipSide={tipSide}
-        aria-haspopup="menu"
-        aria-expanded={open !== null}
-        onClick={(event) => {
-          event.stopPropagation()
-          if (open === null) {
-            show('first')
-          } else {
-            close(false)
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault()
-            show(event.key === 'ArrowUp' ? 'last' : 'first')
-          }
-        }}
-        className={`${
-          revealOnHover && open === null
-            ? 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100'
-            : ''
-        } ${className}`}
-      />
+      {text === undefined ? (
+        <IconButton
+          ref={trigger}
+          label={label}
+          icon={icon}
+          size={size}
+          tipSide={tipSide}
+          aria-haspopup="menu"
+          aria-expanded={open !== null}
+          onClick={onTriggerClick}
+          onKeyDown={onTriggerKeyDown}
+          className={`${
+            revealOnHover && open === null
+              ? 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100'
+              : ''
+          } ${className}`}
+        />
+      ) : (
+        <button
+          ref={trigger}
+          type="button"
+          aria-label={`${text}, ${label.toLowerCase()}`}
+          aria-haspopup="menu"
+          aria-expanded={open !== null}
+          onClick={onTriggerClick}
+          onKeyDown={onTriggerKeyDown}
+          className={`${button('secondary', 'xs')} ${className}`}
+        >
+          {icon === Ellipsis ? null : <ShownIcon icon={icon} />}
+          {text}
+        </button>
+      )}
       {open !== null && (
         <MenuPopup
           label={label}
