@@ -182,6 +182,7 @@ export function TaskDetail({
           <StateBadge state={task.state} />
         </Field>
         <Field label="Priority">{task.priority}</Field>
+        {task.repo !== null && <Field label="Repository">{task.repo}</Field>}
         <Field label="Agent">
           <span className="flex flex-wrap items-center gap-2">
             <span>{task.agent ?? '-'}</span>

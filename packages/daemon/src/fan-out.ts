@@ -38,6 +38,7 @@ export async function fanOut(
       priority: source.priority,
       labels: [...source.labels.filter((existing) => existing !== label), label],
       dependsOn: source.dependsOn,
+      repo: source.repo,
     })
     if (options.start) {
       await parts.workspaces.create(task.id)

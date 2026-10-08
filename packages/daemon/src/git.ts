@@ -552,6 +552,11 @@ export async function readDiffStat(worktreePath: string, base: string | null): P
   return parseNumstat(await git(worktreePath, ['diff', '--numstat', from, '--']))
 }
 
+// The top folder of the repository that holds `path`. Throws GitError when it is not in one.
+export async function repositoryRoot(path: string): Promise<string> {
+  return (await git(path, ['rev-parse', '--show-toplevel'])).trim()
+}
+
 // The local branches of a repository, sorted, and the one its checkout is on.
 export async function listBranches(
   repoDir: string,

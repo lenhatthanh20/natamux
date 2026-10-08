@@ -7,6 +7,7 @@ import { EventBus } from './event-bus.js'
 import { IssueImporter } from './issue-importer.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
+import { RepoService } from './repo-service.js'
 import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
 import { TaskIndex } from './task-index.js'
@@ -22,10 +23,12 @@ const index = new TaskIndex(join(config.dataDir, 'index.sqlite'))
 const bus = new EventBus()
 const service = new TaskService({ dataDir: config.dataDir, index, bus })
 service.init()
+const repos = new RepoService({ dataDir: config.dataDir, defaultPath: config.repoDir })
 const workspaces = new WorkspaceService({
   tasks: service,
   repoDir: config.repoDir,
   worktreesDir: config.worktreesDir,
+  repos,
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -61,8 +64,9 @@ const app = await buildServer({
   terminals,
   agents,
   pullRequests,
-  issues: new IssueImporter({ tasks: service, cwd: config.repoDir }),
+  issues: new IssueImporter({ tasks: service, repoPath: (repo) => repos.pathOf(repo) }),
   templates: new TemplateService({ dataDir: config.dataDir, tasks: service }),
+  repos,
   bus,
   token: config.token,
 })
