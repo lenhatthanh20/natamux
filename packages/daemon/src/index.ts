@@ -1,3 +1,6 @@
+export * from './agent-adapters.js'
+export * from './agent-hook-service.js'
+export * from './agent-signals.js'
 export * from './claude-code-hooks.js'
 export * from './config.js'
 export * from './event-bus.js'

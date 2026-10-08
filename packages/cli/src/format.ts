@@ -15,6 +15,7 @@ Commands:
   workspace create <id>      Create a git worktree and a branch for a task
   workspace remove <id>      Remove the worktree of a task (needs --yes)
   hooks claude-code          Print Claude Code settings that report a task's progress
+  hook <agent>               For an agent's hook: send the JSON on stdin to the daemon (silent)
   help                       Show this help
 
 Options:
