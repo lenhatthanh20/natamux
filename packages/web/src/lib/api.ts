@@ -179,6 +179,18 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
+    // Copies of a task for several agents to try the same work; with `start`, each gets a
+    // workspace and Claude Code.
+    async fanOut(taskId: string, count: number, start: boolean): Promise<Task[]> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/fan-out`, { count, start }),
+      )
+      if (!Array.isArray(body.tasks)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.tasks.map((task) => taskSchema.parse(task))
+    },
+
     // Starts an agent in the terminal of the task's workspace.
     async startAgent(taskId: string, agent: string, prompt?: string): Promise<Task> {
       const body = asRecord(
