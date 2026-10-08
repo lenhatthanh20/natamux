@@ -149,6 +149,25 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    if (path === '/api/github/issues' && method === 'GET') {
+      return json({
+        issues: [
+          {
+            number: 12,
+            title: 'Dark mode flickers',
+            body: '',
+            url: 'https://github.com/o/r/issues/12',
+            labels: ['ui'],
+            taskId: null,
+          },
+        ],
+      })
+    }
+    if (path === '/api/github/issues/import' && method === 'POST') {
+      const task = makeTask({ id: 'T-0050', title: 'Dark mode flickers', labels: ['ui'] })
+      tasks = [...tasks, task]
+      return json({ tasks: [task] })
+    }
     const editPath = /^\/api\/tasks\/(T-\d+)$/.exec(path)
     const editTask = tasks.find((task) => task.id === editPath?.[1])
     if (editTask && method === 'PATCH') {
@@ -537,6 +556,23 @@ describe('App', () => {
     expect(await within(screen.getByRole('table')).findByText('Fix the clock')).toBeTruthy()
     const patch = calls.find((call) => call.method === 'PATCH')
     expect(patch?.path).toBe('/api/tasks/T-0001')
+  })
+
+  it('imports a GitHub issue as a task', async () => {
+    const { calls } = installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Import issues' }))
+    const panel = await screen.findByRole('region', { name: 'Import GitHub issues' })
+    await user.click(await within(panel).findByRole('checkbox'))
+    await user.click(within(panel).getByRole('button', { name: 'Import 1 issue' }))
+
+    expect(await screen.findByText('Imported 1 issue.')).toBeTruthy()
+    expect(within(screen.getByRole('table')).getByText('Dark mode flickers')).toBeTruthy()
+    expect(calls.some((call) => call.path === '/api/github/issues/import')).toBe(true)
   })
 
   it('adds a task from the title field', async () => {

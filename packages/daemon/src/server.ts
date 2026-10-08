@@ -14,6 +14,7 @@ import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { AgentRunner } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
+import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TerminalLimitError, type TerminalService } from './terminal-service.js'
@@ -29,6 +30,7 @@ type ServerOptions = {
   terminals: TerminalService
   agents: AgentRunner
   pullRequests: PullRequestWatcher
+  issues: IssueImporter
   bus: EventBus
   token: string
 }
@@ -41,6 +43,9 @@ const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
+})
+const importIssuesBodySchema = z.object({
+  numbers: z.array(z.number().int().positive()).min(1).max(100),
 })
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
 const terminalQuerySchema = terminalSizeSchema.extend({ ticket: z.string().min(1).max(256) })
@@ -148,6 +153,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks', async (request, reply) => {
     const task = options.service.createTask(request.body)
     return reply.code(201).send({ task })
+  })
+
+  app.get('/github/issues', async () => ({ issues: await options.issues.list() }))
+
+  app.post('/github/issues/import', async (request) => {
+    const { numbers } = importIssuesBodySchema.parse(request.body)
+    return { tasks: await options.issues.import(numbers) }
   })
 
   app.get('/tasks/:id', async (request) => {
