@@ -147,6 +147,19 @@ export class DaemonClient {
     })
   }
 
+  async updateTask(id: string, changes: Record<string, unknown>): Promise<Task> {
+    const body = asRecord(await this.request('PATCH', this.taskPath(id), changes), 'edited task')
+    return taskSchema.parse(body.task)
+  }
+
+  async startAgent(id: string, agent: string, prompt?: string): Promise<Task> {
+    const body = asRecord(
+      await this.request('POST', `${this.taskPath(id)}/agent`, { agent, prompt }),
+      'started agent',
+    )
+    return taskSchema.parse(body.task)
+  }
+
   async createWorkspace(id: string): Promise<Task> {
     const body = asRecord(
       await this.request('POST', `${this.taskPath(id)}/workspace`),

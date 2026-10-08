@@ -199,6 +199,14 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
+    // Pastes text into the agent's terminal as its next prompt.
+    async sendToAgent(taskId: string, text: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent/message`, { text }),
+      )
+      return taskSchema.parse(body.task)
+    },
+
     // Commits every change of the task's workspace.
     async commitChanges(taskId: string, message: string): Promise<Task> {
       const body = asRecord(

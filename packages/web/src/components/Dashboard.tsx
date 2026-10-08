@@ -423,6 +423,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               mergeTask(updated)
               return updated
             }}
+            sendToAgent={async (text) => {
+              const updated = await api.sendToAgent(changesTask.id, text)
+              mergeTask(updated)
+              return updated
+            }}
             openPullRequest={async () => {
               const updated = await api.openPullRequest(changesTask.id)
               mergeTask(updated)
