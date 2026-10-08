@@ -25,8 +25,13 @@ function isInside(folder: string, path: string): boolean {
   return rest === '' || (rest !== '..' && !rest.startsWith(`..${sep}`) && !isAbsolute(rest))
 }
 
+export type AgentActivity = { text: string; at: string }
+
 export class AgentHookService {
   private readonly tasks: TaskService
+  // What the agent of each task does now. Kept in memory only: it is gone after a restart, and
+  // a new hook fills it again.
+  private readonly activities = new Map<string, AgentActivity>()
 
   constructor(tasks: TaskService) {
     this.tasks = tasks
@@ -51,6 +56,10 @@ export class AgentHookService {
       .find((task) => task.workspace !== null && isInside(task.workspace, cwd))
   }
 
+  activity(): Record<string, AgentActivity> {
+    return Object.fromEntries(this.activities)
+  }
+
   // Throws UnknownAgentError for an agent without an adapter, and a ZodError when the input is not
   // a hook of that agent.
   handle(agentId: string, raw: unknown, taskIdHeader: string | undefined): HookResult {
@@ -67,6 +76,13 @@ export class AgentHookService {
     const task = this.findTask(hook.cwd, taskIdHeader)
     if (!task) {
       return { taskId: null, applied: [] }
+    }
+
+    if (hook.summary !== undefined) {
+      this.activities.set(task.id, { text: hook.summary, at: new Date().toISOString() })
+    }
+    if (hook.signal === 'turn-ended' || hook.signal === 'failed' || hook.signal === 'asking') {
+      this.activities.delete(task.id)
     }
 
     const applied: EventType[] = []

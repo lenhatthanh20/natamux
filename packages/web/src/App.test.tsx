@@ -174,6 +174,10 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       tasks = [...tasks, task]
       return json({ task }, 201)
     }
+    if (path === '/api/activity' && method === 'GET') {
+      const entry = { text: 'Bash: pnpm test', at: '2026-10-08T09:00:00Z' }
+      return json({ activity: { 'T-0002': entry } })
+    }
     if (path === '/api/git/branches' && method === 'GET') {
       return json({ branches: ['main', 'release'], current: 'main' })
     }
@@ -731,6 +735,16 @@ describe('App', () => {
     expect((screen.getByLabelText('Search tasks') as HTMLInputElement).value).toBe('tries-t-0001')
     expect(within(screen.getByRole('table')).getByText('Fix it (try 2)')).toBeTruthy()
     expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
+  })
+
+  it('shows what the agent of a running task does now', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const table = await screen.findByRole('table')
+
+    expect(await within(table).findByText('Bash: pnpm test')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {
