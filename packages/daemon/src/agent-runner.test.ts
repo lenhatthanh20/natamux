@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UnknownAgentError } from './agent-hook-service.js'
-import { AgentRunner, firstPrompt, quoteArgument } from './agent-runner.js'
+import { AgentRunner, firstPrompt, quoteArgument, TaskWaitingError } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -99,6 +99,15 @@ describe('AgentRunner', () => {
       "claude --settings '/data/claude code.json' 'Only this'\r",
       "claude --settings '/data/claude code.json'\r",
     ])
+  })
+
+  it('refuses a task that waits for another one', () => {
+    const before = tasks.createTask({ title: 'First things first' })
+    const task = taskWithWorkspace()
+    tasks.updateTask(task.id, { dependsOn: [before.id] })
+
+    expect(() => runner.start(task.id, 'claude-code')).toThrow(TaskWaitingError)
+    expect(ptys).toHaveLength(0)
   })
 
   it('refuses an agent it cannot start, and a task without a workspace', () => {

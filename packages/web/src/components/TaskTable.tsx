@@ -1,4 +1,4 @@
-import type { DiffStat, Task } from '@helmsman/core'
+import { type DiffStat, type Task, waitingOn } from '@helmsman/core'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { formatAge, isQuiet } from '../lib/tasks'
 import { StateBadge } from './StateBadge'
@@ -8,7 +8,16 @@ type TaskTableProps = {
   now: Date
   selectedId: string | null
   diffStats?: Readonly<Record<string, DiffStat>>
+  // Every task, to tell whether a task still waits for others. The rows can be filtered.
+  allTasks?: readonly Task[]
   onSelect: (id: string) => void
+}
+
+export function WaitsFor({ ids }: { ids: readonly string[] }) {
+  if (ids.length === 0) {
+    return null
+  }
+  return <span className="shrink-0 text-muted">waits for {ids.join(', ')}</span>
 }
 
 function DiffSize({ stat }: { stat: DiffStat | undefined }) {
@@ -24,7 +33,14 @@ function DiffSize({ stat }: { stat: DiffStat | undefined }) {
   )
 }
 
-export function TaskTable({ tasks, now, selectedId, diffStats = {}, onSelect }: TaskTableProps) {
+export function TaskTable({
+  tasks,
+  now,
+  selectedId,
+  diffStats = {},
+  allTasks = tasks,
+  onSelect,
+}: TaskTableProps) {
   if (tasks.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
@@ -62,6 +78,7 @@ export function TaskTable({ tasks, now, selectedId, diffStats = {}, onSelect }: 
                 >
                   <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
+                  <WaitsFor ids={waitingOn(task, allTasks)} />
                 </button>
               </td>
               <td className="px-3 py-2">
