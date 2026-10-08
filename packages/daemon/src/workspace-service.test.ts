@@ -352,10 +352,12 @@ describe('commit, push and pull request', () => {
     expect(ghCalls).toEqual([
       ['pr', 'create', '--head', task.branch, '--title', 'Fix the bug', '--body', 'The details.'],
     ])
-    expect(tasks.listEvents(task.id).map((entry) => entry.event.type).slice(-2)).toEqual([
-      'git.pushed',
-      'pr.opened',
-    ])
+    expect(
+      tasks
+        .listEvents(task.id)
+        .map((entry) => entry.event.type)
+        .slice(-2),
+    ).toEqual(['git.pushed', 'pr.opened'])
     await expect(workspaces.openPullRequest(task.id)).rejects.toThrow(WorkspaceConflictError)
   })
 

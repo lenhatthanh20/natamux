@@ -353,9 +353,7 @@ export async function commitAll(
     throw new NothingToCommitError()
   }
   await git(worktreePath, ['commit', '--quiet', '-m', message])
-  const [hash = '', subject = ''] = (
-    await git(worktreePath, ['log', '-1', '--format=%H%x1f%s'])
-  )
+  const [hash = '', subject = ''] = (await git(worktreePath, ['log', '-1', '--format=%H%x1f%s']))
     .trim()
     .split(FIELD)
   return { hash, subject }
