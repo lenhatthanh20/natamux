@@ -1,7 +1,7 @@
 # Production images: `daemon` (the task service) and `web` (the dashboard behind nginx).
 # Build one with --target daemon or --target web. compose.prod.yaml builds both.
 
-FROM node:22-bookworm-slim AS base
+FROM node:25-bookworm-slim AS base
 ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
@@ -23,7 +23,7 @@ RUN pnpm --filter @helmsman/core --filter @helmsman/daemon --filter @helmsman/we
 FROM manifests AS daemon-deps
 RUN pnpm install --frozen-lockfile --prod --filter "@helmsman/daemon..."
 
-FROM node:22-bookworm-slim AS daemon
+FROM node:25-bookworm-slim AS daemon
 # git is how the daemon makes the worktree of a task.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates \
