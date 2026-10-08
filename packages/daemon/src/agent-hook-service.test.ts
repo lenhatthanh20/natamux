@@ -44,6 +44,22 @@ describe('AgentHookService', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('keeps what the agent does now, and forgets it when the turn ends', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    service.handle('claude-code', hook('UserPromptSubmit'), task.id)
+    expect(service.activity()[task.id]?.text).toBe('Reading the prompt')
+
+    service.handle(
+      'claude-code',
+      hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'pnpm test' } }),
+      task.id,
+    )
+    expect(service.activity()[task.id]?.text).toBe('Bash: pnpm test')
+
+    service.handle('claude-code', hook('Stop'), task.id)
+    expect(service.activity()).toEqual({})
+  })
+
   it('finds the task by the header', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     expect(service.findTask('/anywhere', task.id)?.id).toBe(task.id)

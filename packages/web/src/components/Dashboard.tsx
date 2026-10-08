@@ -233,6 +233,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     refetchInterval: 15_000,
   })
 
+  // Hooks do not reach the dashboard as task changes, so the agents' current steps are read often.
+  const activityQuery = useQuery({
+    queryKey: ['activity'],
+    queryFn: () => api.listActivity(),
+    refetchInterval: 3_000,
+  })
+
   const visibleTasks = useMemo(
     () => filterTasks(tasks, stateFilter, search),
     [tasks, stateFilter, search],
@@ -545,6 +552,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
+                  activity={activityQuery.data}
                   onSelect={chooseTask}
                 />
               )}

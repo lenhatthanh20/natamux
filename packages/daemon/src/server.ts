@@ -193,6 +193,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.code(201).send({ task: options.templates.createTask(id, request.body) })
   })
 
+  // What the agent of each task does now, from its last hook.
+  app.get('/activity', async () => ({ activity: hooks.activity() }))
+
   app.get('/git/branches', async () => options.workspaces.branches())
 
   app.get('/diffstats', async () => ({ stats: await options.workspaces.diffStats() }))

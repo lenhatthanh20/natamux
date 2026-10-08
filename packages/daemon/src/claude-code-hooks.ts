@@ -8,6 +8,8 @@ export const claudeCodeInputSchema = z.object({
   session_id: z.string().optional(),
   notification_type: z.string().optional(),
   message: z.string().optional(),
+  tool_name: z.string().optional(),
+  tool_input: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type ClaudeCodeInput = z.infer<typeof claudeCodeInputSchema>
@@ -30,10 +32,46 @@ function details(input: ClaudeCodeInput): Record<string, unknown> {
   }
 }
 
+const SUMMARY_LENGTH = 80
+
+function shorten(text: string): string {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length > SUMMARY_LENGTH ? `${line.slice(0, SUMMARY_LENGTH - 1)}…` : line
+}
+
+// A path inside the session's folder is shown from there.
+function relativePath(path: string, cwd: string | undefined): string {
+  if (cwd && path.startsWith(`${cwd}/`)) {
+    return path.slice(cwd.length + 1)
+  }
+  return path
+}
+
+// "Edit src/a.ts", "Bash: pnpm test", or the tool name for any other tool.
+export function toolSummary(input: ClaudeCodeInput): string | undefined {
+  const tool = input.tool_name
+  if (!tool) {
+    return undefined
+  }
+  const toolInput = input.tool_input ?? {}
+  const text = (key: string) => (typeof toolInput[key] === 'string' ? toolInput[key] : undefined)
+  const file = text('file_path') ?? text('notebook_path')
+  if (file) {
+    return shorten(`${tool} ${relativePath(file, input.cwd)}`)
+  }
+  const command = text('command')
+  if (command) {
+    return shorten(`${tool}: ${command}`)
+  }
+  const pattern = text('pattern') ?? text('url') ?? text('query') ?? text('description')
+  return shorten(pattern ? `${tool} ${pattern}` : tool)
+}
+
 export function claudeCodeSignal(input: ClaudeCodeInput): AgentSignal | undefined {
   switch (input.hook_event_name) {
     case 'UserPromptSubmit':
       return 'prompt'
+    case 'PreToolUse':
     case 'PostToolUse':
       return 'activity'
     case 'PermissionRequest':
@@ -57,6 +95,16 @@ export const claudeCodeAdapter: AgentAdapter = {
   normalize(raw) {
     const input = claudeCodeInputSchema.parse(raw)
     const signal = claudeCodeSignal(input)
-    return signal === undefined ? undefined : { signal, cwd: input.cwd, details: details(input) }
+    if (signal === undefined) {
+      return undefined
+    }
+    // The tool that is about to run is what the agent does now.
+    const summary =
+      input.hook_event_name === 'PreToolUse'
+        ? toolSummary(input)
+        : input.hook_event_name === 'UserPromptSubmit'
+          ? 'Reading the prompt'
+          : undefined
+    return { signal, cwd: input.cwd, details: details(input), summary }
   },
 }

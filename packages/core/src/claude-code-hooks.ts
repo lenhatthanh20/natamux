@@ -1,6 +1,7 @@
 // The Claude Code hook events Helmsman listens to, and the header that names the task.
 export const CLAUDE_CODE_HOOK_EVENTS = [
   'UserPromptSubmit',
+  'PreToolUse',
   'PostToolUse',
   'PermissionRequest',
   'Notification',
