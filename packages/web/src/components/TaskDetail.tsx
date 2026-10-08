@@ -23,6 +23,7 @@ type TaskDetailProps = {
   onCheckPullRequest: () => void
   // Tasks this one depends on that are not done yet.
   waitingFor?: readonly string[]
+  onSaveTemplate?: () => void
   onClose: () => void
 }
 
@@ -49,6 +50,7 @@ export function TaskDetail({
   onEdit,
   onCheckPullRequest,
   waitingFor = [],
+  onSaveTemplate,
   onClose,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
@@ -93,6 +95,17 @@ export function TaskDetail({
               className="rounded-md px-2 py-1 text-muted hover:text-ink"
             >
               Edit
+            </button>
+          )}
+          {onSaveTemplate !== undefined && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSaveTemplate}
+              title="Keep the notes, priority and labels to start new tasks from"
+              className="rounded-md px-2 py-1 text-muted hover:text-ink disabled:opacity-50"
+            >
+              Save as template
             </button>
           )}
           <button
