@@ -77,6 +77,33 @@ describe('createApi', () => {
     })
   })
 
+  it('lists the events of a task', async () => {
+    const entry = {
+      seq: 3,
+      accepted: false,
+      event: {
+        taskId: 'T-0001',
+        source: 'agent',
+        type: 'agent.finished',
+        at: '2026-10-08T09:00:00.000Z',
+        payload: {},
+      },
+    }
+    const { calls, fetchFunction } = fakeFetch(() => json({ events: [entry] }))
+
+    const events = await createApi('secret', fetchFunction).listEvents('T-0001')
+
+    expect(events).toEqual([entry])
+    expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001/events', method: 'GET' })
+  })
+
+  it('rejects an event list that is not a list', async () => {
+    const { fetchFunction } = fakeFetch(() => json({ events: 'nope' }))
+    await expect(createApi('secret', fetchFunction).listEvents('T-0001')).rejects.toThrow(
+      'does not understand',
+    )
+  })
+
   it('creates a workspace for a task', async () => {
     const withWorkspace = { ...task, workspace: '/work/T-0001', branch: 'helmsman/t-0001-example' }
     const { calls, fetchFunction } = fakeFetch(() => json({ task: withWorkspace }, 201))

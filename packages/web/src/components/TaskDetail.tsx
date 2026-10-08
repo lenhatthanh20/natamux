@@ -1,13 +1,17 @@
 import type { Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
+import type { StoredEvent } from '../lib/api'
 import { actionsFor, formatAge, type TaskAction } from '../lib/tasks'
+import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
+import { Timeline } from './Timeline'
 
 type TaskDetailProps = {
   task: Task
   now: Date
   busy: boolean
   feedback: string | null
+  loadEvents: () => Promise<StoredEvent[]>
   onAction: (action: TaskAction) => void
   onCreateWorkspace: () => void
   onRemoveWorkspace: () => void
@@ -28,6 +32,7 @@ export function TaskDetail({
   now,
   busy,
   feedback,
+  loadEvents,
   onAction,
   onCreateWorkspace,
   onRemoveWorkspace,
@@ -107,9 +112,7 @@ export function TaskDetail({
         </Field>
         <Field label="Priority">{task.priority}</Field>
         <Field label="Agent">{task.agent ?? '-'}</Field>
-        <Field label="Branch">
-          <span className="font-mono">{task.branch ?? '-'}</span>
-        </Field>
+        <Field label="Branch">{task.branch === null ? '-' : <PathText path={task.branch} />}</Field>
         <Field label="Workspace">
           {task.workspace === null ? (
             <span className="flex flex-wrap items-center gap-2">
@@ -127,7 +130,7 @@ export function TaskDetail({
             </span>
           ) : (
             <span className="flex flex-col items-start gap-2">
-              <span className="font-mono break-all">{task.workspace}</span>
+              <PathText path={task.workspace} />
               <span className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -161,6 +164,8 @@ export function TaskDetail({
       </dl>
 
       {task.description !== '' && <p className="whitespace-pre-wrap">{task.description}</p>}
+
+      <Timeline taskId={task.id} updatedAt={task.updatedAt} loadEvents={loadEvents} />
     </aside>
   )
 }
