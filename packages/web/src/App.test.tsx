@@ -29,6 +29,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     workspace: null,
     pr: null,
     prStatus: null,
+    parentId: null,
     dependsOn: [],
     createdAt: '2026-10-08T09:00:00.000Z',
     updatedAt: '2026-10-08T09:00:00.000Z',
@@ -83,14 +84,18 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       path,
       authorization: new Headers(init?.headers).get('authorization'),
     })
-    const body: { title?: string; type?: EventType } =
+    const body: { title?: string; type?: EventType; parentId?: string } =
       typeof init?.body === 'string' ? JSON.parse(init.body) : {}
 
     if (path === '/api/tasks' && method === 'GET') {
       return json({ tasks })
     }
     if (path === '/api/tasks' && method === 'POST') {
-      const task = makeTask({ id: 'T-0099', title: body.title ?? '' })
+      const task = makeTask({
+        id: 'T-0099',
+        title: body.title ?? '',
+        parentId: body.parentId ?? null,
+      })
       tasks = [task, ...tasks]
       return json({ task }, 201)
     }
@@ -673,6 +678,24 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 
     expect(await within(screen.getByRole('table')).findByText('Fix the login')).toBeTruthy()
+  })
+
+  it('adds a subtask from the details of a task', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Release 1.0' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Release/ }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.type(within(details).getByLabelText('New subtask title'), 'Write the notes')
+    await user.click(within(details).getByRole('button', { name: 'Add' }))
+
+    const subtasks = await within(details).findByRole('region', { name: 'Subtasks' })
+    expect(await within(subtasks).findByText('Write the notes')).toBeTruthy()
+    expect(within(subtasks).getByText('0 of 1 done')).toBeTruthy()
+    expect(within(screen.getByRole('table')).getByText('part of T-0001')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {
