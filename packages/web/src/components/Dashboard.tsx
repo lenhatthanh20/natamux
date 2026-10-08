@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
+import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
@@ -230,6 +231,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   }
 
   const waitingCount = needsMeTasks(tasks, now).length
+  const notifications = useTaskNotifications(tasks)
   useEffect(() => {
     document.title = waitingCount > 0 ? `(${waitingCount}) Helmsman` : 'Helmsman'
   }, [waitingCount])
@@ -264,6 +266,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             aria-label="Search tasks"
             className="w-48 rounded-md border border-line bg-canvas px-3 py-1.5"
           />
+          {notifications.permission === 'default' && (
+            <button
+              type="button"
+              onClick={notifications.askPermission}
+              title="A system notification when a task starts to wait for you"
+              className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+            >
+              Notify me
+            </button>
+          )}
+          {notifications.permission === 'denied' && (
+            <span className="text-muted" title="Allow notifications for this page in the browser">
+              Notifications blocked
+            </span>
+          )}
           <span
             className="flex items-center gap-1.5 text-muted"
             title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
