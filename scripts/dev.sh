@@ -43,6 +43,12 @@ wait_for_ports() {
 }
 
 up() {
+  # The codespace runs `up` on every start. A `demo` typed at the same time would race it for the
+  # same container names, so the second run waits for the first.
+  if command -v flock >/dev/null; then
+    exec 9>"${TMPDIR:-/tmp}/helmsman-dev.lock"
+    flock 9
+  fi
   wait_for_docker
   # Commits from the dashboard carry your name, and a push uses the token of the codespace.
   export HELMSMAN_GIT_NAME="${HELMSMAN_GIT_NAME:-$(git config user.name || true)}"
