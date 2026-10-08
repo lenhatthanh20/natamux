@@ -360,10 +360,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               mergeTask(updated)
               return updated
             }}
-            connectTerminal={async (size) => {
+            connectTerminal={async (size, terminal) => {
               const ticket = await api.terminalTicket(changesTask.id)
-              return new WebSocket(terminalSocketUrl(window.location, changesTask.id, ticket, size))
+              return new WebSocket(
+                terminalSocketUrl(window.location, changesTask.id, ticket, size, terminal),
+              )
             }}
+            loadTerminals={() => api.listTerminals(changesTask.id)}
+            closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
             onClose={closeChanges}
           />
         ) : (

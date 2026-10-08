@@ -10,10 +10,10 @@ import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
 import { GitGraph } from './GitGraph'
+import { TerminalTabs } from './TerminalTabs'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
-const TerminalView = lazy(() => import('./TerminalView'))
 
 const REFRESH_MS = 10_000
 
@@ -24,7 +24,9 @@ type ChangesViewProps = {
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   loadGraph: () => Promise<GitGraphData>
-  connectTerminal: (size: TerminalSize) => Promise<WebSocket>
+  connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
+  loadTerminals: () => Promise<string[]>
+  closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
@@ -67,6 +69,8 @@ export function ChangesView({
   loadFile,
   loadGraph,
   connectTerminal,
+  loadTerminals,
+  closeTerminal,
   commit,
   push,
   openPullRequest,
@@ -267,9 +271,12 @@ export function ChangesView({
 
       {tab === 'terminal' && (
         <div role="tabpanel" aria-label="Terminal">
-          <Suspense fallback={<p className="text-muted">Loading the terminal.</p>}>
-            <TerminalView connect={connectTerminal} />
-          </Suspense>
+          <TerminalTabs
+            taskId={task.id}
+            connect={connectTerminal}
+            loadTerminals={loadTerminals}
+            closeTerminal={closeTerminal}
+          />
         </div>
       )}
 

@@ -140,6 +140,59 @@ describe('TerminalService', () => {
   })
 })
 
+describe('several terminals of a task', () => {
+  it('keeps one shell per terminal name, each in the workspace', () => {
+    const { service, ptys } = setup()
+    const first = client()
+    const second = client()
+    service.attach('T-0001', first, size)
+    service.attach('T-0001', second, size, '2')
+
+    service.input('T-0001', 'a', '2')
+
+    expect(ptys).toHaveLength(2)
+    expect(ptys[1]?.options.cwd).toBe('/work/T-0001')
+    expect(ptys[1]?.written).toEqual(['a'])
+    expect(first.messages).toEqual([])
+    expect(second.messages).toEqual([{ type: 'output', data: 'a' }])
+    expect(service.list('T-0001')).toEqual(['1', '2'])
+  })
+
+  it('lists terminals in number order, and only those of the task', () => {
+    const { service } = setup()
+    service.attach('T-0001', client(), size, '10')
+    service.attach('T-0001', client(), size, '2')
+    service.attach('T-0002', client(), size)
+
+    expect(service.list('T-0001')).toEqual(['2', '10'])
+  })
+
+  it('closes one terminal, or all of a task', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    service.attach('T-0002', client(), size)
+
+    service.closeOne('T-0001', '2')
+    expect(service.list('T-0001')).toEqual(['1'])
+
+    service.close('T-0001')
+    expect(service.list('T-0001')).toEqual([])
+    expect(ptys.map((pty) => pty.killed)).toEqual([true, true, false])
+  })
+
+  it('runs an agent in the first terminal', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size, '2')
+
+    service.run('T-0001', 'claude')
+
+    expect(ptys).toHaveLength(2)
+    expect(ptys[1]?.written).toEqual(['claude\r'])
+    expect(service.isOpen('T-0001', '1')).toBe(true)
+  })
+})
+
 describe('terminal tickets', () => {
   it('works once, and only for its task', () => {
     const { service } = setup()
