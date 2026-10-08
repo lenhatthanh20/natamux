@@ -4,6 +4,7 @@ import { claudeCodeHookSettings } from '@helmsman/core'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
+import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
@@ -40,10 +41,12 @@ const workspaces = new WorkspaceService({
 // Shells run on the same machine as the daemon, so they reach it on loopback. They get the token
 // and the address for `helmsman` and for the hooks of the agents they start.
 const daemonUrl = `http://127.0.0.1:${config.port}`
+const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
   spawn: spawnShell,
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, HELMSMAN_TOKEN: config.token, HELMSMAN_URL: daemonUrl },
+  onOutput: (taskId, terminal, data) => genericSignals.onOutput(taskId, terminal, data),
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')

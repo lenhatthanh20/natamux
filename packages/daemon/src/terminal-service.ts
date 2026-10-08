@@ -61,6 +61,8 @@ type TerminalServiceOptions = {
   workspaceOf: (taskId: string) => string
   env?: NodeJS.ProcessEnv
   now?: () => number
+  // Called with every piece of output, for signs of life of an agent without hooks.
+  onOutput?: (taskId: string, terminal: string, data: string) => void
 }
 
 type Ticket = { taskId: string; expiresAt: number }
@@ -72,6 +74,7 @@ export class TerminalService {
   private readonly workspaceOf: (taskId: string) => string
   private readonly env: NodeJS.ProcessEnv
   private readonly now: () => number
+  private readonly onOutput: (taskId: string, terminal: string, data: string) => void
   private readonly sessions = new Map<string, Session>()
   private readonly tickets = new Map<string, Ticket>()
 
@@ -80,6 +83,7 @@ export class TerminalService {
     this.workspaceOf = options.workspaceOf
     this.env = options.env ?? process.env
     this.now = options.now ?? Date.now
+    this.onOutput = options.onOutput ?? (() => undefined)
   }
 
   // A browser cannot set headers on a WebSocket. Instead of the daemon token in the URL, it asks
@@ -203,6 +207,11 @@ export class TerminalService {
       session.scrollback = (session.scrollback + data).slice(-SCROLLBACK_CHARS)
       for (const client of session.clients) {
         client.send({ type: 'output', data })
+      }
+      try {
+        this.onOutput(taskId, terminal, data)
+      } catch {
+        // A failing listener must not break the terminal.
       }
     })
     pty.onExit((code) => {
