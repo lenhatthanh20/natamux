@@ -6,7 +6,7 @@ import type {
   TerminalSize,
 } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUp, FileDiff, GitPullRequest, History, Terminal } from 'lucide-react'
+import { ArrowUp, FileDiff as FileDiffIcon, GitPullRequest, History, Terminal } from 'lucide-react'
 import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
@@ -247,7 +247,7 @@ export function ChangesView({
             onClick={() => setTab('changes')}
             className={tabClass}
           >
-            <FileDiff size={14} aria-hidden="true" />
+            <FileDiffIcon size={14} aria-hidden="true" />
             Changes
           </button>
           <button
