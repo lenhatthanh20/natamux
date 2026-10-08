@@ -9,6 +9,7 @@ import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } fr
 import { terminalSocketUrl } from '../lib/terminal'
 import { useViewStore } from '../lib/view-store'
 import { ChangesView } from './ChangesView'
+import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
 import { StateFilter } from './StateFilter'
 import { TaskDetail } from './TaskDetail'
@@ -40,6 +41,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const [newTitle, setNewTitle] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const newTaskRef = useRef<HTMLInputElement>(null)
 
@@ -273,6 +275,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             aria-label="Search tasks"
             className="w-48 rounded-md border border-line bg-canvas px-3 py-1.5"
           />
+          <button
+            type="button"
+            aria-expanded={importOpen}
+            onClick={() => setImportOpen((open) => !open)}
+            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+          >
+            Import issues
+          </button>
           {notifications.permission === 'default' && (
             <button
               type="button"
@@ -358,6 +368,23 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           />
         ) : (
           <>
+            {importOpen && (
+              <IssueImport
+                loadIssues={() => api.listIssues()}
+                importIssues={(numbers) => api.importIssues(numbers)}
+                onImported={(created) => {
+                  for (const task of created) {
+                    mergeTask(task)
+                  }
+                  setFeedback(
+                    created.length === 1
+                      ? 'Imported 1 issue.'
+                      : `Imported ${created.length} issues.`,
+                  )
+                }}
+                onClose={() => setImportOpen(false)}
+              />
+            )}
             <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
 
             <div

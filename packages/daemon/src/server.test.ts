@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { addBareOrigin, createTestRepo, type TestRepo } from './git-repo.fixture.js'
+import { IssueImporter } from './issue-importer.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
@@ -56,6 +57,14 @@ beforeEach(async () => {
     terminals,
     agents,
     pullRequests,
+    issues: new IssueImporter({
+      tasks: service,
+      cwd: repo.dir,
+      gh: async () =>
+        JSON.stringify([
+          { number: 7, title: 'From GitHub', body: '', url: 'https://github.com/o/r/issues/7' },
+        ]),
+    }),
     bus,
     token: TOKEN,
   })
@@ -884,5 +893,32 @@ describe('pull request status', () => {
     })
     expect(none.statusCode).toBe(200)
     expect(none.json().task.prStatus).toBeNull()
+  })
+})
+
+describe('GitHub issues', () => {
+  it('lists open issues and imports them as tasks', async () => {
+    const list = await app.inject({ method: 'GET', url: '/github/issues', headers: authorization })
+    expect(list.statusCode).toBe(200)
+    expect(list.json().issues).toMatchObject([{ number: 7, title: 'From GitHub', taskId: null }])
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: '/github/issues/import',
+      headers: authorization,
+      payload: { numbers: [7] },
+    })
+    expect(imported.statusCode).toBe(200)
+    expect(imported.json().tasks).toMatchObject([{ id: 'T-0001', title: 'From GitHub' }])
+  })
+
+  it('answers 400 without numbers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/github/issues/import',
+      headers: authorization,
+      payload: { numbers: [] },
+    })
+    expect(response.statusCode).toBe(400)
   })
 })
