@@ -195,6 +195,14 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
+    // Asks the daemon to read the pull request of the task from GitHub now.
+    async refreshPullRequest(taskId: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/pull-request/refresh`),
+      )
+      return taskSchema.parse(body.task)
+    },
+
     // A one-time ticket that opens the terminal socket of a task, see terminalSocketUrl.
     async terminalTicket(taskId: string): Promise<string> {
       const body = asRecord(

@@ -293,3 +293,51 @@ describe('updateTask', () => {
     expect(() => service.updateTask(task.id, { dependsOn: [task.id] })).toThrow(/itself/)
   })
 })
+
+describe('recordPullRequestStatus', () => {
+  function taskInReviewWithPr() {
+    const task = service.createTask({ title: 'Fix it' })
+    service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    service.applyEvent(task.id, { source: 'agent', type: 'agent.finished' })
+    return service.recordGit(task.id, 'pr.opened', { url: 'https://github.com/o/r/pull/1' })
+  }
+
+  const types = (taskId: string) => service.listEvents(taskId).map((entry) => entry.event.type)
+
+  it('keeps the status, and logs only when checks pass or fail', () => {
+    const task = taskInReviewWithPr()
+    const count = types(task.id).length
+
+    service.recordPullRequestStatus(task.id, { state: 'open', checks: 'pending' })
+    expect(types(task.id)).toHaveLength(count)
+    expect(service.getTask(task.id).prStatus).toEqual({ state: 'open', checks: 'pending' })
+    expect(messages.at(-1)).toMatchObject({ kind: 'task.changed' })
+
+    service.recordPullRequestStatus(task.id, { state: 'open', checks: 'failing' })
+    service.recordPullRequestStatus(task.id, { state: 'open', checks: 'failing' })
+    service.recordPullRequestStatus(task.id, { state: 'open', checks: 'passing' })
+    expect(types(task.id).slice(count)).toEqual(['ci.failed', 'ci.passed'])
+  })
+
+  it('finishes a task in review when its pull request is merged', () => {
+    const task = taskInReviewWithPr()
+
+    const updated = service.recordPullRequestStatus(task.id, { state: 'merged', checks: 'passing' })
+
+    expect(updated.state).toBe('done')
+    expect(types(task.id).slice(-2)).toEqual(['ci.passed', 'pr.merged'])
+  })
+
+  it('logs a merge that does not fit the state as not accepted', () => {
+    const task = service.createTask({ title: 'Fix it' })
+
+    const updated = service.recordPullRequestStatus(task.id, { state: 'merged', checks: 'none' })
+
+    expect(updated.state).toBe('draft')
+    expect(service.listEvents(task.id).at(-1)).toMatchObject({
+      accepted: false,
+      event: { type: 'pr.merged' },
+    })
+  })
+})

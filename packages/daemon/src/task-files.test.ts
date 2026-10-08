@@ -24,6 +24,7 @@ const task: Task = {
   branch: 'helmsman/t-0042-fix-timezone',
   workspace: null,
   pr: null,
+  prStatus: null,
   dependsOn: ['T-0007'],
   createdAt: '2026-10-08T09:00:00.000Z',
   updatedAt: '2026-10-08T09:30:00.000Z',
