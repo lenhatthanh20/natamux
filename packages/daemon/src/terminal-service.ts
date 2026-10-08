@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import type { TerminalServerMessage, TerminalSize } from '@helmsman/core'
+import { portRange, type TerminalServerMessage, type TerminalSize } from '@helmsman/core'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
 // a fake, so they do not need the native module.
@@ -169,7 +169,14 @@ export class TerminalService {
       ...size,
       cwd,
       // The task id lets `helmsman hook` name the task even when the agent changes folders.
-      env: { ...this.env, TERM: 'xterm-256color', HELMSMAN_TASK_ID: taskId },
+      // PORT is the first port of the task's own block, for a dev server.
+      env: {
+        ...this.env,
+        TERM: 'xterm-256color',
+        HELMSMAN_TASK_ID: taskId,
+        HELMSMAN_PORT: String(portRange(taskId).first),
+        PORT: String(portRange(taskId).first),
+      },
     })
     const key = sessionKey(taskId, terminal)
     const session: Session = { taskId, terminal, pty, scrollback: '', clients: new Set() }

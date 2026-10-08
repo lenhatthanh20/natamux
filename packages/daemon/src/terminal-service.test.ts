@@ -49,6 +49,8 @@ describe('TerminalService', () => {
         PATH: '/bin',
         HELMSMAN_TOKEN: 'secret',
         HELMSMAN_TASK_ID: 'T-0001',
+        HELMSMAN_PORT: '20010',
+        PORT: '20010',
         TERM: 'xterm-256color',
       },
     })
