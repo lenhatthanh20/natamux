@@ -78,6 +78,7 @@ jobs:
           path: packages/*/coverage
           if-no-files-found: error
 
+  # No install here, so there is no pnpm store to cache.
   audit:
     runs-on: ubuntu-latest
     steps:
@@ -86,7 +87,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
       - run: pnpm audit --audit-level=high
 
   # Builds and starts both compose setups, and checks that they answer.
