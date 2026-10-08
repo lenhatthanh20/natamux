@@ -99,9 +99,7 @@ export function TaskTable({
               <td className="px-3 py-2">
                 <span className="flex items-center gap-2">
                   <StateBadge state={task.state} />
-                  {isQuiet(task, now) && (
-                    <span className="font-medium text-signal">quiet</span>
-                  )}
+                  {isQuiet(task, now) && <span className="font-medium text-signal">quiet</span>}
                 </span>
               </td>
               <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>

@@ -557,177 +557,177 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           </div>
         </nav>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
-        {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
-          <p role="alert" className="border-b border-line px-4 py-2 font-medium">
-            {tasksQuery.error.message}
-          </p>
-        )}
-        {feedback !== null && !detailOpen && (
-          <p role="status" className="border-b border-line px-4 py-2 font-medium">
-            {feedback}
-          </p>
-        )}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas">
+          {tasksQuery.isError && !isUnauthorized(tasksQuery.error) && (
+            <p role="alert" className="border-b border-line px-4 py-2 font-medium">
+              {tasksQuery.error.message}
+            </p>
+          )}
+          {feedback !== null && !detailOpen && (
+            <p role="status" className="border-b border-line px-4 py-2 font-medium">
+              {feedback}
+            </p>
+          )}
 
-        {changesTask && changesTask.workspace === null ? (
-          <NoWorkspace
-            key={changesTask.id}
-            task={changesTask}
-            busy={busy}
-            canStart={
-              changesTask.state !== 'done' &&
-              changesTask.state !== 'cancelled' &&
-              waitingOn(changesTask, tasks).length === 0
-            }
-            onStartAgent={() => agentMutation.mutate(changesTask)}
-          />
-        ) : changesTask ? (
-          <ChangesView
-            key={changesTask.id}
-            task={changesTask}
-            now={now}
-            initialTab={changesTab}
-            loadChanges={() => api.listChanges(changesTask.id)}
-            loadFile={(path) => api.getFileDiff(changesTask.id, path)}
-            loadGraph={() => api.getGitGraph(changesTask.id)}
-            commit={async (message) => {
-              const updated = await api.commitChanges(changesTask.id, message)
-              mergeTask(updated)
-              return updated
-            }}
-            push={async () => {
-              const updated = await api.pushBranch(changesTask.id)
-              mergeTask(updated)
-              return updated
-            }}
-            sendToAgent={async (text) => {
-              const updated = await api.sendToAgent(changesTask.id, text)
-              mergeTask(updated)
-              return updated
-            }}
-            openPullRequest={async () => {
-              const updated = await api.openPullRequest(changesTask.id)
-              mergeTask(updated)
-              return updated
-            }}
-            connectTerminal={async (size, terminal) => {
-              const ticket = await api.terminalTicket(changesTask.id)
-              return new WebSocket(
-                terminalSocketUrl(window.location, changesTask.id, ticket, size, terminal),
-              )
-            }}
-            loadTerminals={() => api.listTerminals(changesTask.id)}
-            closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
-          />
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
-              <h2 className="font-semibold">All tasks</h2>
-              <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-              <div className="ml-auto flex gap-1">
-                {(['table', 'board'] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={layout === option}
-                    onClick={() => setLayout(option)}
-                    className="rounded-md px-2.5 py-0.5 text-muted capitalize hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
-                  >
-                    {option}
-                  </button>
-                ))}
+          {changesTask && changesTask.workspace === null ? (
+            <NoWorkspace
+              key={changesTask.id}
+              task={changesTask}
+              busy={busy}
+              canStart={
+                changesTask.state !== 'done' &&
+                changesTask.state !== 'cancelled' &&
+                waitingOn(changesTask, tasks).length === 0
+              }
+              onStartAgent={() => agentMutation.mutate(changesTask)}
+            />
+          ) : changesTask ? (
+            <ChangesView
+              key={changesTask.id}
+              task={changesTask}
+              now={now}
+              initialTab={changesTab}
+              loadChanges={() => api.listChanges(changesTask.id)}
+              loadFile={(path) => api.getFileDiff(changesTask.id, path)}
+              loadGraph={() => api.getGitGraph(changesTask.id)}
+              commit={async (message) => {
+                const updated = await api.commitChanges(changesTask.id, message)
+                mergeTask(updated)
+                return updated
+              }}
+              push={async () => {
+                const updated = await api.pushBranch(changesTask.id)
+                mergeTask(updated)
+                return updated
+              }}
+              sendToAgent={async (text) => {
+                const updated = await api.sendToAgent(changesTask.id, text)
+                mergeTask(updated)
+                return updated
+              }}
+              openPullRequest={async () => {
+                const updated = await api.openPullRequest(changesTask.id)
+                mergeTask(updated)
+                return updated
+              }}
+              connectTerminal={async (size, terminal) => {
+                const ticket = await api.terminalTicket(changesTask.id)
+                return new WebSocket(
+                  terminalSocketUrl(window.location, changesTask.id, ticket, size, terminal),
+                )
+              }}
+              loadTerminals={() => api.listTerminals(changesTask.id)}
+              closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
+            />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2">
+                <h2 className="font-semibold">All tasks</h2>
+                <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
+                <div className="ml-auto flex gap-1">
+                  {(['table', 'board'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={layout === option}
+                      onClick={() => setLayout(option)}
+                      className="rounded-md px-2.5 py-0.5 text-muted capitalize hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
-              {reposOpen && (
-                <RepoPanel
-                  repos={repos}
-                  onAdd={async (path, name) => {
-                    await api.addRepo(path, name)
-                    await reposQuery.refetch()
-                  }}
-                  onClose={() => setReposOpen(false)}
-                />
-              )}
-              {importOpen && (
-                <IssueImport
-                  repo={newRepo || undefined}
-                  loadIssues={() => api.listIssues(newRepo || undefined)}
-                  importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
-                  onImported={(created) => {
-                    for (const task of created) {
-                      mergeTask(task)
-                    }
-                    setFeedback(
-                      created.length === 1
-                        ? 'Imported 1 issue.'
-                        : `Imported ${created.length} issues.`,
-                    )
-                  }}
-                  onClose={() => setImportOpen(false)}
-                />
-              )}
-              {tasksQuery.isPending ? (
-                <p className="text-muted">Loading tasks.</p>
-              ) : layout === 'board' ? (
-                <TaskBoard
-                  tasks={visibleTasks}
-                  now={now}
-                  selectedId={selectedId}
-                  diffStats={diffStatsQuery.data}
-                  allTasks={tasks}
-                  onSelect={chooseTask}
-                />
-              ) : (
-                <TaskTable
-                  tasks={visibleTasks}
-                  now={now}
-                  selectedId={selectedId}
-                  diffStats={diffStatsQuery.data}
-                  allTasks={tasks}
-                  activity={activityQuery.data}
-                  onSelect={chooseTask}
-                />
-              )}
-            </div>
-          </>
-        )}
-      </main>
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+                {reposOpen && (
+                  <RepoPanel
+                    repos={repos}
+                    onAdd={async (path, name) => {
+                      await api.addRepo(path, name)
+                      await reposQuery.refetch()
+                    }}
+                    onClose={() => setReposOpen(false)}
+                  />
+                )}
+                {importOpen && (
+                  <IssueImport
+                    repo={newRepo || undefined}
+                    loadIssues={() => api.listIssues(newRepo || undefined)}
+                    importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
+                    onImported={(created) => {
+                      for (const task of created) {
+                        mergeTask(task)
+                      }
+                      setFeedback(
+                        created.length === 1
+                          ? 'Imported 1 issue.'
+                          : `Imported ${created.length} issues.`,
+                      )
+                    }}
+                    onClose={() => setImportOpen(false)}
+                  />
+                )}
+                {tasksQuery.isPending ? (
+                  <p className="text-muted">Loading tasks.</p>
+                ) : layout === 'board' ? (
+                  <TaskBoard
+                    tasks={visibleTasks}
+                    now={now}
+                    selectedId={selectedId}
+                    diffStats={diffStatsQuery.data}
+                    allTasks={tasks}
+                    onSelect={chooseTask}
+                  />
+                ) : (
+                  <TaskTable
+                    tasks={visibleTasks}
+                    now={now}
+                    selectedId={selectedId}
+                    diffStats={diffStatsQuery.data}
+                    allTasks={tasks}
+                    activity={activityQuery.data}
+                    onSelect={chooseTask}
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </main>
 
-      {detailOpen && detailTask && (
-        <TaskDetail
-          key={detailTask.id}
-          task={detailTask}
-          now={now}
-          busy={busy}
-          feedback={feedback}
-          loadEvents={() => api.listEvents(detailTask.id)}
-          onAction={(action) => runAction(detailTask, action)}
-          onCreateWorkspace={(base) => {
-            setFeedback(null)
-            workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
-          }}
-          branches={branchesQuery.data}
-          onRemoveWorkspace={() => {
-            setFeedback(null)
-            workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
-          }}
-          onViewChanges={() => openChanges(detailTask.id)}
-          onStartAgent={() => agentMutation.mutate(detailTask)}
-          onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
-          onCheckPullRequest={() => pullRequestMutation.mutate(detailTask.id)}
-          waitingFor={waitingOn(detailTask, tasks)}
-          onSaveTemplate={() => templateMutation.mutate(detailTask)}
-          subtasks={tasks.filter((task) => task.parentId === detailTask.id)}
-          onAddSubtask={(title) => subtaskMutation.mutate({ parentId: detailTask.id, title })}
-          onSelectTask={changesTask ? openTask : chooseTask}
-          tries={detailTries}
-          diffStats={diffStatsQuery.data}
-          onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: detailTries })}
-          onFanOut={(count, start) => fanOutMutation.mutate({ task: detailTask, count, start })}
-          onClose={() => setDetailOpen(false)}
-        />
-      )}
+        {detailOpen && detailTask && (
+          <TaskDetail
+            key={detailTask.id}
+            task={detailTask}
+            now={now}
+            busy={busy}
+            feedback={feedback}
+            loadEvents={() => api.listEvents(detailTask.id)}
+            onAction={(action) => runAction(detailTask, action)}
+            onCreateWorkspace={(base) => {
+              setFeedback(null)
+              workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
+            }}
+            branches={branchesQuery.data}
+            onRemoveWorkspace={() => {
+              setFeedback(null)
+              workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
+            }}
+            onViewChanges={() => openChanges(detailTask.id)}
+            onStartAgent={() => agentMutation.mutate(detailTask)}
+            onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
+            onCheckPullRequest={() => pullRequestMutation.mutate(detailTask.id)}
+            waitingFor={waitingOn(detailTask, tasks)}
+            onSaveTemplate={() => templateMutation.mutate(detailTask)}
+            subtasks={tasks.filter((task) => task.parentId === detailTask.id)}
+            onAddSubtask={(title) => subtaskMutation.mutate({ parentId: detailTask.id, title })}
+            onSelectTask={changesTask ? openTask : chooseTask}
+            tries={detailTries}
+            diffStats={diffStatsQuery.data}
+            onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: detailTries })}
+            onFanOut={(count, start) => fanOutMutation.mutate({ task: detailTask, count, start })}
+            onClose={() => setDetailOpen(false)}
+          />
+        )}
       </div>
 
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sidebar px-3 py-1 text-xs text-muted">

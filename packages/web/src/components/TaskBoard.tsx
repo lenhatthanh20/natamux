@@ -56,9 +56,7 @@ export function TaskBoard({
               >
                 <span className="flex items-baseline gap-2">
                   <span className="font-mono text-muted">{task.id}</span>
-                  {isQuiet(task, now) && (
-                    <span className="font-medium text-signal">quiet</span>
-                  )}
+                  {isQuiet(task, now) && <span className="font-medium text-signal">quiet</span>}
                 </span>
                 <span className="font-medium break-words">{task.title}</span>
                 <WaitsFor ids={waitingOn(task, allTasks)} />
