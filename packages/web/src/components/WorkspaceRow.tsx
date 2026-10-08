@@ -76,6 +76,7 @@ export function WorkspaceRow({
 
   useEffect(() => {
     if (renaming) {
+      field.current?.focus()
       field.current?.select()
     } else if (wasRenaming.current) {
       row.current?.focus()
