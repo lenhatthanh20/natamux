@@ -56,8 +56,7 @@ export default function MonacoDiff({ path, original, modified, sideBySide }: Mon
   return (
     <div
       ref={container}
-      role="group"
-      aria-label={`Changes in ${path}`}
+      title={`Changes in ${path}`}
       className="h-[70vh] min-h-[24rem] overflow-hidden rounded-md border border-line"
     />
   )
