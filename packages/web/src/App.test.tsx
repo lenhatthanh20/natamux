@@ -415,7 +415,9 @@ describe('App', () => {
     expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
 
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Changes of T-0001' })).toBeNull())
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Changes of T-0001' })).toBeNull(),
+    )
     expect(screen.getByRole('table')).toBeTruthy()
   })
 

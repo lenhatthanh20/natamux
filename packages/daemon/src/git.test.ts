@@ -163,11 +163,13 @@ describe('changes of a worktree', () => {
     ])
 
     rmSync(join(worktreePath, 'tracked.txt'))
-    expect((await listChanges(worktreePath)).find((entry) => entry.path === 'tracked.txt')).toEqual({
-      path: 'tracked.txt',
-      status: 'D',
-      originalPath: null,
-    })
+    expect((await listChanges(worktreePath)).find((entry) => entry.path === 'tracked.txt')).toEqual(
+      {
+        path: 'tracked.txt',
+        status: 'D',
+        originalPath: null,
+      },
+    )
   })
 
   it('shows a renamed file with its old path', async () => {

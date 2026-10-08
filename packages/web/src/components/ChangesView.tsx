@@ -24,13 +24,7 @@ const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
   R: 'text-[#1a3fa0] dark:text-[#9db9ff]',
 }
 
-function FileBody({
-  file,
-  sideBySide,
-}: {
-  file: FileDiff
-  sideBySide: boolean
-}) {
+function FileBody({ file, sideBySide }: { file: FileDiff; sideBySide: boolean }) {
   if (file.binary) {
     return <p className="text-muted">This file is binary. It changed, but it is not shown.</p>
   }
@@ -92,7 +86,9 @@ export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesVie
           <h2 className="truncate text-base font-semibold">
             <span className="font-mono text-muted">{task.id}</span> {task.title}
           </h2>
-          <p className="text-muted">{changes.data ? countLabel(list.length) : 'Reading changes.'}</p>
+          <p className="text-muted">
+            {changes.data ? countLabel(list.length) : 'Reading changes.'}
+          </p>
         </div>
         <button
           type="button"
@@ -120,7 +116,10 @@ export function ChangesView({ task, loadChanges, loadFile, onClose }: ChangesVie
 
       {list.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-          <ul aria-label="Changed files" className="flex flex-col rounded-md border border-line bg-surface">
+          <ul
+            aria-label="Changed files"
+            className="flex flex-col rounded-md border border-line bg-surface"
+          >
             {list.map((entry) => {
               const { folder, name } = splitPath(entry.path)
               return (
