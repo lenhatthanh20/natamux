@@ -36,6 +36,8 @@ type WorkspaceServiceOptions = {
   repoDir: string
   worktreesDir: string
   gh?: RunGh
+  // Called after a workspace is made, for example to run its setup script.
+  onCreated?: (task: Task) => void
 }
 
 export type RemoveWorkspaceResult = {
@@ -64,6 +66,7 @@ export class WorkspaceService {
   private readonly repoDir: string
   private readonly worktreesDir: string
   private readonly gh: RunGh
+  private readonly onCreated: (task: Task) => void
   private readonly busy = new Set<string>()
 
   constructor(options: WorkspaceServiceOptions) {
@@ -71,6 +74,7 @@ export class WorkspaceService {
     this.repoDir = options.repoDir
     this.worktreesDir = options.worktreesDir
     this.gh = options.gh ?? runGh
+    this.onCreated = options.onCreated ?? (() => undefined)
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -92,12 +96,20 @@ export class WorkspaceService {
       const worktreePath = this.worktreePathFor(taskId)
       await addWorktree(this.repoDir, worktreePath, branch)
 
+      let created: Task
       try {
-        return this.tasks.recordWorkspace(taskId, { workspace: worktreePath, branch })
+        created = this.tasks.recordWorkspace(taskId, { workspace: worktreePath, branch })
       } catch (error) {
         await removeWorktree(this.repoDir, worktreePath).catch(() => undefined)
         throw error
       }
+      // The workspace is made either way; a failing setup shows up in its terminal.
+      try {
+        this.onCreated(created)
+      } catch {
+        // Nothing to undo.
+      }
+      return created
     })
   }
 

@@ -388,3 +388,24 @@ describe('diffStats', () => {
     })
   })
 })
+
+describe('onCreated', () => {
+  it('is told about a new workspace, and its failure does not undo the workspace', async () => {
+    const seen: string[] = []
+    const watched = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      onCreated: (task) => {
+        seen.push(task.workspace ?? '')
+        throw new Error('setup failed')
+      },
+    })
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    const created = await watched.create(task.id)
+
+    expect(seen).toEqual([created.workspace])
+    expect(existsSync(created.workspace ?? '')).toBe(true)
+  })
+})

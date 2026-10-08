@@ -32,7 +32,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `PATCH /tasks/:id` | Body: any of `title`, `description`, `priority`, `labels`, `dependsOn`. Other fields answer 400. Logs `task.edited` with the names of the fields that changed; nothing is written when none did |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
-| `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. Answers 409 if the task has one, is done or cancelled, or git refuses |
+| `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. When the worktree has a `.helmsman-setup` script (`.helmsman-setup.ps1` on Windows), it runs in the task's first terminal (`sh ./.helmsman-setup`). Answers 409 if the task has one, is done or cancelled, or git refuses |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Git refuses when it has files that are not committed (409). The branch is deleted only when it is fully merged. Returns `{ task, branchDeleted }` |
 | `GET /tasks/:id/changes` | Files changed in the workspace compared with its last commit, like VS Code Source Control. Returns `{ changes: [{ path, status, originalPath }] }`. Status is `M`, `A`, `D`, `R`, `U` (new file) or `C` (conflict). Answers 409 when the task has no workspace |
 | `GET /tasks/:id/changes/file?path=` | Both sides of one changed file: `{ path, status, original, modified, binary, tooLarge }`. The path must be one of the changes (404 otherwise). A binary file or one over 1 MB comes without text |
