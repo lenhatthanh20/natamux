@@ -1,9 +1,17 @@
 import type { TerminalSize } from '@helmsman/core'
 import { FitAddon } from '@xterm/addon-fit'
-import { type ITheme, Terminal } from '@xterm/xterm'
+import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { useEffect, useRef, useState } from 'react'
 import { parseTerminalMessage } from '../lib/terminal'
+import {
+  MIN_CONTRAST_RATIO,
+  TERMINAL_FONT_SIZE,
+  TERMINAL_LINE_HEIGHT,
+  terminalTheme,
+} from '../lib/terminal-theme'
+import { uiZoom, useResolvedTheme } from '../lib/theme'
+import { Button } from './ui/Button'
 
 type Status = 'connecting' | 'open' | 'ended' | 'error'
 
@@ -13,18 +21,6 @@ const MONO_FONT =
 
 type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
-}
-
-// Colors come from the dashboard's own tokens, so the terminal follows light and dark.
-function themeFromPage(): ITheme {
-  const style = getComputedStyle(document.documentElement)
-  const token = (name: string) => style.getPropertyValue(name).trim()
-  return {
-    background: token('--terminal'),
-    foreground: token('--ink'),
-    cursor: token('--accent'),
-    selectionBackground: `${token('--accent')}55`,
-  }
 }
 
 const STATUS_TEXT: Record<Status, string> = {
@@ -42,6 +38,10 @@ export default function TerminalView({ connect }: TerminalViewProps) {
   const [status, setStatus] = useState<Status>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const theme = useResolvedTheme()
+  const themeRef = useRef(theme)
+  themeRef.current = theme
+  const terminalRef = useRef<Terminal | null>(null)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
   useEffect(() => {
@@ -52,10 +52,13 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: MONO_FONT,
-      fontSize: 13,
+      fontSize: TERMINAL_FONT_SIZE * uiZoom(),
+      lineHeight: TERMINAL_LINE_HEIGHT,
+      minimumContrastRatio: MIN_CONTRAST_RATIO,
       scrollback: 5000,
-      theme: themeFromPage(),
+      theme: terminalTheme(themeRef.current),
     })
+    terminalRef.current = terminal
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     terminal.open(element)
@@ -131,8 +134,15 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       resized.dispose()
       socket?.close()
       terminal.dispose()
+      terminalRef.current = null
     }
   }, [attempt])
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.theme = terminalTheme(theme)
+    }
+  }, [theme])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -143,17 +153,18 @@ export default function TerminalView({ connect }: TerminalViewProps) {
             {error !== null && ` ${error}`}
           </p>
           {(status === 'ended' || status === 'error') && (
-            <button
-              type="button"
-              onClick={() => setAttempt((value) => value + 1)}
-              className="rounded-md border border-line px-2.5 py-1 text-xs font-medium hover:border-muted"
-            >
+            <Button size="xs" onClick={() => setAttempt((value) => value + 1)}>
               Start a new shell
-            </button>
+            </Button>
           )}
         </div>
       )}
-      <div ref={container} title="Terminal" className="min-h-0 flex-1 overflow-hidden px-3 py-2" />
+      <div
+        ref={container}
+        role="group"
+        aria-label="Terminal screen"
+        className="min-h-0 flex-1 overflow-hidden px-3 py-2"
+      />
     </div>
   )
 }

@@ -1,6 +1,9 @@
 import { TASK_PRIORITIES, type Task } from '@helmsman/core'
 import { type FormEvent, useState } from 'react'
 import type { TaskChanges } from '../lib/api'
+import { Button } from './ui/Button'
+import { Select } from './ui/Select'
+import { input, textarea } from './ui/styles'
 
 type TaskEditFormProps = {
   task: Task
@@ -33,7 +36,7 @@ export function parseTaskIds(text: string): string[] {
   ]
 }
 
-const inputClass = 'w-full rounded-md border border-line bg-canvas px-2 py-1.5'
+const inputClass = `${input} w-full`
 
 export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps) {
   const [title, setTitle] = useState(task.title)
@@ -72,23 +75,23 @@ export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps
           rows={6}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          className={`${inputClass} font-mono`}
+          className={`${textarea} w-full font-mono`}
         />
       </label>
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-muted">Priority</span>
-          <select
+          <Select
             value={priority}
             onChange={(event) => setPriority(event.target.value as Task['priority'])}
-            className={inputClass}
+            className="w-full"
           >
             {TASK_PRIORITIES.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-[2] flex-col gap-1">
           <span className="text-muted">Labels, comma separated</span>
@@ -109,16 +112,12 @@ export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps
         />
       </label>
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={busy || title.trim() === ''}
-          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" variant="primary" disabled={busy || title.trim() === ''}>
           Save
-        </button>
-        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-muted">
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   )

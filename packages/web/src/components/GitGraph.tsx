@@ -110,18 +110,18 @@ export function GitGraph({ graph, now }: GitGraphProps) {
                 ))}
                 <span
                   className={`truncate ${isHead ? 'font-semibold' : ''}`}
-                  title={commit.subject}
+                  data-tip-overflow
                 >
                   {commit.subject}
                 </span>
               </span>
               <span className="hidden shrink-0 text-muted sm:inline">{commit.author}</span>
-              <span className="shrink-0 font-mono text-xs text-muted" title={commit.hash}>
+              <span className="shrink-0 font-mono text-xs text-muted" data-tip={commit.hash}>
                 {commit.hash.slice(0, 7)}
               </span>
               <span
                 className="w-20 shrink-0 whitespace-nowrap text-right text-muted"
-                title={commit.date}
+                data-tip={commit.date}
               >
                 {formatAge(commit.date, now)}
               </span>

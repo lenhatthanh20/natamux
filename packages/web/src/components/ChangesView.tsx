@@ -14,6 +14,9 @@ import { AgentComment } from './AgentComment'
 import { GitGraph } from './GitGraph'
 import { ShellPanes } from './ShellPanes'
 import { StateBadge } from './StateBadge'
+import { Button } from './ui/Button'
+import { button, textarea } from './ui/styles'
+import { Tabs, tabPanelProps } from './ui/Tabs'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
@@ -37,12 +40,12 @@ type ChangesViewProps = {
 }
 
 const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
-  M: 'text-signal',
+  M: 'text-modified',
   A: 'text-add',
   U: 'text-add',
   D: 'text-remove',
   C: 'text-remove',
-  R: 'text-accent',
+  R: 'text-renamed',
 }
 
 function FileBody({
@@ -173,16 +176,9 @@ export function ChangesView({
     }
   }
 
-  const tabClass =
-    '-mb-px flex items-center gap-1.5 border-b-2 border-transparent px-2.5 py-2 font-medium text-muted hover:text-ink aria-selected:border-ink aria-selected:text-ink'
-  const toolButton =
-    'flex items-center gap-1.5 rounded-lg border border-line bg-raised px-2.5 py-1 hover:border-muted disabled:opacity-50'
-  const primaryButton =
-    'flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1 font-medium text-canvas hover:opacity-90 disabled:opacity-50'
-
   return (
     <section aria-label={`Changes of ${task.id}`} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-col gap-1 border-b border-line px-5 pt-3">
+      <header className="flex flex-col gap-1 px-5 pt-3 pb-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="truncate font-mono text-xs text-muted">
@@ -192,28 +188,32 @@ export function ChangesView({
             <h2 className="truncate text-base font-semibold tracking-tight">{task.title}</h2>
           </div>
           <StateBadge state={task.state} />
-          <button
-            type="button"
-            disabled={gitAction.isPending || task.branch === null}
+          <Button
+            icon={ArrowUp}
+            disabled={gitAction.isPending}
+            disabledReason={task.branch === null ? 'This task has no branch to push' : undefined}
             onClick={() => gitAction.mutate('push')}
-            title={task.branch === null ? undefined : `Push ${task.branch} to origin`}
-            className={toolButton}
+            {...(task.branch === null ? {} : { 'data-tip': `Push ${task.branch} to origin` })}
           >
-            <ArrowUp size={14} aria-hidden="true" />
             Push
-          </button>
+          </Button>
           {task.pr === null ? (
-            <button
-              type="button"
-              disabled={gitAction.isPending || task.branch === null}
+            <Button
+              variant="primary"
+              icon={GitPullRequest}
+              disabled={gitAction.isPending}
+              disabledReason={task.branch === null ? 'This task has no branch yet' : undefined}
               onClick={() => gitAction.mutate('pull-request')}
-              className={primaryButton}
             >
-              <GitPullRequest size={14} aria-hidden="true" />
               Create pull request
-            </button>
+            </Button>
           ) : (
-            <a href={task.pr} target="_blank" rel="noreferrer" className={toolButton}>
+            <a
+              href={task.pr}
+              target="_blank"
+              rel="noreferrer"
+              className={button('secondary')}
+            >
               <GitPullRequest size={14} aria-hidden="true" />
               Open pull request
             </a>
@@ -229,42 +229,22 @@ export function ChangesView({
             )}
           </p>
         )}
-        <div role="tablist" aria-label="View" className="mt-1 flex gap-1">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'terminal'}
-            onClick={() => setTab('terminal')}
-            className={tabClass}
-          >
-            <Terminal size={14} aria-hidden="true" />
-            Terminal
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'changes'}
-            onClick={() => setTab('changes')}
-            className={tabClass}
-          >
-            <FileDiffIcon size={14} aria-hidden="true" />
-            Changes
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'history'}
-            onClick={() => setTab('history')}
-            className={tabClass}
-          >
-            <History size={14} aria-hidden="true" />
-            History
-          </button>
-        </div>
       </header>
+      <Tabs
+        label="View"
+        idPrefix="workspace"
+        value={tab}
+        onChange={setTab}
+        className="px-2.5"
+        tabs={[
+          { id: 'terminal', label: 'Terminal', icon: Terminal },
+          { id: 'changes', label: 'Changes', icon: FileDiffIcon },
+          { id: 'history', label: 'History', icon: History },
+        ]}
+      />
 
       {tab === 'terminal' && (
-        <div role="tabpanel" aria-label="Terminal" className="flex min-h-0 flex-1 flex-col p-2">
+        <div {...tabPanelProps('workspace', 'terminal', 'Terminal')} className="flex min-h-0 flex-1 flex-col p-2">
           <ShellPanes
             taskId={task.id}
             connect={connectTerminal}
@@ -276,14 +256,11 @@ export function ChangesView({
 
       {tab === 'history' && (
         <div
-          role="tabpanel"
-          aria-label="History"
+          {...tabPanelProps('workspace', 'history', 'History')}
           className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
         >
           <div className="flex justify-end">
-            <button type="button" onClick={refresh} className={toolButton}>
-              Refresh
-            </button>
+            <Button onClick={refresh}>Refresh</Button>
           </div>
           {graph.isPending && <p className="text-muted">Reading the history.</p>}
           {graph.isError && <p role="alert">{graph.error.message}</p>}
@@ -293,8 +270,7 @@ export function ChangesView({
 
       {tab === 'changes' && (
         <div
-          role="tabpanel"
-          aria-label="Changes"
+          {...tabPanelProps('workspace', 'changes', 'Changes')}
           className="grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-auto p-4 lg:grid-cols-[17rem_1fr] lg:grid-rows-1"
         >
           <div className="flex min-w-0 flex-col gap-3">
@@ -302,17 +278,10 @@ export function ChangesView({
               <span className="flex-1 whitespace-nowrap text-muted">
                 {changes.data ? countLabel(list.length) : 'Reading changes.'}
               </span>
-              <button
-                type="button"
-                aria-pressed={sideBySide}
-                onClick={() => setSideBySide((value) => !value)}
-                className={toolButton}
-              >
+              <Button aria-pressed={sideBySide} onClick={() => setSideBySide((value) => !value)}>
                 {sideBySide ? 'Side by side' : 'Inline'}
-              </button>
-              <button type="button" onClick={refresh} className={toolButton}>
-                Refresh
-              </button>
+              </Button>
+              <Button onClick={refresh}>Refresh</Button>
             </div>
             {changes.isError && <p role="alert">{changes.error.message}</p>}
             {list.length > 0 && (
@@ -331,14 +300,14 @@ export function ChangesView({
                           setLine(null)
                         }}
                         aria-current={entry.path === current?.path}
-                        className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-hover aria-[current=true]:bg-selected"
+                        className="focus-inset flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-hover aria-[current=true]:bg-selected"
                       >
-                        <span className="min-w-0 flex-1 truncate" title={entry.path}>
+                        <span className="min-w-0 flex-1 truncate" data-tip-overflow>
                           <span className="font-medium">{name}</span>
                           {folder !== '' && <span className="text-muted"> {folder}</span>}
                         </span>
                         <span
-                          title={CHANGE_LABEL[entry.status]}
+                          data-tip={CHANGE_LABEL[entry.status]}
                           className={`w-4 shrink-0 text-center font-mono font-semibold ${LETTER_COLOR[entry.status]}`}
                         >
                           {entry.status}
@@ -360,16 +329,19 @@ export function ChangesView({
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   onKeyDown={commitOnShortcut}
-                  placeholder="Commit message (Ctrl+Enter to commit)"
-                  className="rounded-md border border-line bg-surface px-3 py-2"
+                  placeholder="Commit message"
+                  className={textarea}
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="md"
+                  busy={gitAction.isPending && gitAction.variables === 'commit'}
                   disabled={gitAction.isPending || message.trim() === ''}
-                  className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
+                  shortcut="Mod+Enter"
                 >
                   Commit all
-                </button>
+                </Button>
               </form>
             )}
           </div>

@@ -3,10 +3,10 @@ import '@fontsource-variable/geist-mono'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
-import { savedTheme } from './lib/theme'
+import { startTheme } from './lib/theme'
 import './styles.css'
 
-document.documentElement.dataset.theme = savedTheme()
+startTheme()
 
 const root = document.getElementById('root')
 if (!root) {
