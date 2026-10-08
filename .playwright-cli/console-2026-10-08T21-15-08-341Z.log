@@ -1,0 +1,34 @@
+[    4266ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:15804
+[    4455ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:15174/favicon.ico:0
+[   19467ms] [WARNING] WebSocket connection to 'ws://127.0.0.1:15174/api/events?token=devtoken' failed: WebSocket is closed before the connection is established. @ http://127.0.0.1:15174/src/hooks/useLiveTasks.ts:40
+[   44249ms] TypeError: Cannot read properties of undefined (reading 'dimensions')
+    at get dimensions (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:2099:35)
+    at t.Viewport.syncScrollArea (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:903:64)
+    at http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:880:882
+[   44319ms] [WARNING] WebSocket connection to 'ws://127.0.0.1:15174/api/tasks/T-0022/terminal?ticket=uycW1hkEFrVUVMF_Moz4Zi_nHzOM_zFdyzL2xGWTzEA&cols=99&rows=30&terminal=1' failed: WebSocket is closed before the connection is established. @ http://127.0.0.1:15174/src/components/TerminalView.tsx?t=1791493885468:122
+[  125764ms] TypeError: Cannot read properties of undefined (reading 'dimensions')
+    at get dimensions (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:2099:35)
+    at t.Viewport.syncScrollArea (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:903:64)
+    at http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:880:882
+[  125982ms] [WARNING] WebSocket connection to 'ws://127.0.0.1:15174/api/tasks/T-0022/terminal?ticket=Vb3tCfrZ5sKf8hLWUPNPm3Eo6zSN5G4Y8LQGJDIssdg&cols=145&rows=29&terminal=1' failed: WebSocket is closed before the connection is established. @ http://127.0.0.1:15174/src/components/TerminalView.tsx?t=1791493885468:122
+[  127067ms] TypeError: Cannot read properties of undefined (reading 'dimensions')
+    at get dimensions (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:2099:35)
+    at t.Viewport.syncScrollArea (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:903:64)
+    at http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:880:882
+[  127375ms] [WARNING] WebSocket connection to 'ws://127.0.0.1:15174/api/tasks/T-0022/terminal?ticket=_chMFzh15BB-A63CtfAIsS10RI4L4HNh4I66uWpGMKk&cols=71&rows=29&terminal=2' failed: WebSocket is closed before the connection is established. @ http://127.0.0.1:15174/src/components/TerminalView.tsx?t=1791493885468:122
+[  131819ms] Error: You must set the allowProposedApi option to true to use proposed API
+    at d._checkProposedApi (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:7001:72)
+    at d.registerDecoration (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_xterm.js?v=d3050a44:7130:18)
+    at n._createResultDecoration (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_addon-search.js?v=d3050a44:339:18)
+    at n._highlightAllMatches (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_addon-search.js?v=d3050a44:131:22)
+    at n.findNext (http://127.0.0.1:15174/node_modules/.vite/deps/@xterm_addon-search.js?v=d3050a44:119:134)
+    at http://127.0.0.1:15174/src/components/TerminalFind.tsx:43:10
+    at Object.react_stack_bottom_frame (http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:14178:13)
+    at runWithFiberInDEV (http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:944:66)
+    at commitHookEffectListMount (http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:6901:153)
+    at commitHookPassiveMountEffects (http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:6936:55)
+[  131819ms] [WARNING] %s
+
+%s
+ An error occurred in the <TerminalFind> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:15174/node_modules/.vite/deps/react-dom_client.js?v=d3050a44:5450

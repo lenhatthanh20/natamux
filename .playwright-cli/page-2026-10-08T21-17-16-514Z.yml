@@ -1,0 +1,331 @@
+- generic [ref=e1]:
+  - generic [ref=e11]:
+    - link "Skip to main content" [ref=e12] [cursor=pointer]:
+      - /url: "#main"
+    - banner [ref=e13]:
+      - generic [ref=e14]:
+        - button "Hide sidebar" [pressed] [ref=e16] [cursor=pointer]
+        - heading "Helmsman" [level=1] [ref=e19]
+        - generic [ref=e22]:
+          - generic [ref=e777]: helmsman/
+          - generic [ref=e778]: T-0022
+          - generic [ref=e779]: "[pr3] banner check"
+      - button "Search or run a command /" [ref=e23] [cursor=pointer]:
+        - generic [ref=e27]: Search or run a command
+        - generic [ref=e28]: /
+      - generic [ref=e29]:
+        - button "6 need you" [ref=e780] [cursor=pointer]
+        - button "New workspace" [ref=e31] [cursor=pointer]
+        - button "Show details" [ref=e781] [cursor=pointer]
+    - generic [ref=e36]:
+      - navigation "Workspaces" [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - textbox "Search tasks" [ref=e42]:
+              - /placeholder: Filter tasks
+            - generic [ref=e43]: /
+          - generic [ref=e44]:
+            - button "All tasks 23" [ref=e782] [cursor=pointer]:
+              - generic [ref=e49]: All tasks
+              - generic [ref=e50]: "23"
+            - button "Agents 6" [ref=e783] [cursor=pointer]:
+              - generic [ref=e57]: Agents
+              - generic [ref=e58]: "6"
+        - region [ref=e784]:
+          - heading "6 tasks need you" [level=2] [ref=e785]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - button "Failed Retry pushes on network errors 2h T-0010 Failed, 2h" [ref=e64] [cursor=pointer]:
+                - generic [ref=e65]:
+                  - generic [ref=e67]: Failed
+                  - generic [ref=e68]: Retry pushes on network errors
+                  - generic [ref=e69]: 2h
+                - generic [ref=e70]:
+                  - generic [ref=e71]: T-0010
+                  - generic [ref=e72]: Failed, 2h
+            - listitem [ref=e73]:
+              - button "In review CSV export for the task table 2h T-0009 In review, 2h" [ref=e74] [cursor=pointer]:
+                - generic [ref=e75]:
+                  - generic [ref=e77]: In review
+                  - generic [ref=e78]: CSV export for the task table
+                  - generic [ref=e79]: 2h
+                - generic [ref=e80]:
+                  - generic [ref=e81]: T-0009
+                  - generic [ref=e82]: In review, 2h
+            - listitem [ref=e83]:
+              - button "Blocked Windows path tests for repos 1h T-0011 Blocked, 1h" [ref=e84] [cursor=pointer]:
+                - generic [ref=e85]:
+                  - generic [ref=e87]: Blocked
+                  - generic [ref=e88]: Windows path tests for repos
+                  - generic [ref=e89]: 1h
+                - generic [ref=e90]:
+                  - generic [ref=e91]: T-0011
+                  - generic [ref=e92]: Blocked, 1h
+            - listitem [ref=e93]:
+              - button "In review [audit] workspace check 1h T-0018 In review, 1h" [ref=e94] [cursor=pointer]:
+                - generic [ref=e95]:
+                  - generic [ref=e97]: In review
+                  - generic [ref=e98]: "[audit] workspace check"
+                  - generic [ref=e99]: 1h
+                - generic [ref=e100]:
+                  - generic [ref=e101]: T-0018
+                  - generic [ref=e102]: In review, 1h
+            - listitem [ref=e786]:
+              - button "Needs input [pr3] banner check just now T-0022 Needs input, just now" [ref=e787] [cursor=pointer]:
+                - generic [ref=e788]:
+                  - generic [ref=e790]: Needs input
+                  - generic [ref=e791]: "[pr3] banner check"
+                  - generic [ref=e792]: just now
+                - generic [ref=e793]:
+                  - generic [ref=e794]: T-0022
+                  - generic [ref=e795]: Needs input, just now
+            - listitem [ref=e796]:
+              - button "Needs input [pr3] banner check just now T-0023 Needs input, just now" [ref=e797] [cursor=pointer]:
+                - generic [ref=e798]:
+                  - generic [ref=e800]: Needs input
+                  - generic [ref=e801]: "[pr3] banner check"
+                  - generic [ref=e802]: just now
+                - generic [ref=e803]:
+                  - generic [ref=e804]: T-0023
+                  - generic [ref=e805]: Needs input, just now
+        - region [ref=e104]:
+          - generic [ref=e105]:
+            - heading "Workspaces" [level=2] [ref=e106]
+            - button "Add a repository" [ref=e107] [cursor=pointer]
+            - button "Add a workspace" [ref=e110] [cursor=pointer]
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - button "helmsman 13" [expanded] [ref=e806] [cursor=pointer]:
+                - generic [ref=e122]: helmsman
+                - generic [ref=e123]: "13"
+              - button "New workspace in helmsman" [ref=e124] [cursor=pointer]
+            - list [ref=e126]:
+              - listitem [ref=e807]:
+                - button "Needs input [pr3] banner check pr3-banner-check just now" [ref=e808] [cursor=pointer]:
+                  - generic [ref=e809]:
+                    - generic [ref=e810]: Needs input
+                    - generic [ref=e815]: "[pr3] banner check"
+                  - generic [ref=e816]:
+                    - generic [ref=e817]: pr3-banner-check
+                    - generic [ref=e818]: just now
+                - button "Actions for T-0023" [ref=e820] [cursor=pointer]
+              - listitem [ref=e825]:
+                - button "Needs input [pr3] banner check pr3-banner-check just now" [ref=e826] [cursor=pointer]:
+                  - generic [ref=e827]:
+                    - generic [ref=e828]: Needs input
+                    - generic [ref=e833]: "[pr3] banner check"
+                  - generic [ref=e834]:
+                    - generic [ref=e835]: pr3-banner-check
+                    - generic [ref=e836]: just now
+                - button "Actions for T-0022" [ref=e838] [cursor=pointer]
+              - listitem [ref=e127]:
+                - button "Draft [audit] backlog task no workspace audit-backlog-task-no-workspace 1h" [ref=e128] [cursor=pointer]:
+                  - generic [ref=e129]:
+                    - generic [ref=e130]: Draft
+                    - generic [ref=e141]: "[audit] backlog task no workspace"
+                  - generic [ref=e142]:
+                    - generic [ref=e143]: audit-backlog-task-no-workspace
+                    - generic [ref=e144]: 1h
+                - button "Actions for T-0021" [ref=e146] [cursor=pointer]
+              - listitem [ref=e151]:
+                - button "Ready [audit] nav check audit-nav-check 1h" [ref=e152] [cursor=pointer]:
+                  - generic [ref=e153]:
+                    - generic [ref=e154]: Ready
+                    - generic [ref=e158]: "[audit] nav check"
+                  - generic [ref=e159]:
+                    - generic [ref=e160]: audit-nav-check
+                    - generic [ref=e161]: 1h
+                - button "Actions for T-0019" [ref=e163] [cursor=pointer]
+              - listitem [ref=e168]:
+                - button "In review [audit] workspace check audit-workspace-check +2 −0 1h" [ref=e169] [cursor=pointer]:
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: In review
+                    - generic [ref=e176]: "[audit] workspace check"
+                  - generic [ref=e177]:
+                    - generic [ref=e178]: audit-workspace-check
+                    - generic [ref=e179]:
+                      - generic [ref=e180]: "+2"
+                      - generic [ref=e181]: −0
+                    - generic [ref=e182]: 1h
+                - button "Actions for T-0018" [ref=e184] [cursor=pointer]
+              - listitem [ref=e189]:
+                - button "Blocked Windows path tests for repos windows-path-tests-for-repos 1h" [ref=e190] [cursor=pointer]:
+                  - generic [ref=e191]:
+                    - generic [ref=e192]: Blocked
+                    - generic [ref=e196]: Windows path tests for repos
+                  - generic [ref=e197]:
+                    - generic [ref=e198]: windows-path-tests-for-repos
+                    - generic [ref=e199]: 1h
+                - button "Actions for T-0011" [ref=e201] [cursor=pointer]
+              - listitem [ref=e206]:
+                - button "Failed Retry pushes on network errors retry-pushes-on-network-errors 2h" [ref=e207] [cursor=pointer]:
+                  - generic [ref=e208]:
+                    - generic [ref=e209]: Failed
+                    - generic [ref=e215]: Retry pushes on network errors
+                  - generic [ref=e216]:
+                    - generic [ref=e217]: retry-pushes-on-network-errors
+                    - generic [ref=e218]: 2h
+                - button "Actions for T-0010" [ref=e220] [cursor=pointer]
+              - listitem [ref=e225]:
+                - button "In review CSV export for the task table csv-export-for-the-task-table 2h" [ref=e226] [cursor=pointer]:
+                  - generic [ref=e227]:
+                    - generic [ref=e228]: In review
+                    - generic [ref=e233]: CSV export for the task table
+                  - generic [ref=e234]:
+                    - generic [ref=e235]: csv-export-for-the-task-table
+                    - generic [ref=e236]: 2h
+                - button "Actions for T-0009" [ref=e238] [cursor=pointer]
+              - listitem [ref=e243]:
+                - button "Running Fix token refresh race in the daemon fix-token-refresh-race-in-the-daemon 2m" [ref=e843] [cursor=pointer]:
+                  - generic [ref=e245]:
+                    - generic [ref=e246]: Running
+                    - generic [ref=e250]: Fix token refresh race in the daemon
+                  - generic [ref=e251]:
+                    - generic [ref=e252]: fix-token-refresh-race-in-the-daemon
+                    - generic [ref=e253]: 2m
+                - button "Actions for T-0008" [ref=e255] [cursor=pointer]
+              - listitem [ref=e260]:
+                - button "Running Split terminal panes split-terminal-panes 2m" [ref=e844] [cursor=pointer]:
+                  - generic [ref=e262]:
+                    - generic [ref=e263]: Running
+                    - generic [ref=e267]: Split terminal panes
+                  - generic [ref=e268]:
+                    - generic [ref=e269]: split-terminal-panes
+                    - generic [ref=e270]: 2m
+                - button "Actions for T-0007" [ref=e272] [cursor=pointer]
+              - listitem [ref=e277]:
+                - button "Running Drag tasks between board columns drag-tasks-between-board-columns 2m" [ref=e845] [cursor=pointer]:
+                  - generic [ref=e279]:
+                    - generic [ref=e280]: Running
+                    - generic [ref=e284]: Drag tasks between board columns
+                  - generic [ref=e285]:
+                    - generic [ref=e286]: drag-tasks-between-board-columns
+                    - generic [ref=e287]: 2m
+                - button "Actions for T-0006" [ref=e289] [cursor=pointer]
+              - listitem [ref=e294]:
+                - button "Running Command palette opened with Cmd+K command-palette-opened-with-cmd-k 2m" [ref=e846] [cursor=pointer]:
+                  - generic [ref=e296]:
+                    - generic [ref=e297]: Running
+                    - generic [ref=e301]: Command palette opened with Cmd+K
+                  - generic [ref=e302]:
+                    - generic [ref=e303]: command-palette-opened-with-cmd-k
+                    - generic [ref=e304]: 2m
+                - button "Actions for T-0005" [ref=e306] [cursor=pointer]
+              - listitem [ref=e311]:
+                - 'button "Ready Demo: changes and history demo-changes-and-history 2h" [ref=e312] [cursor=pointer]':
+                  - generic [ref=e313]:
+                    - generic [ref=e314]: Ready
+                    - generic [ref=e318]: "Demo: changes and history"
+                  - generic [ref=e319]:
+                    - generic [ref=e320]: demo-changes-and-history
+                    - generic [ref=e321]: 2h
+                - button "Actions for T-0002" [ref=e323] [cursor=pointer]
+              - listitem [ref=e328]:
+                - group [ref=e329]:
+                  - generic "3 finished" [ref=e330]
+      - separator "Resize the sidebar" [ref=e333]
+      - main [ref=e335]:
+        - region "Changes of T-0022" [ref=e847]:
+          - generic [ref=e848]:
+            - generic [ref=e849]: T-0022
+            - heading "[pr3] banner check" [level=2] [ref=e850]
+            - generic [ref=e851]: Needs input
+            - button "Branch helmsman/t-0022-pr3-banner-check, copy" [ref=e852] [cursor=pointer]:
+              - generic [ref=e857]: helmsman/t-0022-pr3-ba
+              - generic [ref=e858]: nner-check
+            - button "Push" [disabled] [ref=e859] [cursor=pointer]
+            - button "Create pull request" [disabled] [ref=e862] [cursor=pointer]
+          - status [ref=e867]:
+            - paragraph [ref=e871]: "The agent asks: Keep the old ticket format for one release, or drop it now?"
+            - generic [ref=e872]:
+              - button "Answer in terminal" [ref=e873] [cursor=pointer]
+              - button "Resume" [ref=e874] [cursor=pointer]
+          - generic [ref=e875]:
+            - tablist "View" [ref=e876]:
+              - tab "Terminal" [selected] [ref=e877] [cursor=pointer]
+              - tab "Changes" [ref=e880] [cursor=pointer]
+              - tab "History" [ref=e884] [cursor=pointer]
+            - button "New shell" [ref=e2496] [cursor=pointer]
+          - tabpanel "Terminal" [ref=e2500]:
+            - generic [ref=e2502]:
+              - region "Shell 1" [ref=e2503]:
+                - generic [ref=e2505]:
+                  - generic [ref=e2506]: Needs input
+                  - generic [ref=e2512]: Shell 1
+                  - generic [ref=e2513]: Agent
+                  - generic [ref=e2514]: Needs your input
+                  - button "Maximize Shell 1" [ref=e2515] [cursor=pointer]
+                - region "Terminal screen" [ref=e2523]:
+                  - generic [ref=e2526]:
+                    - textbox "Terminal input" [ref=e2527]
+                    - generic [aria-hidden] [ref=e2528]:
+                      - generic [ref=e2529]: /workspaces/helmsman/scripts/fake-agent.sh --settings '/workspaces/helm
+                      - generic [ref=e2531]: "sman/.helmsman/claude-code-settings.json' 'ask: test the banner'"
+                      - generic [ref=e2533]: "'/workspaces/helmsman/.helmsman/claude-code-settings.json' 'ask: test"
+                      - generic [ref=e2535]: the banner'msman/scripts/fake-agent.sh --settings
+                      - generic [ref=e2541]: ╭──────────────────────────────────────────────╮
+                      - generic [ref=e2543]:
+                        - generic [ref=e2612]: │
+                        - generic [ref=e2614]: Fake agent
+                        - generic [ref=e2615]: ", a stand-in for Claude Code in dev"
+                        - generic [ref=e2616]: │
+                      - generic [ref=e2544]: ╰──────────────────────────────────────────────╯
+                      - generic [ref=e2548]:
+                        - generic [ref=e2618]: ">"
+                        - generic [ref=e2619]: test the banner
+                      - generic [ref=e2558]:
+                        - generic [ref=e2620]: ●
+                        - generic [ref=e2622]: Read
+                        - generic [ref=e2623]: README.md
+                      - generic [ref=e2561]:
+                        - generic [ref=e2624]: ●
+                        - generic [ref=e2626]: Edit
+                        - generic [ref=e2627]: notes/T-0022.md
+                      - generic [ref=e2566]: +1 line
+                      - generic [ref=e2569]:
+                        - generic [ref=e2630]: ●
+                        - generic [ref=e2632]: Bash
+                        - generic [ref=e2633]: (pnpm --filter @helmsman/web test)
+                      - generic [ref=e2570]: ✓ 121 passed
+                      - generic [ref=e2580]:
+                        - generic [ref=e2636]: ●
+                        - generic [ref=e2638]: Read
+                        - generic [ref=e2639]: README.md
+                      - generic [ref=e2583]:
+                        - generic [ref=e2640]: ●
+                        - generic [ref=e2642]: Edit
+                        - generic [ref=e2643]: notes/T-0022.md
+                      - generic [ref=e2588]: +1 line
+                      - generic [ref=e2591]:
+                        - generic [ref=e2646]: ●
+                        - generic [ref=e2648]: Bash
+                        - generic [ref=e2649]: (pnpm --filter @helmsman/web test)
+                      - generic [ref=e2592]: ✓ 122 passed
+                      - generic [ref=e2597]:
+                        - generic [ref=e2652]: "?"
+                        - generic [ref=e2653]: Keep the old ticket format for one release, or drop it now?
+                      - generic [ref=e2600]: (type an answer and press Enter)
+                      - generic [ref=e2601]: ">"
+              - region "Shell 2" [ref=e2657]:
+                - generic [ref=e2658]:
+                  - generic [ref=e2663]: Shell 2
+                  - button "Maximize Shell 2" [ref=e2664] [cursor=pointer]
+                  - button "Close Shell 2" [ref=e2670] [cursor=pointer]
+                - region "Terminal screen" [ref=e2676]:
+                  - generic [ref=e2679]:
+                    - textbox "Terminal input" [active] [ref=e2680]
+                    - generic [ref=e2682]: node@6adf6744b23b:/workspaces/helmsman/.helmsman/worktrees/T-0022$
+    - contentinfo [ref=e707]:
+      - status [ref=e708]:
+        - generic [ref=e710]: Live
+      - button "4 running" [ref=e711] [cursor=pointer]
+      - button "6 need you" [ref=e955] [cursor=pointer]
+      - button "Repos" [ref=e715] [cursor=pointer]
+      - button "Import issues" [ref=e722] [cursor=pointer]
+      - button "Notify me" [ref=e727] [cursor=pointer]
+      - button "Keyboard shortcuts" [ref=e732] [cursor=pointer]
+      - button "Account" [ref=e735] [cursor=pointer]
+  - list
+  - generic [ref=e2492]:
+    - alert
+    - alert

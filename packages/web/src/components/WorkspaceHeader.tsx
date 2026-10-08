@@ -81,8 +81,10 @@ export function WorkspaceHeader({
           className="flex h-6 min-w-0 shrink items-center gap-1.5 rounded-md border border-line px-1.5 font-mono text-xs text-ink-2 hover:bg-hover hover:text-ink max-md:hidden"
         >
           <GitBranch size={ICON.xs} aria-hidden="true" className="shrink-0" />
-          <span className="truncate">{branch.head}</span>
-          {branch.tail !== '' && <span className="shrink-0">{branch.tail}</span>}
+          <span className="flex min-w-0">
+            <span className="truncate">{branch.head}</span>
+            {branch.tail !== '' && <span className="shrink-0">{branch.tail}</span>}
+          </span>
         </button>
       )}
       <span className="min-w-0 flex-1" />
