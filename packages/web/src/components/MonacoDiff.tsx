@@ -25,7 +25,7 @@ export default function MonacoDiff({
   sideBySide,
   onLine,
 }: MonacoDiffProps) {
-  const container = useRef<HTMLDivElement>(null)
+  const container = useRef<HTMLElement>(null)
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
   const theme = useResolvedTheme()
@@ -74,9 +74,8 @@ export default function MonacoDiff({
   }, [theme])
 
   return (
-    <div
+    <section
       ref={container}
-      role="region"
       aria-label={`Changes in ${path}`}
       className="h-[70vh] min-h-[24rem] overflow-hidden rounded-md border border-line"
     />

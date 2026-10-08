@@ -463,7 +463,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               aria-label="Search tasks"
               className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-placeholder"
             />
-            <kbd aria-hidden="true" className={kbd}>/</kbd>
+            <kbd className={kbd}>/</kbd>
           </label>
 
           <div className="flex flex-col gap-0.5 text-muted">

@@ -496,7 +496,9 @@
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat utility classes */
     transition-property: opacity !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same */
     transition-duration: 80ms !important;
   }
 

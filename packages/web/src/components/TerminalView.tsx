@@ -32,7 +32,7 @@ const STATUS_TEXT: Record<Status, string> = {
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
 export default function TerminalView({ connect }: TerminalViewProps) {
-  const container = useRef<HTMLDivElement>(null)
+  const container = useRef<HTMLElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
   const [status, setStatus] = useState<Status>('connecting')
@@ -159,9 +159,8 @@ export default function TerminalView({ connect }: TerminalViewProps) {
           )}
         </div>
       )}
-      <div
+      <section
         ref={container}
-        role="group"
         aria-label="Terminal screen"
         className="min-h-0 flex-1 overflow-hidden px-3 py-2"
       />
