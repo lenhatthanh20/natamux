@@ -152,7 +152,9 @@ export function createApi(
     },
 
     async getGitGraph(taskId: string): Promise<GitGraph> {
-      return gitGraphSchema.parse(await request('GET', `/tasks/${encodeURIComponent(taskId)}/graph`))
+      return gitGraphSchema.parse(
+        await request('GET', `/tasks/${encodeURIComponent(taskId)}/graph`),
+      )
     },
 
     async createWorkspace(taskId: string): Promise<Task> {

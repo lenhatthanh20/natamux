@@ -108,7 +108,10 @@ export function GitGraph({ graph, now }: GitGraphProps) {
                     {ref}
                   </span>
                 ))}
-                <span className={`truncate ${isHead ? 'font-semibold' : ''}`} title={commit.subject}>
+                <span
+                  className={`truncate ${isHead ? 'font-semibold' : ''}`}
+                  title={commit.subject}
+                >
                   {commit.subject}
                 </span>
               </span>
