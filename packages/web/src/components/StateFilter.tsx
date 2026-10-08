@@ -18,11 +18,11 @@ export function StateFilter({ tasks, active, onToggle }: StateFilterProps) {
             type="button"
             aria-pressed={active === state}
             onClick={() => onToggle(state)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-muted hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
+            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-muted hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
           >
             <span className="state-dot" data-state={state} aria-hidden="true" />
             <span>{STATE_LABEL[state]}</span>
-            <span className="font-semibold">{counts[state]}</span>
+            <span className="text-xs tabular-nums opacity-70">{counts[state]}</span>
           </button>
         </li>
       ))}

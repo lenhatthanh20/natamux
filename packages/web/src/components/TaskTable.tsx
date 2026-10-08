@@ -53,18 +53,18 @@ export function TaskTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-line bg-surface">
+    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <table className="w-full min-w-[52rem] border-collapse text-left">
         <thead>
-          <tr className="border-b border-line text-muted">
-            <th className="px-3 py-2 font-medium">Task</th>
-            <th className="px-3 py-2 font-medium">State</th>
-            <th className="px-3 py-2 font-medium">Agent</th>
-            <th className="px-3 py-2 font-medium">Branch</th>
-            <th className="px-3 py-2 text-right font-medium">Changes</th>
-            <th className="px-3 py-2 font-medium">Pull request</th>
-            <th className="px-3 py-2 text-right font-medium">Age</th>
-            <th className="px-3 py-2 text-right font-medium">Last activity</th>
+          <tr className="border-b border-line text-xs text-muted [&>th]:h-9 [&>th]:px-3 [&>th]:font-medium">
+            <th>Task</th>
+            <th>State</th>
+            <th>Agent</th>
+            <th>Branch</th>
+            <th className="text-right">Changes</th>
+            <th>Pull request</th>
+            <th className="text-right">Age</th>
+            <th className="text-right">Last activity</th>
           </tr>
         </thead>
         <tbody>
@@ -80,7 +80,7 @@ export function TaskTable({
                   onClick={() => onSelect(task.id)}
                   className="flex w-full min-w-0 flex-wrap items-baseline gap-x-3 text-left"
                 >
-                  <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
+                  <span className="w-16 shrink-0 font-mono text-xs text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
                   <WaitsFor ids={waitingOn(task, allTasks)} />
                   {task.repo !== null && (

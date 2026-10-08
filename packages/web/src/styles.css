@@ -13,7 +13,11 @@
   --ink: #1b1d21;
   --muted: #646a74;
   --line: #e2e4e8;
+  --line-strong: #cdd1d7;
   --accent: #3563e9;
+  --danger: #c2412d;
+  --scroll: rgb(20 24 31 / 0.18);
+  --scroll-hover: rgb(20 24 31 / 0.32);
   --hover: rgb(20 24 31 / 0.05);
   --selected: rgb(20 24 31 / 0.07);
   --signal: #b97a06;
@@ -32,7 +36,11 @@
   --ink: #e8e9ec;
   --muted: #8b8f98;
   --line: #222429;
+  --line-strong: #30333a;
   --accent: #7aa2ff;
+  --danger: #d4483a;
+  --scroll: rgb(255 255 255 / 0.12);
+  --scroll-hover: rgb(255 255 255 / 0.22);
   --hover: rgb(255 255 255 / 0.04);
   --selected: rgb(255 255 255 / 0.07);
   --signal: #f2b13c;
@@ -50,6 +58,8 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-danger: var(--danger);
   --color-accent: var(--accent);
   --color-hover: var(--hover);
   --color-selected: var(--selected);
@@ -61,6 +71,19 @@
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--scroll-hover) transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 body {
   background: var(--canvas);
   color: var(--ink);
@@ -69,11 +92,39 @@ body {
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+button,
+[role="menuitem"],
+summary {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+}
+
+/* The terminal's own scroll area follows the page's scrollbar style. */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .state-chip {
