@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
-import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
+import { addBareOrigin, createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -674,5 +674,85 @@ describe('terminal', () => {
     expect(removed.statusCode).toBe(200)
     expect(ptys[0]?.killed).toBe(true)
     await closed
+  })
+})
+
+describe('commit and push', () => {
+  async function taskWithChange(): Promise<string> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const workspace: string = created.json().task.workspace
+    writeFileSync(join(workspace, 'fix.txt'), 'fixed\n')
+    return workspace
+  }
+
+  it('commits the changes of the workspace', async () => {
+    await taskWithChange()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit',
+      headers: authorization,
+      payload: { message: '  Fix the bug  ' },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json().hash).toMatch(/^[0-9a-f]{40}$/)
+    expect(response.json().task.id).toBe('T-0001')
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit',
+      headers: authorization,
+      payload: { message: 'Again' },
+    })
+    expect(again.statusCode).toBe(409)
+  })
+
+  it('answers 400 for an empty message', async () => {
+    await taskWithChange()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit',
+      headers: authorization,
+      payload: { message: '   ' },
+    })
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('pushes to origin, and answers 409 when there is none', async () => {
+    await taskWithChange()
+    const failed = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/push',
+      headers: authorization,
+    })
+    expect(failed.statusCode).toBe(409)
+
+    addBareOrigin(repo)
+    const pushed = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/push',
+      headers: authorization,
+    })
+    expect(pushed.statusCode).toBe(200)
+    expect(pushed.json().task.id).toBe('T-0001')
+  })
+
+  it('needs the token', async () => {
+    const urls = ['/tasks/T-0001/commit', '/tasks/T-0001/push', '/tasks/T-0001/pull-request']
+    for (const url of urls) {
+      const response = await app.inject({ method: 'POST', url })
+      expect(response.statusCode).toBe(401)
+    }
   })
 })

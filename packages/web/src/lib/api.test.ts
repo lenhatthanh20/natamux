@@ -164,6 +164,21 @@ describe('createApi', () => {
     )
   })
 
+  it('commits, pushes and opens a pull request for a task', async () => {
+    const withPr = { ...task, pr: 'https://github.com/o/r/pull/1' }
+    const { calls, fetchFunction } = fakeFetch(() => json({ task: withPr }))
+    const api = createApi('secret', fetchFunction)
+
+    expect(await api.commitChanges('T-0001', 'Fix it')).toEqual(withPr)
+    expect(await api.pushBranch('T-0001')).toEqual(withPr)
+    expect(await api.openPullRequest('T-0001')).toEqual(withPr)
+    expect(calls.map((call) => [call.method, call.url, call.body])).toEqual([
+      ['POST', '/api/tasks/T-0001/commit', { message: 'Fix it' }],
+      ['POST', '/api/tasks/T-0001/push', undefined],
+      ['POST', '/api/tasks/T-0001/pull-request', undefined],
+    ])
+  })
+
   it('asks for a terminal ticket with the token', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ ticket: 'abc' }))
 

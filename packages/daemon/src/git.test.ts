@@ -4,20 +4,28 @@ import type { ChangeEntry, ChangeStatus } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
+  commitAll,
+  createPullRequest,
   currentBranch,
   deleteMergedBranch,
   GitError,
+  GitHubError,
   listChanges,
+  NothingToCommitError,
   OutsideWorkspaceError,
   parseLog,
   parseRefs,
   parseStatus,
+  pullRequestUrl,
+  pushBranch,
   readFileDiff,
   readGitGraph,
   removeWorktree,
+  type RunGh,
   statusFromCodes,
+  withGitConfig,
 } from './git.js'
-import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
+import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 
 let repo: TestRepo
 let worktreePath: string
@@ -389,5 +397,128 @@ describe('readGitGraph', () => {
       expect(graph.commits.map((commit) => commit.subject)).toEqual(['two', 'one', 'init'])
       expect(graph.commits.every((commit) => commit.onBranch)).toBe(true)
     }
+  })
+})
+
+describe('commitAll', () => {
+  it('commits every change, new files included, and gives the hash and the subject', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'new.txt'), 'new\n')
+
+    const result = await commitAll(worktreePath, 'Add a file\n\nWith a body.')
+
+    expect(result.subject).toBe('Add a file')
+    expect(result.hash).toBe(runGit(worktreePath, 'rev-parse', 'HEAD').trim())
+    expect(await listChanges(worktreePath)).toEqual([])
+    expect(runGit(worktreePath, 'log', '-1', '--format=%B').trim()).toBe(
+      'Add a file\n\nWith a body.',
+    )
+  })
+
+  it('refuses when there is nothing to commit', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await expect(commitAll(worktreePath, 'Nothing')).rejects.toThrow(NothingToCommitError)
+  })
+
+  it('takes a message that starts with a dash as the message', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'a.txt'), 'a\n')
+
+    expect((await commitAll(worktreePath, '--amend')).subject).toBe('--amend')
+  })
+})
+
+describe('withGitConfig', () => {
+  it('adds settings after the ones that are there', () => {
+    const env = withGitConfig(
+      { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'safe.directory', GIT_CONFIG_VALUE_0: '/w' },
+      [['a.b', 'c']],
+    )
+    expect(env).toMatchObject({
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_0: 'safe.directory',
+      GIT_CONFIG_KEY_1: 'a.b',
+      GIT_CONFIG_VALUE_1: 'c',
+    })
+  })
+
+  it('starts at zero without settings', () => {
+    expect(withGitConfig({}, [['a.b', 'c']])).toEqual({
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'a.b',
+      GIT_CONFIG_VALUE_0: 'c',
+    })
+  })
+})
+
+describe('pushBranch', () => {
+  it('pushes the branch to origin and sets its upstream', async () => {
+    const remote = addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'work')
+
+    await pushBranch(worktreePath, 'helmsman/t-0001-example')
+
+    expect(runGit(remote, 'rev-parse', 'helmsman/t-0001-example').trim()).toBe(
+      runGit(worktreePath, 'rev-parse', 'HEAD').trim(),
+    )
+    expect(runGit(worktreePath, 'rev-parse', '--abbrev-ref', '@{upstream}').trim()).toBe(
+      'origin/helmsman/t-0001-example',
+    )
+  })
+
+  it('fails with a GitError without an origin', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await expect(pushBranch(worktreePath, 'helmsman/t-0001-example')).rejects.toThrow(GitError)
+  })
+})
+
+describe('pull requests', () => {
+  const request = { branch: 'helmsman/t-0001', title: 'Fix it', body: 'Body' }
+
+  it.each([
+    ['https://github.com/o/r/pull/12\n', 'https://github.com/o/r/pull/12'],
+    [
+      'Creating pull request\nhttps://ghe.example.com/o/r/pull/3',
+      'https://ghe.example.com/o/r/pull/3',
+    ],
+    ['nothing here', undefined],
+  ])('finds the address in %j', (output, url) => {
+    expect(pullRequestUrl(output)).toBe(url)
+  })
+
+  it('asks gh for a pull request from the branch and gives its address', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return 'https://github.com/o/r/pull/12\n'
+    }
+
+    expect(await createPullRequest('/w', request, gh)).toBe('https://github.com/o/r/pull/12')
+    expect(calls).toEqual([
+      ['pr', 'create', '--head', 'helmsman/t-0001', '--title', 'Fix it', '--body', 'Body'],
+    ])
+  })
+
+  it('gives the address of the pull request that exists already', async () => {
+    const gh: RunGh = async () => {
+      throw new GitHubError(
+        'a pull request for branch "helmsman/t-0001" into branch "main" already exists:\n' +
+          'https://github.com/o/r/pull/9',
+      )
+    }
+    expect(await createPullRequest('/w', request, gh)).toBe('https://github.com/o/r/pull/9')
+  })
+
+  it('passes on any other failure', async () => {
+    const gh: RunGh = async () => {
+      throw new GitHubError('not logged in')
+    }
+    await expect(createPullRequest('/w', request, gh)).rejects.toThrow('not logged in')
+  })
+
+  it('fails when gh answers without an address', async () => {
+    const gh: RunGh = async () => 'ok'
+    await expect(createPullRequest('/w', request, gh)).rejects.toThrow(GitHubError)
   })
 })

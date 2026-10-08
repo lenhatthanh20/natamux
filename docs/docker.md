@@ -28,6 +28,8 @@ The dev container has Docker, installs the packages and builds them when the cod
 | `logs` | Follows the logs |
 | `down` | Stops the containers. Tasks and worktrees stay |
 
+`up` also passes your git name and email (`git config user.name` and `user.email`) for commits made from the dashboard, and the codespace's `GITHUB_TOKEN` as `GH_TOKEN`, so **Push** and **Create pull request** work. Set `HELMSMAN_GIT_NAME`, `HELMSMAN_GIT_EMAIL` or `GH_TOKEN` to use others.
+
 `docker compose up` works too. The first start installs and builds if that has not happened. It starts:
 
 - `setup`: installs packages when `node_modules` is missing, builds `@helmsman/core` and the CLI, then stops.

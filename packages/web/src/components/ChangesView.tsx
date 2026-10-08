@@ -5,8 +5,8 @@ import type {
   Task,
   TerminalSize,
 } from '@helmsman/core'
-import { useQuery } from '@tanstack/react-query'
-import { lazy, Suspense, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import { GitGraph } from './GitGraph'
 
@@ -25,6 +25,9 @@ type ChangesViewProps = {
   loadFile: (path: string) => Promise<FileDiff>
   loadGraph: () => Promise<GitGraphData>
   connectTerminal: (size: TerminalSize) => Promise<WebSocket>
+  commit: (message: string) => Promise<Task>
+  push: () => Promise<Task>
+  openPullRequest: () => Promise<Task>
   onClose: () => void
 }
 
@@ -63,11 +66,17 @@ export function ChangesView({
   loadFile,
   loadGraph,
   connectTerminal,
+  commit,
+  push,
+  openPullRequest,
   onClose,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<Tab>('changes')
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [sideBySide, setSideBySide] = useState(true)
+  const [message, setMessage] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const changes = useQuery({
     queryKey: ['changes', task.id],
@@ -95,6 +104,47 @@ export function ChangesView({
     enabled: tab === 'history',
     refetchInterval: REFRESH_MS,
   })
+
+  const refreshGit = () => {
+    for (const key of ['changes', 'file-diff', 'graph']) {
+      queryClient.invalidateQueries({ queryKey: [key, task.id] })
+    }
+  }
+  const gitAction = useMutation({
+    mutationFn: async (action: 'commit' | 'push' | 'pull-request') => {
+      if (action === 'commit') {
+        await commit(message.trim())
+        return 'Committed.'
+      }
+      if (action === 'push') {
+        const pushed = await push()
+        return `Pushed ${pushed.branch ?? 'the branch'} to origin.`
+      }
+      await openPullRequest()
+      return 'Pull request opened.'
+    },
+    onMutate: () => setNotice(null),
+    onSuccess: (text, action) => {
+      setNotice(text)
+      if (action === 'commit') {
+        setMessage('')
+      }
+      refreshGit()
+    },
+    onError: (error) => setNotice(error.message),
+  })
+
+  const submitCommit = (event: { preventDefault: () => void }) => {
+    event.preventDefault()
+    if (message.trim() !== '' && !gitAction.isPending) {
+      gitAction.mutate('commit')
+    }
+  }
+  const commitOnShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      submitCommit(event)
+    }
+  }
 
   const refresh = () => {
     changes.refetch()
@@ -176,6 +226,44 @@ export function ChangesView({
         )}
       </header>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted">Branch</span>
+        <span className="font-mono">{task.branch ?? '-'}</span>
+        <button
+          type="button"
+          disabled={gitAction.isPending || task.branch === null}
+          onClick={() => gitAction.mutate('push')}
+          className="rounded-md border border-line px-3 py-1 hover:border-accent disabled:opacity-50"
+        >
+          Push
+        </button>
+        {task.pr === null ? (
+          <button
+            type="button"
+            disabled={gitAction.isPending || task.branch === null}
+            onClick={() => gitAction.mutate('pull-request')}
+            className="rounded-md border border-line px-3 py-1 hover:border-accent disabled:opacity-50"
+          >
+            Create pull request
+          </button>
+        ) : (
+          <a
+            href={task.pr}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-line px-3 py-1 hover:border-accent"
+          >
+            Open pull request
+          </a>
+        )}
+        {gitAction.isPending && <span className="text-muted">Working.</span>}
+        {notice !== null && (
+          <span role="status" className="font-medium">
+            {notice}
+          </span>
+        )}
+      </div>
+
       {tab === 'terminal' && (
         <div role="tabpanel" aria-label="Terminal">
           <Suspense fallback={<p className="text-muted">Loading the terminal.</p>}>
@@ -197,6 +285,30 @@ export function ChangesView({
         <p className="rounded-md border border-dashed border-line px-4 py-8 text-center text-muted">
           No changes. The workspace matches its last commit.
         </p>
+      )}
+
+      {tab === 'changes' && list.length > 0 && (
+        <form onSubmit={submitCommit} className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <label htmlFor="commit-message" className="sr-only">
+            Commit message
+          </label>
+          <textarea
+            id="commit-message"
+            rows={2}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={commitOnShortcut}
+            placeholder="Commit message (Ctrl+Enter to commit)"
+            className="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2"
+          />
+          <button
+            type="submit"
+            disabled={gitAction.isPending || message.trim() === ''}
+            className="rounded-md bg-accent px-3 py-2 font-medium text-surface disabled:opacity-50"
+          >
+            Commit all
+          </button>
+        </form>
       )}
 
       {tab === 'changes' && list.length > 0 && (

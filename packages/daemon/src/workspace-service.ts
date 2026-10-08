@@ -2,12 +2,17 @@ import { join } from 'node:path'
 import type { ChangeEntry, FileDiff, GitGraph, Task } from '@helmsman/core'
 import {
   addWorktree,
+  commitAll,
+  createPullRequest,
   currentBranch,
   deleteMergedBranch,
   listChanges,
+  pushBranch,
+  type RunGh,
   readFileDiff,
   readGitGraph,
   removeWorktree,
+  runGh,
 } from './git.js'
 import type { TaskService } from './task-service.js'
 
@@ -29,6 +34,7 @@ type WorkspaceServiceOptions = {
   tasks: TaskService
   repoDir: string
   worktreesDir: string
+  gh?: RunGh
 }
 
 export type RemoveWorkspaceResult = {
@@ -56,12 +62,14 @@ export class WorkspaceService {
   private readonly tasks: TaskService
   private readonly repoDir: string
   private readonly worktreesDir: string
+  private readonly gh: RunGh
   private readonly busy = new Set<string>()
 
   constructor(options: WorkspaceServiceOptions) {
     this.tasks = options.tasks
     this.repoDir = options.repoDir
     this.worktreesDir = options.worktreesDir
+    this.gh = options.gh ?? runGh
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -134,6 +142,51 @@ export class WorkspaceService {
   async graph(taskId: string): Promise<GitGraph> {
     const workspace = this.workspaceOf(taskId)
     return readGitGraph(workspace, await currentBranch(this.repoDir))
+  }
+
+  // Commits every change of the workspace on the task branch.
+  async commit(taskId: string, message: string): Promise<{ task: Task; hash: string }> {
+    return this.exclusive(taskId, async () => {
+      const { hash, subject } = await commitAll(this.workspaceOf(taskId), message)
+      const task = this.tasks.recordGit(taskId, 'git.committed', { hash, subject })
+      return { task, hash }
+    })
+  }
+
+  // Pushes the task branch to `origin` and makes it the upstream of the branch.
+  async push(taskId: string): Promise<Task> {
+    return this.exclusive(taskId, async () => this.pushNow(taskId))
+  }
+
+  // Pushes, then opens a pull request into the default branch. A task that has one keeps it.
+  async openPullRequest(taskId: string): Promise<Task> {
+    return this.exclusive(taskId, async () => {
+      const task = this.tasks.getTask(taskId)
+      if (task.pr !== null) {
+        throw new WorkspaceConflictError(`${taskId} has a pull request already: ${task.pr}`)
+      }
+      const pushed = await this.pushNow(taskId)
+      const url = await createPullRequest(
+        this.workspaceOf(taskId),
+        {
+          branch: pushed.branch ?? '',
+          title: pushed.title,
+          body: pushed.description.trim() || `Task ${pushed.id} in Helmsman.`,
+        },
+        this.gh,
+      )
+      return this.tasks.recordGit(taskId, 'pr.opened', { url })
+    })
+  }
+
+  private async pushNow(taskId: string): Promise<Task> {
+    const workspace = this.workspaceOf(taskId)
+    const { branch } = this.tasks.getTask(taskId)
+    if (branch === null) {
+      throw new WorkspaceConflictError(`${taskId} has no branch`)
+    }
+    await pushBranch(workspace, branch)
+    return this.tasks.recordGit(taskId, 'git.pushed', { branch })
   }
 
   // The folder of the task's workspace. Throws WorkspaceConflictError when it has none.

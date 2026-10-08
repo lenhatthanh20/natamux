@@ -121,8 +121,8 @@ Goals:
 |---|---|
 | Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base | MVP |
 | Inline comments that are sent back to the agent as a follow-up prompt | v1 |
-| Commit from the app with a message draft | v1 |
-| One-click push and PR creation (GitHub first) | v1 |
+| Commit from the app with a message draft. Done: commit all changes with a message. Next: a drafted message | v1 |
+| One-click push and PR creation (GitHub first). Done: push, and a pull request through `gh` whose address is kept on the task | v1 |
 | CI status shown on the task | v1 |
 | Rebase or merge conflict help | Later |
 | Built-in browser to preview the running app | Later |

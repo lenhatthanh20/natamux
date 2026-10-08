@@ -148,6 +148,16 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    const gitPath = /^\/api\/tasks\/(T-\d+)\/(commit|push|pull-request)$/.exec(path)
+    const gitTask = tasks.find((task) => task.id === gitPath?.[1])
+    if (gitPath && gitTask && method === 'POST') {
+      const updated: Task =
+        gitPath[2] === 'pull-request'
+          ? { ...gitTask, pr: 'https://github.com/o/r/pull/5' }
+          : gitTask
+      tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
+      return json({ task: updated, hash: 'c'.repeat(40) })
+    }
     if (/^\/api\/tasks\/T-\d+\/graph$/.test(path) && method === 'GET') {
       const commit = { author: 'Ann', date: '2026-10-08T09:00:00.000Z', refs: [] }
       return json({
@@ -439,6 +449,17 @@ describe('App', () => {
 
     await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
     expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
+
+    await user.type(within(view).getByLabelText('Commit message'), 'Fix the parser')
+    await user.click(within(view).getByRole('button', { name: 'Commit all' }))
+    expect(await within(view).findByText('Committed.')).toBeTruthy()
+    expect(
+      calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/commit'),
+    ).toBe(true)
+
+    await user.click(within(view).getByRole('button', { name: 'Create pull request' }))
+    const link = await within(view).findByRole('link', { name: 'Open pull request' })
+    expect(link.getAttribute('href')).toBe('https://github.com/o/r/pull/5')
 
     await user.click(within(view).getByRole('tab', { name: 'History' }))
     const commits = await within(view).findByRole('list', { name: 'Commits' })
