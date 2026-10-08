@@ -81,8 +81,8 @@ export function labelText(label: string): string {
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
-    (target.closest('input, textarea, select, [contenteditable="true"], .xterm, .monaco-editor') !==
-      null)
+    target.closest('input, textarea, select, [contenteditable="true"], .xterm, .monaco-editor') !==
+      null
   )
 }
 
@@ -168,10 +168,14 @@ export function TaskDetail({
       aria-label={`Details of ${task.id}`}
       className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface"
     >
-      <header className={`flex h-10 shrink-0 items-center gap-1 border-b border-line pr-2 ${page ? 'pl-2' : 'pl-4'}`}>
+      <header
+        className={`flex h-10 shrink-0 items-center gap-1 border-b border-line pr-2 ${page ? 'pl-2' : 'pl-4'}`}
+      >
         {page && <IconButton label="Back" icon={ArrowLeft} onClick={onClose} />}
         <span className="flex-1 font-mono text-xs text-muted">{task.id}</span>
-        {!editing && <IconButton label="Edit" icon={Pencil} shortcut="e" onClick={() => setEditing(true)} />}
+        {!editing && (
+          <IconButton label="Edit" icon={Pencil} shortcut="e" onClick={() => setEditing(true)} />
+        )}
         {menu.length > 0 && <Menu label={`More actions for ${task.id}`} items={menu} size="sm" />}
         {!page && <IconButton label="Close details" icon={X} shortcut="Esc" onClick={onClose} />}
       </header>
@@ -223,7 +227,11 @@ export function TaskDetail({
 
           {(stateActions.length > 0 || agentButton !== null) && (
             <div className="flex flex-col gap-1.5 px-4 pb-4">
-              {page && <span className="text-2xs font-semibold tracking-[0.06em] text-muted uppercase">Actions</span>}
+              {page && (
+                <span className="text-2xs font-semibold tracking-[0.06em] text-muted uppercase">
+                  Actions
+                </span>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 {stateActions.map((action, index) => (
                   <Button
@@ -287,7 +295,10 @@ export function TaskDetail({
                 {isFinished ? (
                   <span className="text-muted">No workspace.</span>
                 ) : (
-                  <Button disabled={busy} onClick={() => onCreateWorkspace(base === '' ? undefined : base)}>
+                  <Button
+                    disabled={busy}
+                    onClick={() => onCreateWorkspace(base === '' ? undefined : base)}
+                  >
                     Create workspace
                   </Button>
                 )}
@@ -336,7 +347,12 @@ export function TaskDetail({
                   <Button icon={FileDiff} onClick={onViewChanges}>
                     View changes
                   </Button>
-                  <Button variant="ghost" icon={FolderMinus} disabled={busy} onClick={() => setAsking('remove')}>
+                  <Button
+                    variant="ghost"
+                    icon={FolderMinus}
+                    disabled={busy}
+                    onClick={() => setAsking('remove')}
+                  >
                     Remove workspace
                   </Button>
                 </div>

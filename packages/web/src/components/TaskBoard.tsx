@@ -131,10 +131,7 @@ export function TaskBoard({
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       {phone && (
-        <ul
-          aria-label="Show a state"
-          className="flex shrink-0 gap-1 overflow-x-auto px-4 pb-2"
-        >
+        <ul aria-label="Show a state" className="flex shrink-0 gap-1 overflow-x-auto px-4 pb-2">
           {[...columns]
             .sort((a, b) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state))
             .map((column) => (

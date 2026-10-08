@@ -127,7 +127,9 @@ export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps
           </label>
         </div>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-ink-2">Waits for tasks (ids, comma separated)</span>
+          <span className="text-xs font-medium text-ink-2">
+            Waits for tasks (ids, comma separated)
+          </span>
           <input
             value={dependsOn}
             onChange={(event) => setDependsOn(event.target.value)}

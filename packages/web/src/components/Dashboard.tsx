@@ -472,7 +472,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           return
         case 'Enter':
           // A focused control keeps its own Enter.
-          if (selectedTask && (event.target === document.body || (event.target instanceof HTMLElement && event.target.id === 'main'))) {
+          if (
+            selectedTask &&
+            (event.target === document.body ||
+              (event.target instanceof HTMLElement && event.target.id === 'main'))
+          ) {
             openTask(selectedTask.id)
           }
           return
@@ -951,10 +955,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   title="No tasks yet"
                   actions={
                     <>
-                      <Button variant="primary" size="md" icon={Plus} shortcut="n" onClick={() => newTaskRef.current?.focus()}>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon={Plus}
+                        shortcut="n"
+                        onClick={() => newTaskRef.current?.focus()}
+                      >
                         Add task
                       </Button>
-                      <Button size="md" icon={SquareTerminal} shortcut="c" onClick={() => setNewWorkspace({})}>
+                      <Button
+                        size="md"
+                        icon={SquareTerminal}
+                        shortcut="c"
+                        onClick={() => setNewWorkspace({})}
+                      >
                         New workspace
                       </Button>
                     </>

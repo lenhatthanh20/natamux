@@ -151,7 +151,9 @@ function savedSeen(): Record<string, TaskState> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return {}
     }
-    return Object.fromEntries(Object.entries(value).filter(([, state]) => typeof state === 'string'))
+    return Object.fromEntries(
+      Object.entries(value).filter(([, state]) => typeof state === 'string'),
+    )
   } catch {
     return {}
   }
@@ -195,7 +197,10 @@ export function withTab(
 
 // A task is unseen when its state is not the one it had when the user last looked at it. A task
 // that was never recorded counts as seen: the first visit must not mark everything.
-export function isUnseen(seen: Readonly<Record<string, TaskState>>, task: Pick<Task, 'id' | 'state'>) {
+export function isUnseen(
+  seen: Readonly<Record<string, TaskState>>,
+  task: Pick<Task, 'id' | 'state'>,
+) {
   const state = seen[task.id]
   return state !== undefined && state !== task.state
 }

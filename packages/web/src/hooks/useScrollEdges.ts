@@ -13,7 +13,9 @@ export function useScrollEdges<T extends HTMLElement>() {
     const update = () => {
       const left = element.scrollLeft > 1
       const right = element.scrollLeft + element.clientWidth < element.scrollWidth - 1
-      setEdges((current) => (current.left === left && current.right === right ? current : { left, right }))
+      setEdges((current) =>
+        current.left === left && current.right === right ? current : { left, right },
+      )
     }
     update()
     element.addEventListener('scroll', update, { passive: true })

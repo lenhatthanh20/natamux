@@ -64,9 +64,14 @@ describe('groupEvents', () => {
   })
 
   it('keeps events apart when the actor or the answer of the daemon differs', () => {
-    expect(groupEvents([stored(1, 'task.edited'), stored(2, 'task.edited', 'agent')])).toHaveLength(2)
+    expect(groupEvents([stored(1, 'task.edited'), stored(2, 'task.edited', 'agent')])).toHaveLength(
+      2,
+    )
     expect(
-      groupEvents([stored(1, 'agent.resumed', 'human'), stored(2, 'agent.resumed', 'human', false)]),
+      groupEvents([
+        stored(1, 'agent.resumed', 'human'),
+        stored(2, 'agent.resumed', 'human', false),
+      ]),
     ).toHaveLength(2)
   })
 

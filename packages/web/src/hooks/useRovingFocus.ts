@@ -49,7 +49,8 @@ export function useRovingFocus({ keys, preferred, letters, labels, onKey, onMove
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    const element = event.target instanceof HTMLElement ? event.target.closest('[data-roving]') : null
+    const element =
+      event.target instanceof HTMLElement ? event.target.closest('[data-roving]') : null
     const key = element instanceof HTMLElement ? (element.dataset.roving ?? null) : null
     if (key === null || event.ctrlKey || event.metaKey || event.altKey) {
       return

@@ -24,7 +24,11 @@ type WorkspaceRowProps = {
   // The state changed since the user last opened this workspace.
   unseen: boolean
   // The roving tab stop from the tree: tabIndex, data-roving and onFocus.
-  tab: { tabIndex: number; 'data-roving': string; onFocus: (event: FocusEvent<HTMLElement>) => void }
+  tab: {
+    tabIndex: number
+    'data-roving': string
+    onFocus: (event: FocusEvent<HTMLElement>) => void
+  }
   onOpen: (id: string) => void
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
@@ -116,9 +120,18 @@ export function WorkspaceRow({
       disabled: task.branch === null,
       onSelect: () => copy(task.branch ?? '', 'branch name'),
     },
-    { label: 'Copy folder path', icon: Copy, onSelect: () => copy(task.workspace ?? '', 'folder path') },
+    {
+      label: 'Copy folder path',
+      icon: Copy,
+      onSelect: () => copy(task.workspace ?? '', 'folder path'),
+    },
     { type: 'separator' },
-    { label: 'Remove workspace', icon: FolderMinus, danger: true, onSelect: () => setRemoving(true) },
+    {
+      label: 'Remove workspace',
+      icon: FolderMinus,
+      danger: true,
+      onSelect: () => setRemoving(true),
+    },
   ]
 
   const titleClass = `min-w-0 flex-1 truncate text-sm ${unseen ? 'font-semibold' : 'font-medium'} ${
@@ -208,7 +221,10 @@ export function WorkspaceRow({
             } else if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
               event.stopPropagation()
               openContextMenu(
-                { preventDefault: () => event.preventDefault(), currentTarget: event.currentTarget },
+                {
+                  preventDefault: () => event.preventDefault(),
+                  currentTarget: event.currentTarget,
+                },
                 items,
                 `Actions for ${task.id}`,
               )
