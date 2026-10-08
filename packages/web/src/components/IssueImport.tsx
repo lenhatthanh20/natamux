@@ -3,6 +3,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
 type IssueImportProps = {
+  // The repository the issues come from; it keeps the lists of repositories apart.
+  repo?: string
   loadIssues: () => Promise<GitHubIssue[]>
   importIssues: (numbers: number[]) => Promise<Task[]>
   onImported: (tasks: Task[]) => void
@@ -10,9 +12,15 @@ type IssueImportProps = {
 }
 
 // Open GitHub issues of the repository, to pick some and make tasks of them.
-export function IssueImport({ loadIssues, importIssues, onImported, onClose }: IssueImportProps) {
+export function IssueImport({
+  repo,
+  loadIssues,
+  importIssues,
+  onImported,
+  onClose,
+}: IssueImportProps) {
   const [chosen, setChosen] = useState<Set<number>>(new Set())
-  const issues = useQuery({ queryKey: ['github-issues'], queryFn: loadIssues })
+  const issues = useQuery({ queryKey: ['github-issues', repo], queryFn: loadIssues })
   const importing = useMutation({
     mutationFn: () => importIssues([...chosen]),
     onSuccess: (tasks) => {

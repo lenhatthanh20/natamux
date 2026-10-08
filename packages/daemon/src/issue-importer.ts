@@ -38,25 +38,25 @@ export function parseIssueList(output: string): Omit<GitHubIssue, 'taskId'>[] {
 
 type IssueImporterOptions = {
   tasks: TaskService
-  // A folder of the repository, so gh knows which repository to ask.
-  cwd: string
+  // The folder of a repository (null: the default one), so gh knows which repository to ask.
+  repoPath: (repo: string | null) => string
   gh?: RunGh
 }
 
 // Turns open GitHub issues into draft tasks. An issue becomes a task once.
 export class IssueImporter {
   private readonly tasks: TaskService
-  private readonly cwd: string
+  private readonly repoPath: (repo: string | null) => string
   private readonly gh: RunGh
 
   constructor(options: IssueImporterOptions) {
     this.tasks = options.tasks
-    this.cwd = options.cwd
+    this.repoPath = options.repoPath
     this.gh = options.gh ?? runGh
   }
 
-  async list(): Promise<GitHubIssue[]> {
-    const output = await this.gh(this.cwd, [
+  async list(repo: string | null = null): Promise<GitHubIssue[]> {
+    const output = await this.gh(this.repoPath(repo), [
       'issue',
       'list',
       '--state',
@@ -74,9 +74,9 @@ export class IssueImporter {
   }
 
   // Makes a task for each issue number that is open and not imported yet.
-  async import(numbers: readonly number[]): Promise<Task[]> {
+  async import(numbers: readonly number[], repo: string | null = null): Promise<Task[]> {
     const wanted = new Set(numbers)
-    const issues = (await this.list()).filter(
+    const issues = (await this.list(repo)).filter(
       (issue) => wanted.has(issue.number) && issue.taskId === null,
     )
     return issues.map((issue) =>
@@ -86,6 +86,7 @@ export class IssueImporter {
           .filter((part) => part !== '')
           .join('\n\n'),
         labels: issue.labels,
+        repo,
       }),
     )
   }

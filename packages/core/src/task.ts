@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { repoIdSchema } from './repo.js'
 import { taskStateSchema } from './task-state.js'
 
 export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
@@ -31,6 +32,8 @@ export const taskSchema = z.object({
   dependsOn: z.array(taskIdSchema).default([]),
   // The task this one is a part of. One level only: a subtask has no subtasks.
   parentId: taskIdSchema.nullable().default(null),
+  // The repository of the task. Null is the daemon's own repository (DEFAULT_REPO).
+  repo: repoIdSchema.nullable().default(null),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

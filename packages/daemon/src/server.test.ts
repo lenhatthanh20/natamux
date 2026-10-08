@@ -4,9 +4,10 @@ import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
-import { addBareOrigin, createTestRepo, type TestRepo } from './git-repo.fixture.js'
+import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
+import { RepoService } from './repo-service.js'
 import { buildServer, isAuthorized } from './server.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -30,10 +31,12 @@ beforeEach(async () => {
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
+  const repos = new RepoService({ dataDir, defaultPath: repo.dir })
   const workspaces = new WorkspaceService({
     tasks: service,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
+    repos,
   })
   const spawner = fakeSpawner()
   ptys = spawner.ptys
@@ -60,13 +63,14 @@ beforeEach(async () => {
     pullRequests,
     issues: new IssueImporter({
       tasks: service,
-      cwd: repo.dir,
+      repoPath: () => repo.dir,
       gh: async () =>
         JSON.stringify([
           { number: 7, title: 'From GitHub', body: '', url: 'https://github.com/o/r/issues/7' },
         ]),
     }),
     templates: new TemplateService({ dataDir, tasks: service }),
+    repos,
     bus,
     token: TOKEN,
   })
@@ -1057,5 +1061,83 @@ describe('branches', () => {
       payload: { base: 'nope' },
     })
     expect(missing.statusCode).toBe(409)
+  })
+})
+
+describe('repositories', () => {
+  it('lists the default repository, adds another, and makes its tasks work there', async () => {
+    const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(listed.json().repos).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
+
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'trunk')
+    runGit(other, 'commit', '--allow-empty', '-m', 'first')
+    const added = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other, name: 'Other app' },
+    })
+    expect(added.statusCode).toBe(201)
+    expect(added.json().repo).toEqual({ id: 'other-app', name: 'Other app', path: other })
+
+    const branches = await app.inject({
+      method: 'GET',
+      url: '/git/branches?repo=other-app',
+      headers: authorization,
+    })
+    expect(branches.json()).toEqual({ branches: ['trunk'], current: 'trunk' })
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix it there', repo: 'other-app' },
+    })
+    expect(created.json().task.repo).toBe('other-app')
+    const workspace = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const folder: string = workspace.json().task.workspace
+    expect(runGit(folder, 'log', '-1', '--format=%s').trim()).toBe('first')
+  })
+
+  it('refuses an unknown repository, a folder that is not a repository, and a repeat', async () => {
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'x', repo: 'nope' },
+    })
+    expect(unknown.statusCode).toBe(404)
+
+    const plain = join(repo.root, 'plain')
+    mkdirSync(plain)
+    const notGit = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: plain },
+    })
+    expect(notGit.statusCode).toBe(409)
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: repo.dir },
+    })
+    expect(again.statusCode).toBe(400)
+
+    const relative = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: 'some/where' },
+    })
+    expect(relative.statusCode).toBe(400)
   })
 })

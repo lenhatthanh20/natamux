@@ -30,6 +30,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     pr: null,
     prStatus: null,
     parentId: null,
+    repo: null,
     dependsOn: [],
     createdAt: '2026-10-08T09:00:00.000Z',
     updatedAt: '2026-10-08T09:00:00.000Z',
@@ -62,6 +63,7 @@ function json(data: unknown, status = 200): Response {
 function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   let tasks = [...initial]
   let templates: { id: string; name: string; labels: string[] }[] = []
+  let repos = [{ id: 'default', name: 'helmsman', path: '/work/helmsman' }]
   const calls: Call[] = []
   const log: { accepted: boolean; event: TaskEvent }[] = [
     ...initial.map((task) => ({
@@ -176,6 +178,15 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     }
     if (path === '/api/git/branches' && method === 'GET') {
       return json({ branches: ['main', 'release'], current: 'main' })
+    }
+    if (path === '/api/repos' && method === 'GET') {
+      return json({ repos })
+    }
+    if (path === '/api/repos' && method === 'POST') {
+      const input = JSON.parse(String(init?.body))
+      const repo = { id: 'web', name: input.name ?? 'web', path: input.path }
+      repos = [...repos, repo]
+      return json({ repo }, 201)
     }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
@@ -731,6 +742,29 @@ describe('App', () => {
     expect((screen.getByLabelText('Search tasks') as HTMLInputElement).value).toBe('tries-t-0001')
     expect(within(screen.getByRole('table')).getByText('Fix it (try 2)')).toBeTruthy()
     expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
+  })
+
+  it('adds a repository and makes new tasks in it', async () => {
+    const { calls } = installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Repos' }))
+    const panel = await screen.findByRole('region', { name: 'Repositories' })
+    await user.type(within(panel).getByLabelText('Repository folder'), '/work/web')
+    await user.type(within(panel).getByLabelText('Repository name'), 'Web app')
+    await user.click(within(panel).getByRole('button', { name: 'Add repository' }))
+
+    expect(await within(panel).findByText('/work/web')).toBeTruthy()
+    await user.selectOptions(await screen.findByLabelText('Repository'), 'web')
+    await user.type(screen.getByLabelText('New task title'), 'Fix the header')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
+    )
   })
 
   it('adds a task from the title field', async () => {
