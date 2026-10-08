@@ -5,6 +5,7 @@ import {
   type TerminalServerMessage,
   taskIdSchema,
   taskStateSchema,
+  templateIdSchema,
   terminalClientMessageSchema,
   terminalSizeSchema,
 } from '@helmsman/core'
@@ -17,6 +18,7 @@ import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } fr
 import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
+import { TemplateNotFoundError, type TemplateService } from './template-service.js'
 import { MAIN_TERMINAL, TerminalLimitError, type TerminalService } from './terminal-service.js'
 import {
   FileNotChangedError,
@@ -31,6 +33,7 @@ type ServerOptions = {
   agents: AgentRunner
   pullRequests: PullRequestWatcher
   issues: IssueImporter
+  templates: TemplateService
   bus: EventBus
   token: string
 }
@@ -126,6 +129,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof UnknownAgentError) {
       return reply.code(404).send({ error: 'unknown_agent', message: error.message })
     }
+    if (error instanceof TemplateNotFoundError) {
+      return reply.code(404).send({ error: 'not_found', message: error.message })
+    }
     if (error instanceof FileNotChangedError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
@@ -159,6 +165,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks', async (request, reply) => {
     const task = options.service.createTask(request.body)
     return reply.code(201).send({ task })
+  })
+
+  app.get('/templates', async () => ({ templates: options.templates.list() }))
+
+  app.post('/templates', async (request, reply) => {
+    return reply.code(201).send({ template: options.templates.save(request.body) })
+  })
+
+  app.post('/templates/:id/tasks', async (request, reply) => {
+    const { id } = z.object({ id: templateIdSchema }).parse(request.params)
+    return reply.code(201).send({ task: options.templates.createTask(id, request.body) })
   })
 
   app.get('/diffstats', async () => ({ stats: await options.workspaces.diffStats() }))
