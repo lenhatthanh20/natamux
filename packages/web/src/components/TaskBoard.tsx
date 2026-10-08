@@ -1,7 +1,6 @@
 import {
   type DiffStat,
   needsMe,
-  TASK_STATES,
   type Task,
   type TaskState,
   waitingOn,
@@ -87,7 +86,7 @@ function Card({
   )
 }
 
-// The same tasks as the table, in one column per state. Each column scrolls by itself, so the
+// The same tasks as the table, in one column per state, the ones that need the user first. Each column scrolls by itself, so the
 // board always fills the height of the view.
 export function TaskBoard({
   tasks,
@@ -105,7 +104,7 @@ export function TaskBoard({
   const [pickedState, setPickedState] = useState<TaskState | null>(null)
   const [scroller, edges] = useScrollEdges<HTMLDivElement>()
 
-  const shown = TASK_STATES.filter((state) =>
+  const shown = STATE_ORDER.filter((state) =>
     stateFilter !== null ? state === stateFilter : showFinished || !isFinished(state),
   )
   const columns = shown.map((state) => ({
@@ -132,9 +131,7 @@ export function TaskBoard({
     <div className="relative flex h-full min-h-0 flex-col">
       {phone && (
         <ul aria-label="Show a state" className="flex shrink-0 gap-1 overflow-x-auto px-4 pb-2">
-          {[...columns]
-            .sort((a, b) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state))
-            .map((column) => (
+          {columns.map((column) => (
               <li key={column.state}>
                 <button
                   type="button"
