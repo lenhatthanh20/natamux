@@ -17,6 +17,13 @@ export const addRepoInputSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
 })
 
+// One spelling of a folder: links followed, Windows short names (RUNNER~1) made long, and case
+// ignored where the file system ignores it.
+function canonical(path: string): string {
+  const real = realpathSync.native(path)
+  return process.platform === 'win32' || process.platform === 'darwin' ? real.toLowerCase() : real
+}
+
 export class RepoNotFoundError extends Error {
   constructor(id: string) {
     super(`Repository ${id} is not known. Add it first`)
@@ -66,12 +73,12 @@ export class RepoService {
     if (!isAbsolute(input.path) || !existsSync(input.path)) {
       throw new RepoInputError(`${input.path} is not an absolute path to a folder`)
     }
-    const root = await repositoryRoot(input.path)
-    if (realpathSync(root) !== realpathSync(input.path)) {
+    const root = realpathSync.native(await repositoryRoot(input.path))
+    if (canonical(root) !== canonical(input.path)) {
       throw new RepoInputError(`${input.path} is inside a repository; give its top folder ${root}`)
     }
     const known = this.list()
-    if (known.some((repo) => realpathSync(repo.path) === realpathSync(root))) {
+    if (known.some((repo) => canonical(repo.path) === canonical(root))) {
       throw new RepoInputError(`${root} is added already`)
     }
 

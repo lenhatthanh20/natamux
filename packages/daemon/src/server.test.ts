@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -1105,7 +1105,8 @@ describe('repositories', () => {
       payload: { path: other, name: 'Other app' },
     })
     expect(added.statusCode).toBe(201)
-    expect(added.json().repo).toEqual({ id: 'other-app', name: 'Other app', path: other })
+    expect(added.json().repo).toMatchObject({ id: 'other-app', name: 'Other app' })
+    expect(realpathSync.native(added.json().repo.path)).toBe(realpathSync.native(other))
 
     const branches = await app.inject({
       method: 'GET',
