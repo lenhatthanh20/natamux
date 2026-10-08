@@ -215,3 +215,30 @@ describe('init', () => {
     freshIndex.close()
   })
 })
+
+describe('recordGit', () => {
+  it('logs a commit and a push without changing the state or the pull request', () => {
+    const task = service.createTask({ title: 'Fix it' })
+
+    service.recordGit(task.id, 'git.committed', { hash: 'abc', subject: 'Fix it' })
+    const pushed = service.recordGit(task.id, 'git.pushed', { branch: 'helmsman/t-0001' })
+
+    expect(pushed).toMatchObject({ state: 'draft', pr: null })
+    expect(service.listEvents(task.id).map((entry) => entry.event)).toMatchObject([
+      { type: 'task.created' },
+      { type: 'git.committed', source: 'git', payload: { hash: 'abc', subject: 'Fix it' } },
+      { type: 'git.pushed', source: 'git', payload: { branch: 'helmsman/t-0001' } },
+    ])
+  })
+
+  it('keeps the address of a new pull request on the task and in its file', () => {
+    const task = service.createTask({ title: 'Fix it' })
+    const url = 'https://github.com/owner/repo/pull/7'
+
+    const updated = service.recordGit(task.id, 'pr.opened', { url })
+
+    expect(updated.pr).toBe(url)
+    expect(readTaskFile(dataDir, task.id)?.pr).toBe(url)
+    expect(messages.at(-1)).toMatchObject({ kind: 'task.updated', task: { pr: url } })
+  })
+})

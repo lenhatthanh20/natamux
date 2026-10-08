@@ -12,7 +12,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { EventBus } from './event-bus.js'
-import { GitError, OutsideWorkspaceError } from './git.js'
+import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
 import { TerminalLimitError, type TerminalService } from './terminal-service.js'
 import {
@@ -34,6 +34,7 @@ const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
 const terminalQuerySchema = terminalSizeSchema.extend({ ticket: z.string().min(1).max(256) })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
 
@@ -111,7 +112,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof WorkspaceConflictError ||
       error instanceof GitError ||
       error instanceof OutsideWorkspaceError ||
-      error instanceof TerminalLimitError
+      error instanceof TerminalLimitError ||
+      error instanceof NothingToCommitError ||
+      error instanceof GitHubError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -189,6 +192,22 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/tasks/:id/graph', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return options.workspaces.graph(id)
+  })
+
+  app.post('/tasks/:id/commit', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { message } = commitBodySchema.parse(request.body)
+    return options.workspaces.commit(id, message)
+  })
+
+  app.post('/tasks/:id/push', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: await options.workspaces.push(id) }
+  })
+
+  app.post('/tasks/:id/pull-request', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: await options.workspaces.openPullRequest(id) }
   })
 
   app.post('/tasks/:id/terminal/ticket', async (request) => {

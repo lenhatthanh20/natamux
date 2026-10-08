@@ -157,6 +157,27 @@ export function createApi(
       )
     },
 
+    // Commits every change of the task's workspace.
+    async commitChanges(taskId: string, message: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/commit`, { message }),
+      )
+      return taskSchema.parse(body.task)
+    },
+
+    async pushBranch(taskId: string): Promise<Task> {
+      const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/push`))
+      return taskSchema.parse(body.task)
+    },
+
+    // Pushes the branch, then opens a pull request. The task that comes back has its address.
+    async openPullRequest(taskId: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/pull-request`),
+      )
+      return taskSchema.parse(body.task)
+    },
+
     // A one-time ticket that opens the terminal socket of a task, see terminalSocketUrl.
     async terminalTicket(taskId: string): Promise<string> {
       const body = asRecord(
