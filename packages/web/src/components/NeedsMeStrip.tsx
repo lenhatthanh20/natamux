@@ -41,7 +41,9 @@ export function NeedsMeStrip({ waiting, now, currentId, filtered, onOpen }: Need
           </span>
         )}
       </div>
-      {waiting.length === 0 && <p className="flex h-7 items-center px-2 text-muted">Nothing needs you</p>}
+      {waiting.length === 0 && (
+        <p className="flex h-7 items-center px-2 text-muted">Nothing needs you</p>
+      )}
       {waiting.length > 0 && (
         <ul className="flex flex-col">
           {rows.map((task) => (

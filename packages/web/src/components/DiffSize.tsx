@@ -1,7 +1,13 @@
 import type { DiffStat } from '@helmsman/core'
 
 // "+12 −3": how much a task changed. Nothing when it changed nothing.
-export function DiffSize({ stat, empty = '-' }: { stat: DiffStat | undefined; empty?: string | null }) {
+export function DiffSize({
+  stat,
+  empty = '-',
+}: {
+  stat: DiffStat | undefined
+  empty?: string | null
+}) {
   if (stat === undefined || stat.files === 0) {
     return empty === null ? null : <span className="text-muted">{empty}</span>
   }

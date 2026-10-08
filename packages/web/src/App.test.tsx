@@ -912,7 +912,9 @@ describe('App', () => {
     const keep = within(tries).getAllByRole('button', { name: 'Keep this try' })[1] as HTMLElement
     await user.click(keep)
     const confirm = screen.getByRole('dialog', { name: 'Keep T-0002?' })
-    await user.click(within(confirm).getByRole('button', { name: 'Keep this try, cancel the others' }))
+    await user.click(
+      within(confirm).getByRole('button', { name: 'Keep this try, cancel the others' }),
+    )
 
     expect(await screen.findByText('Cancelled 1 other try.')).toBeTruthy()
     expect(
@@ -1082,9 +1084,7 @@ describe('App', () => {
       })
     })
 
-    await waitFor(() =>
-      expect(screen.getByRole('img', { name: '2 waiting' })).toBeTruthy(),
-    )
+    await waitFor(() => expect(screen.getByRole('img', { name: '2 waiting' })).toBeTruthy())
   })
   it('hides and shows the sidebar from the title bar', async () => {
     installDaemon([reviewTask, runningTask])
@@ -1235,14 +1235,14 @@ describe('App', () => {
     expect(titles()).toEqual(['Beta', 'Alpha'])
     await user.click(within(table).getByRole('button', { name: 'Task' }))
     expect(titles()).toEqual(['Alpha', 'Beta'])
-    expect(within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort')).toBe(
-      'ascending',
-    )
+    expect(
+      within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort'),
+    ).toBe('ascending')
     await user.click(within(table).getByRole('button', { name: 'Task' }))
     expect(titles()).toEqual(['Beta', 'Alpha'])
-    expect(within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort')).toBe(
-      'descending',
-    )
+    expect(
+      within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort'),
+    ).toBe('descending')
   })
 
   it('says when a filter matches nothing, and clears it', async () => {

@@ -90,7 +90,11 @@ describe('collapsedHint', () => {
   })
 
   it('shows the open workspace when nothing waits, finished or not', () => {
-    const running = makeTask({ id: 'T-0001', state: 'running', updatedAt: '2026-10-08T09:00:30.000Z' })
+    const running = makeTask({
+      id: 'T-0001',
+      state: 'running',
+      updatedAt: '2026-10-08T09:00:30.000Z',
+    })
     const done = makeTask({ id: 'T-0002', state: 'done' })
     expect(collapsedHint(group([running], [done]), 'T-0001', now)).toBe('running')
     expect(collapsedHint(group([running], [done]), 'T-0002', now)).toBe('done')

@@ -48,10 +48,14 @@ describe('seen states', () => {
   })
 
   it('records a baseline without changing what was recorded', () => {
-    const seen = withSeen({ 'T-0001': 'running' }, [
-      { id: 'T-0001', state: 'review' },
-      { id: 'T-0002', state: 'ready' },
-    ], false)
+    const seen = withSeen(
+      { 'T-0001': 'running' },
+      [
+        { id: 'T-0001', state: 'review' },
+        { id: 'T-0002', state: 'ready' },
+      ],
+      false,
+    )
     expect(seen).toEqual({ 'T-0001': 'running', 'T-0002': 'ready' })
   })
 

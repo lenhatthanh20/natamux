@@ -4,14 +4,14 @@ import type { MouseEvent } from 'react'
 import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
 import { copyText } from '../lib/clipboard'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
-import { type ColumnKey, COLUMN_LABEL, tableLayout } from '../lib/table-columns'
+import { COLUMN_LABEL, type ColumnKey, tableLayout } from '../lib/table-columns'
 import {
   formatAge,
   formatExact,
   isQuiet,
   rowLabel,
-  STATE_LABEL,
   type SortKey,
+  STATE_LABEL,
   type TaskSort,
 } from '../lib/tasks'
 import { shortBranch } from '../lib/workspace-groups'
@@ -112,7 +112,8 @@ export function TaskTable({
         return true
       }
       if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
-        const row = findRoving(event.currentTarget, id)?.closest<HTMLElement>('[role="row"], li') ?? null
+        const row =
+          findRoving(event.currentTarget, id)?.closest<HTMLElement>('[role="row"], li') ?? null
         const task = tasks.find((candidate) => candidate.id === id)
         if (row !== null && task !== undefined) {
           openContextMenu({ preventDefault: () => undefined, currentTarget: row }, menuFor(task))
@@ -197,7 +198,8 @@ export function TaskTable({
   }
 
   const { columns, widths, minWidth } = layout
-  const cell = (column: ColumnKey, task: Task) => {    const stat = diffStats[task.id]
+  const cell = (column: ColumnKey, task: Task) => {
+    const stat = diffStats[task.id]
     const note = task.state === 'running' ? activity[task.id] : undefined
     switch (column) {
       case 'id':

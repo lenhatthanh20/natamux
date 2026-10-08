@@ -11,7 +11,9 @@ export function CountBadge({
   label?: string
 }) {
   const className = `inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-[5px] text-2xs font-semibold ${
-    tone === 'signal' ? 'border border-signal-line bg-signal-soft text-signal' : 'bg-badge text-ink-2'
+    tone === 'signal'
+      ? 'border border-signal-line bg-signal-soft text-signal'
+      : 'bg-badge text-ink-2'
   }`
   if (label === undefined) {
     return <span className={className}>{count}</span>

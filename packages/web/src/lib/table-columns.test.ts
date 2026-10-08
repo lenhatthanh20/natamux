@@ -61,8 +61,8 @@ describe('tableLayout', () => {
   it('has a smaller minimum with fewer columns', () => {
     const wide = tableLayout(1200, both)
     const narrow = tableLayout(700, both)
-    expect(wide.kind === 'table' && narrow.kind === 'table' && narrow.minWidth < wide.minWidth).toBe(
-      true,
-    )
+    expect(
+      wide.kind === 'table' && narrow.kind === 'table' && narrow.minWidth < wide.minWidth,
+    ).toBe(true)
   })
 })

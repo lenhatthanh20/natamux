@@ -246,7 +246,9 @@ describe('sortTasks', () => {
   it('sorts pull requests as numbers and keeps tasks without one last in both directions', () => {
     expect(ids({ key: 'pr', direction: 'asc' }).slice(0, 2)).toEqual(['T-0005', 'T-0004'])
     expect(ids({ key: 'pr', direction: 'desc' }).slice(0, 2)).toEqual(['T-0004', 'T-0005'])
-    expect(ids({ key: 'pr', direction: 'desc' }).slice(2)).toEqual(ids(null).filter((id) => !['T-0004', 'T-0005'].includes(id)))
+    expect(ids({ key: 'pr', direction: 'desc' }).slice(2)).toEqual(
+      ids(null).filter((id) => !['T-0004', 'T-0005'].includes(id)),
+    )
   })
 
   it('breaks ties with the default order, so equal rows keep their place', () => {

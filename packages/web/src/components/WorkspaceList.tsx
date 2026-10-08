@@ -92,7 +92,12 @@ export function WorkspaceList({
       continue
     }
     for (const task of open) {
-      entries.push({ key: `task:${task.id}`, parent: repoKey, expandable: false, label: task.title })
+      entries.push({
+        key: `task:${task.id}`,
+        parent: repoKey,
+        expandable: false,
+        label: task.title,
+      })
     }
     if (finished.length > 0) {
       const finishedKey = `finished:${repo.id}`
@@ -284,7 +289,9 @@ export function WorkspaceList({
                       />
                       {finished.length} finished
                     </button>
-                    {shownFinished && <ul className="flex flex-col">{finished.map((task) => row(task))}</ul>}
+                    {shownFinished && (
+                      <ul className="flex flex-col">{finished.map((task) => row(task))}</ul>
+                    )}
                   </li>
                 )}
               </ul>

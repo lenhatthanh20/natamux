@@ -65,5 +65,4 @@ export const listRow =
   'focus-inset flex h-(--row-h) w-full items-center gap-1.5 rounded-md px-2 text-left text-ink-2 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink'
 
 // A small caps heading over a group of fields or rows.
-export const sectionTitle =
-  'text-2xs font-semibold uppercase tracking-[0.06em] text-muted'
+export const sectionTitle = 'text-2xs font-semibold uppercase tracking-[0.06em] text-muted'
