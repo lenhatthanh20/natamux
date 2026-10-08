@@ -13,7 +13,7 @@ export function Select({ className = '', children, fieldSize = 'sm', ...props }:
     <span className={`relative inline-flex min-w-0 ${className}`}>
       <select
         {...props}
-        className={`${fieldSize === 'md' ? 'h-8' : 'h-7'} w-full min-w-0 appearance-none truncate rounded-md border border-control bg-input pr-7 pl-2.5 text-ink ring-contrast hover:border-control-hover`}
+        className={`${fieldSize === 'md' ? 'h-(--control-h-md)' : 'h-(--control-h)'} w-full min-w-0 appearance-none truncate rounded-md border border-control bg-input pr-7 pl-2.5 text-ink ring-contrast hover:border-control-hover`}
       >
         {children}
       </select>

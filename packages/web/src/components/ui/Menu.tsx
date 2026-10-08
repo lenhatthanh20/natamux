@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { formatShortcut } from '../../lib/keys'
 import { IconButton } from './IconButton'
-import { ICON } from './styles'
+import { ICON, type IconButtonSize } from './styles'
 
 export type MenuAction = {
   type?: 'item'
@@ -220,10 +220,23 @@ type MenuProps = {
   items: readonly MenuItem[]
   // Shown only while the row around it is hovered or focused, or the menu is open.
   revealOnHover?: boolean
+  // The button defaults to "..." at 24px.
+  icon?: LucideIcon
+  size?: IconButtonSize
+  tipSide?: 'top' | 'bottom'
+  className?: string
 }
 
 // A "…" button with a list of actions.
-export function Menu({ label, items, revealOnHover = false }: MenuProps) {
+export function Menu({
+  label,
+  items,
+  revealOnHover = false,
+  icon = Ellipsis,
+  size = 'xs',
+  tipSide,
+  className = '',
+}: MenuProps) {
   const [open, setOpen] = useState<{ anchor: Anchor; focus: 'first' | 'last' } | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
 
@@ -248,8 +261,9 @@ export function Menu({ label, items, revealOnHover = false }: MenuProps) {
       <IconButton
         ref={trigger}
         label={label}
-        icon={Ellipsis}
-        size="xs"
+        icon={icon}
+        size={size}
+        tipSide={tipSide}
         aria-haspopup="menu"
         aria-expanded={open !== null}
         onClick={(event) => {
@@ -266,11 +280,11 @@ export function Menu({ label, items, revealOnHover = false }: MenuProps) {
             show(event.key === 'ArrowUp' ? 'last' : 'first')
           }
         }}
-        className={
+        className={`${
           revealOnHover && open === null
             ? 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100'
             : ''
-        }
+        } ${className}`}
       />
       {open !== null && (
         <MenuPopup

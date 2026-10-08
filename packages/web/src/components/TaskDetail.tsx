@@ -1,7 +1,8 @@
 import { type DiffStat, portRange, type Task } from '@helmsman/core'
-import { Ban, Copy, FileDiff, FolderMinus, Pencil, Play, Save, X } from 'lucide-react'
+import { ArrowLeft, Ban, Copy, FileDiff, FolderMinus, Pencil, Play, Save, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
+import type { DetailsMode } from '../lib/layout-mode'
 import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { toast } from '../lib/toasts'
@@ -23,7 +24,8 @@ type TaskDetailProps = {
   task: Task
   now: Date
   busy: boolean
-  width?: number
+  // Docked beside the main area, a sheet over it, or a page that replaces it. The parent sizes it.
+  mode?: DetailsMode
   loadEvents: () => Promise<StoredEvent[]>
   onAction: (action: TaskAction) => void
   onCreateWorkspace: (base?: string) => void
@@ -77,7 +79,7 @@ export function TaskDetail({
   task,
   now,
   busy,
-  width,
+  mode = 'docked',
   loadEvents,
   onAction,
   onCreateWorkspace,
@@ -110,10 +112,12 @@ export function TaskDetail({
   return (
     <aside
       aria-label={`Details of ${task.id}`}
-      style={width === undefined ? undefined : { width }}
-      className="flex w-[22rem] shrink-0 flex-col overflow-hidden bg-surface"
+      className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface"
     >
-      <header className="flex h-11 shrink-0 items-center gap-1 border-b border-line pr-2 pl-4">
+      <header
+        className={`flex h-11 shrink-0 items-center gap-1 border-b border-line pr-2 ${mode === 'page' ? 'pl-2' : 'pl-4'}`}
+      >
+        {mode === 'page' && <IconButton label="Back" icon={ArrowLeft} onClick={onClose} />}
         <span className="flex-1 font-mono text-xs text-muted">{task.id}</span>
         {!editing && (
           <Button variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>
@@ -138,7 +142,7 @@ export function TaskDetail({
                 ]),
           ]}
         />
-        <IconButton label="Close details" icon={X} onClick={onClose} />
+        {mode !== 'page' && <IconButton label="Close details" icon={X} onClick={onClose} />}
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">

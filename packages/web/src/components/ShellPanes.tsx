@@ -2,7 +2,8 @@ import type { TerminalSize } from '@helmsman/core'
 import { useQuery } from '@tanstack/react-query'
 import { Columns2 } from 'lucide-react'
 import { useState } from 'react'
-import { MAX_PANES, paneColumns } from '../lib/panes'
+import { usePhone } from '../hooks/useLayoutMode'
+import { MAX_PANES } from '../lib/panes'
 import { nextTerminalName, terminalNames } from '../lib/terminal-tabs'
 import { TerminalPane } from './TerminalPane'
 
@@ -17,10 +18,17 @@ type ShellPanesProps = {
 export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: ShellPanesProps) {
   const open = useQuery({ queryKey: ['terminals', taskId], queryFn: loadTerminals })
   const [added, setAdded] = useState<string[]>([])
+  const [shown, setShown] = useState('1')
+  const phone = usePhone()
   const names = terminalNames(open.data ?? [], added)
 
+  // On a phone one terminal fills the screen, and chips switch between them.
+  const active = names.includes(shown) ? shown : (names[0] ?? '1')
+
   const addShell = () => {
-    setAdded((current) => [...current, nextTerminalName(names)])
+    const name = nextTerminalName(names)
+    setAdded((current) => [...current, name])
+    setShown(name)
   }
 
   const closeShell = async (name: string) => {
@@ -43,13 +51,26 @@ export function ShellPanes({ taskId, connect, loadTerminals, closeTerminal }: Sh
           New shell
         </button>
       </div>
-      <div
-        className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
-        style={{ gridTemplateColumns: `repeat(${paneColumns(names.length)}, minmax(0, 1fr))` }}
-      >
+      {phone && names.length > 1 && (
+        <div role="group" aria-label="Shells" className="flex gap-1.5 overflow-x-auto">
+          {names.map((name) => (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={name === active}
+              onClick={() => setShown(name)}
+              className="h-(--control-h) shrink-0 rounded-full border border-line px-3 text-xs font-medium text-muted aria-pressed:border-line-strong aria-pressed:bg-selected aria-pressed:text-ink"
+            >
+              Shell {name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))]">
         {names.map((name) => (
           <TerminalPane
             key={name}
+            hidden={phone && name !== active}
             label={`Shell ${name}`}
             header={
               <span className="font-medium">

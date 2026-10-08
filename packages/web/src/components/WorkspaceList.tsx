@@ -72,7 +72,7 @@ export function WorkspaceList({
 
   return (
     <section aria-labelledby="workspaces-heading" className="flex flex-col gap-1">
-      <div className="flex h-7 items-center gap-0.5 pr-0.5 pl-2">
+      <div className="sticky top-0 z-(--z-sticky) flex h-7 items-center gap-0.5 bg-sidebar pr-0.5 pl-2">
         <h2 id="workspaces-heading" className={`flex-1 ${sectionTitle}`}>
           Workspaces
         </h2>
