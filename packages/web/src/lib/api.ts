@@ -5,7 +5,9 @@ import {
   type FileDiff,
   fileDiffSchema,
   type GitGraph,
+  type GitHubIssue,
   gitGraphSchema,
+  githubIssueSchema,
   type Task,
   type TaskEvent,
   taskEventSchema,
@@ -193,6 +195,23 @@ export function createApi(
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/pull-request`),
       )
       return taskSchema.parse(body.task)
+    },
+
+    async listIssues(): Promise<GitHubIssue[]> {
+      const body = asRecord(await request('GET', '/github/issues'))
+      if (!Array.isArray(body.issues)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.issues.map((issue) => githubIssueSchema.parse(issue))
+    },
+
+    // Makes a draft task from each issue. Issues imported before are skipped.
+    async importIssues(numbers: readonly number[]): Promise<Task[]> {
+      const body = asRecord(await request('POST', '/github/issues/import', { numbers }))
+      if (!Array.isArray(body.tasks)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.tasks.map((task) => taskSchema.parse(task))
     },
 
     // Asks the daemon to read the pull request of the task from GitHub now.
