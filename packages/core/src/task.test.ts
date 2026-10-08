@@ -21,6 +21,7 @@ describe('taskSchema', () => {
       workspace: null,
       pr: null,
       prStatus: null,
+      parentId: null,
       dependsOn: [],
     })
   })

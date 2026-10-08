@@ -6,6 +6,7 @@ import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { FanOutForm } from './FanOutForm'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
+import { Subtasks } from './Subtasks'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
 
@@ -27,6 +28,9 @@ type TaskDetailProps = {
   // Tasks this one depends on that are not done yet.
   waitingFor?: readonly string[]
   onSaveTemplate?: () => void
+  subtasks?: readonly Task[]
+  onAddSubtask?: (title: string) => void
+  onSelectTask?: (id: string) => void
   onFanOut?: (count: number, start: boolean) => void
   onClose: () => void
 }
@@ -56,6 +60,9 @@ export function TaskDetail({
   onCheckPullRequest,
   waitingFor = [],
   onSaveTemplate,
+  subtasks = [],
+  onAddSubtask,
+  onSelectTask,
   onFanOut,
   onClose,
 }: TaskDetailProps) {
@@ -304,6 +311,27 @@ export function TaskDetail({
       </dl>
 
       {task.description !== '' && <p className="whitespace-pre-wrap">{task.description}</p>}
+
+      {task.parentId !== null && (
+        <p className="text-muted">
+          Part of{' '}
+          <button
+            type="button"
+            onClick={() => onSelectTask?.(task.parentId ?? '')}
+            className="font-mono text-accent"
+          >
+            {task.parentId}
+          </button>
+        </p>
+      )}
+      {task.parentId === null && onAddSubtask !== undefined && (
+        <Subtasks
+          subtasks={subtasks}
+          busy={busy}
+          onSelect={(id) => onSelectTask?.(id)}
+          onAdd={onAddSubtask}
+        />
+      )}
 
       <Timeline taskId={task.id} updatedAt={task.updatedAt} loadEvents={loadEvents} />
     </aside>

@@ -24,6 +24,7 @@ export const createTaskInputSchema = taskSchema.pick({
   labels: true,
   agent: true,
   dependsOn: true,
+  parentId: true,
 })
 
 // The fields a person may change after a task is created. State has its own events.
@@ -108,6 +109,9 @@ export class TaskService {
 
   createTask(rawInput: unknown): Task {
     const input = createTaskInputSchema.parse(rawInput)
+    if (input.parentId) {
+      this.checkParent(input.parentId)
+    }
     const at = this.timestamp()
     const task = taskSchema.parse({
       ...input,
@@ -174,6 +178,17 @@ export class TaskService {
     this.index.appendEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
+  }
+
+  // Subtasks are one level deep: the parent must exist and must not be a subtask itself.
+  private checkParent(parentId: string): void {
+    const parent = readTaskFile(this.dataDir, parentId)
+    if (!parent) {
+      throw new TaskEditError(`No such task: ${parentId}`)
+    }
+    if (parent.parentId !== null) {
+      throw new TaskEditError(`${parentId} is a subtask; a subtask cannot have subtasks`)
+    }
   }
 
   private checkDependencies(taskId: string, dependsOn: readonly string[]): void {
