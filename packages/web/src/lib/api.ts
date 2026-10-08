@@ -1,6 +1,8 @@
 import {
   type ChangeEntry,
   changeEntrySchema,
+  type DiffStat,
+  diffStatSchema,
   type EventType,
   type FileDiff,
   fileDiffSchema,
@@ -202,6 +204,14 @@ export function createApi(
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/pull-request`),
       )
       return taskSchema.parse(body.task)
+    },
+
+    // The size of the work of every task with a workspace, by task id.
+    async listDiffStats(): Promise<Record<string, DiffStat>> {
+      const stats = asRecord(asRecord(await request('GET', '/diffstats')).stats)
+      return Object.fromEntries(
+        Object.entries(stats).map(([taskId, stat]) => [taskId, diffStatSchema.parse(stat)]),
+      )
     },
 
     async listIssues(): Promise<GitHubIssue[]> {

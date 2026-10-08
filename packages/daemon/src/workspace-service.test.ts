@@ -374,3 +374,17 @@ describe('commit, push and pull request', () => {
     await expect(workspaces.push(task.id)).rejects.toThrow(WorkspaceConflictError)
   })
 })
+
+describe('diffStats', () => {
+  it('gives the size of the work of each task with a workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    tasks.createTask({ title: 'No workspace' })
+    const created = await workspaces.create(task.id)
+    writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'a\nb\n')
+    runGit(created.workspace ?? '', 'add', 'notes.txt')
+
+    expect(await workspaces.diffStats()).toEqual({
+      [task.id]: { files: 1, added: 2, removed: 0 },
+    })
+  })
+})

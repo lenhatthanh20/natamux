@@ -160,6 +160,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.code(201).send({ task })
   })
 
+  app.get('/diffstats', async () => ({ stats: await options.workspaces.diffStats() }))
+
   app.get('/github/issues', async () => ({ issues: await options.issues.list() }))
 
   app.post('/github/issues/import', async (request) => {

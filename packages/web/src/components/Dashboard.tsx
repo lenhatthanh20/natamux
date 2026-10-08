@@ -139,6 +139,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => setFeedback(error.message),
   })
 
+  // The size of each task's work. Edits in a workspace do not reach the daemon as events, so
+  // this is read again every 15 seconds.
+  const diffStatsQuery = useQuery({
+    queryKey: ['diffstats'],
+    queryFn: () => api.listDiffStats(),
+    refetchInterval: 15_000,
+  })
+
   const visibleTasks = useMemo(
     () => filterTasks(tasks, stateFilter, search),
     [tasks, stateFilter, search],
@@ -401,6 +409,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   tasks={visibleTasks}
                   now={now}
                   selectedId={selectedId}
+                  diffStats={diffStatsQuery.data}
                   onSelect={chooseTask}
                 />
               )}
