@@ -238,7 +238,7 @@ describe('recordGit', () => {
     const updated = service.recordGit(task.id, 'pr.opened', { url })
 
     expect(updated.pr).toBe(url)
-    expect(readTaskFile(dataDir, task.id).pr).toBe(url)
+    expect(readTaskFile(dataDir, task.id)?.pr).toBe(url)
     expect(messages.at(-1)).toMatchObject({ kind: 'task.updated', task: { pr: url } })
   })
 })
