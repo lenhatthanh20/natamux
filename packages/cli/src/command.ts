@@ -230,7 +230,10 @@ export function parseCommand(argv: readonly string[]): Command {
   }
 
   if (group === 'ask') {
-    const question = [second, ...rest].filter((part) => part !== undefined).join(' ').trim()
+    const question = [second, ...rest]
+      .filter((part) => part !== undefined)
+      .join(' ')
+      .trim()
     if (question === '') {
       throw new UsageError('A question is required: helmsman ask "Which database should I use?"')
     }
