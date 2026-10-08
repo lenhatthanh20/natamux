@@ -102,14 +102,11 @@ export function TaskDetail({
   return (
     <aside
       aria-label={`Details of ${task.id}`}
-      className="flex flex-col gap-4 rounded-md border border-line bg-surface p-4"
+      className="flex w-[22rem] shrink-0 flex-col gap-4 overflow-y-auto border-l border-line bg-surface p-4"
     >
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-muted">{task.id}</p>
-          <h2 className="text-base font-semibold break-words">{task.title}</h2>
-        </div>
-        <span className="flex shrink-0 gap-1">
+      <header className="flex flex-col gap-1">
+        <span className="flex items-center gap-1">
+          <span className="flex-1 font-mono text-muted">{task.id}</span>
           {!editing && (
             <button
               type="button"
@@ -138,6 +135,7 @@ export function TaskDetail({
             Close
           </button>
         </span>
+        <h2 className="text-base font-semibold break-words">{task.title}</h2>
       </header>
 
       {editing && (
