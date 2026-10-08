@@ -55,6 +55,8 @@ services:
       HELMSMAN_HOST: 0.0.0.0
       HELMSMAN_DATA_DIR: /workspaces/helmsman/.helmsman
       HELMSMAN_REPO_DIR: /workspaces/helmsman
+      # scripts/dev.sh seed sets it to the fake agent.
+      HELMSMAN_CLAUDE_COMMAND: ${HELMSMAN_CLAUDE_COMMAND:-}
     ports:
       - "127.0.0.1:4317:4317"
     healthcheck:

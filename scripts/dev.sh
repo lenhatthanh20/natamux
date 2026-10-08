@@ -15,6 +15,7 @@ Usage: scripts/dev.sh <command>
 
   up      Start the daemon and the dashboard, and wait until both answer
   demo    Start, then make a demo task with a workspace, commits and changes
+  seed    Start with a fake agent, then make tasks in every state, with agents at work
   status  Show the containers
   logs    Follow the logs
   down    Stop the containers (tasks and worktrees stay)
@@ -111,9 +112,74 @@ demo() {
   echo "In the dashboard: select $id, then View changes. History shows the graph."
 }
 
+SEED_TITLE="Command palette opened with Cmd+K"
+
+# Calls the daemon's API from inside its container, for what the CLI cannot do.
+api_post() {
+  docker compose exec -T daemon node -e "
+    fetch('http://127.0.0.1:4317' + process.argv[1], {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer $TOKEN' },
+      body: process.argv[2],
+    }).then((response) => { if (!response.ok) process.exit(1) })" "$1" "$2"
+}
+
+seed() {
+  # claude is not in the dev image. The fake agent prints steps and calls the same hooks.
+  export HELMSMAN_CLAUDE_COMMAND="$CONTAINER_ROOT/scripts/fake-agent.sh"
+  up
+  if [ -n "$(cli task list --json | pick "data.find((t) => t.title === '$SEED_TITLE')?.id")" ]; then
+    echo "The seed tasks are there already."
+    return
+  fi
+
+  new_task() { cli task create "$@" --json | pick 'data.id'; }
+  start_agent() {
+    cli event "$1" task.readied >/dev/null
+    cli workspace create "$1" >/dev/null
+    cli agent start "$1" --prompt "$2" >/dev/null
+  }
+
+  local palette board panes token csv push windows electron release done_task
+  palette="$(new_task "$SEED_TITLE" --priority high --label ui --label keyboard)"
+  board="$(new_task "Drag tasks between board columns" --label ui)"
+  panes="$(new_task "Split terminal panes" --label terminal)"
+  token="$(new_task "Fix token refresh race in the daemon" --priority urgent --label bug)"
+  csv="$(new_task "CSV export for the task table" --label ui)"
+  push="$(new_task "Retry pushes on network errors" --priority high --label git)"
+  windows="$(new_task "Windows path tests for repos" --label windows)"
+  electron="$(new_task "Electron shell spike" --priority low --label desktop)"
+  new_task "Codex adapter" --label agents >/dev/null
+  release="$(new_task "Release notes for 0.2" --depends-on "$csv")"
+  done_task="$(new_task "Show the diff of a workspace" --label ui)"
+
+  start_agent "$palette" "loop: Add a command palette opened with Cmd+K that lists tasks and actions."
+  start_agent "$board" "loop: Let people drag a task card to another column to change its state."
+  start_agent "$panes" "loop: Show several shells of a task side by side."
+  start_agent "$token" "ask: Fix the race when two requests refresh the token at once."
+  start_agent "$csv" "Add a CSV export button to the task table."
+  start_agent "$push" "fail: Retry a push when the network drops."
+
+  cli event "$windows" task.readied >/dev/null
+  cli event "$windows" task.blocked --payload '{"reason":"Needs a Windows runner"}' >/dev/null
+  cli event "$electron" task.readied >/dev/null
+  cli event "$release" task.readied >/dev/null
+  api_post /tasks "{\"title\":\"Write the changelog\",\"parentId\":\"$release\"}"
+  api_post /tasks "{\"title\":\"Tag the release\",\"parentId\":\"$release\"}"
+  for type in task.readied agent.started agent.finished review.approved; do
+    cli event "$done_task" "$type" >/dev/null
+  done
+
+  echo
+  echo "Seeded. Six agents start now: three keep working, one asks a question, one ends its"
+  echo "turn for review and one fails. Open the dashboard and look at Agents."
+  echo "To answer the question: open $token, then type in its terminal or send a message."
+}
+
 case "${1:-}" in
 up) up ;;
 demo) demo ;;
+seed) seed ;;
 status) docker compose ps ;;
 logs) docker compose logs -f ;;
 down) docker compose down ;;
