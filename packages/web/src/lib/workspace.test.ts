@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from './api'
-import {
-  bannerText,
-  latestQuestion,
-  pullRequestButton,
-  pushButton,
-  tabToOpen,
-} from './workspace'
+import { bannerText, latestQuestion, pullRequestButton, pushButton, tabToOpen } from './workspace'
 
 function asked(seq: number, payload: Record<string, unknown>): StoredEvent {
   return {
