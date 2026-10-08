@@ -151,7 +151,8 @@ export function ChangesPanel({
 
   // Unmeasured counts as wide: the first frame has the file panel, and tests have no layout.
   const wide = rootWidth === null || rootWidth >= WIDE_FROM
-  const diffWidth = rootWidth === null ? Number.POSITIVE_INFINITY : rootWidth - (wide ? files.width : 0)
+  const diffWidth =
+    rootWidth === null ? Number.POSITIVE_INFINITY : rootWidth - (wide ? files.width : 0)
   const canSideBySide = diffWidth >= SIDE_BY_SIDE_FROM
   const inline = !sideBySide || !canSideBySide
   const wrap = wrapChoice ?? (current === null ? false : wrapsByDefault(current.path))
@@ -483,7 +484,8 @@ function DiffCounts({
   }
   return (
     <span className="font-mono text-xs whitespace-nowrap">
-      <span className="text-add">+{counts.added}</span> <span className="text-remove">−{counts.removed}</span>
+      <span className="text-add">+{counts.added}</span>{' '}
+      <span className="text-remove">−{counts.removed}</span>
     </span>
   )
 }

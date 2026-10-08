@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { findShortcut, terminalShortcut } from './terminal-keys'
 
 function key(
-  init: Partial<Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>>,
+  init: Partial<
+    Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+  >,
 ) {
   return {
     key: '',

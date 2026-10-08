@@ -139,8 +139,7 @@ export function ChangesView({
       })
       refreshGit()
     },
-    onError: (error, { action }) =>
-      toast(FAILED[action], 'error', { detail: error.message }),
+    onError: (error, { action }) => toast(FAILED[action], 'error', { detail: error.message }),
   })
   const pending = gitAction.isPending ? (gitAction.variables?.action ?? null) : null
 

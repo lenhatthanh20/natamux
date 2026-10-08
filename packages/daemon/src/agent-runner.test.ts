@@ -140,7 +140,9 @@ describe('AgentRunner', () => {
 
     windows.start(task.id, 'claude-code', 'Only this')
 
-    expect(spawner.ptys[0]?.written).toEqual(["claude --settings 'C:\\data\\settings.json' 'Only this'\r"])
+    expect(spawner.ptys[0]?.written).toEqual([
+      "claude --settings 'C:\\data\\settings.json' 'Only this'\r",
+    ])
   })
 
   it('refuses a task that waits for another one', () => {
