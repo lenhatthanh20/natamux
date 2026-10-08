@@ -9,7 +9,10 @@ function ToastItem({ toast }: { toast: Toast }) {
   const dismiss = useToasts((state) => state.dismiss)
 
   useEffect(() => {
-    const timer = setTimeout(() => dismiss(toast.id), toast.tone === 'error' ? SHOW_MS * 2 : SHOW_MS)
+    const timer = setTimeout(
+      () => dismiss(toast.id),
+      toast.tone === 'error' ? SHOW_MS * 2 : SHOW_MS,
+    )
     return () => clearTimeout(timer)
   }, [toast, dismiss])
 

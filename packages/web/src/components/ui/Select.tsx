@@ -2,7 +2,11 @@ import { ChevronDown } from 'lucide-react'
 import type { SelectHTMLAttributes } from 'react'
 
 // A native select, so the keyboard and screen readers work as usual, drawn like the other fields.
-export function Select({ className = '', children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({
+  className = '',
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <span className={`relative inline-flex min-w-0 ${className}`}>
       <select

@@ -15,7 +15,14 @@ type DialogProps = {
 
 // A modal over the page. Escape and a click outside close it; focus goes to its first field and
 // back to where it was when it closes.
-export function Dialog({ title, description, onClose, children, footer, size = 'sm' }: DialogProps) {
+export function Dialog({
+  title,
+  description,
+  onClose,
+  children,
+  footer,
+  size = 'sm',
+}: DialogProps) {
   const panel = useRef<HTMLDivElement>(null)
   const close = useRef(onClose)
   close.current = onClose

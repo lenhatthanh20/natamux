@@ -64,7 +64,6 @@ export function IssueImport({
         </>
       }
     >
-
       {issues.isPending && <p className="text-muted">Asking GitHub.</p>}
       {issues.isError && <p role="alert">{issues.error.message}</p>}
       {importing.isError && <p role="alert">{importing.error.message}</p>}
@@ -85,10 +84,7 @@ export function IssueImport({
                 <span className="w-12 shrink-0 font-mono text-muted">#{issue.number}</span>
                 <span className="min-w-0 flex-1 truncate">{issue.title || '(no title)'}</span>
                 {issue.labels.map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-full bg-hover px-2 py-px text-xs text-muted"
-                  >
+                  <span key={label} className="rounded-full bg-hover px-2 py-px text-xs text-muted">
                     {label}
                   </span>
                 ))}

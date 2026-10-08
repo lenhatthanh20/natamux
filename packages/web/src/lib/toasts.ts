@@ -19,8 +19,9 @@ export const useToasts = create<ToastStore>()((set) => ({
 // The same message twice in a row shows once.
 export function toast(text: string, tone: ToastTone = 'info'): void {
   useToasts.setState((state) => ({
-    toasts: [...state.toasts.filter((item) => item.text !== text), { id: nextId++, text, tone }].slice(
-      -4,
-    ),
+    toasts: [
+      ...state.toasts.filter((item) => item.text !== text),
+      { id: nextId++, text, tone },
+    ].slice(-4),
   }))
 }
