@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket'
 import { TASK_ID_HEADER, taskIdSchema, taskStateSchema } from '@helmsman/core'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { ClaudeCodeHookService, hookInputSchema } from './claude-code-hooks.js'
+import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { EventBus } from './event-bus.js'
 import { GitError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
@@ -17,6 +17,7 @@ type ServerOptions = {
 }
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
+const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 
@@ -49,7 +50,7 @@ function clientErrorStatus(error: unknown): number | undefined {
 
 export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
-  const hooks = new ClaudeCodeHookService(options.service)
+  const hooks = new AgentHookService(options.service)
   await app.register(websocket)
 
   // Browsers cannot set headers on a WebSocket, so only /events accepts ?token=.
@@ -71,6 +72,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     }
     if (error instanceof TaskNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
+    }
+    if (error instanceof UnknownAgentError) {
+      return reply.code(404).send({ error: 'unknown_agent', message: error.message })
     }
     if (error instanceof WorkspaceConflictError || error instanceof GitError) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
@@ -111,13 +115,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return options.service.applyEvent(id, request.body)
   })
 
-  // Claude Code posts here from its hooks. Always answer 200 with an empty object, so a hook
-  // that matches no task or changes nothing never shows up as an error in Claude Code.
-  app.post('/hooks/claude-code', async (request) => {
-    const input = hookInputSchema.parse(request.body)
+  // An agent posts its hook here, with its name in the path. Always answer 200 with an empty object,
+  // so a hook that matches no task or changes nothing never shows up as an error in the agent.
+  app.post('/hooks/:agent', async (request) => {
+    const { agent } = hookParamsSchema.parse(request.params)
     const header = request.headers[TASK_ID_HEADER.toLowerCase()]
     const taskIdHeader = (Array.isArray(header) ? header[0] : header)?.trim() || undefined
-    hooks.handle(input, taskIdHeader)
+    hooks.handle(agent, request.body, taskIdHeader)
     return {}
   })
 

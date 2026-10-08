@@ -15,6 +15,8 @@ export const SENDABLE_EVENT_TYPES = EVENT_TYPES.filter(
   (type) => !RECORD_ONLY_EVENT_TYPES.includes(type),
 )
 
+const AGENT_NAME = /^[a-z][a-z0-9-]*$/
+
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 export type EventSource = (typeof EVENT_SOURCES)[number]
 
@@ -42,6 +44,7 @@ export type Command =
     }
   | { name: 'event.list'; id: string; json: boolean }
   | { name: 'hooks.claude-code' }
+  | { name: 'hook.forward'; agent: string }
   | { name: 'workspace.create'; id: string; json: boolean }
   | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
@@ -178,6 +181,16 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'events') {
     noExtraArguments(rest)
     return { name: 'event.list', id: taskId(second), json }
+  }
+
+  if (group === 'hook') {
+    if (second === undefined || !AGENT_NAME.test(second)) {
+      throw new UsageError(
+        'An agent name is required, in lower case letters, digits and "-": helmsman hook claude-code',
+      )
+    }
+    noExtraArguments(rest)
+    return { name: 'hook.forward', agent: second }
   }
 
   if (group === 'hooks') {
