@@ -104,7 +104,9 @@ export function AgentPanes({
                 variant="primary"
                 size="md"
                 onClick={() =>
-                  document.querySelector<HTMLInputElement>('input[aria-label="Add a pane"]')?.focus()
+                  document
+                    .querySelector<HTMLInputElement>('input[aria-label="Add a pane"]')
+                    ?.focus()
                 }
               >
                 Add a pane

@@ -68,7 +68,9 @@ export function TerminalPane({
       }}
       className="group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
     >
-      {needsInput && <span aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 bg-signal" />}
+      {needsInput && (
+        <span aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 bg-signal" />
+      )}
       <header
         className={`flex h-8 shrink-0 items-center gap-2 border-b border-line pr-1 pl-2.5 text-xs ${
           needsInput ? 'bg-signal-soft' : 'bg-surface'

@@ -63,7 +63,7 @@ export function paneSpan(index: number, count: number, columns: number): number 
   if (index !== count - 1) {
     return 1
   }
-  return columns - (count - 1) % columns
+  return columns - ((count - 1) % columns)
 }
 
 // The line under a pane's title: the state, and what the agent does now.
