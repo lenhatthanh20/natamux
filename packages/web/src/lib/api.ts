@@ -50,6 +50,13 @@ export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
 }
 
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    throw new Error('The daemon sent an answer this dashboard does not understand.')
+  }
+  return value
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('The daemon sent an answer this dashboard does not understand.')
@@ -220,6 +227,22 @@ export function createApi(
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/pull-request/refresh`),
       )
       return taskSchema.parse(body.task)
+    },
+
+    // The names of the open terminals of a task, such as ["1", "2"].
+    async listTerminals(taskId: string): Promise<string[]> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/terminals`))
+      return stringList(body.terminals)
+    },
+
+    async closeTerminal(taskId: string, terminal: string): Promise<string[]> {
+      const body = asRecord(
+        await request(
+          'DELETE',
+          `/tasks/${encodeURIComponent(taskId)}/terminals/${encodeURIComponent(terminal)}`,
+        ),
+      )
+      return stringList(body.terminals)
     },
 
     // A one-time ticket that opens the terminal socket of a task, see terminalSocketUrl.
