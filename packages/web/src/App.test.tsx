@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { useToasts } from './lib/toasts'
 import { initialViewData, useViewStore } from './lib/view-store'
 
 // Monaco needs a real browser, so the tests use a plain stand-in.
@@ -295,6 +296,7 @@ const runningTask = makeTask({
 beforeEach(() => {
   window.localStorage.clear()
   useViewStore.setState(initialViewData)
+  useToasts.setState({ toasts: [] })
   FakeSocket.instances = []
   vi.stubGlobal('WebSocket', FakeSocket)
 })
@@ -384,9 +386,10 @@ describe('App', () => {
 
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
-    await user.click(within(details).getByRole('button', { name: /Click again/ }))
+    const confirm = screen.getByRole('dialog', { name: 'Remove the workspace?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
 
-    expect(await within(details).findByText('Workspace removed.')).toBeTruthy()
+    expect(await screen.findByText('Workspace removed.')).toBeTruthy()
     expect(within(details).queryByTitle('/work/T-0001')).toBeNull()
     expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
   })
@@ -632,7 +635,7 @@ describe('App', () => {
     await screen.findByRole('table')
 
     await user.click(screen.getByRole('button', { name: 'Import issues' }))
-    const panel = await screen.findByRole('region', { name: 'Import GitHub issues' })
+    const panel = await screen.findByRole('dialog', { name: 'Import GitHub issues' })
     await user.click(await within(panel).findByRole('checkbox'))
     await user.click(within(panel).getByRole('button', { name: 'Import 1 issue' }))
 
@@ -701,7 +704,8 @@ describe('App', () => {
 
     await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
-    await user.click(within(details).getByRole('button', { name: 'Save as template' }))
+    await user.click(within(details).getByRole('button', { name: 'More actions for T-0001' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Save as template' }))
     expect(await screen.findByText('Saved as the template "Fix it".')).toBeTruthy()
 
     await user.selectOptions(await screen.findByLabelText('Template'), 'fix-it')
@@ -755,7 +759,7 @@ describe('App', () => {
     await screen.findByRole('table')
 
     await user.click(screen.getByRole('button', { name: 'Repos' }))
-    const panel = await screen.findByRole('region', { name: 'Repositories' })
+    const panel = await screen.findByRole('dialog', { name: 'Repositories' })
     await user.type(within(panel).getByLabelText('Repository folder'), '/work/web')
     await user.type(within(panel).getByLabelText('Repository name'), 'Web app')
     await user.click(within(panel).getByRole('button', { name: 'Add repository' }))
@@ -787,7 +791,8 @@ describe('App', () => {
     const tries = within(details).getByRole('region', { name: 'Tries' })
     const keep = within(tries).getAllByRole('button', { name: 'Keep this one' })[1] as HTMLElement
     await user.click(keep)
-    await user.click(within(tries).getByRole('button', { name: /Click again/ }))
+    const confirm = screen.getByRole('dialog', { name: 'Keep T-0002?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel the others' }))
 
     expect(await screen.findByText('Cancelled 1 other try.')).toBeTruthy()
     expect(
