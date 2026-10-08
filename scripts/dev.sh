@@ -5,7 +5,8 @@ cd "$(dirname "$0")/.."
 
 TOKEN="${HELMSMAN_TOKEN:-devtoken}"
 DEMO_TITLE="Demo: changes and history"
-# The containers see the repository at this path. The demo runs git on the host, so it maps it.
+# The containers see the repository at this path. A worktree only works at the path git gave it,
+# so the demo runs git in the container and writes files through the host path.
 CONTAINER_ROOT=/workspaces/helmsman
 
 usage() {
@@ -61,7 +62,7 @@ pick() {
 }
 
 demo_git() {
-  git -C "$1" -c user.name="Helmsman demo" -c user.email=demo@example.invalid \
+  docker compose exec -T daemon git -C "$1" -c user.name="Helmsman demo" -c user.email=demo@example.invalid \
     -c commit.gpgsign=false "${@:2}"
 }
 
@@ -75,21 +76,21 @@ demo() {
   fi
 
   id="$(cli task create "$DEMO_TITLE" --json | pick 'data.id')"
-  local workspace
-  workspace="$(cli workspace create "$id" --json | pick 'data.workspace')"
-  workspace="$PWD${workspace#"$CONTAINER_ROOT"}"
+  local inside workspace
+  inside="$(cli workspace create "$id" --json | pick 'data.workspace')"
+  workspace="$PWD${inside#"$CONTAINER_ROOT"}"
 
   # The branch is new and only for the demo. Moving it back two commits makes it diverge from its
   # base, so the history shows two lanes. Nothing else is touched.
-  if demo_git "$workspace" rev-parse --verify --quiet HEAD~2 >/dev/null; then
-    demo_git "$workspace" reset --quiet --hard HEAD~2
+  if demo_git "$inside" rev-parse --verify --quiet HEAD~2 >/dev/null; then
+    demo_git "$inside" reset --quiet --hard HEAD~2
   fi
   mkdir -p "$workspace/demo"
   printf '# Notes\n\nFirst idea.\n' >"$workspace/demo/notes.md"
-  demo_git "$workspace" add demo/notes.md
-  demo_git "$workspace" commit --quiet -m "Add demo notes"
+  demo_git "$inside" add demo/notes.md
+  demo_git "$inside" commit --quiet -m "Add demo notes"
   printf '# Notes\n\nFirst idea.\nSecond idea.\n' >"$workspace/demo/notes.md"
-  demo_git "$workspace" commit --quiet -am "Expand demo notes"
+  demo_git "$inside" commit --quiet -am "Expand demo notes"
 
   # Changes that are not committed, for the Changes tab.
   printf '# Notes\n\nFirst idea, changed.\nSecond idea.\nThird idea.\n' >"$workspace/demo/notes.md"
