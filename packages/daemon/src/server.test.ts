@@ -810,3 +810,47 @@ describe('start an agent', () => {
     expect(none.statusCode).toBe(409)
   })
 })
+
+describe('edit a task', () => {
+  it('changes the details, and refuses bad changes and unknown tasks', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+
+    const edited = await app.inject({
+      method: 'PATCH',
+      url: '/tasks/T-0001',
+      headers: authorization,
+      payload: { title: 'Fix the parser', labels: ['parser'] },
+    })
+    expect(edited.statusCode).toBe(200)
+    expect(edited.json().task).toMatchObject({ title: 'Fix the parser', labels: ['parser'] })
+
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: '/tasks/T-0001',
+      headers: authorization,
+      payload: { state: 'done' },
+    })
+    expect(bad.statusCode).toBe(400)
+
+    const self = await app.inject({
+      method: 'PATCH',
+      url: '/tasks/T-0001',
+      headers: authorization,
+      payload: { dependsOn: ['T-0001'] },
+    })
+    expect(self.statusCode).toBe(400)
+
+    const unknown = await app.inject({
+      method: 'PATCH',
+      url: '/tasks/T-0099',
+      headers: authorization,
+      payload: { title: 'x' },
+    })
+    expect(unknown.statusCode).toBe(404)
+  })
+})
