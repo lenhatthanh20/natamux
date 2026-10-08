@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, TaskWaitingError } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
+import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
@@ -48,6 +49,10 @@ const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+const fanOutBodySchema = z.object({
+  count: z.number().int().min(1).max(MAX_TRIES),
+  start: z.boolean().default(false),
+})
 const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
@@ -258,6 +263,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { agent, prompt } = startAgentBodySchema.parse(request.body)
     return { task: options.agents.start(id, agent, prompt) }
+  })
+
+  app.post('/tasks/:id/fan-out', async (request, reply) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { count, start } = fanOutBodySchema.parse(request.body)
+    const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
+    return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
   })
 
   // A review comment for the agent: pasted into its terminal as the next prompt.

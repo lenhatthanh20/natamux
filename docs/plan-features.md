@@ -66,7 +66,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.helmsman-setup` (or `.helmsman-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
 | Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `HELMSMAN_PORT` | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |
-| Fan-out: one prompt to several agents, compare results, keep the winner | v1 |
+| Fan-out: one prompt to several agents, compare results, keep the winner. Done: **Fan out** copies a task 1 to 5 times, each with its own workspace and Claude Code; the copies share a `tries-…` label and are compared by their diffs. Next: a compare view | v1 |
 | SSH and remote workspaces | Later |
 | Container isolation | Later |
 | Scheduled and background runs | Later |
