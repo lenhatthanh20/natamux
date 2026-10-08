@@ -1,9 +1,10 @@
 import type { Task } from '@helmsman/core'
 import { type ReactNode, useState } from 'react'
-import type { StoredEvent } from '../lib/api'
+import type { StoredEvent, TaskChanges } from '../lib/api'
 import { actionsFor, formatAge, isQuiet, type TaskAction } from '../lib/tasks'
 import { PathText } from './PathText'
 import { StateBadge } from './StateBadge'
+import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
 
 type TaskDetailProps = {
@@ -17,6 +18,7 @@ type TaskDetailProps = {
   onRemoveWorkspace: () => void
   onViewChanges: () => void
   onStartAgent: () => void
+  onEdit: (changes: TaskChanges) => void
   onClose: () => void
 }
 
@@ -40,8 +42,10 @@ export function TaskDetail({
   onRemoveWorkspace,
   onViewChanges,
   onStartAgent,
+  onEdit,
   onClose,
 }: TaskDetailProps) {
+  const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const actions = actionsFor(task.state)
@@ -75,14 +79,37 @@ export function TaskDetail({
           <p className="font-mono text-muted">{task.id}</p>
           <h2 className="text-base font-semibold break-words">{task.title}</h2>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-2 py-1 text-muted hover:text-ink"
-        >
-          Close
-        </button>
+        <span className="flex shrink-0 gap-1">
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-md px-2 py-1 text-muted hover:text-ink"
+            >
+              Edit
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-muted hover:text-ink"
+          >
+            Close
+          </button>
+        </span>
       </header>
+
+      {editing && (
+        <TaskEditForm
+          task={task}
+          busy={busy}
+          onSave={(changes) => {
+            setEditing(false)
+            onEdit(changes)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
       {isQuiet(task, now) && (
         <p role="status" className="border-l-4 border-signal pl-3 font-medium">

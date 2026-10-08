@@ -29,6 +29,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /tasks?state=<state>` | List tasks, newest update first |
 | `POST /tasks` | Create a draft task (`title` required) |
 | `GET /tasks/:id` | One task |
+| `PATCH /tasks/:id` | Body: any of `title`, `description`, `priority`, `labels`, `dependsOn`. Other fields answer 400. Logs `task.edited` with the names of the fields that changed; nothing is written when none did |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
 | `POST /tasks/:id/workspace` | Create a git worktree and a branch `helmsman/t-0001-<title>` for the task. Answers 409 if the task has one, is done or cancelled, or git refuses |

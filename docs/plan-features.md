@@ -83,7 +83,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Subtasks (one level) | v1 |
 | Dependencies between tasks (a task waits until others are `done`) | v1 |
 | Approval gates: a task can require a human decision before it moves on | v1 |
-| Task notes as markdown, with a run log | MVP |
+| Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
 | Reusable task templates and prompts | v1 |
 | Import tasks from GitHub issues | v1 |
 | Import from Linear, Jira and others | Later |
