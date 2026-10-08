@@ -110,7 +110,7 @@ Goals:
 | Board view (columns by state), toggle with the table | v1 |
 | One-line live summary per running task (what the agent is doing now) | v1 |
 | Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
-| Desktop and system notifications when a task needs me or finishes | MVP |
+| Desktop and system notifications when a task needs me or finishes. Done in the browser: a notification when a task starts to wait while the tab is in the background, and the count in the tab title | MVP |
 | Compact "wall" mode for a second monitor | Later |
 | Mobile-friendly read-only page (reachable on the local network) | Later |
 | History and stats (tasks per day, time in each state) | Later |
