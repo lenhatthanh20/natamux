@@ -16,6 +16,7 @@ type TaskDetailProps = {
   onCreateWorkspace: () => void
   onRemoveWorkspace: () => void
   onViewChanges: () => void
+  onStartAgent: () => void
   onClose: () => void
 }
 
@@ -38,6 +39,7 @@ export function TaskDetail({
   onCreateWorkspace,
   onRemoveWorkspace,
   onViewChanges,
+  onStartAgent,
   onClose,
 }: TaskDetailProps) {
   const [confirming, setConfirming] = useState(false)
@@ -120,7 +122,22 @@ export function TaskDetail({
           <StateBadge state={task.state} />
         </Field>
         <Field label="Priority">{task.priority}</Field>
-        <Field label="Agent">{task.agent ?? '-'}</Field>
+        <Field label="Agent">
+          <span className="flex flex-wrap items-center gap-2">
+            <span>{task.agent ?? '-'}</span>
+            {!isFinished && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onStartAgent}
+                title="Creates the workspace when there is none, then starts Claude Code in its terminal"
+                className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent disabled:opacity-50"
+              >
+                Start Claude Code
+              </button>
+            )}
+          </span>
+        </Field>
         <Field label="Branch">{task.branch === null ? '-' : <PathText path={task.branch} />}</Field>
         <Field label="Workspace">
           {task.workspace === null ? (
@@ -175,7 +192,15 @@ export function TaskDetail({
         <Field label="Depends on">
           {task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}
         </Field>
-        <Field label="Pull request">{task.pr ?? '-'}</Field>
+        <Field label="Pull request">
+          {task.pr === null ? (
+            '-'
+          ) : (
+            <a href={task.pr} target="_blank" rel="noreferrer" className="text-accent underline">
+              {task.pr.replace(/^https:\/\/github\.com\//, '')}
+            </a>
+          )}
+        </Field>
         <Field label="Updated">{formatAge(task.updatedAt, now)}</Field>
       </dl>
 

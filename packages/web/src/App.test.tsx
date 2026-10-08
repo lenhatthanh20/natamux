@@ -148,6 +148,13 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    const agentPath = /^\/api\/tasks\/(T-\d+)\/agent$/.exec(path)
+    const agentTask = tasks.find((task) => task.id === agentPath?.[1])
+    if (agentTask && method === 'POST') {
+      const updated: Task = { ...agentTask, agent: 'claude-code' }
+      tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
+      return json({ task: updated })
+    }
     const gitPath = /^\/api\/tasks\/(T-\d+)\/(commit|push|pull-request)$/.exec(path)
     const gitTask = tasks.find((task) => task.id === gitPath?.[1])
     if (gitPath && gitTask && method === 'POST') {
@@ -477,6 +484,27 @@ describe('App', () => {
       expect(screen.queryByRole('region', { name: 'Changes of T-0001' })).toBeNull(),
     )
     expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('starts Claude Code: makes the workspace, then opens its terminal', async () => {
+    const { calls } = installDaemon([
+      makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'ready' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Start Claude Code' }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    const posts = calls.filter((call) => call.method === 'POST').map((call) => call.path)
+    expect(posts).toEqual(['/api/tasks/T-0001/workspace', '/api/tasks/T-0001/agent'])
   })
 
   it('adds a task from the title field', async () => {

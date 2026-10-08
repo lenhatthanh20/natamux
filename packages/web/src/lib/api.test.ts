@@ -179,6 +179,18 @@ describe('createApi', () => {
     ])
   })
 
+  it('starts an agent for a task', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task }))
+
+    const started = await createApi('secret', fetchFunction).startAgent('T-0001', 'claude-code')
+    expect(started).toEqual(task)
+    expect(calls[0]).toMatchObject({
+      url: '/api/tasks/T-0001/agent',
+      method: 'POST',
+      body: { agent: 'claude-code' },
+    })
+  })
+
   it('asks for a terminal ticket with the token', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ ticket: 'abc' }))
 
