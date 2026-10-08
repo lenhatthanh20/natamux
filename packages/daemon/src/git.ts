@@ -1,9 +1,17 @@
 import { execFile } from 'node:child_process'
+import { readFile, realpath, stat } from 'node:fs/promises'
+import { resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
+import type { ChangeEntry, ChangeStatus, FileDiff } from '@helmsman/core'
 
 const execFileAsync = promisify(execFile)
 
 const MAX_OUTPUT_BYTES = 10 * 1024 * 1024
+
+// A file bigger than this is not sent to the dashboard, and the text of a file is binary when a
+// zero byte shows up in its first bytes.
+const MAX_FILE_BYTES = 1_000_000
+const BINARY_SCAN_BYTES = 8000
 
 export class GitError extends Error {
   readonly args: readonly string[]
@@ -60,6 +68,156 @@ export async function addWorktree(
 // Refuses to remove a worktree that has changes that are not committed.
 export async function removeWorktree(repoDir: string, worktreePath: string): Promise<void> {
   await git(repoDir, ['worktree', 'remove', worktreePath])
+}
+
+export class OutsideWorkspaceError extends Error {
+  constructor(path: string) {
+    super(`${path} points outside the workspace, so it is not shown`)
+    this.name = 'OutsideWorkspaceError'
+  }
+}
+
+async function gitBuffer(cwd: string, args: readonly string[]): Promise<Buffer> {
+  try {
+    const { stdout } = await execFileAsync('git', [...args], {
+      cwd,
+      maxBuffer: MAX_OUTPUT_BYTES,
+      encoding: 'buffer',
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    })
+    return stdout
+  } catch (error) {
+    throw new GitError(args, errorText(error))
+  }
+}
+
+export function statusFromCodes(index: string, worktree: string): ChangeStatus {
+  const conflict =
+    index === 'U' ||
+    worktree === 'U' ||
+    (index === 'A' && worktree === 'A') ||
+    (index === 'D' && worktree === 'D')
+  if (conflict) {
+    return 'C'
+  }
+  if (index === '?' && worktree === '?') {
+    return 'U'
+  }
+  if (index === 'R' || worktree === 'R') {
+    return 'R'
+  }
+  if (index === 'A' || worktree === 'A' || index === 'C' || worktree === 'C') {
+    return 'A'
+  }
+  if (index === 'D' || worktree === 'D') {
+    return 'D'
+  }
+  return 'M'
+}
+
+// Reads the output of `git status --porcelain=v1 -z`. Each entry is "XY path" and a NUL; a renamed
+// or copied file is followed by one more NUL-ended item, its old path.
+export function parseStatus(output: string): ChangeEntry[] {
+  const parts = output.split('\0')
+  const entries: ChangeEntry[] = []
+
+  for (let position = 0; position < parts.length; position += 1) {
+    const item = parts[position]
+    if (!item || item.length < 4) {
+      continue
+    }
+    const index = item[0] ?? ' '
+    const worktree = item[1] ?? ' '
+    const moved = index === 'R' || index === 'C' || worktree === 'R' || worktree === 'C'
+    const originalPath = moved ? (parts[position + 1] ?? null) : null
+    if (moved) {
+      position += 1
+    }
+    entries.push({
+      path: item.slice(3),
+      status: statusFromCodes(index, worktree),
+      originalPath,
+    })
+  }
+  return entries
+}
+
+// The files of a worktree that differ from its last commit, including files not tracked yet.
+export async function listChanges(worktreePath: string): Promise<ChangeEntry[]> {
+  const output = await git(worktreePath, [
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all',
+  ])
+  return parseStatus(output).sort((a, b) => a.path.localeCompare(b.path))
+}
+
+function looksBinary(buffer: Buffer): boolean {
+  return buffer.subarray(0, BINARY_SCAN_BYTES).includes(0)
+}
+
+type FileInWorktree = { size: number; read: () => Promise<Buffer> }
+
+// The file in the worktree, or null when it is not there. A link that leaves the worktree is refused.
+async function readInside(root: string, path: string): Promise<FileInWorktree | null> {
+  let real: string
+  try {
+    real = await realpath(resolve(root, path))
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+
+  const realRoot = await realpath(root)
+  if (real !== realRoot && !real.startsWith(`${realRoot}${sep}`)) {
+    throw new OutsideWorkspaceError(path)
+  }
+  const { size } = await stat(real)
+  return { size, read: () => readFile(real) }
+}
+
+// Both sides of one changed file: the last commit, and the file as it is now.
+export async function readFileDiff(worktreePath: string, change: ChangeEntry): Promise<FileDiff> {
+  const head = { path: change.path, status: change.status }
+  const tooLarge = { ...head, original: null, modified: null, binary: false, tooLarge: true }
+
+  let originalBuffer: Buffer | null = null
+  if (change.status !== 'A' && change.status !== 'U') {
+    const source = `HEAD:${change.originalPath ?? change.path}`
+    const size = Number((await git(worktreePath, ['cat-file', '-s', source])).trim())
+    if (size > MAX_FILE_BYTES) {
+      return tooLarge
+    }
+    originalBuffer = await gitBuffer(worktreePath, ['show', source])
+  }
+
+  let modifiedBuffer: Buffer | null = null
+  if (change.status !== 'D') {
+    const file = await readInside(worktreePath, change.path)
+    if (file) {
+      if (file.size > MAX_FILE_BYTES) {
+        return tooLarge
+      }
+      modifiedBuffer = await file.read()
+    }
+  }
+
+  if (
+    (originalBuffer && looksBinary(originalBuffer)) ||
+    (modifiedBuffer && looksBinary(modifiedBuffer))
+  ) {
+    return { ...head, original: null, modified: null, binary: true, tooLarge: false }
+  }
+  return {
+    ...head,
+    original: originalBuffer?.toString('utf8') ?? null,
+    modified: modifiedBuffer?.toString('utf8') ?? null,
+    binary: false,
+    tooLarge: false,
+  }
 }
 
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.

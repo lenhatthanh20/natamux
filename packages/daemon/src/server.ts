@@ -5,9 +5,13 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import type { EventBus } from './event-bus.js'
-import { GitError } from './git.js'
+import { GitError, OutsideWorkspaceError } from './git.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
-import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
+import {
+  FileNotChangedError,
+  WorkspaceConflictError,
+  type WorkspaceService,
+} from './workspace-service.js'
 
 type ServerOptions = {
   service: TaskService
@@ -20,6 +24,7 @@ const taskParamsSchema = z.object({ id: taskIdSchema })
 const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
+const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
 
 export function isAuthorized(provided: string | undefined, token: string): boolean {
   if (provided === undefined) {
@@ -76,7 +81,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof UnknownAgentError) {
       return reply.code(404).send({ error: 'unknown_agent', message: error.message })
     }
-    if (error instanceof WorkspaceConflictError || error instanceof GitError) {
+    if (error instanceof FileNotChangedError) {
+      return reply.code(404).send({ error: 'not_found', message: error.message })
+    }
+    if (
+      error instanceof WorkspaceConflictError ||
+      error instanceof GitError ||
+      error instanceof OutsideWorkspaceError
+    ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
     const status = clientErrorStatus(error)
@@ -135,6 +147,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const query = removeWorkspaceQuerySchema.parse(request.query)
     return options.workspaces.remove(id, { deleteBranch: query.deleteBranch === 'true' })
+  })
+
+  app.get('/tasks/:id/changes', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { changes: await options.workspaces.changes(id) }
+  })
+
+  app.get('/tasks/:id/changes/file', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { path } = changedFileQuerySchema.parse(request.query)
+    return options.workspaces.fileDiff(id, path)
   })
 
   app.get('/events', { websocket: true }, (socket) => {

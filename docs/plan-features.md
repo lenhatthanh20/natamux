@@ -119,7 +119,7 @@ Goals:
 
 | Feature | Tag |
 |---|---|
-| Diff view per task (unified and split) | MVP |
+| Diff view per task (unified and split). Done: changed files list and a Monaco diff of uncommitted changes. Next: git graph of the task branch | MVP |
 | Inline comments that are sent back to the agent as a follow-up prompt | v1 |
 | Commit from the app with a message draft | v1 |
 | One-click push and PR creation (GitHub first) | v1 |

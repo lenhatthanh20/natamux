@@ -1,5 +1,9 @@
 import {
+  type ChangeEntry,
+  changeEntrySchema,
   type EventType,
+  type FileDiff,
+  fileDiffSchema,
   type Task,
   type TaskEvent,
   taskEventSchema,
@@ -127,6 +131,22 @@ export function createApi(
           event: taskEventSchema.parse(stored.event),
         }
       })
+    },
+
+    async listChanges(taskId: string): Promise<ChangeEntry[]> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/changes`))
+      if (!Array.isArray(body.changes)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.changes.map((entry) => changeEntrySchema.parse(entry))
+    },
+
+    async getFileDiff(taskId: string, path: string): Promise<FileDiff> {
+      const body = await request(
+        'GET',
+        `/tasks/${encodeURIComponent(taskId)}/changes/file?path=${encodeURIComponent(path)}`,
+      )
+      return fileDiffSchema.parse(body)
     },
 
     async createWorkspace(taskId: string): Promise<Task> {

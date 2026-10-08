@@ -15,6 +15,7 @@ type TaskDetailProps = {
   onAction: (action: TaskAction) => void
   onCreateWorkspace: () => void
   onRemoveWorkspace: () => void
+  onViewChanges: () => void
   onClose: () => void
 }
 
@@ -36,6 +37,7 @@ export function TaskDetail({
   onAction,
   onCreateWorkspace,
   onRemoveWorkspace,
+  onViewChanges,
   onClose,
 }: TaskDetailProps) {
   const [confirming, setConfirming] = useState(false)
@@ -139,6 +141,13 @@ export function TaskDetail({
             <span className="flex flex-col items-start gap-2">
               <PathText path={task.workspace} />
               <span className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onViewChanges}
+                  className="rounded-md border border-line px-2 py-1 font-medium hover:border-accent"
+                >
+                  View changes
+                </button>
                 <button
                   type="button"
                   disabled={busy}
