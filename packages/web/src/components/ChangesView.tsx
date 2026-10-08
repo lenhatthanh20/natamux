@@ -1,4 +1,10 @@
-import type { ChangeEntry, FileDiff, GitGraph as GitGraphData, Task } from '@helmsman/core'
+import type {
+  ChangeEntry,
+  FileDiff,
+  GitGraph as GitGraphData,
+  Task,
+  TerminalSize,
+} from '@helmsman/core'
 import { useQuery } from '@tanstack/react-query'
 import { lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
@@ -6,10 +12,11 @@ import { GitGraph } from './GitGraph'
 
 // Monaco is large. It is loaded the first time a diff is shown, not with the dashboard.
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
+const TerminalView = lazy(() => import('./TerminalView'))
 
 const REFRESH_MS = 10_000
 
-type Tab = 'changes' | 'history'
+type Tab = 'changes' | 'history' | 'terminal'
 
 type ChangesViewProps = {
   task: Task
@@ -17,6 +24,7 @@ type ChangesViewProps = {
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   loadGraph: () => Promise<GitGraphData>
+  connectTerminal: (size: TerminalSize) => Promise<WebSocket>
   onClose: () => void
 }
 
@@ -54,6 +62,7 @@ export function ChangesView({
   loadChanges,
   loadFile,
   loadGraph,
+  connectTerminal,
   onClose,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<Tab>('changes')
@@ -136,6 +145,15 @@ export function ChangesView({
           >
             History
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'terminal'}
+            onClick={() => setTab('terminal')}
+            className={tabClass}
+          >
+            Terminal
+          </button>
         </div>
         {tab === 'changes' && (
           <button
@@ -147,14 +165,24 @@ export function ChangesView({
             {sideBySide ? 'Side by side' : 'Inline'}
           </button>
         )}
-        <button
-          type="button"
-          onClick={refresh}
-          className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
-        >
-          Refresh
-        </button>
+        {tab !== 'terminal' && (
+          <button
+            type="button"
+            onClick={refresh}
+            className="rounded-md border border-line px-3 py-1.5 hover:border-accent"
+          >
+            Refresh
+          </button>
+        )}
       </header>
+
+      {tab === 'terminal' && (
+        <div role="tabpanel" aria-label="Terminal">
+          <Suspense fallback={<p className="text-muted">Loading the terminal.</p>}>
+            <TerminalView connect={connectTerminal} />
+          </Suspense>
+        </div>
+      )}
 
       {tab === 'history' && (
         <div role="tabpanel" aria-label="History">

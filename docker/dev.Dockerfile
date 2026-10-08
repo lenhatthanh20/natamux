@@ -1,8 +1,9 @@
 # Development image. It holds the tools; the source code is mounted from the codespace.
 FROM node:22-bookworm-slim
 
+# python3, make and g++ build node-pty when no prebuilt binary fits.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git ca-certificates \
+  && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 # Same pnpm as the packageManager field of package.json.

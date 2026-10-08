@@ -136,7 +136,8 @@ export class WorkspaceService {
     return readGitGraph(workspace, await currentBranch(this.repoDir))
   }
 
-  private workspaceOf(taskId: string): string {
+  // The folder of the task's workspace. Throws WorkspaceConflictError when it has none.
+  workspaceOf(taskId: string): string {
     const task = this.tasks.getTask(taskId)
     if (task.workspace === null) {
       throw new WorkspaceConflictError(`${taskId} has no workspace`)

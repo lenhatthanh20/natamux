@@ -157,6 +157,17 @@ export function createApi(
       )
     },
 
+    // A one-time ticket that opens the terminal socket of a task, see terminalSocketUrl.
+    async terminalTicket(taskId: string): Promise<string> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/terminal/ticket`),
+      )
+      if (typeof body.ticket !== 'string') {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.ticket
+    },
+
     async createWorkspace(taskId: string): Promise<Task> {
       const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/workspace`))
       return taskSchema.parse(body.task)
