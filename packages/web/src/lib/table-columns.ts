@@ -4,19 +4,22 @@ export type ColumnKey = SortKey
 
 export type TableLayout =
   | { kind: 'cards' }
-  | { kind: 'table'; columns: ColumnKey[]; template: string }
+  | { kind: 'table'; columns: ColumnKey[]; widths: Record<string, number | null>; minWidth: number }
 
-// The width of each column as a grid track. Task takes what is left; Agent and Branch may shrink.
-const TRACK: Record<ColumnKey, string> = {
-  id: '4.5rem',
-  task: 'minmax(10rem, 1fr)',
-  state: '7.5rem',
-  agent: 'minmax(5.5rem, 7.5rem)',
-  branch: 'minmax(7.5rem, 12.5rem)',
-  changes: '5.5rem',
-  pr: 'minmax(5.5rem, 7.5rem)',
-  activity: '6.5rem',
+// The width of each column in px. Task has none: it takes what is left, and never less than
+// TASK_MIN. When the main area is narrower than the sum, the table scrolls sideways.
+const WIDTH: Record<ColumnKey, number | null> = {
+  id: 72,
+  task: null,
+  state: 120,
+  agent: 120,
+  branch: 200,
+  changes: 88,
+  pr: 120,
+  activity: 104,
 }
+
+export const TASK_MIN = 240
 
 export const COLUMN_LABEL: Record<ColumnKey, string> = {
   id: 'Id',
@@ -49,5 +52,11 @@ export function tableLayout(mainWidth: number | null, has: HasValue): TableLayou
   columns = columns.filter(
     (column) => !(column === 'changes' && !has.changes) && !(column === 'pr' && !has.pr),
   )
-  return { kind: 'table', columns, template: columns.map((column) => TRACK[column]).join(' ') }
+  const fixed = columns.reduce((sum, column) => sum + (WIDTH[column] ?? 0), 0)
+  return {
+    kind: 'table',
+    columns,
+    widths: Object.fromEntries(columns.map((column) => [column, WIDTH[column]])),
+    minWidth: fixed + TASK_MIN,
+  }
 }

@@ -1,6 +1,6 @@
 import { type Task, type TaskState } from '@helmsman/core'
 import { ListFilter } from 'lucide-react'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { chipsThatFit } from '../lib/state-filter'
 import { countByState, STATE_LABEL, STATE_ORDER } from '../lib/tasks'

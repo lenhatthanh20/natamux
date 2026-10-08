@@ -48,8 +48,21 @@ describe('tableLayout', () => {
     expect(columns(null)).toHaveLength(8)
   })
 
-  it('lets the task column take the free width', () => {
+  it('gives the task column no width of its own, and a minimum for the whole table', () => {
     const layout = tableLayout(1200, both)
-    expect(layout.kind === 'table' && layout.template).toContain('1fr')
+    if (layout.kind !== 'table') {
+      throw new Error('expected a table')
+    }
+    expect(layout.widths.task).toBeNull()
+    expect(layout.widths.id).toBe(72)
+    expect(layout.minWidth).toBe(72 + 120 + 120 + 200 + 88 + 120 + 104 + 240)
+  })
+
+  it('has a smaller minimum with fewer columns', () => {
+    const wide = tableLayout(1200, both)
+    const narrow = tableLayout(700, both)
+    expect(wide.kind === 'table' && narrow.kind === 'table' && narrow.minWidth < wide.minWidth).toBe(
+      true,
+    )
   })
 })

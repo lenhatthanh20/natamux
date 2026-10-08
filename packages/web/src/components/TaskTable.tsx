@@ -61,10 +61,10 @@ function HeaderCell({
   const sorted = sort?.key === column ? sort.direction : null
   const Arrow = sorted === 'desc' ? ArrowDown : ArrowUp
   return (
-    <div
-      role="columnheader"
+    <th
+      scope="col"
       aria-sort={sorted === null ? undefined : sorted === 'asc' ? 'ascending' : 'descending'}
-      className="min-w-0"
+      className="sticky top-0 z-(--z-sticky) h-8 border-b border-line bg-surface p-0 font-medium first:rounded-tl-lg last:rounded-tr-lg"
     >
       <button
         type="button"
@@ -74,7 +74,7 @@ function HeaderCell({
         {COLUMN_LABEL[column]}
         {sorted !== null && <Arrow size={ICON.xs} aria-hidden="true" />}
       </button>
-    </div>
+    </th>
   )
 }
 
@@ -196,9 +196,8 @@ export function TaskTable({
     )
   }
 
-  const { columns, template } = layout
-  const cell = (column: ColumnKey, task: Task) => {
-    const stat = diffStats[task.id]
+  const { columns, widths, minWidth } = layout
+  const cell = (column: ColumnKey, task: Task) => {    const stat = diffStats[task.id]
     const note = task.state === 'running' ? activity[task.id] : undefined
     switch (column) {
       case 'id':
@@ -287,41 +286,45 @@ export function TaskTable({
   }
 
   return (
-    <div
-      ref={roving.container}
-      role="table"
-      aria-label="Tasks"
-      {...roving.containerProps}
-      className="group/table rounded-lg border border-line bg-surface"
-    >
-      <div
-        role="row"
-        style={{ gridTemplateColumns: template }}
-        className="sticky top-0 z-(--z-sticky) grid h-8 items-center rounded-t-lg border-b border-line bg-surface text-xs font-medium text-muted"
+    <div className="group/table rounded-lg border border-line bg-surface">
+      <table
+        ref={roving.container}
+        aria-label="Tasks"
+        {...roving.containerProps}
+        style={{ minWidth }}
+        className="w-full table-fixed border-separate border-spacing-0 text-left"
       >
-        {columns.map((column) => (
-          <HeaderCell key={column} column={column} sort={sort} onSort={onSort} />
-        ))}
-      </div>
-      {tasks.map((task) => (
-        <div
-          key={task.id}
-          role="row"
-          {...rowProps(task)}
-          style={{ gridTemplateColumns: template }}
-          className="grid h-10 cursor-pointer items-center border-b border-line last:rounded-b-lg last:border-b-0 hover:bg-hover has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-focus data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
-        >
+        <colgroup>
           {columns.map((column) => (
-            <div
-              key={column}
-              role="cell"
-              className={`min-w-0 px-3 ${RIGHT.includes(column) ? 'text-right' : ''}`}
-            >
-              {cell(column, task)}
-            </div>
+            <col key={column} style={{ width: widths[column] ?? undefined }} />
           ))}
-        </div>
-      ))}
+        </colgroup>
+        <thead className="text-xs text-muted">
+          <tr>
+            {columns.map((column) => (
+              <HeaderCell key={column} column={column} sort={sort} onSort={onSort} />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map((task) => (
+            <tr
+              key={task.id}
+              {...rowProps(task)}
+              className="group h-10 cursor-pointer has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-focus"
+            >
+              {columns.map((column) => (
+                <td
+                  key={column}
+                  className={`h-10 min-w-0 border-b border-line px-3 group-hover:bg-hover group-data-[selected=true]:bg-selected group-last:border-b-0 group-data-[selected=true]:group-focus-within/table:bg-selection-active first:group-last:rounded-bl-lg last:group-last:rounded-br-lg ${RIGHT.includes(column) ? 'text-right' : ''}`}
+                >
+                  {cell(column, task)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
