@@ -3,6 +3,8 @@ import type { Task, TaskEvent } from '@helmsman/core'
 export type DaemonMessage =
   | { kind: 'task.created'; task: Task }
   | { kind: 'task.updated'; task: Task; event: TaskEvent; accepted: boolean }
+  // A change that is not worth a line in the log, such as checks that started to run.
+  | { kind: 'task.changed'; task: Task }
 
 export type MessageListener = (message: DaemonMessage) => void
 

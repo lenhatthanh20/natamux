@@ -20,6 +20,7 @@ describe('taskSchema', () => {
       branch: null,
       workspace: null,
       pr: null,
+      prStatus: null,
       dependsOn: [],
     })
   })
