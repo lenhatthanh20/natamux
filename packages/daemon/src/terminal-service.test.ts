@@ -132,8 +132,9 @@ describe('TerminalService', () => {
 
   it('refuses a new shell above the limit', () => {
     const { service } = setup()
+    // From T-0101 on, away from T-0009, which has no workspace here.
     for (let number = 1; number <= MAX_SESSIONS; number += 1) {
-      service.attach(`T-${String(number).padStart(4, '0')}`, client(), size)
+      service.attach(`T-${String(100 + number).padStart(4, '0')}`, client(), size)
     }
     expect(() => service.attach('T-0999', client(), size)).toThrow(TerminalLimitError)
   })
