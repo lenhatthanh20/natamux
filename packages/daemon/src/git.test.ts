@@ -14,12 +14,14 @@ import {
   NothingToCommitError,
   OutsideWorkspaceError,
   parseLog,
+  parseNumstat,
   parsePullRequestView,
   parseRefs,
   parseStatus,
   pullRequestUrl,
   pushBranch,
   type RunGh,
+  readDiffStat,
   readFileDiff,
   readGitGraph,
   readPullRequestStatus,
@@ -582,5 +584,32 @@ describe('readPullRequestStatus', () => {
     const gh: RunGh = async () => 'not json'
     const reading = readPullRequestStatus('/repo', 'https://github.com/o/r/pull/1', gh)
     await expect(reading).rejects.toThrow(GitHubError)
+  })
+})
+
+describe('diff size', () => {
+  it('sums numstat lines, binary files without lines', () => {
+    expect(parseNumstat('3\t1\ta.ts\n-\t-\timage.png\n10\t0\tb.ts\n')).toEqual({
+      files: 3,
+      added: 13,
+      removed: 1,
+    })
+    expect(parseNumstat('')).toEqual({ files: 0, added: 0, removed: 0 })
+  })
+
+  it('counts the branch and uncommitted changes from where it left the base', async () => {
+    writeFileSync(join(repo.dir, 'base.txt'), 'one\ntwo\n')
+    runGit(repo.dir, 'add', 'base.txt')
+    runGit(repo.dir, 'commit', '-m', 'base')
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'base.txt'), 'one\nthree\nfour\n')
+    runGit(worktreePath, 'commit', '-am', 'change')
+    writeFileSync(join(worktreePath, 'base.txt'), 'one\nthree\nfour\nfive\n')
+    writeFileSync(join(repo.dir, 'later.txt'), 'main moved\n')
+    runGit(repo.dir, 'add', 'later.txt')
+    runGit(repo.dir, 'commit', '-m', 'main moved')
+
+    expect(await readDiffStat(worktreePath, 'main')).toEqual({ files: 1, added: 3, removed: 1 })
+    expect(await readDiffStat(worktreePath, null)).toEqual({ files: 1, added: 1, removed: 0 })
   })
 })

@@ -149,6 +149,9 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    if (path === '/api/diffstats' && method === 'GET') {
+      return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
+    }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
       return json({ terminals: ['1'] })
     }
@@ -580,6 +583,17 @@ describe('App', () => {
     expect(await screen.findByText('Imported 1 issue.')).toBeTruthy()
     expect(within(screen.getByRole('table')).getByText('Dark mode flickers')).toBeTruthy()
     expect(calls.some((call) => call.path === '/api/github/issues/import')).toBe(true)
+  })
+
+  it('shows the size of the work of a task', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const table = await screen.findByRole('table')
+
+    expect(await within(table).findByText('+12')).toBeTruthy()
+    expect(within(table).getByText('−3')).toBeTruthy()
   })
 
   it('adds a task from the title field', async () => {
