@@ -10,6 +10,8 @@ type TaskTableProps = {
   diffStats?: Readonly<Record<string, DiffStat>>
   // Every task, to tell whether a task still waits for others. The rows can be filtered.
   allTasks?: readonly Task[]
+  // What the agent of each task does now.
+  activity?: Readonly<Record<string, string>>
   onSelect: (id: string) => void
 }
 
@@ -39,6 +41,7 @@ export function TaskTable({
   selectedId,
   diffStats = {},
   allTasks = tasks,
+  activity = {},
   onSelect,
 }: TaskTableProps) {
   if (tasks.length === 0) {
@@ -75,13 +78,18 @@ export function TaskTable({
                 <button
                   type="button"
                   onClick={() => onSelect(task.id)}
-                  className="flex w-full min-w-0 items-baseline gap-3 text-left"
+                  className="flex w-full min-w-0 flex-wrap items-baseline gap-x-3 text-left"
                 >
                   <span className="w-16 shrink-0 font-mono text-muted">{task.id}</span>
                   <span className="truncate font-medium">{task.title}</span>
                   <WaitsFor ids={waitingOn(task, allTasks)} />
                   {task.parentId !== null && (
                     <span className="shrink-0 text-muted">part of {task.parentId}</span>
+                  )}
+                  {task.state === 'running' && activity[task.id] !== undefined && (
+                    <span className="w-full truncate pl-[4.75rem] font-mono text-xs text-muted">
+                      {activity[task.id]}
+                    </span>
                   )}
                 </button>
               </td>
