@@ -6,6 +6,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  listBranches,
   listChanges,
   pushBranch,
   type RunGh,
@@ -82,7 +83,13 @@ export class WorkspaceService {
     return join(this.worktreesDir, taskId)
   }
 
-  async create(taskId: string): Promise<Task> {
+  // The branches a workspace can start from.
+  async branches(): Promise<{ branches: string[]; current: string | null }> {
+    return listBranches(this.repoDir)
+  }
+
+  // Makes the worktree from `base` when given (a local branch), or from the checkout's HEAD.
+  async create(taskId: string, base?: string): Promise<Task> {
     return this.exclusive(taskId, async () => {
       const task = this.tasks.getTask(taskId)
       if (task.workspace !== null) {
@@ -92,9 +99,12 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} is ${task.state}, so it gets no workspace`)
       }
 
+      if (base !== undefined && !(await listBranches(this.repoDir)).branches.includes(base)) {
+        throw new WorkspaceConflictError(`There is no local branch named ${base}`)
+      }
       const branch = branchNameFor(task)
       const worktreePath = this.worktreePathFor(taskId)
-      await addWorktree(this.repoDir, worktreePath, branch)
+      await addWorktree(this.repoDir, worktreePath, branch, base)
 
       let created: Task
       try {

@@ -61,6 +61,9 @@ const startAgentBodySchema = z.object({
 const importIssuesBodySchema = z.object({
   numbers: z.array(z.number().int().positive()).min(1).max(100),
 })
+const createWorkspaceBodySchema = z
+  .object({ base: z.string().min(1).max(255).optional() })
+  .optional()
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
 const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is named by a number')
 const terminalQuerySchema = terminalSizeSchema.extend({
@@ -190,6 +193,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.code(201).send({ task: options.templates.createTask(id, request.body) })
   })
 
+  app.get('/git/branches', async () => options.workspaces.branches())
+
   app.get('/diffstats', async () => ({ stats: await options.workspaces.diffStats() }))
 
   app.get('/github/issues', async () => ({ issues: await options.issues.list() }))
@@ -231,7 +236,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/tasks/:id/workspace', async (request, reply) => {
     const { id } = taskParamsSchema.parse(request.params)
-    const task = await options.workspaces.create(id)
+    const body = createWorkspaceBodySchema.parse(request.body)
+    const task = await options.workspaces.create(id, body?.base)
     return reply.code(201).send({ task })
   })
 

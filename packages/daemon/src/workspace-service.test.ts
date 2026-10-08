@@ -409,3 +409,26 @@ describe('onCreated', () => {
     expect(existsSync(created.workspace ?? '')).toBe(true)
   })
 })
+
+describe('base branch', () => {
+  it('lists the local branches and the current one', async () => {
+    runGit(repo.dir, 'branch', 'release')
+    expect(await workspaces.branches()).toEqual({ branches: ['main', 'release'], current: 'main' })
+  })
+
+  it('starts a workspace from the branch it is given', async () => {
+    runGit(repo.dir, 'checkout', '-b', 'release')
+    runGit(repo.dir, 'commit', '--allow-empty', '-m', 'on release')
+    runGit(repo.dir, 'checkout', 'main')
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    const created = await workspaces.create(task.id, 'release')
+
+    expect(runGit(created.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('on release')
+  })
+
+  it('refuses a branch that does not exist', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await expect(workspaces.create(task.id, 'nope')).rejects.toThrow(WorkspaceConflictError)
+  })
+})
