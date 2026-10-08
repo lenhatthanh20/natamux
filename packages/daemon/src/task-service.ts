@@ -1,13 +1,15 @@
 import {
   applyTaskEvent,
   RECORD_ONLY_EVENT_TYPES,
+  TASK_PRIORITIES,
   type Task,
   type TaskEvent,
   type TaskState,
   taskEventSchema,
+  taskIdSchema,
   taskSchema,
 } from '@helmsman/core'
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { EventBus } from './event-bus.js'
 import { listTaskFiles, listTaskIds, readTaskFile, writeTaskFile } from './task-files.js'
 import type { StoredEvent, TaskIndex } from './task-index.js'
@@ -20,6 +22,21 @@ export const createTaskInputSchema = taskSchema.pick({
   agent: true,
   dependsOn: true,
 })
+
+// The fields a person may change after a task is created. State has its own events.
+// Built without the defaults of taskSchema, so a field that is left out stays as it is.
+export const updateTaskInputSchema = z
+  .object({
+    title: taskSchema.shape.title,
+    description: z.string(),
+    priority: z.enum(TASK_PRIORITIES),
+    labels: z.array(z.string().trim().min(1)),
+    dependsOn: z.array(taskIdSchema),
+  })
+  .partial()
+  .strict()
+
+const EDITABLE_FIELDS = ['title', 'description', 'priority', 'labels', 'dependsOn'] as const
 
 // How often a running task's sign of life is written down at most.
 export const ACTIVITY_INTERVAL_MS = 30_000
@@ -51,6 +68,13 @@ export class TaskNotFoundError extends Error {
     super(`Task ${taskId} does not exist`)
     this.name = 'TaskNotFoundError'
     this.taskId = taskId
+  }
+}
+
+export class TaskEditError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TaskEditError'
   }
 }
 
@@ -115,6 +139,38 @@ export class TaskService {
   listEvents(taskId: string): StoredEvent[] {
     this.getTask(taskId)
     return this.index.listEvents(taskId)
+  }
+
+  // Changes the details of a task. Logs `task.edited` with the names of the fields that changed,
+  // and writes nothing when none did.
+  updateTask(taskId: string, rawInput: unknown): Task {
+    const task = this.getTask(taskId)
+    const input = updateTaskInputSchema.parse(rawInput)
+    if (input.dependsOn?.includes(taskId)) {
+      throw new TaskEditError('A task cannot depend on itself')
+    }
+    const next = { ...task, ...input }
+    const changed = EDITABLE_FIELDS.filter(
+      (field) => JSON.stringify(next[field]) !== JSON.stringify(task[field]),
+    )
+    if (changed.length === 0) {
+      return task
+    }
+
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'task.edited',
+      at: this.timestamp(),
+      payload: { fields: changed },
+    }
+    const updated: Task = taskSchema.parse({ ...next, updatedAt: event.at })
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.index.appendEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
   }
 
   applyEvent(taskId: string, rawInput: unknown): ApplyEventResult {

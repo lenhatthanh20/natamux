@@ -148,6 +148,13 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    const editPath = /^\/api\/tasks\/(T-\d+)$/.exec(path)
+    const editTask = tasks.find((task) => task.id === editPath?.[1])
+    if (editTask && method === 'PATCH') {
+      const updated: Task = { ...editTask, ...JSON.parse(String(init?.body)) }
+      tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
+      return json({ task: updated })
+    }
     const agentPath = /^\/api\/tasks\/(T-\d+)\/agent$/.exec(path)
     const agentTask = tasks.find((task) => task.id === agentPath?.[1])
     if (agentTask && method === 'POST') {
@@ -505,6 +512,30 @@ describe('App', () => {
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     const posts = calls.filter((call) => call.method === 'POST').map((call) => call.path)
     expect(posts).toEqual(['/api/tasks/T-0001/workspace', '/api/tasks/T-0001/agent'])
+  })
+
+  it('edits the details of a task', async () => {
+    const { calls } = installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Edit' }))
+    const form = within(details).getByRole('form', { name: 'Edit T-0001' })
+    const title = within(form).getByLabelText('Title')
+    await user.clear(title)
+    await user.type(title, 'Fix the clock')
+    await user.type(within(form).getByLabelText('Labels, comma separated'), 'time, ui,')
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+
+    expect(await within(screen.getByRole('table')).findByText('Fix the clock')).toBeTruthy()
+    const patch = calls.find((call) => call.method === 'PATCH')
+    expect(patch?.path).toBe('/api/tasks/T-0001')
   })
 
   it('adds a task from the title field', async () => {

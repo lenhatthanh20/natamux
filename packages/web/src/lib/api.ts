@@ -25,6 +25,10 @@ export type StoredEvent = {
   event: TaskEvent
 }
 
+export type TaskChanges = Partial<
+  Pick<Task, 'title' | 'description' | 'priority' | 'labels' | 'dependsOn'>
+>
+
 export type RemoveWorkspaceResult = {
   task: Task
   branchDeleted: boolean
@@ -155,6 +159,11 @@ export function createApi(
       return gitGraphSchema.parse(
         await request('GET', `/tasks/${encodeURIComponent(taskId)}/graph`),
       )
+    },
+
+    async updateTask(taskId: string, changes: TaskChanges): Promise<Task> {
+      const body = asRecord(await request('PATCH', `/tasks/${encodeURIComponent(taskId)}`, changes))
+      return taskSchema.parse(body.task)
     },
 
     // Starts an agent in the terminal of the task's workspace.

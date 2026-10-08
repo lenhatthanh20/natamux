@@ -242,3 +242,54 @@ describe('recordGit', () => {
     expect(messages.at(-1)).toMatchObject({ kind: 'task.updated', task: { pr: url } })
   })
 })
+
+describe('updateTask', () => {
+  it('changes the details and logs which fields changed', () => {
+    const task = service.createTask({ title: 'First' })
+
+    const updated = service.updateTask(task.id, {
+      title: 'Better title',
+      description: 'Notes',
+      priority: 'high',
+      labels: ['ui'],
+    })
+
+    expect(updated).toMatchObject({
+      title: 'Better title',
+      description: 'Notes',
+      priority: 'high',
+      labels: ['ui'],
+      state: 'draft',
+    })
+    expect(readTaskFile(dataDir, task.id)).toEqual(updated)
+    expect(service.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'task.edited',
+      source: 'human',
+      payload: { fields: ['title', 'description', 'priority', 'labels'] },
+    })
+    expect(messages.at(-1)).toMatchObject({ kind: 'task.updated', task: { title: 'Better title' } })
+  })
+
+  it('writes nothing when nothing changed', () => {
+    const task = service.createTask({ title: 'First', labels: ['a'] })
+    const count = service.listEvents(task.id).length
+
+    expect(service.updateTask(task.id, { title: 'First', labels: ['a'] })).toEqual(task)
+    expect(service.listEvents(task.id)).toHaveLength(count)
+  })
+
+  it.each([
+    [{ title: '  ' }],
+    [{ priority: 'someday' }],
+    [{ state: 'done' }],
+    [{ workspace: '/tmp' }],
+  ])('refuses %j', (input) => {
+    const task = service.createTask({ title: 'First' })
+    expect(() => service.updateTask(task.id, input)).toThrow()
+  })
+
+  it('refuses a task that depends on itself', () => {
+    const task = service.createTask({ title: 'First' })
+    expect(() => service.updateTask(task.id, { dependsOn: [task.id] })).toThrow(/itself/)
+  })
+})
