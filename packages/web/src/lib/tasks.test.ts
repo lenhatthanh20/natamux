@@ -24,6 +24,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     workspace: null,
     pr: null,
     prStatus: null,
+    parentId: null,
     dependsOn: [],
     createdAt: '2026-10-08T09:00:00.000Z',
     updatedAt: '2026-10-08T09:00:00.000Z',

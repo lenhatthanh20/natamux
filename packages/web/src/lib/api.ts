@@ -122,8 +122,8 @@ export function createApi(
       return body.tasks.map((task) => taskSchema.parse(task))
     },
 
-    async createTask(title: string): Promise<Task> {
-      const body = asRecord(await request('POST', '/tasks', { title }))
+    async createTask(title: string, parentId?: string): Promise<Task> {
+      const body = asRecord(await request('POST', '/tasks', { title, parentId }))
       return taskSchema.parse(body.task)
     },
 

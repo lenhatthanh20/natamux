@@ -350,3 +350,20 @@ describe('recordPullRequestStatus', () => {
     })
   })
 })
+
+describe('subtasks', () => {
+  it('makes a subtask of a task', () => {
+    const parent = service.createTask({ title: 'Release 1.0' })
+    const child = service.createTask({ title: 'Write the notes', parentId: parent.id })
+    expect(child.parentId).toBe(parent.id)
+    expect(service.createTask({ title: 'Top' }).parentId).toBeNull()
+  })
+
+  it('refuses an unknown parent and a second level', () => {
+    const parent = service.createTask({ title: 'Release 1.0' })
+    const child = service.createTask({ title: 'Write the notes', parentId: parent.id })
+
+    expect(() => service.createTask({ title: 'x', parentId: 'T-0099' })).toThrow(/T-0099/)
+    expect(() => service.createTask({ title: 'x', parentId: child.id })).toThrow(/subtask/)
+  })
+})
