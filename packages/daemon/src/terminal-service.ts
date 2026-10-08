@@ -75,6 +75,7 @@ type Session = {
   pty: PtyProcess
   scrollback: string
   clients: Set<TerminalClient>
+  size: TerminalSize
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
   stopKillTimer?: () => void
 }
@@ -154,7 +155,7 @@ export class TerminalService {
     const session = this.ensure(taskId, terminal, size)
     if (existed) {
       // The screen is drawn for this size, so the shell must know it before the replay.
-      session.pty.resize(size.cols, size.rows)
+      this.setSize(session, size)
     }
     if (session.scrollback !== '') {
       client.send({
@@ -188,7 +189,18 @@ export class TerminalService {
   }
 
   resize(taskId: string, size: TerminalSize, terminal = MAIN_TERMINAL): void {
-    this.sessions.get(sessionKey(taskId, terminal))?.pty.resize(size.cols, size.rows)
+    const session = this.sessions.get(sessionKey(taskId, terminal))
+    if (session) {
+      this.setSize(session, size)
+    }
+  }
+
+  // The shell is told only when the size really changes.
+  private setSize(session: Session, size: TerminalSize): void {
+    if (session.size.cols !== size.cols || session.size.rows !== size.rows) {
+      session.size = size
+      session.pty.resize(size.cols, size.rows)
+    }
   }
 
   // Ends one shell of a task. It is forgotten at once, so a new shell with the same name starts a
@@ -206,11 +218,11 @@ export class TerminalService {
     }
     session.clients.clear()
 
-    session.pty.kill('SIGHUP')
     // A shell that ignores SIGHUP (or a program in it that does) must not stay alive.
     const timer = setTimeout(() => session.pty.kill('SIGKILL'), KILL_GRACE_MS)
     timer.unref()
     session.stopKillTimer = () => clearTimeout(timer)
+    session.pty.kill('SIGHUP')
   }
 
   // Ends every shell of a task, for example before its workspace is removed.
@@ -249,7 +261,7 @@ export class TerminalService {
       },
     })
     const key = sessionKey(taskId, terminal)
-    const session: Session = { taskId, terminal, pty, scrollback: '', clients: new Set() }
+    const session: Session = { taskId, terminal, pty, size, scrollback: '', clients: new Set() }
     this.sessions.set(key, session)
 
     pty.onData((data) => {

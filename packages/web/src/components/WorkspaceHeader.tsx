@@ -65,7 +65,6 @@ export function WorkspaceHeader({
   return (
     <header
       ref={ref}
-      aria-label={`Workspace ${task.id}`}
       className="flex min-h-11 shrink-0 items-center gap-3 px-4 py-1.5"
     >
       <span className="shrink-0 font-mono text-xs text-muted">{task.id}</span>
