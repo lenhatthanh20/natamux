@@ -25,7 +25,8 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
   const dataDir = env.HELMSMAN_DATA_DIR?.trim() || join(cwd, '.helmsman')
 
   return {
-    host: LOOPBACK_HOST,
+    // Only a container sets HELMSMAN_HOST, and only with its port published to loopback.
+    host: env.HELMSMAN_HOST?.trim() || LOOPBACK_HOST,
     port,
     dataDir,
     repoDir: env.HELMSMAN_REPO_DIR?.trim() || cwd,

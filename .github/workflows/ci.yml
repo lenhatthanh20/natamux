@@ -22,3 +22,54 @@ jobs:
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm test
+
+  # Builds and starts both compose setups, and checks that they answer.
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      HELMSMAN_TOKEN: ci-token
+      HELMSMAN_REPO: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the compose files
+        run: |
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.prod.yaml config --quiet
+
+      - name: Production, build and start
+        run: docker compose -f compose.prod.yaml up -d --build --wait --wait-timeout 180
+      - name: Production, smoke test
+        run: |
+          curl -fsS http://127.0.0.1:8080/api/health
+          curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:8080/api/tasks
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/tasks)" = 401
+      - name: Production, logs on failure
+        if: failure()
+        run: docker compose -f compose.prod.yaml logs
+      - name: Production, stop
+        if: always()
+        run: docker compose -f compose.prod.yaml down -v
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Development, build and start
+        run: |
+          export HELMSMAN_UID="$(id -u)" HELMSMAN_GID="$(id -g)"
+          docker compose up -d --build
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:4317/health && break; sleep 3; done
+      - name: Development, smoke test
+        run: |
+          curl -fsS http://127.0.0.1:4317/health
+          curl -fsS http://127.0.0.1:5173/ | grep -q 'id="root"'
+          curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:5173/api/tasks
+      - name: Development, logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Development, stop
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,77 @@
+# Development: docker compose up
+# Runs the daemon and the dashboard against the source in this folder, and reloads on a change.
+# The dashboard is on http://localhost:5173 and the daemon on http://localhost:4317.
+# Both ports are published to loopback only; in a codespace they are forwarded from there.
+name: helmsman-dev
+
+x-dev: &dev
+  build:
+    context: .
+    dockerfile: docker/dev.Dockerfile
+  image: helmsman-dev
+  working_dir: /workspaces/helmsman
+  # The folder is mounted at the same path as in the codespace.
+  volumes:
+    - .:/workspaces/helmsman
+  # Files that the containers write stay yours. In a codespace 1000 is already right.
+  user: "${HELMSMAN_UID:-1000}:${HELMSMAN_GID:-1000}"
+  environment: &dev-env
+    CI: "true"
+    HOME: /tmp
+    HELMSMAN_TOKEN: ${HELMSMAN_TOKEN:-devtoken}
+    # git refuses a folder that another user owns, unless it is listed.
+    GIT_CONFIG_COUNT: "1"
+    GIT_CONFIG_KEY_0: safe.directory
+    GIT_CONFIG_VALUE_0: /workspaces/helmsman
+
+services:
+  # Installs the packages the first time (when node_modules is missing) and builds the
+  # packages that the others use.
+  setup:
+    <<: *dev
+    command: sh -c "[ -d node_modules ] || pnpm install --frozen-lockfile; pnpm --filter '@helmsman/cli...' build"
+    restart: "no"
+
+  # Rebuilds @helmsman/core when you change it. Restart `daemon` to pick that up.
+  core:
+    <<: *dev
+    command: pnpm --filter @helmsman/core exec tsc -p tsconfig.build.json --watch --preserveWatchOutput
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
+  daemon:
+    <<: *dev
+    command: pnpm --filter @helmsman/daemon dev
+    environment:
+      <<: *dev-env
+      HELMSMAN_HOST: 0.0.0.0
+      HELMSMAN_DATA_DIR: /workspaces/helmsman/.helmsman
+      HELMSMAN_REPO_DIR: /workspaces/helmsman
+    ports:
+      - "127.0.0.1:4317:4317"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4317/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 15s
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+
+  web:
+    <<: *dev
+    command: pnpm --filter @helmsman/web dev --host 0.0.0.0
+    environment:
+      <<: *dev-env
+      HELMSMAN_DAEMON_URL: http://daemon:4317
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      daemon:
+        condition: service_healthy
