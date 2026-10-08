@@ -18,6 +18,14 @@ export const SENDABLE_EVENT_TYPES = EVENT_TYPES.filter(
 const AGENT_NAME = /^[a-z][a-z0-9-]*$/
 
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
+
+export type TaskChanges = {
+  title?: string
+  description?: string
+  priority?: TaskPriority
+  labels?: string[]
+  dependsOn?: string[]
+}
 export type EventSource = (typeof EVENT_SOURCES)[number]
 
 export type Command =
@@ -33,6 +41,12 @@ export type Command =
       json: boolean
     }
   | { name: 'task.list'; state?: TaskState; json: boolean }
+  | { name: 'task.edit'; id: string; changes: TaskChanges; json: boolean }
+  | { name: 'agent.start'; id: string; agent: string; prompt?: string; json: boolean }
+  // For an agent without hooks: say it waits for the user, or that its turn is over. Without
+  // --task, the task comes from HELMSMAN_TASK_ID.
+  | { name: 'agent.ask'; id?: string; question: string; json: boolean }
+  | { name: 'agent.done'; id?: string; json: boolean }
   | { name: 'task.show'; id: string; json: boolean }
   | {
       name: 'event.send'
@@ -104,6 +118,9 @@ function parseOptions(argv: readonly string[]) {
         payload: { type: 'string' },
         yes: { type: 'boolean' },
         'delete-branch': { type: 'boolean' },
+        title: { type: 'string' },
+        prompt: { type: 'string' },
+        task: { type: 'string' },
       },
     })
   } catch (error) {
@@ -158,7 +175,27 @@ export function parseCommand(argv: readonly string[]): Command {
       noExtraArguments(rest.slice(1))
       return { name: 'task.show', id: taskId(rest[0]), json }
     }
-    throw new UsageError(`Unknown task command "${second ?? ''}". Use create, list or show`)
+    if (second === 'edit') {
+      noExtraArguments(rest.slice(1))
+      const changes: TaskChanges = {
+        ...(values.title === undefined ? {} : { title: values.title }),
+        ...(values.description === undefined ? {} : { description: values.description }),
+        ...(values.priority === undefined
+          ? {}
+          : { priority: oneOf(values.priority, TASK_PRIORITIES, '--priority') }),
+        ...(values.label === undefined ? {} : { labels: values.label }),
+        ...(values['depends-on'] === undefined
+          ? {}
+          : { dependsOn: values['depends-on'].map((id) => taskId(id)) }),
+      }
+      if (Object.keys(changes).length === 0) {
+        throw new UsageError(
+          'Nothing to change. Use --title, --description, --priority, --label or --depends-on',
+        )
+      }
+      return { name: 'task.edit', id: taskId(rest[0]), changes, json }
+    }
+    throw new UsageError(`Unknown task command "${second ?? ''}". Use create, list, show or edit`)
   }
 
   if (group === 'event') {
@@ -174,6 +211,45 @@ export function parseCommand(argv: readonly string[]): Command {
       type: oneOf(type, SENDABLE_EVENT_TYPES, 'The event type'),
       source: oneOf(values.source ?? 'human', EVENT_SOURCES, '--source'),
       payload: values.payload === undefined ? {} : payloadObject(values.payload),
+      json,
+    }
+  }
+
+  if (group === 'agent') {
+    if (second !== 'start') {
+      throw new UsageError(`Unknown agent command "${second ?? ''}". Use start`)
+    }
+    noExtraArguments(rest.slice(1))
+    return {
+      name: 'agent.start',
+      id: taskId(rest[0]),
+      agent: values.agent ?? 'claude-code',
+      prompt: values.prompt,
+      json,
+    }
+  }
+
+  if (group === 'ask') {
+    const question = [second, ...rest]
+      .filter((part) => part !== undefined)
+      .join(' ')
+      .trim()
+    if (question === '') {
+      throw new UsageError('A question is required: helmsman ask "Which database should I use?"')
+    }
+    return {
+      name: 'agent.ask',
+      id: values.task === undefined ? undefined : taskId(values.task),
+      question,
+      json,
+    }
+  }
+
+  if (group === 'done') {
+    noExtraArguments([second, ...rest].filter((part) => part !== undefined))
+    return {
+      name: 'agent.done',
+      id: values.task === undefined ? undefined : taskId(values.task),
       json,
     }
   }
