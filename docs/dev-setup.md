@@ -35,10 +35,10 @@ Run `build` first: packages import each other through their built `dist` folders
 
 ## Run the daemon and the dashboard
 
-With Docker (one command, and the ports are forwarded out of the codespace):
+With Docker. The codespace starts it for you each time it starts. By hand:
 
 ```sh
-docker compose up
+scripts/dev.sh up     # or: scripts/dev.sh demo, for a task with commits and changes
 ```
 
 See `docs/docker.md`, which also covers the production setup. Without Docker, see `packages/web/README.md`: the dev container forwards port 5173 (the dashboard), and the daemon stays on `127.0.0.1:4317` and is reached through the dashboard's `/api` proxy.

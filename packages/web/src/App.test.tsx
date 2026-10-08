@@ -144,6 +144,28 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    if (/^\/api\/tasks\/T-\d+\/graph$/.test(path) && method === 'GET') {
+      const commit = { author: 'Ann', date: '2026-10-08T09:00:00.000Z', refs: [] }
+      return json({
+        branch: 'helmsman/t-0001',
+        head: 'bbbbbbbbbb',
+        base: 'main',
+        ahead: 1,
+        behind: 0,
+        truncated: false,
+        commits: [
+          {
+            ...commit,
+            hash: 'bbbbbbbbbb',
+            parents: ['aaaaaaaaaa'],
+            subject: 'Fix the parser',
+            refs: ['helmsman/t-0001'],
+            onBranch: true,
+          },
+          { ...commit, hash: 'aaaaaaaaaa', parents: [], subject: 'init', onBranch: false },
+        ],
+      })
+    }
     return json({ message: 'Not found' }, 404)
   })
 
@@ -413,6 +435,13 @@ describe('App', () => {
 
     await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
     expect(await within(view).findByLabelText('Changes in notes.md')).toBeTruthy()
+
+    await user.click(within(view).getByRole('tab', { name: 'History' }))
+    const commits = await within(view).findByRole('list', { name: 'Commits' })
+    expect(within(commits).getByText('Fix the parser')).toBeTruthy()
+    expect(within(commits).getByText('helmsman/t-0001')).toBeTruthy()
+    expect(within(commits).getByText('bbbbbbb')).toBeTruthy()
+    expect(within(view).getByText('1 commit ahead of main, 0 behind.')).toBeTruthy()
 
     await user.keyboard('{Escape}')
     await waitFor(() =>

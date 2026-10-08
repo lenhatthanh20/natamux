@@ -504,3 +504,43 @@ describe('changes', () => {
     expect(response.statusCode).toBe(401)
   })
 })
+
+describe('graph', () => {
+  it('gives the history of the task branch', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/graph',
+      headers: authorization,
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ base: 'main', ahead: 0, behind: 0, truncated: false })
+    expect(response.json().commits).toHaveLength(1)
+  })
+
+  it('answers 409 for a task without a workspace, and needs the token', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const none = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/graph',
+      headers: authorization,
+    })
+    expect(none.statusCode).toBe(409)
+
+    const anonymous = await app.inject({ method: 'GET', url: '/tasks/T-0001/graph' })
+    expect(anonymous.statusCode).toBe(401)
+  })
+})
