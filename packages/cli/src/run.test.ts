@@ -399,3 +399,63 @@ describe('runCli', () => {
     })
   })
 })
+
+describe('more commands', () => {
+  it('edits a task', async () => {
+    const result = await run(['task', 'edit', 'T-1', '--title', 'New title'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-1', title: 'New title' }) }),
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: 'http://127.0.0.1:4317/tasks/T-1',
+      body: { title: 'New title' },
+    })
+    expect(result.stdout).toContain('New title')
+  })
+
+  it('starts an agent', async () => {
+    const result = await run(['agent', 'start', 'T-1'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-1' }) }),
+    })
+
+    expect(result.calls[0]).toMatchObject({
+      method: 'POST',
+      url: 'http://127.0.0.1:4317/tasks/T-1/agent',
+      body: { agent: 'claude-code' },
+    })
+    expect(result.stdout).toBe('Started claude-code in the terminal of T-1\n')
+  })
+
+  it('asks for the task of the terminal, from HELMSMAN_TASK_ID', async () => {
+    const result = await run(['ask', 'Which database?'], {
+      env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_TASK_ID: 'T-7' },
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-7' }), accepted: true }),
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.calls[0]).toMatchObject({
+      method: 'POST',
+      url: 'http://127.0.0.1:4317/tasks/T-7/events',
+      body: { source: 'agent', type: 'agent.asked', payload: { question: 'Which database?' } },
+    })
+  })
+
+  it('says done for the task named with --task', async () => {
+    const result = await run(['done', '--task', 'T-8'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }), accepted: true }),
+    })
+    expect(result.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4317/tasks/T-8/events',
+      body: { type: 'agent.finished' },
+    })
+  })
+
+  it('needs a task for ask and done', async () => {
+    const result = await run(['done'])
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain('HELMSMAN_TASK_ID')
+    expect(result.calls).toEqual([])
+  })
+})

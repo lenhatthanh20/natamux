@@ -251,3 +251,45 @@ describe('parseCommand', () => {
     expect(() => parseCommand(['task', 'list', '--colour'])).toThrow(UsageError)
   })
 })
+
+describe('more commands', () => {
+  it('reads task edit with only the options given', () => {
+    expect(
+      parseCommand(['task', 'edit', 'T-1', '--title', 'New', '--label', 'a', '--label', 'b']),
+    ).toEqual({
+      name: 'task.edit',
+      id: 'T-1',
+      changes: { title: 'New', labels: ['a', 'b'] },
+      json: false,
+    })
+    expect(() => parseCommand(['task', 'edit', 'T-1'])).toThrow(UsageError)
+    expect(() => parseCommand(['task', 'edit', 'T-1', '--priority', 'someday'])).toThrow(UsageError)
+  })
+
+  it('reads agent start with claude-code as the default agent', () => {
+    expect(parseCommand(['agent', 'start', 'T-2', '--prompt', 'Go'])).toEqual({
+      name: 'agent.start',
+      id: 'T-2',
+      agent: 'claude-code',
+      prompt: 'Go',
+      json: false,
+    })
+    expect(() => parseCommand(['agent', 'stop', 'T-2'])).toThrow(UsageError)
+  })
+
+  it('reads ask and done, with or without --task', () => {
+    expect(parseCommand(['ask', 'Which', 'one?'])).toEqual({
+      name: 'agent.ask',
+      id: undefined,
+      question: 'Which one?',
+      json: false,
+    })
+    expect(parseCommand(['done', '--task', 'T-3'])).toEqual({
+      name: 'agent.done',
+      id: 'T-3',
+      json: false,
+    })
+    expect(() => parseCommand(['ask'])).toThrow(UsageError)
+    expect(() => parseCommand(['done', 'extra'])).toThrow(UsageError)
+  })
+})

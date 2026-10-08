@@ -10,6 +10,10 @@ Commands:
   task create <title>        Create a draft task
   task list                  List tasks, newest update first
   task show <id>             Show one task
+  task edit <id>             Change the title, notes, priority, labels or dependencies
+  agent start <id>           Start an agent in the task's terminal (default: claude-code)
+  ask <question>             For an agent: say the task waits for the user
+  done                       For an agent: say its turn is over and the task is ready for review
   event <id> <type>          Send an event to a task
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
@@ -19,11 +23,14 @@ Commands:
   help                       Show this help
 
 Options:
-  --description <text>  task create: description
-  --priority <name>     task create: ${TASK_PRIORITIES.join(', ')}
-  --label <name>        task create: label (repeat for more)
-  --agent <name>        task create: agent that works on the task
-  --depends-on <id>     task create: task that must finish first (repeat for more)
+  --title <text>        task edit: new title
+  --description <text>  task create, task edit: notes
+  --priority <name>     task create, task edit: ${TASK_PRIORITIES.join(', ')}
+  --label <name>        task create, task edit: label (repeat for more)
+  --agent <name>        task create: agent that works on the task; agent start: which agent
+  --depends-on <id>     task create, task edit: task that must finish first (repeat for more)
+  --prompt <text>       agent start: first prompt (default: the task title and notes)
+  --task <id>           ask, done: the task (default: HELMSMAN_TASK_ID)
   --state <state>       task list: only tasks in this state (${TASK_STATES.join(', ')})
   --source <name>       event: ${EVENT_SOURCES.join(', ')} (default: human)
   --payload <json>      event: JSON object sent with the event
@@ -37,7 +44,8 @@ Event types: ${SENDABLE_EVENT_TYPES.join(', ')}
 Environment:
   HELMSMAN_TOKEN        Token of the daemon (required, except for hooks claude-code)
   HELMSMAN_URL          Address of the daemon (default: ${DEFAULT_URL})
-  HELMSMAN_TASK_ID      Set it where Claude Code runs: the task its hooks report on
+  HELMSMAN_TASK_ID      The task of this terminal: its hooks, ask and done report on it.
+                        Terminals that Helmsman opens set it
 `
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
