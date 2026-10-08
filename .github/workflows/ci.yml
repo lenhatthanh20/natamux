@@ -41,14 +41,13 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
-  # The product ships to macOS and Windows. Windows may fail at first, so it does not block a merge.
+  # The product ships to macOS and Windows.
   os:
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
