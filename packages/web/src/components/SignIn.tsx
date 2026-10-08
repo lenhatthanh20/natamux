@@ -34,7 +34,7 @@ export function SignIn({ message, onSubmit }: SignInProps) {
           />
         </label>
         {message !== null && (
-          <p role="alert" className="text-sm font-medium text-[#a02318] dark:text-[#ff9d92]">
+          <p role="alert" className="text-sm font-medium text-remove">
             {message}
           </p>
         )}

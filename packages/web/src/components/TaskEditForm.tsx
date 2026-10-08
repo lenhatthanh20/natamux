@@ -112,7 +112,7 @@ export function TaskEditForm({ task, busy, onSave, onCancel }: TaskEditFormProps
         <button
           type="submit"
           disabled={busy || title.trim() === ''}
-          className="rounded-md bg-accent px-3 py-1.5 font-medium text-surface disabled:opacity-50"
+          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
         >
           Save
         </button>

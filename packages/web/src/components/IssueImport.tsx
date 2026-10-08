@@ -51,7 +51,7 @@ export function IssueImport({
           type="button"
           disabled={count === 0 || importing.isPending}
           onClick={() => importing.mutate()}
-          className="rounded-md bg-accent px-3 py-1.5 font-medium text-surface disabled:opacity-50"
+          className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
         >
           {count === 1 ? 'Import 1 issue' : `Import ${count} issues`}
         </button>

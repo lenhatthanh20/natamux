@@ -6,6 +6,7 @@ import type {
   TerminalSize,
 } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowUp, FileDiff, GitPullRequest, History, Terminal } from 'lucide-react'
 import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
@@ -36,12 +37,12 @@ type ChangesViewProps = {
 }
 
 const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
-  M: 'text-[#7a4300] dark:text-signal',
-  A: 'text-[#12622f] dark:text-[#7fdc9f]',
-  U: 'text-[#12622f] dark:text-[#7fdc9f]',
-  D: 'text-[#a02318] dark:text-[#ff9d92]',
-  C: 'text-[#a02318] dark:text-[#ff9d92]',
-  R: 'text-[#1a3fa0] dark:text-[#9db9ff]',
+  M: 'text-signal',
+  A: 'text-add',
+  U: 'text-add',
+  D: 'text-remove',
+  C: 'text-remove',
+  R: 'text-accent',
 }
 
 function FileBody({
@@ -173,17 +174,23 @@ export function ChangesView({
   }
 
   const tabClass =
-    '-mb-px border-b-2 border-transparent px-2.5 py-1.5 font-medium text-muted hover:text-ink aria-selected:border-accent aria-selected:text-ink'
+    '-mb-px flex items-center gap-1.5 border-b-2 border-transparent px-2.5 py-2 font-medium text-muted hover:text-ink aria-selected:border-ink aria-selected:text-ink'
   const toolButton =
-    'rounded-md border border-line px-2.5 py-1 hover:border-accent disabled:opacity-50'
+    'flex items-center gap-1.5 rounded-lg border border-line bg-raised px-2.5 py-1 hover:border-muted disabled:opacity-50'
+  const primaryButton =
+    'flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1 font-medium text-canvas hover:opacity-90 disabled:opacity-50'
 
   return (
     <section aria-label={`Changes of ${task.id}`} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-col gap-1 border-b border-line px-4 pt-2">
+      <header className="flex flex-col gap-1 border-b border-line px-5 pt-3">
         <div className="flex min-w-0 items-center gap-3">
-          <h2 className="min-w-0 flex-1 truncate font-semibold">
-            <span className="font-mono font-normal text-muted">{task.id}</span> {task.title}
-          </h2>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-mono text-xs text-muted">
+              {task.id}
+              {task.branch !== null && ` · ${task.branch}`}
+            </p>
+            <h2 className="truncate text-base font-semibold tracking-tight">{task.title}</h2>
+          </div>
           <StateBadge state={task.state} />
           <button
             type="button"
@@ -192,6 +199,7 @@ export function ChangesView({
             title={task.branch === null ? undefined : `Push ${task.branch} to origin`}
             className={toolButton}
           >
+            <ArrowUp size={14} aria-hidden="true" />
             Push
           </button>
           {task.pr === null ? (
@@ -199,12 +207,14 @@ export function ChangesView({
               type="button"
               disabled={gitAction.isPending || task.branch === null}
               onClick={() => gitAction.mutate('pull-request')}
-              className={toolButton}
+              className={primaryButton}
             >
+              <GitPullRequest size={14} aria-hidden="true" />
               Create pull request
             </button>
           ) : (
             <a href={task.pr} target="_blank" rel="noreferrer" className={toolButton}>
+              <GitPullRequest size={14} aria-hidden="true" />
               Open pull request
             </a>
           )}
@@ -219,7 +229,7 @@ export function ChangesView({
             )}
           </p>
         )}
-        <div role="tablist" aria-label="View" className="flex gap-2">
+        <div role="tablist" aria-label="View" className="mt-1 flex gap-1">
           <button
             type="button"
             role="tab"
@@ -227,6 +237,7 @@ export function ChangesView({
             onClick={() => setTab('terminal')}
             className={tabClass}
           >
+            <Terminal size={14} aria-hidden="true" />
             Terminal
           </button>
           <button
@@ -236,6 +247,7 @@ export function ChangesView({
             onClick={() => setTab('changes')}
             className={tabClass}
           >
+            <FileDiff size={14} aria-hidden="true" />
             Changes
           </button>
           <button
@@ -245,6 +257,7 @@ export function ChangesView({
             onClick={() => setTab('history')}
             className={tabClass}
           >
+            <History size={14} aria-hidden="true" />
             History
           </button>
         </div>
@@ -353,7 +366,7 @@ export function ChangesView({
                 <button
                   type="submit"
                   disabled={gitAction.isPending || message.trim() === ''}
-                  className="rounded-md bg-accent px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                  className="rounded-md bg-ink px-3 py-1.5 font-medium text-canvas hover:opacity-90 disabled:opacity-50"
                 >
                   Commit all
                 </button>
