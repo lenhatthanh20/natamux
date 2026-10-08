@@ -16,13 +16,19 @@ Neither setup runs agents yet. They keep tasks, workspaces and the dashboard.
 
 ## Development (in a codespace)
 
-The dev container has Docker, installs the packages and builds them when the codespace is created. Then:
+The dev container has Docker, installs the packages and builds them when the codespace is created. Each time the codespace starts, it runs `scripts/dev.sh up`, so the dashboard is ready on port 5173 with the token `devtoken`.
 
-```sh
-docker compose up
-```
+`scripts/dev.sh`:
 
-The first start installs and builds if that has not happened. It starts:
+| Command | What it does |
+|---|---|
+| `up` | Starts the containers and waits until the daemon and the dashboard answer |
+| `demo` | `up`, then a task "Demo: changes and history" with a workspace, two commits on a branch that diverges from its base, and changes that are not committed. Run it again and it finds the same task |
+| `status` | `docker compose ps` |
+| `logs` | Follows the logs |
+| `down` | Stops the containers. Tasks and worktrees stay |
+
+`docker compose up` works too. The first start installs and builds if that has not happened. It starts:
 
 - `setup`: installs packages when `node_modules` is missing, builds `@helmsman/core` and the CLI, then stops.
 - `core`: rebuilds `@helmsman/core` when you change it. Restart `daemon` to pick that up.

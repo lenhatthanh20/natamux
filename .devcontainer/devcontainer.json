@@ -12,6 +12,7 @@
     "ghcr.io/devcontainers/features/copilot-cli:1": {}
   },
   "postCreateCommand": "pnpm install --frozen-lockfile && pnpm build",
+  "postStartCommand": "scripts/dev.sh up",
   "forwardPorts": [5173, 4317, 8080],
   "portsAttributes": {
     "5173": { "label": "Helmsman dashboard (dev)", "onAutoForward": "notify" },
