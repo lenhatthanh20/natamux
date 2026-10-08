@@ -30,8 +30,8 @@ export function pullRequestSummary(task: Pick<Task, 'prStatus'>): string | null 
 }
 
 export const CHECKS_COLOR: Record<PullRequestStatus['checks'], string> = {
-  passing: 'text-[#12622f] dark:text-[#7fdc9f]',
-  failing: 'text-[#a02318] dark:text-[#ff9d92]',
-  pending: 'text-[#7a4300] dark:text-signal',
+  passing: 'text-add',
+  failing: 'text-remove',
+  pending: 'text-signal',
   none: 'text-muted',
 }

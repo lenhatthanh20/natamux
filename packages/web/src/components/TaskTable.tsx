@@ -29,8 +29,8 @@ function DiffSize({ stat }: { stat: DiffStat | undefined }) {
   const files = stat.files === 1 ? '1 file' : `${stat.files} files`
   return (
     <span title={files}>
-      <span className="text-[#12622f] dark:text-[#7fdc9f]">+{stat.added}</span>{' '}
-      <span className="text-[#a02318] dark:text-[#ff9d92]">−{stat.removed}</span>
+      <span className="text-add">+{stat.added}</span>{' '}
+      <span className="text-remove">−{stat.removed}</span>
     </span>
   )
 }
@@ -72,7 +72,7 @@ export function TaskTable({
             <tr
               key={task.id}
               data-selected={task.id === selectedId}
-              className="border-b border-line last:border-b-0 data-[selected=true]:bg-accent/10 data-[selected=true]:shadow-[inset_3px_0_0_var(--accent)]"
+              className="border-b border-line last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected"
             >
               <td className="max-w-[24rem] px-3 py-2">
                 <button
@@ -99,9 +99,7 @@ export function TaskTable({
               <td className="px-3 py-2">
                 <span className="flex items-center gap-2">
                   <StateBadge state={task.state} />
-                  {isQuiet(task, now) && (
-                    <span className="font-medium text-[#8a4b00] dark:text-signal">quiet</span>
-                  )}
+                  {isQuiet(task, now) && <span className="font-medium text-signal">quiet</span>}
                 </span>
               </td>
               <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>

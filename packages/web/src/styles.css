@@ -1,47 +1,64 @@
 @import "tailwindcss";
 
+/* The theme is a data-theme attribute on <html>, so it can differ from the system's. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --canvas: #fbfbfc;
   --surface: #ffffff;
-  --sidebar: #f3f4f6;
+  --raised: #f6f7f9;
+  --sidebar: #f2f3f5;
+  --terminal: #ffffff;
   --ink: #1b1d21;
-  --muted: #69707a;
+  --muted: #646a74;
   --line: #e2e4e8;
   --accent: #3563e9;
   --hover: rgb(20 24 31 / 0.05);
-  --selected: rgb(53 99 233 / 0.1);
-  --signal: #e09b12;
+  --selected: rgb(20 24 31 / 0.07);
+  --signal: #b97a06;
+  --signal-soft: rgb(224 155 18 / 0.1);
+  --add: #1f8a4c;
+  --remove: #c2412d;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #16181c;
-    --surface: #1c1f24;
-    --sidebar: #111316;
-    --ink: #e4e6ea;
-    --muted: #8a919c;
-    --line: #2a2e35;
-    --accent: #6c95ff;
-    --hover: rgb(255 255 255 / 0.05);
-    --selected: rgb(108 149 255 / 0.15);
-    --signal: #f0b23e;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0f1012;
+  --surface: #141518;
+  --raised: #17191c;
+  --sidebar: #0b0c0e;
+  --terminal: #0b0c0e;
+  --ink: #e8e9ec;
+  --muted: #8b8f98;
+  --line: #222429;
+  --accent: #7aa2ff;
+  --hover: rgb(255 255 255 / 0.04);
+  --selected: rgb(255 255 255 / 0.07);
+  --signal: #f2b13c;
+  --signal-soft: rgb(242 177 60 / 0.07);
+  --add: #5fc48a;
+  --remove: #ff8a7a;
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sidebar: var(--sidebar);
+  --color-terminal: var(--terminal);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
-  --color-sidebar: var(--sidebar);
   --color-hover: var(--hover);
   --color-selected: var(--selected);
   --color-signal: var(--signal);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --color-signal-soft: var(--signal-soft);
+  --color-add: var(--add);
+  --color-remove: var(--remove);
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
 }
 
 body {
@@ -51,6 +68,7 @@ body {
   font-size: 0.8125rem;
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
 :focus-visible {
@@ -63,9 +81,9 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.125rem 0.5rem;
-  border-radius: 4px;
+  border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   background: var(--chip-bg);
   color: var(--chip-fg);
@@ -94,87 +112,89 @@ body {
 }
 
 .state-dot[data-state="running"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chip-fg) 20%, transparent);
   animation: running-pulse 2s ease-in-out infinite;
 }
 
 [data-state="draft"] {
-  --chip-bg: #e4e8ed;
-  --chip-fg: #566678;
+  --chip-bg: #eceef1;
+  --chip-fg: #646a74;
 }
 [data-state="draft"]::before {
   background: transparent;
   box-shadow: inset 0 0 0 2px currentColor;
 }
 [data-state="ready"] {
-  --chip-bg: #d7eef5;
-  --chip-fg: #07546f;
+  --chip-bg: #e2f1f4;
+  --chip-fg: #0e6275;
 }
 [data-state="running"] {
-  --chip-bg: #d9f2e1;
-  --chip-fg: #12622f;
+  --chip-bg: #e3ebff;
+  --chip-fg: #2349b8;
 }
 [data-state="running"]::before {
   animation: running-pulse 2s ease-in-out infinite;
 }
 [data-state="needs-input"] {
-  --chip-bg: #fde9bd;
-  --chip-fg: #7a4300;
+  --chip-bg: #fcefd2;
+  --chip-fg: #8a5300;
 }
 [data-state="review"] {
-  --chip-bg: #dbe6fb;
-  --chip-fg: #1a3fa0;
+  --chip-bg: #ece6fb;
+  --chip-fg: #5634b8;
 }
 [data-state="blocked"] {
-  --chip-bg: #ebe3fa;
-  --chip-fg: #5a2aa8;
+  --chip-bg: #f8e4ec;
+  --chip-fg: #a33b62;
 }
 [data-state="failed"] {
-  --chip-bg: #fbdcd8;
-  --chip-fg: #a02318;
+  --chip-bg: #fbe2dd;
+  --chip-fg: #a8321f;
 }
 [data-state="done"] {
-  --chip-bg: #e4e8ed;
-  --chip-fg: #566678;
+  --chip-bg: #e3f3e9;
+  --chip-fg: #1f7a45;
 }
 [data-state="cancelled"] {
-  --chip-bg: #e4e8ed;
-  --chip-fg: #7b8896;
+  --chip-bg: #eceef1;
+  --chip-fg: #7d838c;
 }
 
-@media (prefers-color-scheme: dark) {
-  [data-state="draft"],
-  [data-state="done"] {
-    --chip-bg: #262a31;
-    --chip-fg: #a3aab5;
-  }
-  [data-state="cancelled"] {
-    --chip-bg: #262a31;
-    --chip-fg: #7d848f;
-  }
-  [data-state="ready"] {
-    --chip-bg: #0f3445;
-    --chip-fg: #7fd0ec;
-  }
-  [data-state="running"] {
-    --chip-bg: #123a22;
-    --chip-fg: #7fdc9f;
-  }
-  [data-state="needs-input"] {
-    --chip-bg: #3d2c0c;
-    --chip-fg: #f5b83d;
-  }
-  [data-state="review"] {
-    --chip-bg: #1a2c57;
-    --chip-fg: #9db9ff;
-  }
-  [data-state="blocked"] {
-    --chip-bg: #2d1f52;
-    --chip-fg: #c4a8ff;
-  }
-  [data-state="failed"] {
-    --chip-bg: #4a1a16;
-    --chip-fg: #ff9d92;
-  }
+[data-theme="dark"] [data-state="draft"] {
+  --chip-bg: #1d1f23;
+  --chip-fg: #8b8f98;
+}
+[data-theme="dark"] [data-state="ready"] {
+  --chip-bg: #15262a;
+  --chip-fg: #7fc6d6;
+}
+[data-theme="dark"] [data-state="running"] {
+  --chip-bg: #18213a;
+  --chip-fg: #9db7ff;
+}
+[data-theme="dark"] [data-state="needs-input"] {
+  --chip-bg: #2e2412;
+  --chip-fg: #f6c46a;
+}
+[data-theme="dark"] [data-state="review"] {
+  --chip-bg: #231d3a;
+  --chip-fg: #c4b2ff;
+}
+[data-theme="dark"] [data-state="blocked"] {
+  --chip-bg: #2e1a24;
+  --chip-fg: #f09ab9;
+}
+[data-theme="dark"] [data-state="failed"] {
+  --chip-bg: #321a17;
+  --chip-fg: #ff8a7a;
+}
+[data-theme="dark"] [data-state="done"] {
+  --chip-bg: #16251c;
+  --chip-fg: #7fcf9c;
+}
+[data-theme="dark"] [data-state="cancelled"] {
+  --chip-bg: #1d1f23;
+  --chip-fg: #6b7079;
 }
 
 @keyframes running-pulse {
