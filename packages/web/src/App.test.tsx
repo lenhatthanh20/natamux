@@ -744,9 +744,8 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(
-      within(screen.getByRole('table')).getByRole('button', { name: /T-0002\s*Speed up \(try 2\)/ }),
-    )
+    const table = screen.getByRole('table')
+    await user.click(within(table).getByRole('button', { name: /Speed up \(try 2\)/ }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0002' })
     const tries = within(details).getByRole('region', { name: 'Tries' })
     const keep = within(tries).getAllByRole('button', { name: 'Keep this one' })[1] as HTMLElement
