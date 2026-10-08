@@ -19,10 +19,17 @@ x-dev: &dev
     CI: "true"
     HOME: /tmp
     HELMSMAN_TOKEN: ${HELMSMAN_TOKEN:-devtoken}
-    # git refuses a folder that another user owns, unless it is listed.
-    GIT_CONFIG_COUNT: "1"
+    # For a push and a pull request. scripts/dev.sh takes it from the codespace (GITHUB_TOKEN).
+    GH_TOKEN: ${GH_TOKEN:-}
+    # git refuses a folder that another user owns, unless it is listed. The name and email are
+    # the ones of commits made from the dashboard; scripts/dev.sh takes yours from git.
+    GIT_CONFIG_COUNT: "3"
     GIT_CONFIG_KEY_0: safe.directory
     GIT_CONFIG_VALUE_0: /workspaces/helmsman
+    GIT_CONFIG_KEY_1: user.name
+    GIT_CONFIG_VALUE_1: ${HELMSMAN_GIT_NAME:-Helmsman}
+    GIT_CONFIG_KEY_2: user.email
+    GIT_CONFIG_VALUE_2: ${HELMSMAN_GIT_EMAIL:-helmsman@localhost}
 
 services:
   # Installs the packages the first time (when node_modules is missing) and builds the

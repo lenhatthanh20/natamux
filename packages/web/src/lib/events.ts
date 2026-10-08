@@ -20,6 +20,9 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'workspace.created': 'Workspace created',
   'workspace.removed': 'Workspace removed',
   'agent.active': 'Agent is working',
+  'git.committed': 'Committed',
+  'git.pushed': 'Pushed',
+  'pr.opened': 'Pull request opened',
 }
 
 export function describeEvent(type: EventType): string {
