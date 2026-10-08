@@ -1,4 +1,5 @@
-import type { Repo, Task } from '@helmsman/core'
+import { needsMe, type Repo, type Task, type TaskState } from '@helmsman/core'
+import { isQuiet } from './tasks'
 
 export const DEFAULT_REPO_ID = 'default'
 
@@ -60,4 +61,19 @@ export function shortBranch(task: Pick<Task, 'id' | 'branch'>): string {
   }
   const prefix = `helmsman/${task.id.toLowerCase()}-`
   return task.branch.startsWith(prefix) ? task.branch.slice(prefix.length) : task.branch
+}
+
+// What a folded group hides that the user should still see: a workspace that needs them, else the
+// workspace that is open. The state of that workspace is the color of the dot. Null: nothing.
+export function collapsedHint(
+  group: Pick<RepoGroup, 'open' | 'finished'>,
+  currentId: string | null,
+  now: Date,
+): TaskState | null {
+  const waiting = group.open.find((task) => needsMe(task.state) || isQuiet(task, now))
+  if (waiting !== undefined) {
+    return needsMe(waiting.state) ? waiting.state : 'needs-input'
+  }
+  const current = [...group.open, ...group.finished].find((task) => task.id === currentId)
+  return current?.state ?? null
 }

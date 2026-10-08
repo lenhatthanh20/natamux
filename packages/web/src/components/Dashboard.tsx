@@ -1,7 +1,9 @@
 import { type EventType, type Task, waitingOn } from '@helmsman/core'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Columns3, Plus, Rows3 } from 'lucide-react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Columns3, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useElementWidth } from '../hooks/useElementWidth'
+import { useFrozenOrder } from '../hooks/useFrozenOrder'
 import { useLayoutMode, useViewportWidth } from '../hooks/useLayoutMode'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
@@ -11,12 +13,21 @@ import { chordReachesApp, isModChord } from '../lib/chords'
 import { effectiveSidebarWidth } from '../lib/layout-mode'
 import { agentPaneTasks } from '../lib/panes'
 import { sidebarGroups } from '../lib/sidebar-groups'
-import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
+import {
+  actionsFor,
+  filterTasks,
+  needsMeTasks,
+  nextSort,
+  STATE_LABEL,
+  sortTasks,
+  type TaskAction,
+  upsertTask,
+} from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
-import { tabToOpen } from '../lib/workspace'
+import { latestQuestion, tabToOpen } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
@@ -35,6 +46,8 @@ import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
 import { TitleBar } from './TitleBar'
 import { Button } from './ui/Button'
+import { CountBadge } from './ui/CountBadge'
+import { EmptyState } from './ui/EmptyState'
 import { ContextMenuHost } from './ui/Menu'
 import { useStoredWidth } from './ui/ResizeHandle'
 import { Segmented } from './ui/Segmented'
@@ -79,9 +92,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     paneLayout,
     tabByTask,
     pinned,
+    sort,
+    showFinished,
+    seenState,
   } = useViewStore()
   const {
-    toggleStateFilter,
     showState,
     setSearch,
     select,
@@ -96,6 +111,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setPaneLayout,
     rememberTab,
     togglePin,
+    setStateFilter,
+    setSort,
+    setShowFinished,
+    markSeen,
   } = useViewStore.getState()
 
   const [newTitle, setNewTitle] = useState('')
@@ -186,10 +205,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           : 'Workspace removed. The branch is kept because it has commits that are not merged.',
       }
     },
-    onSuccess: ({ task, message }) => {
+    onSuccess: ({ task, message }, { action }) => {
       mergeTask(task)
       if (message !== null) {
         toast(message)
+      }
+      // A new workspace opens on its terminal, like the one from the dialog.
+      if (action === 'create') {
+        select(task.id)
+        openChanges(task.id, 'terminal')
       }
     },
     onError: (error) => toast(error.message, 'error'),
@@ -269,9 +293,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   // Makes the workspace first when the task has none, then opens its terminal with the agent.
   const agentMutation = useMutation({
-    mutationFn: async (task: Task) => {
+    mutationFn: async ({ task, base }: { task: Task; base?: string }) => {
       if (task.workspace === null) {
-        mergeTask(await api.createWorkspace(task.id))
+        mergeTask(await api.createWorkspace(task.id, base))
       }
       return api.startAgent(task.id, 'claude-code')
     },
@@ -297,10 +321,24 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     refetchInterval: 3_000,
   })
 
+  // The search narrows the counts of the state filter, and the filter narrows the rows.
+  const searchedTasks = useMemo(() => filterTasks(tasks, null, search), [tasks, search])
   const visibleTasks = useMemo(
     () => filterTasks(tasks, stateFilter, search),
     [tasks, stateFilter, search],
   )
+  // One stable order, which holds still under the pointer and right after a key moved the selection.
+  const sortedTasks = useMemo(
+    () => sortTasks(visibleTasks, sort, diffStatsQuery.data),
+    [visibleTasks, sort, diffStatsQuery.data],
+  )
+  const frozen = useFrozenOrder(
+    sortedTasks,
+    `${sort?.key}:${sort?.direction}|${stateFilter}|${search}`,
+  )
+  const orderedTasks = frozen.items
+  // The view header is as wide as the main area, so its width picks the table columns.
+  const [headerRef, mainWidth] = useElementWidth<HTMLDivElement>()
   const selectedTask = tasks.find((task) => task.id === selectedId) ?? null
   const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
   // The open workspace's task, or else the task chosen in the list.
@@ -318,6 +356,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     detailsWidth: details.width,
   })
   const phone = shellLayout.details === 'page'
+  // What waiting agents asked, for the sidebar rows.
+  const asking = tasks.filter((task) => task.state === 'needs-input' && task.workspace !== null)
+  const askQueries = useQueries({
+    queries: asking.map((task) => ({
+      queryKey: ['events', task.id, task.updatedAt],
+      queryFn: () => api.listEvents(task.id),
+    })),
+  })
+  const questions = Object.fromEntries(
+    asking.map((task, index) => [task.id, latestQuestion(askQueries[index]?.data ?? [])]),
+  )
   const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
     eventMutation.isPending ||
@@ -398,14 +447,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       }
 
       const move = (step: number) => {
-        if (visibleTasks.length === 0) {
+        if (orderedTasks.length === 0) {
           return
         }
-        const current = visibleTasks.findIndex((task) => task.id === selectedId)
-        const next = Math.min(Math.max(current + step, 0), visibleTasks.length - 1)
-        const target = visibleTasks[next]
+        const current = orderedTasks.findIndex((task) => task.id === selectedId)
+        const next = Math.min(Math.max(current + step, 0), orderedTasks.length - 1)
+        const target = orderedTasks[next]
         if (target) {
           select(target.id)
+          frozen.hold()
         }
       }
 
@@ -421,8 +471,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           move(-1)
           return
         case 'Enter':
+          // A focused control keeps its own Enter.
+          if (selectedTask && (event.target === document.body || (event.target instanceof HTMLElement && event.target.id === 'main'))) {
+            openTask(selectedTask.id)
+          }
+          return
+        case 'i':
           if (selectedTask) {
-            setDetailOpen(selectedTask.id, true)
+            setDetailOpen(selectedTask.id, !detailOpenByTask[selectedTask.id])
           }
           return
         case 'Escape':
@@ -497,6 +553,19 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   useEffect(() => {
     document.title = waitingCount > 0 ? `(${waitingCount}) Helmsman` : 'Helmsman'
   }, [waitingCount])
+
+  // The first time a workspace is seen, its state is the baseline: nothing starts out unseen.
+  useEffect(() => {
+    if (tasksQuery.isSuccess) {
+      markSeen(tasks.filter((task) => task.workspace !== null))
+    }
+  }, [tasksQuery.isSuccess, tasks, markSeen])
+  // The workspace that is open is being looked at, whatever it does meanwhile.
+  useEffect(() => {
+    if (changesTask !== null) {
+      markSeen([changesTask], true)
+    }
+  }, [changesTask, markSeen])
 
   const runningCount = tasks.filter((task) => task.state === 'running').length
   const repoNameOf = (task: Task) =>
@@ -591,6 +660,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   waiting={allGroups.needsMe}
                   now={now}
                   currentId={changesTaskId}
+                  filtered={search.trim() !== ''}
                   onOpen={(id) => {
                     openTask(id)
                     afterPick()
@@ -600,7 +670,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               tree={
                 <WorkspaceList
                   repos={repos}
-                  tasks={search.trim() === '' ? tasks : filterTasks(tasks, null, search)}
+                  tasks={search.trim() === '' ? tasks : searchedTasks}
+                  allTasks={tasks}
+                  filter={search}
+                  questions={questions}
+                  seenState={seenState}
                   now={now}
                   currentId={changesTaskId}
                   pinnedIds={pinned}
@@ -660,7 +734,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
                     }}
                     onViewChanges={() => openChanges(detailTask.id)}
-                    onStartAgent={() => agentMutation.mutate(detailTask)}
+                    onStartAgent={() => agentMutation.mutate({ task: detailTask })}
                     onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
                     onCheckPullRequest={() => pullRequestMutation.mutate(detailTask.id)}
                     waitingFor={waitingOn(detailTask, tasks)}
@@ -694,12 +768,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             key={changesTask.id}
             task={changesTask}
             busy={busy}
-            canStart={
-              changesTask.state !== 'done' &&
-              changesTask.state !== 'cancelled' &&
-              waitingOn(changesTask, tasks).length === 0
-            }
-            onStartAgent={() => agentMutation.mutate(changesTask)}
+            waitingFor={waitingOn(changesTask, tasks)}
+            branches={branchesQuery.data}
+            onCreateWorkspace={(base) => {
+              workspaceMutation.mutate({ taskId: changesTask.id, action: 'create', base })
+            }}
+            onStartAgent={(base) => agentMutation.mutate({ task: changesTask, base })}
           />
         ) : changesTask ? (
           <ChangesView
@@ -775,14 +849,35 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           />
         ) : (
           <>
-            <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
-              <h2 className="shrink-0 font-semibold">All tasks</h2>
-              <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-              <div className="ml-auto">
+            <div
+              ref={headerRef}
+              className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4"
+            >
+              <h2 className="shrink-0 text-md font-semibold tracking-tight">All tasks</h2>
+              <CountBadge count={visibleTasks.length} label={`${visibleTasks.length} tasks`} />
+              <StateFilter
+                tasks={searchedTasks}
+                active={stateFilter}
+                onChange={setStateFilter}
+                mainWidth={mainWidth}
+              />
+              <div className="ml-auto flex shrink-0 items-center gap-3">
+                {layout === 'board' && (
+                  <label className="flex h-(--control-h) items-center gap-2 text-ink-2">
+                    <input
+                      type="checkbox"
+                      checked={showFinished}
+                      onChange={(event) => setShowFinished(event.target.checked)}
+                      className="size-3.5 accent-accent"
+                    />
+                    {mainWidth !== null && mainWidth < 560 ? 'Finished' : 'Show finished'}
+                  </label>
+                )}
                 <Segmented
                   label="Layout"
                   value={layout}
                   onChange={setLayout}
+                  iconOnly={mainWidth !== null && mainWidth < 560}
                   options={[
                     { value: 'table', label: 'Table', icon: Rows3 },
                     { value: 'board', label: 'Board', icon: Columns3 },
@@ -790,78 +885,135 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 />
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
-              <form onSubmit={submitNewTask} className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={newTaskRef}
-                  value={newTitle}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  placeholder="Add a task to the backlog (n)"
-                  aria-label="New task title"
-                  className={`${input} min-w-64 flex-1`}
-                />
-                {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
-                  <div className="flex gap-2">
-                    {repos.length > 1 && (
-                      <Select
-                        value={newRepo}
-                        onChange={(event) => setNewRepo(event.target.value)}
-                        aria-label="Repository"
-                        className="w-40"
-                      >
-                        {repos.map((repo) => (
-                          <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
-                            {repo.name}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                    {(templatesQuery.data?.length ?? 0) > 0 && (
-                      <Select
-                        value={templateId}
-                        onChange={(event) => setTemplateId(event.target.value)}
-                        aria-label="Template"
-                        className="w-40"
-                      >
-                        <option value="">No template</option>
-                        {templatesQuery.data?.map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {template.name}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </div>
-                )}
-                <Button
-                  type="submit"
-                  icon={Plus}
-                  busy={createMutation.isPending}
-                  disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
-                >
-                  Add task
-                </Button>
-              </form>
+            <form
+              onSubmit={submitNewTask}
+              className="flex shrink-0 flex-wrap items-center gap-2 px-4 pt-4 pb-3"
+            >
+              <input
+                ref={newTaskRef}
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                placeholder="Add a task to the backlog (n)"
+                aria-label="New task title"
+                className={`${input} min-w-64 flex-1`}
+              />
+              {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
+                <div className="flex gap-2">
+                  {repos.length > 1 && (
+                    <Select
+                      value={newRepo}
+                      onChange={(event) => setNewRepo(event.target.value)}
+                      aria-label="Repository"
+                      className="w-40"
+                    >
+                      {repos.map((repo) => (
+                        <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                          {repo.name}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  {(templatesQuery.data?.length ?? 0) > 0 && (
+                    <Select
+                      value={templateId}
+                      onChange={(event) => setTemplateId(event.target.value)}
+                      aria-label="Template"
+                      className="w-40"
+                    >
+                      <option value="">No template</option>
+                      {templatesQuery.data?.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </div>
+              )}
+              <Button
+                type="submit"
+                icon={Plus}
+                busy={createMutation.isPending}
+                disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
+              >
+                Add task
+              </Button>
+            </form>
+            <div
+              {...frozen.handlers}
+              className={`min-h-0 flex-1 ${layout === 'board' && visibleTasks.length > 0 ? '' : 'overflow-auto px-4 pb-4'}`}
+            >
               {tasksQuery.isPending ? (
                 <p className="text-muted">Loading tasks.</p>
+              ) : tasks.length === 0 ? (
+                <EmptyState
+                  icon={ListTodo}
+                  title="No tasks yet"
+                  actions={
+                    <>
+                      <Button variant="primary" size="md" icon={Plus} shortcut="n" onClick={() => newTaskRef.current?.focus()}>
+                        Add task
+                      </Button>
+                      <Button size="md" icon={SquareTerminal} shortcut="c" onClick={() => setNewWorkspace({})}>
+                        New workspace
+                      </Button>
+                    </>
+                  }
+                >
+                  Add a task to the backlog, or start a workspace to work right away.
+                </EmptyState>
+              ) : visibleTasks.length === 0 ? (
+                <EmptyState
+                  icon={SearchX}
+                  title={
+                    search.trim() !== ''
+                      ? `No tasks match “${search.trim()}”`
+                      : `No tasks are ${STATE_LABEL[stateFilter ?? 'draft'].toLowerCase()}`
+                  }
+                  actions={
+                    <Button
+                      size="md"
+                      onClick={() => {
+                        setSearch('')
+                        setStateFilter(null)
+                      }}
+                    >
+                      Clear filter
+                    </Button>
+                  }
+                >
+                  {search.trim() !== ''
+                    ? 'Check the spelling or clear the filter.'
+                    : 'Clear the filter to see every task.'}
+                </EmptyState>
               ) : layout === 'board' ? (
                 <TaskBoard
-                  tasks={visibleTasks}
+                  tasks={orderedTasks}
                   now={now}
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
+                  stateFilter={stateFilter}
+                  showFinished={showFinished}
                   onSelect={chooseTask}
+                  onOpen={openTask}
                 />
               ) : (
                 <TaskTable
-                  tasks={visibleTasks}
+                  tasks={orderedTasks}
                   now={now}
+                  mainWidth={mainWidth}
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
                   activity={activityQuery.data}
-                  onSelect={chooseTask}
+                  showRepo={repos.length > 1}
+                  sort={sort}
+                  onSort={(key) => setSort(nextSort(sort, key))}
+                  onSelect={(id, showDetails) => (showDetails ? chooseTask(id) : select(id))}
+                  onOpen={openTask}
+                  onToggleDetails={(id) => setDetailOpen(id, detailOpenByTask[id] !== true)}
+                  onKeyboardMove={frozen.hold}
                 />
               )}
             </div>

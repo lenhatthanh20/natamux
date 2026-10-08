@@ -7,8 +7,11 @@ import {
   filterTasks,
   formatAge,
   isQuiet,
+  needsMeReason,
   needsMeTasks,
+  nextSort,
   sortByRecent,
+  sortTasks,
   upsertTask,
 } from './tasks'
 
@@ -195,15 +198,118 @@ describe('formatAge', () => {
   const now = new Date('2026-10-08T12:00:00.000Z')
 
   it.each([
-    ['2026-10-08T11:59:30.000Z', 'just now'],
-    ['2026-10-08T12:00:30.000Z', 'just now'],
-    ['2026-10-08T11:58:30.000Z', '1m ago'],
-    ['2026-10-08T11:00:01.000Z', '59m ago'],
-    ['2026-10-08T11:00:00.000Z', '1h ago'],
-    ['2026-10-07T13:00:00.000Z', '23h ago'],
-    ['2026-10-05T12:00:00.000Z', '3d ago'],
-  ])('shows %s as %s', (isoTime, expected) => {
-    expect(formatAge(isoTime, now)).toBe(expected)
+    ['2026-10-08T11:59:30.000Z', 'now', 'just now'],
+    ['2026-10-08T12:00:30.000Z', 'now', 'just now'],
+    ['2026-10-08T11:58:30.000Z', '1m', '1m ago'],
+    ['2026-10-08T11:00:01.000Z', '59m', '59m ago'],
+    ['2026-10-08T11:00:00.000Z', '1h', '1h ago'],
+    ['2026-10-07T13:00:00.000Z', '23h', '23h ago'],
+    ['2026-10-05T12:00:00.000Z', '3d', '3d ago'],
+    ['2026-10-02T12:00:00.000Z', '6d', '6d ago'],
+    ['2026-10-01T12:00:00.000Z', 'Oct 1', 'Oct 1'],
+    ['2025-10-03T12:00:00.000Z', 'Oct 3, 2025', 'Oct 3, 2025'],
+  ])('shows %s as %s (short) and %s (long)', (isoTime, short, long) => {
+    expect(formatAge(isoTime, now, 'short')).toBe(short)
+    expect(formatAge(isoTime, now, 'long')).toBe(long)
+  })
+
+  it('is short by default', () => {
+    expect(formatAge('2026-10-08T11:58:30.000Z', now)).toBe('1m')
+  })
+})
+
+describe('sortTasks', () => {
+  const tasks = [
+    makeTask({ id: 'T-0001', title: 'beta', state: 'done', agent: 'claude-code' }),
+    makeTask({ id: 'T-0002', title: 'Alpha', state: 'running', branch: 'helmsman/b' }),
+    makeTask({ id: 'T-0010', title: 'gamma', state: 'running', branch: 'helmsman/a' }),
+    makeTask({ id: 'T-0003', title: 'delta', state: 'needs-input' }),
+    makeTask({ id: 'T-0004', title: 'eps', state: 'review', pr: 'https://github.com/o/r/pull/12' }),
+    makeTask({ id: 'T-0005', title: 'zeta', state: 'review', pr: 'https://github.com/o/r/pull/9' }),
+  ]
+  const ids = (sort: Parameters<typeof sortTasks>[1], stats = {}) =>
+    sortTasks(tasks, sort, stats).map((task) => task.id)
+
+  it('puts the states that need the user first, then the newest id first', () => {
+    expect(ids(null)).toEqual(['T-0003', 'T-0005', 'T-0004', 'T-0010', 'T-0002', 'T-0001'])
+  })
+
+  it('sorts ids as numbers, not as text', () => {
+    expect(ids({ key: 'id', direction: 'asc' })[5]).toBe('T-0010')
+    expect(ids({ key: 'id', direction: 'desc' })[0]).toBe('T-0010')
+  })
+
+  it('sorts titles without regard to case', () => {
+    expect(ids({ key: 'task', direction: 'asc' }).slice(0, 2)).toEqual(['T-0002', 'T-0001'])
+  })
+
+  it('sorts pull requests as numbers and keeps tasks without one last in both directions', () => {
+    expect(ids({ key: 'pr', direction: 'asc' }).slice(0, 2)).toEqual(['T-0005', 'T-0004'])
+    expect(ids({ key: 'pr', direction: 'desc' }).slice(0, 2)).toEqual(['T-0004', 'T-0005'])
+    expect(ids({ key: 'pr', direction: 'desc' }).slice(2)).toEqual(ids(null).filter((id) => !['T-0004', 'T-0005'].includes(id)))
+  })
+
+  it('breaks ties with the default order, so equal rows keep their place', () => {
+    expect(ids({ key: 'branch', direction: 'asc' }).slice(0, 2)).toEqual(['T-0010', 'T-0002'])
+    expect(ids({ key: 'state', direction: 'asc' })).toEqual(ids(null))
+  })
+
+  it('sorts by the size of the work and puts tasks with no changes last', () => {
+    const stats = {
+      'T-0001': { files: 1, added: 50, removed: 0 },
+      'T-0002': { files: 2, added: 3, removed: 2 },
+      'T-0003': { files: 0, added: 0, removed: 0 },
+    }
+    expect(ids({ key: 'changes', direction: 'desc' }, stats).slice(0, 2)).toEqual([
+      'T-0001',
+      'T-0002',
+    ])
+    expect(ids({ key: 'changes', direction: 'asc' }, stats).slice(0, 2)).toEqual([
+      'T-0002',
+      'T-0001',
+    ])
+  })
+
+  it('does not change the list it is given', () => {
+    const before = tasks.map((task) => task.id)
+    sortTasks(tasks, { key: 'id', direction: 'asc' })
+    expect(tasks.map((task) => task.id)).toEqual(before)
+  })
+})
+
+describe('nextSort', () => {
+  it('goes ascending, descending, then back to the default order', () => {
+    const first = nextSort(null, 'task')
+    expect(first).toEqual({ key: 'task', direction: 'asc' })
+    const second = nextSort(first, 'task')
+    expect(second).toEqual({ key: 'task', direction: 'desc' })
+    expect(nextSort(second, 'task')).toBeNull()
+  })
+
+  it('starts ascending on another column', () => {
+    expect(nextSort({ key: 'task', direction: 'desc' }, 'id')).toEqual({
+      key: 'id',
+      direction: 'asc',
+    })
+  })
+})
+
+describe('needsMeReason', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z')
+
+  it.each<[TaskState, string]>([
+    ['needs-input', 'asks'],
+    ['review', 'review'],
+    ['failed', 'failed'],
+    ['blocked', 'blocked'],
+  ])('says %s as %s', (state, reason) => {
+    expect(needsMeReason(makeTask({ state }), now)).toBe(reason)
+  })
+
+  it('says quiet for a running task that went silent', () => {
+    expect(
+      needsMeReason(makeTask({ state: 'running', updatedAt: '2026-10-08T11:00:00.000Z' }), now),
+    ).toBe('quiet')
   })
 })
 

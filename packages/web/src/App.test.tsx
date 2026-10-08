@@ -345,7 +345,7 @@ describe('App', () => {
 
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: '1 task needs you' })).toBeTruthy()
+    expect(await screen.findByRole('img', { name: '1 waiting' })).toBeTruthy()
     const table = screen.getByRole('table')
     expect(within(table).getByText('Fix timezone bug')).toBeTruthy()
     expect(within(table).getByText('Add export')).toBeTruthy()
@@ -359,7 +359,9 @@ describe('App', () => {
 
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    await screen.findByRole('table')
+    expect(screen.getByText('Nothing needs you')).toBeTruthy()
+    expect(screen.queryByRole('img', { name: /waiting/ })).toBeNull()
   })
 
   it('goes back to the token form when the daemon rejects the token', async () => {
@@ -381,7 +383,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('heading', { name: '1 task needs you' })
+    await screen.findByRole('img', { name: '1 waiting' })
 
     await user.click(
       within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
@@ -389,7 +391,7 @@ describe('App', () => {
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: /Approve/ }))
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    expect(await screen.findByText('Nothing needs you')).toBeTruthy()
     expect(
       calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
     ).toBe(true)
@@ -457,8 +459,8 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
 
-    const heading = await screen.findByRole('heading', { name: '1 task needs you' })
-    const strip = heading.closest('section')
+    const badge = await screen.findByRole('img', { name: '1 waiting' })
+    const strip = badge.closest('section')
     expect(strip?.textContent).toContain('quiet')
 
     await user.click(
@@ -481,7 +483,8 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    await screen.findByRole('table')
+    expect(screen.getByText('Nothing needs you')).toBeTruthy()
   })
 
   it('does not list "agent is working" lines in the activity of a task', async () => {
@@ -906,10 +909,10 @@ describe('App', () => {
     await user.click(within(table).getByRole('button', { name: /Speed up \(try 2\)/ }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0002' })
     const tries = within(details).getByRole('region', { name: 'Tries' })
-    const keep = within(tries).getAllByRole('button', { name: 'Keep this one' })[1] as HTMLElement
+    const keep = within(tries).getAllByRole('button', { name: 'Keep this try' })[1] as HTMLElement
     await user.click(keep)
     const confirm = screen.getByRole('dialog', { name: 'Keep T-0002?' })
-    await user.click(within(confirm).getByRole('button', { name: 'Cancel the others' }))
+    await user.click(within(confirm).getByRole('button', { name: 'Keep this try, cancel the others' }))
 
     expect(await screen.findByText('Cancelled 1 other try.')).toBeTruthy()
     expect(
@@ -941,7 +944,7 @@ describe('App', () => {
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true)
   })
 
-  it('moves the selection with j and opens the details with Enter', async () => {
+  it('moves the selection with j and opens the workspace with Enter', async () => {
     installDaemon([reviewTask, runningTask])
     const user = userEvent.setup()
     render(<App />)
@@ -951,7 +954,7 @@ describe('App', () => {
     await user.keyboard('j')
     await user.keyboard('{Enter}')
 
-    expect(screen.getByRole('complementary', { name: /Details of T-000/ })).toBeTruthy()
+    expect(screen.getByRole('region', { name: /Workspace of T-000/ })).toBeTruthy()
   })
 
   it('opens the workspace of a task from the sidebar', async () => {
@@ -1066,7 +1069,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('heading', { name: '1 task needs you' })
+    await screen.findByRole('img', { name: '1 waiting' })
 
     const socket = FakeSocket.instances[0]
     expect(socket?.url).toContain('/api/events?token=secret')
@@ -1080,7 +1083,7 @@ describe('App', () => {
     })
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: '2 tasks need you' })).toBeTruthy(),
+      expect(screen.getByRole('img', { name: '2 waiting' })).toBeTruthy(),
     )
   })
   it('hides and shows the sidebar from the title bar', async () => {
