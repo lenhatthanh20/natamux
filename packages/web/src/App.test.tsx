@@ -149,6 +149,9 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         tooLarge: false,
       })
     }
+    if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
+      return json({ terminals: ['1'] })
+    }
     if (path === '/api/github/issues' && method === 'GET') {
       return json({
         issues: [
@@ -505,6 +508,10 @@ describe('App', () => {
     await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
+    await user.click(within(view).getByRole('button', { name: 'New shell' }))
+    expect(within(view).getByRole('tab', { name: 'Shell 2' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
 
     await user.keyboard('{Escape}')
     await waitFor(() =>

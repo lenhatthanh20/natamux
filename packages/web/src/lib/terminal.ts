@@ -9,12 +9,14 @@ export function terminalSocketUrl(
   taskId: string,
   ticket: string,
   size: TerminalSize,
+  terminal = '1',
 ): string {
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
   const query = new URLSearchParams({
     ticket,
     cols: String(size.cols),
     rows: String(size.rows),
+    terminal,
   })
   return `${scheme}://${location.host}/api/tasks/${encodeURIComponent(taskId)}/terminal?${query}`
 }
