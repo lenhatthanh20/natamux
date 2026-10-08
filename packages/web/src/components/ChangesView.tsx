@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
+import { AgentComment } from './AgentComment'
 import { GitGraph } from './GitGraph'
 import { TerminalTabs } from './TerminalTabs'
 
@@ -30,6 +31,7 @@ type ChangesViewProps = {
   commit: (message: string) => Promise<Task>
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
+  sendToAgent: (text: string) => Promise<Task>
   onClose: () => void
 }
 
@@ -74,6 +76,7 @@ export function ChangesView({
   commit,
   push,
   openPullRequest,
+  sendToAgent,
   onClose,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab)
@@ -355,6 +358,7 @@ export function ChangesView({
             {file.isPending && <p className="text-muted">Reading the file.</p>}
             {file.isError && <p role="alert">{file.error.message}</p>}
             {file.data && <FileBody file={file.data} sideBySide={sideBySide} />}
+            {current !== null && <AgentComment path={current.path} send={sendToAgent} />}
           </div>
         </div>
       )}

@@ -19,7 +19,12 @@ import type { IssueImporter } from './issue-importer.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
-import { MAIN_TERMINAL, TerminalLimitError, type TerminalService } from './terminal-service.js'
+import {
+  MAIN_TERMINAL,
+  NoTerminalError,
+  TerminalLimitError,
+  type TerminalService,
+} from './terminal-service.js'
 import {
   FileNotChangedError,
   WorkspaceConflictError,
@@ -43,6 +48,7 @@ const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
@@ -140,6 +146,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof GitError ||
       error instanceof OutsideWorkspaceError ||
       error instanceof TerminalLimitError ||
+      error instanceof NoTerminalError ||
       error instanceof NothingToCommitError ||
       error instanceof GitHubError ||
       error instanceof TaskWaitingError
@@ -251,6 +258,15 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { agent, prompt } = startAgentBodySchema.parse(request.body)
     return { task: options.agents.start(id, agent, prompt) }
+  })
+
+  // A review comment for the agent: pasted into its terminal as the next prompt.
+  app.post('/tasks/:id/agent/message', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { text } = messageBodySchema.parse(request.body)
+    options.service.getTask(id)
+    options.terminals.paste(id, text)
+    return { task: options.service.recordReviewComment(id, text) }
   })
 
   app.post('/tasks/:id/commit', async (request) => {
