@@ -103,6 +103,8 @@ Goals:
 | Element | Tag |
 |---|---|
 | **Needs me** strip at the top: tasks in `needs-input`, `review`, `failed`, `blocked`, sorted by waiting time | MVP |
+| A running task with no sign of life for 10 minutes is marked "quiet" and listed in the strip | MVP |
+| Details of a task: what happened, from whom and when (activity list) | MVP |
 | Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status | MVP |
 | Counts per state in a header bar; click to filter | MVP |
 | Board view (columns by state), toggle with the table | v1 |

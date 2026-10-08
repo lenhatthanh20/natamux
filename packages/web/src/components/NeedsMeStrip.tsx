@@ -1,5 +1,5 @@
 import type { Task } from '@helmsman/core'
-import { formatAge, needsMeTasks } from '../lib/tasks'
+import { formatAge, isQuiet, needsMeTasks } from '../lib/tasks'
 import { StateBadge } from './StateBadge'
 
 type NeedsMeStripProps = {
@@ -10,7 +10,7 @@ type NeedsMeStripProps = {
 }
 
 export function NeedsMeStrip({ tasks, now, selectedId, onSelect }: NeedsMeStripProps) {
-  const waiting = needsMeTasks(tasks)
+  const waiting = needsMeTasks(tasks, now)
   const headline =
     waiting.length === 0
       ? 'Nothing needs you.'
@@ -38,7 +38,8 @@ export function NeedsMeStrip({ tasks, now, selectedId, onSelect }: NeedsMeStripP
                   </span>
                   <StateBadge state={task.state} />
                   <span className="w-28 shrink-0 text-right text-band-muted">
-                    waiting {formatAge(task.updatedAt, now).replace(' ago', '')}
+                    {isQuiet(task, now) ? 'quiet' : 'waiting'}{' '}
+                    {formatAge(task.updatedAt, now).replace(' ago', '')}
                   </span>
                 </button>
               </li>

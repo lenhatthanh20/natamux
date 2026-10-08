@@ -136,3 +136,72 @@ describe('AgentHookService', () => {
     expect(() => service.handle('claude-code', { cwd: '/x' }, undefined)).toThrow()
   })
 })
+
+describe('AgentHookService, sign of life', () => {
+  let root: string
+  let index: TaskIndex
+  let clock: Date
+  let tasks: TaskService
+  let service: AgentHookService
+
+  const later = (seconds: number) => {
+    clock = new Date(clock.getTime() + seconds * 1000)
+  }
+
+  const activityEvents = (taskId: string) =>
+    tasks.listEvents(taskId).filter((entry) => entry.event.type === 'agent.active')
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'helmsman-activity-'))
+    const dataDir = join(root, 'data')
+    mkdirSync(dataDir)
+    index = new TaskIndex(':memory:')
+    clock = new Date('2026-10-08T09:00:00.000Z')
+    tasks = new TaskService({ dataDir, index, bus: new EventBus(), now: () => clock })
+    service = new AgentHookService(tasks)
+  })
+
+  afterEach(() => {
+    index.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  function runningTask() {
+    const task = tasks.createTask({ title: 'Fix it' })
+    service.handle('claude-code', { hook_event_name: 'UserPromptSubmit' }, task.id)
+    return task
+  }
+
+  it('records a sign of life when a hook of a running task changes nothing', () => {
+    const task = runningTask()
+    later(45)
+
+    service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
+
+    expect(activityEvents(task.id)).toHaveLength(1)
+    expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:45.000Z')
+  })
+
+  it('does not fill the log when hooks come quickly one after the other', () => {
+    const task = runningTask()
+    later(45)
+    service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
+
+    for (let step = 0; step < 5; step += 1) {
+      later(2)
+      service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
+    }
+
+    expect(activityEvents(task.id)).toHaveLength(1)
+  })
+
+  it('records nothing for a hook the adapter does not use, or for a task that is not running', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    later(3600)
+
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id)
+    service.handle('claude-code', { hook_event_name: 'SessionEnd' }, task.id)
+
+    expect(activityEvents(task.id)).toHaveLength(0)
+  })
+})

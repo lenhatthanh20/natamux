@@ -1,5 +1,5 @@
 import type { Task } from '@helmsman/core'
-import { formatAge } from '../lib/tasks'
+import { formatAge, isQuiet } from '../lib/tasks'
 import { StateBadge } from './StateBadge'
 
 type TaskTableProps = {
@@ -48,7 +48,12 @@ export function TaskTable({ tasks, now, selectedId, onSelect }: TaskTableProps) 
                 </button>
               </td>
               <td className="px-3 py-2">
-                <StateBadge state={task.state} />
+                <span className="flex items-center gap-2">
+                  <StateBadge state={task.state} />
+                  {isQuiet(task, now) && (
+                    <span className="font-medium text-[#8a4b00] dark:text-signal">quiet</span>
+                  )}
+                </span>
               </td>
               <td className="px-3 py-2 text-muted">{task.agent ?? '-'}</td>
               <td className="max-w-[14rem] truncate px-3 py-2 font-mono text-muted">

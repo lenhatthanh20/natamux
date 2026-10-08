@@ -220,7 +220,7 @@ describe('task events', () => {
     expect(response.statusCode).toBe(404)
   })
 
-  it.each(['task.created', 'workspace.created', 'workspace.removed'])(
+  it.each(['task.created', 'workspace.created', 'workspace.removed', 'agent.active'])(
     'does not let a client send %s',
     async (type) => {
       await createTask()

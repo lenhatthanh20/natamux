@@ -20,6 +20,7 @@ export const EVENT_TYPES = [
   'state.overridden',
   'workspace.created',
   'workspace.removed',
+  'agent.active',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -58,6 +59,7 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'task.created',
   'workspace.created',
   'workspace.removed',
+  'agent.active',
 ]
 
 export type AppliedEvent = {
