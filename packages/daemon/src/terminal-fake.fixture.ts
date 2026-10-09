@@ -11,6 +11,8 @@ export class FakePty implements PtyProcess {
   readonly signals: (string | undefined)[] = []
   // A process that ignores everything but SIGKILL, like a program that traps SIGHUP.
   stubborn = false
+  // The program in the foreground; tests set it to pretend an agent runs.
+  program = 'bash'
   private dataListeners: ((data: string) => void)[] = []
   private exitListeners: ((code: number | null) => void)[] = []
 
@@ -22,6 +24,10 @@ export class FakePty implements PtyProcess {
 
   onExit(listener: (code: number | null) => void): void {
     this.exitListeners.push(listener)
+  }
+
+  foreground(): string {
+    return this.program
   }
 
   write(data: string): void {

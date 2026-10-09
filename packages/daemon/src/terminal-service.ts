@@ -10,6 +10,8 @@ export type PtyProcess = {
   resize: (cols: number, rows: number) => void
   // A signal name such as 'SIGHUP'. Without one, the default of the platform.
   kill: (signal?: string) => void
+  // The name of the program in the foreground, such as "bash" or "node".
+  foreground?: () => string | undefined
 }
 
 export type SpawnPty = (
@@ -183,6 +185,11 @@ export class TerminalService {
       throw new NoTerminalError(taskId)
     }
     session.pty.write(`\x1b[200~${text}\x1b[201~\r`)
+  }
+
+  // The program in the foreground of a shell, when the platform tells.
+  foreground(taskId: string, terminal = MAIN_TERMINAL): string | undefined {
+    return this.sessions.get(sessionKey(taskId, terminal))?.pty.foreground?.()
   }
 
   input(taskId: string, data: string, terminal = MAIN_TERMINAL): void {

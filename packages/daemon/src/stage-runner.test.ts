@@ -278,3 +278,31 @@ describe('helpers', () => {
     expect(text).toContain('### sam')
   })
 })
+
+describe('a prompt for a running agent', () => {
+  async function atSpecWithShell(program: string): Promise<{ task: Task; pty: FakePty }> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await workspaces.create(task.id)
+    // The dashboard opened the first shell; the program in it is up to the test.
+    const terminals = (runner as unknown as { terminals: TerminalService }).terminals
+    terminals.run(task.id, 'echo ready')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = program
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+    return { task: tasks.getTask(task.id), pty }
+  }
+
+  it('starts an agent when only a shell runs, and never pastes the prompt into it', async () => {
+    const { task, pty } = await atSpecWithShell('bash')
+    expect(task).toMatchObject({ stage: 'spec', state: 'running' })
+    const typed = pty.written.join('')
+    expect(typed).toContain(`agent-launch-${task.id}.sh`)
+    expect(typed).not.toContain('\x1b[200~')
+  })
+
+  it('pastes the prompt when an agent runs in the foreground', async () => {
+    const { pty } = await atSpecWithShell('node')
+    expect(pty.written.join('')).toContain('\x1b[200~Task: Export tasks')
+  })
+})

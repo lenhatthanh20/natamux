@@ -26,5 +26,6 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
     resize: (cols, rows) => pty.resize(cols, rows),
     // Windows has no signals; the shell is ended outright there.
     kill: (signal) => pty.kill(process.platform === 'win32' ? undefined : signal),
+    foreground: () => pty.process,
   }
 }
