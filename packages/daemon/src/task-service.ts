@@ -1,9 +1,13 @@
 import {
   applyTaskEvent,
+  DEFAULT_PROJECT_SETTINGS,
   type EventType,
   makesCycle,
   type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
+  resolveSteps,
+  type StagePosition,
+  type Step,
   TASK_PRIORITIES,
   type Task,
   type TaskEvent,
@@ -76,6 +80,27 @@ export class TaskNotFoundError extends Error {
   }
 }
 
+// The steps of a task, with each stage's settings. Every repository has the default settings
+// until `.helmsman.json` is read.
+export function stepsOf(task: Pick<Task, 'stages'>): Step[] {
+  return resolveSteps(task.stages, DEFAULT_PROJECT_SETTINGS.stages)
+}
+
+function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes'>): StagePosition {
+  return { stage: task.stage, state: task.state, lanes: task.lanes }
+}
+
+// The task at its new position. Entering a new step starts its clock.
+function moveTask(task: Task, position: StagePosition, moved: boolean, at: string): Task {
+  return {
+    ...task,
+    stage: position.stage,
+    state: position.state,
+    lanes: position.lanes,
+    stageSince: moved ? at : task.stageSince,
+  }
+}
+
 export class TaskEditError extends Error {
   constructor(message: string) {
     super(message)
@@ -118,6 +143,7 @@ export class TaskService {
       ...input,
       id: this.nextTaskId(),
       state: 'draft',
+      stageSince: at,
       createdAt: at,
       updatedAt: at,
     })
@@ -209,8 +235,10 @@ export class TaskService {
     const input = applyEventInputSchema.parse(rawInput)
     const event: TaskEvent = taskEventSchema.parse({ ...input, taskId, at: this.timestamp() })
 
-    const { state, accepted } = applyTaskEvent(task.state, event)
-    const updated: Task = accepted ? { ...task, state, updatedAt: event.at } : task
+    const { position, accepted, moved } = applyTaskEvent(positionOf(task), event, stepsOf(task))
+    const updated: Task = accepted
+      ? { ...moveTask(task, position, moved, event.at), updatedAt: event.at }
+      : task
 
     if (accepted) {
       writeTaskFile(this.dataDir, updated)
@@ -328,15 +356,16 @@ export class TaskService {
       types.push('pr.closed')
     }
 
-    let state = task.state
+    const steps = stepsOf(task)
+    let moving = task
     const logged: { event: TaskEvent; accepted: boolean }[] = []
     for (const type of types) {
       const event: TaskEvent = { taskId, source: 'git', type, at, payload: { url: task.pr } }
-      const applied = applyTaskEvent(state, event)
-      state = applied.state
+      const applied = applyTaskEvent(positionOf(moving), event, steps)
+      moving = moveTask(moving, applied.position, applied.moved, at)
       logged.push({ event, accepted: applied.accepted })
     }
-    const updated: Task = { ...task, state, prStatus: status, updatedAt: at }
+    const updated: Task = { ...moving, prStatus: status, updatedAt: at }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)

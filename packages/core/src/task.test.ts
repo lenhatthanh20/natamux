@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { taskSchema } from './task.js'
+import { taskSchema, upgradeTaskFields } from './task.js'
 
 const minimalTask = {
   id: 'T-42',
@@ -24,6 +24,12 @@ describe('taskSchema', () => {
       parentId: null,
       repo: null,
       dependsOn: [],
+      stage: 'implement',
+      stages: ['implement', 'review', 'release'],
+      lanes: {},
+      stageSince: null,
+      context: null,
+      issue: null,
     })
   })
 
@@ -50,5 +56,37 @@ describe('taskSchema', () => {
 
   it('rejects a pr that is not a URL', () => {
     expect(taskSchema.safeParse({ ...minimalTask, pr: 'pull 12' }).success).toBe(false)
+  })
+})
+
+describe('upgradeTaskFields', () => {
+  it.each([
+    ['review', 'review'],
+    ['done', 'release'],
+    ['running', 'implement'],
+    ['draft', 'implement'],
+  ])('puts an old task in %s at the %s stage', (state, stage) => {
+    expect(upgradeTaskFields({ state })).toEqual({
+      state,
+      stage,
+      stages: ['implement', 'review', 'release'],
+    })
+  })
+
+  it('links the issue an old task was imported from', () => {
+    const upgraded = upgradeTaskFields({
+      state: 'draft',
+      description: 'Body\n\nImported from https://github.com/acme/app/issues/42',
+    })
+    expect(upgraded.issue).toEqual({
+      provider: 'github',
+      key: '#42',
+      url: 'https://github.com/acme/app/issues/42',
+    })
+  })
+
+  it('leaves a task that has a stage as it is', () => {
+    const task = { state: 'review', stage: 'plan' }
+    expect(upgradeTaskFields(task)).toBe(task)
   })
 })
