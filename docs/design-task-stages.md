@@ -7,10 +7,14 @@ Status: draft for review. Nothing here is built yet.
 A task moves through the steps of real work, not only "the agent runs, then I review":
 
 ```
-Context → Spec → Plan → Implement → Review → Testing → Release → (done)
+                        ┌─ Test spec ─┐
+Context → Spec → Plan → ┤             ├→ Review → Testing → Release → (done)
+                        └─ Implement ─┘
 ```
 
-- Each stage makes something you can read: `context.md`, `spec.md`, `plan.md`, a diff, test results, a pull request.
+- This is the default for every project. A project can change the list: drop, reorder, add, or run stages side by side (section 6).
+- Test spec and Implement run at the same time. Review starts when both are finished (section 3.6).
+- Each stage makes something you can read: `context.md`, `spec.md`, `plan.md`, `test-spec.md`, a diff, test results, a pull request.
 - Some stages wait for your approval (a gate). Others move on by themselves.
 - Context can come from several places: typed by hand, a GitHub issue, or an agent that uses a skill or an MCP server (Jira, Linear, Notion, …).
 - A task made in the app can open a GitHub issue for itself. The pull request links to the issue.
@@ -23,7 +27,7 @@ A task has two fields that answer two questions:
 
 | Field | Question | Values |
 |---|---|---|
-| `stage` | Where in the work is it? | The stage ids of its project, by default `context`, `spec`, `plan`, `implement`, `review`, `testing`, `release` |
+| `stage` | Where in the work is it? | The stage ids of its project, by default `context`, `spec`, `plan`, `test-spec`, `implement`, `review`, `testing`, `release` |
 | `state` | What is happening in this stage now? | The existing states: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` |
 
 The state list does not change. Each state now means "in the current stage":
@@ -43,6 +47,8 @@ The state list does not change. Each state now means "in the current stage":
 
 Why keep the state list: the "Needs me" strip, the notifications, the agent hooks and the CLI all work on states and keep working. A task in `review` at stage `plan` shows in "Needs me" as "Plan waits for approval".
 
+In a parallel step each stage has its own state, and `state` is the most urgent of them (section 3.6).
+
 ## 3. Stages
 
 ### 3.1 Stage kinds
@@ -54,7 +60,7 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `context` | The context sources of the task (section 4) | `context.md` | Sources are read; then the gate |
 | `agent` | The task's agent with the stage prompt | A file named by the stage (`spec.md`, `plan.md`), or code changes | The agent finishes its turn (`agent.finished`); then the gate |
 | `review` | Nothing. You read the diff, comment, approve or send back | Review comments | You approve, or send it back to an earlier stage |
-| `testing` | A command (for example `pnpm test`) in a task terminal, or an agent when no command is set | The command output | The command exits: 0 passes, other fails |
+| `testing` | The agent with the stage prompt when there is one, then a command (for example `pnpm test`) in a task terminal | New tests, the command output | The command exits: 0 passes, other fails |
 | `release` | Push and open a pull request (one click, or on entry when the gate is `auto`) | The pull request | The pull request is merged |
 | `manual` | Nothing. A step you do yourself | — | You approve |
 
@@ -65,9 +71,10 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `context` | context | manual | — |
 | `spec` | agent | manual | Read `context.md`. Write `spec.md`: goal, scope, out of scope, acceptance criteria. Do not change code |
 | `plan` | agent | manual | Read `context.md` and `spec.md`. Write `plan.md`: the steps, the files to change, the tests to add. Do not change code |
-| `implement` | agent | auto | Read `spec.md` and `plan.md`. Make the change and its tests. Commit when done |
+| `test-spec` (parallel) | agent | manual | Read `context.md` and `spec.md`, not the code. Write `test-spec.md`: test cases with input, expected result and edge cases. Do not change code |
+| `implement` (parallel) | agent | auto | Read `spec.md` and `plan.md`. Write the tests first, then the code that makes them pass. Commit when done |
 | `review` | review | manual | — |
-| `testing` | testing | auto | The `test` command of the project, else an agent that runs the tests and reports |
+| `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests |
 | `release` | release | manual | — |
 
 - **Gate `manual`:** when the stage output is ready, the state becomes `review` and the task waits for you.
@@ -93,7 +100,7 @@ Four actions, each one an event:
 
 ### 3.4 Where stage files live
 
-Stage files are `context.md`, `spec.md`, `plan.md` and test output.
+Stage files are `context.md`, `spec.md`, `plan.md`, `test-spec.md` and test output.
 
 - **While the task has a workspace:** they are in `.helmsman-task/` inside the worktree.
   - The agent reads and writes there without leaving its folder, so no extra permission prompts.
@@ -106,6 +113,22 @@ Stage files are `context.md`, `spec.md`, `plan.md` and test output.
 ### 3.5 Checks
 
 When an `agent` stage ends without its output file, for example the agent stopped to ask a question in plain text, the state becomes `needs-input`, not `review`. The task header says "spec.md is missing".
+
+### 3.6 Parallel stages
+
+A step of the pipeline is one stage, or a group of stages that run at the same time. The default has one group: Test spec and Implement.
+
+- **Lanes:** while a task is in a group, `stage` is the group id (`build`) and a new field `lanes` holds the state of each stage in it, for example `{ "test-spec": "review", "implement": "running" }`. Outside a group `lanes` is empty.
+- **Gates per lane:** each stage keeps its own gate. Test spec waits for your approval; Implement passes by itself.
+- **End of the group:** when every lane is finished (approved or passed), the task moves to the next step. Review then shows the diff and `test-spec.md` together.
+- **Task state:** `state` is the most urgent lane state, in this order: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`. So "Needs me" shows the task when any lane needs you.
+- **Agents:** each lane has its own agent session in its own terminal, in the same worktree. Implement keeps terminal 1 and the session of the earlier stages; Test spec gets a new terminal.
+  - The terminal gets `HELMSMAN_STAGE`, and `helmsman hook` sends it with each hook, so the daemon knows which lane a hook is about.
+  - Test spec writes only `.helmsman-task/test-spec.md`, which git ignores, so the two agents do not touch the same files.
+- **Why Test spec does not read the code:** it is written from the spec alone, like a separate tester, so it checks what was asked, not what was built. Implement does not wait for it; it writes its own tests from the spec and the plan. In Testing, an agent adds a test for each case in `test-spec.md` that the code does not test yet.
+- **Events name the lane:** `stage.approved`, `stage.passed`, `stage.reopened` and `stage.skipped` carry `payload.stage` inside a group.
+- **Send back:** Review can send the task back to one stage of a group. That lane runs again; the other keeps its result.
+- **Rules:** groups do not nest, hold 2 to 4 stages, and hold only `agent` and `manual` kinds.
 
 ## 4. Task context
 
@@ -170,7 +193,9 @@ Comments on the issue when the stage changes are later.
 
 ## 6. Project settings
 
-A file `.helmsman.json` at the root of the repository, next to `.helmsman-setup`. It is committed, so the team shares it. Every field is optional; a missing field takes the default.
+The app has one default pipeline: the eight stages of section 1, with Test spec and Implement side by side. A repository without settings uses it.
+
+A project changes it in a file `.helmsman.json` at the root of the repository, next to `.helmsman-setup`. It is committed, so the team shares it. Every field is optional; a missing field takes the default.
 
 The name is not `.helmsman/project.json`, because `.helmsman/` is the daemon's default data folder.
 
@@ -180,7 +205,13 @@ The name is not `.helmsman/project.json`, because `.helmsman/` is the daemon's d
     { "id": "context", "kind": "context", "gate": "manual" },
     { "id": "spec", "kind": "agent", "gate": "manual", "output": "spec.md" },
     { "id": "plan", "kind": "agent", "gate": "manual", "output": "plan.md" },
-    { "id": "implement", "kind": "agent", "gate": "auto" },
+    {
+      "id": "build",
+      "parallel": [
+        { "id": "test-spec", "kind": "agent", "gate": "manual", "output": "test-spec.md" },
+        { "id": "implement", "kind": "agent", "gate": "auto" }
+      ]
+    },
     { "id": "review", "kind": "review", "gate": "manual" },
     { "id": "testing", "kind": "testing", "gate": "auto", "command": "pnpm test" },
     { "id": "release", "kind": "release", "gate": "manual" }
@@ -203,11 +234,12 @@ Stage fields:
 - `prompt`: replaces the default prompt. Placeholders: `{title}`, `{description}`, `{dir}` (the stage file folder), `{ref}` (the context reference).
 - `output`: the file the stage must write (`agent` kind).
 - `command`: the test command (`testing` kind).
+- A group is `{ "id", "name"?, "parallel": [stages] }` (section 3.6).
 
 Other rules:
-- **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt.
+- **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt. It can also group stages, or take a stage out of a group so it runs on its own.
 - **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings acts as kind `manual`.
-- **Editing:** the app has a **Project settings** page that edits this file in the repository's main folder. You commit it yourself.
+- **Editing:** the app has a **Project settings** page that edits this file in the repository's main folder. You commit it yourself. "Reset to default" writes the default pipeline back.
 - **Wrong settings:** a file that fails to parse shows an error on the page, and the daemon uses the defaults.
 
 ## 7. Changes per package
@@ -216,23 +248,24 @@ Other rules:
 
 - `stage.ts`:
   - The `projectSettingsSchema` (zod) and the default pipeline.
-  - `nextStage(stages, id)`.
-  - `applyTaskEvent(position, event, pipeline)`, where `position` is `{ stage, state }`.
-- `task.ts`: new fields `stage`, `stages`, `context`, `issue`.
+  - `nextStep(steps, id)`, and `combinedState(lanes)` for the order in 3.6.
+  - `applyTaskEvent(position, event, pipeline)`, where `position` is `{ stage, state, lanes }`.
+- `task.ts`: new fields `stage`, `stages`, `lanes`, `context`, `issue`.
 - `events.ts`: new events `stage.approved`, `stage.passed`, `stage.reopened`, `stage.skipped`, `stage.started`, `context.fetched`, `issue.linked`, `issue.created`.
-- Tests for each move in 3.3, the gates, the snapshot rule, and the migration in section 8.
+- Tests for each move in 3.3, the gates, parallel lanes, the snapshot rule, and the migration in section 8.
 
 ### 7.2 `daemon`
 
 - `project-settings.ts`: reads `.helmsman.json` of a repository, caches it, and watches the file.
 - `stage-runner.ts`:
   - Enters a stage: starts the agent or sends it the prompt, or runs the test command, or opens the pull request.
-  - Listens to `agent.finished`, checks the output file, and passes or waits at the gate.
+  - Enters a group: one agent per lane, a new terminal for each lane after the first.
+  - Listens to `agent.finished`, finds the lane by `HELMSMAN_STAGE`, checks the output file, and passes or waits at the gate.
 - `stage-files.ts`: the folder rules of 3.4 and the `.git/info/exclude` entry.
 - `context-reader.ts`: the `manual` and `github-issue` sources. `skill` and `mcp` go through `stage-runner`.
 - `issue-linker.ts`: `gh issue create`, and the `Closes #N` line for the pull request body (`workspace-service.openPullRequest`).
 - Routes:
-  - `POST /tasks/:id/stage` with `{ action: 'approve' | 'reopen' | 'skip', to? }`.
+  - `POST /tasks/:id/stage` with `{ action: 'approve' | 'reopen' | 'skip', stage?, to? }`.
   - `GET` and `PUT /tasks/:id/files/:name`.
   - `GET` and `PUT /repos/:id/settings`.
   - `POST /tasks/:id/issue`.
@@ -246,19 +279,19 @@ Other rules:
 ### 7.3 `cli`
 
 New commands:
-- `helmsman stage approve|back|skip|pass|fail <task>`.
+- `helmsman stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal `--stage` comes from `HELMSMAN_STAGE`.
 - `helmsman task link <task> --issue <key> --url <url>`.
 - `helmsman task create --context github-issue:42`.
 
 ### 7.4 `web`
 
-- **Task header:** a stage stepper with done, current and next stages. The current one shows its state.
+- **Task header:** a stage stepper with done, current and next stages. The current one shows its state. A group shows its stages stacked, each with its own state and its own Approve button.
 - **Approve and Send back:** buttons, with the existing `a` and `r` keys.
-- **Docs tab:** for each task, `context.md`, `spec.md`, `plan.md`, readable as markdown and editable before approval.
-- **Table:** a "Stage" column. The state badge reads "Plan · Waiting for approval".
-- **Board:** columns by stage, plus Done. A switch keeps the old "by state" columns.
+- **Docs tab:** for each task, `context.md`, `spec.md`, `plan.md`, `test-spec.md`, readable as markdown and editable before approval.
+- **Table:** a "Stage" column. The state badge reads "Plan · Waiting for approval"; in a group, "Test spec · Waiting for approval, Implement · Running".
+- **Board:** columns by step, plus Done. A group is one column. A switch keeps the old "by state" columns.
 - **New task and New workspace dialogs:** a context source picker (from the project settings) and a reference field (`#42`, `ABC-123`).
-- **Project settings page:** the stage list (order, on or off, gate, prompt), the context sources, and the tracker.
+- **Project settings page:** the stage list (order, on or off, gate, prompt, "run alongside the stage above"), the context sources, and the tracker.
 - **Issue:** a link on the task, and "Create issue" when there is none.
 - **Needs me:** keeps working on states. The text names the stage.
 
@@ -279,7 +312,7 @@ Task files without `stage` are read like this. Nothing is rewritten until the ta
 
 Separate pull requests, in this order:
 
-1. `core`: stages, settings schema, events, migration, tests.
+1. `core`: stages, groups and lanes, settings schema, events, migration, tests.
 2. `daemon` and `cli`: settings file, stage runner, stage files, routes, CLI commands.
 3. Context sources: `manual`, `github-issue`, `skill`, `mcp`.
 4. Tracker: GitHub issue on spec approval, manual "Create issue", `Closes #N` in the pull request.
@@ -290,7 +323,8 @@ Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their co
 
 ## 10. Open points
 
-- **One agent session for all stages, or a new one per stage?** The plan above keeps one session (less to set up, the agent remembers). Bigger tasks may need a fresh session for `implement`. That can be a later stage setting (`session: "new"`).
+- **One agent session for all stages, or a new one per stage?** The plan above keeps one session for the main line (less to set up, the agent remembers), and a new one for each extra lane of a group. Bigger tasks may need a fresh session for `implement`. That can be a later stage setting (`session: "new"`).
+- **Two agents in one worktree:** safe in the default group, because Test spec writes only an ignored file. A custom group of two code-writing stages would clash; the settings page warns when a group has more than one stage without `output`.
 - **Agent stops early:** the Claude Code `Stop` hook fires after each turn. An agent that asks a question in plain text "finishes" its turn. The output file check in 3.5 covers the stages that write a file; `implement` has no such check and goes to review as today.
 - **`testing` runs before the pull request,** so CI on the pull request is not part of it. CI stays visible in `release`, as today.
 - **Later:**
