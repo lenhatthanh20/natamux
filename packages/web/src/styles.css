@@ -550,6 +550,20 @@
   animation: hm-shimmer 1.5s linear infinite;
 }
 
+/* Behind a changed image, so that its transparent parts show. */
+.hm-checker {
+  background-color: var(--canvas);
+  background-image: conic-gradient(
+    var(--line) 25%,
+    transparent 0 50%,
+    var(--line) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 /* A new or deleted file is shown whole, with every line marked. */
 .hm-whole-added {
   background: var(--add-bg);

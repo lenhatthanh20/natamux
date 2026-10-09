@@ -432,6 +432,33 @@ export const COMMANDS: readonly Command[] = [
     run: () => fireAppEvent('diff-step', 1),
   },
   {
+    id: 'diff.nextChange',
+    title: 'Next change in the file',
+    category: 'Workspace',
+    shortcuts: ['Alt+F5'],
+    group: 'Diff',
+    when: inWorkspace,
+    run: () => fireAppEvent('diff-change-step', 1),
+  },
+  {
+    id: 'diff.previousChange',
+    title: 'Previous change in the file',
+    category: 'Workspace',
+    shortcuts: ['Shift+Alt+F5'],
+    group: 'Diff',
+    when: inWorkspace,
+    run: () => fireAppEvent('diff-change-step', -1),
+  },
+  {
+    // Monaco handles these keys itself, in the diff it has the focus of.
+    id: 'diff.accessible',
+    title: 'Accessible diff view',
+    category: 'Workspace',
+    shortcuts: ['F7', 'Shift+F7'],
+    group: 'Diff',
+    hidden: true,
+  },
+  {
     id: 'diff.change',
     title: 'Previous or next change in a file',
     category: 'Workspace',
