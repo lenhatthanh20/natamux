@@ -57,7 +57,7 @@ export function TaskTable({
       <table className="w-full min-w-[52rem] border-collapse text-left">
         <thead>
           <tr className="border-b border-line text-xs text-muted [&>th]:h-9 [&>th]:px-3 [&>th]:font-medium">
-            <th>Task</th>
+            <th className="min-[1920px]:w-full">Task</th>
             <th>State</th>
             <th>Agent</th>
             <th>Branch</th>
@@ -74,7 +74,7 @@ export function TaskTable({
               data-selected={task.id === selectedId}
               className="border-b border-line last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected"
             >
-              <td className="max-w-[24rem] px-3 py-2">
+              <td className="max-w-[24rem] px-3 py-2 min-[1920px]:max-w-none">
                 <button
                   type="button"
                   onClick={() => onSelect(task.id)}

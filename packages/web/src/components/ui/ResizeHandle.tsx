@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type PointerEvent, useState } from 'react'
 
 const KEY_STEP = 16
+const KEY_STEP_LARGE = 64
 
 function savedWidth(key: string, initial: number, min: number, max: number): number {
   try {
@@ -34,10 +35,25 @@ type ResizeHandleProps = {
   // The panel grows when the pointer moves right (a left panel) or left (a right panel).
   edge: 'right' | 'left'
   onResize: (width: number) => void
+  // Enter and a double click go back to this width.
+  defaultWidth?: number
+  // A drag that ends narrower than this calls onCollapse instead of keeping the width.
+  collapseBelow?: number
+  onCollapse?: () => void
 }
 
 // The thin line between two panels. Drag it, or focus it and use the arrow keys.
-export function ResizeHandle({ label, width, min, max, edge, onResize }: ResizeHandleProps) {
+export function ResizeHandle({
+  label,
+  width,
+  min,
+  max,
+  edge,
+  onResize,
+  defaultWidth,
+  collapseBelow,
+  onCollapse,
+}: ResizeHandleProps) {
   const sign = edge === 'right' ? 1 : -1
 
   const startDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -46,13 +62,20 @@ export function ResizeHandle({ label, width, min, max, edge, onResize }: ResizeH
     const startWidth = width
     const handle = event.currentTarget
     handle.setPointerCapture(event.pointerId)
+    let latest = startWidth
     const move = (moved: globalThis.PointerEvent) => {
-      onResize(startWidth + sign * (moved.clientX - startX))
+      latest = startWidth + sign * (moved.clientX - startX)
+      onResize(latest)
     }
     const stop = () => {
       handle.removeEventListener('pointermove', move)
       handle.removeEventListener('pointerup', stop)
       document.body.style.cursor = ''
+      if (collapseBelow !== undefined && latest < collapseBelow) {
+        onCollapse?.()
+        // The next opening starts at a usable width, not at the narrow one.
+        onResize(defaultWidth ?? min)
+      }
     }
     document.body.style.cursor = 'col-resize'
     handle.addEventListener('pointermove', move)
@@ -62,7 +85,17 @@ export function ResizeHandle({ label, width, min, max, edge, onResize }: ResizeH
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
       event.preventDefault()
-      onResize(width + (event.key === 'ArrowRight' ? sign : -sign) * KEY_STEP)
+      const step = event.shiftKey ? KEY_STEP_LARGE : KEY_STEP
+      onResize(width + (event.key === 'ArrowRight' ? sign : -sign) * step)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      onResize(min)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      onResize(max)
+    } else if (event.key === 'Enter' && defaultWidth !== undefined) {
+      event.preventDefault()
+      onResize(defaultWidth)
     }
   }
 
@@ -75,10 +108,16 @@ export function ResizeHandle({ label, width, min, max, edge, onResize }: ResizeH
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}
+      aria-valuetext={`${width} pixels`}
       tabIndex={0}
       onPointerDown={startDrag}
+      onDoubleClick={() => {
+        if (defaultWidth !== undefined) {
+          onResize(defaultWidth)
+        }
+      }}
       onKeyDown={onKeyDown}
-      className="group relative z-10 -mx-[3px] w-[7px] shrink-0 cursor-col-resize touch-none focus-visible:outline-none"
+      className="group relative z-10 -mx-[3px] w-[7px] shrink-0 cursor-col-resize touch-none focus-visible:outline-none pointer-coarse:hidden"
     >
       <span className="absolute inset-y-0 left-[3px] w-px bg-line transition-colors group-hover:bg-accent/60 group-focus-visible:bg-accent group-active:bg-accent" />
     </div>

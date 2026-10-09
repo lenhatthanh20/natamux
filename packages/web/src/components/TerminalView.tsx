@@ -11,6 +11,7 @@ import {
   terminalTheme,
 } from '../lib/terminal-theme'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
+import { useUiSize } from '../lib/ui-size'
 import { Button } from './ui/Button'
 
 type Status = 'connecting' | 'open' | 'ended' | 'error'
@@ -42,6 +43,8 @@ export default function TerminalView({ connect }: TerminalViewProps) {
   const themeRef = useRef(theme)
   themeRef.current = theme
   const terminalRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
+  const uiSize = useUiSize()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
   useEffect(() => {
@@ -61,6 +64,9 @@ export default function TerminalView({ connect }: TerminalViewProps) {
     terminalRef.current = terminal
     const fit = new FitAddon()
     terminal.loadAddon(fit)
+    fitRef.current = fit
+    // F6 moves between the parts of the window. The shell never sees it.
+    terminal.attachCustomKeyEventHandler((event) => event.key !== 'F6')
     terminal.open(element)
     fit.fit()
 
@@ -110,7 +116,14 @@ export default function TerminalView({ connect }: TerminalViewProps) {
 
     const input = terminal.onData((data) => send({ type: 'input', data }))
     const resized = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
-    const observer = new ResizeObserver(() => fit.fit())
+    const observer = new ResizeObserver(() => {
+      // A hidden terminal has no size yet, and xterm throws while it measures nothing.
+      try {
+        fit.fit()
+      } catch {
+        // The next resize, when it shows again, fits it.
+      }
+    })
     observer.observe(element)
     terminal.focus()
 
@@ -135,6 +148,7 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       socket?.close()
       terminal.dispose()
       terminalRef.current = null
+      fitRef.current = null
     }
   }, [attempt])
 
@@ -143,6 +157,15 @@ export default function TerminalView({ connect }: TerminalViewProps) {
       terminalRef.current.options.theme = terminalTheme(theme)
     }
   }, [theme])
+
+  // The UI size setting changes the font, and then the number of columns.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: uiSize is the trigger; uiZoom() reads the page.
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.fontSize = TERMINAL_FONT_SIZE * uiZoom()
+      fitRef.current?.fit()
+    }
+  }, [uiSize])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

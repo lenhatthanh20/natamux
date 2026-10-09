@@ -7,7 +7,7 @@ import type {
 } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUp, FileDiff as FileDiffIcon, GitPullRequest, History, Terminal } from 'lucide-react'
-import { type KeyboardEvent, lazy, Suspense, useState } from 'react'
+import { type KeyboardEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import type { WorkspaceTab } from '../lib/view-store'
 import { AgentComment } from './AgentComment'
@@ -27,6 +27,8 @@ type ChangesViewProps = {
   task: Task
   now: Date
   initialTab?: WorkspaceTab
+  // Called with the tab that shows, also when the view first appears.
+  onTabChange?: (tab: WorkspaceTab) => void
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   loadGraph: () => Promise<GitGraphData>
@@ -80,6 +82,7 @@ export function ChangesView({
   task,
   now,
   initialTab = 'changes',
+  onTabChange,
   loadChanges,
   loadFile,
   loadGraph,
@@ -98,6 +101,9 @@ export function ChangesView({
   const [notice, setNotice] = useState<string | null>(null)
   const [line, setLine] = useState<number | null>(null)
   const queryClient = useQueryClient()
+  const reportTab = useRef(onTabChange)
+  reportTab.current = onTabChange
+  useEffect(() => reportTab.current?.(tab), [tab])
 
   const changes = useQuery({
     queryKey: ['changes', task.id],

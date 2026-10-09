@@ -872,7 +872,7 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
 
     await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
     const view = await screen.findByRole('region', { name: 'Changes of T-0002' })
@@ -904,7 +904,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     await user.click(within(sidebar).getByRole('button', { name: /Agents/ }))
     const grid = screen.getByRole('region', { name: 'Agents' })
     const pane = within(grid).getByRole('region', { name: 'Agent of T-0002' })
@@ -932,7 +932,7 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(
       true,
@@ -955,7 +955,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    const sidebar = screen.getByRole('navigation', { name: 'Tasks' })
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
     await user.click(screen.getByRole('menuitem', { name: 'Pin to the top' }))
 
@@ -984,5 +984,138 @@ describe('App', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: '2 tasks need you' })).toBeTruthy(),
     )
+  })
+  it('hides and shows the sidebar from the title bar', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const toggle = screen.getByRole('button', { name: 'Hide sidebar' })
+    expect(screen.getByRole('navigation', { name: 'Workspaces' })).toBeTruthy()
+    await user.click(toggle)
+    expect(screen.queryByRole('navigation', { name: 'Workspaces' })).toBeNull()
+    expect(window.localStorage.getItem('helmsman.sidebar-open')).toBe('false')
+
+    await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(screen.getByRole('navigation', { name: 'Workspaces' })).toBeTruthy()
+  })
+
+  it('shows who needs the user in the title bar and the status bar', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    expect(
+      within(screen.getByRole('banner')).getByRole('button', { name: '1 needs you' }),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 needs you' }),
+    ).toBeTruthy()
+    expect(
+      within(screen.getByRole('contentinfo')).getByRole('button', { name: '1 running' }),
+    ).toBeTruthy()
+  })
+
+  it('toggles the details of the selected task from the title bar', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const toggle = screen.getByRole('button', { name: 'Select a task to show its details' })
+    expect(toggle.getAttribute('aria-disabled')).toBe('true')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
+  it('has a skip link and the page landmarks', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    expect(screen.getByRole('link', { name: 'Skip to main content' }).getAttribute('href')).toBe(
+      '#main',
+    )
+    expect(screen.getByRole('banner')).toBeTruthy()
+    expect(screen.getByRole('main')).toBeTruthy()
+    expect(screen.getByRole('contentinfo')).toBeTruthy()
+  })
+
+  it('moves between the parts with F6', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('{F6}')
+    expect(
+      screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement),
+    ).toBe(true)
+    await user.keyboard('{F6}')
+    expect(screen.getByRole('main').contains(document.activeElement)).toBe(true)
+    await user.keyboard('{Shift>}{F6}{/Shift}')
+    expect(
+      screen.getByRole('navigation', { name: 'Workspaces' }).contains(document.activeElement),
+    ).toBe(true)
+  })
+
+  it('changes the UI size from the account menu', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Large' }))
+    expect(document.documentElement.style.getPropertyValue('--ui-zoom')).toBe('1.077')
+    expect(window.localStorage.getItem('helmsman.ui-size')).toBe('large')
+  })
+
+  it('asks before it signs out, and keeps the session on Cancel', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    const dialog = screen.getByRole('dialog', { name: 'Sign out of Helmsman?' })
+    expect(within(dialog).getByText('Your tasks keep running.')).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('table')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByLabelText('Daemon token')).toBeTruthy()
+  })
+
+  it('opens the shortcut list with the question mark key', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('?')
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()
   })
 })

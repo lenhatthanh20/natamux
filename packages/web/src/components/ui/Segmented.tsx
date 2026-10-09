@@ -58,7 +58,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-line bg-raised p-0.5"
+      className="inline-flex h-(--control-h) shrink-0 items-center gap-0.5 rounded-md border border-line bg-raised p-0.5"
     >
       {options.map((option) => {
         const selected = option.value === value
@@ -81,7 +81,7 @@ export function Segmented<T extends string>({
                 onChange(option.value)
               }
             }}
-            className={`flex h-[22px] items-center gap-1.5 rounded px-2 text-xs font-medium aria-disabled:opacity-50 ${
+            className={`flex h-[22px] pointer-coarse:h-8 items-center gap-1.5 rounded px-2 text-xs font-medium aria-disabled:opacity-50 ${
               selected
                 ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.2)] dark:bg-[#2a2c31]'
                 : 'text-muted not-aria-disabled:hover:text-ink'
