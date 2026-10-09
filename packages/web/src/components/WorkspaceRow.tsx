@@ -162,7 +162,7 @@ export function WorkspaceRow({
         <span className="min-w-0 flex-1 truncate font-mono">{shortBranch(task) || task.id}</span>
         <DiffSize stat={stat} empty={null} />
       </span>
-      {task.state === 'running' && (
+      {task.state === 'running' && activity !== undefined && activity !== '' && (
         <span className={`block h-4 w-full truncate pl-6 ${metaColor}`}>{activity}</span>
       )}
       {task.state === 'needs-input' && (

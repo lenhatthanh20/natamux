@@ -1,9 +1,19 @@
 import type { TaskState } from '@helmsman/core'
 import { STATE_LABEL } from '../lib/tasks'
 
-export function StateBadge({ state }: { state: TaskState }) {
+type StateBadgeProps = {
+  state: TaskState
+  // The stage the task is in. It goes in the tooltip, so the badge keeps its width.
+  stage?: string | null
+}
+
+export function StateBadge({ state, stage = null }: StateBadgeProps) {
   return (
-    <span className="state-chip" data-state={state}>
+    <span
+      className="state-chip"
+      data-state={state}
+      {...(stage === null ? {} : { 'data-tip': `${stage} · ${STATE_LABEL[state]}` })}
+    >
       {STATE_LABEL[state]}
     </span>
   )

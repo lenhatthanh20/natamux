@@ -297,7 +297,11 @@ export function TaskDetail({
                       )
                     }
                   >
-                    {task.branch === null ? '-' : <PathText path={task.branch} />}
+                    {task.branch === null ? '-' : (
+                      <span className="break-all">
+                        <PathText path={task.branch} />
+                      </span>
+                    )}
                   </Field>
                   <Field
                     label="Folder"
@@ -310,7 +314,7 @@ export function TaskDetail({
                       />
                     }
                   >
-                    <span className="text-xs">
+                    <span className="text-xs break-all">
                       <PathText path={task.workspace} />
                     </span>
                   </Field>
