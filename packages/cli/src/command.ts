@@ -52,9 +52,9 @@ export type Command =
   | { name: 'agent.start'; id: string; agent: string; prompt?: string; json: boolean }
   // For an agent without hooks: say it waits for the user, or that its turn is over. Without
   // --task, the task comes from HELMSMAN_TASK_ID.
-  | { name: 'agent.ask'; id?: string; question: string; json: boolean }
+  | { name: 'agent.ask'; id?: string; question: string; stage?: string; json: boolean }
   // Says the stage this terminal works on is done; the daemon then checks it.
-  | { name: 'agent.done'; id?: string; json: boolean }
+  | { name: 'agent.done'; id?: string; stage?: string; json: boolean }
   | {
       name: 'stage.act'
       id: string
@@ -296,6 +296,7 @@ export function parseCommand(argv: readonly string[]): Command {
       name: 'agent.ask',
       id: values.task === undefined ? undefined : taskId(values.task),
       question,
+      ...(values.stage === undefined ? {} : { stage: values.stage }),
       json,
     }
   }
@@ -305,6 +306,7 @@ export function parseCommand(argv: readonly string[]): Command {
     return {
       name: 'agent.done',
       id: values.task === undefined ? undefined : taskId(values.task),
+      ...(values.stage === undefined ? {} : { stage: values.stage }),
       json,
     }
   }
@@ -315,6 +317,9 @@ export function parseCommand(argv: readonly string[]): Command {
     }
     const action = oneOf(second, STAGE_COMMANDS, 'The stage command')
     noExtraArguments(rest.slice(1))
+    if (action === 'back' && values.stage !== undefined) {
+      throw new UsageError('stage back goes to the stage named with --to, not --stage')
+    }
     return {
       name: 'stage.act',
       id: taskId(rest[0]),

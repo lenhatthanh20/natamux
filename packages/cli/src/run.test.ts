@@ -450,6 +450,25 @@ describe('more commands', () => {
     })
   })
 
+  it('names the terminal it runs in, so the daemon knows the stage inside a group', async () => {
+    const env = { HELMSMAN_TOKEN: 'secret', HELMSMAN_TASK_ID: 'T-7', HELMSMAN_TERMINAL: '2' }
+    const handler = () => jsonResponse({ task: makeTask({ id: 'T-7' }), accepted: true })
+
+    const ask = await run(['ask', 'Which file?'], { env, handler })
+    expect(ask.calls[0]?.body).toEqual({
+      source: 'agent',
+      type: 'agent.asked',
+      payload: { question: 'Which file?', terminal: '2' },
+    })
+    const done = await run(['done', '--stage', 'test-spec'], { env, handler })
+    expect(done.calls[0]?.body).toEqual({ action: 'report', stage: 'test-spec', terminal: '2' })
+    const approve = await run(['stage', 'approve', 'T-7'], { env, handler })
+    expect(approve.calls[0]?.body).toEqual({ action: 'approve', terminal: '2' })
+    // A terminal of another task says nothing about this one.
+    const other = await run(['stage', 'approve', 'T-9'], { env, handler })
+    expect(other.calls[0]?.body).toEqual({ action: 'approve' })
+  })
+
   it('reports the stage done for the task named with --task', async () => {
     const result = await run(['done', '--task', 'T-8'], {
       handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }),

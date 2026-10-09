@@ -34,7 +34,7 @@ Options:
   --prompt <text>       agent start: first prompt (default: the task title and notes)
   --task <id>           ask, done: the task (default: HELMSMAN_TASK_ID)
   --context <source>    task create: where its context comes from, such as github-issue:42
-  --stage <id>          stage: the stage, when two run side by side
+  --stage <id>          stage, done, ask: the stage, when two run side by side
   --to <id>             stage back: the stage to go back to (default: the last agent stage)
   --reason <text>       stage back, stage fail: why, for the agent and the log
   --issue <key>         task link: the issue or ticket, such as #42 or ABC-123

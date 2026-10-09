@@ -301,4 +301,16 @@ describe('more commands', () => {
     expect(() => parseCommand(['ask'])).toThrow(UsageError)
     expect(() => parseCommand(['done', 'extra'])).toThrow(UsageError)
   })
+
+  it('reads the stage of ask and done, and refuses --stage for stage back', () => {
+    expect(parseCommand(['done', '--stage', 'test-spec'])).toMatchObject({
+      name: 'agent.done',
+      stage: 'test-spec',
+    })
+    expect(parseCommand(['ask', 'Which?', '--stage', 'implement'])).toMatchObject({
+      name: 'agent.ask',
+      stage: 'implement',
+    })
+    expect(() => parseCommand(['stage', 'back', 'T-1', '--stage', 'plan'])).toThrow(/--to/)
+  })
 })
