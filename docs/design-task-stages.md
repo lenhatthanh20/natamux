@@ -330,7 +330,7 @@ Stage fields:
 
 Other rules:
 - **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt. It can also group stages, or take a stage out of a group so it runs on its own.
-- **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings acts as kind `manual`.
+- **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings keeps the default settings of that id (spec, plan, …); a custom stage that is gone acts as kind `manual`.
 - **Editing:** the app has a **Project settings** page that edits this file in the repository's main folder. You commit it yourself. "Reset to default" writes the default pipeline back.
 - **Wrong settings:** a file that fails to parse shows an error on the page, and the daemon uses the defaults.
 

@@ -143,10 +143,11 @@ export function stepRefsOf(steps: readonly Step[]): StepRef[] {
 export const LEGACY_STEP_REFS: StepRef[] = stepRefsOf(LEGACY_PIPELINE)
 
 // Turns a task's step ids back into steps, with each stage's settings from `pipeline`. A stage
-// that is gone from the settings becomes a manual stage under its id, so the task can go on.
+// that is gone from the settings keeps the default settings of its id, so a task on its way still
+// runs it; a stage of its own that is gone becomes a manual stage, so the task can go on.
 export function resolveSteps(refs: readonly StepRef[], pipeline: readonly Step[]): Step[] {
   const known = new Map<string, Stage>()
-  for (const step of pipeline) {
+  for (const step of [...DEFAULT_PIPELINE, ...pipeline]) {
     for (const stage of stagesOf(step)) {
       known.set(stage.id, stage)
     }
