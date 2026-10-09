@@ -615,3 +615,150 @@
     background: var(--skeleton);
   }
 }
+
+/* Stage markers of the progress views. Only what is alive moves (docs/design-task-stages.md 7.5). */
+.stage-node {
+  position: relative;
+  width: var(--node, 20px);
+  height: var(--node, 20px);
+  border-radius: 9999px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  color: var(--chip-fg);
+}
+.stage-node > svg {
+  position: relative;
+  width: 64%;
+  height: 64%;
+}
+.stage-node[data-status="done"] {
+  background: var(--chip-fg);
+  color: var(--surface);
+}
+.stage-node[data-status="upcoming"] {
+  border: 1.5px solid var(--line-strong);
+}
+.stage-node[data-status="skipped"] {
+  border: 1.5px dashed var(--faint);
+  color: var(--faint);
+}
+.stage-node[data-status="current"] {
+  border: 2px solid var(--chip-fg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--chip-fg) 16%, transparent);
+}
+.stage-node[data-status="current"][data-state="running"] {
+  border-color: color-mix(in srgb, var(--chip-fg) 22%, transparent);
+  box-shadow: none;
+}
+.stage-node[data-status="current"][data-state="needs-input"],
+.stage-node[data-status="current"][data-state="failed"] {
+  background: var(--chip-fg);
+  color: var(--surface);
+}
+.stage-arc {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, transparent 0deg 70deg, var(--chip-fg) 360deg);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: hm-spin 900ms linear infinite;
+}
+.stage-halo {
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: var(--chip-fg);
+  opacity: 0;
+  animation: hm-halo 1.8s var(--ease-out) infinite;
+}
+.stage-core {
+  position: relative;
+  width: 32%;
+  height: 32%;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.stage-node[data-state="review"] .stage-core {
+  animation: hm-breathe 2.4s ease-in-out infinite;
+}
+.stage-link {
+  flex: 1 1 0;
+  height: 2px;
+  min-width: 6px;
+  border-radius: 2px;
+}
+.stage-link[data-kind="done"] {
+  background: color-mix(in srgb, var(--add) 55%, transparent);
+}
+.stage-link[data-kind="upcoming"] {
+  background-image: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 8px);
+}
+.stage-link[data-kind="flow"] {
+  background-image: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px);
+  animation: hm-flow 900ms linear infinite;
+}
+.stage-link[data-kind="hidden"] {
+  visibility: hidden;
+}
+.stage-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--chip-fg) 0 6px,
+    color-mix(in srgb, var(--chip-fg) 55%, transparent) 6px 12px
+  );
+  background-size: 17px 17px;
+  animation: hm-stripes 1s linear infinite;
+}
+
+@keyframes hm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes hm-halo {
+  from {
+    transform: scale(0.7);
+    opacity: 0.32;
+  }
+  to {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+@keyframes hm-breathe {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes hm-flow {
+  to {
+    background-position: 12px 0;
+  }
+}
+@keyframes hm-stripes {
+  to {
+    background-position: 17px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-arc,
+  .stage-halo,
+  .stage-link[data-kind="flow"],
+  .stage-stripes,
+  .stage-node[data-state="review"] .stage-core {
+    animation: none;
+  }
+  .stage-arc {
+    background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
+  }
+}

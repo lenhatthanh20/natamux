@@ -1,8 +1,8 @@
-import type { Repo, Task } from '@helmsman/core'
+import type { ContextSource, ContextSourceType, Repo, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
-import type { NewWorkspaceInput } from '../lib/api'
+import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { Button } from './ui/Button'
@@ -21,6 +21,28 @@ type NewWorkspaceDialogProps = {
   create: (input: NewWorkspaceInput) => Promise<Task>
   onCreated: (task: Task) => void
   onClose: () => void
+  // The project settings, for the context sources it offers.
+  loadSettings?: (repo: string) => Promise<LoadedSettings>
+}
+
+function sourceLabel(source: ContextSource): string {
+  switch (source.type) {
+    case 'manual':
+      return 'My notes'
+    case 'github-issue':
+      return 'A GitHub issue'
+    case 'skill':
+      return `${source.name} (skill)`
+    case 'mcp':
+      return `${source.name} (MCP server)`
+  }
+}
+
+const REF_PLACEHOLDER: Record<ContextSourceType, string> = {
+  manual: '',
+  'github-issue': '#42 or the issue address',
+  skill: 'The ticket key or address',
+  mcp: 'The ticket key or address, such as ABC-123',
 }
 
 const FIELD_LABEL = 'text-xs font-medium text-muted'
@@ -34,6 +56,7 @@ export function NewWorkspaceDialog({
   create,
   onCreated,
   onClose,
+  loadSettings,
 }: NewWorkspaceDialogProps) {
   const [title, setTitle] = useState(initialTitle)
   const [repo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
@@ -41,7 +64,15 @@ export function NewWorkspaceDialog({
   const [agent, setAgent] = useState('claude-code')
   const [prompt, setPrompt] = useState('')
   const [advanced, setAdvanced] = useState(false)
+  const [source, setSource] = useState<ContextSourceType>('manual')
+  const [ref, setRef] = useState('')
   const repoParam = repo === DEFAULT_REPO_ID ? undefined : repo
+  const settings = useQuery({
+    queryKey: ['settings', repo],
+    queryFn: () => loadSettings?.(repo) ?? Promise.reject(new Error('No settings')),
+    enabled: loadSettings !== undefined,
+  })
+  const sources = settings.data?.settings.context.sources ?? [{ type: 'manual' as const }]
 
   const branches = useQuery({
     queryKey: ['branches', repoParam],
@@ -55,6 +86,7 @@ export function NewWorkspaceDialog({
         ...(base === '' ? {} : { base }),
         ...(agent === '' ? {} : { agent }),
         ...(agent === '' || prompt.trim() === '' ? {} : { prompt: prompt.trim() }),
+        ...(source === 'manual' ? {} : { context: { source, ref: ref.trim() } }),
       }),
     onSuccess: (task) => {
       if (base !== '') {
@@ -144,6 +176,35 @@ export function NewWorkspaceDialog({
             disabled={branches.data === undefined}
           />
         </div>
+        {sources.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <span className={FIELD_LABEL}>Context from</span>
+            <div className="flex gap-2">
+              <Select
+                value={source}
+                onChange={(event) => setSource(event.target.value as ContextSourceType)}
+                aria-label="Where the context comes from"
+                fieldSize="md"
+                className="w-52 shrink-0"
+              >
+                {sources.map((item) => (
+                  <option key={`${item.type}-${'name' in item ? item.name : ''}`} value={item.type}>
+                    {sourceLabel(item)}
+                  </option>
+                ))}
+              </Select>
+              {source !== 'manual' && (
+                <input
+                  value={ref}
+                  onChange={(event) => setRef(event.target.value)}
+                  placeholder={REF_PLACEHOLDER[source]}
+                  aria-label="Reference of the context"
+                  className={`${inputLg} min-w-0 flex-1`}
+                />
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Agent</span>
           <Select

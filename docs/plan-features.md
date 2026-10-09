@@ -82,10 +82,15 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Create a task from the app, the CLI, or an agent | MVP |
 | Subtasks (one level). Done: add them in the details of a task, which counts how many are done; a subtask shows its parent | v1 |
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
-| Approval gates: a task can require a human decision before it moves on | v1 |
+| Approval gates: a task can require a human decision before it moves on. Done: each stage has a manual or auto gate (docs/design-task-stages.md) | v1 |
+| Stages per project: Context → Spec → Plan → [Test spec ‖ Implement] → Review → Testing → Release by default, changed in `.helmsman.json` (drop, reorder, add, run side by side). Done: the daemon starts each stage, takes `helmsman done`, checks the result (file, sections, commits, clean worktree, a command), and sends failed checks back to the agent once | v1 |
+| Task context from typed notes, a GitHub issue (with comments), a skill or an MCP server, written to `context.md`. Done | v1 |
+| Stage files (`context.md`, `spec.md`, `plan.md`, `test-spec.md`) in the worktree, ignored by git, kept with the task, editable in the Docs tab. Done | v1 |
+| Event log files: every event is also kept in `tasks/T-0001.events.jsonl`, and the index is rebuilt from them. Done | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
 | Reusable task templates and prompts. Done: save a task as a template (notes, priority, labels) and pick it when adding a task; templates are markdown files in `<data dir>/templates` | v1 |
 | Import tasks from GitHub issues. Done: pick open issues (`gh issue list`) and make draft tasks; an issue is imported once | v1 |
+| A GitHub issue for a task made in the app. Done: opened when the spec is approved (or with the pull request, or by hand), and the pull request body says `Closes #N`; `helmsman task link` links a ticket elsewhere | v1 |
 | Import from Linear, Jira and others | Later |
 | Search and filter by state, label, agent | MVP |
 
@@ -108,6 +113,7 @@ Goals:
 | Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done; elapsed time is the age of the task | MVP |
 | Counts per state in a header bar; click to filter | MVP |
 | Board view (columns by state), toggle with the table. Done; the choice is kept per browser | v1 |
+| Progress view: every task against the stages of its pipeline, with turning, breathing and done markers; a Progress tab per task with the time and evidence of each stage. Done | v1 |
 | One-line live summary per running task (what the agent is doing now). Done for Claude Code: the tool it is about to run (`PreToolUse`), such as "Edit src/a.ts", under the title of a running task | v1 |
 | Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
 | Desktop and system notifications when a task needs me or finishes. Done in the browser: a notification when a task starts to wait while the tab is in the background, and the count in the tab title | MVP |

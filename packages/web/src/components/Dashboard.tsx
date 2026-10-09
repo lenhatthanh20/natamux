@@ -1,6 +1,6 @@
-import { type EventType, type Task, waitingOn } from '@helmsman/core'
+import { type EventType, type Repo, type Task, waitingOn } from '@helmsman/core'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Columns3, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
+import { Columns3, ListChecks, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useDelayedFlag } from '../hooks/useDelayedFlag'
 import { useElementWidth } from '../hooks/useElementWidth'
@@ -42,6 +42,8 @@ import { IssueImport } from './IssueImport'
 import { NeedsMeStrip } from './NeedsMeStrip'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
+import { ProgressBoard } from './ProgressBoard'
+import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { RepoPanel } from './RepoPanel'
 import { ShortcutSheet } from './ShortcutSheet'
 import { Sidebar } from './Sidebar'
@@ -159,6 +161,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   // The repository of new tasks and of issue imports. Empty: the daemon's own.
   const [newRepo, setNewRepo] = useState('')
   const [reposOpen, setReposOpen] = useState(false)
+  const [settingsRepo, setSettingsRepo] = useState<Repo | null>(null)
   const branchesRepo =
     tasks.find((task) => task.id === (changesTaskId ?? selectedId))?.repo ?? undefined
   const branchesQuery = useQuery({
@@ -846,6 +849,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             }}
             loadTerminals={() => api.listTerminals(changesTask.id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
+            loadSettings={() => api.getSettings(changesTask.repo ?? 'default')}
+            loadStageFiles={() => api.listStageFiles(changesTask.id)}
+            readStageFile={(name) => api.readStageFile(changesTask.id, name)}
+            writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
+            stageAction={async (action, input) => {
+              const updated = await api.stageAction(changesTask.id, action, input)
+              mergeTask(updated)
+              return updated
+            }}
+            createIssue={async () => {
+              const updated = await api.createIssue(changesTask.id)
+              mergeTask(updated)
+              return updated
+            }}
           />
         ) : agentsOpen ? (
           <AgentPanes
@@ -895,6 +912,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   options={[
                     { value: 'table', label: 'Table', icon: Rows3 },
                     { value: 'board', label: 'Board', icon: Columns3 },
+                    { value: 'progress', label: 'Progress', icon: ListChecks },
                   ]}
                 />
               </div>
@@ -955,7 +973,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             </form>
             <div
               {...frozen.handlers}
-              className={`min-h-0 flex-1 ${layout === 'board' && visibleTasks.length > 0 ? '' : 'overflow-auto px-4 pb-4'}`}
+              className={`min-h-0 flex-1 ${layout === 'board' && visibleTasks.length > 0 ? '' : layout === 'progress' ? 'overflow-auto' : 'overflow-auto px-4 pb-4'}`}
             >
               {tasksQuery.isPending ? (
                 showSkeleton && <SkeletonList rows={8} rowHeight={40} label="Loading the tasks" />
@@ -1011,6 +1029,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     ? 'Check the spelling or clear the filter.'
                     : 'Clear the filter to see every task.'}
                 </EmptyState>
+              ) : layout === 'progress' ? (
+                <ProgressBoard
+                  tasks={orderedTasks}
+                  repos={repos}
+                  now={now}
+                  activity={activityQuery.data}
+                  loadSettings={(repo) => api.getSettings(repo)}
+                  onOpenTask={(id) => openChanges(id, 'progress')}
+                />
               ) : layout === 'board' ? (
                 <TaskBoard
                   tasks={orderedTasks}
@@ -1055,6 +1082,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           initialRepo={newWorkspace.repo}
           initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
+          loadSettings={(repo) => api.getSettings(repo)}
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)
@@ -1073,6 +1101,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             await reposQuery.refetch()
           }}
           onClose={() => setReposOpen(false)}
+          onSettings={(repo) => {
+            setReposOpen(false)
+            setSettingsRepo(repo)
+          }}
+        />
+      )}
+      {settingsRepo !== null && (
+        <ProjectSettingsDialog
+          repo={settingsRepo}
+          load={() => api.getSettings(settingsRepo.id)}
+          save={(raw) => api.saveSettings(settingsRepo.id, raw)}
+          onClose={() => setSettingsRepo(null)}
         />
       )}
       {importOpen && (

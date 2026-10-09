@@ -6,17 +6,25 @@ import type {
   TerminalSize,
 } from '@helmsman/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileDiff as FileDiffIcon, History, Terminal } from 'lucide-react'
+import { FileDiff as FileDiffIcon, FileText, History, ListChecks, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { StoredEvent } from '../lib/api'
+import type {
+  LoadedSettings,
+  StageAction,
+  StageActionInput,
+  StageFile,
+  StoredEvent,
+} from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { paneStateText } from '../lib/panes'
 import { toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
 import { latestQuestion } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
+import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
 import { NeedsInputBanner } from './NeedsInputBanner'
+import { ProgressTab } from './ProgressTab'
 import { ShellPanes } from './ShellPanes'
 import { SkeletonList } from './ui/Skeleton'
 import { Tabs, tabPanelProps } from './ui/Tabs'
@@ -50,6 +58,12 @@ type ChangesViewProps = {
   sendToAgent: (text: string) => Promise<Task>
   resume: () => void
   resuming: boolean
+  loadSettings: () => Promise<LoadedSettings>
+  loadStageFiles: () => Promise<StageFile[]>
+  readStageFile: (name: string) => Promise<string>
+  writeStageFile: (name: string, text: string) => Promise<void>
+  stageAction: (action: StageAction, input?: StageActionInput) => Promise<Task>
+  createIssue: () => Promise<Task>
 }
 
 type GitAction = {
@@ -86,8 +100,15 @@ export function ChangesView({
   sendToAgent,
   resume,
   resuming,
+  loadSettings,
+  loadStageFiles,
+  readStageFile,
+  writeStageFile,
+  stageAction,
+  createIssue,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab)
+  const [docFile, setDocFile] = useState<string | null>(null)
   const [tabActions, setTabActions] = useState<HTMLElement | null>(null)
   const [focusToken, setFocusToken] = useState(0)
   const queryClient = useQueryClient()
@@ -99,7 +120,7 @@ export function ChangesView({
     setTab(next)
     onTabPicked?.(next)
   }
-  // The keys 1, 2 and 3 are commands. A new address (back button, link) can name another tab too.
+  // The keys 1 to 5 are commands. A new address (back button, link) can name another tab too.
   useAppEvent<WorkspaceTab>('workspace-tab', pickTab)
   useEffect(() => setTab(initialTab), [initialTab])
 
@@ -194,6 +215,8 @@ export function ChangesView({
           { id: 'terminal', label: 'Terminal', icon: Terminal },
           { id: 'changes', label: 'Changes', icon: FileDiffIcon },
           { id: 'history', label: 'History', icon: History },
+          { id: 'progress', label: 'Progress', icon: ListChecks },
+          { id: 'docs', label: 'Docs', icon: FileText },
         ]}
       />
 
@@ -226,6 +249,45 @@ export function ChangesView({
           {graph.data && (
             <GitGraph graph={graph.data} now={now} onRefresh={() => graph.refetch()} />
           )}
+        </div>
+      )}
+
+      {tab === 'progress' && (
+        <div
+          {...tabPanelProps('workspace', 'progress', 'Progress')}
+          className="flex min-h-0 flex-1 flex-col bg-canvas"
+        >
+          <ProgressTab
+            task={task}
+            now={now}
+            loadSettings={loadSettings}
+            loadEvents={loadEvents}
+            loadFiles={loadStageFiles}
+            act={stageAction}
+            createIssue={createIssue}
+            activity={activity}
+            onOpenFile={(name) => {
+              setDocFile(name)
+              pickTab('docs')
+            }}
+          />
+        </div>
+      )}
+
+      {tab === 'docs' && (
+        <div
+          {...tabPanelProps('workspace', 'docs', 'Docs')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <DocsTab
+            taskId={task.id}
+            now={now}
+            file={docFile}
+            onFileChange={setDocFile}
+            loadFiles={loadStageFiles}
+            readFile={readStageFile}
+            writeFile={writeStageFile}
+          />
         </div>
       )}
 

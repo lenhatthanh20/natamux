@@ -4,8 +4,8 @@ import { type PaneLayout, parsePaneLayout } from './panes'
 import type { Route } from './route'
 import type { TaskSort } from './tasks'
 
-export type WorkspaceTab = 'changes' | 'history' | 'terminal'
-export type Layout = 'table' | 'board'
+export type WorkspaceTab = 'changes' | 'history' | 'terminal' | 'progress' | 'docs'
+export type Layout = 'table' | 'board' | 'progress'
 
 const LAYOUT_KEY = 'helmsman.layout'
 const PINNED_KEY = 'helmsman.pinned'
@@ -24,7 +24,8 @@ const MAX_RECENT = 20
 // The layout is a per-browser choice. Storage can be missing or blocked; then it is the table.
 function savedLayout(): Layout {
   try {
-    return globalThis.localStorage?.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'table'
+    const saved = globalThis.localStorage?.getItem(LAYOUT_KEY)
+    return saved === 'board' || saved === 'progress' ? saved : 'table'
   } catch {
     return 'table'
   }
@@ -419,7 +420,8 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
         return { changesTaskId: null, agentsOpen: false, selectedId: route.id, detailOpenByTask }
       }
       // A list address shows no details: the address of the details is /t/<id>.
-      const layout: Layout = route.kind === 'board' ? 'board' : 'table'
+      const layout: Layout =
+        route.kind === 'board' || route.kind === 'progress' ? route.kind : 'table'
       saveLayout(layout)
       const open = current.selectedId !== null && current.detailOpenByTask[current.selectedId]
       const detailOpenByTask =
