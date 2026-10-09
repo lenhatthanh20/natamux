@@ -1,4 +1,4 @@
-import { existsSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChangeEntry, ChangeStatus, ImageSide } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -344,6 +344,30 @@ describe('listChanges with counts', () => {
       { path: 'new.txt', status: 'U', originalPath: null, added: 3, removed: 0 },
       { path: 'tracked.txt', status: 'M', originalPath: null, added: 2, removed: 0 },
     ])
+  })
+
+  it('still lists the changes when a new folder is a nested repository', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'new.txt'), 'a\n')
+    const nestedPath = join(worktreePath, 'sub')
+    mkdirSync(nestedPath)
+    runGit(nestedPath, 'init', '-b', 'main')
+    runGit(nestedPath, 'commit', '--allow-empty', '-m', 'init')
+
+    const changes = await listChanges(worktreePath, { counts: true })
+
+    expect(changes).toContainEqual({
+      path: 'new.txt',
+      status: 'U',
+      originalPath: null,
+      added: 1,
+      removed: 0,
+    })
+    expect(changes.find((entry) => entry.path.startsWith('sub'))).toMatchObject({
+      status: 'U',
+      added: null,
+      removed: null,
+    })
   })
 
   it('leaves the counts out by default', async () => {
