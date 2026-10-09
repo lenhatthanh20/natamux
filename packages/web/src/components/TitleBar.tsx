@@ -1,4 +1,5 @@
 import { Menu, PanelLeft, PanelRight, Plus, Search } from 'lucide-react'
+import { shortcutOf } from '../lib/commands'
 import { IconButton } from './ui/IconButton'
 import { Kbd } from './ui/Kbd'
 import { ICON } from './ui/styles'
@@ -80,7 +81,7 @@ export function TitleBar({
             <IconButton
               label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
               icon={PanelLeft}
-              shortcut="Mod+B"
+              shortcut={shortcutOf('sidebar.toggle')}
               tipSide="bottom"
               aria-pressed={sidebarOpen}
               onClick={onToggleSidebar}
@@ -102,7 +103,7 @@ export function TitleBar({
         >
           <Search size={ICON.sm} aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Search or run a command</span>
-          <Kbd shortcut="/" />
+          <Kbd shortcut={shortcutOf('palette.open') ?? 'Mod+K'} />
         </button>
       )}
 
@@ -116,18 +117,25 @@ export function TitleBar({
             {needsYou} {needsYou === 1 ? 'needs' : 'need'} you
           </button>
         )}
-        {phone && <IconButton label="Search" icon={Search} tipSide="bottom" onClick={onSearch} />}
+        {phone && (
+          <IconButton
+            label="Search or run a command"
+            icon={Search}
+            tipSide="bottom"
+            onClick={onSearch}
+          />
+        )}
         <IconButton
           label="New workspace"
           icon={Plus}
-          shortcut="c"
+          shortcut={shortcutOf('workspace.new')}
           tipSide="bottom"
           onClick={onNewWorkspace}
         />
         <IconButton
           label={detailsDisabledReason ?? (detailsOpen ? 'Hide details' : 'Show details')}
           icon={PanelRight}
-          shortcut="Mod+Alt+B"
+          shortcut={shortcutOf('details.toggle')}
           tipSide="bottom"
           aria-pressed={detailsOpen}
           aria-disabled={detailsDisabledReason === undefined ? undefined : true}

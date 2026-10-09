@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { StoredEvent } from '../lib/api'
+import { useAppEvent } from '../lib/app-events'
 import { paneStateText } from '../lib/panes'
 import { toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
@@ -31,6 +32,9 @@ type ChangesViewProps = {
   onTabChange?: (tab: WorkspaceTab) => void
   // Called only when the user picks a tab, so the choice can be remembered.
   onTabPicked?: (tab: WorkspaceTab) => void
+  // The file of the address bar, and where to report the one that shows.
+  file?: string | null
+  onFileChange?: (path: string | null) => void
   // What the agent does now, for the title bar of Shell 1.
   activity?: string
   loadChanges: () => Promise<ChangeEntry[]>
@@ -66,6 +70,8 @@ export function ChangesView({
   initialTab = 'terminal',
   onTabChange,
   onTabPicked,
+  file,
+  onFileChange,
   activity,
   loadChanges,
   loadFile,
@@ -93,6 +99,9 @@ export function ChangesView({
     setTab(next)
     onTabPicked?.(next)
   }
+  // The keys 1, 2 and 3 are commands. A new address (back button, link) can name another tab too.
+  useAppEvent<WorkspaceTab>('workspace-tab', pickTab)
+  useEffect(() => setTab(initialTab), [initialTab])
 
   // The graph has the number of commits ahead of the base, which the Push button shows.
   const graph = useQuery({
@@ -233,6 +242,8 @@ export function ChangesView({
             onCommit={commitFiles}
             committing={pending === 'commit'}
             gitBusy={pending !== null}
+            file={file}
+            onFileChange={onFileChange}
           />
         </div>
       )}

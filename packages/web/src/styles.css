@@ -15,6 +15,7 @@
   --input: #ffffff;
   --terminal: #fbfbfc;
   --scrim: rgb(15 17 20 / 0.32);
+  --scrim-palette: rgb(15 17 20 / 0.12);
   --skeleton: rgb(20 24 31 / 0.06);
   --badge: #e6e8ec;
 
@@ -106,6 +107,7 @@
   --input: #0f1012;
   --terminal: #0b0c0e;
   --scrim: rgb(0 0 0 / 0.5);
+  --scrim-palette: rgb(0 0 0 / 0.24);
   --skeleton: rgb(255 255 255 / 0.06);
   --badge: #2a2c31;
 
@@ -193,6 +195,7 @@
   --color-input: var(--input);
   --color-terminal: var(--terminal);
   --color-scrim: var(--scrim);
+  --color-scrim-palette: var(--scrim-palette);
   --color-skeleton: var(--skeleton);
   --color-badge: var(--badge);
   --color-ink: var(--ink);

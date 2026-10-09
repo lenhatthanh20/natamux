@@ -1,5 +1,6 @@
 import type { GitGraph as GitGraphData } from '@helmsman/core'
 import { RefreshCw } from 'lucide-react'
+import { shortcutOf } from '../lib/commands'
 import { layoutGraph } from '../lib/graph-layout'
 import { formatAge } from '../lib/tasks'
 import { IconButton } from './ui/IconButton'
@@ -58,7 +59,12 @@ export function GitGraph({ graph, now, onRefresh }: GitGraphProps) {
           {aheadLabel(graph)}
           {graph.truncated && ` Only the newest ${graph.commits.length} commits are shown.`}
         </p>
-        <IconButton label="Refresh" icon={RefreshCw} shortcut="Shift+R" onClick={onRefresh} />
+        <IconButton
+          label="Refresh"
+          icon={RefreshCw}
+          shortcut={shortcutOf('changes.refresh')}
+          onClick={onRefresh}
+        />
       </div>
 
       <ol aria-label="Commits" className="rounded-md border border-line bg-surface py-1">

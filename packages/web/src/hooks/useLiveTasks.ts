@@ -1,6 +1,6 @@
 import type { Task } from '@helmsman/core'
 import { useEffect, useRef, useState } from 'react'
-import { liveSocketUrl, parseLiveMessage } from '../lib/live'
+import { closeSocket, liveSocketUrl, parseLiveMessage } from '../lib/live'
 
 export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
 
@@ -48,7 +48,9 @@ export function useLiveTasks(token: string, onTask: (task: Task) => void): LiveS
     return () => {
       stopped = true
       clearTimeout(timer)
-      socket?.close()
+      if (socket !== undefined) {
+        closeSocket(socket)
+      }
     }
   }, [token])
 

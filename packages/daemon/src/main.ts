@@ -72,6 +72,7 @@ const app = await buildServer({
   repos,
   bus,
   token: config.token,
+  webIndexPath: config.webIndexPath,
 })
 await app.listen({ host: config.host, port: config.port })
 

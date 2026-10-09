@@ -10,6 +10,7 @@ import {
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { LiveStatus } from '../hooks/useLiveTasks'
 import type { NotifyPermission } from '../hooks/useTaskNotifications'
+import { shortcutOf } from '../lib/commands'
 import {
   condense,
   forcedByWidth,
@@ -263,7 +264,7 @@ export function StatusBar({
       <IconButton
         label="Keyboard shortcuts"
         icon={Keyboard}
-        shortcut="?"
+        shortcut={shortcutOf('help.shortcuts')}
         size="xs"
         tipSide="top"
         onClick={onShortcuts}

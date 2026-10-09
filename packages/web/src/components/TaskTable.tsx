@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Copy, ExternalLink, FileDiff, PanelRight } from 'lu
 import type { MouseEvent } from 'react'
 import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
 import { copyText } from '../lib/clipboard'
+import { shortcutOf } from '../lib/commands'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { COLUMN_LABEL, type ColumnKey, tableLayout } from '../lib/table-columns'
 import {
@@ -125,11 +126,16 @@ export function TaskTable({
   })
 
   const menuFor = (task: Task): MenuItem[] => [
-    { label: 'Open workspace', icon: FileDiff, shortcut: 'Enter', onSelect: () => onOpen(task.id) },
+    {
+      label: 'Open workspace',
+      icon: FileDiff,
+      shortcut: shortcutOf('task.open'),
+      onSelect: () => onOpen(task.id),
+    },
     {
       label: 'Show details',
       icon: PanelRight,
-      shortcut: 'i',
+      shortcut: shortcutOf('task.details'),
       onSelect: () => onSelect(task.id, true),
     },
     { type: 'separator' },

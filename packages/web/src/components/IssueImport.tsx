@@ -1,8 +1,12 @@
 import type { GitHubIssue, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { CircleAlert } from 'lucide-react'
 import { useState } from 'react'
+import { importLabel, issueProblem } from '../lib/issues'
 import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
+import { EmptyState } from './ui/EmptyState'
+import { SkeletonList } from './ui/Skeleton'
 
 type IssueImportProps = {
   // The repository the issues come from; it keeps the lists of repositories apart.
@@ -57,17 +61,43 @@ export function IssueImport({
             variant="primary"
             size="md"
             shortcut="Mod+Enter"
-            disabled={count === 0 || importing.isPending}
+            busy={importing.isPending}
+            disabledReason={count === 0 ? 'Pick an issue first' : undefined}
             onClick={() => importing.mutate()}
           >
-            {count === 1 ? 'Import 1 issue' : `Import ${count} issues`}
+            {importLabel(count)}
           </Button>
         </>
       }
     >
-      {issues.isPending && <p className="text-muted">Asking GitHub.</p>}
-      {issues.isError && <p role="alert">{issues.error.message}</p>}
-      {importing.isError && <p role="alert">{importing.error.message}</p>}
+      {issues.isPending && <SkeletonList rows={6} rowHeight={28} label="Asking GitHub" />}
+      {issues.isError && (
+        <EmptyState
+          icon={CircleAlert}
+          tone="error"
+          title="Could not load the issues"
+          actions={
+            <Button size="md" onClick={() => issues.refetch()} busy={issues.isFetching}>
+              Retry
+            </Button>
+          }
+        >
+          {issueProblem(issues.error.message)}
+          <details className="mt-3 text-left">
+            <summary className="cursor-pointer text-xs font-medium text-ink-2">
+              Show details
+            </summary>
+            <pre className="mt-2 max-h-32 overflow-auto rounded-md bg-raised p-2 font-mono text-xs whitespace-pre-wrap text-ink-2">
+              {issues.error.message}
+            </pre>
+          </details>
+        </EmptyState>
+      )}
+      {importing.isError && (
+        <p role="alert" className="mb-2 text-danger-text">
+          {importing.error.message}
+        </p>
+      )}
       {issues.data?.length === 0 && <p className="text-muted">No open issues.</p>}
 
       {issues.data && issues.data.length > 0 && (

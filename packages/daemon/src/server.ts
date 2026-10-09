@@ -29,6 +29,7 @@ import {
   TerminalLimitError,
   type TerminalService,
 } from './terminal-service.js'
+import { registerWebFallback } from './web-fallback.js'
 import {
   FileNotChangedError,
   WorkspaceConflictError,
@@ -46,6 +47,9 @@ type ServerOptions = {
   repos: RepoService
   bus: EventBus
   token: string
+  // The built dashboard's index.html. With it, an address of the dashboard that is not an API
+  // route (a deep link) answers with that page when the browser asks for HTML.
+  webIndexPath?: string
 }
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
@@ -121,12 +125,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   const app = Fastify({ logger: false })
   const hooks = new AgentHookService(options.service)
   await app.register(websocket)
+  const servesPage =
+    options.webIndexPath === undefined ? null : registerWebFallback(app, options.webIndexPath)
 
   // Browsers cannot set headers on a WebSocket, so only /events accepts ?token=. The terminal
   // socket checks a one-time ticket itself instead (see TerminalService.issueTicket).
   app.addHook('onRequest', async (request, reply) => {
     const url = new URL(request.url, 'http://localhost')
-    if (url.pathname === '/health') {
+    if (url.pathname === '/health' || servesPage?.(request) === true) {
       return
     }
     if (

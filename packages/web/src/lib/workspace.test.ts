@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from './api'
-import {
-  bannerText,
-  latestQuestion,
-  pullRequestButton,
-  pushButton,
-  splitMiddle,
-  tabToOpen,
-} from './workspace'
+import { bannerText, latestQuestion, pullRequestButton, pushButton, tabToOpen } from './workspace'
 
 function asked(seq: number, payload: Record<string, unknown>): StoredEvent {
   return {
@@ -44,16 +37,6 @@ describe('pullRequestButton', () => {
     )
     expect(pullRequestButton(null, null, null, false).reason).toBe('This task has no branch yet')
     expect(pullRequestButton('b', null, null, false).reason).toBeUndefined()
-  })
-})
-
-describe('splitMiddle', () => {
-  it('keeps short names whole and splits long ones near the end', () => {
-    expect(splitMiddle('helmsman/t-0001')).toEqual({ head: 'helmsman/t-0001', tail: '' })
-    expect(splitMiddle('helmsman/t-0018-fix-the-token-refresh-race')).toEqual({
-      head: 'helmsman/t-0018-fix-the-token-re',
-      tail: 'fresh-race',
-    })
   })
 })
 

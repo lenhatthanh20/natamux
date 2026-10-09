@@ -6,9 +6,11 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useAppEvent } from '../lib/app-events'
+import { keyBelongsToShell } from '../lib/dispatch'
 import { MONO_FONT } from '../lib/fonts'
+import { closeSocket } from '../lib/live'
 import { parseTerminalMessage } from '../lib/terminal'
-import { terminalShortcut } from '../lib/terminal-keys'
 import {
   MIN_CONTRAST_RATIO,
   TERMINAL_FONT_SIZE,
@@ -24,11 +26,22 @@ type Status = 'connecting' | 'open' | 'ended' | 'error'
 
 // A burst of resizes (dragging a divider) fits the terminal once, when it settles.
 const FIT_DELAY_MS = 100
+const DISPOSE_DELAY_MS = 200
 
 type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
   focusToken?: number
+}
+
+// A terminal that is hidden, not open yet or already disposed has no size, and xterm throws
+// ("reading 'dimensions'") while it measures nothing. The next resize fits it.
+function safeFit(fit: FitAddon | null): void {
+  try {
+    fit?.fit()
+  } catch {
+    // Nothing to fit yet.
+  }
 }
 
 const STATUS_TEXT: Record<Status, string> = {
@@ -87,26 +100,11 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
         window.open(uri, '_blank', 'noopener,noreferrer')
       }),
     )
-    // F6 moves between the parts of the window, and the shortcuts of the app stay out of the
-    // shell. Returning false lets the key event go on to the page.
-    terminal.attachCustomKeyEventHandler((event) => {
-      if (event.key === 'F6') {
-        return false
-      }
-      const shortcut = terminalShortcut(event)
-      if (shortcut === null) {
-        return true
-      }
-      if (shortcut === 'find' && event.type === 'keydown') {
-        event.preventDefault()
-        setFindOpen(true)
-      } else if (shortcut === 'maximize') {
-        event.preventDefault()
-      }
-      return false
-    })
+    // The keys of the app (F6, Cmd chords on a Mac, Ctrl+Shift chords elsewhere) are not for the
+    // shell. Returning false lets the key event go on to the page, see lib/dispatch.ts.
+    terminal.attachCustomKeyEventHandler((event) => keyBelongsToShell(event))
     terminal.open(element)
-    fit.fit()
+    safeFit(fit)
 
     let socket: WebSocket | null = null
     let disposed = false
@@ -130,7 +128,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       .current({ cols: terminal.cols, rows: terminal.rows })
       .then((opened) => {
         if (disposed) {
-          opened.close()
+          closeSocket(opened)
           return
         }
         socket = opened
@@ -177,12 +175,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     const observer = new ResizeObserver(() => {
       clearTimeout(fitTimer)
       fitTimer = setTimeout(() => {
-        // A hidden terminal has no size yet, and xterm throws while it measures nothing.
-        try {
-          fit.fit()
-        } catch {
-          // The next resize, when it shows again, fits it.
-        }
+        safeFit(fit)
       }, FIT_DELAY_MS)
     })
     observer.observe(element)
@@ -196,7 +189,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
         if (!disposed) {
           terminal.options.fontFamily = 'monospace'
           terminal.options.fontFamily = MONO_FONT
-          fit.fit()
+          safeFit(fit)
         }
       })
       .catch(() => undefined)
@@ -209,8 +202,13 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       resized.dispose()
       scrolled.dispose()
       written.dispose()
-      socket?.close()
-      terminal.dispose()
+      if (socket !== null) {
+        closeSocket(socket)
+      }
+      // xterm still has a frame of work queued that reads its size ("reading 'dimensions'"), so it
+      // is taken off the page now and disposed of a moment later.
+      terminal.element?.remove()
+      setTimeout(() => terminal.dispose(), DISPOSE_DELAY_MS)
       terminalRef.current = null
       fitRef.current = null
       setSearch(null)
@@ -229,7 +227,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.options.fontSize = TERMINAL_FONT_SIZE * uiZoom()
-      fitRef.current?.fit()
+      safeFit(fitRef.current)
     }
   }, [uiSize])
 
@@ -237,6 +235,13 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
   useEffect(() => {
     terminalRef.current?.focus()
   }, [focusToken])
+
+  // Mod+F is a command; it finds in the terminal that has the focus.
+  useAppEvent('terminal-find', () => {
+    if (container.current?.contains(document.activeElement)) {
+      setFindOpen(true)
+    }
+  })
 
   const closeFind = () => {
     setFindOpen(false)

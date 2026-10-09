@@ -43,6 +43,19 @@ function setPageInert(inert: boolean) {
   }
 }
 
+// Makes the page behind a layer inert, until every layer that asked for it has let go. Returns
+// the call that lets go.
+export function lockPage(): () => void {
+  openDialogs += 1
+  setPageInert(true)
+  return () => {
+    openDialogs -= 1
+    if (openDialogs === 0) {
+      setPageInert(false)
+    }
+  }
+}
+
 // A modal over the page. Escape and a click outside close it; Tab stays inside; the page behind is
 // inert; focus goes to its first field and back to where it was when it closes.
 export function Dialog({
@@ -70,13 +83,9 @@ export function Dialog({
       '[data-autofocus], input, textarea, select, button:not([data-dialog-close])',
     )
     first?.focus()
-    openDialogs += 1
-    setPageInert(true)
+    const unlock = lockPage()
     return () => {
-      openDialogs -= 1
-      if (openDialogs === 0) {
-        setPageInert(false)
-      }
+      unlock()
       previous?.focus()
     }
   }, [])

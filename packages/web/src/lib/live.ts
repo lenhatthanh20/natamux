@@ -22,3 +22,20 @@ export function parseLiveMessage(text: string): Task | undefined {
   const parsed = taskSchema.safeParse(message.task)
   return parsed.success ? parsed.data : undefined
 }
+
+// WebSocket.CONNECTING. The number, so a stand-in socket in a test works too.
+const CONNECTING = 0
+
+// Closing a socket that is still connecting makes the browser log "closed before the connection
+// is established". Such a socket is closed as soon as it opens, and its handlers are dropped so
+// nothing reacts to it meanwhile.
+export function closeSocket(socket: WebSocket): void {
+  if (socket.readyState === CONNECTING) {
+    socket.onmessage = null
+    socket.onclose = null
+    socket.onerror = null
+    socket.onopen = () => socket.close()
+    return
+  }
+  socket.close()
+}

@@ -1,6 +1,6 @@
 import type { Task } from '@helmsman/core'
-import { describe, expect, it } from 'vitest'
-import { liveSocketUrl, parseLiveMessage } from './live'
+import { describe, expect, it, vi } from 'vitest'
+import { closeSocket, liveSocketUrl, parseLiveMessage } from './live'
 
 const task: Task = {
   id: 'T-0001',
@@ -55,5 +55,34 @@ describe('parseLiveMessage', () => {
     ['a task that is not valid', JSON.stringify({ task: { id: 'nope' } })],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
+  })
+})
+
+describe('closeSocket', () => {
+  function fake(readyState: number) {
+    return {
+      readyState,
+      close: vi.fn(),
+      onopen: null as (() => void) | null,
+      onmessage: vi.fn() as unknown,
+      onclose: vi.fn() as unknown,
+      onerror: vi.fn() as unknown,
+    }
+  }
+
+  it('closes an open socket at once', () => {
+    const socket = fake(1)
+    closeSocket(socket as unknown as WebSocket)
+    expect(socket.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for a socket that is still connecting, so the browser logs no warning', () => {
+    const socket = fake(0)
+    closeSocket(socket as unknown as WebSocket)
+    expect(socket.close).not.toHaveBeenCalled()
+    expect(socket.onmessage).toBeNull()
+    expect(socket.onclose).toBeNull()
+    socket.onopen?.()
+    expect(socket.close).toHaveBeenCalledTimes(1)
   })
 })
