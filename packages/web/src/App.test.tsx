@@ -853,6 +853,21 @@ describe('App', () => {
     expect(await within(screen.getByRole('table')).findByText('Fix the login')).toBeTruthy()
   })
 
+  it('adds tasks typed one after another without waiting for the daemon', async () => {
+    installDaemon([])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    const field = (await screen.findByLabelText('New task title')) as HTMLInputElement
+    await user.type(field, 'First task{Enter}Second task{Enter}')
+
+    expect(field.value).toBe('')
+    const table = await screen.findByRole('table')
+    expect(await within(table).findByText('First task')).toBeTruthy()
+    expect(await within(table).findByText('Second task')).toBeTruthy()
+  })
+
   it('adds a subtask from the details of a task', async () => {
     installDaemon([makeTask({ id: 'T-0001', title: 'Release 1.0' })])
     const user = userEvent.setup()

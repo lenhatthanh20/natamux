@@ -553,6 +553,16 @@ export class StageRunner {
     }
     this.tasks.recordEvent(task.id, 'context.fetched', { stage: stage.id, source: source.type })
     await this.reportAndCheck(task.id, stage.id, 'system')
+    // A context of the task's own title and description holds nothing new to read. Waiting for
+    // approval would put every new backlog task in Needs you.
+    const now = this.tasks.getTask(task.id)
+    if (source.type === 'manual' && now.stage === stage.id && now.state === 'review') {
+      this.tasks.applyEvent(task.id, {
+        source: 'system',
+        type: 'stage.passed',
+        payload: { stage: stage.id },
+      })
+    }
   }
 
   private async readIssue(task: Task): Promise<string> {
