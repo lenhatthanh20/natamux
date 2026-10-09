@@ -55,6 +55,9 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # The desktop app runs here, so its runtime is downloaded.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ""
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -65,6 +68,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+      # Last: node-pty is built for Electron from here on, not for Node.js.
+      - name: Desktop app, start and load the dashboard
+        shell: bash
+        env:
+          HELMSMAN_DESKTOP_SMOKE: "1"
+          HELMSMAN_DESKTOP_SMOKE_SHOT: ${{ runner.temp }}/desktop.png
+        run: |
+          pnpm --filter @helmsman/desktop rebuild-native
+          node -e "require('fs').mkdirSync(process.argv[1], { recursive: true }); require('fs').writeFileSync(process.argv[1] + '/settings.json', JSON.stringify({ repoDir: process.argv[2] }))" \
+            "$RUNNER_TEMP/desktop-user" "$GITHUB_WORKSPACE"
+          cd packages/desktop
+          pnpm exec electron . --user-data-dir="$RUNNER_TEMP/desktop-user"
+      - name: Desktop app, picture and log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/desktop.png
+            ${{ runner.temp }}/desktop-user/logs
+          if-no-files-found: ignore
 
   coverage:
     runs-on: ubuntu-latest
