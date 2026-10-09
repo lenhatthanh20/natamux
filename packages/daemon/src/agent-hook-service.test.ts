@@ -95,7 +95,7 @@ describe('AgentHookService', () => {
     expect(service.findTask(undefined, undefined)).toBeUndefined()
   })
 
-  it('moves a task through a run: prompt, question, answer, end of turn', () => {
+  it('moves a task through a run: prompt, question, answer, end of turn without a report', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     const step = (name: string) => service.handle('claude-code', hook(name), task.id)
 
@@ -108,8 +108,27 @@ describe('AgentHookService', () => {
     step('PostToolUse')
     expect(tasks.getTask(task.id).state).toBe('running')
 
+    // The agent did not run `helmsman done`, so the turn end waits for you.
     step('Stop')
-    expect(tasks.getTask(task.id).state).toBe('review')
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+  })
+
+  it('drops the turn end that follows a report, and names the stage of the terminal', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    const seen: (string | undefined)[] = []
+    const reporting = new AgentHookService(tasks, {
+      laneFor: (current, terminal) => {
+        seen.push(terminal)
+        return { stage: current.stage, state: current.state }
+      },
+      takeReport: () => true,
+    })
+    reporting.handle('claude-code', hook('UserPromptSubmit'), task.id, '2')
+    expect(tasks.listEvents(task.id).at(-1)?.event.payload).toMatchObject({ stage: 'implement' })
+
+    expect(reporting.handle('claude-code', hook('Stop'), task.id, '2').applied).toEqual([])
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(seen).toEqual(['2', '2'])
   })
 
   it('records the events as coming from the agent', () => {

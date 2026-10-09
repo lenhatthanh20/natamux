@@ -481,7 +481,7 @@ describe('Claude Code hooks', () => {
     expect(await stateOf('T-0001')).toBe('running')
 
     await post({ hook_event_name: 'Stop' }, { 'x-helmsman-task': 'T-0001' })
-    expect(await stateOf('T-0001')).toBe('review')
+    expect(await stateOf('T-0001')).toBe('needs-input')
   })
 
   it('finds the task by the workspace of the working directory', async () => {
