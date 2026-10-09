@@ -20,6 +20,7 @@ import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
+import { IssueLinkError, type IssueLinker } from './issue-linker.js'
 import { newWorkspace } from './new-workspace.js'
 import { type ProjectSettingsService, SettingsInputError } from './project-settings.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
@@ -59,6 +60,7 @@ type ServerOptions = {
   bus: EventBus
   stages: StageRunner
   settings: ProjectSettingsService
+  issueLinker: IssueLinker
   // The daemon's data folder, where stage files are kept for tasks without a worktree.
   dataDir: string
   token: string
@@ -212,7 +214,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof NothingToCommitError ||
       error instanceof GitHubError ||
       error instanceof TaskWaitingError ||
-      error instanceof StageActionError
+      error instanceof StageActionError ||
+      error instanceof IssueLinkError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -337,6 +340,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { text } = stageFileBodySchema.parse(request.body)
     writeStageFile(options.dataDir, options.service.getTask(id), name, text)
     return { name, text }
+  })
+
+  // Opens a GitHub issue for the task now ("Create issue").
+  app.post('/tasks/:id/issue', async (request, reply) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return reply.code(201).send({ task: await options.issueLinker.create(id) })
   })
 
   app.put('/tasks/:id/issue', async (request) => {
