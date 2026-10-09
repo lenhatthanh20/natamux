@@ -2,14 +2,16 @@ import { execFile } from 'node:child_process'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type {
-  ChangeEntry,
-  ChangeStatus,
-  DiffStat,
-  FileDiff,
-  GitGraph,
-  GraphCommit,
-  PullRequestStatus,
+import {
+  type ChangeEntry,
+  type ChangeStatus,
+  type DiffStat,
+  type FileDiff,
+  type GitGraph,
+  type GraphCommit,
+  type ImageSide,
+  imageTypeOf,
+  type PullRequestStatus,
 } from '@helmsman/core'
 
 const execFileAsync = promisify(execFile)
@@ -152,22 +154,148 @@ export function parseStatus(output: string): ChangeEntry[] {
   return entries
 }
 
-// The files of a worktree that differ from its last commit, including files not tracked yet.
-export async function listChanges(worktreePath: string): Promise<ChangeEntry[]> {
+type LineCounts = { added: number | null; removed: number | null }
+
+// Reads `git diff --numstat -z`. A record is "added<TAB>removed<TAB>path" and a NUL. For a
+// rename the path is empty and two NUL-ended items follow, the old path and the new one. Binary
+// files have "-" for both counts. Keyed by the path the file has now.
+export function parseNumstatZ(output: string): Map<string, LineCounts> {
+  const parts = output.split('\0')
+  const counts = new Map<string, LineCounts>()
+  for (let position = 0; position < parts.length; position += 1) {
+    const item = parts[position]
+    if (!item) {
+      continue
+    }
+    const firstTab = item.indexOf('\t')
+    const secondTab = item.indexOf('\t', firstTab + 1)
+    if (firstTab === -1 || secondTab === -1) {
+      continue
+    }
+    const added = item.slice(0, firstTab)
+    const removed = item.slice(firstTab + 1, secondTab)
+    let path = item.slice(secondTab + 1)
+    if (path === '') {
+      path = parts[position + 2] ?? ''
+      position += 2
+    }
+    if (path === '') {
+      continue
+    }
+    counts.set(path, {
+      added: added === '-' ? null : Number(added),
+      removed: removed === '-' ? null : Number(removed),
+    })
+  }
+  return counts
+}
+
+// The lines of a text file: one for each line break, and one more for a last line without one.
+export function countTextLines(buffer: Buffer): number {
+  let lines = 0
+  for (let at = buffer.indexOf(0x0a); at !== -1; at = buffer.indexOf(0x0a, at + 1)) {
+    lines += 1
+  }
+  return buffer.length > 0 && buffer[buffer.length - 1] !== 0x0a ? lines + 1 : lines
+}
+
+// Reading every new file on each refresh would be slow, so only this many are counted.
+const MAX_COUNTED_UNTRACKED = 300
+const MAX_CACHED_COUNTS = 5000
+// The line count of an untracked file, by its real path. It is used while the size and the time
+// of the last change are the same.
+const untrackedLines = new Map<string, { size: number; mtimeMs: number; lines: number | null }>()
+
+async function untrackedCounts(worktreePath: string, path: string): Promise<LineCounts> {
+  let file: FileInWorktree | null
+  try {
+    file = await readInside(worktreePath, path)
+  } catch {
+    return { added: null, removed: null }
+  }
+  // Git lists a nested repository as one untracked folder.
+  if (file === null || !file.isFile || file.size > MAX_FILE_BYTES) {
+    return { added: null, removed: null }
+  }
+  const cached = untrackedLines.get(file.real)
+  let lines: number | null
+  if (cached !== undefined && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
+    lines = cached.lines
+  } else {
+    let buffer: Buffer
+    try {
+      buffer = await file.read()
+    } catch {
+      // An agent can delete the file after the stat. One file must not fail the whole list.
+      return { added: null, removed: null }
+    }
+    lines = looksBinary(buffer) ? null : countTextLines(buffer)
+    if (untrackedLines.size >= MAX_CACHED_COUNTS) {
+      untrackedLines.clear()
+    }
+    untrackedLines.set(file.real, { size: file.size, mtimeMs: file.mtimeMs, lines })
+  }
+  return lines === null ? { added: null, removed: null } : { added: lines, removed: 0 }
+}
+
+async function lineCounts(
+  worktreePath: string,
+  entries: readonly ChangeEntry[],
+): Promise<ChangeEntry[]> {
+  let tracked = new Map<string, LineCounts>()
+  try {
+    // `-M` finds renames even when the user's git config turns them off.
+    tracked = parseNumstatZ(
+      await git(worktreePath, ['diff', '--numstat', '-z', '-M', 'HEAD', '--']),
+    )
+  } catch (error) {
+    // A repository without a commit has no HEAD to compare with.
+    if (!(error instanceof GitError)) {
+      throw error
+    }
+  }
+  let untrackedSeen = 0
+  return Promise.all(
+    entries.map(async (entry) => {
+      if (entry.status === 'U') {
+        untrackedSeen += 1
+        if (untrackedSeen <= MAX_COUNTED_UNTRACKED) {
+          return { ...entry, ...(await untrackedCounts(worktreePath, entry.path)) }
+        }
+        return { ...entry, added: null, removed: null }
+      }
+      return { ...entry, ...(tracked.get(entry.path) ?? { added: null, removed: null }) }
+    }),
+  )
+}
+
+// The files of a worktree that differ from its last commit, including files not tracked yet. With
+// `counts`, each file also has the lines it adds and removes. Without, it costs one git call.
+export async function listChanges(
+  worktreePath: string,
+  options: { counts?: boolean } = {},
+): Promise<ChangeEntry[]> {
   const output = await git(worktreePath, [
     'status',
     '--porcelain=v1',
     '-z',
     '--untracked-files=all',
   ])
-  return parseStatus(output).sort((a, b) => a.path.localeCompare(b.path))
+  const entries = parseStatus(output).sort((a, b) => a.path.localeCompare(b.path))
+  return options.counts === true ? lineCounts(worktreePath, entries) : entries
 }
 
 function looksBinary(buffer: Buffer): boolean {
   return buffer.subarray(0, BINARY_SCAN_BYTES).includes(0)
 }
 
-type FileInWorktree = { size: number; read: () => Promise<Buffer> }
+type FileInWorktree = {
+  real: string
+  isFile: boolean
+  size: number
+  mtimeMs: number
+  read: () => Promise<Buffer>
+}
 
 // The file in the worktree, or null when it is not there. A link that leaves the worktree is refused.
 async function readInside(root: string, path: string): Promise<FileInWorktree | null> {
@@ -185,8 +313,14 @@ async function readInside(root: string, path: string): Promise<FileInWorktree | 
   if (real !== realRoot && !real.startsWith(`${realRoot}${sep}`)) {
     throw new OutsideWorkspaceError(path)
   }
-  const { size } = await stat(real)
-  return { size, read: () => readFile(real) }
+  const stats = await stat(real)
+  return {
+    real,
+    isFile: stats.isFile(),
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    read: () => readFile(real),
+  }
 }
 
 // Both sides of one changed file: the last commit, and the file as it is now.
@@ -228,6 +362,72 @@ export async function readFileDiff(worktreePath: string, change: ChangeEntry): P
     binary: false,
     tooLarge: false,
   }
+}
+
+// Images are sent as they are, so the limit is higher than for text.
+export const MAX_IMAGE_BYTES = 5_000_000
+
+export class NotAnImageError extends Error {
+  constructor(path: string) {
+    super(`${path} is not an image that the dashboard can show`)
+    this.name = 'NotAnImageError'
+  }
+}
+
+export class ImageSideMissingError extends Error {
+  constructor(path: string, side: ImageSide) {
+    super(
+      side === 'original'
+        ? `${path} is not in the last commit`
+        : `${path} is not in the workspace any more`,
+    )
+    this.name = 'ImageSideMissingError'
+  }
+}
+
+export class ImageTooLargeError extends Error {
+  constructor(path: string) {
+    super(`${path} is larger than ${MAX_IMAGE_BYTES / 1_000_000} MB, so it is not shown`)
+    this.name = 'ImageTooLargeError'
+  }
+}
+
+// One side of a changed image: the last commit (`original`) or the file now (`modified`).
+export async function readFileImage(
+  worktreePath: string,
+  change: ChangeEntry,
+  side: ImageSide,
+): Promise<{ type: string; bytes: Buffer }> {
+  const type = imageTypeOf(change.path)
+  if (type === null) {
+    throw new NotAnImageError(change.path)
+  }
+
+  if (side === 'original') {
+    const source = change.originalPath ?? change.path
+    // A file renamed from something that is not an image has no old image to show.
+    const originalType = imageTypeOf(source)
+    if (change.status === 'A' || change.status === 'U' || originalType === null) {
+      throw new ImageSideMissingError(change.path, side)
+    }
+    const size = Number((await git(worktreePath, ['cat-file', '-s', `HEAD:${source}`])).trim())
+    if (size > MAX_IMAGE_BYTES) {
+      throw new ImageTooLargeError(change.path)
+    }
+    return { type: originalType, bytes: await gitBuffer(worktreePath, ['show', `HEAD:${source}`]) }
+  }
+
+  if (change.status === 'D') {
+    throw new ImageSideMissingError(change.path, side)
+  }
+  const file = await readInside(worktreePath, change.path)
+  if (file === null) {
+    throw new ImageSideMissingError(change.path, side)
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new ImageTooLargeError(change.path)
+  }
+  return { type, bytes: await file.read() }
 }
 
 // The graph shows at most this many commits. Older ones are left out.

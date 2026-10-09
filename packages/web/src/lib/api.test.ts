@@ -235,6 +235,38 @@ describe('createApi', () => {
   })
 })
 
+describe('getFileImage', () => {
+  it('sends the token and the encoded path and side, and gives the bytes', async () => {
+    const headers = { 'content-type': 'image/png' }
+    const png = () => new Response(new Uint8Array([1, 2]), { headers })
+    const { calls, fetchFunction } = fakeFetch(png)
+    const api = createApi('secret', fetchFunction)
+
+    const image = await api.getFileImage('T-0001', 'assets/a b.png', 'original')
+
+    expect(calls[0]?.url).toBe(
+      '/api/tasks/T-0001/changes/image?path=assets%2Fa%20b.png&side=original',
+    )
+    expect(calls[0]?.headers.get('authorization')).toBe('Bearer secret')
+    expect(image.type).toBe('image/png')
+    expect([...new Uint8Array(await image.arrayBuffer())]).toEqual([1, 2])
+  })
+
+  it('turns a refusal into an ApiError with the status', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({ error: 'too_large', message: 'logo.png is larger than 5 MB' }, 413),
+    )
+
+    const failure = await createApi('secret', fetchFunction)
+      .getFileImage('T-0001', 'logo.png', 'modified')
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(ApiError)
+    expect((failure as ApiError).status).toBe(413)
+    expect((failure as ApiError).message).toBe('logo.png is larger than 5 MB')
+  })
+})
+
 describe('isUnauthorized', () => {
   it('is false for other errors', () => {
     expect(isUnauthorized(new ApiError(404, 'missing'))).toBe(false)
