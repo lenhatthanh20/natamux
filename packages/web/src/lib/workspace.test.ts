@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from './api'
-import { bannerText, latestQuestion, pullRequestButton, pushButton, tabToOpen } from './workspace'
+import {
+  bannerText,
+  createBlockedReason,
+  latestQuestion,
+  pullRequestButton,
+  pushButton,
+  rowText,
+  tabToOpen,
+  waitReason,
+} from './workspace'
+
+function stored(seq: number, type: string, payload: Record<string, unknown> = {}): StoredEvent {
+  return {
+    seq,
+    accepted: true,
+    event: { taskId: 'T-0001', source: 'system', type, at: '', payload } as StoredEvent['event'],
+  }
+}
 
 function asked(seq: number, payload: Record<string, unknown>): StoredEvent {
   return {
@@ -53,10 +70,48 @@ describe('latestQuestion', () => {
   })
 })
 
-describe('bannerText', () => {
+describe('waitReason and bannerText', () => {
   it('quotes the question, or says where to answer', () => {
-    expect(bannerText('Which runner?')).toBe('The agent asks: Which runner?')
-    expect(bannerText(null)).toBe('The agent is waiting for your answer in Shell 1.')
+    expect(bannerText({ kind: 'asked', question: 'Which runner?' })).toBe(
+      'The agent asks: Which runner?',
+    )
+    expect(bannerText({ kind: 'asked', question: null })).toBe(
+      'The agent is waiting for your answer in its terminal.',
+    )
+    expect(rowText({ kind: 'asked', question: null })).toBe('Waiting for your answer')
+  })
+
+  it('assumes a question while the events load', () => {
+    expect(waitReason(undefined)).toEqual({ kind: 'asked', question: null })
+  })
+
+  it('reads the question of the newest ask', () => {
+    expect(waitReason([asked(1, { message: 'Which runner?' })])).toEqual({
+      kind: 'asked',
+      question: 'Which runner?',
+    })
+  })
+
+  it('shows the reasons of a failed check, and not a failed try that the agent fixes', () => {
+    const failed = stored(2, 'stage.check-failed', { reasons: ['no tests', 'lint'], final: true })
+    expect(waitReason([asked(1, { message: 'Old?' }), failed])).toEqual({
+      kind: 'check-failed',
+      reasons: ['no tests', 'lint'],
+    })
+    expect(bannerText({ kind: 'check-failed', reasons: ['no tests', 'lint'] })).toBe(
+      'The checks failed: no tests; lint',
+    )
+    expect(waitReason([stored(1, 'stage.check-failed', { reasons: ['x'], final: false })])).toEqual(
+      { kind: 'stopped' },
+    )
+  })
+
+  it('says the agent stopped when nothing asked since it started', () => {
+    expect(waitReason([asked(1, { message: 'Old?' }), stored(2, 'agent.resumed')])).toEqual({
+      kind: 'stopped',
+    })
+    expect(waitReason([])).toEqual({ kind: 'stopped' })
+    expect(bannerText({ kind: 'stopped' })).toBe('The agent stopped without saying it is done.')
   })
 })
 
@@ -70,5 +125,16 @@ describe('tabToOpen', () => {
     expect(tabToOpen('review', 'changes')).toBe('changes')
     expect(tabToOpen('ready', 'history')).toBe('history')
     expect(tabToOpen('ready', undefined)).toBe('terminal')
+  })
+})
+
+describe('createBlockedReason', () => {
+  it('needs a name, and a reference for a source other than manual', () => {
+    expect(createBlockedReason(' ', 'manual', '')).toBe('Enter a name')
+    expect(createBlockedReason('Fix', 'manual', '')).toBeUndefined()
+    expect(createBlockedReason('Fix', 'github-issue', ' ')).toBe(
+      'Enter the reference of the context',
+    )
+    expect(createBlockedReason('Fix', 'github-issue', '#4')).toBeUndefined()
   })
 })

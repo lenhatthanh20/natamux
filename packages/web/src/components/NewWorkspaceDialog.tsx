@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
+import { createBlockedReason } from '../lib/workspace'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { Button } from './ui/Button'
 import { Combobox } from './ui/Combobox'
@@ -100,9 +101,11 @@ export function NewWorkspaceDialog({
   const current = branches.data?.current ?? null
   const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo))
 
+  const missing = createBlockedReason(title, source, ref)
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (title.trim() !== '' && !making.isPending) {
+    if (missing === undefined && !making.isPending) {
       making.mutate()
     }
   }
@@ -125,7 +128,7 @@ export function NewWorkspaceDialog({
             size="md"
             shortcut="Mod+Enter"
             busy={making.isPending}
-            disabledReason={title.trim() === '' ? 'Enter a name' : undefined}
+            disabledReason={missing}
           >
             {making.isPending ? 'Making the workspace' : 'Create workspace'}
           </Button>

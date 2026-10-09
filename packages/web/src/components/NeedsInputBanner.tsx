@@ -1,11 +1,10 @@
 import { CircleQuestionMark } from 'lucide-react'
-import { bannerText } from '../lib/workspace'
+import { bannerText, type WaitReason } from '../lib/workspace'
 import { Button } from './ui/Button'
 import { ICON } from './ui/styles'
 
 type NeedsInputBannerProps = {
-  // What the agent asked, or null when the daemon has no text for it.
-  question: string | null
+  reason: WaitReason
   resuming: boolean
   onAnswer: () => void
   onResume: () => void
@@ -13,7 +12,7 @@ type NeedsInputBannerProps = {
 
 // Under the workspace header while the agent waits: the question as text, and what to do.
 export function NeedsInputBanner({
-  question,
+  reason,
   resuming,
   onAnswer,
   onResume,
@@ -25,10 +24,10 @@ export function NeedsInputBanner({
     >
       <CircleQuestionMark size={ICON.md} aria-hidden="true" className="shrink-0 text-signal" />
       <p className="line-clamp-2 min-w-0 flex-1 basis-60 text-ink" data-tip-overflow>
-        {bannerText(question)}
+        {bannerText(reason)}
       </p>
       <div className="flex items-center gap-2">
-        <Button onClick={onAnswer}>Answer in terminal</Button>
+        {reason.kind === 'asked' && <Button onClick={onAnswer}>Answer in terminal</Button>}
         <Button variant="ghost" busy={resuming} onClick={onResume}>
           Resume
         </Button>
