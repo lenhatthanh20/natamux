@@ -319,7 +319,9 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Connect' }))
 }
 
-const reviewTask = makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'review' })
+const reviewTask = makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'review',
+  stage: 'review',
+})
 // A running task is "quiet" after ten minutes, so this one must be recent whenever the tests run.
 const runningTask = makeTask({
   id: 'T-0002',
