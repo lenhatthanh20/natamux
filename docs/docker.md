@@ -12,7 +12,7 @@ Two setups, kept apart:
 | Token | `HELMSMAN_TOKEN`, default `devtoken` | `HELMSMAN_TOKEN`, **required**, long and random |
 | Containers | Run as you (user 1000) | No root, read-only, no capabilities |
 
-Neither setup runs agents yet. They keep tasks, workspaces and the dashboard.
+Neither image has Claude Code, so neither runs a real agent. They keep tasks, stages, workspaces and the dashboard. The development setup can run a fake agent: `scripts/dev.sh seed`.
 
 ## Development (in a codespace)
 
@@ -24,6 +24,7 @@ The dev container has Docker, installs the packages and builds them when the cod
 |---|---|
 | `up` | Starts the containers and waits until the daemon and the dashboard answer |
 | `demo` | `up`, then a task "Demo: changes and history" with a workspace, two commits on a branch that diverges from its base, and changes that are not committed. Run it again and it finds the same task |
+| `seed` | `up` with the daemon set to run `scripts/fake-agent.sh` in place of Claude Code, then tasks at different stages and states (blocked, draft, done, in review, needs input, failed) and fake agents at work. Run it again and it finds the same tasks |
 | `status` | `docker compose ps` |
 | `logs` | Follows the logs |
 | `down` | Stops the containers. Tasks and worktrees stay |

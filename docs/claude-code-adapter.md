@@ -25,14 +25,14 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | running | `agent.asked` | needs input |
 | `PostToolUse` | needs input | `agent.resumed` | running (the permission was answered) |
 | `PreToolUse` | any | none (a sign of life) | unchanged; the tool and its file or command become the task's one-line summary, such as "Edit src/a.ts" |
-| `Stop` | running | `agent.finished` | in review |
-| `Stop` | needs input | `agent.resumed`, `agent.finished` | in review |
+| `Stop` | running | `agent.finished` | needs input |
+| `Stop` | needs input | `agent.resumed`, `agent.finished` | needs input |
 | `StopFailure` | running | `agent.failed` | failed |
 | `StopFailure` | needs input | `agent.resumed`, `agent.failed` | failed |
 
-Everything else is ignored and not logged, so the event log does not fill with calls that change nothing. `idle_prompt` is ignored: `Stop` already moved the task to review.
+Everything else is ignored and not logged, so the event log does not fill with calls that change nothing. `idle_prompt` is ignored: `Stop` already moved the task to needs input.
 
-**A choice to know about:** because `Stop` fires after every answer, a task lands in "in review" at the end of each turn, even when the agent only asked a question in plain text. The dashboard then says "this task is waiting for you", which is true. A person decides whether it is really done (Approve) or needs more (type the next prompt, which resumes it).
+**A choice to know about:** because `Stop` fires after every answer, a task lands in "needs input" at the end of each turn, even when the agent only asked a question in plain text. The dashboard then says "this task is waiting for you", which is true. The stage is done only when the agent runs `helmsman done`; the daemon drops the `Stop` that follows that report, runs the checks, and the stage then waits for approval ("in review") or moves on. A person can also mark the stage as done, or type the next prompt, which resumes it.
 
 ## Which task a hook belongs to
 
@@ -78,7 +78,7 @@ What Helmsman does about it: every hook of a running task, even one that changes
 2026-10-08, Claude Code on a Mac, the daemon in a GitHub codespace, the port forwarded with `gh codespace ports forward 4317:4317`, hooks from `helmsman hooks claude-code`.
 
 - `UserPromptSubmit` on a draft task wrote `task.readied` and `agent.started`, 24 ms apart. The task went from draft to running.
-- `Stop` wrote `agent.finished` and the task went to in review. A prompt typed while in review wrote `agent.resumed`. Three such rounds all matched. Every event had the source `agent` and was accepted.
+- Before stages existed, `Stop` wrote `agent.finished` and the task went to in review (it goes to needs input now). A prompt typed while in review wrote `agent.resumed`. Three such rounds all matched. Every event had the source `agent` and was accepted.
 - An interrupted prompt left the task running (the known gap above).
 - **A proxy can block the hooks.** With a proxy set on the machine, both hooks failed with "proxy refused the connection". Claude Code sends an `http` hook through the proxy, and the docs do not say that loopback is exempt for hooks. `export NO_PROXY="localhost,127.0.0.1"` and `export no_proxy="$NO_PROXY"` before starting `claude` fixed it. Many company machines have a proxy, so a user may need this. A `command` hook that runs `curl --noproxy "*"` is the other way round it.
 - **`--settings` adds to the other hooks, it does not replace them.** Claude Code reported "Ran 2 stop hooks" although these settings define one. The second came from the user's own settings. This is evidence from one session, not a statement in the docs.
