@@ -1,4 +1,5 @@
-import type { EventType } from '@helmsman/core'
+import type { EventType, TaskEvent } from '@helmsman/core'
+import type { StoredEvent } from './api'
 
 // One short sentence for every kind of event. `Record<EventType, …>` makes the compiler ask for a
 // sentence whenever a new event type is added.
@@ -42,4 +43,51 @@ export function formatClock(isoTime: string): string {
     minute: '2-digit',
     second: '2-digit',
   })
+}
+
+const ACTOR: Record<TaskEvent['source'], string> = {
+  human: 'You',
+  agent: 'Agent',
+  git: 'Daemon',
+  ci: 'Daemon',
+  system: 'Daemon',
+}
+
+export function actorOf(source: TaskEvent['source']): string {
+  return ACTOR[source]
+}
+
+export type ActivityLine = {
+  // The first event of the run, which keys the line.
+  seq: number
+  accepted: boolean
+  type: EventType
+  actor: string
+  // How many events in a row were the same.
+  count: number
+  // The newest event of the run: its time is the time of the line.
+  at: string
+}
+
+// Consecutive events of the same kind, from the same actor, become one line with a count, so
+// "Details edited" four times in a row reads as "Details edited ×4". Oldest first in, oldest first out.
+export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
+  const lines: ActivityLine[] = []
+  for (const { seq, accepted, event } of events) {
+    const actor = actorOf(event.source)
+    const last = lines[lines.length - 1]
+    if (last?.type === event.type && last.actor === actor && last.accepted === accepted) {
+      last.count += 1
+      last.at = event.at
+    } else {
+      lines.push({ seq, accepted, type: event.type, actor, count: 1, at: event.at })
+    }
+  }
+  return lines
+}
+
+// "Details edited ×4 · You"
+export function describeLine(line: ActivityLine): string {
+  const times = line.count > 1 ? ` ×${line.count}` : ''
+  return `${describeEvent(line.type)}${times} · ${line.actor}`
 }

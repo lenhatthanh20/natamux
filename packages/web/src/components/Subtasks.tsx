@@ -1,7 +1,9 @@
 import type { Task } from '@helmsman/core'
 import { type FormEvent, useState } from 'react'
+import { DetailSection } from './DetailSection'
 import { StateBadge } from './StateBadge'
-import { button, input, sectionTitle } from './ui/styles'
+import { Button } from './ui/Button'
+import { input } from './ui/styles'
 
 type SubtasksProps = {
   subtasks: readonly Task[]
@@ -24,15 +26,17 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
   }
 
   return (
-    <section aria-label="Subtasks" className="flex flex-col gap-2 border-t border-line pt-4">
-      <h3 className={`flex justify-between ${sectionTitle}`}>
-        Subtasks
-        {subtasks.length > 0 && (
-          <span className="font-normal">
+    <DetailSection
+      id="subtasks"
+      title="Subtasks"
+      aside={
+        subtasks.length > 0 ? (
+          <span className="text-xs text-muted">
             {done} of {subtasks.length} done
           </span>
-        )}
-      </h3>
+        ) : undefined
+      }
+    >
       {subtasks.length > 0 && (
         <ul className="flex flex-col">
           {subtasks.map((task) => (
@@ -40,7 +44,7 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
               <button
                 type="button"
                 onClick={() => onSelect(task.id)}
-                className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-hover"
+                className="focus-inset -mx-2 flex h-7 w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 text-left hover:bg-hover"
               >
                 <span className="font-mono text-xs text-muted">{task.id}</span>
                 <span className="min-w-0 flex-1 truncate">{task.title}</span>
@@ -56,12 +60,12 @@ export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Add a subtask"
           aria-label="New subtask title"
-          className={`${input} h-7 flex-1`}
+          className={`${input} flex-1`}
         />
-        <button type="submit" disabled={busy || title.trim() === ''} className={button()}>
+        <Button type="submit" disabled={busy || title.trim() === ''}>
           Add
-        </button>
+        </Button>
       </form>
-    </section>
+    </DetailSection>
   )
 }

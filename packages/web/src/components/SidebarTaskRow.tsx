@@ -24,9 +24,7 @@ export function SidebarTaskRow({ task, now, note, current, onOpen }: SidebarTask
           <span className="state-dot" data-state={task.state} aria-hidden="true" />
           <span className="sr-only">{STATE_LABEL[task.state]}</span>
           <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
-          <span className="shrink-0 text-xs text-muted">
-            {formatAge(task.updatedAt, now).replace(' ago', '')}
-          </span>
+          <span className="shrink-0 text-xs text-muted">{formatAge(task.updatedAt, now)}</span>
         </span>
         <span className="flex w-full min-w-0 gap-2 pl-4 text-xs text-muted">
           <span className="shrink-0 font-mono">{task.id}</span>

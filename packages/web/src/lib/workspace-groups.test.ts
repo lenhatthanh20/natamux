@@ -1,6 +1,6 @@
 import { type Task, taskSchema } from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
-import { shortBranch, workspaceGroups } from './workspace-groups'
+import { collapsedHint, shortBranch, workspaceGroups } from './workspace-groups'
 
 function makeTask(overrides: Partial<Task>): Task {
   return taskSchema.parse({
@@ -72,5 +72,36 @@ describe('shortBranch', () => {
     expect(shortBranch({ id: 'T-0012', branch: 'helmsman/t-0012-fix-login' })).toBe('fix-login')
     expect(shortBranch({ id: 'T-0012', branch: 'feature/x' })).toBe('feature/x')
     expect(shortBranch({ id: 'T-0012', branch: null })).toBe('')
+  })
+})
+
+describe('collapsedHint', () => {
+  const now = new Date('2026-10-08T09:01:00.000Z')
+  const group = (open: Task[], finished: Task[] = []) => ({ open, finished })
+
+  it('shows a workspace that needs the user, in its own state', () => {
+    const waiting = makeTask({ id: 'T-0001', state: 'review' })
+    expect(collapsedHint(group([makeTask({ id: 'T-0002' }), waiting]), null, now)).toBe('review')
+  })
+
+  it('shows a quiet workspace as one that needs the user', () => {
+    const quiet = makeTask({ state: 'running', updatedAt: '2026-10-08T08:00:00.000Z' })
+    expect(collapsedHint(group([quiet]), null, now)).toBe('needs-input')
+  })
+
+  it('shows the open workspace when nothing waits, finished or not', () => {
+    const running = makeTask({
+      id: 'T-0001',
+      state: 'running',
+      updatedAt: '2026-10-08T09:00:30.000Z',
+    })
+    const done = makeTask({ id: 'T-0002', state: 'done' })
+    expect(collapsedHint(group([running], [done]), 'T-0001', now)).toBe('running')
+    expect(collapsedHint(group([running], [done]), 'T-0002', now)).toBe('done')
+  })
+
+  it('shows nothing when the group hides nothing of interest', () => {
+    const running = makeTask({ state: 'running', updatedAt: '2026-10-08T09:00:30.000Z' })
+    expect(collapsedHint(group([running]), null, now)).toBeNull()
   })
 })
