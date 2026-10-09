@@ -71,12 +71,13 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `context` | context | manual | — |
 | `spec` | agent | manual | Read `context.md`. Write `spec.md`: goal, scope, out of scope, acceptance criteria. Do not change code |
 | `plan` | agent | manual | Read `context.md` and `spec.md`. Write `plan.md`: the steps, the files to change, the tests to add. Do not change code |
-| `test-spec` (parallel) | agent | manual | Read `context.md` and `spec.md`, not the code. Write `test-spec.md`: test cases with input, expected result and edge cases. Do not change code |
+| `test-spec` (parallel) | agent | manual | Read `context.md` and `spec.md`, not the code. Write `test-spec.md`: under a Cases heading, test cases with input, expected result and edge cases. Do not change code |
 | `implement` (parallel) | agent | auto | Read `spec.md` and `plan.md`. Write the tests first, then the code that makes them pass. Commit when done |
 | `review` | review | manual | — |
 | `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests |
 | `release` | release | manual | — |
 
+- **Every agent prompt** ends with "When you are done, run `helmsman done`" (section 3.5).
 - **Gate `manual`:** when the stage output is ready, the state becomes `review` and the task waits for you.
 - **Gate `auto`:** when the stage output is ready, the task moves to the next stage at once.
 - **Gate `auto` and failures:** a failed `testing` stage goes to `failed`. You then retry it, or send the task back to `implement` with the test output as the next prompt.
@@ -108,11 +109,84 @@ Stage files are `context.md`, `spec.md`, `plan.md`, `test-spec.md` and test outp
 - **Without a workspace, and as a copy:** they are in `<data dir>/tasks/T-0001/`.
   - The daemon copies the worktree files there on each approval and before the workspace is removed.
   - A removed workspace does not lose them.
-- **Editing:** you can edit a stage file in the app before you approve it, for example to fix the spec by hand.
+- **Editing:** you can edit a stage file in the app before you approve it, for example to fix the spec by hand. This edits the working copy.
+- **Reading:** the daemon reads the working copy while the worktree exists, else the archived copy.
+- **A task without a worktree yet:** stage files are written straight to `<data dir>/tasks/T-0001/`. When the workspace is made, the daemon copies them into `.helmsman-task/`.
+- **Leaving the machine:** only `spec.md`, when `createIssue` is `on-spec-approved` (section 5). Nothing else is sent anywhere.
 
-### 3.5 Checks
+With the default folders (`<data dir>` = `<repo>/.helmsman/`):
 
-When an `agent` stage ends without its output file, for example the agent stopped to ask a question in plain text, the state becomes `needs-input`, not `review`. The task header says "spec.md is missing".
+```
+<data dir>/
+├── index.sqlite
+├── tasks/
+│   ├── T-0012.md                 the task and its state
+│   ├── T-0012.events.jsonl       its history
+│   └── T-0012/                   archived stage files
+│       ├── context.md
+│       ├── spec.md
+│       ├── plan.md
+│       └── test-spec.md
+└── worktrees/
+    └── <task folder>/            the task's git worktree
+        ├── src/ …
+        └── .helmsman-task/       working stage files, ignored by git
+            ├── context.md
+            ├── spec.md
+            ├── plan.md
+            └── test-spec.md
+```
+
+### 3.5 When a stage is finished
+
+A stage is finished (✓) only after three steps, in this order: the stage reports it is done, the daemon checks the result, and the gate lets it through.
+
+**Step 1: the report.** Who says "done" depends on the kind:
+
+| Kind | Report |
+|---|---|
+| `context` | Manual: you save the text. GitHub issue: `gh issue view` succeeded. Skill or MCP: the agent runs `helmsman done` |
+| `agent` | The agent runs `helmsman done`. The stage prompt ends with that instruction |
+| `review`, `manual` | None; your approval is the report |
+| `testing` | The command exits. With an agent part, the agent runs `helmsman done` first, then the command runs |
+| `release` | The pull request watcher sees the pull request merged |
+
+- `helmsman done` sends `stage.reported`. It reads the task from `HELMSMAN_TASK_ID` and the stage from `HELMSMAN_STAGE`, which the daemon sets in each stage terminal. Today it sends `agent.finished`; that changes.
+- **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `helmsman done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
+
+**Step 2: the checks.** After the report the daemon checks the result itself:
+
+| Stage | Check | Default |
+|---|---|---|
+| Every stage with `output` | The file exists in `.helmsman-task/`, is not empty, and was changed after the stage started (so a file from an earlier round does not count) | On |
+| Every stage with `sections` | The file has a heading for each listed section | See below |
+| `context` | `context.md`, as above | On |
+| `spec` | Sections: Goal, Scope, Out of scope, Acceptance criteria | On |
+| `plan` | Sections: Steps, Files, Tests | On |
+| `test-spec` | Section Cases, with at least one case under it (a `###` heading or a list item) | On |
+| `implement` | At least one new commit on the task branch since the stage started (`requireCommit`) | On |
+| `implement` | No uncommitted changes in the worktree (`requireClean`); `.helmsman-task/` is ignored, so it does not count | On |
+| Any stage with `check` | The command (for example `pnpm typecheck`) exits with 0 | Off |
+| `testing` | The test command exits with 0 | On |
+
+- **A failed check, the first time:** the daemon sends the reasons to the agent as its next prompt, for example "plan.md has no Tests section" or "2 files are not committed". The stage stays `running`.
+- **A failed check, the second time:** the stage moves to `needs-input` and lists the reasons. You can send it to the agent again, edit the file, or **Approve anyway**. Approve anyway is logged with the reasons it skipped.
+- `testing` does not retry by itself: a failed command moves the stage to `failed` (section 3.2).
+
+**Step 3: the gate.**
+- `manual`: the stage moves to `review` ("waiting for approval"). It is finished when you approve.
+- `auto`: it is finished as soon as the checks pass.
+
+**Events and times.** Each step is an event, so the progress view (7.5) can show times and names:
+
+| Event | When |
+|---|---|
+| `stage.started` | The stage begins (`startedAt`) |
+| `stage.reported` | `helmsman done`, Mark as done, or the report of the kind |
+| `stage.check-failed` | A check failed; `payload.reasons` lists why |
+| `stage.approved` / `stage.passed` | The gate let it through (`endedAt`; `approvedBy` for `stage.approved`) |
+
+**Settings.** Each stage can change its checks in `.helmsman.json`: `output`, `sections`, `requireCommit`, `requireClean`, `check`. An empty `sections` list turns the section check off.
 
 ### 3.6 Parallel stages
 
@@ -250,6 +324,7 @@ Stage fields:
 - `prompt`: replaces the default prompt. Placeholders: `{title}`, `{description}`, `{dir}` (the stage file folder), `{ref}` (the context reference).
 - `output`: the file the stage must write (`agent` kind).
 - `command`: the test command (`testing` kind).
+- `sections`, `requireCommit`, `requireClean`, `check`: the checks of 3.5.
 - A group is `{ "id", "name"?, "parallel": [stages] }` (section 3.6).
 
 Other rules:
@@ -268,7 +343,7 @@ Other rules:
   - `applyTaskEvent(position, event, pipeline)`, where `position` is `{ stage, state, lanes }`.
 - `task.ts`: new fields `stage`, `stages`, `lanes`, `stageSince`, `context`, `issue`.
 - `progress.ts`: `stageProgress(task, events, pipeline)` for the progress view (7.5).
-- `events.ts`: new events `stage.approved`, `stage.passed`, `stage.reopened`, `stage.skipped`, `stage.started`, `context.fetched`, `issue.linked`, `issue.created`.
+- `events.ts`: new events `stage.started`, `stage.reported`, `stage.check-failed`, `stage.approved`, `stage.passed`, `stage.reopened`, `stage.skipped`, `context.fetched`, `issue.linked`, `issue.created`.
 - Tests for each move in 3.3, the gates, parallel lanes, the snapshot rule, and the migration in section 8.
 
 ### 7.2 `daemon`
@@ -277,7 +352,9 @@ Other rules:
 - `stage-runner.ts`:
   - Enters a stage: starts the agent or sends it the prompt, or runs the test command, or opens the pull request.
   - Enters a group: one agent per lane, a new terminal for each lane after the first.
-  - Listens to `agent.finished`, finds the lane by `HELMSMAN_STAGE`, checks the output file, and passes or waits at the gate.
+  - Listens to `stage.reported`, finds the lane by `HELMSMAN_STAGE`, runs the checks of 3.5, and passes or waits at the gate.
+  - Listens to `agent.finished` (the `Stop` hook): without a report it moves the stage to `needs-input`.
+- `stage-checks.ts`: the checks of 3.5 (file, sections, commits, clean worktree, `check` command).
 - `stage-files.ts`: the folder rules of 3.4 and the `.git/info/exclude` entry.
 - `context-reader.ts`: the `manual` and `github-issue` sources. `skill` and `mcp` go through `stage-runner`.
 - `issue-linker.ts`: `gh issue create`, and the `Closes #N` line for the pull request body (`workspace-service.openPullRequest`).
@@ -299,6 +376,7 @@ Other rules:
 
 New commands:
 - `helmsman stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal `--stage` comes from `HELMSMAN_STAGE`.
+- `helmsman done` now sends `stage.reported` for the stage of its terminal.
 - `helmsman task link <task> --issue <key> --url <url>`.
 - `helmsman task create --context github-issue:42`.
 
@@ -356,6 +434,7 @@ Task files without `stage` are read like this. Nothing is rewritten until the ta
 
 - **`stages`:** old tasks get `implement`, `review`, `release`. That is the work they had before, so no old task suddenly waits for a spec.
 - **`issue`:** an old task with an "Imported from <url>" line gets `issue` from that line.
+- **Agents started before the change** were not told to run `helmsman done`. Their next `Stop` moves the task to `needs-input` with Mark as done, instead of to review.
 
 ## 9. Build order
 
@@ -374,7 +453,6 @@ Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their co
 
 - **One agent session for all stages, or a new one per stage?** The plan above keeps one session for the main line (less to set up, the agent remembers), and a new one for each extra lane of a group. Bigger tasks may need a fresh session for `implement`. That can be a later stage setting (`session: "new"`).
 - **Two agents in one worktree:** safe in the default group, because Test spec writes only an ignored file. A custom group of two code-writing stages would clash; the settings page warns when a group has more than one stage without `output`.
-- **Agent stops early:** the Claude Code `Stop` hook fires after each turn. An agent that asks a question in plain text "finishes" its turn. The output file check in 3.5 covers the stages that write a file; `implement` has no such check and goes to review as today.
 - **`testing` runs before the pull request,** so CI on the pull request is not part of it. CI stays visible in `release`, as today.
 - **Later:**
   - Jira and Linear issue creation.
