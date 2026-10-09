@@ -1,4 +1,4 @@
-import { type IssueLink, type Task, stagesOf } from '@helmsman/core'
+import { type IssueLink, stagesOf, type Task } from '@helmsman/core'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { GitHubError, type RunGh, runGh } from './git.js'
 import { readStageFile } from './stage-files.js'
@@ -20,7 +20,9 @@ export function issueUrl(output: string): string | undefined {
 
 // The line a pull request body ends with, so the tracker closes the item on merge.
 export function closingLine(issue: IssueLink): string {
-  return issue.provider === 'github' ? `Closes ${issue.key}` : `Tracked in ${issue.key}: ${issue.url}`
+  return issue.provider === 'github'
+    ? `Closes ${issue.key}`
+    : `Tracked in ${issue.key}: ${issue.url}`
 }
 
 type IssueLinkerOptions = {
@@ -84,7 +86,11 @@ export class IssueLinker {
       return
     }
     const tracker = this.tracker(task)
-    if (tracker.type === 'github' && tracker.createIssue === 'on-spec-approved' && task.issue === null) {
+    if (
+      tracker.type === 'github' &&
+      tracker.createIssue === 'on-spec-approved' &&
+      task.issue === null
+    ) {
       // A failure leaves the task without an issue; "Create issue" can try again.
       const work = this.create(task.id).catch((error: unknown) => {
         console.error(`Could not open an issue for ${task.id}: ${String(error)}`)
@@ -101,7 +107,9 @@ export class IssueLinker {
       throw new IssueLinkError(`${taskId} is linked to ${task.issue.key} already`)
     }
     if (this.tracker(task).type !== 'github') {
-      throw new IssueLinkError('This project has no issue tracker. Set tracker.type in .helmsman.json')
+      throw new IssueLinkError(
+        'This project has no issue tracker. Set tracker.type in .helmsman.json',
+      )
     }
     const spec = readStageFile(this.dataDir, task, 'spec.md')
     const body = [
@@ -122,7 +130,11 @@ export class IssueLinker {
       throw new GitHubError(`no issue address in the answer: ${output.trim()}`)
     }
     const number = /\/issues\/(\d+)/.exec(url)?.[1] ?? ''
-    const linked = this.tasks.linkIssue(task.id, { provider: 'github', key: `#${number}`, url }, 'system')
+    const linked = this.tasks.linkIssue(
+      task.id,
+      { provider: 'github', key: `#${number}`, url },
+      'system',
+    )
     this.tasks.recordEvent(task.id, 'issue.created', { url })
     return linked
   }
