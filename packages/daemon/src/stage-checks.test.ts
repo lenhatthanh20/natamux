@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Stage } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { type CheckInput, countItems, runStageChecks } from './stage-checks.js'
+import { createTestRepo } from './git-repo.fixture.js'
+import { type CheckInput, countItems, runStageChecks, shellCommand } from './stage-checks.js'
 
 let folder: string
 
@@ -17,7 +18,7 @@ afterEach(() => {
 })
 
 function input(stage: CheckInput['stage'], startedAt: string | null = null): CheckInput {
-  return { stage, folder, isWorktree: false, startedAt, startHead: null }
+  return { stage, folder, cwd: folder, isWorktree: false, startedAt, startHead: null }
 }
 
 describe('runStageChecks', () => {
@@ -92,6 +93,49 @@ describe('runStageChecks', () => {
 
     const passing = await runStageChecks(input(stage), async () => ({ code: 0, output: '' }))
     expect(passing).toMatchObject({ passed: true, passes: ['pnpm typecheck passed'] })
+  })
+
+  it('runs its commands at the root of the worktree, with no stage folder there', async () => {
+    const repo = createTestRepo()
+    try {
+      const stage: Stage = {
+        id: 'implement',
+        kind: 'agent',
+        gate: 'auto',
+        requireCommit: true,
+        requireClean: true,
+        check: './test.sh',
+      }
+      const ran: string[] = []
+      const result = await runStageChecks(
+        {
+          stage,
+          folder: join(repo.dir, '.helmsman-task'),
+          cwd: repo.dir,
+          isWorktree: true,
+          startedAt: null,
+          startHead: null,
+        },
+        async (_command, cwd) => {
+          ran.push(cwd)
+          return { code: 0, output: '' }
+        },
+      )
+      expect(result.reasons).toEqual([])
+      expect(ran).toEqual([repo.dir])
+    } finally {
+      repo.cleanup()
+    }
+  })
+})
+
+describe('shellCommand', () => {
+  it('uses sh on POSIX and cmd.exe on Windows', () => {
+    expect(shellCommand('make test', 'linux')).toEqual({ file: 'sh', args: ['-c', 'make test'] })
+    expect(shellCommand('make test', 'win32')).toEqual({
+      file: 'cmd.exe',
+      args: ['/d', '/s', '/c', '"make test"'],
+    })
   })
 })
 

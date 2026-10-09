@@ -16,7 +16,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
-import { type AgentRunner, TaskWaitingError } from './agent-runner.js'
+import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
@@ -33,7 +33,12 @@ import {
   StageFileError,
   writeStageFile,
 } from './stage-files.js'
-import { STAGE_ACTIONS, StageActionError, type StageRunner } from './stage-runner.js'
+import {
+  STAGE_ACTIONS,
+  StageActionError,
+  StageInputError,
+  type StageRunner,
+} from './stage-runner.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
 import {
@@ -84,7 +89,8 @@ const newWorkspaceBodySchema = z.object({
   title: z.string().trim().min(1).max(200),
   repo: repoIdSchema.optional(),
   base: z.string().min(1).max(255).optional(),
-  agent: z.string().min(1).max(64).optional(),
+  // The first stage starts at once, so it must be an agent the daemon can start.
+  agent: z.enum(LAUNCHABLE_AGENTS).optional(),
   prompt: z.string().trim().max(20_000).optional(),
   context: taskContextSchema.optional(),
 })
@@ -197,7 +203,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (
       error instanceof RepoInputError ||
       error instanceof SettingsInputError ||
-      error instanceof StageFileError
+      error instanceof StageFileError ||
+      error instanceof StageInputError
     ) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })
     }
@@ -376,8 +383,6 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.delete('/tasks/:id/workspace', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const query = removeWorkspaceQuerySchema.parse(request.query)
-    // A shell that runs in the folder would keep files open while git removes it.
-    options.terminals.close(id)
     archiveStageFiles(options.dataDir, options.service.getTask(id))
     return options.workspaces.remove(id, { deleteBranch: query.deleteBranch === 'true' })
   })
@@ -428,6 +433,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { text } = messageBodySchema.parse(request.body)
     options.service.getTask(id)
+    // Pasted into a shell, the lines of the comment would run as commands.
+    if (!options.stages.agentRuns(id, MAIN_TERMINAL)) {
+      throw new StageActionError(`No agent runs in the terminal of ${id}. Start the agent first`)
+    }
     options.terminals.paste(id, text)
     return { task: options.service.recordReviewComment(id, text) }
   })
