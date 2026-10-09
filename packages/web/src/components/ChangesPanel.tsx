@@ -8,9 +8,6 @@ import { useStoredFlag } from '../hooks/useStoredFlag'
 import { useAppEvent } from '../lib/app-events'
 import { fileOrder } from '../lib/change-tree'
 import {
-  CHANGE_LABEL,
-  countLines,
-  splitPath,
   stepFile,
   wholeFileKind,
   wrapsByDefault,
@@ -39,15 +36,6 @@ const SIDE_BY_SIDE_FROM = 720
 // Under this width the layout switch shows icons only.
 const FULL_LABELS_FROM = 960
 const NO_CHANGES: ChangeEntry[] = []
-
-const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
-  M: 'text-modified',
-  A: 'text-add',
-  U: 'text-add',
-  D: 'text-remove',
-  C: 'text-remove',
-  R: 'text-renamed',
-}
 
 type ChangesPanelProps = {
   taskId: string
@@ -245,7 +233,6 @@ export function ChangesPanel({
   const [showMoves, setShowMoves] = useStoredFlag('helmsman.diff-show-moves', false)
   const [wrapProse, setWrapProse] = useStoredFlag('helmsman.diff-wrap-prose', true)
   const [wrapCode, setWrapCode] = useStoredFlag('helmsman.diff-wrap-code', false)
-  const [wrapChoice, setWrapChoice] = useState<boolean | null>(null)
   // The SVG file whose image shows instead of its text.
   const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -515,99 +502,5 @@ export function ChangesPanel({
       {diff}
       {!wide && commitBox}
     </div>
-  )
-}
-
-function FileRow({
-  entry,
-  selected,
-  onSelect,
-}: {
-  entry: ChangeEntry
-  selected: boolean
-  onSelect: () => void
-}) {
-  const { folder, name } = splitPath(entry.path)
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-current={selected}
-        className="focus-inset flex h-(--row-h) w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover aria-[current=true]:bg-selected"
-      >
-        <span
-          data-tip={CHANGE_LABEL[entry.status]}
-          className={`flex size-4 shrink-0 items-center justify-center font-mono text-xs font-semibold ${LETTER_COLOR[entry.status]}`}
-        >
-          {entry.status}
-        </span>
-        <span className="shrink-0 font-medium">{name}</span>
-        {folder !== '' && (
-          // The folder loses its start when it is long: the end names the place.
-          <span
-            data-tip={entry.path}
-            className="min-w-0 flex-1 truncate text-xs text-muted"
-            style={{ direction: 'rtl', textAlign: 'left' }}
-          >
-            {`${folder}‎`}
-          </span>
-        )}
-      </button>
-    </li>
-  )
-}
-
-function DiffTitle({ entry }: { entry: ChangeEntry }) {
-  const { folder, name } = splitPath(entry.path)
-  const badge =
-    entry.status === 'U' || entry.status === 'A'
-      ? 'New file'
-      : entry.status === 'D'
-        ? 'Deleted'
-        : entry.status === 'R' && entry.originalPath !== null
-          ? `Renamed from ${entry.originalPath}`
-          : null
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span data-tip-overflow data-tip={entry.path} className="min-w-0 truncate font-mono text-xs">
-        <span className="text-muted">{folder}</span>
-        <span className="text-ink">{name}</span>
-      </span>
-      {badge !== null && (
-        <span className="max-w-60 shrink-0 truncate rounded border border-line px-1.5 text-xs text-ink-2">
-          {badge}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function DiffCounts({
-  path,
-  file,
-  stats,
-}: {
-  path: string
-  file: FileDiff | undefined
-  stats: { added: number; removed: number } | null
-}) {
-  let counts = stats
-  if (file !== undefined && file.path === path) {
-    const kind = wholeFileKind(file.status)
-    if (kind === 'added') {
-      counts = { added: countLines(file.modified ?? ''), removed: 0 }
-    } else if (kind === 'removed') {
-      counts = { added: 0, removed: countLines(file.original ?? '') }
-    }
-  }
-  if (counts === null) {
-    return null
-  }
-  return (
-    <span className="font-mono text-xs whitespace-nowrap">
-      <span className="text-add">+{counts.added}</span>{' '}
-      <span className="text-remove">−{counts.removed}</span>
-    </span>
   )
 }

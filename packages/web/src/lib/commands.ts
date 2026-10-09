@@ -459,14 +459,6 @@ export const COMMANDS: readonly Command[] = [
     hidden: true,
   },
   {
-    id: 'diff.change',
-    title: 'Previous or next change in a file',
-    category: 'Workspace',
-    shortcuts: ['Alt+F5', 'F7'],
-    group: 'Diff',
-    hidden: true,
-  },
-  {
     id: 'diff.comment',
     title: 'Comment on the file for the agent',
     category: 'Workspace',

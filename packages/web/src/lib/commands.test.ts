@@ -87,6 +87,7 @@ describe('the command registry', () => {
     expect(shortcutOf('diff.previousChange')).toBe('Shift+Alt+F5')
     expect(commandById('diff.accessible')?.shortcuts).toEqual(['F7', 'Shift+F7'])
     expect(commandById('diff.accessible')?.run).toBeUndefined()
+    expect(commandById('diff.change')).toBeUndefined()
     for (const id of ['diff.nextChange', 'diff.previousChange']) {
       const command = commandById(id)
       expect(command && runnable(command, context().context), id).toBe(false)
