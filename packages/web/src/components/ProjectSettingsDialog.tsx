@@ -26,6 +26,25 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
   const [problem, setProblem] = useState<string | null>(null)
   const value = text ?? (loaded.data === undefined ? '' : format(loaded.data.settings))
 
+  const broken = loaded.data?.error != null
+  // The editor holds the defaults when the file is invalid, so a save would replace the user's
+  // file. Ask first. Ignore a save while the settings load or a save runs.
+  const submit = () => {
+    if (loaded.data === undefined || saving.isPending) {
+      return
+    }
+    if (
+      broken &&
+      text === null &&
+      !window.confirm(
+        `${loaded.data.path} has a problem, so this editor shows the defaults. Saving replaces your file with them. Save anyway?`,
+      )
+    ) {
+      return
+    }
+    saving.mutate()
+  }
+
   const saving = useMutation({
     mutationFn: async () => {
       let raw: unknown
@@ -57,13 +76,17 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
       size="lg"
       busy={saving.isPending}
       onClose={onClose}
-      onSubmit={() => saving.mutate()}
+      onSubmit={submit}
       footer={
         <>
           <Button
             variant="ghost"
             size="md"
+            disabled={loaded.data === undefined}
             onClick={() => {
+              if (!window.confirm('Replace the text with the default settings?')) {
+                return
+              }
               setText(format(DEFAULT_PROJECT_SETTINGS))
               setProblem(null)
             }}
@@ -79,7 +102,7 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
             size="md"
             shortcut="Mod+Enter"
             busy={saving.isPending}
-            onClick={() => saving.mutate()}
+            onClick={submit}
           >
             Save
           </Button>

@@ -1,10 +1,11 @@
 import { DEFAULT_PIPELINE, type Stage } from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
-import { finishedWhen, formatDuration, stageCount } from './stage-view'
+import { finishedWhen, formatDuration, stageCount, stepTime } from './stage-view'
 
 describe('formatDuration', () => {
   it.each([
+    ['2026-10-09T09:00:00Z', '2026-10-09T09:00:40Z', '<1m'],
     ['2026-10-09T09:00:00Z', '2026-10-09T09:04:00Z', '4m'],
     ['2026-10-09T09:00:00Z', '2026-10-09T10:05:00Z', '1h 5m'],
     ['2026-10-09T09:00:00Z', '2026-10-09T11:00:00Z', '2h'],
@@ -48,5 +49,24 @@ describe('stageCount', () => {
       done: 2,
       total: 3,
     })
+  })
+})
+
+describe('stepTime', () => {
+  const now = new Date('2026-10-09T10:00:00Z')
+  const lane = (startedAt: string | null, endedAt: string | null, status = 'done') =>
+    ({ startedAt, endedAt, status }) as never
+  it('spans from the first start to the last end of side by side stages', () => {
+    const a = lane('2026-10-09T09:00:00Z', '2026-10-09T09:10:00Z')
+    const b = lane('2026-10-09T09:02:00Z', '2026-10-09T09:30:00Z')
+    expect(stepTime([a, b], now)).toBe('30m')
+  })
+  it('counts up to now while a stage runs', () => {
+    const a = lane('2026-10-09T09:00:00Z', null, 'current')
+    expect(stepTime([a], now)).toBe('1h so far')
+  })
+  it('is null before a start, or when a finished stage has no end', () => {
+    expect(stepTime([lane(null, null, 'upcoming')], now)).toBeNull()
+    expect(stepTime([lane('2026-10-09T09:00:00Z', null)], now)).toBeNull()
   })
 })
