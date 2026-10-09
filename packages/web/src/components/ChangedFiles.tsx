@@ -31,6 +31,7 @@ import {
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
 import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey } from '../lib/roving'
+import { FileIcon } from './FileIcon'
 import { IconButton } from './ui/IconButton'
 import { ICON } from './ui/styles'
 
@@ -330,7 +331,9 @@ export function ChangedFiles({
                   aria-hidden="true"
                   className="flex size-4 shrink-0 items-center justify-center text-muted"
                 >
-                  {!isFile && (
+                  {node.kind === 'file' ? (
+                    <FileIcon path={node.key} />
+                  ) : (
                     <ChevronRight
                       size={ICON.xs}
                       className={`motion-safe:transition-transform ${row.expanded ? 'rotate-90' : ''}`}
@@ -338,6 +341,7 @@ export function ChangedFiles({
                   )}
                 </span>
               )}
+              {mode === 'list' && node.kind === 'file' && <FileIcon path={node.key} />}
               {node.kind === 'file' ? (
                 <FileContent entry={node.entry} name={node.name} showFolder={mode === 'list'} />
               ) : (
