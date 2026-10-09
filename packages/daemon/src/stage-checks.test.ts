@@ -24,18 +24,29 @@ describe('runStageChecks', () => {
   it('passes a written output with its sections', async () => {
     writeFileSync(join(folder, 'plan.md'), '# Steps\n1. a\n## Files\n- a.ts\n## Tests\n- one\n')
     const result = await runStageChecks(
-      input({ id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md', sections: ['Steps', 'Files', 'Tests'] }),
+      input({
+        id: 'plan',
+        kind: 'agent',
+        gate: 'manual',
+        output: 'plan.md',
+        sections: ['Steps', 'Files', 'Tests'],
+      }),
     )
     expect(result).toEqual({
       passed: true,
       reasons: [],
-      passes: ['plan.md was written after the stage started', 'Sections Steps, Files, Tests are there'],
+      passes: [
+        'plan.md was written after the stage started',
+        'Sections Steps, Files, Tests are there',
+      ],
     })
   })
 
   it('fails a missing, empty or old output', async () => {
     const stage: Stage = { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' }
-    expect((await runStageChecks(input(stage))).reasons).toEqual(['.helmsman-task/spec.md is missing'])
+    expect((await runStageChecks(input(stage))).reasons).toEqual([
+      '.helmsman-task/spec.md is missing',
+    ])
 
     writeFileSync(join(folder, 'spec.md'), '  \n')
     expect((await runStageChecks(input(stage))).reasons).toEqual(['spec.md is empty'])
@@ -56,7 +67,9 @@ describe('runStageChecks', () => {
       sections: ['Cases'],
     }
     writeFileSync(join(folder, 'test-spec.md'), '# Cases\n\nNone yet.\n')
-    expect((await runStageChecks(input(stage))).reasons).toEqual(['test-spec.md has no case under Cases'])
+    expect((await runStageChecks(input(stage))).reasons).toEqual([
+      'test-spec.md has no case under Cases',
+    ])
 
     writeFileSync(join(folder, 'test-spec.md'), '# Cases\n### Empty list\nx\n### Commas\ny\n')
     expect((await runStageChecks(input(stage))).passes).toContain('Section Cases has 2 cases')
@@ -71,7 +84,10 @@ describe('runStageChecks', () => {
 
   it('runs the check command and keeps the end of its output', async () => {
     const stage: Stage = { id: 'implement', kind: 'agent', gate: 'auto', check: 'pnpm typecheck' }
-    const failing = await runStageChecks(input(stage), async () => ({ code: 2, output: 'error TS1' }))
+    const failing = await runStageChecks(input(stage), async () => ({
+      code: 2,
+      output: 'error TS1',
+    }))
     expect(failing.reasons).toEqual(['pnpm typecheck failed with exit code 2:\nerror TS1'])
 
     const passing = await runStageChecks(input(stage), async () => ({ code: 0, output: '' }))

@@ -100,7 +100,10 @@ const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000
 const stageBodySchema = z.object({
   action: z.enum(STAGE_ACTIONS),
   stage: z.string().min(1).max(40).optional(),
-  terminal: z.string().regex(/^[1-9]\d{0,2}$/).optional(),
+  terminal: z
+    .string()
+    .regex(/^[1-9]\d{0,2}$/)
+    .optional(),
   to: z.string().min(1).max(40).optional(),
   reason: z.string().trim().min(1).max(20_000).optional(),
 })

@@ -24,7 +24,15 @@ import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 import type { TaskService } from './task-service.js'
 import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
 
-export const STAGE_ACTIONS = ['approve', 'reopen', 'skip', 'pass', 'fail', 'report', 'start'] as const
+export const STAGE_ACTIONS = [
+  'approve',
+  'reopen',
+  'skip',
+  'pass',
+  'fail',
+  'report',
+  'start',
+] as const
 export type StageAction = (typeof STAGE_ACTIONS)[number]
 
 export type StageActionInput = {
@@ -251,7 +259,12 @@ export class StageRunner {
           return
         case 'agent': {
           const prompt = stagePrompt(stage, task)
-          await this.startAgent(task, step, stage, reason ? `${prompt}\nWhat to change: ${reason}` : prompt)
+          await this.startAgent(
+            task,
+            step,
+            stage,
+            reason ? `${prompt}\nWhat to change: ${reason}` : prompt,
+          )
           return
         }
         case 'testing':
@@ -446,7 +459,10 @@ export class StageRunner {
     }
     const plan: Record<typeof action, { type: TaskEvent['type']; states: TaskState[] }> = {
       approve: { type: 'stage.approved', states: ['review', 'needs-input'] },
-      skip: { type: 'stage.skipped', states: ['draft', 'ready', 'running', 'needs-input', 'review'] },
+      skip: {
+        type: 'stage.skipped',
+        states: ['draft', 'ready', 'running', 'needs-input', 'review'],
+      },
       pass: { type: 'stage.passed', states: ['ready', 'running', 'review'] },
       fail: { type: 'stage.failed', states: ['running'] },
     }
@@ -535,7 +551,8 @@ export class StageRunner {
       return
     }
     // An agent gets one more try; a stage that no agent works on waits for you at once.
-    const agentWorks = stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)
+    const agentWorks =
+      stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)
     const final = !agentWorks || start.failures >= 1
     this.tasks.applyEvent(taskId, {
       source: 'system',
