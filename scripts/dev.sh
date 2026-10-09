@@ -134,10 +134,23 @@ seed() {
   fi
 
   new_task() { cli task create "$@" --json | pick 'data.id'; }
+  # A new task starts its Context stage and waits in review for approval. A prompt typed to the
+  # agent takes it up again, so the fake agent works on the prompt in that stage.
+  wait_for_review() {
+    local i
+    for i in $(seq 1 30); do
+      [ "$(cli task show "$1" --json | pick 'data.state')" = review ] && return
+      sleep 1
+    done
+    echo "$1 did not reach review in 30 seconds" >&2
+  }
   start_agent() {
-    cli event "$1" task.readied >/dev/null
-    cli workspace create "$1" >/dev/null
-    cli agent start "$1" --prompt "$2" >/dev/null
+    wait_for_review "$1"
+    cli workspace create "$1"
+    cli agent start "$1" --prompt "$2"
+  }
+  override() {
+    cli event "$1" state.overridden --payload "$2"
   }
 
   local palette board panes token csv push windows electron release done_task
@@ -160,15 +173,11 @@ seed() {
   start_agent "$csv" "Add a CSV export button to the task table."
   start_agent "$push" "fail: Retry a push when the network drops."
 
-  cli event "$windows" task.readied >/dev/null
-  cli event "$windows" task.blocked --payload '{"reason":"Needs a Windows runner"}' >/dev/null
-  cli event "$electron" task.readied >/dev/null
-  cli event "$release" task.readied >/dev/null
+  override "$windows" '{"to":"blocked"}'
+  override "$electron" '{"to":"draft"}'
   api_post /tasks "{\"title\":\"Write the changelog\",\"parentId\":\"$release\"}"
   api_post /tasks "{\"title\":\"Tag the release\",\"parentId\":\"$release\"}"
-  for type in task.readied agent.started agent.finished review.approved; do
-    cli event "$done_task" "$type" >/dev/null
-  done
+  override "$done_task" '{"to":"done","stage":"release"}'
 
   echo
   echo "Seeded. Six agents start now: three keep working, one asks a question, one ends its"

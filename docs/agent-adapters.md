@@ -14,7 +14,7 @@ Four signals are enough to drive every state in the task state machine:
 |---|---|
 | The user sent a prompt, or the agent started working | running |
 | The agent waits for the user (a permission, a question) | needs input |
-| The agent ended its turn | in review |
+| The agent ended its turn | needs input (the stage is done only when the agent runs `helmsman done`; then the checks run) |
 | The agent failed | failed |
 
 ## How each agent can send them
