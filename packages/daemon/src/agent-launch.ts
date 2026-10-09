@@ -164,9 +164,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         : `GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings} ${command.join(' ')}`
     }
     case 'copilot':
-      return [options.program, ...extra, ...(prompt.length > 0 ? ['-i', ...prompt] : [])].join(
-        ' ',
-      )
+      return [options.program, ...extra, ...(prompt.length > 0 ? ['-i', ...prompt] : [])].join(' ')
     case 'cursor':
       return [options.program, ...extra, ...prompt].join(' ')
   }
@@ -187,8 +185,13 @@ export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boo
       return false
     }
   }
-  mkdirSync(dirname(target), { recursive: true })
-  writeFileSync(target, file.content)
+  try {
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, file.content)
+  } catch {
+    // A folder that cannot be written: the agent still starts, followed by its terminal only.
+    return false
+  }
   excludeFromGit(workspace, `/${file.path}`)
   return true
 }

@@ -55,7 +55,11 @@ export class GenericSignals {
 
   // Reads the terminal of an agent that just started, for a shell that does not know it.
   watchLaunch(launch: AgentLaunch): void {
-    this.launches.set(`${launch.taskId}/${launch.terminal}`, { ...launch, at: this.now(), text: '' })
+    this.launches.set(`${launch.taskId}/${launch.terminal}`, {
+      ...launch,
+      at: this.now(),
+      text: '',
+    })
   }
 
   onOutput(taskId: string, terminal: string, data: string): void {

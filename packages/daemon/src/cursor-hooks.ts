@@ -46,9 +46,19 @@ function summaryOf(input: CursorInput, cwd: string | undefined): string | undefi
       : {}
   switch (input.hook_event_name) {
     case 'beforeShellExecution':
-      return toolSummary({ hook_event_name: 'Shell', tool_name: 'Shell', tool_input: { command: input.command }, cwd })
+      return toolSummary({
+        hook_event_name: 'Shell',
+        tool_name: 'Shell',
+        tool_input: { command: input.command },
+        cwd,
+      })
     case 'preToolUse':
-      return toolSummary({ hook_event_name: 'preToolUse', tool_name: input.tool_name, tool_input: toolInput, cwd })
+      return toolSummary({
+        hook_event_name: 'preToolUse',
+        tool_name: input.tool_name,
+        tool_input: toolInput,
+        cwd,
+      })
     case 'beforeSubmitPrompt':
       return 'Reading the prompt'
     default:

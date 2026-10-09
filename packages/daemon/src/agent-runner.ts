@@ -77,7 +77,8 @@ export class AgentRunner {
     this.terminals = options.terminals
     this.claudeSettingsPath = options.claudeSettingsPath
     this.geminiSettingsPath =
-      options.geminiSettingsPath ?? join(dirname(options.claudeSettingsPath), 'gemini-settings.json')
+      options.geminiSettingsPath ??
+      join(dirname(options.claudeSettingsPath), 'gemini-settings.json')
     const given = { ...options.programs }
     given['claude-code'] ??= options.claudeCommand
     given.copilot ??= options.copilotCommand

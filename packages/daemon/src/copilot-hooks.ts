@@ -45,7 +45,9 @@ function toolArgs(value: unknown): Record<string, unknown> {
   if (typeof value === 'string') {
     try {
       const parsed: unknown = JSON.parse(value)
-      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {}
+      return typeof parsed === 'object' && parsed !== null
+        ? (parsed as Record<string, unknown>)
+        : {}
     } catch {
       return {}
     }

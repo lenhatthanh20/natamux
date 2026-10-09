@@ -95,7 +95,7 @@ describe('GenericSignals', () => {
       now: () => clock,
       settingsOf: () => DEFAULT_PROJECT_SETTINGS,
     })
-    const task = staged.createTask({ title: 'Export', agent: 'codex' })
+    const task = staged.createTask({ title: 'Export', agent: 'cursor' })
     staged.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
