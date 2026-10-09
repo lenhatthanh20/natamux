@@ -30,7 +30,11 @@ export function DocsTab({
   writeFile,
 }: DocsTabProps) {
   const queryClient = useQueryClient()
-  const files = useQuery({ queryKey: ['stage-files', taskId], queryFn: loadFiles, refetchInterval: 10_000 })
+  const files = useQuery({
+    queryKey: ['stage-files', taskId],
+    queryFn: loadFiles,
+    refetchInterval: 10_000,
+  })
   const names = (files.data ?? []).map((entry) => entry.name)
   const current = file !== null && names.includes(file) ? file : (names[0] ?? null)
   const text = useQuery({
@@ -68,7 +72,8 @@ export function DocsTab({
   if (names.length === 0) {
     return (
       <p className="p-4 text-muted">
-        No stage files yet. The Context stage writes context.md, and each stage after it adds its own.
+        No stage files yet. The Context stage writes context.md, and each stage after it adds its
+        own.
       </p>
     )
   }
@@ -76,7 +81,10 @@ export function DocsTab({
   const editing = draft !== null
   return (
     <div className="flex min-h-0 flex-1">
-      <nav aria-label="Stage files" className="flex w-52 shrink-0 flex-col gap-0.5 border-r border-line p-2">
+      <nav
+        aria-label="Stage files"
+        className="flex w-52 shrink-0 flex-col gap-0.5 border-r border-line p-2"
+      >
         {(files.data ?? []).map((entry) => (
           <button
             key={entry.name}
@@ -102,12 +110,22 @@ export function DocsTab({
               <Button size="xs" variant="ghost" onClick={() => setDraft(null)}>
                 Cancel
               </Button>
-              <Button size="xs" variant="primary" busy={save.isPending} onClick={() => save.mutate(draft)}>
+              <Button
+                size="xs"
+                variant="primary"
+                busy={save.isPending}
+                onClick={() => save.mutate(draft)}
+              >
                 Save
               </Button>
             </>
           ) : (
-            <Button size="xs" variant="secondary" disabled={text.data === undefined} onClick={() => setDraft(text.data ?? '')}>
+            <Button
+              size="xs"
+              variant="secondary"
+              disabled={text.data === undefined}
+              onClick={() => setDraft(text.data ?? '')}
+            >
               Edit
             </Button>
           )}

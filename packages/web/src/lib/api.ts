@@ -422,9 +422,13 @@ export function createApi(
     },
 
     async writeStageFile(taskId: string, name: string, text: string): Promise<void> {
-      await request('PUT', `/tasks/${encodeURIComponent(taskId)}/files/${encodeURIComponent(name)}`, {
-        text,
-      })
+      await request(
+        'PUT',
+        `/tasks/${encodeURIComponent(taskId)}/files/${encodeURIComponent(name)}`,
+        {
+          text,
+        },
+      )
     },
 
     async createIssue(taskId: string): Promise<Task> {
@@ -443,7 +447,9 @@ export function createApi(
     },
 
     async saveSettings(repo: string, raw: unknown): Promise<ProjectSettings> {
-      const body = asRecord(await request('PUT', `/repos/${encodeURIComponent(repo)}/settings`, raw))
+      const body = asRecord(
+        await request('PUT', `/repos/${encodeURIComponent(repo)}/settings`, raw),
+      )
       return projectSettingsSchema.parse(body.settings)
     },
 

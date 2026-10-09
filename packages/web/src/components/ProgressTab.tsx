@@ -71,8 +71,14 @@ export function ProgressTab({
   createIssue,
   onOpenFile,
 }: ProgressTabProps) {
-  const settings = useQuery({ queryKey: ['settings', task.repo ?? 'default'], queryFn: loadSettings })
-  const events = useQuery({ queryKey: ['stage-events', task.id, task.updatedAt], queryFn: loadEvents })
+  const settings = useQuery({
+    queryKey: ['settings', task.repo ?? 'default'],
+    queryFn: loadSettings,
+  })
+  const events = useQuery({
+    queryKey: ['stage-events', task.id, task.updatedAt],
+    queryFn: loadEvents,
+  })
   const files = useQuery({ queryKey: ['stage-files', task.id, task.updatedAt], queryFn: loadFiles })
   const [sendingBack, setSendingBack] = useState<StageProgress | null>(null)
 
@@ -128,10 +134,20 @@ export function ProgressTab({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 p-4">
-        <Overview task={task} now={now} steps={steps} progress={progress} count={count} sentBack={sentBackCount(accepted)} />
+        <Overview
+          task={task}
+          now={now}
+          steps={steps}
+          progress={progress}
+          count={count}
+          sentBack={sentBackCount(accepted)}
+        />
 
         <div className="flex flex-wrap items-start gap-4">
-          <ol className="m-0 flex min-w-0 flex-[999_1_560px] list-none flex-col p-0" aria-label="Stages">
+          <ol
+            className="m-0 flex min-w-0 flex-[999_1_560px] list-none flex-col p-0"
+            aria-label="Stages"
+          >
             {steps.map((step, index) => {
               const stages = stagesOf(step)
               const first = byId.get(stages[0]?.id ?? '')
@@ -141,9 +157,11 @@ export function ProgressTab({
                   ? 'current'
                   : (first?.status ?? 'upcoming')
                 : (first?.status ?? 'upcoming')
-              const groupState = isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
+              const groupState =
+                isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
               const next = steps[index + 1]
-              const nextFirst = next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
+              const nextFirst =
+                next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
               return (
                 <li key={step.id} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3">
                   <div className="flex flex-col items-center pt-3">
@@ -201,7 +219,10 @@ export function ProgressTab({
             })}
           </ol>
 
-          <aside aria-label="Task facts" className="flex min-w-0 max-w-[380px] flex-[1_1_280px] flex-col gap-3">
+          <aside
+            aria-label="Task facts"
+            className="flex min-w-0 max-w-[380px] flex-[1_1_280px] flex-col gap-3"
+          >
             <section className={`${CARD} p-4`}>
               <h2 className="m-0 mb-3 text-sm font-semibold">Context and issue</h2>
               <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
@@ -215,14 +236,24 @@ export function ProgressTab({
                 <dd className="m-0 truncate">
                   {task.issue === null ? (
                     settings.data.settings.tracker.type === 'github' && open ? (
-                      <Button size="xs" variant="secondary" busy={issue.isPending} onClick={() => issue.mutate()}>
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        busy={issue.isPending}
+                        onClick={() => issue.mutate()}
+                      >
                         Create issue
                       </Button>
                     ) : (
                       <span className="text-muted">None</span>
                     )
                   ) : (
-                    <a href={task.issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link">
+                    <a
+                      href={task.issue.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-link"
+                    >
                       {task.issue.key}
                       <ExternalLink size={12} aria-hidden="true" />
                     </a>
@@ -254,16 +285,21 @@ export function ProgressTab({
                   .reverse()
                   .slice(0, 8)
                   .map(({ seq, event }) => (
-                  <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
-                    <span className="text-xs text-muted tabular-nums">{formatAge(event.at, now)}</span>
-                    <span className="truncate">
-                      {describeEvent(event.type)}
-                      {typeof event.payload.stage === 'string' ? (
-                        <span className="text-muted"> · {byId.get(event.payload.stage)?.name ?? event.payload.stage}</span>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
+                    <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
+                      <span className="text-xs text-muted tabular-nums">
+                        {formatAge(event.at, now)}
+                      </span>
+                      <span className="truncate">
+                        {describeEvent(event.type)}
+                        {typeof event.payload.stage === 'string' ? (
+                          <span className="text-muted">
+                            {' '}
+                            · {byId.get(event.payload.stage)?.name ?? event.payload.stage}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
               </ul>
             </section>
           </aside>
@@ -323,7 +359,10 @@ function Overview({
         {task.stageSince !== null && task.state !== 'done' && (
           <Figure value={formatDuration(task.stageSince, now)} label="in this stage" />
         )}
-        <Figure value={String(sentBack)} label={sentBack === 1 ? 'time sent back' : 'times sent back'} />
+        <Figure
+          value={String(sentBack)}
+          label={sentBack === 1 ? 'time sent back' : 'times sent back'}
+        />
       </div>
       <div>
         <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
@@ -331,7 +370,11 @@ function Overview({
             const ids = stagesOf(step).map((stage) => stage.id)
             const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
             return (
-              <span key={step.id} className="flex min-w-2.5 flex-col gap-0.5" style={{ flex: `${weight} 1 0` }}>
+              <span
+                key={step.id}
+                className="flex min-w-2.5 flex-col gap-0.5"
+                style={{ flex: `${weight} 1 0` }}
+              >
                 {ids.map((id) => (
                   <Segment key={id} entry={byId.get(id)} />
                 ))}
@@ -347,7 +390,11 @@ function Overview({
               .map((entry) => (entry === undefined ? null : stageTime(entry, now)))
               .find((value) => value !== null)
             return (
-              <span key={step.id} className="min-w-2.5 overflow-hidden text-xs leading-4" style={{ flex: `${weight} 1 0` }}>
+              <span
+                key={step.id}
+                className="min-w-2.5 overflow-hidden text-xs leading-4"
+                style={{ flex: `${weight} 1 0` }}
+              >
                 <b className="block truncate font-medium text-ink-2">
                   {step.name ?? entries.map((entry) => entry?.name).join(' and ')}
                 </b>
@@ -377,7 +424,8 @@ function Segment({ entry }: { entry: StageProgress | undefined }) {
         className="flex-1 rounded-sm"
         style={{
           boxShadow: 'inset 0 0 0 1px var(--line-strong)',
-          backgroundImage: 'repeating-linear-gradient(-45deg, transparent 0 4px, var(--line) 4px 5px)',
+          backgroundImage:
+            'repeating-linear-gradient(-45deg, transparent 0 4px, var(--line) 4px 5px)',
         }}
       />
     )
@@ -387,18 +435,29 @@ function Segment({ entry }: { entry: StageProgress | undefined }) {
       <span
         data-state={entry.state ?? 'running'}
         className={`flex-1 rounded-sm ${entry.state === 'running' ? 'stage-stripes' : ''}`}
-        style={entry.state === 'running' ? undefined : { background: 'var(--chip-fg)', opacity: 0.8 }}
+        style={
+          entry.state === 'running' ? undefined : { background: 'var(--chip-fg)', opacity: 0.8 }
+        }
       />
     )
   }
-  return <span data-state="done" className="flex-1 rounded-sm" style={{ background: 'var(--chip-fg)', opacity: entry.status === 'skipped' ? 0.35 : 0.8 }} />
+  return (
+    <span
+      data-state="done"
+      className="flex-1 rounded-sm"
+      style={{ background: 'var(--chip-fg)', opacity: entry.status === 'skipped' ? 0.35 : 0.8 }}
+    />
+  )
 }
 
 function TimeBars({ progress, now }: { progress: readonly StageProgress[]; now: Date }) {
   const rows = progress
     .filter((entry) => entry.startedAt !== null)
     .map((entry) => {
-      const end = entry.endedAt === null || entry.status === 'current' ? now.getTime() : Date.parse(entry.endedAt)
+      const end =
+        entry.endedAt === null || entry.status === 'current'
+          ? now.getTime()
+          : Date.parse(entry.endedAt)
       return { entry, minutes: (end - Date.parse(entry.startedAt ?? '')) / 60_000 }
     })
   if (rows.length === 0) {
@@ -408,16 +467,24 @@ function TimeBars({ progress, now }: { progress: readonly StageProgress[]; now: 
   return (
     <div className="flex flex-col gap-2">
       {rows.map(({ entry, minutes }) => (
-        <div key={entry.stage} className="grid grid-cols-[76px_minmax(0,1fr)_56px] items-center gap-2 text-xs">
+        <div
+          key={entry.stage}
+          className="grid grid-cols-[76px_minmax(0,1fr)_56px] items-center gap-2 text-xs"
+        >
           <span className="truncate text-ink-2">{entry.name}</span>
           <span className="h-1.5 overflow-hidden rounded-full bg-raised">
             <span
               data-state={entry.status === 'current' ? (entry.state ?? 'running') : 'done'}
               className="block h-full rounded-full"
-              style={{ width: `${Math.max(4, (minutes / longest) * 100)}%`, background: 'var(--chip-fg)' }}
+              style={{
+                width: `${Math.max(4, (minutes / longest) * 100)}%`,
+                background: 'var(--chip-fg)',
+              }}
             />
           </span>
-          <span className="text-right text-muted tabular-nums">{stageTime(entry, now)?.replace(' so far', '') ?? ''}</span>
+          <span className="text-right text-muted tabular-nums">
+            {stageTime(entry, now)?.replace(' so far', '') ?? ''}
+          </span>
         </div>
       ))}
     </div>
@@ -459,14 +526,20 @@ function StageCard({
       }
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h4 className={`m-0 text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>{progress.name}</h4>
+        <h4 className={`m-0 text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>
+          {progress.name}
+        </h4>
         {current && state !== null ? (
           <span className="state-chip" data-state={state}>
             {STATE_LABEL[state]}
           </span>
         ) : (
           <span className="state-chip" data-state={progress.status === 'done' ? 'done' : 'draft'}>
-            {progress.status === 'done' ? 'Done' : progress.status === 'skipped' ? 'Skipped' : 'Not started'}
+            {progress.status === 'done'
+              ? 'Done'
+              : progress.status === 'skipped'
+                ? 'Skipped'
+                : 'Not started'}
           </span>
         )}
         {stage.gate === 'manual' && stage.kind !== 'release' && (
@@ -500,7 +573,11 @@ function StageCard({
               >
                 <FileText size={13} aria-hidden="true" />
                 <span className="font-mono">{stage.output}</span>
-                {file === undefined ? <span className="text-muted">not written yet</span> : <span className="text-muted">{kilobytes(file.size)}</span>}
+                {file === undefined ? (
+                  <span className="text-muted">not written yet</span>
+                ) : (
+                  <span className="text-muted">{kilobytes(file.size)}</span>
+                )}
               </button>
             )}
             {progress.passes.length > 0 && (
@@ -535,11 +612,17 @@ function StageCard({
 
           {progress.passes.length > 0 && (
             <details className="mt-2 text-sm">
-              <summary className="cursor-pointer text-xs text-muted hover:text-ink">Show evidence</summary>
+              <summary className="cursor-pointer text-xs text-muted hover:text-ink">
+                Show evidence
+              </summary>
               <ul className="m-0 mt-1.5 flex list-none flex-col gap-1 p-0">
                 {progress.passes.map((pass) => (
                   <li key={pass} className="flex items-start gap-2 text-ink-2">
-                    <CircleCheck size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-add" />
+                    <CircleCheck
+                      size={14}
+                      aria-hidden="true"
+                      className="mt-0.5 shrink-0 text-add"
+                    />
                     {pass}
                   </li>
                 ))}
@@ -550,12 +633,22 @@ function StageCard({
           {current && canAct && (
             <div className="mt-3 flex flex-wrap gap-2">
               {(state === 'running' || state === 'needs-input') && (
-                <Button size="xs" variant="secondary" disabled={busy} onClick={() => onAction('report')}>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => onAction('report')}
+                >
                   Mark as done
                 </Button>
               )}
               {(state === 'draft' || state === 'ready') && (
-                <Button size="xs" variant="secondary" disabled={busy} onClick={() => onAction('start')}>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => onAction('start')}
+                >
                   Start
                 </Button>
               )}
@@ -567,7 +660,12 @@ function StageCard({
               </Button>
               <span className="flex-1" />
               {(state === 'review' || state === 'needs-input') && (
-                <Button size="xs" variant="primary" disabled={busy} onClick={() => onAction('approve')}>
+                <Button
+                  size="xs"
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => onAction('approve')}
+                >
                   {state === 'needs-input' ? 'Approve anyway' : 'Approve'}
                 </Button>
               )}
@@ -607,7 +705,13 @@ function SendBackDialog({
           <Button variant="ghost" size="md" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" size="md" busy={busy} shortcut="Mod+Enter" onClick={() => onSend(to, reason.trim())}>
+          <Button
+            variant="primary"
+            size="md"
+            busy={busy}
+            shortcut="Mod+Enter"
+            onClick={() => onSend(to, reason.trim())}
+          >
             Send back
           </Button>
         </>
@@ -616,7 +720,13 @@ function SendBackDialog({
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Back to</span>
-          <Select value={to} onChange={(event) => setTo(event.target.value)} aria-label="Stage to go back to" fieldSize="md" className="w-full">
+          <Select
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+            aria-label="Stage to go back to"
+            fieldSize="md"
+            className="w-full"
+          >
             {earlier.map((entry) => (
               <option key={entry.stage} value={entry.stage}>
                 {entry.name}
