@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { fireAppEvent } from '../lib/app-events'
 import { changeCountLabel, countLines, splitPath, wholeFileKind } from '../lib/changes'
+import { FileIcon } from './FileIcon'
 import { copyText } from '../lib/clipboard'
 import { shortcutOf } from '../lib/commands'
 import { IconButton } from './ui/IconButton'
@@ -84,6 +85,7 @@ export function DiffTitle({ entry, file }: { entry: ChangeEntry; file?: FileDiff
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
+      <FileIcon path={entry.path} />
       <span
         data-tip-overflow={from === null ? true : undefined}
         data-tip={from === null ? entry.path : `Renamed from ${from} to ${entry.path}`}
