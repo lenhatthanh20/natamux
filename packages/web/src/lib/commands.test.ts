@@ -82,6 +82,19 @@ describe('the command registry', () => {
     expect(shortcutOf('tab.history')).toBe('3')
   })
 
+  it('steps through the changes of a file with Alt+F5, and documents the accessible diff', () => {
+    expect(shortcutOf('diff.nextChange')).toBe('Alt+F5')
+    expect(shortcutOf('diff.previousChange')).toBe('Shift+Alt+F5')
+    expect(commandById('diff.accessible')?.shortcuts).toEqual(['F7', 'Shift+F7'])
+    expect(commandById('diff.accessible')?.run).toBeUndefined()
+    expect(commandById('diff.change')).toBeUndefined()
+    for (const id of ['diff.nextChange', 'diff.previousChange']) {
+      const command = commandById(id)
+      expect(command && runnable(command, context().context), id).toBe(false)
+      expect(command && runnable(command, context({ workspaceOpen: true }).context), id).toBe(true)
+    }
+  })
+
   it('keeps Cancel task out of the keys and the palette, because it asks first', () => {
     expect(commandById('task.task.cancelled')).toBeUndefined()
   })

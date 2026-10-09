@@ -525,14 +525,24 @@ Shared shell:
 - Needs-input pane: 2px top bar `--signal`, header bg signal-soft, state text "Needs your input" in signal (WS-21).
 - Body: bg terminal, pad 8 10. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body.
 
-### 4.24 Diff view chrome (`components/ChangesView.tsx`, `MonacoDiff.tsx`)
-- Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Combobox) above the diff, full width.
-- File panel: header 32 ("4 changed files" 12/500 muted, refresh icon button 24 with tooltip "Refresh  R"); rows 28: status letter in a 16px mono 12/600 box colored (M modified, A/U add, D/C remove, R renamed) with tooltip, file name 13/500, folder 12 muted truncated at the start (`direction: rtl` trick or JS middle truncation); selected row style 4.8. Commit box docked at the bottom of the panel: textarea (3 rows, placeholder "Commit message"), primary `Commit all` full width with `Mod Enter` kbd.
-- Diff toolbar 36 above Monaco: path breadcrumb (mono 12, folder muted / name ink), badge "New file" / "Deleted" / "Renamed from x", `+12 −3` mono 12, then right: Segmented [Side by side | Inline], Wrap toggle (`WrapText`, aria-pressed), prev/next file (`[` `]`).
-- Side by side is offered only when the diff column >= 720; below it the control shows Inline selected and Side by side disabled with tooltip "Needs a wider window" (WS-03).
-- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = mono stack, `fontSize` 12, `lineHeight` 18, `lightbulb: { enabled: 'off' }`, `glyphMargin: false`, `renderOverviewRuler: false`, `hideUnchangedRegions: { enabled: true }`, `wordWrap: 'on'` for .md/.txt/no extension and when Wrap is on (WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
-- New or deleted files are not diffs: show a read-only single editor with the whole file decorated as added (or removed), and no phantom empty line (WS-02).
-- Comment-for-the-agent box docked at the bottom of the diff column: one line field that grows to 4 lines, label "Comment on line 12 for the agent" (or "on this file"), [Send to agent] with `Mod Enter`.
+### 4.24 Diff view chrome (`components/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
+- Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.
+- File panel (`ChangedFiles`): header 32 ("4 changed files" 12/500 muted, then `+340 −88` mono 12 summed over the files with counts; right: in tree view "Collapse all folders" / "Expand all folders", the "View as tree" toggle (aria-pressed, remembered in `helmsman.changes-view`), Refresh). Below it, one `role="tree"` with rows of `--row-h`.
+  - List view: status colour on the file name, folder 12 muted truncated at the start, `+12 −3` when the panel is at least 15rem wide, status letter in a 16px mono box with tooltip.
+  - Tree view: folders first, natural sort, single-child folders compacted ("web/src"), 12px indent a level, indent guides on hover or focus, chevrons on folders. A collapsed folder shows its summed counts. Collapsed folders are kept per task while the page is open. Arrow keys, Home, End and type-ahead work as in VS Code.
+  - Per-file counts come from `git diff --numstat`, and a line count for untracked text files. Binary files, files that are too big, and untracked files after the first 300 have no counts.
+  - Commit box docked at the bottom of the panel: textarea (3 rows, placeholder "Commit message"), primary `Commit all` full width with `Mod Enter` kbd.
+- Diff toolbar (`DiffToolbar`, min 36, wraps):
+  - Left: the path (mono 12, folder muted / name ink; a rename shows `old → new`, tooltip "Renamed from x to y"), Copy path, badge "New file · N lines" / "Deleted · N lines".
+  - Right: `+12 −3` (text diffs); change navigator (Previous change `Shift+Alt+F5`, "2 of 7" or "7 changes", Next change `Alt+F5`; wraps at the ends); Segmented [Side by side | Inline] (icons only under 960; [Side by side | Stacked] for images); Collapse unchanged lines (aria-pressed); Wrap long lines (aria-pressed); Show image preview (SVG only); Diff options menu (Ignore leading and trailing whitespace, Show moved code); prev/next file (`[` `]`, in the order of the file panel).
+- Remembered per browser: `helmsman.diff-side-by-side` (on), `helmsman.diff-collapse-unchanged` (on), `helmsman.diff-ignore-whitespace` (on), `helmsman.diff-show-moves` (off), `helmsman.diff-wrap-prose` (on), `helmsman.diff-wrap-code` (off).
+- Side by side is offered only when the diff column >= 720. Below it the control shows Inline selected and Side by side disabled with tooltip "Needs a wider window" (WS-03). The stored choice is kept and comes back on a wider window. Monaco's own switch (`useInlineViewWhenSpaceIsLimited`) is off, so only one rule decides.
+- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = mono stack, `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
+- The editor is built again only for a new file or a new UI size. Every other option, and new text from the 10 s refresh, updates it in place, so the scroll position stays.
+- New or deleted files are not diffs: show a read-only single editor with the whole file decorated as added (or removed), and no phantom empty line (WS-02). An empty one shows "Empty file."
+- Notices instead of an editor: "Renamed without changes.", "The text did not change. Only the file mode may differ.", binary, larger than 1 MB. Above the editor, when the diff finds nothing: "Only whitespace or line endings changed." with [Show whitespace].
+- Images (png, jpg, gif, webp, and svg on demand): Before (last commit) and After (working tree), side by side or stacked, on a checkerboard, with the pixel size and the file size. Read from `GET /tasks/:id/changes/image` (5 MB limit, `nosniff`, sandbox CSP).
+- Comment-for-the-agent box docked at the bottom of the diff column: one line field that grows to 4 lines, label "Comment on line 12 for the agent" (or "on this file"), [Send to agent] with `Mod Enter`. Stepping to a change moves the cursor, so the comment is about that line.
 
 ### 4.25 Table (`components/TaskTable.tsx`)
 - Frame: radius 8, 1px line, bg surface. Header 32, sticky, 12/500 muted, bottom border line. Rows 40 fixed, bottom border line, cells pad x 12, one line, ellipsis (fixes NAV-06, RA-06).
@@ -632,7 +642,8 @@ Rules:
 | | Ctrl+Shift+` | New shell (works inside a terminal on both OSes) |
 | | Mod+F (in a pane, P2, needs `@xterm/addon-search`) | Find in scrollback |
 | Diff | `[` `]` | Previous / next file |
-| | Alt+F5 / F7 (Monaco built-in) | Previous / next change |
+| | Alt+F5 / Shift+Alt+F5 | Next / previous change in the file |
+| | F7 / Shift+F7 (Monaco built-in) | Accessible diff view |
 | | Mod+Shift+A | Comment on the current line for the agent |
 | Palette | Up/Down, Enter, Shift+Enter, Alt+1..9, Tab, Esc | see 4.17 |
 
