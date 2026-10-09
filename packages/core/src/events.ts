@@ -106,7 +106,7 @@ const MOVES: Partial<Record<EventType, Move>> = {
   // The agent ended its turn without saying the stage is done (`helmsman done`), for example to
   // ask something in plain text. The daemon drops the turn end that follows a report.
   'agent.finished': { from: ['running'], to: 'needs-input' },
-  'agent.failed': { from: ['running'], to: 'failed' },
+  'agent.failed': { from: ['running', 'needs-input'], to: 'failed' },
   // "Mark as done" from needs-input runs the checks again.
   'stage.reported': { from: ['running', 'needs-input'], to: 'running' },
   'stage.checked': { from: ['running'], to: 'gate' },
