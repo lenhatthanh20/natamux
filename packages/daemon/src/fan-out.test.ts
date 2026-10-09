@@ -15,7 +15,7 @@ let repo: TestRepo
 let index: TaskIndex
 let tasks: TaskService
 let ptys: FakePty[]
-let parts: { tasks: TaskService; workspaces: WorkspaceService; agents: AgentRunner }
+let parts: Parameters<typeof fanOut>[0]
 
 beforeEach(() => {
   repo = createTestRepo()
@@ -41,7 +41,12 @@ beforeEach(() => {
     platform: 'linux',
     launchDir: dataDir,
   })
-  parts = { tasks, workspaces, agents }
+  // No stage runner here: a start by hand goes straight to the agent.
+  const stages = {
+    startByHand: async (id: string, agent: string, prompt?: string) =>
+      agents.start(id, agent, prompt),
+  }
+  parts = { tasks, workspaces, stages }
 })
 
 afterEach(() => {
