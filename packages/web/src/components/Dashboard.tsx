@@ -981,7 +981,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               <Button
                 type="submit"
                 icon={Plus}
-                busy={createMutation.isPending}
+                // Not busy while a task is added: a disabled submit button stops Enter, and the
+                // next title is often typed before the daemon answers.
                 disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
               >
                 Add task
