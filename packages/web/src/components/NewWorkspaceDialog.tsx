@@ -2,6 +2,7 @@ import type { ContextSource, ContextSourceType, Repo, Task } from '@helmsman/cor
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
+import { AGENT_CHOICES } from '../lib/agents'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
 import { createBlockedReason } from '../lib/workspace'
@@ -217,8 +218,11 @@ export function NewWorkspaceDialog({
             fieldSize="md"
             className="w-full"
           >
-            <option value="claude-code">Claude Code</option>
-            <option value="copilot">GitHub Copilot</option>
+            {AGENT_CHOICES.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
             <option value="">No agent, a plain shell</option>
           </Select>
         </div>

@@ -82,6 +82,27 @@ So there are three real approaches: hooks (Orca, Superset, Emdash), reading the 
 - **Driving the agent through a protocol is exact but costly.** Vibe Kanban needs a separate executor for each agent and owns the whole interface, with no native terminal. Helmsman should not write one per agent. ACP is the one shared protocol; use it later.
 - **Orca's size is a warning.** Its hook code alone is dozens of files (pane identity, freshness, races, remote hosts). Keep Helmsman to the four signals and add detail only when a real case needs it.
 
+## Built (2026-10-10)
+
+Each agent starts from the dashboard (**New workspace**, or **Start agent** on a stage or a failed task) with hooks for that session only. Nothing in the user's own settings changes.
+
+| Agent | Command | How its hooks are passed | Prompt sent | Waits for the user | Turn ended | Failed | Checked |
+|---|---|---|---|---|---|---|---|
+| Claude Code | `claude --settings <file> '<prompt>'` | the settings file | `UserPromptSubmit` | `PermissionRequest`, `Notification` | `Stop` | `StopFailure` | real sessions |
+| Codex | `codex --dangerously-bypass-hook-trust -c 'hooks.<Event>=[…]' '<prompt>'` | `-c` overrides | `UserPromptSubmit` | `PermissionRequest` | `Stop`, `Interrupt` | none | its source, not run |
+| Gemini CLI | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini -i '<prompt>'` | its system settings file, in the data folder | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterAgent` | none | its docs, not run |
+| GitHub Copilot CLI | `copilot -i '<prompt>'` | `.github/hooks/helmsman.json` in the worktree, kept out of git | `userPromptSubmitted` | `permissionRequest` | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
+| Cursor CLI | `cursor-agent '<prompt>'` | `.cursor/hooks.json` in the worktree, kept out of git | `beforeSubmitPrompt` | none (the bell instead) | `stop` | `stop` with `status: error` | its docs, not run |
+
+Notes:
+
+- **Codex hook trust.** Codex runs a hook only after the user trusted it, and asks at start for every hook it has not seen. Helmsman's hooks change with the daemon's address, so it passes `--dangerously-bypass-hook-trust`. The flag skips that review for the session's other hooks too: hooks of a project the user already trusts run without the review. To work without the flag, start Codex by hand in the task's terminal; its hooks then come from its own settings.
+- **Copilot names no event.** Its hook gets the same JSON shape for several events, so each hook command names its event: `helmsman hook copilot agentStop`. In the real session the hooks ran in a new, untrusted folder, and got Helmsman's environment variables.
+- **JSON answers.** Cursor blocks a shell command when a hook's answer is not JSON, and Gemini reads the answer as JSON, so `helmsman hook cursor` and `helmsman hook gemini` print `{}`, even outside a Helmsman terminal.
+- **A file of the user's own** at `.github/hooks/helmsman.json` or `.cursor/hooks.json` is left alone; the agent then runs without Helmsman's hooks and is followed by its terminal.
+- **Gemini CLI** replaced its free tier with the Antigravity CLI on 2026-06-18 (its docs say so); paid accounts keep `gemini`.
+- **An agent that does not start.** If the shell answers "command not found" (or the same in zsh, sh, fish, PowerShell, cmd) for the agent's program in the first 15 seconds, the task fails with the shell's line and the variable that sets the command (`HELMSMAN_<AGENT>_COMMAND`). The stage card and the banner offer **Start agent** with a choice of agent.
+
 ## Order of work
 
 1. (Done) Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `helmsman hook <agent>` (guarded: it does nothing without `HELMSMAN_TOKEN`, always exits 0 and prints nothing) and `POST /hooks/:agent`. Claude Code keeps working.

@@ -76,7 +76,7 @@ export type Command =
     }
   | { name: 'event.list'; id: string; json: boolean }
   | { name: 'hooks.claude-code' }
-  | { name: 'hook.forward'; agent: string }
+  | { name: 'hook.forward'; agent: string; event?: string }
   | { name: 'workspace.create'; id: string; base?: string; json: boolean }
   | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
@@ -342,8 +342,13 @@ export function parseCommand(argv: readonly string[]): Command {
         'An agent name is required, in lower case letters, digits and "-": helmsman hook claude-code',
       )
     }
-    noExtraArguments(rest)
-    return { name: 'hook.forward', agent: second }
+    // Copilot CLI does not say which event a hook is for, so its hook command names it.
+    const [event, ...extra] = rest
+    noExtraArguments(extra)
+    if (event !== undefined && !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(event)) {
+      throw new UsageError(`Unexpected argument: ${event}`)
+    }
+    return { name: 'hook.forward', agent: second, ...(event === undefined ? {} : { event }) }
   }
 
   if (group === 'hooks') {

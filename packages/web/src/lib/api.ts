@@ -368,6 +368,12 @@ export function createApi(
       return stringList(body.terminals)
     },
 
+    // The names of the terminals where an agent runs now.
+    async listAgentTerminals(taskId: string): Promise<string[]> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/terminals`))
+      return stringList(body.agents)
+    },
+
     async closeTerminal(taskId: string, terminal: string): Promise<string[]> {
       const body = asRecord(
         await request(

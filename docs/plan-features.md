@@ -140,7 +140,7 @@ Goals:
 | Adapter interface: one function per agent that turns its hook input into a signal (prompt sent, waiting for the user, turn ended, failed) | MVP |
 | Claude Code adapter using its hooks for status events | MVP |
 | `helmsman hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
-| Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks | v1 |
+| Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks. Done: each agent starts from the dashboard with hooks for its session only (docs/agent-adapters.md); Copilot checked in a real session, the others against their documented input | v1 |
 | Generic adapter for any CLI (status from process and output idle time, terminal bell). Done: output in a task's first terminal is a sign of life (so a silent agent shows as quiet), and the terminal bell from an agent without hooks moves a running task to needs input | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |

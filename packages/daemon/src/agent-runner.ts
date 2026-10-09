@@ -2,8 +2,16 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { type Task, waitingOn } from '@helmsman/core'
 import { UnknownAgentError } from './agent-hook-service.js'
+import {
+  DEFAULT_PROGRAMS,
+  isLaunchable,
+  type LaunchableAgent,
+  launchCommand,
+  prepareWorkspace,
+  quoteArgument,
+} from './agent-launch.js'
 import type { TaskService } from './task-service.js'
-import type { TerminalService } from './terminal-service.js'
+import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
 
 export class TaskWaitingError extends Error {
   constructor(taskId: string, waiting: readonly string[]) {
@@ -12,16 +20,7 @@ export class TaskWaitingError extends Error {
   }
 }
 
-// Agents that Helmsman can start. Each one also has an adapter that reads its hooks.
-export const LAUNCHABLE_AGENTS = ['claude-code', 'copilot'] as const
-
-// Quotes one argument for the shell of the terminal: PowerShell on Windows, a POSIX shell elsewhere.
-export function quoteArgument(value: string, platform: NodeJS.Platform = process.platform): string {
-  if (platform === 'win32') {
-    return `'${value.replaceAll("'", "''")}'`
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
+export { LAUNCHABLE_AGENTS, quoteArgument } from './agent-launch.js'
 
 // The first prompt: the task title, then its description. On one line, because the shell runs
 // the command at the first line end.
@@ -37,13 +36,27 @@ type AgentRunnerOptions = {
   terminals: TerminalService
   // Claude Code settings with the hooks that report to this daemon (see claudeCodeHookSettings).
   claudeSettingsPath: string
+  // Gemini CLI settings with its hooks (see geminiHookSettings). Default: next to Claude's.
+  geminiSettingsPath?: string
+  // The command of each agent (HELMSMAN_<AGENT>_COMMAND), and words to add to its command line
+  // (HELMSMAN_<AGENT>_ARGS), such as --allow-all-tools for Copilot.
+  programs?: Partial<Record<LaunchableAgent, string | undefined>>
+  extraArgs?: Partial<Record<LaunchableAgent, string | undefined>>
   claudeCommand?: string
-  // GitHub Copilot CLI, and words to add to its command line, such as --allow-all-tools.
   copilotCommand?: string
   copilotArgs?: string
   platform?: NodeJS.Platform
   // Where the launch scripts go. Default: the folder of the settings file.
   launchDir?: string
+  // Told of each start, to watch the terminal for a shell that cannot find the agent.
+  onLaunch?: (launch: AgentLaunch) => void
+}
+
+export type AgentLaunch = {
+  taskId: string
+  terminal: string
+  agent: LaunchableAgent
+  program: string
 }
 
 // Starts an agent in the terminal of a task, as if the user typed the command. Its hooks then
@@ -52,27 +65,49 @@ export class AgentRunner {
   private readonly tasks: TaskService
   private readonly terminals: TerminalService
   private readonly claudeSettingsPath: string
-  private readonly claudeCommand: string
-  private readonly copilotCommand: string
-  private readonly copilotArgs: string
+  private readonly geminiSettingsPath: string
+  private readonly programs: Record<LaunchableAgent, string>
+  private readonly extraArgs: Partial<Record<LaunchableAgent, string>>
   private readonly platform: NodeJS.Platform
   private readonly launchDir: string
+  private readonly onLaunch: ((launch: AgentLaunch) => void) | undefined
 
   constructor(options: AgentRunnerOptions) {
     this.tasks = options.tasks
     this.terminals = options.terminals
     this.claudeSettingsPath = options.claudeSettingsPath
-    this.claudeCommand = options.claudeCommand?.trim() || 'claude'
-    this.copilotCommand = options.copilotCommand?.trim() || 'copilot'
-    this.copilotArgs = options.copilotArgs?.trim() ?? ''
+    this.geminiSettingsPath =
+      options.geminiSettingsPath ??
+      join(dirname(options.claudeSettingsPath), 'gemini-settings.json')
+    const given = { ...options.programs }
+    given['claude-code'] ??= options.claudeCommand
+    given.copilot ??= options.copilotCommand
+    this.programs = { ...DEFAULT_PROGRAMS }
+    for (const [agent, program] of Object.entries(given)) {
+      if (program?.trim() && isLaunchable(agent)) {
+        this.programs[agent] = program.trim()
+      }
+    }
+    this.extraArgs = { copilot: options.copilotArgs?.trim() }
+    for (const [agent, words] of Object.entries(options.extraArgs ?? {})) {
+      if (words !== undefined && isLaunchable(agent)) {
+        this.extraArgs[agent] = words.trim()
+      }
+    }
     this.platform = options.platform ?? process.platform
     this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
+    this.onLaunch = options.onLaunch
+  }
+
+  // The program that starts an agent, as the shell looks it up.
+  programOf(agent: LaunchableAgent): string {
+    return this.programs[agent]
   }
 
   // Starts the agent in a terminal of the task: the first by default, another for a stage that
   // runs beside the first one.
   start(taskId: string, agent: string, prompt?: string, terminal?: string): Task {
-    if (!(LAUNCHABLE_AGENTS as readonly string[]).includes(agent)) {
+    if (!isLaunchable(agent)) {
       throw new UnknownAgentError(agent)
     }
     const task = this.tasks.getTask(taskId)
@@ -80,26 +115,22 @@ export class AgentRunner {
     if (waiting.length > 0) {
       throw new TaskWaitingError(taskId, waiting)
     }
-    const text = (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
-    const quote = (value: string) => quoteArgument(value, this.platform)
-    // Copilot has no hooks for Helmsman yet: its output shows that it works, and it reports a
-    // stage with `helmsman done`. `-i` keeps it open for the prompts of the next stages.
-    const command =
-      agent === 'copilot'
-        ? [
-            this.copilotCommand,
-            ...(this.copilotArgs === '' ? [] : [this.copilotArgs]),
-            ...(text === '' ? [] : ['-i', quote(text)]),
-          ].join(' ')
-        : [
-            this.claudeCommand,
-            '--settings',
-            quote(this.claudeSettingsPath),
-            ...(text === '' ? [] : [quote(text)]),
-          ].join(' ')
+    if (task.workspace !== null) {
+      prepareWorkspace(agent, task.workspace)
+    }
+    const command = launchCommand(agent, {
+      program: this.programs[agent],
+      extraArgs: this.extraArgs[agent] ?? '',
+      prompt: (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim(),
+      platform: this.platform,
+      claudeSettingsPath: this.claudeSettingsPath,
+      geminiSettingsPath: this.geminiSettingsPath,
+    })
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
-    return this.tasks.recordAgentLaunch(taskId, agent)
+    const program = this.programs[agent]
+    this.onLaunch?.({ taskId, terminal: terminal ?? MAIN_TERMINAL, agent, program })
+    return this.tasks.recordAgentLaunch(taskId, agent, program)
   }
 
   // What is typed into the terminal. The terminal echoes it, so the long command (settings path,

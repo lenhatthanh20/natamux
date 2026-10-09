@@ -222,8 +222,16 @@ describe('parseCommand', () => {
       },
     )
 
-    it('rejects extra arguments', () => {
-      expect(() => parseCommand(['hook', 'claude-code', 'extra'])).toThrow(/Unexpected argument/)
+    it('takes the event that a Copilot hook names, and nothing more', () => {
+      expect(parseCommand(['hook', 'copilot', 'agentStop'])).toEqual({
+        name: 'hook.forward',
+        agent: 'copilot',
+        event: 'agentStop',
+      })
+      expect(() => parseCommand(['hook', 'copilot', 'agentStop', 'extra'])).toThrow(
+        /Unexpected argument/,
+      )
+      expect(() => parseCommand(['hook', 'copilot', 'a/b'])).toThrow(/Unexpected argument/)
     })
   })
 
