@@ -420,6 +420,27 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 - **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
 - **Mock-up:** the canvas "Helmsman stage progress" shows both views, with a light and dark switch.
 
+**Task progress page** (the Progress tab of a task). It shows what each stage did and the evidence that it is finished.
+
+- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. A bar with one segment per stage, as wide as the time spent; a parallel step is two thin bars on top of each other; a running segment has moving stripes.
+- **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
+  - Done stage: time, who approved and when, and evidence chips. **Show evidence** opens the passed checks and, for a stage that ran twice, each round with the comment that sent it back.
+  - Current stage: everything the checks of 3.5 will look at, live. A parallel step shows its stages side by side, each in its own card.
+  - Stage not reached: what will finish it, in one sentence ("Finished when the pull request is merged").
+- **Evidence per stage kind:**
+
+| Kind | Evidence shown |
+|---|---|
+| `context` | The source (issue number and comment count, or the skill or MCP server), `context.md` and its size |
+| `agent` with `output` | The file, its size or item count (cases, steps), the first items, the checks |
+| `implement` | What the agent does now (from `PreToolUse`), the commits since the stage started, files and lines changed, the checks |
+| `review` | Review comments sent to the agent, the approval |
+| `testing` | The command, passed and failed counts, the log of a failed run |
+| `release` | The pull request, its checks, the merge, the issue it closes |
+
+- **Side panel:** time per stage, task details (repository, branch, base, context source, agents and terminals, ports, pull request), and the latest events with "All events".
+- **Data:** `GET /tasks/:id/progress` gives the evidence with each stage entry (`checks`, `files`, `commits`, `rounds`), built from the events and the stage files.
+
 **Task progress strip** (task header):
 - The steps from left to right, each with its marker, its name, and its time: time spent for a done stage, time so far for the current one.
 - A parallel group is one column with its stages stacked, each with its own marker and time.
