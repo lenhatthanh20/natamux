@@ -13,8 +13,8 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 | `HELMSMAN_DATA_DIR` | `<cwd>/.helmsman` | Task files and the SQLite index |
 | `HELMSMAN_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
 | `HELMSMAN_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
-| `HELMSMAN_CLAUDE_COMMAND` | `claude` | The program that starts Claude Code (`scripts/dev.sh seed` sets a fake agent) |
-| `HELMSMAN_COPILOT_COMMAND`, `HELMSMAN_COPILOT_ARGS` | built in | The program and arguments that start the GitHub Copilot CLI |
+| `HELMSMAN_<AGENT>_COMMAND` | `claude`, `codex`, `gemini`, `copilot`, `cursor-agent` | The program that starts each agent; `<AGENT>` is `CLAUDE`, `CODEX`, `GEMINI`, `COPILOT` or `CURSOR` (`scripts/dev.sh seed` sets a fake Claude) |
+| `HELMSMAN_<AGENT>_ARGS` | none | Words added to the agent's command line, such as `--allow-all-tools` for Copilot |
 | `HELMSMAN_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `HELMSMAN_WEB_INDEX` | none | Path of the built dashboard's `index.html` (for example `packages/web/dist/index.html`). With it, deep links work, see below |
 | `HELMSMAN_WEB_DIR` | none | The built dashboard (`packages/web/dist`). With it, the daemon serves the whole dashboard, and the API under `/api` too, on its own port; `HELMSMAN_WEB_INDEX` defaults to its `index.html`. The desktop app uses this |

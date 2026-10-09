@@ -87,6 +87,23 @@ describe('GitHub Copilot CLI', () => {
     ).toBe('bash: ls -la')
   })
 
+  it('reads the JSON of a real Copilot CLI 1.0.94 session', () => {
+    // Recorded on 2026-10-10: the stdin of the agentStop hook, as Copilot sent it.
+    const recorded = {
+      sessionId: '8e832061-c62c-438e-ad8b-f399d51a200c',
+      timestamp: 1791570302333,
+      cwd: '/tmp/cp-test',
+      transcriptPath: '/home/vscode/.copilot/session-state/8e832061/events.jsonl',
+      stopReason: 'end_turn',
+      stop_hook_active: false,
+    }
+    expect(normalize('copilot', { ...recorded, [COPILOT_EVENT_FIELD]: 'agentStop' })).toMatchObject({
+      signal: 'turn-ended',
+      cwd: '/tmp/cp-test',
+      details: { hook: 'agentStop', sessionId: recorded.sessionId },
+    })
+  })
+
   it('needs the event that the hook command names', () => {
     expect(() => normalize('copilot', { cwd: '/w' })).toThrow()
   })
