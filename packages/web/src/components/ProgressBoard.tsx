@@ -162,11 +162,13 @@ export function ProgressBoard({
                     Task
                   </div>
                   {stages.map(({ stage, inGroup }) => {
+                    // The tasks whose current step holds this stage, and not finished there.
                     const here = section.open.filter((task) => {
                       const step = section.steps[stepIndex(section.steps, task.stage)]
                       return (
                         step !== undefined &&
-                        stagesOf(step).some((candidate) => candidate.id === stage.id)
+                        stagesOf(step).some((candidate) => candidate.id === stage.id) &&
+                        (!inGroup || (task.lanes[stage.id] ?? 'done') !== 'done')
                       )
                     })
                     const waiting = here.filter((task) =>

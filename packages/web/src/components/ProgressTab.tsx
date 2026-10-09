@@ -43,6 +43,8 @@ type ProgressTabProps = {
   act: (action: StageAction, input?: StageActionInput) => Promise<Task>
   createIssue: () => Promise<Task>
   onOpenFile: (name: string) => void
+  // What the agent in the first terminal does now, such as "Edit src/a.ts".
+  activity?: string
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -70,6 +72,7 @@ export function ProgressTab({
   act,
   createIssue,
   onOpenFile,
+  activity,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -127,6 +130,14 @@ export function ProgressTab({
         onAction={(name) => run(name, { stage: stage.id })}
         onSendBack={() => setSendingBack(entry)}
         onOpenFile={onOpenFile}
+        activity={
+          entry.status === 'current' &&
+          entry.state === 'running' &&
+          stage.kind === 'agent' &&
+          stage.output === undefined
+            ? activity
+            : undefined
+        }
       />
     )
   }
@@ -501,7 +512,9 @@ function StageCard({
   onAction,
   onSendBack,
   onOpenFile,
+  activity,
 }: {
+  activity?: string
   stage: Stage
   progress: StageProgress
   file: StageFile | undefined
@@ -563,6 +576,16 @@ function StageCard({
         <p className="m-0 mt-1.5 text-sm text-muted">{finishedWhen(stage)}</p>
       ) : (
         <>
+          {activity !== undefined && (
+            <p
+              data-state="running"
+              className="m-0 mt-2.5 flex items-center gap-2 rounded-lg bg-(--chip-bg) px-2.5 py-1.5 text-sm text-(--chip-fg)"
+            >
+              <StageMarker status="current" state="running" size={14} label="Working" />
+              <span>Now</span>
+              <span className="truncate font-mono text-xs text-ink">{activity}</span>
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {stage.output !== undefined && (
               <button
