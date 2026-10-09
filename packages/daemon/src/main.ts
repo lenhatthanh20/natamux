@@ -107,6 +107,7 @@ const app = await buildServer({
   dataDir: config.dataDir,
   token: config.token,
   webIndexPath: config.webIndexPath,
+  webDir: config.webDir,
 })
 await app.listen({ host: config.host, port: config.port })
 

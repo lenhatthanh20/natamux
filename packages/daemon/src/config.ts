@@ -12,6 +12,8 @@ export type DaemonConfig = {
   worktreesDir: string
   // The built dashboard's index.html, for deep links. Undefined: the daemon serves no page.
   webIndexPath: string | undefined
+  // The built dashboard, served by the daemon (the desktop app, or a daemon without a web server).
+  webDir: string | undefined
   token: string
   tokenWasGenerated: boolean
 }
@@ -25,6 +27,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
 
   const configuredToken = env.HELMSMAN_TOKEN?.trim()
   const dataDir = env.HELMSMAN_DATA_DIR?.trim() || join(cwd, '.helmsman')
+  const webDir = env.HELMSMAN_WEB_DIR?.trim() || undefined
 
   return {
     // Only a container sets HELMSMAN_HOST, and only with its port published to loopback.
@@ -33,7 +36,10 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
     dataDir,
     repoDir: env.HELMSMAN_REPO_DIR?.trim() || cwd,
     worktreesDir: env.HELMSMAN_WORKTREES_DIR?.trim() || join(dataDir, 'worktrees'),
-    webIndexPath: env.HELMSMAN_WEB_INDEX?.trim() || undefined,
+    webIndexPath:
+      env.HELMSMAN_WEB_INDEX?.trim() ||
+      (webDir === undefined ? undefined : join(webDir, 'index.html')),
+    webDir,
     token: configuredToken || randomBytes(24).toString('base64url'),
     tokenWasGenerated: !configuredToken,
   }

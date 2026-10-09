@@ -18,6 +18,8 @@ x-dev: &dev
   environment: &dev-env
     CI: "true"
     HOME: /tmp
+    # The desktop app is not run in the containers.
+    ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
     HELMSMAN_TOKEN: ${HELMSMAN_TOKEN:-devtoken}
     # For a push and a pull request. scripts/dev.sh takes it from the codespace (GITHUB_TOKEN).
     GH_TOKEN: ${GH_TOKEN:-}

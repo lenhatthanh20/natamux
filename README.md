@@ -45,4 +45,4 @@ For tasks in every state with agents at work, run `scripts/dev.sh seed`. It star
 - Agents: [adapters](docs/agent-adapters.md), [Claude Code](docs/claude-code-adapter.md)
 - [MVP checks](docs/mvp-checks.md)
 
-Status: MVP in progress. Runs in a browser tab; the desktop app comes later.
+Status: MVP checks pass (`docs/mvp-checks.md`). Runs in a browser tab, or in the desktop app (`packages/desktop`, not packaged yet).
