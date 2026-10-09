@@ -136,7 +136,10 @@ describe('context', () => {
   })
 
   it('writes the context into a workspace made while the issue was read', async () => {
-    const task = tasks.createTask({ title: 'Export', context: { source: 'github-issue', ref: '#7' } })
+    const task = tasks.createTask({
+      title: 'Export',
+      context: { source: 'github-issue', ref: '#7' },
+    })
     await workspaces.create(task.id)
     await runner.settle()
 
