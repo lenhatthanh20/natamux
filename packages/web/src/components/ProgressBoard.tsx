@@ -4,6 +4,7 @@ import {
   type Repo,
   resolveSteps,
   type Step,
+  stageName,
   stageProgress,
   stagesOf,
   stepIndex,
@@ -152,7 +153,10 @@ export function ProgressBoard({
               </span>
             </div>
             <div className="overflow-x-auto">
-              <div className="grid min-w-max" style={{ gridTemplateColumns: columns }}>
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: columns, minWidth: 360 + stages.length * 72 }}
+              >
                 <div className="contents">
                   <div className="border-b border-line px-4 py-2 text-xs font-medium text-muted">
                     Task
@@ -174,7 +178,7 @@ export function ProgressBoard({
                         className={`flex flex-col items-center gap-0.5 border-b border-line px-1 py-2 ${inGroup ? 'bg-raised' : ''}`}
                       >
                         <span className="text-xs font-medium text-ink-2">
-                          {stage.name ?? stage.id}
+                          {stageName(stage)}
                         </span>
                         <span className="flex items-center gap-1 text-2xs text-muted tabular-nums">
                           <span className="rounded-full bg-raised px-1.5">{here.length}</span>
