@@ -4,7 +4,12 @@ export function descendants(psOutput: string, root: number): number[] {
   const children = new Map<number, number[]>()
   for (const line of psOutput.split('\n')) {
     const [pid, ppid] = line.trim().split(/\s+/).map(Number)
-    if (pid !== undefined && ppid !== undefined && Number.isInteger(pid) && Number.isInteger(ppid)) {
+    if (
+      pid !== undefined &&
+      ppid !== undefined &&
+      Number.isInteger(pid) &&
+      Number.isInteger(ppid)
+    ) {
       children.set(ppid, [...(children.get(ppid) ?? []), pid])
     }
   }

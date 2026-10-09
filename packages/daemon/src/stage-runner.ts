@@ -25,7 +25,18 @@ import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 import type { TaskService } from './task-service.js'
 import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
 
-const SHELLS = ['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'nu', 'pwsh', 'powershell.exe', 'cmd.exe']
+const SHELLS = [
+  'bash',
+  'zsh',
+  'sh',
+  'dash',
+  'fish',
+  'ksh',
+  'nu',
+  'pwsh',
+  'powershell.exe',
+  'cmd.exe',
+]
 
 export const STAGE_ACTIONS = [
   'approve',
