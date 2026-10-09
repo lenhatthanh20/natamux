@@ -6,6 +6,7 @@ import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
+import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
@@ -33,11 +34,19 @@ const service = new TaskService({
   settingsOf: (repo) => settings.get(repo),
 })
 service.init()
+const issueLinker = new IssueLinker({
+  tasks: service,
+  bus,
+  dataDir: config.dataDir,
+  repoPath: (repo) => repos.pathOf(repo),
+})
+issueLinker.start()
 const workspaces = new WorkspaceService({
   tasks: service,
   repoDir: config.repoDir,
   worktreesDir: config.worktreesDir,
   repos,
+  pullRequestBody: (task) => issueLinker.pullRequestBody(task),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -91,6 +100,7 @@ const app = await buildServer({
   bus,
   stages,
   settings,
+  issueLinker,
   dataDir: config.dataDir,
   token: config.token,
   webIndexPath: config.webIndexPath,
@@ -107,6 +117,7 @@ if (config.tokenWasGenerated) {
 async function shutdown(): Promise<void> {
   terminals.closeAll()
   stages.stop()
+  issueLinker.stop()
   pullRequests.stop()
   await app.close()
   index.close()

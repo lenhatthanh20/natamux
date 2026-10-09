@@ -42,6 +42,8 @@ type WorkspaceServiceOptions = {
   gh?: RunGh
   // Called after a workspace is made, for example to run its setup script.
   onCreated?: (task: Task) => void
+  // The body of a task's pull request. Default: the task's notes.
+  pullRequestBody?: (task: Task) => Promise<string>
 }
 
 export type RemoveWorkspaceResult = {
@@ -72,6 +74,7 @@ export class WorkspaceService {
   private readonly repos: RepoService | undefined
   private readonly gh: RunGh
   private readonly onCreated: (task: Task) => void
+  private readonly pullRequestBody: (task: Task) => Promise<string>
   private readonly busy = new Set<string>()
 
   constructor(options: WorkspaceServiceOptions) {
@@ -81,6 +84,9 @@ export class WorkspaceService {
     this.worktreesDir = options.worktreesDir
     this.gh = options.gh ?? runGh
     this.onCreated = options.onCreated ?? (() => undefined)
+    this.pullRequestBody =
+      options.pullRequestBody ??
+      (async (task) => task.description.trim() || `Task ${task.id} in Helmsman.`)
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -231,7 +237,7 @@ export class WorkspaceService {
         {
           branch: pushed.branch ?? '',
           title: pushed.title,
-          body: pushed.description.trim() || `Task ${pushed.id} in Helmsman.`,
+          body: await this.pullRequestBody(pushed),
         },
         this.gh,
       )

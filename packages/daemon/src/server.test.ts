@@ -6,6 +6,7 @@ import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
+import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
@@ -89,6 +90,7 @@ beforeEach(async () => {
       repoPath: () => repo.dir,
     }),
     settings: new ProjectSettingsService({ repos }),
+    issueLinker: new IssueLinker({ tasks: service, bus, dataDir, repoPath: () => repo.dir }),
     dataDir,
     token: TOKEN,
     webIndexPath,
