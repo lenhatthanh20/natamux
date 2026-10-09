@@ -9,8 +9,10 @@ import {
   pipelineSchema,
   resolveSteps,
   stageName,
+  stageOfTerminal,
   stepIndex,
   stepRefsOf,
+  terminalOfStage,
 } from './stage.js'
 
 describe('pipelineSchema', () => {
@@ -46,6 +48,16 @@ describe('pipelineSchema', () => {
     ).toBe(false)
   })
 
+  it('keeps the context first and the release last, one of each', () => {
+    const stage = (id: string, kind: string) => ({ id, kind, gate: 'manual' })
+    const valid = (steps: unknown[]) => pipelineSchema.safeParse(steps).success
+    expect(valid([stage('context', 'context'), stage('ship', 'release')])).toBe(true)
+    expect(valid([stage('check', 'manual'), stage('context', 'context')])).toBe(false)
+    expect(valid([stage('context', 'context'), stage('more', 'context')])).toBe(false)
+    expect(valid([stage('ship', 'release'), stage('check', 'manual')])).toBe(false)
+    expect(valid([stage('ship', 'release'), stage('again', 'release')])).toBe(false)
+  })
+
   it('rejects an empty pipeline and a bad stage id', () => {
     expect(pipelineSchema.safeParse([]).success).toBe(false)
     expect(pipelineSchema.safeParse([{ id: 'Spec', kind: 'agent', gate: 'auto' }]).success).toBe(
@@ -55,6 +67,10 @@ describe('pipelineSchema', () => {
 })
 
 describe('projectSettingsSchema', () => {
+  it('needs at least one context source', () => {
+    expect(projectSettingsSchema.safeParse({ context: { sources: [] } }).success).toBe(false)
+  })
+
   it('fills every field of an empty file', () => {
     expect(projectSettingsSchema.parse({})).toEqual(DEFAULT_PROJECT_SETTINGS)
     expect(DEFAULT_PROJECT_SETTINGS.stages).toEqual(DEFAULT_PIPELINE)
@@ -149,5 +165,18 @@ describe('stageName', () => {
     expect(stageName({ id: 'build', name: 'Test spec and Implement' })).toBe(
       'Test spec and Implement',
     )
+  })
+})
+
+describe('terminals of a group', () => {
+  it('gives the code stage the first terminal and the others the next ones', () => {
+    const build = DEFAULT_PIPELINE[3]
+    if (build === undefined) {
+      throw new Error('The default pipeline changed')
+    }
+    expect(terminalOfStage(build, 'implement')).toBe('1')
+    expect(terminalOfStage(build, 'test-spec')).toBe('2')
+    expect(stageOfTerminal(build, '2')?.id).toBe('test-spec')
+    expect(stageOfTerminal(build, '3')).toBeUndefined()
   })
 })

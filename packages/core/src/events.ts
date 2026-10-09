@@ -2,11 +2,13 @@ import { z } from 'zod'
 import {
   combinedState,
   enterStep,
+  entryState,
   firstPosition,
   isGroup,
   type Stage,
   type StagePosition,
   type Step,
+  stageOfTerminal,
   stagesOf,
   stepIndex,
 } from './stage.js'
@@ -131,15 +133,49 @@ function payloadString(event: TaskEvent, key: string): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-// The step to go back to: `to`, else the last agent stage before the current step.
-function reopenTarget(steps: readonly Step[], current: number, to: string | undefined) {
+// The state of one stage of a step: its lane in a group, else the state of the step.
+function laneStateOf(position: StagePosition, step: Step, stage: string): TaskState | undefined {
+  return isGroup(step) ? position.lanes[stage] : position.state
+}
+
+// Events that send a task back to a stage. A prompt typed to the agent during review is a
+// request for changes.
+function sendsBack(event: TaskEvent, step: Step): boolean {
+  return (
+    event.type === 'stage.reopened' ||
+    event.type === 'review.changes-requested' ||
+    (event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review')
+  )
+}
+
+// The stage to go back to: `to`; for changes asked about an agent stage that waits for you, that
+// stage; else the last agent stage before the current step.
+function reopenTarget(
+  steps: readonly Step[],
+  position: StagePosition,
+  current: number,
+  event: TaskEvent,
+): { index: number; stage: string } | undefined {
+  const to = payloadString(event, 'to')
   if (to !== undefined) {
     const index = stepIndex(steps, to)
     return index >= 0 && index <= current ? { index, stage: to } : undefined
   }
+  const step = steps[current]
+  if (event.type === 'review.changes-requested' && step !== undefined) {
+    const waiting = stagesOf(step).filter((stage) => {
+      const state = laneStateOf(position, step, stage.id)
+      return stage.kind === 'agent' && (state === 'review' || state === 'needs-input')
+    })
+    const code = agentStageOf(step)
+    const chosen = waiting.find((stage) => stage.id === code?.id) ?? waiting[0]
+    if (chosen !== undefined) {
+      return { index: current, stage: chosen.id }
+    }
+  }
   for (let index = current - 1; index >= 0; index -= 1) {
-    const step = steps[index]
-    const stage = step === undefined ? undefined : agentStageOf(step)
+    const earlier = steps[index]
+    const stage = earlier === undefined ? undefined : agentStageOf(earlier)
     if (stage !== undefined) {
       return { index, stage: stage.id }
     }
@@ -153,18 +189,98 @@ function agentStageOf(step: Step): Stage | undefined {
   return agents.find((stage) => stage.output === undefined) ?? agents[0]
 }
 
-function reopen(steps: readonly Step[], index: number, stage: string, state: TaskState) {
+// The position after going back to `stage` (a stage, or a whole group) at step `index`. The stage
+// gets `state`, or without one the state it starts in, so a stage that only waits for a person
+// waits for approval again. Going back inside the current group leaves its other stages as they
+// are; going back to an earlier group counts its other stages as done.
+function reopen(
+  steps: readonly Step[],
+  index: number,
+  stage: string,
+  position: StagePosition,
+  state?: TaskState,
+): StagePosition | undefined {
   const step = steps[index]
   if (step === undefined) {
     return undefined
   }
+  const stateOf = (target: Stage) => state ?? entryState(target)
   if (!isGroup(step)) {
-    return { stage: step.id, state, lanes: {} }
+    return { stage: step.id, state: stateOf(step), lanes: {} }
   }
+  const here = step.id === position.stage
   const lanes = Object.fromEntries(
-    step.parallel.map((lane) => [lane.id, lane.id === stage || step.id === stage ? state : 'done']),
+    step.parallel.map((lane) => [
+      lane.id,
+      lane.id === stage || step.id === stage
+        ? stateOf(lane)
+        : here
+          ? (position.lanes[lane.id] ?? 'done')
+          : 'done',
+    ]),
   ) as Record<string, TaskState>
   return { stage: step.id, state: combinedState(lanes), lanes }
+}
+
+// The move an event makes in one stage. A failed check keeps the stage running while the agent
+// fixes it; the last try waits for you.
+function moveOf(event: TaskEvent): Move | undefined {
+  return event.type === 'stage.check-failed'
+    ? { from: ['running'], to: event.payload.final === true ? 'needs-input' : 'running' }
+    : MOVES[event.type]
+}
+
+// The stage an event is about. Outside a group it is the current stage. Inside one: the stage it
+// names, else the stage of the terminal it came from, else the only stage the move fits.
+function laneOf(
+  step: Step,
+  position: StagePosition,
+  event: TaskEvent,
+  move: Move,
+): string | undefined {
+  const named = payloadString(event, 'stage')
+  if (!isGroup(step) || named !== undefined) {
+    return named ?? step.id
+  }
+  const terminal = payloadString(event, 'terminal')
+  if (terminal !== undefined) {
+    return stageOfTerminal(step, terminal)?.id
+  }
+  const fitting = step.parallel.filter((stage) => {
+    const state = position.lanes[stage.id]
+    return state !== undefined && move.from.includes(state)
+  })
+  return fitting.length === 1 ? fitting[0]?.id : undefined
+}
+
+// The event as it is logged: the stage it is about, and for a send back the stage it goes back
+// to, filled in when the sender left them out (a button, `helmsman ask`, a terminal bell). The
+// progress views read both from the log.
+export function completeEvent(
+  position: StagePosition,
+  event: TaskEvent,
+  steps: readonly Step[],
+): TaskEvent {
+  const index = stepIndex(steps, position.stage)
+  const step = steps[index]
+  if (step === undefined || isTerminalState(position.state)) {
+    return event
+  }
+  if (sendsBack(event, step)) {
+    const target =
+      payloadString(event, 'to') === undefined
+        ? reopenTarget(steps, position, index, event)
+        : undefined
+    return target === undefined
+      ? event
+      : { ...event, payload: { ...event.payload, to: target.stage } }
+  }
+  const move = moveOf(event)
+  if (move === undefined || payloadString(event, 'stage') !== undefined) {
+    return event
+  }
+  const lane = laneOf(step, position, event, move)
+  return lane === undefined ? event : { ...event, payload: { ...event.payload, stage: lane } }
 }
 
 // After a stage ends: the next step, or done after the last one.
@@ -206,7 +322,7 @@ export function applyTaskEvent(
     const stage = payloadString(event, 'stage')
     if (stage !== undefined) {
       const at = stepIndex(steps, stage)
-      const moved = at >= 0 ? reopen(steps, at, stage, target.data) : undefined
+      const moved = at >= 0 ? reopen(steps, at, stage, position, target.data) : undefined
       return moved === undefined ? keep(false) : { position: moved, accepted: true, moved: true }
     }
     if (step !== undefined && isGroup(step)) {
@@ -249,34 +365,21 @@ export function applyTaskEvent(
     return keep(false)
   }
 
-  // A prompt typed to the agent during review is a request for changes.
-  const resumedInReview = event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review'
-  if (
-    event.type === 'stage.reopened' ||
-    event.type === 'review.changes-requested' ||
-    resumedInReview
-  ) {
-    // Changes asked in review go to the agent as its next prompt, so its stage runs at once.
-    const state: TaskState = event.type === 'stage.reopened' ? 'ready' : 'running'
-    const target = reopenTarget(steps, index, payloadString(event, 'to'))
+  if (sendsBack(event, step)) {
+    // The stage starts again, so the runner gives it its prompt and it gets a new round.
+    const target = reopenTarget(steps, position, index, event)
     const moved =
-      target === undefined ? undefined : reopen(steps, target.index, target.stage, state)
+      target === undefined ? undefined : reopen(steps, target.index, target.stage, position)
     return moved === undefined ? keep(false) : { position: moved, accepted: true, moved: true }
   }
 
-  // A failed check keeps the stage running while the agent fixes it; the last try waits for you.
-  const move: Move | undefined =
-    event.type === 'stage.check-failed'
-      ? { from: ['running'], to: event.payload.final === true ? 'needs-input' : 'running' }
-      : MOVES[event.type]
+  const move = moveOf(event)
   if (move === undefined) {
     return keep(false)
   }
 
-  // Inside a group an event names its stage; outside one it may name the current stage only.
-  const named = payloadString(event, 'stage')
   const group = isGroup(step)
-  const lane = group ? named : (named ?? step.id)
+  const lane = laneOf(step, position, event, move)
   const stage = stagesOf(step).find((candidate) => candidate.id === lane)
   if (lane === undefined || stage === undefined) {
     return keep(false)
