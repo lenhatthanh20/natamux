@@ -1,13 +1,13 @@
 import {
   applyTaskEvent,
   DEFAULT_PROJECT_SETTINGS,
-  LEGACY_PIPELINE,
   type EventType,
   firstPosition,
   type IssueLink,
   issueLinkSchema,
-  type ProjectSettings,
+  LEGACY_PIPELINE,
   makesCycle,
+  type ProjectSettings,
   type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
   resolveSteps,
@@ -29,16 +29,18 @@ import { appendEventLine, readEventLog, writeEventLog } from './event-log.js'
 import { listTaskFiles, listTaskIds, readTaskFile, writeTaskFile } from './task-files.js'
 import type { StoredEvent, TaskIndex } from './task-index.js'
 
-export const createTaskInputSchema = taskSchema.pick({
-  title: true,
-  description: true,
-  priority: true,
-  labels: true,
-  agent: true,
-  dependsOn: true,
-  parentId: true,
-  repo: true,
-}).extend({ context: taskContextSchema.nullable().optional() })
+export const createTaskInputSchema = taskSchema
+  .pick({
+    title: true,
+    description: true,
+    priority: true,
+    labels: true,
+    agent: true,
+    dependsOn: true,
+    parentId: true,
+    repo: true,
+  })
+  .extend({ context: taskContextSchema.nullable().optional() })
 
 // The fields a person may change after a task is created. State has its own events.
 // Built without the defaults of taskSchema, so a field that is left out stays as it is.

@@ -22,7 +22,9 @@ export function writeEventLog(
   events: readonly LoggedEvent[],
 ): void {
   mkdirSync(tasksDir(dataDir), { recursive: true })
-  const text = events.map(({ event, accepted }) => JSON.stringify({ ...event, accepted })).join('\n')
+  const text = events
+    .map(({ event, accepted }) => JSON.stringify({ ...event, accepted }))
+    .join('\n')
   writeFileSync(eventLogPath(dataDir, taskId), text === '' ? '' : `${text}\n`)
 }
 

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS, DEFAULT_PIPELINE, type Task } from '@helmsman/core'
+import { DEFAULT_PIPELINE, DEFAULT_PROJECT_SETTINGS, type Task } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
@@ -177,7 +177,11 @@ describe('agent stages', () => {
 
   it('waits for approval when the output has its sections, and drops the turn end after', async () => {
     const task = await withWorkspace((await atSpec()).id)
-    writeWorking(task, 'spec.md', '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n')
+    writeWorking(
+      task,
+      'spec.md',
+      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n',
+    )
 
     await runner.act(task.id, 'report', { terminal: '1' })
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'review' })

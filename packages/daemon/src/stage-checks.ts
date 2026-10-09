@@ -31,10 +31,7 @@ export type CheckInput = {
   startHead: string | null
 }
 
-export type RunCommand = (
-  command: string,
-  cwd: string,
-) => Promise<{ code: number; output: string }>
+export type RunCommand = (command: string, cwd: string) => Promise<{ code: number; output: string }>
 
 export const runShellCommand: RunCommand = async (command, cwd) => {
   try {
@@ -96,8 +93,9 @@ function sectionBody(text: string, name: string): string[] {
 
 // A case is a sub-heading or a list item under the section.
 export function countItems(text: string, section: string): number {
-  return sectionBody(text, section).filter((line) => /^(#{2,6}\s|\s*([-*+]|\d+[.)])\s+\S)/.test(line))
-    .length
+  return sectionBody(text, section).filter((line) =>
+    /^(#{2,6}\s|\s*([-*+]|\d+[.)])\s+\S)/.test(line),
+  ).length
 }
 
 async function checkOutput(input: CheckInput, result: CheckResult): Promise<void> {
@@ -156,7 +154,9 @@ async function checkGit(input: CheckInput, result: CheckResult): Promise<void> {
     if (count === 0) {
       result.reasons.push('There is no new commit since the stage started')
     } else {
-      result.passes.push(`${count} new ${count === 1 ? 'commit' : 'commits'} since the stage started`)
+      result.passes.push(
+        `${count} new ${count === 1 ? 'commit' : 'commits'} since the stage started`,
+      )
     }
   }
   if (stage.requireClean) {

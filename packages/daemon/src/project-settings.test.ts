@@ -32,7 +32,11 @@ describe('ProjectSettingsService', () => {
     writeFileSync(file(), JSON.stringify({ tracker: { createIssue: 'never' } }))
     const loaded = service.load(null)
     expect(loaded.error).toBeNull()
-    expect(loaded.settings.tracker).toEqual({ type: 'github', createIssue: 'never', linkInPr: true })
+    expect(loaded.settings.tracker).toEqual({
+      type: 'github',
+      createIssue: 'never',
+      linkInPr: true,
+    })
     expect(loaded.settings.stages).toEqual(DEFAULT_PROJECT_SETTINGS.stages)
   })
 

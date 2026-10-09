@@ -32,7 +32,9 @@ export class StageFileError extends Error {
 
 export function checkFileName(name: string): string {
   if (!FILE_NAME.test(name)) {
-    throw new StageFileError(`"${name}" is not a stage file. Stage files are markdown, like spec.md`)
+    throw new StageFileError(
+      `"${name}" is not a stage file. Stage files are markdown, like spec.md`,
+    )
   }
   return name
 }
