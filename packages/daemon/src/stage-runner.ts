@@ -390,12 +390,9 @@ export class StageRunner {
     }
     const output = stage.output ?? 'context.md'
     try {
-      if (source.type === 'github-issue') {
-        const text = await this.readIssue(task)
-        writeStageFile(this.dataDir, task, output, text)
-      } else {
-        writeStageFile(this.dataDir, task, output, manualContext(task))
-      }
+      const text = source.type === 'github-issue' ? await this.readIssue(task) : manualContext(task)
+      // The task may have got its workspace while the issue was read: write where it is now.
+      writeStageFile(this.dataDir, this.tasks.getTask(task.id), output, text)
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
       return

@@ -135,6 +135,18 @@ describe('context', () => {
     expect(context).toContain('Dates in UTC, please.')
   })
 
+  it('writes the context into a workspace made while the issue was read', async () => {
+    const task = tasks.createTask({ title: 'Export', context: { source: 'github-issue', ref: '#7' } })
+    await workspaces.create(task.id)
+    await runner.settle()
+
+    const current = tasks.getTask(task.id)
+    expect(current.state).toBe('review')
+    expect(readFileSync(join(current.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')).toContain(
+      'Dates in UTC, please.',
+    )
+  })
+
   it('waits for you when the issue number is missing', async () => {
     const task = await created({ title: 'Export', context: { source: 'github-issue', ref: '' } })
     expect(task.state).toBe('needs-input')
