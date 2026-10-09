@@ -48,9 +48,9 @@ describe('Gemini CLI', () => {
   })
 
   it('takes only a permission notification as a wait, and names the file a tool reads', () => {
-    expect(normalize('gemini', { hook_event_name: 'Notification', notification_type: 'Other' })).toBe(
-      undefined,
-    )
+    expect(
+      normalize('gemini', { hook_event_name: 'Notification', notification_type: 'Other' }),
+    ).toBe(undefined)
     expect(
       normalize('gemini', {
         hook_event_name: 'BeforeTool',
@@ -82,9 +82,9 @@ describe('GitHub Copilot CLI', () => {
   })
 
   it('reads the tool arguments as JSON text', () => {
-    expect(hook('preToolUse', { toolName: 'bash', toolArgs: '{"command":"ls -la"}' })?.summary).toBe(
-      'bash: ls -la',
-    )
+    expect(
+      hook('preToolUse', { toolName: 'bash', toolArgs: '{"command":"ls -la"}' })?.summary,
+    ).toBe('bash: ls -la')
   })
 
   it('needs the event that the hook command names', () => {

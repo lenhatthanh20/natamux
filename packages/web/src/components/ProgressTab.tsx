@@ -11,6 +11,7 @@ import {
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useState } from 'react'
+import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -28,7 +29,6 @@ import {
   stepTime,
 } from '../lib/stage-view'
 import { formatAge, STATE_LABEL } from '../lib/tasks'
-import type { AgentId } from '../lib/agents'
 import { toast } from '../lib/toasts'
 import { StageMarker } from './StageMarker'
 import { StartAgentControl } from './StartAgentControl'

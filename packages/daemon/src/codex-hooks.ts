@@ -40,9 +40,7 @@ function commandText(command: unknown): string | undefined {
   }
   if (Array.isArray(command) && command.every((word) => typeof word === 'string')) {
     const flag = command.findIndex((word) => word === '-lc' || word === '-c')
-    return flag >= 0 && command[flag + 1] !== undefined
-      ? command[flag + 1]
-      : command.join(' ')
+    return flag >= 0 && command[flag + 1] !== undefined ? command[flag + 1] : command.join(' ')
   }
   return undefined
 }

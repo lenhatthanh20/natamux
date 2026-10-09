@@ -9,6 +9,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, ListChecks, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -24,7 +25,6 @@ import { waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
-import type { AgentId } from '../lib/agents'
 import { NeedsInputBanner } from './NeedsInputBanner'
 import { ProgressTab } from './ProgressTab'
 import { ShellPanes } from './ShellPanes'
