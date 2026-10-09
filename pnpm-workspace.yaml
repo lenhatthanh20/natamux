@@ -5,7 +5,9 @@ minimumReleaseAge: 1440
 strictDepBuilds: true
 
 # node-pty compiles its native part when no prebuilt one fits. The terminal of a task needs it.
+# electron downloads its runtime for the desktop app.
 onlyBuiltDependencies:
+  - electron
   - node-pty
 
 ignoredBuiltDependencies:

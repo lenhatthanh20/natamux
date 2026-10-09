@@ -1,0 +1,24 @@
+{
+  "name": "@helmsman/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "electron .",
+    "rebuild-native": "electron-rebuild --force --only node-pty --module-dir ../daemon"
+  },
+  "dependencies": {
+    "@helmsman/cli": "workspace:*",
+    "@helmsman/daemon": "workspace:*",
+    "@helmsman/web": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
