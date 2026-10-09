@@ -84,6 +84,14 @@ describe('deriveTaskState with the legacy pipeline', () => {
     expect(result.position).toEqual(at('implement', 'ready'))
   })
 
+  it('fails a task that waited for the user when its agent, started again, did not start', () => {
+    const result = deriveTaskState(
+      [event('task.readied'), event('agent.started'), event('agent.asked'), event('agent.failed')],
+      LEGACY_PIPELINE,
+    )
+    expect(result.position).toEqual(at('implement', 'failed'))
+  })
+
   it('skips an event that does not fit and reports it', () => {
     const early = event('agent.finished')
     const result = deriveTaskState([event('task.readied'), early], LEGACY_PIPELINE)
