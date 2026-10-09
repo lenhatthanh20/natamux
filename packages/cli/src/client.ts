@@ -16,6 +16,15 @@ export type CreateTaskRequest = {
   labels?: string[]
   agent?: string
   dependsOn?: string[]
+  context?: { source: string; ref: string }
+}
+
+export type StageActionRequest = {
+  action: 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start'
+  stage?: string
+  terminal?: string
+  to?: string
+  reason?: string
 }
 
 export type SendEventRequest = {
@@ -157,6 +166,16 @@ export class DaemonClient {
       await this.request('POST', `${this.taskPath(id)}/agent`, { agent, prompt }),
       'started agent',
     )
+    return taskSchema.parse(body.task)
+  }
+
+  async stageAction(id: string, request: StageActionRequest): Promise<Task> {
+    const body = asRecord(await this.request('POST', `${this.taskPath(id)}/stage`, request), 'task')
+    return taskSchema.parse(body.task)
+  }
+
+  async linkIssue(id: string, link: { provider: string; key: string; url: string }): Promise<Task> {
+    const body = asRecord(await this.request('PUT', `${this.taskPath(id)}/issue`, link), 'task')
     return taskSchema.parse(body.task)
   }
 

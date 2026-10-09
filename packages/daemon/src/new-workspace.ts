@@ -1,12 +1,12 @@
 import type { Task } from '@helmsman/core'
-import type { AgentRunner } from './agent-runner.js'
+import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
 
 type NewWorkspaceParts = {
   tasks: TaskService
   workspaces: WorkspaceService
-  agents: AgentRunner
+  stages: StageRunner
 }
 
 export type NewWorkspaceInput = {
@@ -15,13 +15,14 @@ export type NewWorkspaceInput = {
   repo?: string
   // A local branch to start from; none is the branch the checkout is on.
   base?: string
-  // The agent to start in the workspace's first shell; none leaves a plain shell.
+  // The agent that works on the task's stages; none leaves a plain shell.
   agent?: string
+  // What to do. It becomes the task's notes, and so its context.
   prompt?: string
 }
 
-// The quick way to start work: a task that is ready at once, its worktree, and the agent when one
-// is chosen. The base branch is checked first, so a typo leaves no task behind.
+// The quick way to start work: a task, its worktree, and its first stage started when an agent is
+// chosen. The base branch is checked first, so a typo leaves no task behind.
 export async function newWorkspace(
   parts: NewWorkspaceParts,
   input: NewWorkspaceInput,
@@ -37,8 +38,11 @@ export async function newWorkspace(
     title: input.title,
     description: input.prompt ?? '',
     ...(input.repo === undefined ? {} : { repo: input.repo }),
+    ...(input.agent === undefined ? {} : { agent: input.agent }),
   })
-  parts.tasks.applyEvent(created.id, { source: 'human', type: 'task.readied', payload: {} })
   const task = await parts.workspaces.create(created.id, input.base)
-  return input.agent === undefined ? task : parts.agents.start(task.id, input.agent, input.prompt)
+  if (input.agent === undefined) {
+    return task
+  }
+  return parts.stages.act(task.id, 'start')
 }

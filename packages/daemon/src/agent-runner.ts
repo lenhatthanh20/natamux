@@ -62,7 +62,9 @@ export class AgentRunner {
     this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
   }
 
-  start(taskId: string, agent: string, prompt?: string): Task {
+  // Starts the agent in a terminal of the task: the first by default, another for a stage that
+  // runs beside the first one.
+  start(taskId: string, agent: string, prompt?: string, terminal?: string): Task {
     if (!(LAUNCHABLE_AGENTS as readonly string[]).includes(agent)) {
       throw new UnknownAgentError(agent)
     }
@@ -80,7 +82,7 @@ export class AgentRunner {
       ...(text === '' ? [] : [quote(text)]),
     ].join(' ')
 
-    this.terminals.run(taskId, this.launchLine(taskId, command))
+    this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
     return this.tasks.recordAgentLaunch(taskId, agent)
   }
 
@@ -88,12 +90,13 @@ export class AgentRunner {
   // prompt) goes into a small script and only a short line to run it is typed. The script is
   // sourced, not run by `sh`, so the user's own shell (aliases, PATH) still starts the agent.
   // PowerShell may refuse scripts by policy, so Windows types the command itself.
-  private launchLine(taskId: string, command: string): string {
+  private launchLine(taskId: string, command: string, terminal?: string): string {
     if (this.platform === 'win32') {
       return command
     }
     mkdirSync(this.launchDir, { recursive: true })
-    const script = join(this.launchDir, `agent-launch-${taskId}.sh`)
+    const suffix = terminal === undefined || terminal === '1' ? '' : `-${terminal}`
+    const script = join(this.launchDir, `agent-launch-${taskId}${suffix}.sh`)
     writeFileSync(script, `${command}\n`, { mode: 0o600 })
     return `. ${quoteArgument(script, this.platform)}`
   }
