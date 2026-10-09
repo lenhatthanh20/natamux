@@ -1,4 +1,4 @@
-import { applyTaskEvent, TASK_STATES, type Task, type TaskState } from '@helmsman/core'
+import { applyTaskEvent, LEGACY_PIPELINE, TASK_STATES, type Task, type TaskState } from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
@@ -70,13 +70,17 @@ describe('actionsFor', () => {
   it('only offers events the daemon accepts for that state', () => {
     for (const state of TASK_STATES) {
       for (const action of actionsFor(state)) {
-        const result = applyTaskEvent(state, {
-          taskId: 'T-0001',
-          source: 'human',
-          type: action.type,
-          at: '2026-10-08T09:00:00.000Z',
-          payload: {},
-        })
+        const result = applyTaskEvent(
+          { stage: state === 'review' ? 'review' : 'implement', state, lanes: {} },
+          {
+            taskId: 'T-0001',
+            source: 'human',
+            type: action.type,
+            at: '2026-10-08T09:00:00.000Z',
+            payload: {},
+          },
+          LEGACY_PIPELINE,
+        )
         expect(result.accepted, `${action.label} in ${state}`).toBe(true)
       }
     }
