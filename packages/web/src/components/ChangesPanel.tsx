@@ -7,11 +7,7 @@ import { useFileViewMode } from '../hooks/useFileViewMode'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import { useAppEvent } from '../lib/app-events'
 import { fileOrder } from '../lib/change-tree'
-import {
-  stepFile,
-  wholeFileKind,
-  wrapsByDefault,
-} from '../lib/changes'
+import { stepFile, wholeFileKind, wrapsByDefault } from '../lib/changes'
 import { AgentComment } from './AgentComment'
 import { ChangedFiles } from './ChangedFiles'
 import { type BodyKind, DiffToolbar } from './DiffToolbar'
