@@ -168,9 +168,11 @@ function createWindow(): void {
     created.webContents.once('did-finish-load', async () => {
       await new Promise((resolve) => setTimeout(resolve, 4000))
       const signedIn: unknown = await created.webContents.executeJavaScript(
-          `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
+        `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
       )
-      console.log(`helmsman-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`)
+      console.log(
+        `helmsman-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`,
+      )
       const shot = process.env.HELMSMAN_DESKTOP_SMOKE_SHOT
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
