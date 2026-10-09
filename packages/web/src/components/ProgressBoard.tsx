@@ -99,7 +99,8 @@ export function boardSections(
         key: `${repo.id}:${key}`,
         title:
           index === 0 && (loaded === undefined || key === currentKey)
-            ? repo.name : `${repo.name}, earlier pipeline`,
+            ? repo.name
+            : `${repo.name}, earlier pipeline`,
         steps,
         open: sortRows(
           group.filter((task) => task.state !== 'done'),

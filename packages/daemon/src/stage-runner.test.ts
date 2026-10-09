@@ -450,9 +450,7 @@ describe('a send back', () => {
   it('refuses a stage the task does not have or has not reached', async () => {
     const task = await inReview()
     await expect(runner.act(task.id, 'reopen', { to: 'nope' })).rejects.toThrow(StageInputError)
-    await expect(runner.act(task.id, 'reopen', { to: 'release' })).rejects.toThrow(
-      StageInputError,
-    )
+    await expect(runner.act(task.id, 'reopen', { to: 'release' })).rejects.toThrow(StageInputError)
   })
 
   it('answers with the task after its stage failed to start', async () => {
