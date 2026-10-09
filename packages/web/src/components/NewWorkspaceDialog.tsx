@@ -215,6 +215,7 @@ export function NewWorkspaceDialog({
             className="w-full"
           >
             <option value="claude-code">Claude Code</option>
+            <option value="copilot">GitHub Copilot</option>
             <option value="">No agent, a plain shell</option>
           </Select>
         </div>
