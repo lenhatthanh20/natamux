@@ -36,6 +36,9 @@ beforeEach(async () => {
   mkdirSync(join(repo.root, 'web'))
   webIndexPath = join(repo.root, 'web', 'index.html')
   writeFileSync(webIndexPath, PAGE)
+  mkdirSync(join(repo.root, 'web', 'assets'))
+  writeFileSync(join(repo.root, 'web', 'assets', 'index-abc.js'), 'console.log(1)\n')
+  writeFileSync(join(repo.root, 'secret.txt'), 'not for the browser\n')
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
@@ -95,6 +98,7 @@ beforeEach(async () => {
     dataDir,
     token: TOKEN,
     webIndexPath,
+    webDir: join(repo.root, 'web'),
   })
 })
 
@@ -158,6 +162,34 @@ describe('deep links', () => {
     renameSync(webIndexPath, `${webIndexPath}.moved`)
     const response = await app.inject({ method: 'GET', url: '/board', headers: html })
     expect(response.statusCode).toBe(401)
+  })
+})
+
+describe('the dashboard served by the daemon', () => {
+  it('serves the built files without a token, and caches the hashed ones', async () => {
+    const script = await app.inject({ method: 'GET', url: '/assets/index-abc.js' })
+    expect(script.statusCode).toBe(200)
+    expect(script.headers['content-type']).toContain('text/javascript')
+    expect(script.headers['cache-control']).toContain('immutable')
+    expect(script.body).toBe('console.log(1)\n')
+
+    const page = await app.inject({ method: 'GET', url: '/index.html' })
+    expect(page.headers['content-security-policy']).toContain("default-src 'self'")
+  })
+
+  it.each(['/../secret.txt', '/assets/..%2F..%2Fsecret.txt', '/%2e%2e/secret.txt'])(
+    'serves nothing outside the folder for %s',
+    async (url) => {
+      const response = await app.inject({ method: 'GET', url })
+      expect(response.statusCode).toBe(401)
+    },
+  )
+
+  it('takes the API at /api too, as the dashboard asks for it', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/tasks', headers: authorization })
+    expect(response.json()).toEqual({ tasks: [] })
+    const health = await app.inject({ method: 'GET', url: '/api/health' })
+    expect(health.json()).toEqual({ status: 'ok' })
   })
 })
 
