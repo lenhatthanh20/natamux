@@ -210,9 +210,20 @@ export function ChangedFiles({
     },
     onBlur: (event: FocusEvent<HTMLDivElement>) => {
       const next = event.relatedTarget
-      if (next instanceof Node && !event.currentTarget.contains(next)) {
-        lastFocus.current = null
+      const left = event.target
+      if (next instanceof Node) {
+        if (!event.currentTarget.contains(next)) {
+          lastFocus.current = null
+        }
+        return
       }
+      // Focus went nowhere: either the user clicked a blank part of the page, or a refresh took
+      // the row away. Only a row still in the page means the user left.
+      queueMicrotask(() => {
+        if (left.isConnected) {
+          lastFocus.current = null
+        }
+      })
     },
   }
 
@@ -286,6 +297,7 @@ export function ChangedFiles({
               key={row.key}
               role="treeitem"
               {...tab}
+              tabIndex={tab.tabIndex}
               onFocus={(event) => {
                 tab.onFocus(event)
                 if (event.target === event.currentTarget) {
