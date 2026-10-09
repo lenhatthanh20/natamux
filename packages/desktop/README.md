@@ -31,7 +31,7 @@ pnpm --filter @helmsman/desktop start
 
 ## Check it without a screen
 
-`HELMSMAN_DESKTOP_SMOKE=1` loads the dashboard, prints what it found, and quits. `HELMSMAN_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. On Linux:
+`HELMSMAN_DESKTOP_SMOKE=1` loads the dashboard and quits: exit code 0 when the page started signed in, 1 when not. `HELMSMAN_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main). On Linux:
 
 ```sh
 HELMSMAN_DESKTOP_SMOKE=1 xvfb-run -a pnpm --filter @helmsman/desktop start -- --no-sandbox

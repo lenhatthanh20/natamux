@@ -163,19 +163,23 @@ function createWindow(): void {
     }
   })
   if (process.env.HELMSMAN_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loads signed in, then the app quits.
+    // A check for CI and the codespace: the dashboard loads signed in, then the app quits. The
+    // exit code tells: on Windows the app's output may not reach the console.
     created.webContents.once('did-finish-load', async () => {
       await new Promise((resolve) => setTimeout(resolve, 4000))
-      const seen: unknown = await created.webContents.executeJavaScript(
-        `JSON.stringify({ title: document.title, signedIn: document.querySelector('[aria-label="Daemon token"]') === null, table: document.querySelector('table') !== null })`,
+      const signedIn: unknown = await created.webContents.executeJavaScript(
+        `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
       )
-      console.log(`helmsman-desktop: ${created.webContents.getURL()} ${String(seen)}`)
+      console.log(
+        `helmsman-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`,
+      )
       const shot = process.env.HELMSMAN_DESKTOP_SMOKE_SHOT
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
       }
       quitConfirmed = true
-      app.quit()
+      daemon?.kill()
+      app.exit(signedIn === true ? 0 : 1)
     })
   }
   void created.loadURL(`${dashboardUrl}/`)
