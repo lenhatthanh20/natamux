@@ -6,9 +6,11 @@ import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
+import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
 import { buildServer, isAuthorized } from './server.js'
+import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
@@ -78,6 +80,16 @@ beforeEach(async () => {
     templates: new TemplateService({ dataDir, tasks: service }),
     repos,
     bus,
+    stages: new StageRunner({
+      tasks: service,
+      terminals,
+      agents,
+      bus,
+      dataDir,
+      repoPath: () => repo.dir,
+    }),
+    settings: new ProjectSettingsService({ repos }),
+    dataDir,
     token: TOKEN,
     webIndexPath,
   })

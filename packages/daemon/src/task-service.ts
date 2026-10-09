@@ -1,6 +1,7 @@
 import {
   applyTaskEvent,
   DEFAULT_PROJECT_SETTINGS,
+  LEGACY_PIPELINE,
   type EventType,
   firstPosition,
   type IssueLink,
@@ -90,6 +91,10 @@ export class TaskNotFoundError extends Error {
 
 export type SettingsOf = (repo: string | null) => ProjectSettings
 
+// The flow tasks had before stages: implement, review, release. The daemon passes the settings of
+// each repository instead.
+const LEGACY_SETTINGS: ProjectSettings = { ...DEFAULT_PROJECT_SETTINGS, stages: LEGACY_PIPELINE }
+
 function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes'>): StagePosition {
   return { stage: task.stage, state: task.state, lanes: task.lanes }
 }
@@ -117,7 +122,7 @@ type TaskServiceOptions = {
   index: TaskIndex
   bus: EventBus
   now?: () => Date
-  // The settings of a repository (`.helmsman.json`). Default: the default settings.
+  // The settings of a repository (`.helmsman.json`). Default: the legacy pipeline.
   settingsOf?: SettingsOf
 }
 
@@ -133,7 +138,7 @@ export class TaskService {
     this.index = options.index
     this.bus = options.bus
     this.now = options.now ?? (() => new Date())
-    this.settingsOf = options.settingsOf ?? (() => DEFAULT_PROJECT_SETTINGS)
+    this.settingsOf = options.settingsOf ?? (() => LEGACY_SETTINGS)
   }
 
   // Rebuild the index cache from the task files and their event logs. A task with no event log
