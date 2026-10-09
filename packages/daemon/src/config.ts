@@ -37,7 +37,8 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
     repoDir: env.HELMSMAN_REPO_DIR?.trim() || cwd,
     worktreesDir: env.HELMSMAN_WORKTREES_DIR?.trim() || join(dataDir, 'worktrees'),
     webIndexPath:
-      env.HELMSMAN_WEB_INDEX?.trim() || (webDir === undefined ? undefined : join(webDir, 'index.html')),
+      env.HELMSMAN_WEB_INDEX?.trim() ||
+      (webDir === undefined ? undefined : join(webDir, 'index.html')),
     webDir,
     token: configuredToken || randomBytes(24).toString('base64url'),
     tokenWasGenerated: !configuredToken,

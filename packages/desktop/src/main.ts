@@ -21,6 +21,8 @@ import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
 import { freePort, loginShellPath, waitForHealth } from './startup.js'
 
+// Before the paths are read: the user data folder is named after the app.
+app.setName('Helmsman')
 const here = dirname(fileURLToPath(import.meta.url))
 const userData = app.getPath('userData')
 const settingsFile = join(userData, 'settings.json')
@@ -234,9 +236,8 @@ function buildMenu(): void {
 // The page reads the token once, as it loads. Only the dashboard may ask.
 ipcMain.on('helmsman:daemon-token', (event) => {
   const from = event.senderFrame?.url ?? ''
-  event.returnValue = dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin)
-    ? daemonToken
-    : ''
+  event.returnValue =
+    dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
 })
 
 if (!app.requestSingleInstanceLock()) {
