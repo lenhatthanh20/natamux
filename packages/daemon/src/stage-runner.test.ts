@@ -126,10 +126,10 @@ function writeWorking(task: Task, name: string, text: string): void {
 }
 
 describe('context', () => {
-  it('writes the context of a typed task and waits for your approval', async () => {
+  it('writes the context of a typed task and moves on by itself', async () => {
     const task = await created({ title: 'Export tasks', description: 'As CSV, for reports.' })
 
-    expect(task).toMatchObject({ stage: 'context', state: 'review' })
+    expect(task).toMatchObject({ stage: 'spec', state: 'ready' })
     const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
     expect(context).toContain('# Export tasks')
     expect(context).toContain('As CSV, for reports.')
@@ -139,6 +139,7 @@ describe('context', () => {
       'context.fetched',
       'stage.reported',
       'stage.checked',
+      'stage.passed',
     ])
   })
 
@@ -190,12 +191,7 @@ describe('context', () => {
 })
 
 describe('agent stages', () => {
-  async function atSpec(): Promise<Task> {
-    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
-    await runner.act(task.id, 'approve')
-    await runner.settle()
-    return tasks.getTask(task.id)
-  }
+  const atSpec = () => created({ title: 'Export tasks', agent: 'claude-code' })
 
   it('waits for a workspace, then starts the agent with the stage prompt', async () => {
     const waiting = await atSpec()
@@ -253,14 +249,12 @@ describe('agent stages', () => {
 describe('a group', () => {
   async function atBuild(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
-    await withWorkspace(task.id)
     tasks.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
       payload: { to: 'ready', stage: 'build' },
     })
-    await runner.settle()
-    return tasks.getTask(task.id)
+    return withWorkspace(task.id)
   }
 
   it('starts each stage in its own terminal: implement in the first, test spec in the next', async () => {
@@ -335,6 +329,12 @@ describe('helpers', () => {
 describe('a prompt for a running agent', () => {
   async function atSpecWithShell(program: string): Promise<{ task: Task; pty: FakePty }> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    // Held at the context gate, so the spec stage starts only when the shell is set up.
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'context' },
+    })
     await workspaces.create(task.id)
     // The dashboard opened the first shell; the program in it is up to the test.
     terminals.run(task.id, 'echo ready')
@@ -379,6 +379,29 @@ describe('a prompt for a running agent', () => {
     expect(pty.written.join('')).not.toContain('The checks of this stage failed')
   })
 
+  it('starts one agent when a person starts it while the new workspace starts the stage', async () => {
+    const task = await created({ title: 'Export tasks' })
+    await workspaces.create(task.id)
+
+    const after = await runner.startByHand(task.id, 'claude-code')
+    await runner.settle()
+
+    expect(after).toMatchObject({ stage: 'spec', state: 'running' })
+    expect(ptys).toHaveLength(1)
+    expect(ptys[0]?.written.join('').split(`agent-launch-${task.id}.sh`)).toHaveLength(2)
+  })
+
+  it('gives a prompt to the agent that runs, rather than starting another', async () => {
+    const task = await withWorkspace((await created({ title: 'Export tasks' })).id)
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    await runner.startByHand(task.id, 'claude-code', 'Also add a test')
+
+    expect(ptys).toHaveLength(1)
+    expect(pty.written.join('')).toContain('\x1b[200~Also add a test')
+  })
+
   it('ends the shells of a task that is cancelled', async () => {
     const { task, pty } = await atSpecWithShell('node')
 
@@ -392,14 +415,12 @@ describe('a prompt for a running agent', () => {
 describe('a send back', () => {
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
-    await withWorkspace(task.id)
     tasks.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
       payload: { to: 'review', stage: 'review' },
     })
-    await runner.settle()
-    return tasks.getTask(task.id)
+    return withWorkspace(task.id)
   }
 
   const typesSince = (id: string, type: EventType) => {

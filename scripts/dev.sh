@@ -134,18 +134,19 @@ seed() {
   fi
 
   new_task() { cli task create "$@" --json | pick 'data.id'; }
-  # A new task starts its Context stage and waits in review for approval. A prompt typed to the
-  # agent takes it up again, so the fake agent works on the prompt in that stage.
-  wait_for_review() {
+  # A new task passes its Context stage and waits, ready, for its Spec stage. The seed holds it at
+  # the context gate instead: a prompt typed to the agent takes that stage up again, so the fake
+  # agent works on the prompt there and the Spec stage does not start an agent of its own.
+  hold_at_context() {
     local i
     for i in $(seq 1 30); do
-      [ "$(cli task show "$1" --json | pick 'data.state')" = review ] && return
+      [ "$(cli task show "$1" --json | pick 'data.state')" = ready ] && break
       sleep 1
     done
-    echo "$1 did not reach review in 30 seconds" >&2
+    cli event "$1" state.overridden --payload '{"to":"review","stage":"context"}' >/dev/null
   }
   start_agent() {
-    wait_for_review "$1"
+    hold_at_context "$1"
     cli workspace create "$1"
     cli agent start "$1" --prompt "$2"
   }

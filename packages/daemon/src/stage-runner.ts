@@ -204,6 +204,8 @@ export class StageRunner {
   private readonly waitingForTasks = new Set<string>()
   // Terminals where this daemon started an agent, and when.
   private readonly launched = new Map<string, number>()
+  // The agent a person picked, while the stage it starts is starting.
+  private readonly chosenAgents = new Map<string, string>()
   // The terminal where each task runs its stage command.
   private readonly commandTerminals = new Map<string, string>()
   // The stages each task is starting now, so an action can answer with the task after them.
@@ -442,12 +444,38 @@ export class StageRunner {
       if (this.agentRuns(task.id, terminal)) {
         this.terminals.paste(task.id, prompt, terminal)
       } else {
-        this.agents.start(task.id, task.agent ?? 'claude-code', prompt, terminal)
+        const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
+        this.agents.start(task.id, agent, prompt, terminal)
         this.launched.set(`${task.id}/${terminal}`, this.now())
       }
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
     }
+  }
+
+  // An agent started by a person: Start agent in the dashboard, the CLI, or the tries of a fan-out.
+  // A stage that waits for its agent starts it, with the stage prompt. An agent that runs already
+  // is left alone, since its command would be typed into it; a prompt goes to it instead.
+  async startByHand(taskId: string, agent: string, prompt?: string): Promise<Task> {
+    // A new workspace may be starting the stage right now.
+    await this.startWork.get(taskId)
+    if (prompt === undefined && !this.agentRuns(taskId)) {
+      this.chosenAgents.set(taskId, agent)
+      try {
+        await this.startLanes(taskId, ['draft', 'ready'])
+      } finally {
+        this.chosenAgents.delete(taskId)
+      }
+    }
+    if (this.agentRuns(taskId)) {
+      if (prompt !== undefined) {
+        this.terminals.paste(taskId, prompt)
+      }
+      return this.tasks.getTask(taskId)
+    }
+    const task = this.agents.start(taskId, agent, prompt)
+    this.launched.set(`${taskId}/${MAIN_TERMINAL}`, this.now())
+    return task
   }
 
   // A prompt goes into a running agent only. Pasted into a shell, its lines would run as
@@ -553,6 +581,16 @@ export class StageRunner {
     }
     this.tasks.recordEvent(task.id, 'context.fetched', { stage: stage.id, source: source.type })
     await this.reportAndCheck(task.id, stage.id, 'system')
+    // A context of the task's own title and description holds nothing new to read. Waiting for
+    // approval would put every new backlog task in Needs you.
+    const now = this.tasks.getTask(task.id)
+    if (source.type === 'manual' && now.stage === stage.id && now.state === 'review') {
+      this.tasks.applyEvent(task.id, {
+        source: 'system',
+        type: 'stage.passed',
+        payload: { stage: stage.id },
+      })
+    }
   }
 
   private async readIssue(task: Task): Promise<string> {

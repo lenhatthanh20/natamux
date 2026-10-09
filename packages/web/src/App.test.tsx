@@ -126,7 +126,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     }
     if (path === '/api/tasks' && method === 'POST') {
       const task = makeTask({
-        id: 'T-0099',
+        id: `T-${String(99 + tasks.length).padStart(4, '0')}`,
         title: body.title ?? '',
         parentId: body.parentId ?? null,
       })
@@ -851,6 +851,21 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 
     expect(await within(screen.getByRole('table')).findByText('Fix the login')).toBeTruthy()
+  })
+
+  it('adds tasks typed one after another without waiting for the daemon', async () => {
+    installDaemon([])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    const field = (await screen.findByLabelText('New task title')) as HTMLInputElement
+    await user.type(field, 'First task{Enter}Second task{Enter}')
+
+    expect(field.value).toBe('')
+    const table = await screen.findByRole('table')
+    expect(await within(table).findByText('First task')).toBeTruthy()
+    expect(await within(table).findByText('Second task')).toBeTruthy()
   })
 
   it('adds a subtask from the details of a task', async () => {

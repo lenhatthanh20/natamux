@@ -237,7 +237,7 @@ Agent sources (`skill`, `mcp`):
 - It writes `context.md`.
 - Helmsman does not set up MCP servers or skills. The agent uses the ones it already has (its user settings or the repository's `.mcp.json`).
 
-The `context` stage ends when `context.md` exists. With gate `manual` you read it, edit it if needed, and approve.
+The `context` stage ends when `context.md` exists. With gate `manual` you read it, edit it if needed, and approve. A `manual` source is the exception: its context is only the task's own title and notes, so there is nothing new to read, and the stage passes by itself (`stage.passed`). Otherwise every new backlog task would wait in Needs you.
 
 ### 4.2 Task fields
 

@@ -29,8 +29,8 @@ How to test stages, context, issues and pull requests on a real repository. Run 
 
 | # | Case | Expected |
 |---|---|---|
-| E1 | New workspace with an agent and a prompt | `context.md` from the notes; Context waits for approval |
-| E2 | Approve Context; Send back with a reason | Spec runs; after send back it runs again (×2, reason on the card) |
+| E1 | New workspace with an agent and a prompt | `context.md` from the notes; Context passes by itself, Spec starts |
+| E2 | Send back the spec with a reason | Spec runs; after send back it runs again (×2, reason on the card) |
 | E3 | Approve Spec and Plan | Test spec in terminal 2 and Implement in terminal 1 at once; Implement commits and passes |
 | E4 | Approve Test spec and Review | Testing runs and passes; Release is ready |
 | E5 | The four marks | One failed check goes back to the agent; `[no-done]` and `[ask]` wait for you |
