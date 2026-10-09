@@ -1,4 +1,10 @@
-import { applyTaskEvent, type EventType, type Task, type TaskEvent } from '@helmsman/core'
+import {
+  applyTaskEvent,
+  type EventType,
+  LEGACY_PIPELINE,
+  type Task,
+  type TaskEvent,
+} from '@helmsman/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
@@ -35,6 +41,12 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     workspace: null,
     pr: null,
     prStatus: null,
+    stage: 'implement',
+    stages: ['implement', 'review', 'release'],
+    lanes: {},
+    stageSince: null,
+    context: null,
+    issue: null,
     parentId: null,
     repo: null,
     dependsOn: [],
@@ -138,10 +150,14 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         at: '2026-10-08T12:00:00.000Z',
         payload: {},
       }
-      const applied = applyTaskEvent(target.state, event)
+      const applied = applyTaskEvent(
+        { stage: target.stage, state: target.state, lanes: target.lanes },
+        event,
+        LEGACY_PIPELINE,
+      )
       log.push({ accepted: applied.accepted, event })
       const updated = applied.accepted
-        ? { ...target, state: applied.state, updatedAt: event.at }
+        ? { ...target, ...applied.position, updatedAt: event.at }
         : target
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated, accepted: applied.accepted })
@@ -309,7 +325,12 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Connect' }))
 }
 
-const reviewTask = makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'review' })
+const reviewTask = makeTask({
+  id: 'T-0001',
+  title: 'Fix timezone bug',
+  state: 'review',
+  stage: 'review',
+})
 // A running task is "quiet" after ten minutes, so this one must be recent whenever the tests run.
 const runningTask = makeTask({
   id: 'T-0002',
