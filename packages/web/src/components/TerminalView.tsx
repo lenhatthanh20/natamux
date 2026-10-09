@@ -245,7 +245,6 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
   // A new token is the trigger. Token 0 is "no request", so a terminal that only opens does not
   // take the focus from the tab that opened it.
   const lastToken = useRef<number | undefined>(undefined)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token is the trigger.
   useEffect(() => {
     const changed = lastToken.current !== focusToken
     lastToken.current = focusToken
