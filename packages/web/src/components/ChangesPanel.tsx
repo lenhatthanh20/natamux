@@ -73,7 +73,8 @@ function showsImage(file: FileDiff, svgPreview: boolean): boolean {
   return imageTypeOf(file.path) !== null && (file.binary || file.tooLarge || svgPreview)
 }
 
-function bodyKindOf(file: FileDiff | undefined, svgPreview: boolean): BodyKind {
+// Must match what FileBody shows, so the toolbar has no buttons that do nothing.
+function bodyKindOf(file: FileDiff | undefined, svgPreview: boolean, sameText: boolean): BodyKind {
   if (file === undefined) {
     return 'pending'
   }
@@ -83,7 +84,15 @@ function bodyKindOf(file: FileDiff | undefined, svgPreview: boolean): BodyKind {
   if (file.binary || file.tooLarge) {
     return 'notice'
   }
-  return wholeFileKind(file.status) === null ? 'text' : 'whole'
+  const kind = wholeFileKind(file.status)
+  if (kind !== null) {
+    return wholeText(file, kind) === '' ? 'notice' : 'whole'
+  }
+  return sameText ? 'notice' : 'text'
+}
+
+function wholeText(file: FileDiff, kind: 'added' | 'removed'): string {
+  return (kind === 'added' ? file.modified : file.original) ?? ''
 }
 
 function Notice({ children }: { children: string }) {
@@ -131,9 +140,11 @@ function FileBody({
   onStats,
   onChanges,
 }: FileBodyProps) {
+  // Keyed by path: the size of the image before must not show while the new one loads.
   if (showsImage(file, svgPreview)) {
     return (
       <ImageDiff
+        key={file.path}
         taskId={taskId}
         path={file.path}
         status={file.status}
@@ -151,7 +162,7 @@ function FileBody({
   const viewer = <SkeletonList rows={6} rowHeight={28} label="Loading the viewer" />
   const kind = wholeFileKind(file.status)
   if (kind !== null) {
-    const whole = (kind === 'added' ? file.modified : file.original) ?? ''
+    const whole = wholeText(file, kind)
     if (whole === '') {
       return <Notice>Empty file.</Notice>
     }
@@ -285,7 +296,7 @@ export function ChangesPanel({
   const setWrap = prose ? setWrapProse : setWrapCode
   const isSvg = current !== null && imageTypeOf(current.path) === 'image/svg+xml'
   const svgPreview = isSvg && previewPath === current?.path
-  const body = bodyKindOf(shown, svgPreview)
+  const body = bodyKindOf(shown, svgPreview, sameText)
   const fileStats = current !== null && stats?.path === current.path ? stats : null
   const fileChanges = current !== null && changeInfo?.path === current.path ? changeInfo : null
   // The preview switch is for an SVG that is shown as text. A big SVG is an image anyway.

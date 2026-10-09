@@ -58,6 +58,8 @@ function errorText(error: Error): string {
     : error.message
 }
 
+type NaturalSize = { url: string; width: number; height: number }
+
 function ImagePanel({
   taskId,
   path,
@@ -72,10 +74,11 @@ function ImagePanel({
     refetchInterval: false,
   })
   const url = useObjectUrl(image.data)
-  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null)
+  // Kept with its address, so a new image does not show the size of the one before it.
+  const [natural, setNatural] = useState<NaturalSize | null>(null)
   const facts = [
     CAPTION[side],
-    natural === null ? null : `${natural.width} × ${natural.height} px`,
+    natural === null || natural.url !== url ? null : `${natural.width} × ${natural.height} px`,
     image.data === undefined ? null : formatBytes(image.data.size),
   ].filter((fact) => fact !== null)
 
@@ -106,6 +109,7 @@ function ImagePanel({
             alt={`${SHORT[side]}: ${path}`}
             onLoad={(event) =>
               setNatural({
+                url,
                 width: event.currentTarget.naturalWidth,
                 height: event.currentTarget.naturalHeight,
               })

@@ -213,7 +213,8 @@ async function untrackedCounts(worktreePath: string, path: string): Promise<Line
   } catch {
     return { added: null, removed: null }
   }
-  if (file === null || file.size > MAX_FILE_BYTES) {
+  // Git lists a nested repository as one untracked folder.
+  if (file === null || !file.isFile || file.size > MAX_FILE_BYTES) {
     return { added: null, removed: null }
   }
   const cached = untrackedLines.get(file.real)
@@ -221,7 +222,13 @@ async function untrackedCounts(worktreePath: string, path: string): Promise<Line
   if (cached !== undefined && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
     lines = cached.lines
   } else {
-    const buffer = await file.read()
+    let buffer: Buffer
+    try {
+      buffer = await file.read()
+    } catch {
+      // An agent can delete the file after the stat. One file must not fail the whole list.
+      return { added: null, removed: null }
+    }
     lines = looksBinary(buffer) ? null : countTextLines(buffer)
     if (untrackedLines.size >= MAX_CACHED_COUNTS) {
       untrackedLines.clear()
@@ -237,7 +244,10 @@ async function lineCounts(
 ): Promise<ChangeEntry[]> {
   let tracked = new Map<string, LineCounts>()
   try {
-    tracked = parseNumstatZ(await git(worktreePath, ['diff', '--numstat', '-z', 'HEAD', '--']))
+    // `-M` finds renames even when the user's git config turns them off.
+    tracked = parseNumstatZ(
+      await git(worktreePath, ['diff', '--numstat', '-z', '-M', 'HEAD', '--']),
+    )
   } catch (error) {
     // A repository without a commit has no HEAD to compare with.
     if (!(error instanceof GitError)) {
@@ -281,6 +291,7 @@ function looksBinary(buffer: Buffer): boolean {
 
 type FileInWorktree = {
   real: string
+  isFile: boolean
   size: number
   mtimeMs: number
   read: () => Promise<Buffer>
@@ -302,8 +313,14 @@ async function readInside(root: string, path: string): Promise<FileInWorktree | 
   if (real !== realRoot && !real.startsWith(`${realRoot}${sep}`)) {
     throw new OutsideWorkspaceError(path)
   }
-  const { size, mtimeMs } = await stat(real)
-  return { real, size, mtimeMs, read: () => readFile(real) }
+  const stats = await stat(real)
+  return {
+    real,
+    isFile: stats.isFile(),
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    read: () => readFile(real),
+  }
 }
 
 // Both sides of one changed file: the last commit, and the file as it is now.

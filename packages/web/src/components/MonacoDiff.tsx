@@ -91,7 +91,11 @@ export default function MonacoDiff({
   // The cursor line of the new side. Null until the user moves the cursor or steps to a change, so
   // the first step goes to the first change and a comment is about the whole file.
   const lineRef = useRef<number | null>(null)
-  const builtPath = useRef<string | null>(null)
+  // The file whose first change was scrolled to. Set only once it happens: in dev, StrictMode
+  // builds the editor twice, and the first one is gone before its diff is done.
+  const revealedPath = useRef<string | null>(null)
+  // What onChanges got last. A cursor move inside the same change must not render the panel again.
+  const lastReported = useRef<{ index: number; total: number } | null>(null)
   // Monaco moves the cursor when it gets a model or new text. Those moves are not the user's.
   const quiet = useRef(false)
   // One key press can reach both the app's shortcut and the editor's own key. It steps once.
@@ -100,10 +104,14 @@ export default function MonacoDiff({
   const report = () => {
     const changes = changesRef.current
     const line = lineRef.current
-    onChangesRef.current?.({
-      index: line === null ? -1 : changeAt(changes, line),
-      total: changes.length,
-    })
+    const index = line === null ? -1 : changeAt(changes, line)
+    const last = lastReported.current
+    if (last !== null && last.index === index && last.total === changes.length) {
+      return
+    }
+    const info = { index, total: changes.length }
+    lastReported.current = info
+    onChangesRef.current?.(info)
   }
 
   const step = (by: 1 | -1) => {
@@ -143,11 +151,10 @@ export default function MonacoDiff({
     if (!element) {
       return
     }
-    const newPath = builtPath.current !== path
-    builtPath.current = path
     // A new editor has its cursor at the top, whatever the old one had.
     lineRef.current = null
     changesRef.current = []
+    lastReported.current = null
 
     const language = languageForPath(path)
     const editor = monaco.editor.createDiffEditor(element, {
@@ -206,7 +213,7 @@ export default function MonacoDiff({
       onLineRef.current?.(event.position.lineNumber)
       report()
     })
-    let revealFirst = newPath
+    let revealFirst = revealedPath.current !== path
     const updated = editor.onDidUpdateDiff(() => {
       const changes = editor.getLineChanges() ?? []
       changesRef.current = changes
@@ -215,6 +222,7 @@ export default function MonacoDiff({
       if (revealFirst && first !== undefined) {
         // Show where the work is, without moving the cursor: a comment stays about the file.
         modifiedEditor.revealLineNearTop(changeAnchor(first).start)
+        revealedPath.current = path
       }
       revealFirst = false
       report()
