@@ -91,11 +91,14 @@ function sectionBody(text: string, name: string): string[] {
   return body
 }
 
-// A case is a sub-heading or a list item under the section.
+// A case is a sub-heading under the section, or, without sub-headings, a list item that is not
+// indented (the input and expected result of a case are often a list of their own).
 export function countItems(text: string, section: string): number {
-  return sectionBody(text, section).filter((line) =>
-    /^(#{2,6}\s|\s*([-*+]|\d+[.)])\s+\S)/.test(line),
-  ).length
+  const body = sectionBody(text, section)
+  const headings = body.filter((line) => /^#{2,6}\s/.test(line)).length
+  return headings > 0
+    ? headings
+    : body.filter((line) => /^([-*+]|\d+[.)])\s+\S/.test(line)).length
 }
 
 async function checkOutput(input: CheckInput, result: CheckResult): Promise<void> {
