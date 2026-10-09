@@ -176,9 +176,7 @@ describe('GitHub Copilot', () => {
     })
     const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')
-    expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "copilot --allow-all-tools -i 'Fix it'\n",
-    )
+    expect(readFileSync(script(task.id), 'utf8')).toBe("copilot --allow-all-tools -i 'Fix it'\n")
     expect(tasks.getTask(task.id).agent).toBe('copilot')
   })
 })
