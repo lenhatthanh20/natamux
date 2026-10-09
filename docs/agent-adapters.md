@@ -96,7 +96,7 @@ Each agent starts from the dashboard (**New workspace**, or **Start agent** on a
 
 Notes:
 
-- **Codex hook trust.** Codex runs a hook only after the user trusted it, and asks at start for every hook it has not seen. Helmsman's hooks change with the daemon's address, so it passes `--dangerously-bypass-hook-trust`. The flag skips that review for the session's other hooks too: hooks of a project the user already trusts run without the review. Set `HELMSMAN_CODEX_ARGS` or start Codex by hand to work without it.
+- **Codex hook trust.** Codex runs a hook only after the user trusted it, and asks at start for every hook it has not seen. Helmsman's hooks change with the daemon's address, so it passes `--dangerously-bypass-hook-trust`. The flag skips that review for the session's other hooks too: hooks of a project the user already trusts run without the review. To work without the flag, start Codex by hand in the task's terminal; its hooks then come from its own settings.
 - **Copilot names no event.** Its hook gets the same JSON shape for several events, so each hook command names its event: `helmsman hook copilot agentStop`. In the real session the hooks ran in a new, untrusted folder, and got Helmsman's environment variables.
 - **JSON answers.** Cursor blocks a shell command when a hook's answer is not JSON, and Gemini reads the answer as JSON, so `helmsman hook cursor` and `helmsman hook gemini` print `{}`, even outside a Helmsman terminal.
 - **A file of the user's own** at `.github/hooks/helmsman.json` or `.cursor/hooks.json` is left alone; the agent then runs without Helmsman's hooks and is followed by its terminal.
