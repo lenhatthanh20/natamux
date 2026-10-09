@@ -25,7 +25,7 @@ describe('fileIconName', () => {
     ['logo.PNG', 'image'],
     ['Vagrantfile', 'vagrant'],
     ['disc.yml', 'yaml'],
-    ['garoon.sh.bak', 'file'],
+    ['deploy.sh.bak', 'file'],
     ['.gitignore', 'git'],
     ['Makefile', 'makefile'],
     ['no-extension', 'file'],

@@ -20,7 +20,7 @@ const BY_EXTENSION = new Map(
     md: 'markdown',
     py: 'python',
     php: 'php',
-    // Garoon's PHP files.
+    // PHP templates in some projects.
     csp: 'php',
     rb: 'ruby',
     go: 'go',

@@ -1,0 +1,34 @@
+name: Desktop app
+
+# Run by hand (Actions → Desktop app → Run workflow). Builds the app on GitHub's macOS and Windows
+# machines and keeps the installers as artifacts of the run. Not signed yet (build order step 11).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Package
+        shell: bash
+        run: scripts/package-desktop.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: helmsman-${{ runner.os }}
+          path: |
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.exe
+          if-no-files-found: error
