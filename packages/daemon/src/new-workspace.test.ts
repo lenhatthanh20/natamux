@@ -5,6 +5,7 @@ import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { newWorkspace } from './new-workspace.js'
+import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
@@ -15,14 +16,15 @@ let repo: TestRepo
 let index: TaskIndex
 let tasks: TaskService
 let ptys: FakePty[]
-let parts: { tasks: TaskService; workspaces: WorkspaceService; agents: AgentRunner }
+let parts: { tasks: TaskService; workspaces: WorkspaceService; stages: StageRunner }
 
 beforeEach(() => {
   repo = createTestRepo()
   const dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
   index = new TaskIndex(':memory:')
-  tasks = new TaskService({ dataDir, index, bus: new EventBus() })
+  const bus = new EventBus()
+  tasks = new TaskService({ dataDir, index, bus })
   const workspaces = new WorkspaceService({
     tasks,
     repoDir: repo.dir,
@@ -41,7 +43,16 @@ beforeEach(() => {
     platform: 'linux',
     launchDir: dataDir,
   })
-  parts = { tasks, workspaces, agents }
+  const stages = new StageRunner({
+    tasks,
+    terminals,
+    agents,
+    bus,
+    dataDir,
+    repoPath: () => repo.dir,
+  })
+  stages.start()
+  parts = { tasks, workspaces, stages }
 })
 
 afterEach(() => {
@@ -50,16 +61,16 @@ afterEach(() => {
 })
 
 describe('newWorkspace', () => {
-  it('makes a ready task with a worktree and leaves the shell to the user', async () => {
+  it('makes a task with a worktree and leaves the shell to the user', async () => {
     const task = await newWorkspace(parts, { title: 'Fix the login page' })
 
-    expect(task).toMatchObject({ title: 'Fix the login page', state: 'ready' })
+    expect(task).toMatchObject({ title: 'Fix the login page', state: 'draft' })
     expect(task.workspace).not.toBeNull()
     expect(task.branch).toBe('helmsman/t-0001-fix-the-login-page')
     expect(ptys).toHaveLength(0)
   })
 
-  it('starts the agent with the prompt, which also becomes the notes', async () => {
+  it('starts the first stage with an agent, and the prompt becomes the notes', async () => {
     const task = await newWorkspace(parts, {
       title: 'Speed up search',
       agent: 'claude-code',
@@ -68,6 +79,7 @@ describe('newWorkspace', () => {
 
     expect(task.agent).toBe('claude-code')
     expect(task.description).toBe('Keep it under 100 ms')
+    expect(task).toMatchObject({ stage: 'implement', state: 'running' })
     expect(ptys).toHaveLength(1)
   })
 
