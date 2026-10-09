@@ -2,7 +2,8 @@ import type { Task, TaskEvent } from '@helmsman/core'
 
 export type DaemonMessage =
   | { kind: 'task.created'; task: Task }
-  | { kind: 'task.updated'; task: Task; event: TaskEvent; accepted: boolean }
+  // `moved`: the task entered another step.
+  | { kind: 'task.updated'; task: Task; event: TaskEvent; accepted: boolean; moved?: boolean }
   // A change that is not worth a line in the log, such as checks that started to run.
   | { kind: 'task.changed'; task: Task }
 

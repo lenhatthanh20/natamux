@@ -121,6 +121,28 @@ export class TaskIndex {
       )
   }
 
+  countEvents(taskId: string): number {
+    const row = this.db
+      .prepare('select count(*) as count from events where task_id = ?')
+      .get(taskId) as { count: number }
+    return row.count
+  }
+
+  // Puts the events of a task back from its event log, in order.
+  replaceEvents(taskId: string, events: readonly { event: TaskEvent; accepted: boolean }[]): void {
+    this.db.exec('begin')
+    try {
+      this.db.prepare('delete from events where task_id = ?').run(taskId)
+      for (const { event, accepted } of events) {
+        this.appendEvent(event, accepted)
+      }
+      this.db.exec('commit')
+    } catch (error) {
+      this.db.exec('rollback')
+      throw error
+    }
+  }
+
   listEvents(taskId: string): StoredEvent[] {
     const rows = this.db
       .prepare('select * from events where task_id = ? order by seq')

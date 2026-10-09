@@ -97,6 +97,7 @@ ask)
   say "Got it: $answer"
   work 3
   say "Done. The change is ready for review."
+  helmsman done >/dev/null 2>&1 || true
   hook Stop
   ;;
 fail)
@@ -111,6 +112,7 @@ fail)
   work 1
   work 2
   say "Done. The change is ready for review."
+  helmsman done >/dev/null 2>&1 || true
   hook Stop
   ;;
 esac

@@ -1,5 +1,7 @@
 import { parseArgs } from 'node:util'
 import {
+  CONTEXT_SOURCE_TYPES,
+  type ContextSourceType,
   EVENT_SOURCES,
   EVENT_TYPES,
   type EventType,
@@ -28,6 +30,10 @@ export type TaskChanges = {
 }
 export type EventSource = (typeof EVENT_SOURCES)[number]
 
+export const STAGE_COMMANDS = ['approve', 'back', 'skip', 'pass', 'fail', 'start'] as const
+// `back` is the daemon's `reopen`.
+export type StageCommand = (typeof STAGE_COMMANDS)[number]
+
 export type Command =
   | { name: 'help' }
   | {
@@ -38,6 +44,7 @@ export type Command =
       labels: string[]
       agent?: string
       dependsOn: string[]
+      context?: { source: ContextSourceType; ref: string }
       json: boolean
     }
   | { name: 'task.list'; state?: TaskState; json: boolean }
@@ -46,7 +53,18 @@ export type Command =
   // For an agent without hooks: say it waits for the user, or that its turn is over. Without
   // --task, the task comes from HELMSMAN_TASK_ID.
   | { name: 'agent.ask'; id?: string; question: string; json: boolean }
+  // Says the stage this terminal works on is done; the daemon then checks it.
   | { name: 'agent.done'; id?: string; json: boolean }
+  | {
+      name: 'stage.act'
+      id: string
+      action: StageCommand
+      stage?: string
+      to?: string
+      reason?: string
+      json: boolean
+    }
+  | { name: 'task.link'; id: string; provider: string; key: string; url: string; json: boolean }
   | { name: 'task.show'; id: string; json: boolean }
   | {
       name: 'event.send'
@@ -122,10 +140,27 @@ function parseOptions(argv: readonly string[]) {
         prompt: { type: 'string' },
         task: { type: 'string' },
         base: { type: 'string' },
+        context: { type: 'string' },
+        stage: { type: 'string' },
+        to: { type: 'string' },
+        reason: { type: 'string' },
+        issue: { type: 'string' },
+        url: { type: 'string' },
+        provider: { type: 'string' },
       },
     })
   } catch (error) {
     throw new UsageError(error instanceof Error ? error.message : String(error))
+  }
+}
+
+// "github-issue:42" or "manual" for --context.
+function contextOption(value: string): { source: ContextSourceType; ref: string } {
+  const at = value.indexOf(':')
+  const source = at < 0 ? value : value.slice(0, at)
+  return {
+    source: oneOf(source, CONTEXT_SOURCE_TYPES, 'The context source in --context'),
+    ref: at < 0 ? '' : value.slice(at + 1).trim(),
   }
 }
 
@@ -161,6 +196,23 @@ export function parseCommand(argv: readonly string[]): Command {
         labels: values.label ?? [],
         agent: values.agent,
         dependsOn: (values['depends-on'] ?? []).map((id) => taskId(id)),
+        ...(values.context === undefined ? {} : { context: contextOption(values.context) }),
+        json,
+      }
+    }
+    if (second === 'link') {
+      noExtraArguments(rest.slice(1))
+      if (values.issue === undefined || values.url === undefined) {
+        throw new UsageError(
+          'Give the issue and its address: helmsman task link T-42 --issue ABC-123 --url https://…',
+        )
+      }
+      return {
+        name: 'task.link',
+        id: taskId(rest[0]),
+        provider: values.provider ?? (values.url.includes('github.com') ? 'github' : 'tracker'),
+        key: values.issue,
+        url: values.url,
         json,
       }
     }
@@ -196,7 +248,9 @@ export function parseCommand(argv: readonly string[]): Command {
       }
       return { name: 'task.edit', id: taskId(rest[0]), changes, json }
     }
-    throw new UsageError(`Unknown task command "${second ?? ''}". Use create, list, show or edit`)
+    throw new UsageError(
+      `Unknown task command "${second ?? ''}". Use create, list, show, edit or link`,
+    )
   }
 
   if (group === 'event') {
@@ -251,6 +305,23 @@ export function parseCommand(argv: readonly string[]): Command {
     return {
       name: 'agent.done',
       id: values.task === undefined ? undefined : taskId(values.task),
+      json,
+    }
+  }
+
+  if (group === 'stage') {
+    if (second === undefined) {
+      throw new UsageError(`A stage command is required: ${STAGE_COMMANDS.join(', ')}`)
+    }
+    const action = oneOf(second, STAGE_COMMANDS, 'The stage command')
+    noExtraArguments(rest.slice(1))
+    return {
+      name: 'stage.act',
+      id: taskId(rest[0]),
+      action,
+      ...(values.stage === undefined ? {} : { stage: values.stage }),
+      ...(values.to === undefined ? {} : { to: values.to }),
+      ...(values.reason === undefined ? {} : { reason: values.reason }),
       json,
     }
   }

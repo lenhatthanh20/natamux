@@ -450,13 +450,46 @@ describe('more commands', () => {
     })
   })
 
-  it('says done for the task named with --task', async () => {
+  it('reports the stage done for the task named with --task', async () => {
     const result = await run(['done', '--task', 'T-8'], {
-      handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }), accepted: true }),
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }),
     })
     expect(result.calls[0]).toMatchObject({
-      url: 'http://127.0.0.1:4317/tasks/T-8/events',
-      body: { type: 'agent.finished' },
+      url: 'http://127.0.0.1:4317/tasks/T-8/stage',
+      body: { action: 'report' },
+    })
+  })
+
+  it('approves a stage, and sends a task back with a reason', async () => {
+    const approve = await run(['stage', 'approve', 'T-8', '--stage', 'test-spec'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }),
+    })
+    expect(approve.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4317/tasks/T-8/stage',
+      body: { action: 'approve', stage: 'test-spec' },
+    })
+    const back = await run(['stage', 'back', 'T-8', '--to', 'plan', '--reason', 'Add tests'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }),
+    })
+    expect(back.calls[0]).toMatchObject({
+      body: { action: 'reopen', to: 'plan', reason: 'Add tests' },
+    })
+  })
+
+  it('links an issue, and creates a task with its context source', async () => {
+    const link = await run(
+      ['task', 'link', 'T-8', '--issue', 'ABC-1', '--url', 'https://jira.example.com/ABC-1'],
+      { handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }) },
+    )
+    expect(link.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4317/tasks/T-8/issue',
+      body: { provider: 'tracker', key: 'ABC-1' },
+    })
+    const create = await run(['task', 'create', 'Export', '--context', 'github-issue:42'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-9' }) }, 201),
+    })
+    expect(create.calls[0]).toMatchObject({
+      body: { title: 'Export', context: { source: 'github-issue', ref: '42' } },
     })
   })
 

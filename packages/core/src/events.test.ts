@@ -35,7 +35,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
     })
   })
 
-  it('waits for review after the agent finishes, then for the release after approval', () => {
+  it('waits for review after the agent reports done, then for the release after approval', () => {
     const result = deriveTaskState(
       [
         event('task.created'),
@@ -43,7 +43,8 @@ describe('deriveTaskState with the legacy pipeline', () => {
         event('agent.started'),
         event('agent.asked'),
         event('agent.resumed'),
-        event('agent.finished'),
+        event('stage.reported'),
+        event('stage.checked'),
       ],
       LEGACY_PIPELINE,
     )
@@ -53,7 +54,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
       [
         event('task.readied'),
         event('agent.started'),
-        event('agent.finished'),
+        event('stage.checked'),
         event('review.approved'),
       ],
       LEGACY_PIPELINE,
@@ -66,7 +67,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
       [
         event('task.readied'),
         event('agent.started'),
-        event('agent.finished'),
+        event('stage.checked'),
         event('review.changes-requested'),
       ],
       LEGACY_PIPELINE,
@@ -212,9 +213,21 @@ describe('applyTaskEvent with the default pipeline', () => {
     )
   })
 
-  it('passes an auto stage when the agent finishes its turn', () => {
-    expect(run(at('testing', 'running'), event('agent.finished')).position).toEqual(
+  it('passes an auto stage when its checks pass', () => {
+    expect(run(at('testing', 'running'), event('stage.checked')).position).toEqual(
       at('release', 'ready'),
+    )
+  })
+
+  it('waits for you when the agent ends its turn without reporting done', () => {
+    expect(run(at('plan', 'running'), event('agent.finished')).position).toEqual(
+      at('plan', 'needs-input'),
+    )
+  })
+
+  it('fails a stage whose command failed', () => {
+    expect(run(at('testing', 'running'), event('stage.failed')).position).toEqual(
+      at('testing', 'failed'),
     )
   })
 

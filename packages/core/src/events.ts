@@ -48,6 +48,7 @@ export const EVENT_TYPES = [
   'stage.checked',
   'stage.approved',
   'stage.passed',
+  'stage.failed',
   'stage.reopened',
   'stage.skipped',
   'context.fetched',
@@ -100,8 +101,9 @@ const MOVES: Partial<Record<EventType, Move>> = {
   'agent.asked': { from: ['running'], to: 'needs-input' },
   // A prompt typed to an agent whose stage waits for approval takes the stage up again.
   'agent.resumed': { from: ['needs-input', 'review'], to: 'running' },
-  // The agent ended its turn: the stage is done, as far as it goes.
-  'agent.finished': { from: ['running'], to: 'gate' },
+  // The agent ended its turn without saying the stage is done (`helmsman done`), for example to
+  // ask something in plain text. The daemon drops the turn end that follows a report.
+  'agent.finished': { from: ['running'], to: 'needs-input' },
   'agent.failed': { from: ['running'], to: 'failed' },
   // "Mark as done" from needs-input runs the checks again.
   'stage.reported': { from: ['running', 'needs-input'], to: 'running' },
@@ -110,6 +112,7 @@ const MOVES: Partial<Record<EventType, Move>> = {
   'stage.approved': { from: ['review', 'needs-input'], to: 'finish' },
   'review.approved': { from: ['review', 'needs-input'], to: 'finish' },
   'stage.passed': { from: ['ready', 'running', 'review'], to: 'finish' },
+  'stage.failed': { from: ['running'], to: 'failed' },
   'stage.skipped': {
     from: ['draft', 'ready', 'running', 'needs-input', 'review', 'blocked', 'failed'],
     to: 'finish',

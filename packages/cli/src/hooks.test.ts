@@ -19,13 +19,18 @@ describe('claudeCodeHookSettings', () => {
     }
   })
 
-  it('takes the token and the task id from the environment, never writing them in', () => {
+  it('takes the token, the task id and the terminal from the environment, never writing them in', () => {
     const hook = settings.hooks.Stop?.[0]?.hooks[0]
     expect(hook?.headers).toEqual({
       Authorization: 'Bearer $HELMSMAN_TOKEN',
       'X-Helmsman-Task': '$HELMSMAN_TASK_ID',
+      'X-Helmsman-Terminal': '$HELMSMAN_TERMINAL',
     })
-    expect(hook?.allowedEnvVars).toEqual(['HELMSMAN_TOKEN', 'HELMSMAN_TASK_ID'])
+    expect(hook?.allowedEnvVars).toEqual([
+      'HELMSMAN_TOKEN',
+      'HELMSMAN_TASK_ID',
+      'HELMSMAN_TERMINAL',
+    ])
   })
 
   it('stops waiting for the daemon after a few seconds', () => {

@@ -11,9 +11,11 @@ Commands:
   task list                  List tasks, newest update first
   task show <id>             Show one task
   task edit <id>             Change the title, notes, priority, labels or dependencies
+  task link <id>             Link the task to its issue or ticket (--issue, --url)
   agent start <id>           Start an agent in the task's terminal (default: claude-code)
   ask <question>             For an agent: say the task waits for the user
-  done                       For an agent: say its turn is over and the task is ready for review
+  done                       For an agent: say its stage is done, so the daemon checks it
+  stage <command> <id>       approve, back, skip, pass, fail or start the task's stage
   event <id> <type>          Send an event to a task
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
@@ -31,6 +33,13 @@ Options:
   --depends-on <id>     task create, task edit: task that must finish first (repeat for more)
   --prompt <text>       agent start: first prompt (default: the task title and notes)
   --task <id>           ask, done: the task (default: HELMSMAN_TASK_ID)
+  --context <source>    task create: where its context comes from, such as github-issue:42
+  --stage <id>          stage: the stage, when two run side by side
+  --to <id>             stage back: the stage to go back to (default: the last agent stage)
+  --reason <text>       stage back, stage fail: why, for the agent and the log
+  --issue <key>         task link: the issue or ticket, such as #42 or ABC-123
+  --url <address>       task link: its address
+  --provider <name>     task link: github, jira, … (default: from the address)
   --state <state>       task list: only tasks in this state (${TASK_STATES.join(', ')})
   --source <name>       event: ${EVENT_SOURCES.join(', ')} (default: human)
   --payload <json>      event: JSON object sent with the event
@@ -47,6 +56,7 @@ Environment:
   HELMSMAN_URL          Address of the daemon (default: ${DEFAULT_URL})
   HELMSMAN_TASK_ID      The task of this terminal: its hooks, ask and done report on it.
                         Terminals that Helmsman opens set it
+  HELMSMAN_TERMINAL     The terminal of the task, which tells the stage done is about
 `
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
