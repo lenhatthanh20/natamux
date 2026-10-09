@@ -34,6 +34,7 @@ export type CommandActions = {
   toggleSelectedDetails: () => void
   editSelected: () => void
   taskEvent: (type: EventType) => void
+  stageAction: (action: 'skip' | 'approve' | 'report') => void
   showTab: (tab: WorkspaceTab) => void
   back: () => void
   showAllTasks: () => void
@@ -103,6 +104,41 @@ const taskActionCommands: Command[] = TASK_ACTIONS.map(({ type, title, key }) =>
     actionsFor(state.selectedState).some((action) => action.type === type && !action.confirm),
   run: ({ actions }) => actions.taskEvent(type),
 }))
+
+// Stage actions that need no more input. Send back asks for a stage and a reason, so it opens
+// the Progress tab, where that form is.
+const STAGE_ACTIONS: readonly {
+  action: 'skip' | 'approve' | 'report'
+  title: string
+}[] = [
+  { action: 'skip', title: 'Skip the stage' },
+  { action: 'report', title: 'Mark the stage as done' },
+  { action: 'approve', title: 'Approve the stage anyway' },
+]
+
+const inStage = ({ state }: CommandContext) =>
+  state.workspaceOpen &&
+  state.selectedState !== null &&
+  ['ready', 'running', 'needs-input', 'review'].includes(state.selectedState)
+
+const stageCommands: Command[] = [
+  ...STAGE_ACTIONS.map(
+    ({ action, title }): Command => ({
+      id: `stage.${action}`,
+      title,
+      category: 'Workspace',
+      when: inStage,
+      run: ({ actions }) => actions.stageAction(action),
+    }),
+  ),
+  {
+    id: 'stage.send-back',
+    title: 'Send the task back to an earlier stage',
+    category: 'Workspace',
+    when: inStage,
+    run: ({ actions }) => actions.showTab('progress'),
+  },
+]
 
 const THEMES: readonly { theme: Theme; title: string }[] = [
   { theme: 'system', title: 'Follow the system' },
@@ -294,6 +330,7 @@ export const COMMANDS: readonly Command[] = [
       run: ({ actions }) => actions.showTab(tab),
     }),
   ),
+  ...stageCommands,
   {
     id: 'changes.refresh',
     title: 'Read the changes and the history again',

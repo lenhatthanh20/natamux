@@ -78,6 +78,33 @@ describe('stageProgress', () => {
     })
   })
 
+  it('reads an approval from review and a request for changes like their stage events', () => {
+    minute = 0
+    const events = [
+      event('stage.started', { stage: 'plan' }),
+      event('stage.checked', { stage: 'plan' }),
+      event('review.approved', { stage: 'plan' }, 'human'),
+      event('stage.started', { stage: 'implement' }),
+      event('review.changes-requested', { to: 'implement', reason: 'Fix the dates' }, 'human'),
+      event('stage.started', { stage: 'implement' }),
+    ]
+    const progress = stageProgress(
+      { stage: 'build', state: 'running', lanes: { 'test-spec': 'review', implement: 'running' } },
+      events,
+      DEFAULT_PIPELINE,
+    )
+    const plan = progress.find((stage) => stage.stage === 'plan')
+    const testSpec = progress.find((stage) => stage.stage === 'test-spec')
+    const implement = progress.find((stage) => stage.stage === 'implement')
+    expect(plan).toMatchObject({
+      status: 'done',
+      endedAt: '2026-10-09T09:03:00.000Z',
+      approvedBy: 'human',
+    })
+    expect(testSpec?.startedAt).toBe('2026-10-09T09:05:00.000Z')
+    expect(implement).toMatchObject({ rounds: 2, sentBackFor: 'Fix the dates' })
+  })
+
   it('marks a skipped stage, and every stage of a done task', () => {
     minute = 0
     const events = [event('stage.skipped', { stage: 'context' })]

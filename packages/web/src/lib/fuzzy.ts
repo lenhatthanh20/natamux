@@ -9,6 +9,8 @@ const WORD_START_BONUS = 8
 const FIRST_CHAR_BONUS = 4
 const NEIGHBOUR_BONUS = 6
 const GAP_PENALTY = 0.3
+const LONG_QUERY = 4
+const MAX_SPREAD = 2
 // Longer texts are cut: a title that long is not matched past its start.
 const MAX_TEXT = 160
 
@@ -94,6 +96,12 @@ function matchWord(word: string, original: string): FuzzyMatch | null {
   for (let i = last; i >= 0; i -= 1) {
     positions.unshift(at)
     at = from[i * n + at] ?? -1
+  }
+  // A long query that spreads over the text is noise: "stage" must not find "Show the tab,
+  // toggle sidebar" by scattered letters.
+  const first = positions[0] ?? 0
+  if (m >= LONG_QUERY && end - first + 1 > m * MAX_SPREAD) {
+    return null
   }
   return { score, ranges: toRanges(positions) }
 }

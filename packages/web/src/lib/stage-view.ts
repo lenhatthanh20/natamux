@@ -7,10 +7,14 @@ import {
   type TaskEvent,
 } from '@helmsman/core'
 
-// "4m", "1h 5m", "2d 3h": the time between two moments.
+// "<1m", "4m", "1h 5m", "2d 3h": the time between two moments.
 export function formatDuration(from: string, to: Date | string): string {
   const end = typeof to === 'string' ? Date.parse(to) : to.getTime()
-  const minutes = Math.max(0, Math.round((end - Date.parse(from)) / 60_000))
+  const span = Math.max(0, end - Date.parse(from))
+  if (span < 60_000) {
+    return '<1m'
+  }
+  const minutes = Math.round(span / 60_000)
   if (minutes < 60) {
     return `${minutes}m`
   }
@@ -31,6 +35,35 @@ export function stageTime(progress: StageProgress, now: Date): string | null {
     return `${formatDuration(progress.startedAt, now)} so far`
   }
   return progress.endedAt === null ? null : formatDuration(progress.startedAt, progress.endedAt)
+}
+
+// The time of a step: from the first start to the last end of its stages (side by side stages
+// overlap). Null until one has started, or while one has no end.
+export function stepTime(
+  entries: readonly (StageProgress | undefined)[],
+  now: Date,
+): string | null {
+  const started = entries.filter(
+    (entry): entry is StageProgress & { startedAt: string } =>
+      entry !== undefined && entry.startedAt !== null,
+  )
+  const first = started
+    .map((entry) => entry.startedAt)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0]
+  if (first === undefined) {
+    return null
+  }
+  if (started.some((entry) => entry.status === 'current')) {
+    return `${formatDuration(first, now)} so far`
+  }
+  const ends = started.map((entry) => entry.endedAt)
+  if (ends.some((end) => end === null)) {
+    return null
+  }
+  const last = ends
+    .filter((end): end is string => end !== null)
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0]
+  return last === undefined ? null : formatDuration(first, last)
 }
 
 export function findStage(steps: readonly Step[], id: string): Stage | undefined {

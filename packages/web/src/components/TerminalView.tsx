@@ -10,7 +10,7 @@ import { useAppEvent } from '../lib/app-events'
 import { keyBelongsToShell } from '../lib/dispatch'
 import { MONO_FONT } from '../lib/fonts'
 import { closeSocket } from '../lib/live'
-import { parseTerminalMessage } from '../lib/terminal'
+import { parseTerminalMessage, takesFocusOnOpen } from '../lib/terminal'
 import {
   MIN_CONTRAST_RATIO,
   TERMINAL_FONT_SIZE,
@@ -132,7 +132,9 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
           return
         }
         socket = opened
+        let wasOpen = false
         opened.onopen = () => {
+          wasOpen = true
           setStatus('open')
           // The terminal may have been fitted while the socket was opening.
           sendSize()
@@ -150,9 +152,16 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
           }
         }
         opened.onclose = () => {
-          if (!disposed) {
-            setStatus((current) => (current === 'error' ? current : 'ended'))
+          if (disposed) {
+            return
           }
+          // A close before the open is a failed handshake, not a shell that ended.
+          if (!wasOpen) {
+            setError((current) => current ?? 'Could not connect to the terminal.')
+            setStatus('error')
+            return
+          }
+          setStatus((current) => (current === 'error' ? current : 'ended'))
         }
       })
       .catch((reason: unknown) => {
@@ -179,7 +188,9 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       }, FIT_DELAY_MS)
     })
     observer.observe(element)
-    terminal.focus()
+    if (takesFocusOnOpen(document.activeElement, document.body)) {
+      terminal.focus()
+    }
 
     // The web font may still be loading when the terminal measures its cells. Setting the font
     // again makes it measure with the loaded one.
@@ -231,9 +242,15 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     }
   }, [uiSize])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new token is the trigger.
+  // A new token is the trigger. Token 0 is "no request", so a terminal that only opens does not
+  // take the focus from the tab that opened it.
+  const lastToken = useRef<number | undefined>(undefined)
   useEffect(() => {
-    terminalRef.current?.focus()
+    const changed = lastToken.current !== focusToken
+    lastToken.current = focusToken
+    if (changed && focusToken) {
+      terminalRef.current?.focus()
+    }
   }, [focusToken])
 
   // Mod+F is a command; it finds in the terminal that has the focus.

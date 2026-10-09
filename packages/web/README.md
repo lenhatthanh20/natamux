@@ -23,6 +23,9 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 - The task table, newest update first, updating live over the daemon's WebSocket.
 - Details of one task with the actions that fit its state (approve, request changes, retry, unblock, cancel). Cancel asks twice.
 - A workspace field: create a git worktree and a branch for the task, or remove it (asks twice).
+- Views beside the table: a board, and a progress view of every task against its stages.
+- A Progress tab (the evidence of each stage) and a Docs tab (the stage files, editable) on each task; project settings for the stage pipeline of a repository.
+- Terminals, changes and history of a task's workspace, system notifications, a command palette, diff size of each task, and several repositories.
 
 ## Keyboard
 
@@ -37,9 +40,7 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 
 ## Not done yet
 
-- Board view, desktop notifications, diff size and CI status columns.
-- The daemon does not serve the dashboard yet; for now Vite does.
-- A page for tasks of several repositories.
+- The daemon serves only the dashboard's `index.html` (for deep links), not its scripts and styles; Vite or nginx serves them.
 
 ## Look
 

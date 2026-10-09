@@ -44,6 +44,8 @@ type WorkspaceServiceOptions = {
   onCreated?: (task: Task) => void
   // The body of a task's pull request. Default: the task's notes.
   pullRequestBody?: (task: Task) => Promise<string>
+  // Ends the shells of a task, before its worktree is removed.
+  closeTerminals?: (taskId: string) => void
 }
 
 export type RemoveWorkspaceResult = {
@@ -75,6 +77,7 @@ export class WorkspaceService {
   private readonly gh: RunGh
   private readonly onCreated: (task: Task) => void
   private readonly pullRequestBody: (task: Task) => Promise<string>
+  private readonly closeTerminals: (taskId: string) => void
   private readonly busy = new Set<string>()
 
   constructor(options: WorkspaceServiceOptions) {
@@ -87,6 +90,7 @@ export class WorkspaceService {
     this.pullRequestBody =
       options.pullRequestBody ??
       (async (task) => task.description.trim() || `Task ${task.id} in Helmsman.`)
+    this.closeTerminals = options.closeTerminals ?? (() => undefined)
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -118,12 +122,19 @@ export class WorkspaceService {
       }
 
       const repoDir = this.repoDirOf(task.repo)
-      if (base !== undefined && !(await listBranches(repoDir)).branches.includes(base)) {
+      const { branches } = await listBranches(repoDir)
+      if (base !== undefined && !branches.includes(base)) {
         throw new WorkspaceConflictError(`There is no local branch named ${base}`)
       }
-      const branch = branchNameFor(task)
+      // A workspace removed with its branch kept leaves the task's work there: go on with it.
+      const kept = task.branch !== null && branches.includes(task.branch) ? task.branch : null
       const worktreePath = this.worktreePathFor(taskId)
-      await addWorktree(repoDir, worktreePath, branch, base)
+      const branch = kept ?? branchNameFor(task)
+      if (kept === null) {
+        await addWorktree(repoDir, worktreePath, branch, base)
+      } else {
+        await addWorktree(repoDir, worktreePath, branch, undefined, true)
+      }
 
       let created: Task
       try {
@@ -150,6 +161,17 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} has no workspace`)
       }
 
+      // git refuses a worktree with changes that are not committed. Refuse it here, before the
+      // agent and the shells of the task are ended for nothing.
+      const changes = await listChanges(task.workspace).catch(() => [])
+      if (changes.length > 0) {
+        const count = changes.length === 1 ? '1 change' : `${changes.length} changes`
+        throw new WorkspaceConflictError(
+          `${taskId} has ${count} that are not committed. Commit or discard them first`,
+        )
+      }
+      // A shell that runs in the folder would keep files open while git removes it.
+      this.closeTerminals(taskId)
       const repoDir = this.repoDirOf(task.repo)
       await removeWorktree(repoDir, task.workspace)
 

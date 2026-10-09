@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyTaskEvent,
+  completeEvent,
   deriveTaskState,
   type EventType,
   type TaskEvent,
@@ -62,7 +63,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
     expect(approved.position).toEqual(at('release', 'ready'))
   })
 
-  it('goes back to a running implement stage when changes are requested', () => {
+  it('goes back to implement, to start it again, when changes are requested', () => {
     const result = deriveTaskState(
       [
         event('task.readied'),
@@ -72,7 +73,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
       ],
       LEGACY_PIPELINE,
     )
-    expect(result.position).toEqual(at('implement', 'running'))
+    expect(result.position).toEqual(at('implement', 'ready'))
   })
 
   it('moves a failed stage to ready on retry', () => {
@@ -139,7 +140,7 @@ describe('applyTaskEvent with the default pipeline', () => {
     expect(position).toEqual(at('build', 'ready', { 'test-spec': 'ready', implement: 'ready' }))
   })
 
-  it('needs the stage name for an event inside a group', () => {
+  it('needs the stage name when an event fits more than one stage of a group', () => {
     const group = at('build', 'ready', { 'test-spec': 'ready', implement: 'ready' })
     expect(run(group, event('stage.started')).accepted).toEqual([false])
     expect(run(group, event('stage.started', { stage: 'nope' })).accepted).toEqual([false])
@@ -192,7 +193,51 @@ describe('applyTaskEvent with the default pipeline', () => {
 
   it('sends changes asked in review to the code stage of the step before', () => {
     const { position } = run(at('review', 'review'), event('review.changes-requested'))
-    expect(position).toEqual(at('build', 'running', { 'test-spec': 'done', implement: 'running' }))
+    expect(position).toEqual(at('build', 'ready', { 'test-spec': 'done', implement: 'ready' }))
+  })
+
+  it('sends changes asked about a stage that waits for approval back to that stage', () => {
+    expect(run(at('spec', 'review'), event('review.changes-requested')).position).toEqual(
+      at('spec', 'ready'),
+    )
+    const group = at('build', 'review', { 'test-spec': 'review', implement: 'running' })
+    expect(run(group, event('review.changes-requested')).position).toEqual(
+      at('build', 'running', { 'test-spec': 'ready', implement: 'running' }),
+    )
+  })
+
+  it('keeps the other stages of the current group when one of them is sent back', () => {
+    const group = at('build', 'review', { 'test-spec': 'review', implement: 'running' })
+    expect(run(group, event('stage.reopened', { to: 'implement' })).position).toEqual(
+      at('build', 'review', { 'test-spec': 'review', implement: 'ready' }),
+    )
+  })
+
+  it('sends a task back to a stage that waits for a person in its waiting state', () => {
+    expect(run(at('testing', 'running'), event('stage.reopened', { to: 'review' }))).toEqual({
+      position: at('review', 'review'),
+      accepted: [true],
+    })
+  })
+
+  it('takes an event with no stage name for the only stage of a group it fits', () => {
+    const group = at('build', 'review', { 'test-spec': 'review', implement: 'running' })
+    expect(run(group, event('review.approved')).position).toEqual(
+      at('build', 'running', { 'test-spec': 'done', implement: 'running' }),
+    )
+    expect(run(group, event('agent.asked')).position.lanes).toEqual({
+      'test-spec': 'review',
+      implement: 'needs-input',
+    })
+  })
+
+  it('takes the stage of the terminal an event came from', () => {
+    const group = at('build', 'running', { 'test-spec': 'running', implement: 'running' })
+    expect(run(group, event('agent.asked')).accepted).toEqual([false])
+    expect(run(group, event('agent.asked', { terminal: '2' })).position.lanes).toEqual({
+      'test-spec': 'needs-input',
+      implement: 'running',
+    })
   })
 
   it('does not send a task forward with reopen', () => {
@@ -248,6 +293,33 @@ describe('applyTaskEvent with the default pipeline', () => {
     expect(run(at('plan', 'ready'), event('state.overridden', { to: 'nope' })).accepted).toEqual([
       false,
     ])
+  })
+})
+
+describe('completeEvent', () => {
+  it('names the stage an event is about when the sender left it out', () => {
+    const group = at('build', 'review', { 'test-spec': 'review', implement: 'running' })
+    const inGroup = completeEvent(group, event('review.approved'), DEFAULT_PIPELINE)
+    expect(inGroup.payload).toEqual({ stage: 'test-spec' })
+    const alone = completeEvent(at('plan', 'review'), event('review.approved'), DEFAULT_PIPELINE)
+    expect(alone.payload).toEqual({ stage: 'plan' })
+  })
+
+  it('names the stage a send back goes to', () => {
+    const sent = completeEvent(
+      at('review', 'review'),
+      event('review.changes-requested', { reason: 'Fix it' }),
+      DEFAULT_PIPELINE,
+    )
+    expect(sent.payload).toEqual({ reason: 'Fix it', to: 'implement' })
+  })
+
+  it('leaves an event that names its stage, or fits no stage, as it is', () => {
+    const named = event('stage.checked', { stage: 'spec' })
+    expect(completeEvent(at('plan', 'running'), named, DEFAULT_PIPELINE)).toBe(named)
+    const group = at('build', 'running', { 'test-spec': 'running', implement: 'running' })
+    const unclear = event('agent.asked')
+    expect(completeEvent(group, unclear, DEFAULT_PIPELINE)).toBe(unclear)
   })
 })
 

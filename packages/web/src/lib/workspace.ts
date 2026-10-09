@@ -58,10 +58,76 @@ export function latestQuestion(events: readonly StoredEvent[]): string | null {
   return null
 }
 
-export function bannerText(question: string | null): string {
-  return question === null
-    ? 'The agent is waiting for your answer in Shell 1.'
-    : `The agent asks: ${question}`
+// Why Create is off in the New workspace dialog. A source other than manual needs its reference,
+// or the task would start with no context.
+export function createBlockedReason(
+  title: string,
+  source: string,
+  ref: string,
+): string | undefined {
+  if (title.trim() === '') {
+    return 'Enter a name'
+  }
+  return source !== 'manual' && ref.trim() === '' ? 'Enter the reference of the context' : undefined
+}
+
+// Why a task waits for the user. Only an agent that asked has a question to answer.
+export type WaitReason =
+  | { kind: 'asked'; question: string | null }
+  | { kind: 'check-failed'; reasons: string[] }
+  | { kind: 'stopped' }
+
+// The newest thing that put the task in needs-input. Events before the last start or resume are
+// old news: then the agent stopped without saying a thing. No events yet: assume a question.
+export function waitReason(events: readonly StoredEvent[] | undefined): WaitReason {
+  if (events === undefined) {
+    return { kind: 'asked', question: null }
+  }
+  for (const stored of [...events].reverse()) {
+    const { event } = stored
+    if (!stored.accepted) {
+      continue
+    }
+    if (event.type === 'agent.asked') {
+      return { kind: 'asked', question: latestQuestion([stored]) }
+    }
+    if (event.type === 'stage.check-failed' && event.payload.final !== false) {
+      const reasons = Array.isArray(event.payload.reasons)
+        ? event.payload.reasons.filter((reason): reason is string => typeof reason === 'string')
+        : []
+      return { kind: 'check-failed', reasons }
+    }
+    if (
+      event.type === 'agent.resumed' ||
+      event.type === 'agent.started' ||
+      event.type === 'stage.started'
+    ) {
+      break
+    }
+  }
+  return { kind: 'stopped' }
+}
+
+export function bannerText(reason: WaitReason): string {
+  switch (reason.kind) {
+    case 'asked':
+      return reason.question === null
+        ? 'The agent is waiting for your answer in its terminal.'
+        : `The agent asks: ${reason.question}`
+    case 'check-failed':
+      return reason.reasons.length === 0
+        ? 'The checks of this stage failed.'
+        : `The checks failed: ${reason.reasons.join('; ')}`
+    case 'stopped':
+      return 'The agent stopped without saying it is done.'
+  }
+}
+
+// The line under a task in the sidebar.
+export function rowText(reason: WaitReason): string {
+  return reason.kind === 'asked' && reason.question === null
+    ? 'Waiting for your answer'
+    : bannerText(reason)
 }
 
 // A task whose agent works or waits opens on its terminal. Another task opens on the tab that

@@ -45,6 +45,7 @@ beforeEach(async () => {
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
     repos,
+    closeTerminals: (taskId) => terminals.close(taskId),
   })
   const spawner = fakeSpawner()
   ptys = spawner.ptys
@@ -332,6 +333,32 @@ describe('task events', () => {
       payload: { source: 'human', type: 'task.readied' },
     })
     expect(response.statusCode).toBe(404)
+  })
+
+  it('answers 400 for a send back to an unknown or later stage', async () => {
+    await createTask()
+    for (const to of ['nope', 'release']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/stage',
+        headers: authorization,
+        payload: { action: 'reopen', to },
+      })
+      expect(response.statusCode).toBe(400)
+      expect(response.json().message).toContain(`"${to}"`)
+    }
+  })
+
+  it('refuses a new workspace for an agent the daemon cannot start', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Example', agent: 'foo' },
+    })
+    expect(response.statusCode).toBe(400)
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toEqual([])
   })
 
   it.each(['task.created', 'workspace.created', 'workspace.removed', 'agent.active'])(
@@ -766,6 +793,18 @@ describe('terminal', () => {
     expect(none.statusCode).toBe(409)
 
     await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
+    // Only a shell runs: the comment would run as commands there.
+    const shell = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/agent/message',
+      headers: authorization,
+      payload: { text: 'Rename the function' },
+    })
+    expect(shell.statusCode).toBe(409)
+    expect(ptys[0]?.written).toEqual([])
+
+    const agent = ptys[0] as FakePty
+    agent.program = 'node'
     const sent = await app.inject({
       method: 'POST',
       url: '/tasks/T-0001/agent/message',

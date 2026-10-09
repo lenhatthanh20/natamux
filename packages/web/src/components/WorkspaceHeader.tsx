@@ -78,7 +78,7 @@ export function WorkspaceHeader({
           onClick={() => copyText(task.branch ?? '', 'the branch name')}
           data-tip={`${task.branch} (click to copy)`}
           aria-label={`Branch ${task.branch}, copy`}
-          className="flex h-6 min-w-0 shrink items-center gap-1.5 rounded-md border border-line px-1.5 font-mono text-xs text-ink-2 hover:bg-hover hover:text-ink max-md:hidden"
+          className="flex h-6 min-w-20 shrink-[4] items-center gap-1.5 rounded-md border border-line px-1.5 font-mono text-xs text-ink-2 hover:bg-hover hover:text-ink max-md:hidden"
         >
           <GitBranch size={ICON.xs} aria-hidden="true" className="shrink-0" />
           <MiddleTruncate text={task.branch} />

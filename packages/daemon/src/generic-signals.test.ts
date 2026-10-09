@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DEFAULT_PROJECT_SETTINGS } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
@@ -84,5 +85,28 @@ describe('GenericSignals', () => {
     const draft = tasks.createTask({ title: 'Not started' })
     signals.onOutput(draft.id, '1', '\x07')
     expect(tasks.getTask(draft.id).state).toBe('draft')
+  })
+
+  it('asks for the stage of the first terminal inside a group', () => {
+    const staged = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      now: () => clock,
+      settingsOf: () => DEFAULT_PROJECT_SETTINGS,
+    })
+    const task = staged.createTask({ title: 'Export', agent: 'codex' })
+    staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'running', stage: 'build' },
+    })
+
+    new GenericSignals(staged, () => clock.getTime()).onOutput(task.id, '1', '\x07')
+
+    expect(staged.getTask(task.id).lanes).toEqual({
+      'test-spec': 'running',
+      implement: 'needs-input',
+    })
   })
 })

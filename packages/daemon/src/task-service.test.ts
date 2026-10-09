@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DEFAULT_PROJECT_SETTINGS } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
@@ -104,6 +105,59 @@ describe('applyEvent', () => {
     expect(() => service.applyEvent('T-0099', { source: 'human', type: 'task.readied' })).toThrow(
       TaskNotFoundError,
     )
+  })
+})
+
+describe('applyEvent inside a group', () => {
+  let staged: TaskService
+
+  function atBuild(): string {
+    const task = staged.createTask({ title: 'Export' })
+    staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'running', stage: 'build' },
+    })
+    return task.id
+  }
+
+  beforeEach(() => {
+    staged = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      settingsOf: () => DEFAULT_PROJECT_SETTINGS,
+    })
+  })
+
+  it('takes an event with no stage for the only stage it fits, and logs that stage', () => {
+    const id = atBuild()
+    staged.applyEvent(id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'test-spec' },
+    })
+
+    const result = staged.applyEvent(id, { source: 'human', type: 'review.approved' })
+
+    expect(result.accepted).toBe(true)
+    expect(result.task.lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    expect(staged.listEvents(id).at(-1)?.event.payload).toEqual({ stage: 'test-spec' })
+  })
+
+  it('refuses an event that fits two stages, unless its terminal names one', () => {
+    const id = atBuild()
+
+    const unclear = staged.applyEvent(id, { source: 'agent', type: 'agent.asked' })
+    expect(unclear.accepted).toBe(false)
+
+    const fromTerminal = staged.applyEvent(id, {
+      source: 'agent',
+      type: 'agent.asked',
+      payload: { question: 'Which file?', terminal: '2' },
+    })
+    expect(fromTerminal.task.lanes).toEqual({ 'test-spec': 'needs-input', implement: 'running' })
+    expect(staged.listEvents(id).at(-1)?.event.payload).toMatchObject({ stage: 'test-spec' })
   })
 })
 

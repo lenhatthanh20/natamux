@@ -81,7 +81,7 @@ export function Segmented<T extends string>({
                 onChange(option.value)
               }
             }}
-            className={`flex h-[22px] pointer-coarse:h-8 items-center gap-1.5 rounded px-2 text-xs font-medium aria-disabled:opacity-50 ${
+            className={`flex h-[22px] pointer-coarse:h-8 pointer-coarse:min-w-8 max-md:h-8 max-md:min-w-8 items-center justify-center gap-1.5 rounded px-2 text-xs font-medium aria-disabled:opacity-50 ${
               selected
                 ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.2)] dark:bg-[#2a2c31]'
                 : 'text-muted not-aria-disabled:hover:text-ink'

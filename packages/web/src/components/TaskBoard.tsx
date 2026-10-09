@@ -4,7 +4,15 @@ import { useState } from 'react'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useScrollEdges } from '../hooks/useScrollEdges'
 import { pullRequestNumber } from '../lib/pull-request'
-import { formatAge, formatExact, isQuiet, rowLabel, STATE_LABEL, STATE_ORDER } from '../lib/tasks'
+import {
+  formatAge,
+  formatExact,
+  isQuiet,
+  rowLabel,
+  STATE_LABEL,
+  STATE_ORDER,
+  stageLabel,
+} from '../lib/tasks'
 import { DiffSize } from './DiffSize'
 import { LABEL_CHIP } from './TaskChips'
 import { CountBadge } from './ui/CountBadge'
@@ -71,6 +79,7 @@ function Card({
       </span>
       <span className="line-clamp-2 font-medium break-words">{task.title}</span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted empty:hidden">
+        {stageLabel(task) !== null && <span>{stageLabel(task)}</span>}
         {task.agent !== null && <span>{task.agent}</span>}
         <DiffSize stat={stat} empty={null} />
         {task.pr !== null && <span>{pullRequestNumber(task.pr)}</span>}

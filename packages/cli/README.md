@@ -17,7 +17,7 @@ Run in a codespace after `pnpm build`: `pnpm --filter @helmsman/cli start <comma
 helmsman task create "Fix the bug" --priority high --label bug --depends-on T-0007
 helmsman task list --state review
 helmsman task show T-0001
-helmsman event T-0001 task.readied
+helmsman event T-0001 task.blocked --payload '{"reason":"Needs a runner"}'
 helmsman event T-0001 agent.asked --source agent --payload '{"question":"Which branch?"}'
 helmsman events T-0001
 helmsman workspace create T-0001

@@ -57,20 +57,22 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
   }
 }
 
+// Makes a new branch for the worktree, from `baseRef` or HEAD. With `existing`, checks out the
+// branch that is there instead, with the work it has.
 export async function addWorktree(
   repoDir: string,
   worktreePath: string,
   branch: string,
   baseRef?: string,
+  existing = false,
 ): Promise<void> {
-  await git(repoDir, [
-    'worktree',
-    'add',
-    '-b',
-    branch,
-    worktreePath,
-    ...(baseRef === undefined ? [] : [baseRef]),
-  ])
+  const base = baseRef === undefined ? [] : [baseRef]
+  await git(
+    repoDir,
+    existing
+      ? ['worktree', 'add', worktreePath, branch]
+      : ['worktree', 'add', '-b', branch, worktreePath, ...base],
+  )
 }
 
 // Refuses to remove a worktree that has changes that are not committed.

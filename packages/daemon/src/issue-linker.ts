@@ -42,6 +42,8 @@ export class IssueLinker {
   private readonly repoPath: (repo: string | null) => string
   private readonly gh: RunGh
   private readonly pending = new Set<Promise<unknown>>()
+  // Issues being opened now, by task: a second request waits for the first, not a second issue.
+  private readonly creating = new Map<string, Promise<Task>>()
   private unsubscribe: (() => void) | undefined
 
   constructor(options: IssueLinkerOptions) {
@@ -102,6 +104,16 @@ export class IssueLinker {
 
   // Opens the issue now: its title is the task's, its body the spec (else the notes).
   async create(taskId: string): Promise<Task> {
+    const running = this.creating.get(taskId)
+    if (running !== undefined) {
+      return running
+    }
+    const work = this.createNow(taskId).finally(() => this.creating.delete(taskId))
+    this.creating.set(taskId, work)
+    return work
+  }
+
+  private async createNow(taskId: string): Promise<Task> {
     const task = this.tasks.getTask(taskId)
     if (task.issue !== null) {
       throw new IssueLinkError(`${taskId} is linked to ${task.issue.key} already`)
@@ -130,6 +142,14 @@ export class IssueLinker {
       throw new GitHubError(`no issue address in the answer: ${output.trim()}`)
     }
     const number = /\/issues\/(\d+)/.exec(url)?.[1] ?? ''
+    // The task may have been linked while gh ran, for example from its context.
+    const current = this.tasks.getTask(taskId).issue
+    if (current !== null) {
+      this.tasks.recordEvent(task.id, 'issue.created', { url })
+      throw new IssueLinkError(
+        `${taskId} was linked to ${current.key} while ${url} was opened. Close one of them`,
+      )
+    }
     const linked = this.tasks.linkIssue(
       task.id,
       { provider: 'github', key: `#${number}`, url },
