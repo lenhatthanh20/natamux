@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ChangeEntry, DiffStat, FileDiff, GitGraph, Task } from '@helmsman/core'
+import type { ChangeEntry, DiffStat, FileDiff, GitGraph, ImageSide, Task } from '@helmsman/core'
 import {
   addWorktree,
   commitAll,
@@ -12,6 +12,7 @@ import {
   type RunGh,
   readDiffStat,
   readFileDiff,
+  readFileImage,
   readGitGraph,
   removeWorktree,
   runGh,
@@ -187,20 +188,34 @@ export class WorkspaceService {
     })
   }
 
-  // The files of the workspace that differ from its last commit.
+  // The files of the workspace that differ from its last commit, with the lines of each.
   async changes(taskId: string): Promise<ChangeEntry[]> {
-    return listChanges(this.workspaceOf(taskId))
+    return listChanges(this.workspaceOf(taskId), { counts: true })
   }
 
   // Only a file that is in the list of changes can be read: this is what keeps the request from
   // reaching any other file.
   async fileDiff(taskId: string, path: string): Promise<FileDiff> {
     const workspace = this.workspaceOf(taskId)
+    return readFileDiff(workspace, await this.changedFile(workspace, path))
+  }
+
+  // One side of a changed image, with the same guard as fileDiff.
+  async fileImage(
+    taskId: string,
+    path: string,
+    side: ImageSide,
+  ): Promise<{ type: string; bytes: Buffer }> {
+    const workspace = this.workspaceOf(taskId)
+    return readFileImage(workspace, await this.changedFile(workspace, path), side)
+  }
+
+  private async changedFile(workspace: string, path: string): Promise<ChangeEntry> {
     const change = (await listChanges(workspace)).find((entry) => entry.path === path)
     if (!change) {
       throw new FileNotChangedError(path)
     }
-    return readFileDiff(workspace, change)
+    return change
   }
 
   // The size of the work in each workspace. A workspace that git cannot read is left out.

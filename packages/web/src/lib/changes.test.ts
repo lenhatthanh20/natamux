@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  changeAnchor,
+  changeAt,
+  changeCountLabel,
   countLineChanges,
   countLines,
+  type LineChange,
+  stepChange,
   stepFile,
   trimTrailingNewline,
   wholeFileKind,
@@ -57,6 +62,84 @@ describe('countLineChanges', () => {
       ]),
     ).toEqual({ added: 4, removed: 2 })
     expect(countLineChanges([])).toEqual({ added: 0, removed: 0 })
+  })
+})
+
+// Only the new side matters for navigation.
+function change(modifiedStartLineNumber: number, modifiedEndLineNumber: number): LineChange {
+  return {
+    originalStartLineNumber: 1,
+    originalEndLineNumber: 1,
+    modifiedStartLineNumber,
+    modifiedEndLineNumber,
+  }
+}
+
+// Lines 3 to 5 changed, then lines were deleted after line 10, then line 20 changed.
+const CHANGES = [change(3, 5), change(10, 0), change(20, 20)]
+
+describe('changeAnchor', () => {
+  it('covers the new lines of a change', () => {
+    expect(changeAnchor(change(3, 5))).toEqual({ start: 3, end: 5 })
+    expect(changeAnchor(change(20, 20))).toEqual({ start: 20, end: 20 })
+  })
+
+  it('puts a deletion on the line it follows, and a deletion at the top on line 1', () => {
+    expect(changeAnchor(change(10, 0))).toEqual({ start: 10, end: 10 })
+    expect(changeAnchor(change(0, 0))).toEqual({ start: 1, end: 1 })
+  })
+})
+
+describe('changeAt', () => {
+  it('finds the change that holds a line, and -1 between changes', () => {
+    expect(changeAt(CHANGES, 3)).toBe(0)
+    expect(changeAt(CHANGES, 4)).toBe(0)
+    expect(changeAt(CHANGES, 5)).toBe(0)
+    expect(changeAt(CHANGES, 6)).toBe(-1)
+    expect(changeAt(CHANGES, 10)).toBe(1)
+    expect(changeAt(CHANGES, 11)).toBe(-1)
+    expect(changeAt([], 1)).toBe(-1)
+  })
+})
+
+describe('stepChange', () => {
+  it('goes to the first or the last change when no line is known yet', () => {
+    expect(stepChange(CHANGES, null, 1)).toBe(0)
+    expect(stepChange(CHANGES, null, -1)).toBe(2)
+  })
+
+  it('goes to the next change that starts after the line', () => {
+    expect(stepChange(CHANGES, 1, 1)).toBe(0)
+    expect(stepChange(CHANGES, 3, 1)).toBe(1)
+    expect(stepChange(CHANGES, 4, 1)).toBe(1)
+    expect(stepChange(CHANGES, 10, 1)).toBe(2)
+  })
+
+  it('goes to the previous change that starts before the line', () => {
+    expect(stepChange(CHANGES, 20, -1)).toBe(1)
+    expect(stepChange(CHANGES, 15, -1)).toBe(1)
+    expect(stepChange(CHANGES, 4, -1)).toBe(0)
+  })
+
+  it('wraps at both ends', () => {
+    expect(stepChange(CHANGES, 20, 1)).toBe(0)
+    expect(stepChange(CHANGES, 30, 1)).toBe(0)
+    expect(stepChange(CHANGES, 3, -1)).toBe(2)
+    expect(stepChange(CHANGES, 1, -1)).toBe(2)
+  })
+
+  it('has nothing to go to without changes', () => {
+    expect(stepChange([], null, 1)).toBe(-1)
+    expect(stepChange([], 5, -1)).toBe(-1)
+  })
+})
+
+describe('changeCountLabel', () => {
+  it('names the change the cursor is in, or counts them all', () => {
+    expect(changeCountLabel(1, 7)).toBe('2 of 7')
+    expect(changeCountLabel(-1, 7)).toBe('7 changes')
+    expect(changeCountLabel(-1, 1)).toBe('1 change')
+    expect(changeCountLabel(-1, 0)).toBe('0 changes')
   })
 })
 
