@@ -86,13 +86,13 @@ importers:
       '@helmsman/daemon':
         specifier: workspace:*
         version: link:../daemon
-      '@helmsman/web':
-        specifier: workspace:*
-        version: link:../web
     devDependencies:
       '@electron/rebuild':
         specifier: ^4.2.1
         version: 4.2.1
+      '@helmsman/web':
+        specifier: workspace:*
+        version: link:../web
       '@types/node':
         specifier: ^26.6.4
         version: 26.6.4
