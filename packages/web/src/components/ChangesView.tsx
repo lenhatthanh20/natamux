@@ -265,6 +265,7 @@ export function ChangesView({
             loadFiles={loadStageFiles}
             act={stageAction}
             createIssue={createIssue}
+            activity={activity}
             onOpenFile={(name) => {
               setDocFile(name)
               pickTab('docs')
