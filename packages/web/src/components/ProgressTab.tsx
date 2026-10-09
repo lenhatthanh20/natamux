@@ -324,12 +324,12 @@ function Overview({
       <div>
         <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
           {steps.map((step) => {
-            const entries = stagesOf(step).map((stage) => byId.get(stage.id))
-            const weight = Math.max(...entries.map(minutes))
+            const ids = stagesOf(step).map((stage) => stage.id)
+            const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
             return (
               <span key={step.id} className="flex min-w-2.5 flex-col gap-0.5" style={{ flex: `${weight} 1 0` }}>
-                {entries.map((entry, index) => (
-                  <Segment key={entry?.stage ?? index} entry={entry} />
+                {ids.map((id) => (
+                  <Segment key={id} entry={byId.get(id)} />
                 ))}
               </span>
             )

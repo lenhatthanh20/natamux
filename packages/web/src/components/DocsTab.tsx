@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { StageFile } from '../lib/api'
 import { formatAge } from '../lib/tasks'
 import { toast } from '../lib/toasts'
@@ -38,8 +38,11 @@ export function DocsTab({
     queryFn: () => readFile(current ?? ''),
     enabled: current !== null,
   })
-  const [draft, setDraft] = useState<string | null>(null)
-  useEffect(() => setDraft(null), [current])
+  // An edit belongs to one file; picking another file drops it.
+  const [edit, setEdit] = useState<{ name: string; text: string } | null>(null)
+  const draft = edit !== null && edit.name === current ? edit.text : null
+  const setDraft = (text: string | null) =>
+    setEdit(text === null || current === null ? null : { name: current, text })
 
   const save = useMutation({
     mutationFn: (value: string) => writeFile(current ?? '', value),
