@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -22,5 +25,7 @@
     "electron": "^44.7.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
-  }
+  },
+  "description": "Helmsman desktop app",
+  "author": "Helmsman"
 }
