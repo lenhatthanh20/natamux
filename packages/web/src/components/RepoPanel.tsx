@@ -10,10 +10,12 @@ type RepoPanelProps = {
   repos: readonly Repo[]
   onAdd: (path: string, name?: string) => Promise<unknown>
   onClose: () => void
+  // Opens the stages, context sources and tracker of a repository.
+  onSettings?: (repo: Repo) => void
 }
 
 // The repositories the daemon manages, and a form to add one by its folder on the daemon's machine.
-export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
+export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps) {
   const [path, setPath] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +62,11 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
             <span className="min-w-0 flex-1 truncate text-right font-mono text-xs text-muted">
               {repo.path}
             </span>
+            {onSettings !== undefined && (
+              <Button size="xs" variant="ghost" onClick={() => onSettings(repo)}>
+                Settings
+              </Button>
+            )}
           </li>
         ))}
       </ul>

@@ -3,6 +3,7 @@ import websocket from '@fastify/websocket'
 import {
   issueLinkSchema,
   repoIdSchema,
+  taskContextSchema,
   TASK_ID_HEADER,
   TERMINAL_HEADER,
   type TerminalServerMessage,
@@ -85,6 +86,7 @@ const newWorkspaceBodySchema = z.object({
   base: z.string().min(1).max(255).optional(),
   agent: z.string().min(1).max(64).optional(),
   prompt: z.string().trim().max(20_000).optional(),
+  context: taskContextSchema.optional(),
 })
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),

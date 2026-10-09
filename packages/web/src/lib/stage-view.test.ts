@@ -1,0 +1,49 @@
+import { DEFAULT_PIPELINE, type Stage } from '@helmsman/core'
+import { describe, expect, it } from 'vitest'
+import { finishedWhen, formatDuration, stageCount } from './stage-view'
+import { linkKind } from '../components/StageMarker'
+
+describe('formatDuration', () => {
+  it.each([
+    ['2026-10-09T09:00:00Z', '2026-10-09T09:04:00Z', '4m'],
+    ['2026-10-09T09:00:00Z', '2026-10-09T10:05:00Z', '1h 5m'],
+    ['2026-10-09T09:00:00Z', '2026-10-09T11:00:00Z', '2h'],
+    ['2026-10-09T09:00:00Z', '2026-10-11T12:00:00Z', '2d 3h'],
+  ])('says %s to %s as %s', (from, to, text) => {
+    expect(formatDuration(from, to)).toBe(text)
+  })
+})
+
+describe('finishedWhen', () => {
+  it('says what finishes a stage from its checks', () => {
+    const plan = DEFAULT_PIPELINE[2] as Stage
+    expect(finishedWhen(plan)).toBe(
+      'Finished when plan.md is written, it has Steps, Files, Tests, and you approve it.',
+    )
+    expect(finishedWhen({ id: 'release', kind: 'release', gate: 'manual' })).toBe(
+      'Finished when the pull request is merged.',
+    )
+    expect(finishedWhen({ id: 'x', kind: 'manual', gate: 'manual', doneWhen: 'Legal signs off.' })).toBe(
+      'Legal signs off.',
+    )
+  })
+})
+
+describe('linkKind', () => {
+  const done = { status: 'done' as const, state: null }
+  const running = { status: 'current' as const, state: 'running' as const }
+  const upcoming = { status: 'upcoming' as const, state: null }
+  it('is green behind the work, moving into a running stage, dashed ahead', () => {
+    expect(linkKind(done, done)).toBe('done')
+    expect(linkKind(done, running)).toBe('flow')
+    expect(linkKind(running, upcoming)).toBe('upcoming')
+    expect(linkKind(undefined, done)).toBe('hidden')
+  })
+})
+
+describe('stageCount', () => {
+  it('counts done and skipped stages as finished', () => {
+    const entry = (status: 'done' | 'skipped' | 'current') => ({ status }) as never
+    expect(stageCount([entry('done'), entry('skipped'), entry('current')])).toEqual({ done: 2, total: 3 })
+  })
+})

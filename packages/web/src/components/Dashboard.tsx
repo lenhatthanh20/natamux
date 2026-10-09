@@ -1,4 +1,4 @@
-import { type EventType, type Task, waitingOn } from '@helmsman/core'
+import { type EventType, type Repo, type Task, waitingOn } from '@helmsman/core'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Columns3, ListChecks, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -43,6 +43,7 @@ import { NeedsMeStrip } from './NeedsMeStrip'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
 import { ProgressBoard } from './ProgressBoard'
+import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { RepoPanel } from './RepoPanel'
 import { ShortcutSheet } from './ShortcutSheet'
 import { Sidebar } from './Sidebar'
@@ -160,6 +161,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   // The repository of new tasks and of issue imports. Empty: the daemon's own.
   const [newRepo, setNewRepo] = useState('')
   const [reposOpen, setReposOpen] = useState(false)
+  const [settingsRepo, setSettingsRepo] = useState<Repo | null>(null)
   const branchesRepo =
     tasks.find((task) => task.id === (changesTaskId ?? selectedId))?.repo ?? undefined
   const branchesQuery = useQuery({
@@ -1080,6 +1082,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           initialRepo={newWorkspace.repo}
           initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
+          loadSettings={(repo) => api.getSettings(repo)}
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)
@@ -1098,6 +1101,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             await reposQuery.refetch()
           }}
           onClose={() => setReposOpen(false)}
+          onSettings={(repo) => {
+            setReposOpen(false)
+            setSettingsRepo(repo)
+          }}
+        />
+      )}
+      {settingsRepo !== null && (
+        <ProjectSettingsDialog
+          repo={settingsRepo}
+          load={() => api.getSettings(settingsRepo.id)}
+          save={(raw) => api.saveSettings(settingsRepo.id, raw)}
+          onClose={() => setSettingsRepo(null)}
         />
       )}
       {importOpen && (

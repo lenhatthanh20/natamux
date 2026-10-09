@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task, TaskContext } from '@helmsman/core'
 import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
@@ -19,6 +19,8 @@ export type NewWorkspaceInput = {
   agent?: string
   // What to do. It becomes the task's notes, and so its context.
   prompt?: string
+  // Where the context comes from, when not from the notes: a GitHub issue, a skill, an MCP server.
+  context?: TaskContext
 }
 
 // The quick way to start work: a task, its worktree, and its first stage started when an agent is
@@ -39,6 +41,7 @@ export async function newWorkspace(
     description: input.prompt ?? '',
     ...(input.repo === undefined ? {} : { repo: input.repo }),
     ...(input.agent === undefined ? {} : { agent: input.agent }),
+    ...(input.context === undefined ? {} : { context: input.context }),
   })
   const task = await parts.workspaces.create(created.id, input.base)
   if (input.agent === undefined) {

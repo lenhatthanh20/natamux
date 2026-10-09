@@ -1,5 +1,6 @@
 import {
   type ChangeEntry,
+  type ContextSourceType,
   changeEntrySchema,
   type DiffStat,
   diffStatSchema,
@@ -28,6 +29,7 @@ export type NewWorkspaceInput = {
   base?: string
   agent?: string
   prompt?: string
+  context?: { source: ContextSourceType; ref: string }
 }
 
 export type StageAction = 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start'
