@@ -36,9 +36,7 @@ export const projectSettingsSchema = z.object({
   stages: pipelineSchema.default(DEFAULT_PIPELINE),
   context: z
     .object({
-      sources: z
-        .array(contextSourceSchema)
-        .default([{ type: 'manual' }, { type: 'github-issue' }]),
+      sources: z.array(contextSourceSchema).default([{ type: 'manual' }, { type: 'github-issue' }]),
     })
     .default({ sources: [{ type: 'manual' }, { type: 'github-issue' }] }),
   tracker: trackerSettingsSchema.default({
