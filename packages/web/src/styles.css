@@ -639,11 +639,11 @@
   color: var(--surface);
 }
 .stage-node[data-status="upcoming"] {
-  border: 1.5px solid var(--line-strong);
+  border: 1.5px solid var(--muted);
 }
 .stage-node[data-status="skipped"] {
-  border: 1.5px dashed var(--faint);
-  color: var(--faint);
+  border: 1.5px dashed var(--muted);
+  color: var(--muted);
 }
 .stage-node[data-status="current"] {
   border: 2px solid var(--chip-fg);
@@ -694,7 +694,7 @@
   background: color-mix(in srgb, var(--add) 55%, transparent);
 }
 .stage-link[data-kind="upcoming"] {
-  background-image: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 8px);
+  background-image: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 8px);
 }
 .stage-link[data-kind="flow"] {
   background-image: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px);
