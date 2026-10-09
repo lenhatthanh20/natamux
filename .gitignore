@@ -10,3 +10,4 @@ coverage/
 *.sqlite-shm
 .helmsman/
 .pnpm-store/
+release/
