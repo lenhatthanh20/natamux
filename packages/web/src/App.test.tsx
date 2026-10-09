@@ -590,7 +590,7 @@ describe('App', () => {
       calls.some((call) => call.path === '/api/tasks/T-0001/changes/file?path=src%2Fa.ts'),
     ).toBe(true)
 
-    await user.click(within(view).getByRole('button', { name: /notes\.md/ }))
+    await user.click(within(view).getByRole('treeitem', { name: /notes\.md/ }))
     expect(await within(view).findByLabelText('New file notes.md')).toBeTruthy()
 
     await user.type(within(view).getByLabelText(/for the agent/), 'Keep the old name')
