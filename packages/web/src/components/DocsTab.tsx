@@ -55,9 +55,7 @@ export function DocsTab({
   // Only for a task with no stage file: "Write context.md" starts the first one by hand.
   const [startNew, setStartNew] = useState(false)
   const current =
-    file !== null && names.includes(file)
-      ? file
-      : (names[0] ?? (startNew ? FIRST_FILE : null))
+    file !== null && names.includes(file) ? file : (names[0] ?? (startNew ? FIRST_FILE : null))
   const entry = entries.find((candidate) => candidate.name === current)
   const modifiedAt = entry?.modifiedAt ?? null
   const text = useQuery({

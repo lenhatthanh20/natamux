@@ -16,11 +16,11 @@ import {
   needsMeReason,
   needsMeTasks,
   nextSort,
+  STATE_LABEL,
   sortByRecent,
   sortTasks,
   stageLabel,
   stageStateLabel,
-  STATE_LABEL,
   upsertTask,
 } from './tasks'
 

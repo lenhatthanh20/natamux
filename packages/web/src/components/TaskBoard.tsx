@@ -9,9 +9,9 @@ import {
   formatExact,
   isQuiet,
   rowLabel,
-  stageLabel,
   STATE_LABEL,
   STATE_ORDER,
+  stageLabel,
 } from '../lib/tasks'
 import { DiffSize } from './DiffSize'
 import { LABEL_CHIP } from './TaskChips'

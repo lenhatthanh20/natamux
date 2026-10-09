@@ -11,12 +11,7 @@ type NeedsInputBannerProps = {
 }
 
 // Under the workspace header while the agent waits: the question as text, and what to do.
-export function NeedsInputBanner({
-  reason,
-  resuming,
-  onAnswer,
-  onResume,
-}: NeedsInputBannerProps) {
+export function NeedsInputBanner({ reason, resuming, onAnswer, onResume }: NeedsInputBannerProps) {
   return (
     <div
       role="status"

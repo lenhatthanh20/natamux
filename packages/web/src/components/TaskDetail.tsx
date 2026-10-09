@@ -297,7 +297,9 @@ export function TaskDetail({
                       )
                     }
                   >
-                    {task.branch === null ? '-' : (
+                    {task.branch === null ? (
+                      '-'
+                    ) : (
                       <span className="break-all">
                         <PathText path={task.branch} />
                       </span>
