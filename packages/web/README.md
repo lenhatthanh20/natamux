@@ -40,8 +40,10 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 
 ## Not done yet
 
-- The daemon serves only the dashboard's `index.html` (for deep links), not its scripts and styles; Vite or nginx serves them.
+- The daemon serves the dashboard itself only with `HELMSMAN_WEB_DIR` (the desktop app); otherwise Vite or nginx serves it.
 
 ## Look
 
 Light and dark follow the system. System fonts only. Colors are variables at the top of `src/styles.css`.
+
+File type icons in the Changes tab come from [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) (MIT, © Material Extensions). Only the icons named in `src/lib/file-icons.ts` are bundled; to add a type, add it there and to the list in `src/components/FileIcon.tsx`.

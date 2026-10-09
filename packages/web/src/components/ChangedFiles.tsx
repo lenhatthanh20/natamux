@@ -29,9 +29,9 @@ import {
   totalCounts,
 } from '../lib/change-tree'
 import { CHANGE_LABEL, countLabel, splitPath } from '../lib/changes'
-import { FileIcon } from './FileIcon'
 import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey } from '../lib/roving'
+import { FileIcon } from './FileIcon'
 import { IconButton } from './ui/IconButton'
 import { ICON } from './ui/styles'
 
