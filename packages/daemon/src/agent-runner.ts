@@ -13,7 +13,7 @@ export class TaskWaitingError extends Error {
 }
 
 // Agents that Helmsman can start. Each one also has an adapter that reads its hooks.
-export const LAUNCHABLE_AGENTS = ['claude-code'] as const
+export const LAUNCHABLE_AGENTS = ['claude-code', 'copilot'] as const
 
 // Quotes one argument for the shell of the terminal: PowerShell on Windows, a POSIX shell elsewhere.
 export function quoteArgument(value: string, platform: NodeJS.Platform = process.platform): string {
@@ -38,6 +38,9 @@ type AgentRunnerOptions = {
   // Claude Code settings with the hooks that report to this daemon (see claudeCodeHookSettings).
   claudeSettingsPath: string
   claudeCommand?: string
+  // GitHub Copilot CLI, and words to add to its command line, such as --allow-all-tools.
+  copilotCommand?: string
+  copilotArgs?: string
   platform?: NodeJS.Platform
   // Where the launch scripts go. Default: the folder of the settings file.
   launchDir?: string
@@ -50,6 +53,8 @@ export class AgentRunner {
   private readonly terminals: TerminalService
   private readonly claudeSettingsPath: string
   private readonly claudeCommand: string
+  private readonly copilotCommand: string
+  private readonly copilotArgs: string
   private readonly platform: NodeJS.Platform
   private readonly launchDir: string
 
@@ -58,6 +63,8 @@ export class AgentRunner {
     this.terminals = options.terminals
     this.claudeSettingsPath = options.claudeSettingsPath
     this.claudeCommand = options.claudeCommand?.trim() || 'claude'
+    this.copilotCommand = options.copilotCommand?.trim() || 'copilot'
+    this.copilotArgs = options.copilotArgs?.trim() ?? ''
     this.platform = options.platform ?? process.platform
     this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
   }
@@ -75,12 +82,21 @@ export class AgentRunner {
     }
     const text = (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
     const quote = (value: string) => quoteArgument(value, this.platform)
-    const command = [
-      this.claudeCommand,
-      '--settings',
-      quote(this.claudeSettingsPath),
-      ...(text === '' ? [] : [quote(text)]),
-    ].join(' ')
+    // Copilot has no hooks for Helmsman yet: its output shows that it works, and it reports a
+    // stage with `helmsman done`. `-i` keeps it open for the prompts of the next stages.
+    const command =
+      agent === 'copilot'
+        ? [
+            this.copilotCommand,
+            ...(this.copilotArgs === '' ? [] : [this.copilotArgs]),
+            ...(text === '' ? [] : ['-i', quote(text)]),
+          ].join(' ')
+        : [
+            this.claudeCommand,
+            '--settings',
+            quote(this.claudeSettingsPath),
+            ...(text === '' ? [] : [quote(text)]),
+          ].join(' ')
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
     return this.tasks.recordAgentLaunch(taskId, agent)

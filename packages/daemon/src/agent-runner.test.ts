@@ -163,3 +163,22 @@ describe('AgentRunner', () => {
     expect(tasks.getTask(bare.id).agent).toBeNull()
   })
 })
+
+describe('GitHub Copilot', () => {
+  it('starts copilot in interactive mode with the prompt and the extra words', () => {
+    const copilot = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude-code-settings.json',
+      copilotArgs: '--allow-all-tools',
+      platform: 'linux',
+      launchDir: dataDir,
+    })
+    const task = tasks.createTask({ title: 'Fix the parser' })
+    copilot.start(task.id, 'copilot', 'Fix it')
+    expect(readFileSync(join(dataDir, `agent-launch-${task.id}.sh`), 'utf8')).toBe(
+      "copilot --allow-all-tools -i 'Fix it'\n",
+    )
+    expect(tasks.getTask(task.id).agent).toBe('copilot')
+  })
+})
