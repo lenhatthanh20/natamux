@@ -17,6 +17,7 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 | `HELMSMAN_COPILOT_COMMAND`, `HELMSMAN_COPILOT_ARGS` | built in | The program and arguments that start the GitHub Copilot CLI |
 | `HELMSMAN_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `HELMSMAN_WEB_INDEX` | none | Path of the built dashboard's `index.html` (for example `packages/web/dist/index.html`). With it, deep links work, see below |
+| `HELMSMAN_WEB_DIR` | none | The built dashboard (`packages/web/dist`). With it, the daemon serves the whole dashboard, and the API under `/api` too, on its own port; `HELMSMAN_WEB_INDEX` defaults to its `index.html`. The desktop app uses this |
 
 ## Storage
 
@@ -78,6 +79,6 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 
 ## Deep links
 
-The dashboard keeps its view in the address (`/board`, `/agents`, `/t/T-0018`, `/w/T-0018/changes?file=src/a.ts`). When `HELMSMAN_WEB_INDEX` is set, a `GET` that matches no API route and accepts `text/html` (a reload or a pasted link) is answered with that `index.html` and status 200, without a token: the page holds no data. Any other request keeps its answer: a known API route still needs the token, and an unknown path that does not accept HTML is a 404 (401 without a token). The daemon serves only this one file. It does not serve the dashboard's scripts and styles yet, so the page only works behind something that does (in development, Vite serves the dashboard and already answers deep links itself; the daemon is reached through `/api`).
+The dashboard keeps its view in the address (`/board`, `/agents`, `/t/T-0018`, `/w/T-0018/changes?file=src/a.ts`). When `HELMSMAN_WEB_INDEX` is set, a `GET` that matches no API route and accepts `text/html` (a reload or a pasted link) is answered with that `index.html` and status 200, without a token: the page holds no data. Any other request keeps its answer: a known API route still needs the token, and an unknown path that does not accept HTML is a 404 (401 without a token). Without `HELMSMAN_WEB_DIR` the daemon serves only this one file, so the page works only behind something that serves the scripts and styles (Vite in development, nginx in Docker; both reach the daemon through `/api`). With `HELMSMAN_WEB_DIR` it serves them too, without a token, from that folder only, with the same security headers as the nginx setup; files under `assets/` are cached for good, since their names hold a hash.
 
 An event that does not fit the task's current state is recorded with `accepted: false` and does not change the task.
