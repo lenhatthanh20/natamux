@@ -1,8 +1,10 @@
 import { timingSafeEqual } from 'node:crypto'
 import websocket from '@fastify/websocket'
 import {
+  issueLinkSchema,
   repoIdSchema,
   TASK_ID_HEADER,
+  TERMINAL_HEADER,
   type TerminalServerMessage,
   taskIdSchema,
   taskStateSchema,
@@ -19,8 +21,17 @@ import { fanOut, MAX_TRIES } from './fan-out.js'
 import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
 import type { IssueImporter } from './issue-importer.js'
 import { newWorkspace } from './new-workspace.js'
+import { type ProjectSettingsService, SettingsInputError } from './project-settings.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoInputError, RepoNotFoundError, type RepoService } from './repo-service.js'
+import {
+  archiveStageFiles,
+  listStageFiles,
+  readStageFile,
+  StageFileError,
+  writeStageFile,
+} from './stage-files.js'
+import { STAGE_ACTIONS, StageActionError, type StageRunner } from './stage-runner.js'
 import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
 import {
@@ -46,6 +57,10 @@ type ServerOptions = {
   templates: TemplateService
   repos: RepoService
   bus: EventBus
+  stages: StageRunner
+  settings: ProjectSettingsService
+  // The daemon's data folder, where stage files are kept for tasks without a worktree.
+  dataDir: string
   token: string
   // The built dashboard's index.html. With it, an address of the dashboard that is not an API
   // route (a deep link) answers with that page when the browser asks for HTML.
@@ -82,6 +97,19 @@ const createWorkspaceBodySchema = z
   .object({ base: z.string().min(1).max(255).optional() })
   .optional()
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
+const stageBodySchema = z.object({
+  action: z.enum(STAGE_ACTIONS),
+  stage: z.string().min(1).max(40).optional(),
+  terminal: z
+    .string()
+    .regex(/^[1-9]\d{0,2}$/)
+    .optional(),
+  to: z.string().min(1).max(40).optional(),
+  reason: z.string().trim().min(1).max(20_000).optional(),
+})
+const stageFileParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(100) })
+const stageFileBodySchema = z.object({ text: z.string() })
+const repoParamsSchema = z.object({ id: repoIdSchema })
 const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is named by a number')
 const terminalQuerySchema = terminalSizeSchema.extend({
   ticket: z.string().min(1).max(256),
@@ -123,7 +151,7 @@ function clientErrorStatus(error: unknown): number | undefined {
 
 export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
-  const hooks = new AgentHookService(options.service)
+  const hooks = new AgentHookService(options.service, options.stages)
   await app.register(websocket)
   const servesPage =
     options.webIndexPath === undefined ? null : registerWebFallback(app, options.webIndexPath)
@@ -162,7 +190,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof UnknownAgentError) {
       return reply.code(404).send({ error: 'unknown_agent', message: error.message })
     }
-    if (error instanceof RepoInputError) {
+    if (
+      error instanceof RepoInputError ||
+      error instanceof SettingsInputError ||
+      error instanceof StageFileError
+    ) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })
     }
     if (error instanceof TemplateNotFoundError || error instanceof RepoNotFoundError) {
@@ -179,7 +211,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof NoTerminalError ||
       error instanceof NothingToCommitError ||
       error instanceof GitHubError ||
-      error instanceof TaskWaitingError
+      error instanceof TaskWaitingError ||
+      error instanceof StageActionError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -269,10 +302,57 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // so a hook that matches no task or changes nothing never shows up as an error in the agent.
   app.post('/hooks/:agent', async (request) => {
     const { agent } = hookParamsSchema.parse(request.params)
-    const header = request.headers[TASK_ID_HEADER.toLowerCase()]
-    const taskIdHeader = (Array.isArray(header) ? header[0] : header)?.trim() || undefined
-    hooks.handle(agent, request.body, taskIdHeader)
+    const header = (name: string) => {
+      const value = request.headers[name.toLowerCase()]
+      return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
+    }
+    hooks.handle(agent, request.body, header(TASK_ID_HEADER), header(TERMINAL_HEADER))
     return {}
+  })
+
+  // Moves a task through its stages: approve, send back, skip, pass, fail, report done, start.
+  app.post('/tasks/:id/stage', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { action, ...input } = stageBodySchema.parse(request.body)
+    return { task: await options.stages.act(id, action, input) }
+  })
+
+  app.get('/tasks/:id/files', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { files: listStageFiles(options.dataDir, options.service.getTask(id)) }
+  })
+
+  app.get('/tasks/:id/files/:name', async (request, reply) => {
+    const { id, name } = stageFileParamsSchema.parse(request.params)
+    const text = readStageFile(options.dataDir, options.service.getTask(id), name)
+    if (text === undefined) {
+      return reply.code(404).send({ error: 'not_found', message: `${id} has no ${name}` })
+    }
+    return { name, text }
+  })
+
+  // An edit by hand, for example to fix the spec before approving it.
+  app.put('/tasks/:id/files/:name', async (request) => {
+    const { id, name } = stageFileParamsSchema.parse(request.params)
+    const { text } = stageFileBodySchema.parse(request.body)
+    writeStageFile(options.dataDir, options.service.getTask(id), name, text)
+    return { name, text }
+  })
+
+  app.put('/tasks/:id/issue', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: options.service.linkIssue(id, issueLinkSchema.parse(request.body)) }
+  })
+
+  app.get('/repos/:id/settings', async (request) => {
+    const { id } = repoParamsSchema.parse(request.params)
+    const loaded = options.settings.load(id)
+    return { ...loaded, path: options.settings.pathOf(id) }
+  })
+
+  app.put('/repos/:id/settings', async (request) => {
+    const { id } = repoParamsSchema.parse(request.params)
+    return { settings: options.settings.save(id, request.body) }
   })
 
   app.post('/tasks/:id/workspace', async (request, reply) => {
@@ -287,6 +367,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const query = removeWorkspaceQuerySchema.parse(request.query)
     // A shell that runs in the folder would keep files open while git removes it.
     options.terminals.close(id)
+    archiveStageFiles(options.dataDir, options.service.getTask(id))
     return options.workspaces.remove(id, { deleteBranch: query.deleteBranch === 'true' })
   })
 
@@ -322,7 +403,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // A task, its worktree and its agent in one step.
   app.post('/workspaces', async (request, reply) => {
     const input = newWorkspaceBodySchema.parse(request.body)
-    const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
+    const parts = {
+      tasks: options.service,
+      workspaces: options.workspaces,
+      agents: options.agents,
+      stages: options.stages,
+    }
     return reply.code(201).send({ task: await newWorkspace(parts, input) })
   })
 

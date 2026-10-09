@@ -6,11 +6,13 @@ import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
+import { ProjectSettingsService } from './project-settings.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
 import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
+import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
@@ -22,9 +24,15 @@ const config = loadConfig(process.env, process.cwd())
 mkdirSync(config.dataDir, { recursive: true })
 const index = new TaskIndex(join(config.dataDir, 'index.sqlite'))
 const bus = new EventBus()
-const service = new TaskService({ dataDir: config.dataDir, index, bus })
-service.init()
 const repos = new RepoService({ dataDir: config.dataDir, defaultPath: config.repoDir })
+const settings = new ProjectSettingsService({ repos })
+const service = new TaskService({
+  dataDir: config.dataDir,
+  index,
+  bus,
+  settingsOf: (repo) => settings.get(repo),
+})
+service.init()
 const workspaces = new WorkspaceService({
   tasks: service,
   repoDir: config.repoDir,
@@ -58,6 +66,16 @@ const agents = new AgentRunner({
   claudeCommand: process.env.HELMSMAN_CLAUDE_COMMAND,
 })
 
+const stages = new StageRunner({
+  tasks: service,
+  terminals,
+  agents,
+  bus,
+  dataDir: config.dataDir,
+  repoPath: (repo) => repos.pathOf(repo),
+})
+stages.start()
+
 const pullRequests = new PullRequestWatcher({ tasks: service, cwd: config.repoDir })
 pullRequests.start()
 
@@ -71,6 +89,9 @@ const app = await buildServer({
   templates: new TemplateService({ dataDir: config.dataDir, tasks: service }),
   repos,
   bus,
+  stages,
+  settings,
+  dataDir: config.dataDir,
   token: config.token,
   webIndexPath: config.webIndexPath,
 })
@@ -85,6 +106,7 @@ if (config.tokenWasGenerated) {
 
 async function shutdown(): Promise<void> {
   terminals.closeAll()
+  stages.stop()
   pullRequests.stop()
   await app.close()
   index.close()

@@ -34,7 +34,12 @@ function printJson(io: CliIo, data: unknown): void {
   io.stdout(`${JSON.stringify(data, null, 2)}\n`)
 }
 
-async function execute(command: Command, client: DaemonClient, io: CliIo): Promise<void> {
+async function execute(
+  command: Command,
+  client: DaemonClient,
+  io: CliIo,
+  env: Record<string, string | undefined>,
+): Promise<void> {
   switch (command.name) {
     case 'help':
       io.stdout(USAGE)
@@ -48,6 +53,7 @@ async function execute(command: Command, client: DaemonClient, io: CliIo): Promi
         labels: command.labels,
         agent: command.agent,
         dependsOn: command.dependsOn,
+        ...(command.context === undefined ? {} : { context: command.context }),
       })
       if (command.json) {
         printJson(io, task)
@@ -121,15 +127,56 @@ async function execute(command: Command, client: DaemonClient, io: CliIo): Promi
       return
     }
 
-    case 'agent.ask':
     case 'agent.done': {
-      const id = command.id ?? ''
-      const result = await client.sendEvent(
-        id,
-        command.name === 'agent.ask'
-          ? { source: 'agent', type: 'agent.asked', payload: { question: command.question } }
-          : { source: 'agent', type: 'agent.finished', payload: {} },
-      )
+      // The terminal tells the daemon which stage of a group this agent works on.
+      const terminal = env.HELMSMAN_TERMINAL?.trim() || undefined
+      const task = await client.stageAction(command.id ?? '', {
+        action: 'report',
+        ...(terminal === undefined ? {} : { terminal }),
+      })
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`Reported done; the checks run now.\n${formatTask(task)}\n`)
+      }
+      return
+    }
+
+    case 'stage.act': {
+      const task = await client.stageAction(command.id, {
+        action: command.action === 'back' ? 'reopen' : command.action,
+        ...(command.stage === undefined ? {} : { stage: command.stage }),
+        ...(command.to === undefined ? {} : { to: command.to }),
+        ...(command.reason === undefined ? {} : { reason: command.reason }),
+      })
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`${formatTask(task)}\n`)
+      }
+      return
+    }
+
+    case 'task.link': {
+      const task = await client.linkIssue(command.id, {
+        provider: command.provider,
+        key: command.key,
+        url: command.url,
+      })
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        io.stdout(`${formatTask(task)}\n`)
+      }
+      return
+    }
+
+    case 'agent.ask': {
+      const result = await client.sendEvent(command.id ?? '', {
+        source: 'agent',
+        type: 'agent.asked',
+        payload: { question: command.question },
+      })
       if (command.json) {
         printJson(io, result)
       } else {
@@ -223,7 +270,7 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
   })
 
   try {
-    await execute(command, client, io)
+    await execute(command, client, io, env)
     return EXIT_OK
   } catch (error) {
     io.stderr(`Error: ${error instanceof Error ? error.message : String(error)}\n`)

@@ -37,6 +37,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'stage.checked': 'Stage checks passed',
   'stage.approved': 'Stage approved',
   'stage.passed': 'Stage passed',
+  'stage.failed': 'Stage failed',
   'stage.reopened': 'Sent back to an earlier stage',
   'stage.skipped': 'Stage skipped',
   'context.fetched': 'Context fetched',

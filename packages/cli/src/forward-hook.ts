@@ -1,4 +1,4 @@
-import { TASK_ID_HEADER } from '@helmsman/core'
+import { TASK_ID_HEADER, TERMINAL_HEADER } from '@helmsman/core'
 import type { FetchFunction } from './client.js'
 import { DEFAULT_URL } from './format.js'
 
@@ -36,6 +36,10 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
     const taskId = env.HELMSMAN_TASK_ID?.trim()
     if (taskId) {
       headers[TASK_ID_HEADER] = taskId
+    }
+    const terminal = env.HELMSMAN_TERMINAL?.trim()
+    if (terminal) {
+      headers[TERMINAL_HEADER] = terminal
     }
 
     const baseUrl = (env.HELMSMAN_URL?.trim() || DEFAULT_URL).replace(/\/+$/, '')

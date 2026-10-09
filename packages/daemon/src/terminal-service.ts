@@ -169,15 +169,16 @@ export class TerminalService {
     }
   }
 
-  // Types a command line into the task's first shell, starting the shell first when needed.
-  run(taskId: string, line: string, size: TerminalSize = DEFAULT_SIZE): void {
-    this.ensure(taskId, MAIN_TERMINAL, size).pty.write(`${line}\r`)
+  // Types a command line into a shell of the task (the first by default), starting the shell
+  // first when needed.
+  run(taskId: string, line: string, terminal = MAIN_TERMINAL, size = DEFAULT_SIZE): void {
+    this.ensure(taskId, terminal, size).pty.write(`${line}\r`)
   }
 
-  // Pastes text into the first shell and presses Enter, so the agent there takes it as its next
-  // prompt. Bracketed paste keeps line breaks from sending the text early.
-  paste(taskId: string, text: string): void {
-    const session = this.sessions.get(sessionKey(taskId, MAIN_TERMINAL))
+  // Pastes text into a shell (the first by default) and presses Enter, so the agent there takes it
+  // as its next prompt. Bracketed paste keeps line breaks from sending the text early.
+  paste(taskId: string, text: string, terminal = MAIN_TERMINAL): void {
+    const session = this.sessions.get(sessionKey(taskId, terminal))
     if (!session) {
       throw new NoTerminalError(taskId)
     }
@@ -250,12 +251,14 @@ export class TerminalService {
     const pty = this.spawn({
       ...size,
       cwd,
-      // The task id lets `helmsman hook` name the task even when the agent changes folders.
+      // The task id lets `helmsman hook` name the task even when the agent changes folders, and the
+      // terminal name tells which stage of a group the agent works on.
       // PORT is the first port of the task's own block, for a dev server.
       env: {
         ...this.env,
         TERM: 'xterm-256color',
         HELMSMAN_TASK_ID: taskId,
+        HELMSMAN_TERMINAL: terminal,
         HELMSMAN_PORT: String(portRange(taskId).first),
         PORT: String(portRange(taskId).first),
       },
