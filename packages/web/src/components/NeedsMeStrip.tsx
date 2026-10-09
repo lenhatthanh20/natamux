@@ -1,6 +1,6 @@
 import type { Task } from '@helmsman/core'
 import { useState } from 'react'
-import { formatAge, isQuiet, needsMeReason, rowLabel } from '../lib/tasks'
+import { formatAge, isQuiet, needsMeReason, rowLabel, stageLabel } from '../lib/tasks'
 import { StatusGlyph } from './StatusGlyph'
 import { CountBadge } from './ui/CountBadge'
 import { sectionTitle } from './ui/styles'
@@ -57,6 +57,11 @@ export function NeedsMeStrip({ waiting, now, currentId, filtered, onOpen }: Need
               >
                 <StatusGlyph state={task.state} quiet={isQuiet(task, now)} />
                 <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
+                {stageLabel(task) !== null && (
+                  <span className="max-w-20 shrink-0 truncate text-xs text-muted">
+                    {stageLabel(task)}
+                  </span>
+                )}
                 <span className="shrink-0 text-xs text-signal">{needsMeReason(task, now)}</span>
                 <span className="w-7 shrink-0 text-right text-xs text-muted">
                   {formatAge(task.updatedAt, now)}

@@ -1,18 +1,25 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DEFAULT_PIPELINE, DEFAULT_PROJECT_SETTINGS, type Task } from '@helmsman/core'
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  type EventType,
+  type ProjectSettings,
+  type Task,
+} from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
+import type { RunCommand } from './stage-checks.js'
 import { archiveDir, STAGE_DIR } from './stage-files.js'
 import {
   issueContext,
   issueNumber,
+  LAUNCH_GRACE_MS,
+  parseIssueRef,
   StageActionError,
+  StageInputError,
   StageRunner,
-  stageOfTerminal,
-  terminalOfStage,
 } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -37,6 +44,10 @@ let workspaces: WorkspaceService
 let runner: StageRunner
 let ptys: FakePty[]
 let ghCalls: string[][]
+let settings: ProjectSettings
+let clock: number
+let runCommand: RunCommand
+let terminals: TerminalService
 
 beforeEach(() => {
   repo = createTestRepo()
@@ -44,7 +55,10 @@ beforeEach(() => {
   mkdirSync(dataDir)
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
-  tasks = new TaskService({ dataDir, index, bus, settingsOf: () => DEFAULT_PROJECT_SETTINGS })
+  settings = DEFAULT_PROJECT_SETTINGS
+  clock = Date.parse('2026-10-09T09:00:00.000Z')
+  runCommand = async () => ({ code: 0, output: '' })
+  tasks = new TaskService({ dataDir, index, bus, settingsOf: () => settings })
   workspaces = new WorkspaceService({
     tasks,
     repoDir: repo.dir,
@@ -52,7 +66,7 @@ beforeEach(() => {
   })
   const spawner = fakeSpawner()
   ptys = spawner.ptys
-  const terminals = new TerminalService({
+  terminals = new TerminalService({
     spawn: spawner.spawn,
     workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   })
@@ -74,6 +88,9 @@ beforeEach(() => {
       ghCalls.push([...args])
       return JSON.stringify(ISSUE)
     },
+    runCommand: (command, cwd) => runCommand(command, cwd),
+    now: () => clock,
+    platform: 'linux',
   })
   runner.start()
 })
@@ -150,6 +167,22 @@ describe('context', () => {
     )
   })
 
+  it('reads an issue of another repository from its address', async () => {
+    const ref = 'https://github.com/other/repo/issues/7#issuecomment-1'
+    const task = await created({ title: 'Export', context: { source: 'github-issue', ref } })
+
+    expect(ghCalls[0]).toEqual([
+      'issue',
+      'view',
+      '7',
+      '--repo',
+      'other/repo',
+      '--json',
+      'number,title,body,url,labels,comments',
+    ])
+    expect(task.issue?.key).toBe('other/repo#7')
+  })
+
   it('waits for you when the issue number is missing', async () => {
     const task = await created({ title: 'Export', context: { source: 'github-issue', ref: '' } })
     expect(task.state).toBe('needs-input')
@@ -200,8 +233,8 @@ describe('agent stages', () => {
 
     await runner.act(task.id, 'report', { terminal: '1' })
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'review' })
-    expect(runner.takeReport(task.id, 'spec')).toBe(true)
-    expect(runner.takeReport(task.id, 'spec')).toBe(false)
+    expect(runner.takeReport(task.id, '1')).toBe(true)
+    expect(runner.takeReport(task.id, '1')).toBe(false)
   })
 
   it('names the missing sections', async () => {
@@ -264,26 +297,31 @@ describe('a group', () => {
 })
 
 describe('helpers', () => {
-  const build = DEFAULT_PIPELINE[3]
-
-  it('gives the code stage of a group the first terminal', () => {
-    if (build === undefined) {
-      throw new Error('The default pipeline changed')
-    }
-    expect(terminalOfStage(build, 'implement')).toBe('1')
-    expect(terminalOfStage(build, 'test-spec')).toBe('2')
-    expect(stageOfTerminal(build, '2')?.id).toBe('test-spec')
-    expect(stageOfTerminal(build, '3')).toBeUndefined()
-  })
-
   it.each([
     ['#42', 42],
     ['42', 42],
     ['https://github.com/o/r/issues/42', 42],
+    ['https://github.com/o/r/issues/42#issuecomment-123', 42],
+    ['o/r#42', 42],
     ['ABC-42', undefined],
+    ['o/r42', undefined],
     ['', undefined],
   ])('reads the issue number in %j', (ref, number) => {
     expect(issueNumber(ref)).toBe(number)
+  })
+
+  it('reads the repository of an issue address', () => {
+    expect(parseIssueRef('https://github.com/torvalds/linux/issues/1')).toEqual({
+      number: 1,
+      slug: 'torvalds/linux',
+      repo: 'torvalds/linux',
+    })
+    expect(parseIssueRef('https://ghe.example.com/o/r/issues/5')).toEqual({
+      number: 5,
+      slug: 'o/r',
+      repo: 'ghe.example.com/o/r',
+    })
+    expect(parseIssueRef('#5')).toEqual({ number: 5 })
   })
 
   it('writes an issue as markdown', () => {
@@ -299,7 +337,6 @@ describe('a prompt for a running agent', () => {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
     await workspaces.create(task.id)
     // The dashboard opened the first shell; the program in it is up to the test.
-    const terminals = (runner as unknown as { terminals: TerminalService }).terminals
     terminals.run(task.id, 'echo ready')
     const pty = ptys.at(-1) as FakePty
     pty.program = program
@@ -319,5 +356,216 @@ describe('a prompt for a running agent', () => {
   it('pastes the prompt when an agent runs in the foreground', async () => {
     const { pty } = await atSpecWithShell('node')
     expect(pty.written.join('')).toContain('\x1b[200~Task: Export tasks')
+  })
+
+  it('starts the agent again when it ended and only the shell is left', async () => {
+    const { task, pty } = await atSpecWithShell('bash')
+    clock += LAUNCH_GRACE_MS + 1
+
+    await runner.act(task.id, 'reopen', { to: 'spec' })
+
+    const typed = pty.written.join('')
+    expect(typed.split(`agent-launch-${task.id}.sh`)).toHaveLength(3)
+    expect(typed).not.toContain('\x1b[200~')
+  })
+
+  it('makes a failed check final when no agent is left to fix it', async () => {
+    const { task, pty } = await atSpecWithShell('bash')
+    clock += LAUNCH_GRACE_MS + 1
+
+    await runner.act(task.id, 'report')
+
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+    expect(pty.written.join('')).not.toContain('The checks of this stage failed')
+  })
+
+  it('ends the shells of a task that is cancelled', async () => {
+    const { task, pty } = await atSpecWithShell('node')
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+
+    expect(pty.killed).toBe(true)
+    expect(terminals.list(task.id)).toEqual([])
+  })
+})
+
+describe('a send back', () => {
+  async function inReview(): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'review' },
+    })
+    await runner.settle()
+    return tasks.getTask(task.id)
+  }
+
+  const typesSince = (id: string, type: EventType) => {
+    const types = tasks.listEvents(id).map((entry) => entry.event.type)
+    return types.slice(types.lastIndexOf(type))
+  }
+
+  it('starts the code stage again with the changes asked for', async () => {
+    const task = await inReview()
+
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'review.changes-requested',
+      payload: { reason: 'Fix the dates' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({
+      stage: 'build',
+      lanes: { 'test-spec': 'done', implement: 'running' },
+    })
+    expect(typesSince(task.id, 'review.changes-requested')).toEqual([
+      'review.changes-requested',
+      'stage.started',
+      'agent.launched',
+    ])
+    expect(launchScript(task.id)).toContain('What to change: Fix the dates')
+  })
+
+  it('takes the stage up again, with no new prompt, when you type to the agent', async () => {
+    const task = await inReview()
+    terminals.run(task.id, 'claude')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.resumed',
+      payload: { stage: 'review' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    expect(typesSince(task.id, 'agent.resumed')).toEqual(['agent.resumed', 'stage.started'])
+    expect(pty.written).toEqual(['claude\r'])
+  })
+
+  it('refuses a stage the task does not have or has not reached', async () => {
+    const task = await inReview()
+    await expect(runner.act(task.id, 'reopen', { to: 'nope' })).rejects.toThrow(StageInputError)
+    await expect(runner.act(task.id, 'reopen', { to: 'release' })).rejects.toThrow(StageInputError)
+  })
+
+  it('answers with the task after its stage failed to start', async () => {
+    const task = await created({ title: 'Export', context: { source: 'github-issue', ref: '' } })
+    expect(task.state).toBe('needs-input')
+
+    const after = await runner.act(task.id, 'reopen', { to: 'context' })
+
+    expect(after.state).toBe('needs-input')
+    expect(typesSince(task.id, 'stage.reopened')).toEqual([
+      'stage.reopened',
+      'stage.started',
+      'stage.check-failed',
+    ])
+  })
+})
+
+describe('a pipeline of its own', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto', check: 'make test' },
+        { id: 'review', kind: 'review', gate: 'manual' },
+      ],
+    }
+  })
+
+  async function started(input: Record<string, unknown> = {}): Promise<Task> {
+    const task = await created({ title: 'Export', agent: 'claude-code', ...input })
+    await withWorkspace(task.id)
+    return runner.act(task.id, 'start')
+  }
+
+  it('runs the check command at the root of the worktree', async () => {
+    const cwds: string[] = []
+    runCommand = async (_command, cwd) => {
+      cwds.push(cwd)
+      return { code: 0, output: '' }
+    }
+    const task = await started()
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(cwds).toEqual([task.workspace])
+    expect(tasks.getTask(task.id).stage).toBe('review')
+  })
+
+  it('drops the result of checks that ran while the stage started again', async () => {
+    let finish: (code: number) => void = () => undefined
+    runCommand = () =>
+      new Promise((resolve) => {
+        finish = (code) => resolve({ code, output: 'failed' })
+      })
+    const task = await started()
+
+    const reporting = runner.act(task.id, 'report', { terminal: '1' })
+    await runner.act(task.id, 'reopen', { to: 'implement' })
+    finish(1)
+    await reporting
+
+    expect(tasks.listEvents(task.id).map((entry) => entry.event.type)).not.toContain(
+      'stage.check-failed',
+    )
+    expect(tasks.getTask(task.id).state).toBe('running')
+  })
+
+  it('waits for the tasks it depends on, then starts', async () => {
+    const first = await created({ title: 'Schema' })
+    const task = await started({ dependsOn: [first.id] })
+    expect(task.state).toBe('draft')
+    expect(ptys).toHaveLength(0)
+
+    tasks.applyEvent(first.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'done' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(launchScript(task.id)).toContain('Task: Export')
+  })
+
+  it('runs a stage command as one unit, in the same terminal each time', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'testing', kind: 'testing', gate: 'auto', command: 'make test; make lint' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+    const task = await started()
+    const script = join(dataDir, `stage-command-${task.id}.sh`)
+
+    expect(terminals.list(task.id)).toEqual(['2'])
+    expect(ptys[0]?.written).toEqual([`sh '${script}'\r`])
+    expect(readFileSync(script, 'utf8')).toBe(
+      [
+        'if (',
+        'make test; make lint',
+        '); then',
+        `  helmsman stage pass ${task.id} --stage testing`,
+        'else',
+        `  helmsman stage fail ${task.id} --stage testing`,
+        'fi',
+        '',
+      ].join('\n'),
+    )
+
+    await runner.act(task.id, 'reopen', { to: 'testing' })
+
+    expect(ptys[0]?.killed).toBe(true)
+    expect(ptys).toHaveLength(2)
+    expect(terminals.list(task.id)).toEqual(['2'])
   })
 })

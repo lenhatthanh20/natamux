@@ -1,6 +1,6 @@
 # Helmsman plugin for Claude Code
 
-A skill that teaches Claude Code to work inside a Helmsman task with the `helmsman` CLI: read the task, ask the user, report done, file follow-up tasks.
+A skill that teaches Claude Code to work inside a Helmsman task with the `helmsman` CLI: read the task, work stage by stage, ask the user, report each stage done with `helmsman done`, file follow-up tasks.
 
 Install, in Claude Code:
 

@@ -81,6 +81,19 @@ export const pipelineSchema = z
       }
       seen.add(id)
     }
+    // The context is read when a task is made, so only the first step can be one. A release
+    // ends the task, so nothing can come after it.
+    const kinds = steps.map((step) => (isGroup(step) ? undefined : step.kind))
+    if (kinds.filter((kind) => kind === 'context').length > 1) {
+      context.addIssue({ code: 'custom', message: 'A pipeline has at most one context stage' })
+    } else if (kinds.indexOf('context') > 0) {
+      context.addIssue({ code: 'custom', message: 'The context stage must come first' })
+    }
+    if (kinds.filter((kind) => kind === 'release').length > 1) {
+      context.addIssue({ code: 'custom', message: 'A pipeline has at most one release stage' })
+    } else if (kinds.includes('release') && kinds.at(-1) !== 'release') {
+      context.addIssue({ code: 'custom', message: 'The release stage must come last' })
+    }
   })
 
 export const DEFAULT_PIPELINE: Step[] = [
@@ -230,6 +243,30 @@ export function stepIndex(steps: readonly Step[], id: string): number {
   return steps.findIndex(
     (step) => step.id === id || stagesOf(step).some((stage) => stage.id === id),
   )
+}
+
+// The stage of a group that changes code keeps the first terminal (and the agent session of the
+// steps before); each other stage gets the next terminal.
+export function codeStage(step: Step): Stage {
+  const stages = stagesOf(step)
+  const agents = stages.filter((stage) => stage.kind === 'agent')
+  return agents.find((stage) => stage.output === undefined) ?? agents[0] ?? (stages[0] as Stage)
+}
+
+export function terminalOfStage(step: Step, stageId: string): string {
+  if (!isGroup(step)) {
+    return '1'
+  }
+  const main = codeStage(step)
+  if (main.id === stageId) {
+    return '1'
+  }
+  const others = step.parallel.filter((stage) => stage.id !== main.id)
+  return String(others.findIndex((stage) => stage.id === stageId) + 2)
+}
+
+export function stageOfTerminal(step: Step, terminal: string): Stage | undefined {
+  return stagesOf(step).find((stage) => terminalOfStage(step, stage.id) === terminal)
 }
 
 export const lanesSchema = z.record(stageIdSchema, taskStateSchema)

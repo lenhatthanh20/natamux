@@ -30,3 +30,9 @@ export function parseTerminalMessage(text: string): TerminalServerMessage | unde
     return undefined
   }
 }
+
+// A terminal that opens takes the keyboard, unless the user is on the tab list or on the page
+// itself: a number key that chose the tab must keep working for the next key.
+export function takesFocusOnOpen(active: Element | null, body: Element): boolean {
+  return active !== null && active !== body && active.getAttribute('role') !== 'tab'
+}

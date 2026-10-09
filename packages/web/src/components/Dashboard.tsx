@@ -32,7 +32,7 @@ import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
-import { latestQuestion, tabToOpen } from '../lib/workspace'
+import { rowText, tabToOpen, waitReason } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
@@ -193,6 +193,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         toast(`The daemon did not accept that change. ${task.id} stays ${task.state}.`, 'error')
       }
     },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
+  const stageMutation = useMutation({
+    mutationFn: ({ taskId, action }: { taskId: string; action: 'skip' | 'approve' | 'report' }) =>
+      api.stageAction(taskId, action),
+    onSuccess: (task) => mergeTask(task),
     onError: (error) => toast(error.message, 'error'),
   })
 
@@ -377,7 +384,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     })),
   })
   const questions = Object.fromEntries(
-    asking.map((task, index) => [task.id, latestQuestion(askQueries[index]?.data ?? [])]),
+    asking.map((task, index) => [task.id, rowText(waitReason(askQueries[index]?.data))]),
   )
   const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
@@ -508,6 +515,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     taskEvent: (type) => {
       if (selectedTask) {
         eventMutation.mutate({ taskId: selectedTask.id, type })
+      }
+    },
+    stageAction: (action) => {
+      if (selectedTask) {
+        stageMutation.mutate({ taskId: selectedTask.id, action })
       }
     },
     showTab: (tab) => fireAppEvent('workspace-tab', tab),

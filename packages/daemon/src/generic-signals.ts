@@ -52,7 +52,8 @@ export class GenericSignals {
       this.tasks.applyEvent(taskId, {
         source: 'agent',
         type: 'agent.asked',
-        payload: { reason: 'terminal bell' },
+        // Inside a group, the terminal tells which stage asks.
+        payload: { reason: 'terminal bell', terminal },
       })
       return
     }

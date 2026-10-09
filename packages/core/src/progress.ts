@@ -39,10 +39,22 @@ export type StageProgress = {
 
 const ENDS: readonly TaskEvent['type'][] = [
   'stage.approved',
+  'review.approved',
   'stage.passed',
   'stage.skipped',
   'stage.checked',
 ]
+
+const APPROVALS: readonly TaskEvent['type'][] = ['stage.approved', 'review.approved']
+
+// A send back names the stage it goes to in `to`; the daemon fills it in when the sender did not.
+function sendsBackTo(event: TaskEvent): string | undefined {
+  const sendBack =
+    event.type === 'stage.reopened' ||
+    event.type === 'review.changes-requested' ||
+    event.type === 'agent.resumed'
+  return sendBack && typeof event.payload.to === 'string' ? event.payload.to : undefined
+}
 
 function strings(value: unknown): string[] {
   return Array.isArray(value)
@@ -69,7 +81,7 @@ export function stageProgress(
         .filter(
           (event) =>
             (ENDS.includes(event.type) && previous.has(String(event.payload.stage))) ||
-            (event.type === 'stage.reopened' && ids.has(String(event.payload.to))),
+            ids.has(sendsBackTo(event) ?? ''),
         )
         .at(-1)?.at ?? null
     )
@@ -81,13 +93,11 @@ export function stageProgress(
       const lastStart = starts.at(-1)
       const sinceStart = lastStart === undefined ? own : own.slice(own.indexOf(lastStart))
       const ended = sinceStart.filter((event) => ENDS.includes(event.type)).at(-1)
-      const approved = sinceStart.filter((event) => event.type === 'stage.approved').at(-1)
+      const approved = sinceStart.filter((event) => APPROVALS.includes(event.type)).at(-1)
       const checked = sinceStart.filter((event) => event.type === 'stage.checked').at(-1)
       const failed = sinceStart.filter((event) => event.type === 'stage.check-failed').at(-1)
       const skipped = ended?.type === 'stage.skipped'
-      const reopened = events
-        .filter((event) => event.type === 'stage.reopened' && event.payload.to === stage.id)
-        .at(-1)
+      const reopened = events.filter((event) => sendsBackTo(event) === stage.id).at(-1)
 
       const laneState = isGroup(step) ? task.lanes[stage.id] : task.state
       let status: StageStatus

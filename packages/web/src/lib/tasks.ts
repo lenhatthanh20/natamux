@@ -2,6 +2,7 @@ import {
   type DiffStat,
   type EventType,
   needsMe,
+  stageName,
   TASK_STATES,
   type Task,
   type TaskState,
@@ -54,7 +55,13 @@ export function sortByRecent(tasks: readonly Task[]): Task[] {
   )
 }
 
+// A late answer to a request must not replace what the live feed already brought: keep the task
+// that was updated last. The same time counts as newer, so the answer of an edit still shows.
 export function upsertTask(tasks: readonly Task[], task: Task): Task[] {
+  const known = tasks.find((existing) => existing.id === task.id)
+  if (known !== undefined && known.updatedAt > task.updatedAt) {
+    return [...tasks]
+  }
   return sortByRecent([...tasks.filter((existing) => existing.id !== task.id), task])
 }
 
@@ -263,6 +270,20 @@ export function formatExact(isoTime: string): string {
 }
 
 // What a screen reader says for a task row: "Fix token refresh race, Needs input, T-0008, 34m ago".
+// The stage a task is in, such as "Plan". Null while it has none: a draft, or a finished task.
+export function stageLabel(task: Pick<Task, 'stage' | 'state'>): string | null {
+  if (task.state === 'draft' || task.state === 'done' || task.state === 'cancelled') {
+    return null
+  }
+  return stageName({ id: task.stage })
+}
+
+// "Plan · Needs input": the stage and its state in one text.
+export function stageStateLabel(task: Pick<Task, 'stage' | 'state'>): string {
+  const stage = stageLabel(task)
+  return stage === null ? STATE_LABEL[task.state] : `${stage} · ${STATE_LABEL[task.state]}`
+}
+
 export function rowLabel(task: Task, now: Date): string {
   return `${task.title}, ${STATE_LABEL[task.state]}, ${task.id}, ${formatAge(task.updatedAt, now, 'long')}`
 }

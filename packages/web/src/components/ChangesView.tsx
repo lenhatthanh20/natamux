@@ -19,7 +19,7 @@ import { useAppEvent } from '../lib/app-events'
 import { paneStateText } from '../lib/panes'
 import { toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
-import { latestQuestion } from '../lib/workspace'
+import { waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
@@ -195,7 +195,7 @@ export function ChangesView({
       />
       {waiting && (
         <NeedsInputBanner
-          question={latestQuestion(events.data ?? [])}
+          reason={waitReason(events.data)}
           resuming={resuming}
           onAnswer={() => {
             pickTab('terminal')

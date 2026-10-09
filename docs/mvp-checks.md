@@ -23,7 +23,7 @@ Pass: under 2 minutes, three tasks in Running, each in its own worktree (`git wo
 
 1. In one agent's terminal, ask something that needs a permission (for example a command it must approve).
 2. Watch the table. Pass: the task moves to Needs input within 2 seconds, and the Needs me strip lists it.
-3. Approve in the terminal. Pass: back to Running within 2 seconds; when the agent ends its turn, In review.
+3. Approve in the terminal. Pass: back to Running within 2 seconds; when the agent ends its turn without `helmsman done`, Needs input; after `helmsman done` and passing checks, In review (manual gate).
 
 ## 3. A user can name which task needs them from the dashboard alone
 

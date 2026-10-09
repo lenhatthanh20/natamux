@@ -16,8 +16,11 @@ import {
   needsMeReason,
   needsMeTasks,
   nextSort,
+  STATE_LABEL,
   sortByRecent,
   sortTasks,
+  stageLabel,
+  stageStateLabel,
   upsertTask,
 } from './tasks'
 
@@ -106,9 +109,32 @@ describe('sorting and merging', () => {
     expect(result.map((task) => task.title)).toEqual(['New'])
   })
 
+  it('keeps the task that was updated last', () => {
+    const live = makeTask({ title: 'Live', updatedAt: '2026-10-08T10:00:00.000Z' })
+    const late = makeTask({ title: 'Late answer', updatedAt: '2026-10-08T09:00:00.000Z' })
+    expect(upsertTask([live], late).map((task) => task.title)).toEqual(['Live'])
+    expect(upsertTask([late], live).map((task) => task.title)).toEqual(['Live'])
+  })
+
   it('adds a task that is new', () => {
     const result = upsertTask([makeTask({ id: 'T-0001' })], makeTask({ id: 'T-0002' }))
     expect(result).toHaveLength(2)
+  })
+})
+
+describe('stage labels', () => {
+  it('names the stage of a task that is in progress', () => {
+    const task = makeTask({ stage: 'test-spec', state: 'needs-input' })
+    expect(stageLabel(task)).toBe('Test spec')
+    expect(stageStateLabel(task)).toBe('Test spec · Needs input')
+  })
+
+  it('has no stage for a draft or a finished task', () => {
+    for (const state of ['draft', 'done', 'cancelled'] as const) {
+      const task = makeTask({ stage: 'implement', state })
+      expect(stageLabel(task)).toBeNull()
+      expect(stageStateLabel(task)).toBe(STATE_LABEL[state])
+    }
   })
 })
 

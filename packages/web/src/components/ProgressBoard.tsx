@@ -19,6 +19,7 @@ import { isQuiet, STATE_LABEL } from '../lib/tasks'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { linkKind, StageLink, StageMarker } from './StageMarker'
 import { Button } from './ui/Button'
+import { SkeletonList } from './ui/Skeleton'
 
 type ProgressBoardProps = {
   tasks: readonly Task[]
@@ -44,16 +45,22 @@ type Section = {
   done: Task[]
 }
 
-// Waiting for you first, then the furthest along, then the newest.
+// Waiting for you first, then the furthest along. Equal rows keep the order of `tasks`, which the
+// dashboard freezes, so a row never moves under the pointer.
 function sortRows(tasks: readonly Task[], steps: readonly Step[], now: Date): Task[] {
   const waits = (task: Task) => needsMe(task.state) || isQuiet(task, now)
   return [...tasks].sort(
     (a, b) =>
-      Number(waits(b)) - Number(waits(a)) ||
-      stepIndex(steps, b.stage) - stepIndex(steps, a.stage) ||
-      b.updatedAt.localeCompare(a.updatedAt),
+      Number(waits(b)) - Number(waits(a)) || stepIndex(steps, b.stage) - stepIndex(steps, a.stage),
   )
 }
+
+// Cells that stay in place while the stage columns scroll. The hover tint is an image over the
+// surface color, so the columns behind do not show through.
+const STICKY_TASK =
+  'sticky left-0 z-[1] bg-surface shadow-[8px_0_8px_-8px_rgb(0_0_0/0.18)] group-hover:[background-image:linear-gradient(var(--hover),var(--hover))]'
+const STICKY_NEXT =
+  'sticky right-0 z-[1] bg-surface shadow-[-8px_0_8px_-8px_rgb(0_0_0/0.18)] group-hover:[background-image:linear-gradient(var(--hover),var(--hover))]'
 
 // One section per repository, and one more for its tasks made before its pipeline changed.
 export function boardSections(
@@ -68,8 +75,10 @@ export function boardSections(
     const own = tasks.filter(
       (task) => (task.repo ?? DEFAULT_REPO_ID) === repo.id && task.state !== 'cancelled',
     )
-    const pipeline = pipelines.get(repo.id)
-    if (own.length === 0 || pipeline === undefined) {
+    // Without the settings (still loading, or failed) the tasks show the stages they carry.
+    const loaded = pipelines.get(repo.id)
+    const pipeline = loaded ?? []
+    if (own.length === 0) {
       continue
     }
     const keys = [...new Set(own.map(stepsKey))]
@@ -88,7 +97,10 @@ export function boardSections(
       const steps = resolveSteps(first.stages, pipeline)
       sections.push({
         key: `${repo.id}:${key}`,
-        title: index === 0 && key === currentKey ? repo.name : `${repo.name}, earlier pipeline`,
+        title:
+          index === 0 && (loaded === undefined || key === currentKey)
+            ? repo.name
+            : `${repo.name}, earlier pipeline`,
         steps,
         open: sortRows(
           group.filter((task) => task.state !== 'done'),
@@ -127,13 +139,41 @@ export function ProgressBoard({
   })
   const sections = boardSections(tasks, known, pipelines, now)
   const [showDone, setShowDone] = useState<Record<string, boolean>>({})
+  const failed = settings.find((query) => query.isError)
+  const loading = settings.some((query) => query.isPending)
 
+  if (loading && sections.length > 0) {
+    return (
+      <div className="p-4">
+        <SkeletonList rows={4} rowHeight={48} label="Reading the stages" />
+      </div>
+    )
+  }
   if (sections.length === 0) {
     return <p className="p-4 text-muted">No tasks to show.</p>
   }
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {failed !== undefined && (
+        <p role="alert" className="m-0 flex flex-wrap items-center gap-2 text-sm text-danger-text">
+          Could not read the stage settings, so the stages shown are the ones each task carries.{' '}
+          {failed.error?.message}
+          <Button
+            size="xs"
+            variant="secondary"
+            onClick={() => {
+              for (const query of settings) {
+                if (query.isError) {
+                  query.refetch()
+                }
+              }
+            }}
+          >
+            Retry
+          </Button>
+        </p>
+      )}
       {sections.map((section) => {
         const stages = section.steps.flatMap((step) =>
           stagesOf(step).map((stage) => ({ stage, step, inGroup: isGroup(step) })),
@@ -158,7 +198,9 @@ export function ProgressBoard({
                 style={{ gridTemplateColumns: columns, minWidth: 360 + stages.length * 72 }}
               >
                 <div className="contents">
-                  <div className="border-b border-line px-4 py-2 text-xs font-medium text-muted">
+                  <div
+                    className={`border-b border-line px-4 py-2 text-xs font-medium text-muted ${STICKY_TASK}`}
+                  >
                     Task
                   </div>
                   {stages.map(({ stage, inGroup }) => {
@@ -189,7 +231,9 @@ export function ProgressBoard({
                       </div>
                     )
                   })}
-                  <div className="border-b border-line px-4 py-2 text-right text-xs font-medium text-muted">
+                  <div
+                    className={`border-b border-line px-4 py-2 text-right text-xs font-medium text-muted ${STICKY_NEXT}`}
+                  >
                     Next
                   </div>
                 </div>
@@ -200,7 +244,9 @@ export function ProgressBoard({
                   const waits = needsMe(task.state) || isQuiet(task, now)
                   return (
                     <div key={task.id} className="group contents">
-                      <div className="flex min-w-0 flex-col justify-center gap-0.5 border-b border-line px-4 py-2 group-hover:bg-hover">
+                      <div
+                        className={`flex min-w-0 flex-col justify-center gap-0.5 border-b border-line px-4 py-2 ${STICKY_TASK}`}
+                      >
                         <button
                           type="button"
                           onClick={() => onOpenTask(task.id)}
@@ -248,7 +294,9 @@ export function ProgressBoard({
                           </div>
                         )
                       })}
-                      <div className="flex items-center justify-end gap-2 border-b border-line px-4 group-hover:bg-hover">
+                      <div
+                        className={`flex items-center justify-end gap-2 border-b border-line px-4 ${STICKY_NEXT}`}
+                      >
                         {waits && label !== undefined ? (
                           <Button size="xs" variant="primary" onClick={() => onOpenTask(task.id)}>
                             {label}

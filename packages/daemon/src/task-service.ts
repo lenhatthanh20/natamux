@@ -1,5 +1,6 @@
 import {
   applyTaskEvent,
+  completeEvent,
   DEFAULT_PROJECT_SETTINGS,
   type EventType,
   firstPosition,
@@ -274,13 +275,15 @@ export class TaskService {
   applyEvent(taskId: string, rawInput: unknown): ApplyEventResult {
     const task = this.getTask(taskId)
     const input = applyEventInputSchema.parse(rawInput)
-    const event: TaskEvent = taskEventSchema.parse({ ...input, taskId, at: this.timestamp() })
-
-    const { position, accepted, moved } = applyTaskEvent(
+    const steps = this.stepsOf(task)
+    // A button or `helmsman ask` may leave out the stage; the log keeps the one it was about.
+    const event: TaskEvent = completeEvent(
       positionOf(task),
-      event,
-      this.stepsOf(task),
+      taskEventSchema.parse({ ...input, taskId, at: this.timestamp() }),
+      steps,
     )
+
+    const { position, accepted, moved } = applyTaskEvent(positionOf(task), event, steps)
     const updated: Task = accepted
       ? { ...moveTask(task, position, moved, event.at), updatedAt: event.at }
       : task

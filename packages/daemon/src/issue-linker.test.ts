@@ -96,6 +96,29 @@ describe('IssueLinker', () => {
     await expect(linker.create(task.id)).rejects.toThrow(IssueLinkError)
   })
 
+  it('opens one issue for two requests at the same time', async () => {
+    const task = tasks.createTask({ title: 'Export' })
+
+    const [first, second] = await Promise.all([linker.create(task.id), linker.create(task.id)])
+
+    expect(ghCalls).toHaveLength(1)
+    expect(first.issue?.key).toBe('#12')
+    expect(second).toEqual(first)
+  })
+
+  it('does not link a new issue over one linked while it was opened', async () => {
+    const task = tasks.createTask({ title: 'Export' })
+    const opening = linker.create(task.id)
+    tasks.linkIssue(task.id, {
+      provider: 'github',
+      key: '#3',
+      url: 'https://github.com/o/r/issues/3',
+    })
+
+    await expect(opening).rejects.toThrow(/linked to #3/)
+    expect(tasks.getTask(task.id).issue?.key).toBe('#3')
+  })
+
   it('ends the pull request body with the closing line', async () => {
     const task = tasks.createTask({ title: 'Export', description: 'Adds a CSV export.' })
     tasks.linkIssue(task.id, {

@@ -12,7 +12,8 @@ import {
   isQuiet,
   rowLabel,
   type SortKey,
-  STATE_LABEL,
+  stageLabel,
+  stageStateLabel,
   type TaskSort,
 } from '../lib/tasks'
 import { shortBranch } from '../lib/workspace-groups'
@@ -190,7 +191,7 @@ export function TaskTable({
                   <span className="flex items-center gap-1.5 text-xs text-muted">
                     <span className="font-mono">{task.id}</span>
                     <span aria-hidden="true">·</span>
-                    <span>{quiet ? 'Quiet' : STATE_LABEL[task.state]}</span>
+                    <span>{quiet ? 'Quiet' : stageStateLabel(task)}</span>
                     <span aria-hidden="true">·</span>
                     <span>{formatAge(task.updatedAt, now)}</span>
                   </span>
@@ -233,7 +234,7 @@ export function TaskTable({
           </div>
         )
       case 'state':
-        return <StateBadge state={task.state} />
+        return <StateBadge state={task.state} stage={stageLabel(task)} />
       case 'agent':
         return note !== undefined ? (
           <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">

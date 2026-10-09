@@ -22,9 +22,11 @@ export type CheckResult = {
 
 export type CheckInput = {
   stage: Stage
-  // The folder the stage worked in: the worktree, or the task's archive without one.
+  // The folder of the stage files: in the worktree, or the task's archive without one.
   folder: string
-  // Whether `folder` is a git worktree; commit and clean checks need one.
+  // Where git and the `check` command run: the root of the worktree.
+  cwd: string
+  // Whether `cwd` is a git worktree; commit and clean checks need one.
   isWorktree: boolean
   // When the stage started, and the commit HEAD was on then.
   startedAt: string | null
@@ -33,12 +35,25 @@ export type CheckInput = {
 
 export type RunCommand = (command: string, cwd: string) => Promise<{ code: number; output: string }>
 
+// A `check` command runs in the shell of the platform. cmd.exe reads the quoted command as it is,
+// the way Node runs a command with `shell: true`.
+export function shellCommand(
+  command: string,
+  platform: NodeJS.Platform,
+): { file: string; args: string[] } {
+  return platform === 'win32'
+    ? { file: 'cmd.exe', args: ['/d', '/s', '/c', `"${command}"`] }
+    : { file: 'sh', args: ['-c', command] }
+}
+
 export const runShellCommand: RunCommand = async (command, cwd) => {
+  const { file, args } = shellCommand(command, process.platform)
   try {
-    const { stdout, stderr } = await execFileAsync('sh', ['-c', command], {
+    const { stdout, stderr } = await execFileAsync(file, args, {
       cwd,
       timeout: CHECK_TIMEOUT_MS,
       maxBuffer: 10 * 1024 * 1024,
+      windowsVerbatimArguments: process.platform === 'win32',
     })
     return { code: 0, output: `${stdout}${stderr}` }
   } catch (error) {
@@ -142,7 +157,7 @@ async function checkOutput(input: CheckInput, result: CheckResult): Promise<void
 }
 
 async function checkGit(input: CheckInput, result: CheckResult): Promise<void> {
-  const { stage, folder } = input
+  const { stage, cwd } = input
   if (!input.isWorktree) {
     if (stage.requireCommit || stage.requireClean) {
       result.reasons.push('The task has no workspace')
@@ -151,7 +166,7 @@ async function checkGit(input: CheckInput, result: CheckResult): Promise<void> {
   }
   if (stage.requireCommit) {
     const range = input.startHead === null ? 'HEAD' : `${input.startHead}..HEAD`
-    const count = Number((await git(folder, ['rev-list', '--count', range])).trim())
+    const count = Number((await git(cwd, ['rev-list', '--count', range])).trim())
     if (count === 0) {
       result.reasons.push('There is no new commit since the stage started')
     } else {
@@ -161,7 +176,7 @@ async function checkGit(input: CheckInput, result: CheckResult): Promise<void> {
     }
   }
   if (stage.requireClean) {
-    const dirty = (await git(folder, ['status', '--porcelain'])).split('\n').filter(Boolean)
+    const dirty = (await git(cwd, ['status', '--porcelain'])).split('\n').filter(Boolean)
     if (dirty.length > 0) {
       result.reasons.push(
         `${dirty.length} ${dirty.length === 1 ? 'file is' : 'files are'} not committed`,
@@ -181,7 +196,7 @@ export async function runStageChecks(
   await checkOutput(input, result)
   await checkGit(input, result)
   if (input.stage.check !== undefined && result.reasons.length === 0) {
-    const ran = await runCommand(input.stage.check, input.folder)
+    const ran = await runCommand(input.stage.check, input.cwd)
     if (ran.code === 0) {
       result.passes.push(`${input.stage.check} passed`)
     } else {

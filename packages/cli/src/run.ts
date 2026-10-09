@@ -34,6 +34,13 @@ function printJson(io: CliIo, data: unknown): void {
   io.stdout(`${JSON.stringify(data, null, 2)}\n`)
 }
 
+// The terminal the command runs in, when it is a terminal of that task. Inside a group it tells
+// the daemon which stage the agent there works on.
+function terminalOf(env: Record<string, string | undefined>, taskId: string): string | undefined {
+  const terminal = env.HELMSMAN_TERMINAL?.trim()
+  return terminal && env.HELMSMAN_TASK_ID?.trim() === taskId ? terminal : undefined
+}
+
 async function execute(
   command: Command,
   client: DaemonClient,
@@ -128,10 +135,11 @@ async function execute(
     }
 
     case 'agent.done': {
-      // The terminal tells the daemon which stage of a group this agent works on.
-      const terminal = env.HELMSMAN_TERMINAL?.trim() || undefined
-      const task = await client.stageAction(command.id ?? '', {
+      const id = command.id ?? ''
+      const terminal = terminalOf(env, id)
+      const task = await client.stageAction(id, {
         action: 'report',
+        ...(command.stage === undefined ? {} : { stage: command.stage }),
         ...(terminal === undefined ? {} : { terminal }),
       })
       if (command.json) {
@@ -143,9 +151,11 @@ async function execute(
     }
 
     case 'stage.act': {
+      const terminal = terminalOf(env, command.id)
       const task = await client.stageAction(command.id, {
         action: command.action === 'back' ? 'reopen' : command.action,
         ...(command.stage === undefined ? {} : { stage: command.stage }),
+        ...(terminal === undefined ? {} : { terminal }),
         ...(command.to === undefined ? {} : { to: command.to }),
         ...(command.reason === undefined ? {} : { reason: command.reason }),
       })
@@ -172,10 +182,16 @@ async function execute(
     }
 
     case 'agent.ask': {
-      const result = await client.sendEvent(command.id ?? '', {
+      const id = command.id ?? ''
+      const terminal = terminalOf(env, id)
+      const result = await client.sendEvent(id, {
         source: 'agent',
         type: 'agent.asked',
-        payload: { question: command.question },
+        payload: {
+          question: command.question,
+          ...(command.stage === undefined ? {} : { stage: command.stage }),
+          ...(terminal === undefined ? {} : { terminal }),
+        },
       })
       if (command.json) {
         printJson(io, result)

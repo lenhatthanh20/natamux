@@ -3,6 +3,7 @@ import { type EventType, type Task, type TaskState, taskIdSchema } from '@helmsm
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { planSignalEvents } from './agent-signals.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
+import { MAIN_TERMINAL } from './terminal-service.js'
 
 export type HookResult = {
   taskId: string | null
@@ -28,10 +29,10 @@ function isInside(folder: string, path: string): boolean {
 export type AgentActivity = { text: string; at: string }
 
 // What the hook service needs to know about stages: which stage a terminal works on, and whether
-// a turn end follows a report (see StageRunner).
+// a turn end in a terminal follows a report (see StageRunner).
 export type StageLookup = {
   laneFor: (task: Task, terminal: string | undefined) => { stage: string; state: TaskState }
-  takeReport: (taskId: string, stage: string) => boolean
+  takeReport: (taskId: string, terminal: string) => boolean
 }
 
 const NO_STAGES: StageLookup = {
@@ -106,7 +107,9 @@ export class AgentHookService {
 
     const lane = this.stages.laneFor(task, terminal)
     // The turn in which the agent ran `helmsman done` ends as planned, not "stopped early".
-    if (hook.signal === 'turn-ended' && this.stages.takeReport(task.id, lane.stage)) {
+    const reportedTurn =
+      hook.signal === 'turn-ended' && this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
+    if (reportedTurn) {
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []
