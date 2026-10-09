@@ -179,7 +179,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onSuccess: (task) => {
       mergeTask(task)
       select(task.id)
-      setNewTitle('')
     },
     onError: (error) => toast(error.message, 'error'),
   })
@@ -549,7 +548,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     event.preventDefault()
     const title = newTitle.trim()
     if (title !== '') {
-      createMutation.mutate(title)
+      // Cleared now, not when the daemon answers: the next title may be typed while it works.
+      setNewTitle('')
+      createMutation.mutate(title, {
+        onError: () => setNewTitle((typed) => (typed === '' ? title : typed)),
+      })
     }
   }
 
