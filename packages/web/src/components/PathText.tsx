@@ -7,7 +7,7 @@ export function PathText({ path }: { path: string }) {
   }))
 
   return (
-    <span className="font-mono" title={path}>
+    <span className="font-mono" data-tip={path}>
       {parts.map(({ key, part, first }) => (
         <span key={key}>
           {!first && (

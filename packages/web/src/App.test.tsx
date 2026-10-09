@@ -293,6 +293,11 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   return { calls }
 }
 
+// Full texts live in data-tip attributes, which the tooltip layer shows on hover.
+function byTip(root: HTMLElement, text: string): Element | null {
+  return root.querySelector(`[data-tip="${text}"]`)
+}
+
 async function signIn(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Daemon token'), 'secret')
   await user.click(screen.getByRole('button', { name: 'Connect' }))
@@ -396,7 +401,7 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: 'Create workspace' }))
-    expect(await within(details).findByTitle('/work/T-0001')).toBeTruthy()
+    await waitFor(() => expect(byTip(details, '/work/T-0001')).toBeTruthy())
 
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
@@ -404,7 +409,7 @@ describe('App', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
 
     expect(await screen.findByText('Workspace removed.')).toBeTruthy()
-    expect(within(details).queryByTitle('/work/T-0001')).toBeNull()
+    expect(byTip(details, '/work/T-0001')).toBeNull()
     expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
   })
 
@@ -522,8 +527,8 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
 
-    expect(within(details).getByTitle('/work/.helmsman/worktrees/T-0001')).toBeTruthy()
-    expect(within(details).getByTitle('helmsman/t-0001-fix-timezone-bug')).toBeTruthy()
+    expect(byTip(details, '/work/.helmsman/worktrees/T-0001')).toBeTruthy()
+    expect(byTip(details, 'helmsman/t-0001-fix-timezone-bug')).toBeTruthy()
   })
 
   it('opens the changes of a workspace, shows a file diff, and closes with Escape', async () => {
@@ -676,7 +681,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(screen.getByRole('button', { name: 'board' }))
+    await user.click(screen.getByRole('radio', { name: 'Board' }))
 
     expect(screen.queryByRole('table')).toBeNull()
     const review = screen.getByRole('region', { name: 'In review' })

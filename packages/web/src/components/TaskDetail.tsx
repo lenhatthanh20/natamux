@@ -12,10 +12,12 @@ import { StateBadge } from './StateBadge'
 import { Subtasks } from './Subtasks'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
+import { Button } from './ui/Button'
 import { ConfirmDialog } from './ui/Dialog'
+import { IconButton } from './ui/IconButton'
 import { Menu } from './ui/Menu'
 import { Select } from './ui/Select'
-import { button, iconButton, sectionTitle } from './ui/styles'
+import { button, sectionTitle } from './ui/styles'
 
 type TaskDetailProps = {
   task: Task
@@ -114,10 +116,9 @@ export function TaskDetail({
       <header className="flex h-11 shrink-0 items-center gap-1 border-b border-line pr-2 pl-4">
         <span className="flex-1 font-mono text-xs text-muted">{task.id}</span>
         {!editing && (
-          <button type="button" onClick={() => setEditing(true)} className={button('ghost')}>
-            <Pencil size={13} aria-hidden="true" />
+          <Button variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>
             Edit
-          </button>
+          </Button>
         )}
         <Menu
           label={`More actions for ${task.id}`}
@@ -137,9 +138,7 @@ export function TaskDetail({
                 ]),
           ]}
         />
-        <button type="button" aria-label="Close details" onClick={onClose} className={iconButton}>
-          <X size={15} aria-hidden="true" />
-        </button>
+        <IconButton label="Close details" icon={X} onClick={onClose} />
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
@@ -209,7 +208,7 @@ export function TaskDetail({
                 type="button"
                 disabled={busy || waitingFor.length > 0}
                 onClick={onStartAgent}
-                title="Creates the workspace when there is none, then starts Claude Code in its terminal"
+                data-tip="Creates the workspace when there is none, then starts Claude Code in its terminal"
                 className={button(task.workspace === null ? 'primary' : 'secondary')}
               >
                 <Play size={13} aria-hidden="true" />
@@ -268,15 +267,13 @@ export function TaskDetail({
                     <span className="min-w-0 text-xs">
                       <PathText path={task.workspace} />
                     </span>
-                    <button
-                      type="button"
-                      aria-label="Copy the folder path"
-                      title="Copy the folder path"
+                    <IconButton
+                      label="Copy the folder path"
+                      icon={Copy}
+                      size="xs"
                       onClick={() => copy(task.workspace ?? '', 'folder path')}
-                      className={`${iconButton} -my-1 size-6`}
-                    >
-                      <Copy size={12} aria-hidden="true" />
-                    </button>
+                      className="-my-1"
+                    />
                   </span>
                 </Field>
                 <Field label="Ports">

@@ -3,9 +3,10 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import type { NewWorkspaceInput } from '../lib/api'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
+import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { Select } from './ui/Select'
-import { button, input, textarea } from './ui/styles'
+import { inputLg, textarea } from './ui/styles'
 
 type NewWorkspaceDialogProps = {
   repos: readonly Pick<Repo, 'id' | 'name'>[]
@@ -74,17 +75,19 @@ export function NewWorkspaceDialog({
       onClose={onClose}
       footer={
         <>
-          <button type="button" onClick={onClose} className={button('ghost')}>
+          <Button variant="ghost" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             form="new-workspace"
+            variant="primary"
+            size="md"
+            shortcut="Mod+Enter"
             disabled={title.trim() === '' || making.isPending}
-            className={button('primary')}
           >
             {making.isPending ? 'Making the workspace…' : 'Create workspace'}
-          </button>
+          </Button>
         </>
       }
     >
@@ -96,7 +99,7 @@ export function NewWorkspaceDialog({
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Fix the login redirect"
             aria-label="Workspace name"
-            className={input}
+            className={inputLg}
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -109,7 +112,8 @@ export function NewWorkspaceDialog({
                 setBase('')
               }}
               aria-label="Repository of the workspace"
-              className="w-full [&_select]:h-8"
+              fieldSize="md"
+              className="w-full"
             >
               {repos.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -124,7 +128,8 @@ export function NewWorkspaceDialog({
               value={base}
               onChange={(event) => setBase(event.target.value)}
               aria-label="Branch to start from"
-              className="w-full [&_select]:h-8"
+              fieldSize="md"
+              className="w-full"
             >
               <option value="">{branches.data?.current ?? 'The current branch'}</option>
               {(branches.data?.branches ?? [])
@@ -143,7 +148,8 @@ export function NewWorkspaceDialog({
             value={agent}
             onChange={(event) => setAgent(event.target.value)}
             aria-label="Agent"
-            className="w-full [&_select]:h-8"
+            fieldSize="md"
+            className="w-full"
           >
             <option value="claude-code">Claude Code</option>
             <option value="">No agent, a plain shell</option>
