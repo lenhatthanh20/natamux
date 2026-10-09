@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { type Task, waitingOn } from '@helmsman/core'
 import { UnknownAgentError } from './agent-hook-service.js'
 import type { TaskService } from './task-service.js'
@@ -37,6 +39,8 @@ type AgentRunnerOptions = {
   claudeSettingsPath: string
   claudeCommand?: string
   platform?: NodeJS.Platform
+  // Where the launch scripts go. Default: the folder of the settings file.
+  launchDir?: string
 }
 
 // Starts an agent in the terminal of a task, as if the user typed the command. Its hooks then
@@ -47,6 +51,7 @@ export class AgentRunner {
   private readonly claudeSettingsPath: string
   private readonly claudeCommand: string
   private readonly platform: NodeJS.Platform
+  private readonly launchDir: string
 
   constructor(options: AgentRunnerOptions) {
     this.tasks = options.tasks
@@ -54,6 +59,7 @@ export class AgentRunner {
     this.claudeSettingsPath = options.claudeSettingsPath
     this.claudeCommand = options.claudeCommand?.trim() || 'claude'
     this.platform = options.platform ?? process.platform
+    this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
   }
 
   start(taskId: string, agent: string, prompt?: string): Task {
@@ -67,14 +73,28 @@ export class AgentRunner {
     }
     const text = (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
     const quote = (value: string) => quoteArgument(value, this.platform)
-    const line = [
+    const command = [
       this.claudeCommand,
       '--settings',
       quote(this.claudeSettingsPath),
       ...(text === '' ? [] : [quote(text)]),
     ].join(' ')
 
-    this.terminals.run(taskId, line)
+    this.terminals.run(taskId, this.launchLine(taskId, command))
     return this.tasks.recordAgentLaunch(taskId, agent)
+  }
+
+  // What is typed into the terminal. The terminal echoes it, so the long command (settings path,
+  // prompt) goes into a small script and only a short line to run it is typed. The script is
+  // sourced, not run by `sh`, so the user's own shell (aliases, PATH) still starts the agent.
+  // PowerShell may refuse scripts by policy, so Windows types the command itself.
+  private launchLine(taskId: string, command: string): string {
+    if (this.platform === 'win32') {
+      return command
+    }
+    mkdirSync(this.launchDir, { recursive: true })
+    const script = join(this.launchDir, `agent-launch-${taskId}.sh`)
+    writeFileSync(script, `${command}\n`, { mode: 0o600 })
+    return `. ${quoteArgument(script, this.platform)}`
   }
 }

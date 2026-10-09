@@ -39,6 +39,7 @@ beforeEach(() => {
     terminals,
     claudeSettingsPath: '/data/settings.json',
     platform: 'linux',
+    launchDir: dataDir,
   })
   parts = { tasks, workspaces, agents }
 })

@@ -1,10 +1,16 @@
 import type { PtyProcess, SpawnPty } from './terminal-service.js'
 
 // A pseudo terminal for tests. It echoes what is written, and remembers how it was started.
+let nextPid = 1000
+
 export class FakePty implements PtyProcess {
+  readonly pid = nextPid++
   readonly written: string[] = []
   readonly sizes: { cols: number; rows: number }[] = []
   killed = false
+  readonly signals: (string | undefined)[] = []
+  // A process that ignores everything but SIGKILL, like a program that traps SIGHUP.
+  stubborn = false
   private dataListeners: ((data: string) => void)[] = []
   private exitListeners: ((code: number | null) => void)[] = []
 
@@ -27,7 +33,11 @@ export class FakePty implements PtyProcess {
     this.sizes.push({ cols, rows })
   }
 
-  kill(): void {
+  kill(signal?: string): void {
+    this.signals.push(signal)
+    if (this.stubborn && signal !== 'SIGKILL') {
+      return
+    }
     this.killed = true
     this.exit(null)
   }

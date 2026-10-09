@@ -16,6 +16,7 @@ import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
+import { tabToOpen } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
@@ -75,6 +76,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     layout,
     agentsOpen,
     agentPanes,
+    paneLayout,
+    tabByTask,
     pinned,
   } = useViewStore()
   const {
@@ -90,6 +93,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setLayout,
     openAgents,
     setAgentPanes,
+    setPaneLayout,
+    rememberTab,
     togglePin,
   } = useViewStore.getState()
 
@@ -369,14 +374,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     )
 
   // Opens the task's workspace in the main area: the agent's terminal while it works, else the
-  // changes. The details keep the state they had.
+  // tab that was used last there. The details keep the state they had.
   const openTask = (id: string) => {
     const task = tasks.find((candidate) => candidate.id === id)
     select(id)
-    openChanges(
-      id,
-      task?.state === 'running' || task?.state === 'needs-input' ? 'terminal' : 'changes',
-    )
+    openChanges(id, task === undefined ? 'terminal' : tabToOpen(task.state, tabByTask[id]))
   }
 
   useEffect(() => {
@@ -705,6 +707,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             task={changesTask}
             now={now}
             initialTab={changesTab}
+            onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
+            activity={activityQuery.data?.[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
               const main =
@@ -723,6 +727,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
             loadGraph={() => api.getGitGraph(changesTask.id)}
+            loadEvents={() => api.listEvents(changesTask.id)}
+            resume={() => eventMutation.mutate({ taskId: changesTask.id, type: 'agent.resumed' })}
+            resuming={eventMutation.isPending}
             commit={async (message) => {
               const updated = await api.commitChanges(changesTask.id, message)
               mergeTask(updated)
@@ -757,6 +764,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             tasks={tasks}
             chosen={agentPanes}
             onChange={setAgentPanes}
+            layout={paneLayout}
+            onLayout={setPaneLayout}
+            activity={activityQuery.data}
             connect={async (taskId, size) => {
               const ticket = await api.terminalTicket(taskId)
               return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))

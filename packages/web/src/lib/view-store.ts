@@ -1,5 +1,6 @@
 import type { TaskState } from '@helmsman/core'
 import { create } from 'zustand'
+import { type PaneLayout, parsePaneLayout } from './panes'
 
 export type WorkspaceTab = 'changes' | 'history' | 'terminal'
 export type Layout = 'table' | 'board'
@@ -8,6 +9,8 @@ const LAYOUT_KEY = 'helmsman.layout'
 const PINNED_KEY = 'helmsman.pinned'
 const SIDEBAR_OPEN_KEY = 'helmsman.sidebar-open'
 const DETAIL_OPEN_KEY = 'helmsman.detail-open'
+const TAB_KEY = 'helmsman.tab-by-task'
+const PANE_LAYOUT_KEY = 'helmsman.pane-layout'
 // Old tasks do not need a remembered answer forever.
 const MAX_REMEMBERED_DETAILS = 200
 
@@ -82,15 +85,67 @@ function saveDetailOpen(open: Record<string, boolean>): void {
   }
 }
 
-// Sets one task's flag. The newest answers stay when there are too many.
+function isWorkspaceTab(value: unknown): value is WorkspaceTab {
+  return value === 'changes' || value === 'history' || value === 'terminal'
+}
+
+function savedTabs(): Record<string, WorkspaceTab> {
+  try {
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(TAB_KEY) ?? '{}')
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return {}
+    }
+    return Object.fromEntries(Object.entries(value).filter(([, tab]) => isWorkspaceTab(tab)))
+  } catch {
+    return {}
+  }
+}
+
+function saveTabs(tabs: Record<string, WorkspaceTab>): void {
+  try {
+    globalThis.localStorage?.setItem(TAB_KEY, JSON.stringify(tabs))
+  } catch {
+    // Not kept; the next visit opens each workspace on its terminal.
+  }
+}
+
+function savedPaneLayout(): PaneLayout {
+  try {
+    return parsePaneLayout(globalThis.localStorage?.getItem(PANE_LAYOUT_KEY))
+  } catch {
+    return 'auto'
+  }
+}
+
+function savePaneLayout(layout: PaneLayout): void {
+  try {
+    globalThis.localStorage?.setItem(PANE_LAYOUT_KEY, layout)
+  } catch {
+    // Not kept; the next visit starts with Auto.
+  }
+}
+
+// Sets one task's entry. The newest answers stay when there are too many.
+function withEntry<T>(current: Readonly<Record<string, T>>, taskId: string, value: T) {
+  const { [taskId]: _old, ...rest } = current
+  const entries = Object.entries({ ...rest, [taskId]: value })
+  return Object.fromEntries(entries.slice(-MAX_REMEMBERED_DETAILS))
+}
+
 export function withDetailOpen(
   current: Readonly<Record<string, boolean>>,
   taskId: string,
   open: boolean,
 ): Record<string, boolean> {
-  const { [taskId]: _old, ...rest } = current
-  const entries = Object.entries({ ...rest, [taskId]: open })
-  return Object.fromEntries(entries.slice(-MAX_REMEMBERED_DETAILS))
+  return withEntry(current, taskId, open)
+}
+
+export function withTab(
+  current: Readonly<Record<string, WorkspaceTab>>,
+  taskId: string,
+  tab: WorkspaceTab,
+): Record<string, WorkspaceTab> {
+  return withEntry(current, taskId, tab)
 }
 
 type ViewData = {
@@ -107,6 +162,10 @@ type ViewData = {
   changesTaskId: string | null
   // The tab that the workspace view opens on.
   changesTab: WorkspaceTab
+  // The tab the user picked last in each workspace.
+  tabByTask: Record<string, WorkspaceTab>
+  // Columns of the agents grid.
+  paneLayout: PaneLayout
   layout: Layout
   // The grid of agent terminals is shown instead of the task list.
   agentsOpen: boolean
@@ -125,6 +184,8 @@ type ViewActions = {
   setSidebarOpen: (open: boolean) => void
   setDrawerOpen: (open: boolean) => void
   openChanges: (taskId: string, tab?: WorkspaceTab) => void
+  rememberTab: (taskId: string, tab: WorkspaceTab) => void
+  setPaneLayout: (layout: PaneLayout) => void
   closeChanges: () => void
   setLayout: (layout: Layout) => void
   openAgents: () => void
@@ -141,6 +202,8 @@ export const initialViewData: ViewData = {
   drawerOpen: false,
   changesTaskId: null,
   changesTab: 'changes',
+  tabByTask: {},
+  paneLayout: 'auto',
   layout: 'table',
   agentsOpen: false,
   agentPanes: null,
@@ -153,6 +216,8 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   pinned: savedPinned(),
   sidebarOpen: savedSidebarOpen(),
   detailOpenByTask: savedDetailOpen(),
+  tabByTask: savedTabs(),
+  paneLayout: savedPaneLayout(),
   toggleStateFilter: (state) =>
     set((current) => ({ stateFilter: current.stateFilter === state ? null : state })),
   showState: (state) => set({ stateFilter: state, changesTaskId: null, agentsOpen: false }),
@@ -171,6 +236,19 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   setDrawerOpen: (open) => set({ drawerOpen: open }),
   openChanges: (taskId, tab = 'changes') =>
     set({ changesTaskId: taskId, changesTab: tab, agentsOpen: false }),
+  rememberTab: (taskId, tab) =>
+    set((current) => {
+      if (current.tabByTask[taskId] === tab) {
+        return current
+      }
+      const tabByTask = withTab(current.tabByTask, taskId, tab)
+      saveTabs(tabByTask)
+      return { tabByTask }
+    }),
+  setPaneLayout: (paneLayout) => {
+    savePaneLayout(paneLayout)
+    set({ paneLayout })
+  },
   // Back to the task list, from a workspace or from the agents grid.
   closeChanges: () => set({ changesTaskId: null, agentsOpen: false }),
   setLayout: (layout) => {

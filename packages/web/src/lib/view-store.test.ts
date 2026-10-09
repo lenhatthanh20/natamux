@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withDetailOpen } from './view-store'
+import { withDetailOpen, withTab } from './view-store'
 
 describe('withDetailOpen', () => {
   it('sets and changes the flag of one task', () => {
@@ -23,5 +23,16 @@ describe('withDetailOpen', () => {
     expect(Object.keys(flags)).toHaveLength(200)
     expect(flags['T-0']).toBeUndefined()
     expect(flags['T-204']).toBe(true)
+  })
+})
+
+describe('withTab', () => {
+  it('remembers the last tab of each workspace', () => {
+    const first = withTab({}, 'T-0001', 'changes')
+    expect(withTab(first, 'T-0002', 'history')).toEqual({
+      'T-0001': 'changes',
+      'T-0002': 'history',
+    })
+    expect(withTab(first, 'T-0001', 'terminal')).toEqual({ 'T-0001': 'terminal' })
   })
 })
