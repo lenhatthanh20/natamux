@@ -98,10 +98,15 @@ describe('resolveSteps', () => {
     })
   })
 
-  it('makes a stage that is gone from the settings a manual one', () => {
+  it('makes a stage of its own that is gone from the settings a manual one', () => {
     expect(resolveSteps(['security'], DEFAULT_PIPELINE)).toEqual([
       { id: 'security', kind: 'manual', gate: 'manual' },
     ])
+  })
+
+  it('keeps the default settings of a default stage that is gone from the settings', () => {
+    const [plan] = resolveSteps(['plan'], [{ id: 'implement', kind: 'agent', gate: 'auto' }])
+    expect(plan).toMatchObject({ id: 'plan', kind: 'agent', output: 'plan.md' })
   })
 })
 
