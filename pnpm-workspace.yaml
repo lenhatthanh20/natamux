@@ -10,5 +10,7 @@ onlyBuiltDependencies:
   - electron
   - node-pty
 
+# electron-winstaller is for Squirrel installers; the Windows app uses NSIS.
 ignoredBuiltDependencies:
+  - electron-winstaller
   - esbuild
