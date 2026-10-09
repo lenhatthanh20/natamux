@@ -71,6 +71,14 @@ describe('loadConfig', () => {
     ).toBe('/web/dist/index.html')
   })
 
+  it('serves the dashboard from HELMSMAN_WEB_DIR, with its index.html for deep links', () => {
+    expect(loadConfig({ HELMSMAN_WEB_DIR: '/app/web' }, '/work/repo')).toMatchObject({
+      webDir: '/app/web',
+      webIndexPath: join('/app/web', 'index.html'),
+    })
+    expect(loadConfig({}, '/work/repo').webDir).toBeUndefined()
+  })
+
   it.each(['abc', '1.5', '-1', '70000'])('rejects the port %j', (port) => {
     expect(() => loadConfig({ HELMSMAN_PORT: port }, '/work/repo')).toThrow(/HELMSMAN_PORT/)
   })
