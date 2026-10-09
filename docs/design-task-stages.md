@@ -130,6 +130,22 @@ A step of the pipeline is one stage, or a group of stages that run at the same t
 - **Send back:** Review can send the task back to one stage of a group. That lane runs again; the other keeps its result.
 - **Rules:** groups do not nest, hold 2 to 4 stages, and hold only `agent` and `manual` kinds.
 
+### 3.7 Where task data lives
+
+All of it is in the daemon's data folder (`HELMSMAN_DATA_DIR`, default `<repo>/.helmsman/`), on the machine that runs the daemon.
+
+| Where | What | Role |
+|---|---|---|
+| `tasks/T-0001.md` | The task fields, `state`, `stage`, `stages`, `lanes`, `stageSince` | The source of truth |
+| `tasks/T-0001.events.jsonl` (new) | Every event of the task, one JSON line each | The history; it survives a lost index |
+| `index.sqlite` | The tasks and the events again, for fast lists and filters | A cache; rebuilt from the two files above |
+| `tasks/T-0001/` | Copies of the stage files (section 3.4) | Kept after the workspace is gone |
+
+- **Write order:** an event is appended to the `.jsonl` file first, then to SQLite. A crash between the two loses nothing.
+- **Rebuild:** at start the daemon compares the event count of each task with SQLite and reloads the tasks that differ. A missing `index.sqlite` is rebuilt whole.
+- **Old tasks:** their history is only in SQLite. At the first start after this change the daemon writes their `.jsonl` files from it, once.
+- **`stageSince`:** the time the current step started. Lists use it for "time in this stage" without reading events.
+
 ## 4. Task context
 
 ### 4.1 Sources
@@ -250,7 +266,8 @@ Other rules:
   - The `projectSettingsSchema` (zod) and the default pipeline.
   - `nextStep(steps, id)`, and `combinedState(lanes)` for the order in 3.6.
   - `applyTaskEvent(position, event, pipeline)`, where `position` is `{ stage, state, lanes }`.
-- `task.ts`: new fields `stage`, `stages`, `lanes`, `context`, `issue`.
+- `task.ts`: new fields `stage`, `stages`, `lanes`, `stageSince`, `context`, `issue`.
+- `progress.ts`: `stageProgress(task, events, pipeline)` for the progress view (7.5).
 - `events.ts`: new events `stage.approved`, `stage.passed`, `stage.reopened`, `stage.skipped`, `stage.started`, `context.fetched`, `issue.linked`, `issue.created`.
 - Tests for each move in 3.3, the gates, parallel lanes, the snapshot rule, and the migration in section 8.
 
@@ -270,6 +287,8 @@ Other rules:
   - `GET` and `PUT /repos/:id/settings`.
   - `POST /tasks/:id/issue`.
 - `task-index.ts`: a `stage` column, so the board can group by it.
+- `event-log.ts`: the `.jsonl` files, the write order and the rebuild of 3.7.
+- Route `GET /tasks/:id/progress`: the result of `stageProgress` for one task.
 - The testing command reports through the CLI:
 
   ```
@@ -285,7 +304,7 @@ New commands:
 
 ### 7.4 `web`
 
-- **Task header:** a stage stepper with done, current and next stages. The current one shows its state. A group shows its stages stacked, each with its own state and its own Approve button.
+- **Task header:** the progress strip of 7.5.
 - **Approve and Send back:** buttons, with the existing `a` and `r` keys.
 - **Docs tab:** for each task, `context.md`, `spec.md`, `plan.md`, `test-spec.md`, readable as markdown and editable before approval.
 - **Table:** a "Stage" column. The state badge reads "Plan · Waiting for approval"; in a group, "Test spec · Waiting for approval, Implement · Running".
@@ -294,6 +313,36 @@ New commands:
 - **Project settings page:** the stage list (order, on or off, gate, prompt, "run alongside the stage above"), the context sources, and the tracker.
 - **Issue:** a link on the task, and "Create issue" when there is none.
 - **Needs me:** keeps working on states. The text names the stage.
+
+### 7.5 Progress view
+
+Two places show how far tasks are: a strip in each task, and a view across all tasks.
+
+**Markers.** One marker per stage, the same everywhere:
+
+| Marker | Meaning |
+|---|---|
+| Check, green | Done: approved or passed |
+| Ring in the state color | Current: running, waiting for approval, needs input, failed, blocked |
+| Hollow circle | Not reached yet |
+| Circle with a dash | Skipped |
+| "×2" beside a marker | The stage ran twice, because it was sent back |
+
+**Task progress strip** (task header):
+- The steps from left to right, each with its marker, its name, and its time: time spent for a done stage, time so far for the current one.
+- A parallel group is one column with its stages stacked, each with its own marker and time.
+- Under the strip, one line per current stage: the stage, its state, the time so far, and its actions (Approve, Send back, open its file).
+- Hover a done stage: who approved it and when. Click it: its file in the Docs tab, or the diff for Implement.
+
+**Progress view** (dashboard, a third view beside Table and Board):
+- A row per task and a column per step, one section per repository, because each repository has its own pipeline.
+- Each cell holds the marker. The current cell also shows the state and the time in the stage (from `stageSince`).
+- Column headers count the tasks at that step and how many wait for you.
+- Tasks that wait for you come first, then the ones furthest along. Done tasks fold at the bottom ("12 done"); cancelled tasks are hidden.
+- Keys as in the table: `j`/`k` move, `enter` opens, `a` approves the current stage.
+- Narrow windows: each row becomes the task name over a small strip of markers.
+
+**Data.** `stageProgress` (core) turns the task and its events into one entry per stage: `{ stage, status: 'done' | 'current' | 'upcoming' | 'skipped', state?, rounds, startedAt?, endedAt?, approvedBy? }`. The task strip reads it from `GET /tasks/:id/progress`. The progress view needs no events: it uses `stage`, `stages`, `lanes` and `stageSince` from the task list.
 
 ## 8. Old tasks
 
@@ -313,10 +362,10 @@ Task files without `stage` are read like this. Nothing is rewritten until the ta
 Separate pull requests, in this order:
 
 1. `core`: stages, groups and lanes, settings schema, events, migration, tests.
-2. `daemon` and `cli`: settings file, stage runner, stage files, routes, CLI commands.
+2. `daemon` and `cli`: settings file, stage runner, stage files, event log files, routes, CLI commands.
 3. Context sources: `manual`, `github-issue`, `skill`, `mcp`.
 4. Tracker: GitHub issue on spec approval, manual "Create issue", `Closes #N` in the pull request.
-5. `web`: stepper, Docs tab, stage column and board, source picker, Project settings page.
+5. `web`: progress strip and progress view, Docs tab, stage column and board, source picker, Project settings page.
 6. Docs: `plan-features.md` rows, README, CLI docs.
 
 Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their components.
