@@ -1,5 +1,5 @@
 import { isAbsolute, relative, sep } from 'node:path'
-import { type EventType, type Task, taskIdSchema } from '@helmsman/core'
+import { type EventType, type Task, type TaskState, taskIdSchema } from '@helmsman/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { planSignalEvents } from './agent-signals.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
@@ -27,14 +27,28 @@ function isInside(folder: string, path: string): boolean {
 
 export type AgentActivity = { text: string; at: string }
 
+// What the hook service needs to know about stages: which stage a terminal works on, and whether
+// a turn end follows a report (see StageRunner).
+export type StageLookup = {
+  laneFor: (task: Task, terminal: string | undefined) => { stage: string; state: TaskState }
+  takeReport: (taskId: string, stage: string) => boolean
+}
+
+const NO_STAGES: StageLookup = {
+  laneFor: (task) => ({ stage: task.stage, state: task.state }),
+  takeReport: () => false,
+}
+
 export class AgentHookService {
   private readonly tasks: TaskService
+  private readonly stages: StageLookup
   // What the agent of each task does now. Kept in memory only: it is gone after a restart, and
   // a new hook fills it again.
   private readonly activities = new Map<string, AgentActivity>()
 
-  constructor(tasks: TaskService) {
+  constructor(tasks: TaskService, stages: StageLookup = NO_STAGES) {
     this.tasks = tasks
+    this.stages = stages
   }
 
   // The task comes from the header when it names one, otherwise from the workspace that holds `cwd`.
@@ -62,7 +76,12 @@ export class AgentHookService {
 
   // Throws UnknownAgentError for an agent without an adapter, and a ZodError when the input is not
   // a hook of that agent.
-  handle(agentId: string, raw: unknown, taskIdHeader: string | undefined): HookResult {
+  handle(
+    agentId: string,
+    raw: unknown,
+    taskIdHeader: string | undefined,
+    terminal?: string,
+  ): HookResult {
     const adapter = findAdapter(agentId)
     if (!adapter) {
       throw new UnknownAgentError(agentId)
@@ -85,12 +104,17 @@ export class AgentHookService {
       this.activities.delete(task.id)
     }
 
+    const lane = this.stages.laneFor(task, terminal)
+    // The turn in which the agent ran `helmsman done` ends as planned, not "stopped early".
+    if (hook.signal === 'turn-ended' && this.stages.takeReport(task.id, lane.stage)) {
+      return { taskId: task.id, applied: [] }
+    }
     const applied: EventType[] = []
-    for (const planned of planSignalEvents(task.state, hook.signal, hook.details)) {
+    for (const planned of planSignalEvents(lane.state, hook.signal, hook.details)) {
       this.tasks.applyEvent(task.id, {
         source: 'agent',
         type: planned.type,
-        payload: planned.payload,
+        payload: { ...planned.payload, stage: lane.stage },
       })
       applied.push(planned.type)
     }

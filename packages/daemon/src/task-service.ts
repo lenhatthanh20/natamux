@@ -2,22 +2,29 @@ import {
   applyTaskEvent,
   DEFAULT_PROJECT_SETTINGS,
   type EventType,
+  firstPosition,
+  type IssueLink,
+  issueLinkSchema,
+  type ProjectSettings,
   makesCycle,
   type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
   resolveSteps,
   type StagePosition,
   type Step,
+  stepRefsOf,
   TASK_PRIORITIES,
   type Task,
   type TaskEvent,
   type TaskState,
+  taskContextSchema,
   taskEventSchema,
   taskIdSchema,
   taskSchema,
 } from '@helmsman/core'
 import { z } from 'zod'
 import type { EventBus } from './event-bus.js'
+import { appendEventLine, readEventLog, writeEventLog } from './event-log.js'
 import { listTaskFiles, listTaskIds, readTaskFile, writeTaskFile } from './task-files.js'
 import type { StoredEvent, TaskIndex } from './task-index.js'
 
@@ -30,7 +37,7 @@ export const createTaskInputSchema = taskSchema.pick({
   dependsOn: true,
   parentId: true,
   repo: true,
-})
+}).extend({ context: taskContextSchema.nullable().optional() })
 
 // The fields a person may change after a task is created. State has its own events.
 // Built without the defaults of taskSchema, so a field that is left out stays as it is.
@@ -63,6 +70,7 @@ export type ApplyEventInput = z.input<typeof applyEventInputSchema>
 export type ApplyEventResult = {
   task: Task
   accepted: boolean
+  moved: boolean
 }
 
 export type WorkspaceChange = {
@@ -80,11 +88,7 @@ export class TaskNotFoundError extends Error {
   }
 }
 
-// The steps of a task, with each stage's settings. Every repository has the default settings
-// until `.helmsman.json` is read.
-export function stepsOf(task: Pick<Task, 'stages'>): Step[] {
-  return resolveSteps(task.stages, DEFAULT_PROJECT_SETTINGS.stages)
-}
+export type SettingsOf = (repo: string | null) => ProjectSettings
 
 function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes'>): StagePosition {
   return { stage: task.stage, state: task.state, lanes: task.lanes }
@@ -113,6 +117,8 @@ type TaskServiceOptions = {
   index: TaskIndex
   bus: EventBus
   now?: () => Date
+  // The settings of a repository (`.helmsman.json`). Default: the default settings.
+  settingsOf?: SettingsOf
 }
 
 export class TaskService {
@@ -120,17 +126,40 @@ export class TaskService {
   private readonly index: TaskIndex
   private readonly bus: EventBus
   private readonly now: () => Date
+  readonly settingsOf: SettingsOf
 
   constructor(options: TaskServiceOptions) {
     this.dataDir = options.dataDir
     this.index = options.index
     this.bus = options.bus
     this.now = options.now ?? (() => new Date())
+    this.settingsOf = options.settingsOf ?? (() => DEFAULT_PROJECT_SETTINGS)
   }
 
-  // Rebuild the index cache from the task files.
+  // Rebuild the index cache from the task files and their event logs. A task with no event log
+  // yet (made before there were logs) gets one from the index.
   init(): void {
-    this.index.replaceAllTasks(listTaskFiles(this.dataDir))
+    const tasks = listTaskFiles(this.dataDir)
+    this.index.replaceAllTasks(tasks)
+    for (const task of tasks) {
+      const logged = readEventLog(this.dataDir, task.id)
+      if (logged === undefined) {
+        writeEventLog(this.dataDir, task.id, this.index.listEvents(task.id))
+      } else if (logged.length !== this.index.countEvents(task.id)) {
+        this.index.replaceEvents(task.id, logged)
+      }
+    }
+  }
+
+  // The steps of a task, with each stage's settings from its repository.
+  stepsOf(task: Pick<Task, 'stages' | 'repo'>): Step[] {
+    return resolveSteps(task.stages, this.settingsOf(task.repo).stages)
+  }
+
+  // The event log file first, then the index: a crash between the two loses nothing.
+  private logEvent(event: TaskEvent, accepted: boolean): void {
+    appendEventLine(this.dataDir, event, accepted)
+    this.index.appendEvent(event, accepted)
   }
 
   createTask(rawInput: unknown): Task {
@@ -139,10 +168,15 @@ export class TaskService {
       this.checkParent(input.parentId)
     }
     const at = this.timestamp()
+    const steps = this.settingsOf(input.repo ?? null).stages
+    const start = firstPosition(steps)
     const task = taskSchema.parse({
       ...input,
       id: this.nextTaskId(),
-      state: 'draft',
+      stage: start.stage,
+      state: start.state,
+      lanes: start.lanes,
+      stages: stepRefsOf(steps),
       stageSince: at,
       createdAt: at,
       updatedAt: at,
@@ -150,7 +184,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, task)
     this.index.upsertTask(task)
-    this.index.appendEvent(
+    this.logEvent(
       { taskId: task.id, source: 'system', type: 'task.created', at, payload: {} },
       true,
     )
@@ -202,7 +236,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -235,7 +269,11 @@ export class TaskService {
     const input = applyEventInputSchema.parse(rawInput)
     const event: TaskEvent = taskEventSchema.parse({ ...input, taskId, at: this.timestamp() })
 
-    const { position, accepted, moved } = applyTaskEvent(positionOf(task), event, stepsOf(task))
+    const { position, accepted, moved } = applyTaskEvent(
+      positionOf(task),
+      event,
+      this.stepsOf(task),
+    )
     const updated: Task = accepted
       ? { ...moveTask(task, position, moved, event.at), updatedAt: event.at }
       : task
@@ -244,9 +282,9 @@ export class TaskService {
       writeTaskFile(this.dataDir, updated)
       this.index.upsertTask(updated)
     }
-    this.index.appendEvent(event, accepted)
-    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted })
-    return { task: updated, accepted }
+    this.logEvent(event, accepted)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted, moved })
+    return { task: updated, accepted, moved }
   }
 
   // Records where the task's working copy lives. Called by the workspace service.
@@ -268,7 +306,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -289,7 +327,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -308,7 +346,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -327,7 +365,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -356,7 +394,7 @@ export class TaskService {
       types.push('pr.closed')
     }
 
-    const steps = stepsOf(task)
+    const steps = this.stepsOf(task)
     let moving = task
     const logged: { event: TaskEvent; accepted: boolean }[] = []
     for (const type of types) {
@@ -370,12 +408,56 @@ export class TaskService {
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
     for (const { event, accepted } of logged) {
-      this.index.appendEvent(event, accepted)
-      this.bus.publish({ kind: 'task.updated', task: updated, event, accepted })
+      this.logEvent(event, accepted)
+      this.bus.publish({
+        kind: 'task.updated',
+        task: updated,
+        event,
+        accepted,
+        moved: updated.stage !== task.stage,
+      })
     }
     if (logged.length === 0) {
       this.bus.publish({ kind: 'task.changed', task: updated })
     }
+    return updated
+  }
+
+  // Links the task to the item that tracks it elsewhere: a GitHub issue, a Jira ticket.
+  linkIssue(taskId: string, rawLink: unknown, source: TaskEvent['source'] = 'human'): Task {
+    const task = this.getTask(taskId)
+    const issue: IssueLink = issueLinkSchema.parse(rawLink)
+    const event: TaskEvent = {
+      taskId,
+      source,
+      type: 'issue.linked',
+      at: this.timestamp(),
+      payload: { ...issue },
+    }
+    const updated: Task = { ...task, issue, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.logEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
+  // Writes down an event that changes no state, such as fetched context.
+  recordEvent(
+    taskId: string,
+    type: EventType,
+    payload: Record<string, unknown>,
+    source: TaskEvent['source'] = 'system',
+  ): Task {
+    const task = this.getTask(taskId)
+    const event: TaskEvent = { taskId, source, type, at: this.timestamp(), payload }
+    const updated: Task = { ...task, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.logEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
 
@@ -398,7 +480,7 @@ export class TaskService {
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
-    this.index.appendEvent(event, true)
+    this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return true
   }
