@@ -18,6 +18,9 @@ COPY packages/core/package.json packages/core/
 COPY packages/daemon/package.json packages/daemon/
 COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
+COPY packages/desktop/package.json packages/desktop/
+# The images serve the dashboard in a browser; the desktop app's runtime is not needed.
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 FROM manifests AS build
 RUN pnpm install --frozen-lockfile

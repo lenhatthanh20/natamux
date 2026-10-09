@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -163,9 +163,17 @@ function createWindow(): void {
     }
   })
   if (process.env.HELMSMAN_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loaded in the window, then quit.
-    created.webContents.once('did-finish-load', () => {
-      console.log(`helmsman-desktop: loaded ${created.webContents.getURL()}`)
+    // A check for CI and the codespace: the dashboard loads signed in, then the app quits.
+    created.webContents.once('did-finish-load', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 4000))
+      const seen: unknown = await created.webContents.executeJavaScript(
+        `JSON.stringify({ title: document.title, signedIn: document.querySelector('[aria-label="Daemon token"]') === null, table: document.querySelector('table') !== null })`,
+      )
+      console.log(`helmsman-desktop: ${created.webContents.getURL()} ${String(seen)}`)
+      const shot = process.env.HELMSMAN_DESKTOP_SMOKE_SHOT
+      if (shot) {
+        writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
+      }
       quitConfirmed = true
       app.quit()
     })

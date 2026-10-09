@@ -110,7 +110,7 @@ Order of work:
 - The Electron shell comes after the daemon and dashboard are stable.
 - The shell only hosts the web dashboard and starts the daemon. No business logic lives in it.
 
-Tooling (draft): `electron-vite` or plain Vite for the shell, `electron-builder` for packaging and auto-update.
+Tooling: plain `tsc` for the shell (`packages/desktop`), no bundler; the daemon runs in an Electron utility process and serves the built dashboard itself (`HELMSMAN_WEB_DIR`). `electron-builder` for packaging and auto-update (step 11). Built on 2026-10-09, see `packages/desktop/README.md`.
 
 ### Native code per OS
 
