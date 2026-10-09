@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import {
   type ContextSource,
   findStep,
@@ -23,6 +24,8 @@ import {
 import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 import type { TaskService } from './task-service.js'
 import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
+
+const SHELLS = ['bash', 'zsh', 'sh', 'dash', 'fish', 'ksh', 'nu', 'pwsh', 'powershell.exe', 'cmd.exe']
 
 export const STAGE_ACTIONS = [
   'approve',
@@ -304,10 +307,7 @@ export class StageRunner {
     const terminal = terminalOfStage(step, stage.id)
     const key = `${task.id}/${terminal}`
     try {
-      const running =
-        this.terminals.isOpen(task.id, terminal) &&
-        (this.launched.has(key) || (terminal === MAIN_TERMINAL && task.agent !== null))
-      if (running) {
+      if (this.agentRuns(task.id, terminal)) {
         this.terminals.paste(task.id, prompt, terminal)
       } else {
         this.agents.start(task.id, task.agent ?? 'claude-code', prompt, terminal)
@@ -316,6 +316,20 @@ export class StageRunner {
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
     }
+  }
+
+  // A prompt goes into a running agent only. Pasted into a shell, its lines would run as
+  // commands. An agent runs when this daemon started it, or when the program in the foreground
+  // is not a shell (an agent started by hand, or before a restart).
+  private agentRuns(taskId: string, terminal: string): boolean {
+    if (!this.terminals.isOpen(taskId, terminal)) {
+      return false
+    }
+    if (this.launched.has(`${taskId}/${terminal}`)) {
+      return true
+    }
+    const program = this.terminals.foreground(taskId, terminal)
+    return program !== undefined && !SHELLS.includes(basename(program))
   }
 
   // A command whose exit code decides the stage, such as the test command.
