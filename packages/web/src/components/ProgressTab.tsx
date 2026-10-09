@@ -249,8 +249,12 @@ export function ProgressTab({
             <section className={`${CARD} p-4`}>
               <h2 className="m-0 mb-2 text-sm font-semibold">Latest events</h2>
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
-                {[...accepted].reverse().slice(0, 8).map((event, index) => (
-                  <li key={`${event.at}-${index}`} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
+                {events.data
+                  .filter((entry) => entry.accepted)
+                  .reverse()
+                  .slice(0, 8)
+                  .map(({ seq, event }) => (
+                  <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
                     <span className="text-xs text-muted tabular-nums">{formatAge(event.at, now)}</span>
                     <span className="truncate">
                       {describeEvent(event.type)}
