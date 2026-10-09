@@ -357,16 +357,16 @@ Other rules:
   - Listens to `agent.finished` (the `Stop` hook): without a report it moves the stage to `needs-input`.
 - `stage-checks.ts`: the checks of 3.5 (file, sections, commits, clean worktree, `check` command).
 - `stage-files.ts`: the folder rules of 3.4 and the `.git/info/exclude` entry.
-- `context-reader.ts`: the `manual` and `github-issue` sources. `skill` and `mcp` go through `stage-runner`.
+- The `manual` and `github-issue` context sources are read in `stage-runner.ts` (`manualContext` in `stage-prompts.ts`). `skill` and `mcp` go through an agent prompt (`contextPrompt`).
 - `issue-linker.ts`: `gh issue create`, and the `Closes #N` line for the pull request body (`workspace-service.openPullRequest`).
 - Routes:
-  - `POST /tasks/:id/stage` with `{ action: 'approve' | 'reopen' | 'skip', stage?, to? }`.
+  - `POST /tasks/:id/stage` with `{ action: 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start', stage?, terminal?, to?, reason? }`.
   - `GET` and `PUT /tasks/:id/files/:name`.
   - `GET` and `PUT /repos/:id/settings`.
   - `POST /tasks/:id/issue`.
 - `task-index.ts`: a `stage` column, so the board can group by it.
 - `event-log.ts`: the `.jsonl` files, the write order and the rebuild of 3.7.
-- Route `GET /tasks/:id/progress`: the result of `stageProgress` for one task.
+- No progress route: the web app calls `stageProgress` (core) on the task and its events (`GET /tasks/:id/events`).
 - The testing command reports through the CLI:
 
   ```
@@ -440,7 +440,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 | `release` | The pull request, its checks, the merge, the issue it closes |
 
 - **Side panel:** time per stage, task details (repository, branch, base, context source, agents and terminals, ports, pull request), and the latest events with "All events".
-- **Data:** `GET /tasks/:id/progress` gives the evidence with each stage entry (`checks`, `files`, `commits`, `rounds`), built from the events and the stage files.
+- **Data:** the evidence of each stage entry (`checks`, `files`, `commits`, `rounds`) is built in the web app from the task's events and stage files (`GET /tasks/:id/events`, `GET /tasks/:id/files`).
 
 **Custom pipelines in the progress views.** Both views are drawn from the pipeline; no stage is fixed in the web code.
 
@@ -467,7 +467,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 - Keys as in the table: `j`/`k` move, `enter` opens, `a` approves the current stage.
 - Narrow windows: each row becomes the task name over a small strip of markers.
 
-**Data.** `stageProgress` (core) turns the task and its events into one entry per stage: `{ stage, status: 'done' | 'current' | 'upcoming' | 'skipped', state?, rounds, startedAt?, endedAt?, approvedBy? }`. The task strip reads it from `GET /tasks/:id/progress`. The progress view needs no events: it uses `stage`, `stages`, `lanes` and `stageSince` from the task list.
+**Data.** `stageProgress` (core) turns the task and its events into one entry per stage: `{ stage, status: 'done' | 'current' | 'upcoming' | 'skipped', state?, rounds, startedAt?, endedAt?, approvedBy? }`. The task strip computes it from the task's events. The progress view needs no events: it uses `stage`, `stages`, `lanes` and `stageSince` from the task list.
 
 ## 8. Old tasks
 
