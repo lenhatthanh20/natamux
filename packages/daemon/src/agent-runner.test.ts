@@ -174,9 +174,9 @@ describe('GitHub Copilot', () => {
       platform: 'linux',
       launchDir: dataDir,
     })
-    const task = tasks.createTask({ title: 'Fix the parser' })
+    const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')
-    expect(readFileSync(join(dataDir, `agent-launch-${task.id}.sh`), 'utf8')).toBe(
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
       "copilot --allow-all-tools -i 'Fix it'\n",
     )
     expect(tasks.getTask(task.id).agent).toBe('copilot')
