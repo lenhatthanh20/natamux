@@ -1,16 +1,23 @@
-import { basename } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import {
   type ContextSource,
+  codeStage,
   findStep,
   isGroup,
+  RECORD_ONLY_EVENT_TYPES,
   type Stage,
   type Step,
+  stageOfTerminal,
   stagesOf,
+  stepIndex,
   type Task,
   type TaskEvent,
   type TaskState,
+  terminalOfStage,
+  waitingOn,
 } from '@helmsman/core'
-import type { AgentRunner } from './agent-runner.js'
+import { type AgentRunner, quoteArgument } from './agent-runner.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { type RunGh, runGh } from './git.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
@@ -37,6 +44,9 @@ const SHELLS = [
   'powershell.exe',
   'cmd.exe',
 ]
+
+// After the launch line is typed, the shell stays in the foreground until the agent is up.
+export const LAUNCH_GRACE_MS = 30_000
 
 export const STAGE_ACTIONS = [
   'approve',
@@ -67,38 +77,63 @@ export class StageActionError extends Error {
   }
 }
 
-// The stage of a group that changes code keeps the first terminal (and the agent session of the
-// steps before); each other stage gets the next terminal.
-function codeStage(step: Step): Stage {
-  const stages = stagesOf(step)
-  const agents = stages.filter((stage) => stage.kind === 'agent')
-  return agents.find((stage) => stage.output === undefined) ?? agents[0] ?? (stages[0] as Stage)
-}
-
-export function terminalOfStage(step: Step, stageId: string): string {
-  if (!isGroup(step)) {
-    return MAIN_TERMINAL
+// An action that names something the task does not have, such as a stage to go back to.
+export class StageInputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StageInputError'
   }
-  const main = codeStage(step)
-  if (main.id === stageId) {
-    return MAIN_TERMINAL
-  }
-  const others = step.parallel.filter((stage) => stage.id !== main.id)
-  return String(others.findIndex((stage) => stage.id === stageId) + 2)
-}
-
-export function stageOfTerminal(step: Step, terminal: string): Stage | undefined {
-  return stagesOf(step).find((stage) => terminalOfStage(step, stage.id) === terminal)
 }
 
 function laneState(task: Pick<Task, 'state' | 'lanes'>, step: Step, stageId: string): TaskState {
   return isGroup(step) ? (task.lanes[stageId] ?? 'done') : task.state
 }
 
+// Why a send back asked for changes, for the agent's next prompt.
+function sendBackReason(cause: TaskEvent | undefined): string | undefined {
+  if (
+    cause === undefined ||
+    (cause.type !== 'stage.reopened' && cause.type !== 'review.changes-requested')
+  ) {
+    return undefined
+  }
+  const reason = cause.payload.reason
+  return typeof reason === 'string' && reason !== '' ? reason : undefined
+}
+
+export type IssueRef = {
+  number: number
+  // The repository of an issue address: "owner/name", for the closing line of a pull request.
+  slug?: string
+  // The same for `gh --repo`, with the host when it is not github.com.
+  repo?: string
+}
+
+const ISSUE_ADDRESS = /^https?:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/issues\/(\d+)\/?(?:[?#]\S*)?$/
+const ISSUE_KEY = /^(?:([\w.-]+\/[\w.-]+)#|#?)(\d+)$/
+
+// An issue in "#42", "42", "owner/name#42" or an issue address (a comment link too).
+export function parseIssueRef(ref: string): IssueRef | undefined {
+  const text = ref.trim()
+  const address = ISSUE_ADDRESS.exec(text)
+  if (address !== null) {
+    const [, host = '', owner = '', name = '', number = ''] = address
+    const slug = `${owner}/${name}`
+    return { number: Number(number), slug, repo: host === 'github.com' ? slug : `${host}/${slug}` }
+  }
+  const short = ISSUE_KEY.exec(text)
+  if (short === null) {
+    return undefined
+  }
+  const [, slug, number = ''] = short
+  return slug === undefined
+    ? { number: Number(number) }
+    : { number: Number(number), slug, repo: slug }
+}
+
 // The issue number in "#42", "42" or an issue address.
 export function issueNumber(ref: string): number | undefined {
-  const match = /(?:^#?|\/issues\/)(\d+)\s*$/.exec(ref.trim())
-  return match?.[1] === undefined ? undefined : Number(match[1])
+  return parseIssueRef(ref)?.number
 }
 
 type GhIssue = {
@@ -141,6 +176,9 @@ type StageRunnerOptions = {
   repoPath: (repo: string | null) => string
   gh?: RunGh
   runCommand?: RunCommand
+  now?: () => number
+  // The platform of the terminals' shells.
+  platform?: NodeJS.Platform
 }
 
 // Moves tasks through their stages: starts each stage when the task reaches it, takes the report
@@ -154,12 +192,22 @@ export class StageRunner {
   private readonly repoPath: (repo: string | null) => string
   private readonly gh: RunGh
   private readonly runCommand: RunCommand
-  // Stages that reported done; the turn end that follows the report is not a "stopped early".
-  private readonly reported = new Set<string>()
+  private readonly now: () => number
+  private readonly platform: NodeJS.Platform
+  // Terminals whose agent reported a stage done, with that stage: the turn end that follows the
+  // report is not a "stopped early". Kept by terminal, since the task may be at the next stage
+  // when the turn ends.
+  private readonly reported = new Map<string, string>()
   // Tasks whose agent stage waits for a workspace.
   private readonly waitingForWorkspace = new Set<string>()
-  // Terminals where this daemon started an agent.
-  private readonly launched = new Set<string>()
+  // Tasks whose agent stage waits for the tasks it depends on to be done.
+  private readonly waitingForTasks = new Set<string>()
+  // Terminals where this daemon started an agent, and when.
+  private readonly launched = new Map<string, number>()
+  // The terminal where each task runs its stage command.
+  private readonly commandTerminals = new Map<string, string>()
+  // The stages each task is starting now, so an action can answer with the task after them.
+  private readonly startWork = new Map<string, Promise<void>>()
   private readonly starting = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
   private unsubscribe: (() => void) | undefined
@@ -173,6 +221,8 @@ export class StageRunner {
     this.repoPath = options.repoPath
     this.gh = options.gh ?? runGh
     this.runCommand = options.runCommand ?? runShellCommand
+    this.now = options.now ?? Date.now
+    this.platform = options.platform ?? process.platform
   }
 
   start(): void {
@@ -195,6 +245,18 @@ export class StageRunner {
     this.pending.add(tracked)
   }
 
+  private startInBackground(taskId: string, states: readonly TaskState[], cause?: TaskEvent) {
+    const work = this.startLanes(taskId, states, cause).catch(() => undefined)
+    this.startWork.set(taskId, work)
+    this.background(
+      work.finally(() => {
+        if (this.startWork.get(taskId) === work) {
+          this.startWork.delete(taskId)
+        }
+      }),
+    )
+  }
+
   private stepOf(task: Task): Step {
     const step = findStep(this.tasks.stepsOf(task), task.stage)
     if (step === undefined) {
@@ -212,16 +274,16 @@ export class StageRunner {
     return { stage: stage.id, state: laneState(task, step, stage.id) }
   }
 
-  // True once for the turn end that follows a report.
-  takeReport(taskId: string, stage: string): boolean {
-    return this.reported.delete(`${taskId}/${stage}`)
+  // True once for the turn end that follows a report from this terminal.
+  takeReport(taskId: string, terminal: string): boolean {
+    return this.reported.delete(`${taskId}/${terminal}`)
   }
 
   private onMessage(message: DaemonMessage): void {
     if (message.kind === 'task.created') {
       const step = this.stepOf(message.task)
       if (stagesOf(step).some((stage) => stage.kind === 'context')) {
-        this.background(this.startLanes(message.task.id, ['draft', 'ready']))
+        this.startInBackground(message.task.id, ['draft', 'ready'])
       }
       return
     }
@@ -236,11 +298,49 @@ export class StageRunner {
       restoreStageFiles(this.dataDir, task)
       this.background(excludeStageDir(task.workspace))
       if (this.waitingForWorkspace.delete(task.id)) {
-        this.background(this.startLanes(task.id, ['ready', 'draft']))
+        this.startInBackground(task.id, ['ready', 'draft'])
       }
     }
     if (message.moved === true) {
-      this.background(this.startLanes(task.id, ['ready'], event))
+      this.startInBackground(task.id, ['ready'], event)
+    }
+    const ended = task.state === 'done' || task.state === 'cancelled'
+    if (ended && !RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
+      this.finish(task.id)
+    }
+    if (task.state === 'done' || event.type === 'task.edited') {
+      this.startWaiting()
+    }
+  }
+
+  // A task that is done or cancelled needs its agent and its shells no more.
+  private finish(taskId: string): void {
+    this.terminals.close(taskId)
+    for (const key of [...this.launched.keys(), ...this.reported.keys()]) {
+      if (key.startsWith(`${taskId}/`)) {
+        this.launched.delete(key)
+        this.reported.delete(key)
+      }
+    }
+    this.commandTerminals.delete(taskId)
+    this.waitingForWorkspace.delete(taskId)
+    this.waitingForTasks.delete(taskId)
+  }
+
+  // Starts the stages that waited for other tasks, once those are done.
+  private startWaiting(): void {
+    if (this.waitingForTasks.size === 0) {
+      return
+    }
+    const all = this.tasks.listTasks()
+    for (const id of [...this.waitingForTasks]) {
+      const task = all.find((candidate) => candidate.id === id)
+      if (task === undefined || waitingOn(task, all).length === 0) {
+        this.waitingForTasks.delete(id)
+        if (task !== undefined) {
+          this.startInBackground(id, ['ready', 'draft'])
+        }
+      }
     }
   }
 
@@ -263,21 +363,20 @@ export class StageRunner {
     this.starting.add(key)
     try {
       const task = this.tasks.getTask(taskId)
-      const reason =
-        cause?.type === 'stage.reopened' && typeof cause.payload.reason === 'string'
-          ? cause.payload.reason
-          : undefined
+      const reason = sendBackReason(cause)
       switch (stage.kind) {
         case 'context':
           await this.startContext(task, step, stage)
           return
         case 'agent': {
           const prompt = stagePrompt(stage, task)
+          const withReason = reason ? `${prompt}\nWhat to change: ${reason}` : prompt
+          // A prompt typed to the agent took the stage up again: the agent has its prompt.
           await this.startAgent(
             task,
             step,
             stage,
-            reason ? `${prompt}\nWhat to change: ${reason}` : prompt,
+            cause?.type === 'agent.resumed' ? undefined : withReason,
           )
           return
         }
@@ -285,7 +384,7 @@ export class StageRunner {
           if (stage.command === undefined) {
             await this.startAgent(task, step, stage, stagePrompt(stage, task))
           } else {
-            await this.startCommand(task, stage, stage.command)
+            await this.startCommand(task, step, stage, stage.command)
           }
           return
         default:
@@ -297,32 +396,54 @@ export class StageRunner {
     }
   }
 
-  private markStarted(task: Task, stage: Stage, payload: Record<string, unknown>): boolean {
-    return this.tasks.applyEvent(task.id, {
+  private markStarted(
+    task: Task,
+    step: Step,
+    stage: Stage,
+    payload: Record<string, unknown>,
+  ): boolean {
+    const started = this.tasks.applyEvent(task.id, {
       source: 'system',
       type: 'stage.started',
       payload: { stage: stage.id, ...payload },
     }).accepted
+    // The turn end of an earlier report of this stage never came; it must not swallow one of
+    // this round.
+    const key = `${task.id}/${terminalOfStage(step, stage.id)}`
+    if (started && this.reported.get(key) === stage.id) {
+      this.reported.delete(key)
+    }
+    return started
   }
 
-  private async startAgent(task: Task, step: Step, stage: Stage, prompt: string): Promise<void> {
+  private async startAgent(
+    task: Task,
+    step: Step,
+    stage: Stage,
+    prompt: string | undefined,
+  ): Promise<void> {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
       return
     }
+    // The agent may not start before the tasks it depends on are done. The stage stays ready and
+    // starts when they are.
+    if (waitingOn(task, this.tasks.listTasks()).length > 0) {
+      this.waitingForTasks.add(task.id)
+      return
+    }
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
-    if (!this.markStarted(task, stage, { head })) {
+    if (!this.markStarted(task, step, stage, { head }) || prompt === undefined) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)
-    const key = `${task.id}/${terminal}`
     try {
       if (this.agentRuns(task.id, terminal)) {
         this.terminals.paste(task.id, prompt, terminal)
       } else {
         this.agents.start(task.id, task.agent ?? 'claude-code', prompt, terminal)
-        this.launched.add(key)
+        this.launched.set(`${task.id}/${terminal}`, this.now())
       }
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
@@ -330,37 +451,70 @@ export class StageRunner {
   }
 
   // A prompt goes into a running agent only. Pasted into a shell, its lines would run as
-  // commands. An agent runs when this daemon started it, or when the program in the foreground
-  // is not a shell (an agent started by hand, or before a restart).
-  private agentRuns(taskId: string, terminal: string): boolean {
+  // commands. An agent runs when the program in the foreground is not a shell (an agent started
+  // here, by hand, or before a restart), or for a short time after this daemon started one.
+  agentRuns(taskId: string, terminal = MAIN_TERMINAL): boolean {
+    const key = `${taskId}/${terminal}`
     if (!this.terminals.isOpen(taskId, terminal)) {
+      // A new shell with this name has no agent in it.
+      this.launched.delete(key)
       return false
     }
-    if (this.launched.has(`${taskId}/${terminal}`)) {
+    const launchedAt = this.launched.get(key)
+    const program = this.terminals.foreground(taskId, terminal)
+    if (program !== undefined && !SHELLS.includes(basename(program))) {
       return true
     }
-    const program = this.terminals.foreground(taskId, terminal)
-    return program !== undefined && !SHELLS.includes(basename(program))
+    if (launchedAt === undefined) {
+      return false
+    }
+    // Some platforms name only the shell (Windows does), so an agent started here counts.
+    return (
+      program === undefined ||
+      this.platform === 'win32' ||
+      this.now() - launchedAt < LAUNCH_GRACE_MS
+    )
   }
 
   // A command whose exit code decides the stage, such as the test command.
-  private async startCommand(task: Task, stage: Stage, command: string): Promise<void> {
+  private async startCommand(task: Task, step: Step, stage: Stage, command: string) {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
       return
     }
-    if (!this.markStarted(task, stage, {})) {
+    if (!this.markStarted(task, step, stage, {})) {
       return
     }
+    // The command runs in the same terminal each time, so testing again adds no shell.
+    const previous = this.commandTerminals.get(task.id)
+    if (previous !== undefined) {
+      this.terminals.closeOne(task.id, previous)
+    }
     const open = this.terminals.list(task.id).map(Number)
-    const terminal = String(Math.max(1, ...open) + 1)
-    const id = task.id
-    const line = `${command} && helmsman stage pass ${id} --stage ${stage.id} || helmsman stage fail ${id} --stage ${stage.id}`
+    const terminal = previous ?? String(Math.max(1, ...open) + 1)
+    this.commandTerminals.set(task.id, terminal)
     try {
-      this.terminals.run(task.id, line, terminal)
+      this.terminals.run(task.id, this.commandLine(task.id, stage.id, command), terminal)
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
     }
+  }
+
+  // The command and the report of its result, as one line for the shell of the terminal. On a
+  // POSIX system a script runs them, so a command such as `a; b` stays one unit and a failing
+  // `stage pass` does not run `stage fail` too. PowerShell 5.1 has no && or ||, so on Windows the
+  // line asks $? instead.
+  private commandLine(taskId: string, stageId: string, command: string): string {
+    const pass = `helmsman stage pass ${taskId} --stage ${stageId}`
+    const fail = `helmsman stage fail ${taskId} --stage ${stageId}`
+    if (this.platform === 'win32') {
+      return `${command}; if ($?) { ${pass} } else { ${fail} }`
+    }
+    mkdirSync(this.dataDir, { recursive: true })
+    const script = join(this.dataDir, `stage-command-${taskId}.sh`)
+    const text = ['if (', command, '); then', `  ${pass}`, 'else', `  ${fail}`, 'fi', '']
+    writeFileSync(script, text.join('\n'), { mode: 0o600 })
+    return `sh ${quoteArgument(script, this.platform)}`
   }
 
   private failStage(taskId: string, stage: string, reason: string): void {
@@ -385,7 +539,7 @@ export class StageRunner {
       await this.startAgent(task, step, stage, contextPrompt(source, task))
       return
     }
-    if (!this.markStarted(task, stage, { source: source.type })) {
+    if (!this.markStarted(task, step, stage, { source: source.type })) {
       return
     }
     const output = stage.output ?? 'context.md'
@@ -402,24 +556,31 @@ export class StageRunner {
   }
 
   private async readIssue(task: Task): Promise<string> {
-    const number =
-      issueNumber(task.context?.ref ?? '') ??
-      (task.issue?.provider === 'github' ? issueNumber(task.issue.key) : undefined)
-    if (number === undefined) {
+    const ref =
+      parseIssueRef(task.context?.ref ?? '') ??
+      (task.issue?.provider === 'github' ? parseIssueRef(task.issue.key) : undefined)
+    if (ref === undefined) {
       throw new StageActionError('Give the issue number, such as #42, to read the context from')
     }
+    // An address of another repository reads that repository's issue, not the same number here.
     const output = await this.gh(this.repoPath(task.repo), [
       'issue',
       'view',
-      String(number),
+      String(ref.number),
+      ...(ref.repo === undefined ? [] : ['--repo', ref.repo]),
       '--json',
       'number,title,body,url,labels,comments',
     ])
     const issue = JSON.parse(output) as GhIssue
-    if (task.issue === null && issue.url) {
+    if (this.tasks.getTask(task.id).issue === null && issue.url) {
+      const number = issue.number ?? ref.number
       this.tasks.linkIssue(
         task.id,
-        { provider: 'github', key: `#${issue.number ?? number}`, url: issue.url },
+        {
+          provider: 'github',
+          key: ref.slug === undefined ? `#${number}` : `${ref.slug}#${number}`,
+          url: issue.url,
+        },
         'system',
       )
     }
@@ -470,14 +631,18 @@ export class StageRunner {
     if (action === 'report') {
       const stage = this.resolveStage(task, step, input, ['running', 'needs-input'])
       const source = input.terminal === undefined ? 'human' : 'agent'
-      await this.reportAndCheck(taskId, stage.id, source)
+      await this.reportAndCheck(taskId, stage.id, source, input.terminal)
       return this.tasks.getTask(taskId)
     }
     if (action === 'reopen') {
-      return this.apply(taskId, 'stage.reopened', {
+      if (input.to !== undefined) {
+        this.checkTarget(task, input.to)
+      }
+      this.apply(taskId, 'stage.reopened', {
         ...(input.to === undefined ? {} : { to: input.to }),
         ...(input.reason === undefined ? {} : { reason: input.reason }),
       })
+      return this.afterStart(taskId)
     }
     const plan: Record<typeof action, { type: TaskEvent['type']; states: TaskState[] }> = {
       approve: { type: 'stage.approved', states: ['review', 'needs-input'] },
@@ -490,18 +655,36 @@ export class StageRunner {
     }
     const { type, states } = plan[action]
     const stage = this.resolveStage(task, step, input, states)
-    return this.apply(taskId, type, {
+    this.apply(taskId, type, {
       stage: stage.id,
       ...(input.reason === undefined ? {} : { reason: input.reason }),
     })
+    return this.afterStart(taskId)
   }
 
-  private apply(taskId: string, type: TaskEvent['type'], payload: Record<string, unknown>): Task {
+  // A send back goes to this stage or one before it.
+  private checkTarget(task: Task, to: string): void {
+    const steps = this.tasks.stepsOf(task)
+    const at = stepIndex(steps, to)
+    if (at < 0 || at > stepIndex(steps, task.stage)) {
+      throw new StageInputError(
+        `${task.id} has no stage "${to}" to go back to. Name this stage or one before it`,
+      )
+    }
+  }
+
+  private apply(taskId: string, type: TaskEvent['type'], payload: Record<string, unknown>): void {
     const result = this.tasks.applyEvent(taskId, { source: 'human', type, payload })
     if (!result.accepted) {
       throw new StageActionError(`${taskId} cannot take "${type}" now (${result.task.state})`)
     }
-    return result.task
+  }
+
+  // The task once the stages the action moved it to have started, so the answer shows a stage
+  // that failed at once, not the ready state before it.
+  private async afterStart(taskId: string): Promise<Task> {
+    await this.startWork.get(taskId)
+    return this.tasks.getTask(taskId)
   }
 
   // The report that a stage is done, then its checks.
@@ -509,6 +692,7 @@ export class StageRunner {
     taskId: string,
     stage: string,
     source: TaskEvent['source'],
+    terminal?: string,
   ): Promise<void> {
     const reported = this.tasks.applyEvent(taskId, {
       source,
@@ -518,8 +702,8 @@ export class StageRunner {
     if (!reported.accepted) {
       throw new StageActionError(`${taskId}: the ${stage} stage is not running`)
     }
-    if (source === 'agent') {
-      this.reported.add(`${taskId}/${stage}`)
+    if (source === 'agent' && terminal !== undefined) {
+      this.reported.set(`${taskId}/${terminal}`, stage)
     }
     await this.check(taskId, stage)
   }
@@ -536,10 +720,15 @@ export class StageRunner {
               later.event.type === 'stage.check-failed' && later.event.payload.stage === stage,
           ).length
         const head = stored.event.payload.head
-        return { at: stored.event.at, head: typeof head === 'string' ? head : null, failures }
+        return {
+          seq: stored.seq,
+          at: stored.event.at,
+          head: typeof head === 'string' ? head : null,
+          failures,
+        }
       }
     }
-    return { at: null, head: null, failures: 0 }
+    return { seq: -1, at: null, head: null, failures: 0 }
   }
 
   private async check(taskId: string, stageId: string): Promise<void> {
@@ -550,10 +739,12 @@ export class StageRunner {
       return
     }
     const start = this.lastStart(taskId, stageId)
+    const folder = workingDir(this.dataDir, task)
     const result = await runStageChecks(
       {
         stage,
-        folder: workingDir(this.dataDir, task),
+        folder,
+        cwd: task.workspace ?? folder,
         isWorktree: task.workspace !== null,
         startedAt: start.at,
         startHead: start.head,
@@ -564,6 +755,10 @@ export class StageRunner {
       reasons: [error instanceof Error ? error.message : String(error)],
       passes: [],
     }))
+    // The stage started again while the checks ran: their result is about the round before.
+    if (this.lastStart(taskId, stageId).seq !== start.seq) {
+      return
+    }
     if (result.passed) {
       this.tasks.applyEvent(taskId, {
         source: 'system',
@@ -573,8 +768,10 @@ export class StageRunner {
       return
     }
     // An agent gets one more try; a stage that no agent works on waits for you at once.
+    const terminal = terminalOfStage(step, stageId)
     const agentWorks =
-      stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)
+      (stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)) &&
+      this.agentRuns(taskId, terminal)
     const final = !agentWorks || start.failures >= 1
     this.tasks.applyEvent(taskId, {
       source: 'system',
@@ -588,9 +785,9 @@ export class StageRunner {
         'Fix them, then run `helmsman done` again.',
       ].join('\n')
       try {
-        this.terminals.paste(taskId, text, terminalOfStage(step, stageId))
+        this.terminals.paste(taskId, text, terminal)
       } catch {
-        // No terminal: the reasons are in the log, and the next failure waits for you.
+        // The terminal closed since: the reasons are in the log, and the next failure waits.
       }
     }
   }

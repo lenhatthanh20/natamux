@@ -121,7 +121,7 @@ describe('AgentHookService', () => {
         seen.push(terminal)
         return { stage: current.stage, state: current.state }
       },
-      takeReport: () => true,
+      takeReport: (_taskId, terminal) => terminal === '2',
     })
     reporting.handle('claude-code', hook('UserPromptSubmit'), task.id, '2')
     expect(tasks.listEvents(task.id).at(-1)?.event.payload).toMatchObject({ stage: 'implement' })

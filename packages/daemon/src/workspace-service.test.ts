@@ -175,15 +175,30 @@ describe('remove', () => {
     expect(branchExists('helmsman/t-0001-fix-the-bug')).toBe(true)
   })
 
-  it('refuses to remove a worktree with files that are not committed', async () => {
+  it('refuses a worktree with changes not committed, before ending its shells', async () => {
+    const closed: string[] = []
+    const guarded = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      closeTerminals: (taskId) => closed.push(taskId),
+    })
     const task = tasks.createTask({ title: 'Fix the bug' })
-    const created = await workspaces.create(task.id)
+    const created = await guarded.create(task.id)
     writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'work in progress')
 
-    await expect(workspaces.remove(task.id, { deleteBranch: true })).rejects.toThrow(GitError)
+    await expect(guarded.remove(task.id, { deleteBranch: true })).rejects.toThrow(
+      WorkspaceConflictError,
+    )
 
+    expect(closed).toEqual([])
     expect(tasks.getTask(task.id).workspace).toBe(created.workspace)
     expect(existsSync(join(created.workspace ?? '', 'notes.txt'))).toBe(true)
+
+    runGit(created.workspace ?? '', 'add', 'notes.txt')
+    runGit(created.workspace ?? '', 'commit', '-m', 'Notes')
+    await guarded.remove(task.id, { deleteBranch: false })
+    expect(closed).toEqual([task.id])
   })
 
   it('refuses a task that has no workspace', async () => {
@@ -202,6 +217,18 @@ describe('remove', () => {
     const again = await workspaces.create(task.id)
 
     expect(again.workspace).not.toBeNull()
+  })
+
+  it('goes on with the branch that was kept when the task gets a new workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+    await workspaces.remove(task.id, { deleteBranch: true })
+
+    const again = await workspaces.create(task.id)
+
+    expect(again.branch).toBe('helmsman/t-0001-fix-the-bug')
+    expect(runGit(again.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('work')
   })
 })
 
