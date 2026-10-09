@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
+import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
@@ -308,7 +309,7 @@ describe('recordPullRequestStatus', () => {
     const task = service.createTask({ title: 'Fix it' })
     service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
     service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
-    service.applyEvent(task.id, { source: 'agent', type: 'agent.finished' })
+    service.applyEvent(task.id, { source: 'system', type: 'stage.checked' })
     return service.recordGit(task.id, 'pr.opened', { url: 'https://github.com/o/r/pull/1' })
   }
 
@@ -365,5 +366,41 @@ describe('subtasks', () => {
 
     expect(() => service.createTask({ title: 'x', parentId: 'T-0099' })).toThrow(/T-0099/)
     expect(() => service.createTask({ title: 'x', parentId: child.id })).toThrow(/subtask/)
+  })
+})
+
+describe('event log files', () => {
+  it('rebuilds the events from the log files when the index is new', () => {
+    const task = service.createTask({ title: 'Fix it' })
+    service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+
+    const fresh = new TaskIndex(':memory:')
+    makeService(fresh).init()
+    expect(fresh.listEvents(task.id).map((entry) => entry.event.type)).toEqual([
+      'task.created',
+      'task.readied',
+    ])
+    fresh.close()
+  })
+
+  it('writes a log file for a task that only has events in the index', () => {
+    const task = service.createTask({ title: 'Fix it' })
+    rmSync(eventLogPath(dataDir, task.id))
+
+    makeService(index).init()
+    expect(readEventLog(dataDir, task.id)?.map((entry) => entry.event.type)).toEqual([
+      'task.created',
+    ])
+  })
+
+  it('links an issue and logs it', () => {
+    const task = service.createTask({ title: 'Fix it' })
+    const link = { provider: 'jira', key: 'ABC-1', url: 'https://jira.example.com/ABC-1' }
+
+    expect(service.linkIssue(task.id, link).issue).toEqual(link)
+    expect(service.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'issue.linked',
+      payload: link,
+    })
   })
 })
