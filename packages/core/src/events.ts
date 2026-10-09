@@ -98,7 +98,8 @@ const MOVES: Partial<Record<EventType, Move>> = {
   'agent.started': { from: ['ready'], to: 'running' },
   'stage.started': { from: ['draft', 'ready'], to: 'running' },
   'agent.asked': { from: ['running'], to: 'needs-input' },
-  'agent.resumed': { from: ['needs-input'], to: 'running' },
+  // A prompt typed to an agent whose stage waits for approval takes the stage up again.
+  'agent.resumed': { from: ['needs-input', 'review'], to: 'running' },
   // The agent ended its turn: the stage is done, as far as it goes.
   'agent.finished': { from: ['running'], to: 'gate' },
   'agent.failed': { from: ['running'], to: 'failed' },
@@ -245,9 +246,16 @@ export function applyTaskEvent(
     return keep(false)
   }
 
-  if (event.type === 'stage.reopened' || event.type === 'review.changes-requested') {
+  // A prompt typed to the agent during review is a request for changes.
+  const resumedInReview =
+    event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review'
+  if (
+    event.type === 'stage.reopened' ||
+    event.type === 'review.changes-requested' ||
+    resumedInReview
+  ) {
     // Changes asked in review go to the agent as its next prompt, so its stage runs at once.
-    const state: TaskState = event.type === 'review.changes-requested' ? 'running' : 'ready'
+    const state: TaskState = event.type === 'stage.reopened' ? 'ready' : 'running'
     const target = reopenTarget(steps, index, payloadString(event, 'to'))
     const moved = target === undefined ? undefined : reopen(steps, target.index, target.stage, state)
     return moved === undefined ? keep(false) : { position: moved, accepted: true, moved: true }
