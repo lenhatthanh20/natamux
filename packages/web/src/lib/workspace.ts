@@ -75,6 +75,7 @@ export function createBlockedReason(
 export type WaitReason =
   | { kind: 'asked'; question: string | null }
   | { kind: 'check-failed'; reasons: string[] }
+  | { kind: 'failed'; reason: string | null }
   | { kind: 'stopped' }
 
 // The newest thing that put the task in needs-input. Events before the last start or resume are
@@ -90,6 +91,10 @@ export function waitReason(events: readonly StoredEvent[] | undefined): WaitReas
     }
     if (event.type === 'agent.asked') {
       return { kind: 'asked', question: latestQuestion([stored]) }
+    }
+    if (event.type === 'agent.failed' || event.type === 'stage.failed') {
+      const reason = event.payload.reason
+      return { kind: 'failed', reason: typeof reason === 'string' && reason !== '' ? reason : null }
     }
     if (event.type === 'stage.check-failed' && event.payload.final !== false) {
       const reasons = Array.isArray(event.payload.reasons)
@@ -118,6 +123,8 @@ export function bannerText(reason: WaitReason): string {
       return reason.reasons.length === 0
         ? 'The checks of this stage failed.'
         : `The checks failed: ${reason.reasons.join('; ')}`
+    case 'failed':
+      return reason.reason ?? 'The agent failed.'
     case 'stopped':
       return 'The agent stopped without saying it is done.'
   }

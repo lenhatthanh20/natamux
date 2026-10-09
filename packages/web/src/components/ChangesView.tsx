@@ -24,6 +24,7 @@ import { waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
+import type { AgentId } from '../lib/agents'
 import { NeedsInputBanner } from './NeedsInputBanner'
 import { ProgressTab } from './ProgressTab'
 import { ShellPanes } from './ShellPanes'
@@ -54,6 +55,7 @@ type ChangesViewProps = {
   loadEvents: () => Promise<StoredEvent[]>
   connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
+  loadAgentTerminals?: () => Promise<string[]>
   closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
   push: () => Promise<Task>
@@ -66,6 +68,8 @@ type ChangesViewProps = {
   readStageFile: (name: string) => Promise<string>
   writeStageFile: (name: string, text: string) => Promise<void>
   stageAction: (action: StageAction, input?: StageActionInput) => Promise<Task>
+  // Starts an agent in the task's terminal, for an agent that failed to start or stopped.
+  startAgent?: (agent: AgentId) => Promise<Task>
   createIssue: () => Promise<Task>
 }
 
@@ -97,6 +101,7 @@ export function ChangesView({
   loadEvents,
   connectTerminal,
   loadTerminals,
+  loadAgentTerminals,
   closeTerminal,
   commit,
   push,
@@ -104,6 +109,7 @@ export function ChangesView({
   sendToAgent,
   resume,
   resuming,
+  startAgent,
   loadSettings,
   loadStageFiles,
   readStageFile,
@@ -137,7 +143,8 @@ export function ChangesView({
   const ahead = graph.data?.ahead ?? null
   const base = graph.data?.base ?? null
 
-  const waiting = task.state === 'needs-input'
+  // A failed task shows why, too, and lets the agent be started again.
+  const waiting = task.state === 'needs-input' || task.state === 'failed'
   const events = useQuery({
     queryKey: ['question-events', task.id],
     queryFn: loadEvents,
@@ -206,6 +213,12 @@ export function ChangesView({
             setFocusToken((value) => value + 1)
           }}
           onResume={resume}
+          onStartAgent={
+            task.state === 'failed' && startAgent !== undefined
+              ? (agent) => void startAgent(agent).catch(() => undefined)
+              : undefined
+          }
+          agent={task.agent}
         />
       )}
       <Tabs
@@ -236,6 +249,7 @@ export function ChangesView({
             stateText={task.agent === null ? undefined : paneStateText(task.state, activity)}
             connect={connectTerminal}
             loadTerminals={loadTerminals}
+            loadAgentTerminals={loadAgentTerminals}
             closeTerminal={closeTerminal}
             focusToken={focusToken}
             actionsSlot={tabActions}
@@ -268,6 +282,7 @@ export function ChangesView({
             loadEvents={loadEvents}
             loadFiles={loadStageFiles}
             act={stageAction}
+            startAgent={startAgent}
             createIssue={createIssue}
             activity={activity}
             onOpenFile={(name) => {

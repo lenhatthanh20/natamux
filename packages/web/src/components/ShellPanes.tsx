@@ -23,6 +23,8 @@ type ShellPanesProps = {
   stateText?: string
   connect: (size: TerminalSize, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
+  // The shells where an agent runs now. Without it, Shell 1 counts as the agent's.
+  loadAgentTerminals?: () => Promise<string[]>
   closeTerminal: (terminal: string) => Promise<string[]>
   // A new number puts the keyboard in Shell 1.
   focusToken?: number
@@ -38,11 +40,19 @@ export function ShellPanes({
   stateText,
   connect,
   loadTerminals,
+  loadAgentTerminals,
   closeTerminal,
   focusToken,
   actionsSlot,
 }: ShellPanesProps) {
   const open = useQuery({ queryKey: ['terminals', taskId], queryFn: loadTerminals })
+  // An agent starts and ends in its shell without a task event, so this is read again often.
+  const agentShells = useQuery({
+    queryKey: ['agent-terminals', taskId],
+    queryFn: () => loadAgentTerminals?.() ?? Promise.resolve(['1']),
+    enabled: loadAgentTerminals !== undefined,
+    refetchInterval: 5000,
+  })
   const [added, setAdded] = useState<string[]>([])
   // Shells that are being closed. They leave the screen at once, not when the list is read again.
   const [closing, setClosing] = useState<string[]>([])
@@ -145,7 +155,10 @@ export function ShellPanes({
         className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
         {names.map((name) => {
-          const isAgent = name === '1' && agent !== null
+          const isAgent =
+            loadAgentTerminals === undefined
+              ? name === '1' && agent !== null
+              : (agentShells.data ?? []).includes(name)
           const index = visible.indexOf(name)
           return (
             <TerminalPane

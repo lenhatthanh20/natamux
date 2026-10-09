@@ -40,7 +40,7 @@ const later = (seconds: number) => {
 
 describe('GenericSignals', () => {
   it('counts output of the first terminal as a sign of life', () => {
-    const task = runningTask('codex')
+    const task = runningTask('cursor')
     later(60)
 
     signals.onOutput(task.id, '1', 'compiling...')
@@ -49,7 +49,7 @@ describe('GenericSignals', () => {
   })
 
   it('keeps a running task alive while it prints', () => {
-    const task = runningTask('codex')
+    const task = runningTask('cursor')
     later(60)
     signals.onOutput(task.id, '1', 'a')
     later(31)
@@ -62,7 +62,7 @@ describe('GenericSignals', () => {
   })
 
   it('moves a running task to needs input when an agent without hooks rings the bell', () => {
-    const task = runningTask('codex')
+    const task = runningTask('cursor')
 
     signals.onOutput(task.id, '1', 'Allow this command? \x07')
 
@@ -78,7 +78,7 @@ describe('GenericSignals', () => {
     signals.onOutput(claude.id, '1', '\x07')
     expect(tasks.getTask(claude.id).state).toBe('running')
 
-    const other = runningTask('codex')
+    const other = runningTask('cursor')
     signals.onOutput(other.id, '2', '\x07')
     expect(tasks.getTask(other.id).state).toBe('running')
 
@@ -108,5 +108,39 @@ describe('GenericSignals', () => {
       'test-spec': 'running',
       implement: 'needs-input',
     })
+  })
+})
+
+describe('a shell that cannot find the agent', () => {
+  const launch = (taskId: string) =>
+    signals.watchLaunch({ taskId, terminal: '1', agent: 'claude-code', program: 'claude' })
+
+  it.each([
+    'bash: claude: command not found',
+    'zsh: command not found: claude',
+    'sh: 1: claude: not found',
+    "\u001b[31mclaude : The term 'claude' is not recognized as the name of a cmdlet\u001b[0m",
+  ])('fails the task with what the shell said: %s', (line) => {
+    const task = runningTask('claude-code')
+    launch(task.id)
+
+    signals.onOutput(task.id, '1', `$ . '/data/agent-launch.sh'\r\n${line.slice(0, 9)}`)
+    signals.onOutput(task.id, '1', `${line.slice(9)}\r\n$ `)
+
+    const failed = tasks.listEvents(task.id).at(-1)?.event
+    expect(tasks.getTask(task.id).state).toBe('failed')
+    expect(failed?.type).toBe('agent.failed')
+    expect(String(failed?.payload.reason)).toContain('HELMSMAN_CLAUDE_COMMAND')
+  })
+
+  it('pays no heed to other words, to other programs, or after the first seconds', () => {
+    const task = runningTask('claude-code')
+    launch(task.id)
+    signals.onOutput(task.id, '1', 'bash: pnpm: command not found\r\n')
+    signals.onOutput(task.id, '2', 'bash: claude: command not found\r\n')
+    later(20)
+    signals.onOutput(task.id, '1', 'bash: claude: command not found\r\n')
+
+    expect(tasks.getTask(task.id).state).toBe('running')
   })
 })

@@ -10,6 +10,7 @@ import { useLayoutMode, useViewportWidth } from '../hooks/useLayoutMode'
 import { useLiveTasks } from '../hooks/useLiveTasks'
 import { useNow } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
+import { type AgentId, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
@@ -311,11 +312,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   // Makes the workspace first when the task has none, then opens its terminal with the agent.
   const agentMutation = useMutation({
-    mutationFn: async ({ task, base }: { task: Task; base?: string }) => {
+    mutationFn: async ({ task, base, agent }: { task: Task; base?: string; agent?: AgentId }) => {
       if (task.workspace === null) {
         mergeTask(await api.createWorkspace(task.id, base))
       }
-      return api.startAgent(task.id, 'claude-code')
+      return api.startAgent(task.id, agent ?? (isAgentId(task.agent) ? task.agent : DEFAULT_AGENT))
     },
     onSuccess: (task) => {
       mergeTask(task)
@@ -864,11 +865,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               )
             }}
             loadTerminals={() => api.listTerminals(changesTask.id)}
+            loadAgentTerminals={() => api.listAgentTerminals(changesTask.id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
             loadSettings={() => api.getSettings(changesTask.repo ?? 'default')}
             loadStageFiles={() => api.listStageFiles(changesTask.id)}
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
+            startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
             stageAction={async (action, input) => {
               const updated = await api.stageAction(changesTask.id, action, input)
               mergeTask(updated)
