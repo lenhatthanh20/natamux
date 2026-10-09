@@ -96,9 +96,7 @@ function sectionBody(text: string, name: string): string[] {
 export function countItems(text: string, section: string): number {
   const body = sectionBody(text, section)
   const headings = body.filter((line) => /^#{2,6}\s/.test(line)).length
-  return headings > 0
-    ? headings
-    : body.filter((line) => /^([-*+]|\d+[.)])\s+\S/.test(line)).length
+  return headings > 0 ? headings : body.filter((line) => /^([-*+]|\d+[.)])\s+\S/.test(line)).length
 }
 
 async function checkOutput(input: CheckInput, result: CheckResult): Promise<void> {
