@@ -79,9 +79,13 @@ export function Dialog({
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const first = panel.current?.querySelector<HTMLElement>(
-      '[data-autofocus], input, textarea, select, button:not([data-dialog-close])',
-    )
+    // A field marked for focus wins, wherever it is; a list of selectors would take the first
+    // field in the page instead.
+    const first =
+      panel.current?.querySelector<HTMLElement>('[data-autofocus]') ??
+      panel.current?.querySelector<HTMLElement>(
+        'input, textarea, select, button:not([data-dialog-close])',
+      )
     first?.focus()
     const unlock = lockPage()
     return () => {
