@@ -247,8 +247,7 @@ export function applyTaskEvent(
   }
 
   // A prompt typed to the agent during review is a request for changes.
-  const resumedInReview =
-    event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review'
+  const resumedInReview = event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review'
   if (
     event.type === 'stage.reopened' ||
     event.type === 'review.changes-requested' ||
@@ -257,7 +256,8 @@ export function applyTaskEvent(
     // Changes asked in review go to the agent as its next prompt, so its stage runs at once.
     const state: TaskState = event.type === 'stage.reopened' ? 'ready' : 'running'
     const target = reopenTarget(steps, index, payloadString(event, 'to'))
-    const moved = target === undefined ? undefined : reopen(steps, target.index, target.stage, state)
+    const moved =
+      target === undefined ? undefined : reopen(steps, target.index, target.stage, state)
     return moved === undefined ? keep(false) : { position: moved, accepted: true, moved: true }
   }
 
@@ -292,7 +292,11 @@ export function applyTaskEvent(
     return { position: { ...position, state: to }, accepted: true, moved: false }
   }
   const lanes = { ...position.lanes, [lane]: to }
-  return { position: { ...position, lanes, state: combinedState(lanes) }, accepted: true, moved: false }
+  return {
+    position: { ...position, lanes, state: combinedState(lanes) },
+    accepted: true,
+    moved: false,
+  }
 }
 
 export type DerivedTaskState = {
@@ -316,4 +320,3 @@ export function deriveTaskState(events: readonly TaskEvent[], steps: readonly St
 
   return { position, rejected } satisfies DerivedTaskState
 }
-

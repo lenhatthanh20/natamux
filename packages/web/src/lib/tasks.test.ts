@@ -1,4 +1,10 @@
-import { applyTaskEvent, LEGACY_PIPELINE, TASK_STATES, type Task, type TaskState } from '@helmsman/core'
+import {
+  applyTaskEvent,
+  LEGACY_PIPELINE,
+  TASK_STATES,
+  type Task,
+  type TaskState,
+} from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
 import {
   actionsFor,

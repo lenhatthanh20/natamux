@@ -76,12 +76,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
 
   it('moves a failed stage to ready on retry', () => {
     const result = deriveTaskState(
-      [
-        event('task.readied'),
-        event('agent.started'),
-        event('agent.failed'),
-        event('task.retried'),
-      ],
+      [event('task.readied'), event('agent.started'), event('agent.failed'), event('task.retried')],
       LEGACY_PIPELINE,
     )
     expect(result.position).toEqual(at('implement', 'ready'))
@@ -206,7 +201,9 @@ describe('applyTaskEvent with the default pipeline', () => {
   })
 
   it('skips a stage without output', () => {
-    expect(run(at('context', 'draft'), event('stage.skipped')).position).toEqual(at('spec', 'ready'))
+    expect(run(at('context', 'draft'), event('stage.skipped')).position).toEqual(
+      at('spec', 'ready'),
+    )
   })
 
   it('finishes the task after the last stage', () => {
@@ -228,8 +225,9 @@ describe('applyTaskEvent with the default pipeline', () => {
   })
 
   it('lets a human override set any state, and move to a stage', () => {
-    expect(run(at('release', 'cancelled'), event('state.overridden', { to: 'ready' })).position)
-      .toEqual(at('release', 'ready'))
+    expect(
+      run(at('release', 'cancelled'), event('state.overridden', { to: 'ready' })).position,
+    ).toEqual(at('release', 'ready'))
     expect(
       run(at('review', 'review'), event('state.overridden', { to: 'running', stage: 'plan' }))
         .position,

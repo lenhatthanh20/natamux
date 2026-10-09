@@ -37,9 +37,9 @@ describe('pipelineSchema', () => {
     const agent = (id: string) => ({ id, kind: 'agent', gate: 'auto' })
     expect(pipelineSchema.safeParse(group([agent('a')])).success).toBe(false)
     expect(pipelineSchema.safeParse(group([agent('a'), agent('b')])).success).toBe(true)
-    expect(
-      pipelineSchema.safeParse(group(['a', 'b', 'c', 'd', 'e'].map(agent))).success,
-    ).toBe(false)
+    expect(pipelineSchema.safeParse(group(['a', 'b', 'c', 'd', 'e'].map(agent))).success).toBe(
+      false,
+    )
     expect(
       pipelineSchema.safeParse(group([agent('a'), { id: 'r', kind: 'review', gate: 'manual' }]))
         .success,

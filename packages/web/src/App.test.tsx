@@ -1,4 +1,10 @@
-import { applyTaskEvent, type EventType, LEGACY_PIPELINE, type Task, type TaskEvent } from '@helmsman/core'
+import {
+  applyTaskEvent,
+  type EventType,
+  LEGACY_PIPELINE,
+  type Task,
+  type TaskEvent,
+} from '@helmsman/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
@@ -319,7 +325,10 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Connect' }))
 }
 
-const reviewTask = makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'review',
+const reviewTask = makeTask({
+  id: 'T-0001',
+  title: 'Fix timezone bug',
+  state: 'review',
   stage: 'review',
 })
 // A running task is "quiet" after ten minutes, so this one must be recent whenever the tests run.
