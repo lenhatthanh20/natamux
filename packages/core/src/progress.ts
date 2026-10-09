@@ -58,6 +58,22 @@ export function stageProgress(
   steps: readonly Step[],
 ): StageProgress[] {
   const current = stepIndex(steps, task.stage)
+  // When a step began: the end of the step before it, or a send back into it. Stages that only
+  // wait for a person (review, release) have no start event of their own.
+  const entered = steps.map((step, index) => {
+    const before = steps[index - 1]
+    const ids = new Set(stagesOf(step).map((stage) => stage.id))
+    const previous = new Set(before === undefined ? [] : stagesOf(before).map((stage) => stage.id))
+    return (
+      events
+        .filter(
+          (event) =>
+            (ENDS.includes(event.type) && previous.has(String(event.payload.stage))) ||
+            (event.type === 'stage.reopened' && ids.has(String(event.payload.to))),
+        )
+        .at(-1)?.at ?? null
+    )
+  })
   return steps.flatMap((step, index) =>
     stagesOf(step).map((stage) => {
       const own = events.filter((event) => event.payload.stage === stage.id)
@@ -97,7 +113,7 @@ export function stageProgress(
         status,
         state,
         rounds: status === 'upcoming' ? 0 : Math.max(starts.length, 1),
-        startedAt: lastStart?.at ?? null,
+        startedAt: lastStart?.at ?? (status === 'upcoming' ? null : (entered[index] ?? null)),
         endedAt: status === 'done' || status === 'skipped' ? (ended?.at ?? null) : null,
         approvedBy: approved?.source ?? null,
         passes: strings(checked?.payload.passes),

@@ -96,9 +96,14 @@ describe('runStageChecks', () => {
 })
 
 describe('countItems', () => {
-  it('counts sub-headings and list items under a section only', () => {
-    const text = '# Cases\n- a\n1. b\n### c\n# Notes\n- not a case\n'
-    expect(countItems(text, 'Cases')).toBe(3)
+  it('counts the list items under a section only, not their own lists', () => {
+    const text = '# Cases\n- a\n  - input: x\n1. b\n# Notes\n- not a case\n'
+    expect(countItems(text, 'Cases')).toBe(2)
     expect(countItems(text, 'Missing')).toBe(0)
+  })
+
+  it('counts sub-headings when the cases have them', () => {
+    const text = '# Cases\n### Empty\n- input: ""\n- expected: ""\n### Comma\n- input: a,b\n'
+    expect(countItems(text, 'Cases')).toBe(2)
   })
 })

@@ -330,7 +330,7 @@ Stage fields:
 
 Other rules:
 - **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt. It can also group stages, or take a stage out of a group so it runs on its own.
-- **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings acts as kind `manual`.
+- **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings keeps the default settings of that id (spec, plan, …); a custom stage that is gone acts as kind `manual`.
 - **Editing:** the app has a **Project settings** page that edits this file in the repository's main folder. You commit it yourself. "Reset to default" writes the default pipeline back.
 - **Wrong settings:** a file that fails to parse shows an error on the page, and the daemon uses the defaults.
 
@@ -449,7 +449,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 - **Board, one section per repository,** with that repository's columns. Tasks whose `stages` differ from the current settings (made before a change) go into a sub-section "Earlier pipeline", with columns of their own, so no row is out of line.
 - **Groups** of 2 to 4 stages: their columns share a band and the "Side by side" label on the board; on the task page their cards wrap.
 - **Long pipelines:** the board scrolls sideways; the Task and Next columns stay in place.
-- **A stage id that is gone from the settings:** shown with its id as its name, as kind `manual`.
+- **A stage id that is gone from the settings:** a default stage keeps its default settings; a custom one is shown with its id as its name, as kind `manual`.
 - **Evidence comes from the kind and the checks of a stage,** not its name. A custom `agent` stage with `output`, `sections` and `check` shows its file, its sections and its command result. A `manual` stage shows only who approved it and when.
 - **"Finished when …"** for a stage not reached yet is built from its checks; the stage field `doneWhen` replaces it.
 

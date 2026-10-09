@@ -73,6 +73,8 @@ const agents = new AgentRunner({
   terminals,
   claudeSettingsPath,
   claudeCommand: process.env.HELMSMAN_CLAUDE_COMMAND,
+  copilotCommand: process.env.HELMSMAN_COPILOT_COMMAND,
+  copilotArgs: process.env.HELMSMAN_COPILOT_ARGS,
 })
 
 const stages = new StageRunner({
