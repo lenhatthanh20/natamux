@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Stage } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type CheckInput, countItems, runStageChecks } from './stage-checks.js'
 
@@ -33,7 +34,7 @@ describe('runStageChecks', () => {
   })
 
   it('fails a missing, empty or old output', async () => {
-    const stage = { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' } as const
+    const stage: Stage = { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' }
     expect((await runStageChecks(input(stage))).reasons).toEqual(['.helmsman-task/spec.md is missing'])
 
     writeFileSync(join(folder, 'spec.md'), '  \n')
@@ -47,13 +48,13 @@ describe('runStageChecks', () => {
   })
 
   it('counts the cases of a test spec', async () => {
-    const stage = {
+    const stage: Stage = {
       id: 'test-spec',
       kind: 'agent',
       gate: 'manual',
       output: 'test-spec.md',
       sections: ['Cases'],
-    } as const
+    }
     writeFileSync(join(folder, 'test-spec.md'), '# Cases\n\nNone yet.\n')
     expect((await runStageChecks(input(stage))).reasons).toEqual(['test-spec.md has no case under Cases'])
 
@@ -69,7 +70,7 @@ describe('runStageChecks', () => {
   })
 
   it('runs the check command and keeps the end of its output', async () => {
-    const stage = { id: 'implement', kind: 'agent', gate: 'auto', check: 'pnpm typecheck' } as const
+    const stage: Stage = { id: 'implement', kind: 'agent', gate: 'auto', check: 'pnpm typecheck' }
     const failing = await runStageChecks(input(stage), async () => ({ code: 2, output: 'error TS1' }))
     expect(failing.reasons).toEqual(['pnpm typecheck failed with exit code 2:\nerror TS1'])
 
