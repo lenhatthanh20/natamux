@@ -325,6 +325,7 @@ Stage fields:
 - `output`: the file the stage must write (`agent` kind).
 - `command`: the test command (`testing` kind).
 - `sections`, `requireCommit`, `requireClean`, `check`: the checks of 3.5.
+- `doneWhen`: the sentence the progress page shows before the stage is reached (7.5).
 - A group is `{ "id", "name"?, "parallel": [stages] }` (section 3.6).
 
 Other rules:
@@ -440,6 +441,17 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 - **Side panel:** time per stage, task details (repository, branch, base, context source, agents and terminals, ports, pull request), and the latest events with "All events".
 - **Data:** `GET /tasks/:id/progress` gives the evidence with each stage entry (`checks`, `files`, `commits`, `rounds`), built from the events and the stage files.
+
+**Custom pipelines in the progress views.** Both views are drawn from the pipeline; no stage is fixed in the web code.
+
+- **Which list:** the task page uses the task's `stages` snapshot. Names, gates and checks come from the current settings, so a renamed stage shows its new name at once.
+- **Colors and markers** follow the state, never the stage. A new stage needs no color or icon.
+- **Board, one section per repository,** with that repository's columns. Tasks whose `stages` differ from the current settings (made before a change) go into a sub-section "Earlier pipeline", with columns of their own, so no row is out of line.
+- **Groups** of 2 to 4 stages: their columns share a band and the "Side by side" label on the board; on the task page their cards wrap.
+- **Long pipelines:** the board scrolls sideways; the Task and Next columns stay in place.
+- **A stage id that is gone from the settings:** shown with its id as its name, as kind `manual`.
+- **Evidence comes from the kind and the checks of a stage,** not its name. A custom `agent` stage with `output`, `sections` and `check` shows its file, its sections and its command result. A `manual` stage shows only who approved it and when.
+- **"Finished when …"** for a stage not reached yet is built from its checks; the stage field `doneWhen` replaces it.
 
 **Task progress strip** (task header):
 - The steps from left to right, each with its marker, its name, and its time: time spent for a done stage, time so far for the current one.
