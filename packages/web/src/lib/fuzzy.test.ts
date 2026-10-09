@@ -42,6 +42,12 @@ describe('fuzzyMatch', () => {
     ])
   })
 
+  it('does not find a long query by letters that are far apart', () => {
+    expect(fuzzyMatch('stage', 'Show the tab, toggle sidebar, change editor')).toBeNull()
+    expect(fuzzyMatch('stage', 'Skip the stage')).not.toBeNull()
+    expect(fuzzyMatch('ft', 'Draft')).not.toBeNull()
+  })
+
   it('matches everything for an empty query', () => {
     expect(fuzzyMatch('  ', 'anything')).toEqual({ score: 0, ranges: [] })
   })

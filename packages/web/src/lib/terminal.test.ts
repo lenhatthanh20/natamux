@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerminalMessage, terminalSocketUrl } from './terminal'
+import { parseTerminalMessage, takesFocusOnOpen, terminalSocketUrl } from './terminal'
 
 describe('terminalSocketUrl', () => {
   it('builds the socket address through /api with the ticket and the size', () => {
@@ -35,5 +35,17 @@ describe('parseTerminalMessage', () => {
 
   it.each(['not json', '{"type":"other"}', '{"type":"output"}', 'null'])('ignores %s', (text) => {
     expect(parseTerminalMessage(text)).toBeUndefined()
+  })
+})
+
+describe('takesFocusOnOpen', () => {
+  it('leaves the focus on the page and on a tab, and takes it from other controls', () => {
+    const tab = document.createElement('button')
+    tab.setAttribute('role', 'tab')
+    const row = document.createElement('button')
+    expect(takesFocusOnOpen(document.body, document.body)).toBe(false)
+    expect(takesFocusOnOpen(null, document.body)).toBe(false)
+    expect(takesFocusOnOpen(tab, document.body)).toBe(false)
+    expect(takesFocusOnOpen(row, document.body)).toBe(true)
   })
 })

@@ -11,6 +11,9 @@ const SHOW_DELAY_MS = 400
 const WARM_MS = 600
 const GAP = 6
 const EDGE = 8
+// Keys that move the focus. A focus within this time of one of them came from the user.
+const MOVE_KEYS = /^(Tab|Arrow(Up|Down|Left|Right)|Home|End)$/
+const MOVE_KEY_MS = 150
 const SELECTOR = '[data-tip], [data-tip-overflow]'
 
 function isFocusVisible(el: HTMLElement): boolean {
@@ -49,6 +52,7 @@ export function Tooltip() {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pending = useRef<HTMLElement | null>(null)
   const lastClosed = useRef(0)
+  const moveKeyAt = useRef(0)
   const visible = useRef<Shown | null>(null)
   visible.current = shown
 
@@ -99,13 +103,18 @@ export function Tooltip() {
     }
     const onFocus = (event: FocusEvent) => {
       const el = trigger(event.target)
-      if (el !== null && isFocusVisible(el)) {
+      // Focus that the page restores (after Escape, a closed dialog) is not the user moving.
+      const moved = Date.now() - moveKeyAt.current < MOVE_KEY_MS
+      if (el !== null && moved && isFocusVisible(el)) {
         hide()
         show(el)
       }
     }
     // Escape closes the tooltip before anything else.
     const onKey = (event: KeyboardEvent) => {
+      if (MOVE_KEYS.test(event.key)) {
+        moveKeyAt.current = Date.now()
+      }
       if (event.key === 'Escape' && visible.current !== null) {
         event.stopPropagation()
       }

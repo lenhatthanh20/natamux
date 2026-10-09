@@ -61,7 +61,10 @@ function useLayer(
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         // A menu, a dialog or a tooltip on top of this layer takes the key first.
-        if (document.querySelector('[role="dialog"], [role="menu"], [role="tooltip"]')) {
+        const above = [
+          ...document.querySelectorAll('[role="dialog"], [role="menu"], [role="tooltip"]'),
+        ].some((layer) => layer !== element)
+        if (above) {
           return
         }
         event.stopPropagation()
@@ -89,8 +92,13 @@ function useLayer(
     return () => {
       window.removeEventListener('keydown', onKeyDown, true)
       // The page may have moved focus on already, for example into a new terminal.
-      if (previous?.isConnected && document.activeElement === document.body) {
-        previous.focus()
+      if (document.activeElement === document.body) {
+        // The opener may be gone or may never have had the focus (a key opened the layer).
+        const target =
+          previous?.isConnected && previous !== document.body
+            ? previous
+            : document.getElementById('main')
+        target?.focus()
       }
     }
   }, [ref, trap, focusPanel])
@@ -119,6 +127,9 @@ function Drawer({
       <div
         ref={panel}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sidebar"
         className={`hm-slide-left relative h-full focus:outline-none border-r border-line-strong bg-sidebar shadow-modal ${phone ? 'w-[min(360px,100vw)]' : 'w-[min(300px,85vw)]'}`}
       >
         {children}
@@ -153,6 +164,7 @@ function Sheet({
       )}
       <div
         ref={panel}
+        {...(scrim ? { role: 'dialog', 'aria-modal': true, 'aria-label': 'Details' } : {})}
         className="hm-slide-right pointer-events-auto relative h-full w-[min(360px,90vw)] border-l border-line-strong bg-surface shadow-modal"
       >
         {children}
@@ -205,6 +217,11 @@ export function AppShell({
 
   const detailsMode = details === null ? null : layout.details
   const page = detailsMode === 'page'
+  // What a drawer or a sheet with a scrim covers cannot be reached by key or by a screen reader.
+  // The title bar stays live: its buttons close the layer.
+  const covered =
+    (layout.sidebar === 'drawer' && sidebar.drawerOpen) ||
+    (detailsMode === 'sheet' && layout.compact)
 
   return (
     <div ref={root} className="flex h-dvh flex-col overflow-hidden">
@@ -218,7 +235,11 @@ export function AppShell({
       <div className="relative flex min-h-0 flex-1">
         {layout.sidebar === 'docked' && sidebar.open && (
           <>
-            <div style={{ width: sidebar.sizing.width }} className="h-full shrink-0 bg-sidebar">
+            <div
+              inert={covered}
+              style={{ width: sidebar.sizing.width }}
+              className="h-full shrink-0 bg-sidebar"
+            >
               {sidebar.content}
             </div>
             <ResizeHandle
@@ -244,6 +265,7 @@ export function AppShell({
           id="main"
           data-part="main"
           tabIndex={-1}
+          inert={covered}
           className={`@container/main flex min-w-0 flex-1 flex-col overflow-hidden bg-canvas focus:outline-none ${page ? 'hidden' : ''}`}
         >
           {children}
