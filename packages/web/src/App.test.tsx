@@ -126,7 +126,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     }
     if (path === '/api/tasks' && method === 'POST') {
       const task = makeTask({
-        id: 'T-0099',
+        id: `T-${String(99 + tasks.length).padStart(4, '0')}`,
         title: body.title ?? '',
         parentId: body.parentId ?? null,
       })
