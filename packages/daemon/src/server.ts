@@ -436,13 +436,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/agent', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const { agent, prompt } = startAgentBodySchema.parse(request.body)
-    return { task: options.agents.start(id, agent, prompt) }
+    return { task: await options.stages.startByHand(id, agent, prompt) }
   })
 
   app.post('/tasks/:id/fan-out', async (request, reply) => {
     const { id } = taskParamsSchema.parse(request.params)
     const { count, start } = fanOutBodySchema.parse(request.body)
-    const parts = { tasks: options.service, workspaces: options.workspaces, agents: options.agents }
+    const parts = { tasks: options.service, workspaces: options.workspaces, stages: options.stages }
     return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
   })
 
