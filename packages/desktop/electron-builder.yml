@@ -1,0 +1,24 @@
+# Used by scripts/package-desktop.sh, which builds the app from a `pnpm deploy` copy of this package.
+appId: dev.helmsman.desktop
+productName: Helmsman
+# Plain files: node-pty's helper program and the daemon's entry must be real files to run.
+asar: false
+npmRebuild: true
+executableName: helmsman
+files:
+  - dist/**
+  - package.json
+# The built dashboard only: its libraries are bundled into it already.
+extraResources:
+  - from: web-dist
+    to: web
+mac:
+  target:
+    - target: dmg
+  category: public.app-category.developer-tools
+  # Not signed with a certificate yet (build order step 11); after-pack.cjs signs it ad hoc.
+  identity: null
+win:
+  target: nsis
+linux:
+  target: dir

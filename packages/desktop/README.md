@@ -29,6 +29,18 @@ pnpm --filter @helmsman/desktop start
 
 `rebuild-native` builds node-pty for Electron. A daemon run with plain Node.js afterwards needs `pnpm rebuild node-pty` again.
 
+## Package it
+
+```sh
+scripts/package-desktop.sh
+```
+
+It builds the app for the machine it runs on, into `packages/desktop/release`: a `.dmg` on macOS, an installer on Windows, a folder on Linux. It needs Node.js 22.13 or newer, pnpm (`corepack enable`), and a C++ toolchain for node-pty (on macOS: `xcode-select --install`).
+
+- The app is not signed with a certificate or notarized yet (build order step 11). On macOS it gets an ad hoc signature (`after-pack.cjs`), which is enough on the Mac that built it. A copy downloaded to another Mac needs right click → **Open** the first time, or `xattr -dr com.apple.quarantine /Applications/Helmsman.app`.
+- Files stay plain (no asar): node-pty's helper and the daemon's entry run from disk.
+- The dashboard goes in as its built files only (`Resources/web`); the daemon and the CLI come with their production dependencies.
+
 ## Check it without a screen
 
 `HELMSMAN_DESKTOP_SMOKE=1` loads the dashboard and quits: exit code 0 when the page started signed in, 1 when not. `HELMSMAN_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main). On Linux:
