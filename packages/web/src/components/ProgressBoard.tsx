@@ -179,9 +179,7 @@ export function ProgressBoard({
                         key={stage.id}
                         className={`flex flex-col items-center gap-0.5 border-b border-line px-1 py-2 ${inGroup ? 'bg-raised' : ''}`}
                       >
-                        <span className="text-xs font-medium text-ink-2">
-                          {stageName(stage)}
-                        </span>
+                        <span className="text-xs font-medium text-ink-2">{stageName(stage)}</span>
                         <span className="flex items-center gap-1 text-2xs text-muted tabular-nums">
                           <span className="rounded-full bg-raised px-1.5">{here.length}</span>
                           {waiting > 0 && (
