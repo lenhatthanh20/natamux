@@ -1,4 +1,4 @@
-import { applyTaskEvent, TASK_STATES, type TaskState } from '@helmsman/core'
+import { applyTaskEvent, LEGACY_PIPELINE, TASK_STATES, type TaskState } from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
 import { AGENT_SIGNALS, type AgentSignal, planSignalEvents } from './agent-signals.js'
 
@@ -60,17 +60,25 @@ describe('planSignalEvents', () => {
   it('only plans events the state machine accepts, in every state', () => {
     for (const start of TASK_STATES) {
       for (const signal of AGENT_SIGNALS) {
-        let state = start
+        let position = {
+          stage: start === 'review' ? 'review' : 'implement',
+          state: start,
+          lanes: {},
+        }
         for (const planned of planSignalEvents(start, signal, {})) {
-          const applied = applyTaskEvent(state, {
-            taskId: 'T-0001',
-            source: 'agent',
-            type: planned.type,
-            at: '2026-10-08T09:00:00.000Z',
-            payload: {},
-          })
+          const applied = applyTaskEvent(
+            position,
+            {
+              taskId: 'T-0001',
+              source: 'agent',
+              type: planned.type,
+              at: '2026-10-08T09:00:00.000Z',
+              payload: {},
+            },
+            LEGACY_PIPELINE,
+          )
           expect(applied.accepted, `${signal} in ${start}`).toBe(true)
-          state = applied.state
+          position = applied.position
         }
       }
     }
