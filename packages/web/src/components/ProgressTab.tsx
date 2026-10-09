@@ -8,7 +8,7 @@ import {
   stagesOf,
   type Task,
 } from '@helmsman/core'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import type {
@@ -25,6 +25,7 @@ import {
   sentBackCount,
   stageCount,
   stageTime,
+  stepTime,
 } from '../lib/stage-view'
 import { formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
@@ -58,6 +59,9 @@ const FAILED_ACTION: Record<StageAction, string> = {
   start: 'Could not start the stage.',
 }
 
+// The kinds a person can start. Review, manual and release wait for a person or a pull request.
+const STARTS_ITSELF: ReadonlySet<Stage['kind']> = new Set(['context', 'agent', 'testing'])
+
 function kilobytes(size: number): string {
   return size < 1024 ? `${size} B` : `${Math.round(size / 102.4) / 10} KB`
 }
@@ -81,8 +85,14 @@ export function ProgressTab({
   const events = useQuery({
     queryKey: ['stage-events', task.id, task.updatedAt],
     queryFn: loadEvents,
+    // Keep the old list while the next one loads, or the whole tab (and an open dialog) would blink.
+    placeholderData: keepPreviousData,
   })
-  const files = useQuery({ queryKey: ['stage-files', task.id, task.updatedAt], queryFn: loadFiles })
+  const files = useQuery({
+    queryKey: ['stage-files', task.id, task.updatedAt],
+    queryFn: loadFiles,
+    placeholderData: keepPreviousData,
+  })
   const [sendingBack, setSendingBack] = useState<StageProgress | null>(null)
 
   const action = useMutation({
@@ -96,22 +106,30 @@ export function ProgressTab({
     onError: (error) => toast('Could not open the issue.', 'error', { detail: error.message }),
   })
 
-  if (settings.isPending || events.isPending) {
-    return <p className="p-4 text-muted">Reading the stages…</p>
-  }
-  if (settings.isError || events.isError) {
-    return (
+  const loadedSettings = settings.data
+  const loadedEvents = events.data
+  if (loadedSettings === undefined || loadedEvents === undefined) {
+    const failure = settings.error ?? events.error
+    return failure === null ? (
+      <p className="p-4 text-muted">Reading the stages…</p>
+    ) : (
       <p role="alert" className="p-4">
-        {(settings.error ?? events.error)?.message}
+        {failure.message}
       </p>
     )
   }
 
-  const steps = resolveSteps(task.stages, settings.data.settings.stages)
-  const accepted = events.data.filter((entry) => entry.accepted).map((entry) => entry.event)
-  const progress = stageProgress(task, accepted, steps)
+  const steps = resolveSteps(task.stages, loadedSettings.settings.stages)
+  const accepted = loadedEvents.filter((entry) => entry.accepted).map((entry) => entry.event)
+  // A merged pull request ends the Release stage; no stage event says so.
+  const progress = stageProgress(task, accepted, steps).map((entry) =>
+    entry.status === 'done' && entry.endedAt === null && task.state === 'done'
+      ? { ...entry, endedAt: task.updatedAt }
+      : entry,
+  )
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
+  const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
   const open = task.state !== 'done' && task.state !== 'cancelled'
   const run = (name: StageAction, input?: StageActionInput) => action.mutate({ name, input })
@@ -124,6 +142,9 @@ export function ProgressTab({
         stage={stage}
         progress={entry}
         file={stage.output === undefined ? undefined : fileByName.get(stage.output)}
+        fileStatus={fileStatus}
+        pr={stage.kind === 'release' ? task.pr : null}
+        merged={task.state === 'done'}
         now={now}
         busy={action.isPending}
         canAct={open}
@@ -194,7 +215,7 @@ export function ProgressTab({
                           backgroundImage:
                             markerStatus === 'done' || markerStatus === 'skipped'
                               ? undefined
-                              : 'repeating-linear-gradient(180deg, var(--line-strong) 0 4px, transparent 4px 8px)',
+                              : 'repeating-linear-gradient(180deg, var(--muted) 0 4px, transparent 4px 8px)',
                         }}
                       />
                     )}
@@ -217,7 +238,7 @@ export function ProgressTab({
                               : `${nextFirst.name} starts when both are finished`}
                           </span>
                         </div>
-                        <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3">
+                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-3">
                           {stages.map(card)}
                         </div>
                       </section>
@@ -246,7 +267,7 @@ export function ProgressTab({
                 <dt className="text-muted">Issue</dt>
                 <dd className="m-0 truncate">
                   {task.issue === null ? (
-                    settings.data.settings.tracker.type === 'github' && open ? (
+                    loadedSettings.settings.tracker.type === 'github' && open ? (
                       <Button
                         size="xs"
                         variant="secondary"
@@ -291,8 +312,9 @@ export function ProgressTab({
             <section className={`${CARD} p-4`}>
               <h2 className="m-0 mb-2 text-sm font-semibold">Latest events</h2>
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
-                {events.data
-                  .filter((entry) => entry.accepted)
+                {loadedEvents
+                  // "Agent is working" lines only keep the clock fresh; they would fill the list.
+                  .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
                   .reverse()
                   .slice(0, 8)
                   .map(({ seq, event }) => (
@@ -355,19 +377,29 @@ function Overview({
   sentBack: number
 }) {
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
+  const finished = task.state === 'done' || task.state === 'cancelled'
   const minutes = (entry: StageProgress | undefined) => {
     if (entry === undefined || entry.startedAt === null) {
       return 20
     }
-    const end = entry.endedAt === null ? now.getTime() : Date.parse(entry.endedAt)
+    // Only a stage in progress grows with the clock.
+    const end =
+      entry.endedAt !== null
+        ? Date.parse(entry.endedAt)
+        : entry.status === 'current'
+          ? now.getTime()
+          : Date.parse(entry.startedAt)
     return Math.max(8, (end - Date.parse(entry.startedAt)) / 60_000)
   }
   return (
     <section aria-label="Overview" className={`${CARD} flex flex-col gap-4 p-4`}>
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
         <Figure value={`${count.done} of ${count.total}`} label="stages done" />
-        <Figure value={formatDuration(task.createdAt, now)} label="since the task started" />
-        {task.stageSince !== null && task.state !== 'done' && (
+        <Figure
+          value={formatDuration(task.createdAt, finished ? task.updatedAt : now)}
+          label={finished ? 'from start to finish' : 'since the task started'}
+        />
+        {task.stageSince !== null && !finished && (
           <Figure value={formatDuration(task.stageSince, now)} label="in this stage" />
         )}
         <Figure
@@ -393,27 +425,23 @@ function Overview({
             )
           })}
         </div>
-        <div className="mt-2 flex gap-1">
+        <ul className="m-0 mt-2 flex list-none flex-wrap gap-x-5 gap-y-1.5 p-0">
           {steps.map((step) => {
             const entries = stagesOf(step).map((stage) => byId.get(stage.id))
-            const weight = Math.max(...entries.map(minutes))
-            const time = entries
-              .map((entry) => (entry === undefined ? null : stageTime(entry, now)))
-              .find((value) => value !== null)
+            const name = step.name ?? entries.map((entry) => entry?.name).join(' and ')
+            const time = stepTime(entries, now)
             return (
-              <span
+              <li
                 key={step.id}
-                className="min-w-2.5 overflow-hidden text-xs leading-4"
-                style={{ flex: `${weight} 1 0` }}
+                data-tip={time === null ? name : `${name}: ${time}`}
+                className="min-w-0 text-xs leading-4"
               >
-                <b className="block truncate font-medium text-ink-2">
-                  {step.name ?? entries.map((entry) => entry?.name).join(' and ')}
-                </b>
-                <span className="block truncate text-muted">{time ?? '–'}</span>
-              </span>
+                <b className="block font-medium text-ink-2">{name}</b>
+                <span className="block text-muted">{time ?? '–'}</span>
+              </li>
             )
           })}
-        </div>
+        </ul>
       </div>
     </section>
   )
@@ -434,7 +462,7 @@ function Segment({ entry }: { entry: StageProgress | undefined }) {
       <span
         className="flex-1 rounded-sm"
         style={{
-          boxShadow: 'inset 0 0 0 1px var(--line-strong)',
+          boxShadow: 'inset 0 0 0 1px var(--muted)',
           backgroundImage:
             'repeating-linear-gradient(-45deg, transparent 0 4px, var(--line) 4px 5px)',
         }}
@@ -466,9 +494,9 @@ function TimeBars({ progress, now }: { progress: readonly StageProgress[]; now: 
     .filter((entry) => entry.startedAt !== null)
     .map((entry) => {
       const end =
-        entry.endedAt === null || entry.status === 'current'
+        entry.status === 'current'
           ? now.getTime()
-          : Date.parse(entry.endedAt)
+          : Date.parse(entry.endedAt ?? entry.startedAt ?? '')
       return { entry, minutes: (end - Date.parse(entry.startedAt ?? '')) / 60_000 }
     })
   if (rows.length === 0) {
@@ -506,6 +534,9 @@ function StageCard({
   stage,
   progress,
   file,
+  fileStatus,
+  pr,
+  merged,
   now,
   busy,
   canAct,
@@ -518,6 +549,9 @@ function StageCard({
   stage: Stage
   progress: StageProgress
   file: StageFile | undefined
+  fileStatus: 'loading' | 'ready' | 'error'
+  pr: string | null
+  merged: boolean
   now: Date
   busy: boolean
   canAct: boolean
@@ -597,7 +631,13 @@ function StageCard({
                 <FileText size={13} aria-hidden="true" />
                 <span className="font-mono">{stage.output}</span>
                 {file === undefined ? (
-                  <span className="text-muted">not written yet</span>
+                  <span className="text-muted">
+                    {fileStatus === 'loading'
+                      ? '–'
+                      : fileStatus === 'error'
+                        ? 'could not read'
+                        : 'not written yet'}
+                  </span>
                 ) : (
                   <span className="text-muted">{kilobytes(file.size)}</span>
                 )}
@@ -612,8 +652,20 @@ function StageCard({
             {progress.sentBackFor !== null && progress.rounds > 1 && (
               <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-ink-2">
                 <Undo2 size={13} aria-hidden="true" />
-                Sent back once
+                Sent back {progress.rounds - 1}×
               </span>
+            )}
+            {pr !== null && (
+              <a
+                href={pr}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-link"
+              >
+                <ExternalLink size={13} aria-hidden="true" />
+                {pr.replace(/^https:\/\/github\.com\//, '')}
+                {merged && <span className="text-muted">merged</span>}
+              </a>
             )}
           </div>
 
@@ -665,7 +717,10 @@ function StageCard({
                   Mark as done
                 </Button>
               )}
-              {(state === 'draft' || state === 'ready') && (
+              {(state === 'draft' || state === 'ready') && !STARTS_ITSELF.has(stage.kind) && (
+                <p className="m-0 self-center text-xs text-muted">{finishedWhen(stage)}</p>
+              )}
+              {(state === 'draft' || state === 'ready') && STARTS_ITSELF.has(stage.kind) && (
                 <Button
                   size="xs"
                   variant="secondary"
