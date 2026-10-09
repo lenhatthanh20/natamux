@@ -18,6 +18,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
+import { COPILOT_EVENT_FIELD } from './copilot-hooks.js'
 import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import {
@@ -88,6 +89,7 @@ type ServerOptions = {
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
 const hookParamsSchema = z.object({ agent: z.string().min(1) })
+const hookQuerySchema = z.object({ event: z.string().min(1).max(64).optional() })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
@@ -341,7 +343,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       const value = request.headers[name.toLowerCase()]
       return (Array.isArray(value) ? value[0] : value)?.trim() || undefined
     }
-    hooks.handle(agent, request.body, header(TASK_ID_HEADER), header(TERMINAL_HEADER))
+    // Copilot CLI does not name the event in the JSON; its hook command adds it as ?event=.
+    const { event } = hookQuerySchema.parse(request.query)
+    const body =
+      event !== undefined && typeof request.body === 'object' && request.body !== null
+        ? { ...request.body, [COPILOT_EVENT_FIELD]: event }
+        : request.body
+    hooks.handle(agent, body, header(TASK_ID_HEADER), header(TERMINAL_HEADER))
     return {}
   })
 
@@ -503,7 +511,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/tasks/:id/terminals', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     options.service.getTask(id)
-    return { terminals: options.terminals.list(id) }
+    const terminals = options.terminals.list(id)
+    // The shells where an agent runs now, so a shell left after a restart is not called the agent's.
+    const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
+    return { terminals, agents }
   })
 
   app.delete('/tasks/:id/terminals/:terminal', async (request) => {

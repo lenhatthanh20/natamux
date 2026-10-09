@@ -1,5 +1,7 @@
 import { CircleQuestionMark } from 'lucide-react'
+import type { AgentId } from '../lib/agents'
 import { bannerText, type WaitReason } from '../lib/workspace'
+import { StartAgentControl } from './StartAgentControl'
 import { Button } from './ui/Button'
 import { ICON } from './ui/styles'
 
@@ -8,10 +10,20 @@ type NeedsInputBannerProps = {
   resuming: boolean
   onAnswer: () => void
   onResume: () => void
+  // For a failed task: start an agent again, in place of Resume.
+  onStartAgent?: (agent: AgentId) => void
+  agent?: string | null
 }
 
 // Under the workspace header while the agent waits: the question as text, and what to do.
-export function NeedsInputBanner({ reason, resuming, onAnswer, onResume }: NeedsInputBannerProps) {
+export function NeedsInputBanner({
+  reason,
+  resuming,
+  onAnswer,
+  onResume,
+  onStartAgent,
+  agent = null,
+}: NeedsInputBannerProps) {
   return (
     <div
       role="status"
@@ -23,9 +35,13 @@ export function NeedsInputBanner({ reason, resuming, onAnswer, onResume }: Needs
       </p>
       <div className="flex items-center gap-2">
         {reason.kind === 'asked' && <Button onClick={onAnswer}>Answer in terminal</Button>}
-        <Button variant="ghost" busy={resuming} onClick={onResume}>
-          Resume
-        </Button>
+        {onStartAgent === undefined ? (
+          <Button variant="ghost" busy={resuming} onClick={onResume}>
+            Resume
+          </Button>
+        ) : (
+          <StartAgentControl current={agent} onStart={onStartAgent} />
+        )}
       </div>
     </div>
   )

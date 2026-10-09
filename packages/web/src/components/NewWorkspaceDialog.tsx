@@ -1,3 +1,4 @@
+import { AGENT_CHOICES } from '../lib/agents'
 import type { ContextSource, ContextSourceType, Repo, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
@@ -217,8 +218,11 @@ export function NewWorkspaceDialog({
             fieldSize="md"
             className="w-full"
           >
-            <option value="claude-code">Claude Code</option>
-            <option value="copilot">GitHub Copilot</option>
+            {AGENT_CHOICES.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
             <option value="">No agent, a plain shell</option>
           </Select>
         </div>

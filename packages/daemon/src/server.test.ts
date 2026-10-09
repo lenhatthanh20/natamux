@@ -865,7 +865,15 @@ describe('terminal', () => {
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(listed.json()).toEqual({ terminals: ['1', '2'] })
+    expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [] })
+    // A program that is not a shell runs in the first one: an agent, as far as Helmsman can tell.
+    ;(ptys[0] as FakePty).program = 'node'
+    const withAgent = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(withAgent.json()).toEqual({ terminals: ['1', '2'], agents: ['1'] })
 
     const closed = closeCode(second)
     const removed = await app.inject({
