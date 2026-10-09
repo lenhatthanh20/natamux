@@ -112,6 +112,14 @@ describe('when a command is available', () => {
     expect(approve && runnable(approve, context({ selectedState: 'review' }).context)).toBe(true)
   })
 
+  it('offers the stage actions in an open workspace of a task that is not finished', () => {
+    const skip = commandById('stage.skip')
+    const open = { workspaceOpen: true, selectedState: 'running' as const }
+    expect(skip && runnable(skip, context(open).context)).toBe(true)
+    expect(skip && runnable(skip, context({ ...open, selectedState: 'done' }).context)).toBe(false)
+    expect(skip && runnable(skip, context({ selectedState: 'running' }).context)).toBe(false)
+  })
+
   it('offers Find in the terminal only while a terminal has the focus', () => {
     const find = commandById('terminal.find')
     expect(find && runnable(find, context({ focus: 'body' }).context)).toBe(false)
@@ -136,6 +144,12 @@ describe('running a command', () => {
     expect(actions.setLayout).toHaveBeenCalledWith('board')
     commandById('tab.history')?.run?.(ctx)
     expect(actions.showTab).toHaveBeenCalledWith('history')
+    commandById('stage.approve')?.run?.(ctx)
+    expect(actions.stageAction).toHaveBeenCalledWith('approve')
+    commandById('stage.report')?.run?.(ctx)
+    expect(actions.stageAction).toHaveBeenCalledWith('report')
+    commandById('stage.send-back')?.run?.(ctx)
+    expect(actions.showTab).toHaveBeenCalledWith('progress')
     commandById('task.review.approved')?.run?.(ctx)
     expect(actions.taskEvent).toHaveBeenCalledWith('review.approved')
   })

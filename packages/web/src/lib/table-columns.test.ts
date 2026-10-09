@@ -9,8 +9,8 @@ function columns(width: number | null, has = both): ColumnKey[] | 'cards' {
 }
 
 describe('tableLayout', () => {
-  it('has every column from 1000', () => {
-    expect(columns(1000)).toEqual([
+  it('has every column from 1064', () => {
+    expect(columns(1064)).toEqual([
       'id',
       'task',
       'state',
@@ -23,8 +23,8 @@ describe('tableLayout', () => {
     expect(columns(1920)).toHaveLength(8)
   })
 
-  it('drops agent, branch and pull request from 760 to 999', () => {
-    expect(columns(999)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
+  it('drops agent, branch and pull request from 760 to 1063', () => {
+    expect(columns(1063)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
     expect(columns(760)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
   })
 

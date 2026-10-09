@@ -21,6 +21,9 @@ const WIDTH: Record<ColumnKey, number | null> = {
 
 export const TASK_MIN = 240
 
+// The full set needs this much room: all its columns and the task column at its minimum.
+const FULL_FROM = 1064
+
 export const COLUMN_LABEL: Record<ColumnKey, string> = {
   id: 'Id',
   task: 'Task',
@@ -42,7 +45,7 @@ export function tableLayout(mainWidth: number | null, has: HasValue): TableLayou
     return { kind: 'cards' }
   }
   let columns: ColumnKey[]
-  if (width >= 1000) {
+  if (width >= FULL_FROM) {
     columns = ['id', 'task', 'state', 'agent', 'branch', 'changes', 'pr', 'activity']
   } else if (width >= 760) {
     columns = ['id', 'task', 'state', 'changes', 'activity']
