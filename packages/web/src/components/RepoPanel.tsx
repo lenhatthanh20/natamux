@@ -1,8 +1,9 @@
 import type { Repo } from '@helmsman/core'
 import { FolderGit2 } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
+import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
-import { button, input } from './ui/styles'
+import { inputLg } from './ui/styles'
 
 type RepoPanelProps = {
   repos: readonly Repo[]
@@ -61,7 +62,7 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
             onChange={(event) => setPath(event.target.value)}
             placeholder="/path/to/the/repository"
             aria-label="Repository folder"
-            className={`${input} font-mono`}
+            className={`${inputLg} font-mono`}
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -71,7 +72,7 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
             onChange={(event) => setName(event.target.value)}
             placeholder="Optional. The folder name is used without one."
             aria-label="Repository name"
-            className={input}
+            className={inputLg}
           />
         </label>
         {error !== null && (
@@ -80,13 +81,15 @@ export function RepoPanel({ repos, onAdd, onClose }: RepoPanelProps) {
           </p>
         )}
         <div className="flex justify-end pt-1">
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="md"
+            shortcut="Mod+Enter"
             disabled={adding || path.trim() === ''}
-            className={button('primary')}
           >
             Add repository
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

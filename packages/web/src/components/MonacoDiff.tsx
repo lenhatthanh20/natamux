@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { languageForPath } from '../lib/language'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
+import { type ResolvedTheme, uiZoom, useResolvedTheme } from '../lib/theme'
 
 type MonacoDiffProps = {
   path: string
@@ -11,8 +12,9 @@ type MonacoDiffProps = {
   onLine?: (line: number) => void
 }
 
-function themeForScheme(): string {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? DARK_THEME : LIGHT_THEME
+// The app's theme decides, not the system's: a dark app on a light system still gets a dark diff.
+function monacoTheme(theme: ResolvedTheme): string {
+  return theme === 'dark' ? DARK_THEME : LIGHT_THEME
 }
 
 // The diff of VS Code, read only. This default export is what ChangesView loads on demand.
@@ -23,9 +25,12 @@ export default function MonacoDiff({
   sideBySide,
   onLine,
 }: MonacoDiffProps) {
-  const container = useRef<HTMLDivElement>(null)
+  const container = useRef<HTMLElement>(null)
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
+  const theme = useResolvedTheme()
+  const themeRef = useRef(theme)
+  themeRef.current = theme
 
   useEffect(() => {
     const element = container.current
@@ -42,8 +47,9 @@ export default function MonacoDiff({
       minimap: { enabled: false },
       renderOverviewRuler: false,
       scrollBeyondLastLine: false,
-      fontSize: 13,
-      theme: themeForScheme(),
+      fontSize: 12 * uiZoom(),
+      lineHeight: 18 * uiZoom(),
+      theme: monacoTheme(themeRef.current),
     })
     const originalModel = monaco.editor.createModel(original, language)
     const modifiedModel = monaco.editor.createModel(modified, language)
@@ -53,12 +59,7 @@ export default function MonacoDiff({
       .getModifiedEditor()
       .onDidChangeCursorPosition((event) => onLineRef.current?.(event.position.lineNumber))
 
-    const scheme = window.matchMedia('(prefers-color-scheme: dark)')
-    const followScheme = () => monaco.editor.setTheme(themeForScheme())
-    scheme.addEventListener('change', followScheme)
-
     return () => {
-      scheme.removeEventListener('change', followScheme)
       cursor.dispose()
       // The editor must let go of the models before they are disposed.
       editor.setModel(null)
@@ -68,10 +69,14 @@ export default function MonacoDiff({
     }
   }, [path, original, modified, sideBySide])
 
+  useEffect(() => {
+    monaco.editor.setTheme(monacoTheme(theme))
+  }, [theme])
+
   return (
-    <div
+    <section
       ref={container}
-      title={`Changes in ${path}`}
+      aria-label={`Changes in ${path}`}
       className="h-[70vh] min-h-[24rem] overflow-hidden rounded-md border border-line"
     />
   )

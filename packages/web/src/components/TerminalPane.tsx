@@ -1,6 +1,7 @@
 import type { TerminalSize } from '@helmsman/core'
 import { X } from 'lucide-react'
 import { lazy, type ReactNode, Suspense } from 'react'
+import { IconButton } from './ui/IconButton'
 
 // xterm.js is loaded the first time a terminal is shown.
 const TerminalView = lazy(() => import('./TerminalView'))
@@ -23,15 +24,7 @@ export function TerminalPane({ label, header, connect, onClose }: TerminalPanePr
       <header className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
         <div className="flex min-w-0 flex-1 items-center gap-2">{header}</div>
         {onClose !== undefined && (
-          <button
-            type="button"
-            aria-label={`Close ${label}`}
-            title={`Close ${label}`}
-            onClick={onClose}
-            className="rounded p-0.5 text-muted hover:bg-hover hover:text-ink"
-          >
-            <X size={13} aria-hidden="true" />
-          </button>
+          <IconButton label={`Close ${label}`} icon={X} size="xs" onClick={onClose} />
         )}
       </header>
       <Suspense fallback={<p className="p-3 text-muted">Loading the terminal.</p>}>

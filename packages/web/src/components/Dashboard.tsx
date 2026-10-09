@@ -24,7 +24,7 @@ import { agentPaneTasks } from '../lib/panes'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import { actionsFor, filterTasks, needsMeTasks, type TaskAction, upsertTask } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
-import { applyTheme, savedTheme, type Theme } from '../lib/theme'
+import { applyTheme, useResolvedTheme } from '../lib/theme'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { useViewStore } from '../lib/view-store'
@@ -39,10 +39,15 @@ import { StateFilter } from './StateFilter'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
+import { Button } from './ui/Button'
+import { IconButton } from './ui/IconButton'
+import { ContextMenuHost } from './ui/Menu'
 import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
+import { Segmented } from './ui/Segmented'
 import { Select } from './ui/Select'
-import { button, input, kbd } from './ui/styles'
+import { fieldBox, input, kbd, listRow } from './ui/styles'
 import { Toaster } from './ui/Toaster'
+import { Tooltip } from './ui/Tooltip'
 import { WorkspaceList } from './WorkspaceList'
 
 const TASKS_KEY = ['tasks']
@@ -92,7 +97,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const [newTitle, setNewTitle] = useState('')
   const [importOpen, setImportOpen] = useState(false)
-  const [theme, setTheme] = useState<Theme>(savedTheme)
+  const theme = useResolvedTheme()
   // The new workspace dialog, with the repository it opens on. Null: closed.
   const [newWorkspace, setNewWorkspace] = useState<{ repo?: string } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -428,15 +433,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const liveText =
     liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting' : 'Reconnecting'
   const runningCount = tasks.filter((task) => task.state === 'running').length
-  const footerButton =
-    'flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink aria-expanded:text-ink'
-  const iconButton = 'rounded-md p-1 hover:bg-hover hover:text-ink'
-  const navButton =
-    'flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink'
+  // A click picks the opposite of what is shown now, which also leaves "system".
   const switchTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    applyTheme(next)
-    setTheme(next)
+    applyTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
   return (
@@ -449,18 +448,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         >
           <div className="flex items-center gap-2 px-1">
             <h1 className="flex-1 px-1 font-semibold tracking-tight">Helmsman</h1>
-            <button
-              type="button"
-              onClick={() => setNewWorkspace({})}
-              title="New workspace (c)"
-              className={button('secondary')}
-            >
-              <Plus size={14} aria-hidden="true" />
+            <Button icon={Plus} onClick={() => setNewWorkspace({})}>
               New workspace
-            </button>
+            </Button>
           </div>
 
-          <label className="mx-1 flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-muted hover:border-line-strong focus-within:border-accent">
+          <label className={`${fieldBox} mx-1 h-7`}>
             <Search size={14} aria-hidden="true" />
             <input
               ref={searchRef}
@@ -468,7 +461,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search"
               aria-label="Search tasks"
-              className="min-w-0 flex-1 bg-transparent text-ink outline-none"
+              className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-placeholder"
             />
             <kbd className={kbd}>/</kbd>
           </label>
@@ -478,7 +471,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               type="button"
               aria-pressed={changesTask === null && !agentsOpen}
               onClick={closeChanges}
-              className={navButton}
+              className={listRow}
             >
               <LayoutList size={14} aria-hidden="true" />
               <span className="flex-1 text-left">All tasks</span>
@@ -488,7 +481,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               type="button"
               aria-pressed={agentsOpen}
               onClick={openAgents}
-              className={navButton}
+              className={listRow}
             >
               <LayoutGrid size={14} aria-hidden="true" />
               <span className="flex-1 text-left">Agents</span>
@@ -607,23 +600,16 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
                 <h2 className="shrink-0 font-semibold">All tasks</h2>
                 <StateFilter tasks={tasks} active={stateFilter} onToggle={toggleStateFilter} />
-                <div className="ml-auto flex shrink-0 rounded-md border border-line p-0.5">
-                  {(['table', 'board'] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      aria-pressed={layout === option}
-                      onClick={() => setLayout(option)}
-                      className="flex h-6 items-center gap-1.5 rounded px-2 text-muted capitalize hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink"
-                    >
-                      {option === 'table' ? (
-                        <Rows3 size={13} aria-hidden="true" />
-                      ) : (
-                        <Columns3 size={13} aria-hidden="true" />
-                      )}
-                      {option}
-                    </button>
-                  ))}
+                <div className="ml-auto">
+                  <Segmented
+                    label="Layout"
+                    value={layout}
+                    onChange={setLayout}
+                    options={[
+                      { value: 'table', label: 'Table', icon: Rows3 },
+                      { value: 'board', label: 'Board', icon: Columns3 },
+                    ]}
+                  />
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
@@ -643,7 +629,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           value={newRepo}
                           onChange={(event) => setNewRepo(event.target.value)}
                           aria-label="Repository"
-                          className="w-40 [&_select]:h-8"
+                          className="w-40"
                         >
                           {repos.map((repo) => (
                             <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
@@ -657,7 +643,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           value={templateId}
                           onChange={(event) => setTemplateId(event.target.value)}
                           aria-label="Template"
-                          className="w-40 [&_select]:h-8"
+                          className="w-40"
                         >
                           <option value="">No template</option>
                           {templatesQuery.data?.map((template) => (
@@ -669,14 +655,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       )}
                     </div>
                   )}
-                  <button
+                  <Button
                     type="submit"
-                    disabled={createMutation.isPending || newTitle.trim() === ''}
-                    className={button('secondary', 'md')}
+                    icon={Plus}
+                    busy={createMutation.isPending}
+                    disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
                   >
-                    <Plus size={14} aria-hidden="true" />
                     Add task
-                  </button>
+                  </Button>
                 </form>
                 {tasksQuery.isPending ? (
                   <p className="text-muted">Loading tasks.</p>
@@ -750,6 +736,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       </div>
 
       <Toaster />
+      <Tooltip />
+      <ContextMenuHost />
       {newWorkspace !== null && (
         <NewWorkspaceDialog
           repos={repos.length > 0 ? repos : [{ id: 'default', name: 'default' }]}
@@ -790,10 +778,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         />
       )}
 
-      <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sidebar px-3 py-1 text-xs text-muted">
+      <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-shell px-3 py-1 text-xs text-muted">
         <span
           className="flex items-center gap-1.5"
-          title={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
+          data-tip={liveStatus === 'live' ? 'Changes appear as they happen' : 'Trying to reconnect'}
         >
           <span
             aria-hidden="true"
@@ -804,67 +792,41 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <span>{runningCount} running</span>
         {waitingCount > 0 && <span className="text-signal">{waitingCount} need you</span>}
         <span className="flex-1" />
-        <button
-          type="button"
-          aria-expanded={reposOpen}
-          onClick={() => setReposOpen(true)}
-          className={footerButton}
-        >
-          <FolderGit2 size={13} aria-hidden="true" />
+        <Button variant="ghost" size="xs" icon={FolderGit2} onClick={() => setReposOpen(true)}>
           Repos
-        </button>
-        <button
-          type="button"
-          aria-expanded={importOpen}
-          onClick={() => setImportOpen(true)}
-          className={footerButton}
-        >
-          <Download size={13} aria-hidden="true" />
+        </Button>
+        <Button variant="ghost" size="xs" icon={Download} onClick={() => setImportOpen(true)}>
           Import issues
-        </button>
+        </Button>
         {notifications.permission === 'default' && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
+            icon={Bell}
             onClick={notifications.askPermission}
-            title="A system notification when a task starts to wait for you"
-            className={footerButton}
+            data-tip="A system notification when a task starts to wait for you"
           >
-            <Bell size={13} aria-hidden="true" />
             Notify me
-          </button>
+          </Button>
         )}
         {notifications.permission === 'denied' && (
           <span
             className="flex items-center gap-1.5"
-            title="Allow notifications for this page in the browser"
+            data-tip="Allow notifications for this page in the browser"
           >
             <BellOff size={13} aria-hidden="true" />
             Notifications blocked
           </span>
         )}
         <span className="font-mono">c workspace · n task · / search · j k move · Esc back</span>
-        <button
-          type="button"
-          aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
-          title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+        <IconButton
+          label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+          icon={theme === 'dark' ? Sun : Moon}
+          size="xs"
+          tipSide="top"
           onClick={switchTheme}
-          className={iconButton}
-        >
-          {theme === 'dark' ? (
-            <Sun size={13} aria-hidden="true" />
-          ) : (
-            <Moon size={13} aria-hidden="true" />
-          )}
-        </button>
-        <button
-          type="button"
-          aria-label="Sign out"
-          title="Sign out"
-          onClick={onSignOut}
-          className={iconButton}
-        >
-          <LogOut size={13} aria-hidden="true" />
-        </button>
+        />
+        <IconButton label="Sign out" icon={LogOut} size="xs" onClick={onSignOut} />
       </footer>
     </div>
   )
