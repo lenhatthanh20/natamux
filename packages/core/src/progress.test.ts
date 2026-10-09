@@ -91,4 +91,20 @@ describe('stageProgress', () => {
     const done = stageProgress({ stage: 'release', state: 'done', lanes: {} }, [], DEFAULT_PIPELINE)
     expect(done.every((stage) => stage.status === 'done')).toBe(true)
   })
+
+  it('starts a stage that waits for a person when the step before it ended', () => {
+    minute = 0
+    const events = [
+      event('stage.started', { stage: 'testing' }),
+      event('stage.checked', { stage: 'testing' }),
+    ]
+    const steps = [
+      { id: 'testing', kind: 'testing', gate: 'auto' },
+      { id: 'release', kind: 'release', gate: 'manual' },
+    ] as const
+    const [, release] = stageProgress({ stage: 'release', state: 'ready', lanes: {} }, events, [
+      ...steps,
+    ])
+    expect(release).toMatchObject({ status: 'current', startedAt: '2026-10-09T09:02:00.000Z' })
+  })
 })
