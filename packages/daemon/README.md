@@ -13,12 +13,17 @@ Run in a codespace: `pnpm --filter @helmsman/daemon dev`. Build `@helmsman/core`
 | `HELMSMAN_DATA_DIR` | `<cwd>/.helmsman` | Task files and the SQLite index |
 | `HELMSMAN_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
 | `HELMSMAN_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
+| `HELMSMAN_CLAUDE_COMMAND` | `claude` | The program that starts Claude Code (`scripts/dev.sh seed` sets a fake agent) |
+| `HELMSMAN_COPILOT_COMMAND`, `HELMSMAN_COPILOT_ARGS` | built in | The program and arguments that start the GitHub Copilot CLI |
+| `HELMSMAN_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `HELMSMAN_WEB_INDEX` | none | Path of the built dashboard's `index.html` (for example `packages/web/dist/index.html`). With it, deep links work, see below |
 
 ## Storage
 
 - Tasks are markdown files with YAML front matter: `<data dir>/tasks/T-0001.md`. They are the source of truth.
-- `<data dir>/index.sqlite` (Node's built-in `node:sqlite`, Node 22.13 or newer) is a cache of the task files plus the event log. The task cache is rebuilt from the files at start. The event log is not rebuilt.
+- `<data dir>/index.sqlite` (Node's built-in `node:sqlite`, Node 22.13 or newer) is a cache of the task files plus the event log. The task cache is rebuilt from the files at start. The event log is kept as one JSON line per event in `<data dir>/tasks/T-0001.events.jsonl` next to the task file, and the index is rebuilt from it.
+- Stage files of a task are in `.helmsman-task/` in its worktree; copies are archived in `<data dir>/tasks/T-0001/` when a stage ends and restored into a new worktree.
+- Per-repository settings (the stage pipeline, checks) are `.helmsman.json` in the repository, read through `/repos/:id/settings`.
 
 ## API
 
@@ -28,9 +33,17 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 |---|---|
 | `GET /health` | Liveness |
 | `GET /tasks?state=<state>` | List tasks, newest update first |
-| `POST /tasks` | Create a draft task (`title` required; also `description`, `priority`, `labels`, `agent`, `dependsOn`, `parentId`, and `repo`, a repository id from `/repos`, 404 when unknown) |
+| `POST /tasks` | Create a task (`title` required; also `description`, `priority`, `labels`, `agent`, `dependsOn`, `parentId`, `context` as `{ source, ref? }` where source is `manual`, `github-issue`, `skill` or `mcp`, and `repo`, a repository id from `/repos`, 404 when unknown). It gets the stages of its repository's settings and starts the first one (Context) at once |
 | `GET /tasks/:id` | One task |
 | `PATCH /tasks/:id` | Body: any of `title`, `description`, `priority`, `labels`, `dependsOn`. Other fields answer 400. Logs `task.edited` with the names of the fields that changed; nothing is written when none did |
+| `POST /tasks/:id/stage` | Body `{ action, stage?, terminal?, to?, reason? }`. Action is `approve`, `reopen` (go back to `to`, with `reason` for the agent), `skip`, `pass`, `fail`, `report` (the stage is done: run its checks; `helmsman done` sends it with `terminal`) or `start`. `stage` names the stage inside a group of side-by-side stages. Answers `{ task }`, or an error when the task is not in a state that fits |
+| `GET /tasks/:id/files` | Stage files of the task (`context.md`, `spec.md`, …): `{ files }`. Read from the worktree, or from the archive when there is none |
+| `GET /tasks/:id/files/:name` | `{ name, text }`, or 404 |
+| `PUT /tasks/:id/files/:name` | Body `{ text }`. Replaces the file, for an edit by hand |
+| `POST /tasks/:id/issue` | Opens a GitHub issue for the task now (`gh issue create`). Answers 201 with `{ task }` |
+| `PUT /tasks/:id/issue` | Body `{ provider, key, url }`. Links the task to an issue or ticket elsewhere (`{ task }`) |
+| `GET /repos/:id/settings` | The repository's `.helmsman.json`: the loaded settings and its `path` |
+| `PUT /repos/:id/settings` | Body: the settings (the stage pipeline, checks). Saves them to `.helmsman.json`: `{ settings }` |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
 | `GET /repos` | Repositories whose tasks Helmsman manages: `{ repos: [{ id, name, path }] }`. The first is always `default`, the repository the daemon was started for |
@@ -42,7 +55,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /tasks/:id/changes/file?path=` | Both sides of one changed file: `{ path, status, original, modified, binary, tooLarge }`. The path must be one of the changes (404 otherwise). A binary file or one over 1 MB comes without text |
 | `GET /tasks/:id/graph` | History of the task branch next to the branch that the main checkout is on, newest first, in topological order (at most 200 commits). Returns `{ branch, head, base, ahead, behind, commits: [{ hash, parents, author, date, subject, refs, onBranch }], truncated }`. `base`, `ahead` and `behind` are null when the main checkout is not on a branch. Answers 409 when the task has no workspace |
 | `POST /tasks/:id/agent` | Body `{ agent, prompt? }`. Writes the agent's command into a small script (`agent-launch-<task id>.sh` in the data folder) and types only a short line that sources it into the task's terminal, starting the shell when needed, so the settings path and the prompt are not echoed on the screen (on Windows the command itself is typed). Only `claude-code` today (see `docs/claude-code-adapter.md`). Sets `agent` on the task and logs `agent.launched`. Answers 404 for another agent and 409 without a workspace |
-| `POST /workspaces` | Body `{ title, repo?, base?, agent?, prompt? }`. Makes a task, marks it ready, adds its worktree from `base` (a local branch; the checkout's branch without one) and, with `agent`, starts that agent with `prompt`. The prompt also becomes the task's notes. Answers 201 with `{ task }`, 409 for an unknown base branch (no task is made) and 404 for an unknown repository or agent |
+| `POST /workspaces` | Body `{ title, repo?, base?, agent?, prompt?, context? }`. Makes a task, adds its worktree from `base` (a local branch; the checkout's branch without one) and, with `agent`, starts that agent with `prompt`. The prompt also becomes the task's notes. Answers 201 with `{ task }`, 409 for an unknown base branch (no task is made) and 404 for an unknown repository or agent |
 | `POST /tasks/:id/fan-out` | Body `{ count: 1 to 5, start? }`. Copies the task `count` times ("<title> (try 2)", …) with its notes, priority, labels and dependencies. The task and its copies get the label `tries-t-0001`. With `start: true` each copy gets a workspace and Claude Code. Answers 201 with `{ tasks }` |
 | `POST /tasks/:id/agent/message` | Body `{ text }`. Pastes the text into the task's first terminal (bracketed paste, then Enter), so the agent there takes it as its next prompt. Logs `review.commented`. Answers 409 when that terminal is not open |
 | `POST /tasks/:id/commit` | Body `{ message }`. Commits every change of the workspace, new files included. Returns `{ task, hash }` and logs `git.committed`. Answers 409 when there is nothing to commit |
