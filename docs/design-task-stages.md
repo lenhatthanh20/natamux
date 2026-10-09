@@ -406,6 +406,20 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 | Circle with a dash | Skipped |
 | "×2" beside a marker | The stage ran twice, because it was sent back |
 
+**Motion.** Motion shows only what is alive; everything else is still.
+
+| Marker | Look | Motion |
+|---|---|---|
+| Running | A ring with a faint track; an arc that fades along its tail; a dot in the middle | The arc turns once every 900 ms, linear. A soft halo grows out of the node and fades every 1.8 s |
+| Waits for approval | A ring in the review color with a dot in the middle | The dot breathes (scale 0.72 to 1) every 2.4 s, ease in and out |
+| Line into a running stage | A dashed line in the running color | The dashes move toward the stage, one dash every 0.9 s |
+| Needs input, failed | A filled circle with `?` or `×` and a soft outer ring | None |
+| Done | A filled circle with a check | None |
+
+- **Reduced motion** (`prefers-reduced-motion`): nothing moves. Running shows a still three-quarter ring; the flowing line becomes a plain dashed line.
+- **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
+- **Mock-up:** the canvas "Helmsman stage progress" shows both views, with a light and dark switch.
+
 **Task progress strip** (task header):
 - The steps from left to right, each with its marker, its name, and its time: time spent for a done stage, time so far for the current one.
 - A parallel group is one column with its stages stacked, each with its own marker and time.
