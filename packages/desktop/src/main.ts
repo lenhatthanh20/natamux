@@ -76,7 +76,13 @@ async function pickRepository(message: string): Promise<string | undefined> {
 }
 
 async function startDaemon(repoDir: string): Promise<void> {
-  const parts = findParts(process.env)
+  // The packaged app keeps the built dashboard in its resources (electron-builder.yml).
+  const parts = findParts({
+    ...process.env,
+    HELMSMAN_WEB_DIR:
+      process.env.HELMSMAN_WEB_DIR ??
+      (app.isPackaged ? join(process.resourcesPath, 'web') : undefined),
+  })
   const binDir = join(userData, 'bin')
   writeCliShim(binDir, process.execPath, parts.cliMain, process.platform)
   const port = await freePort(PREFERRED_PORT)

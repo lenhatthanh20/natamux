@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@helmsman/cli": "workspace:*",
-    "@helmsman/daemon": "workspace:*",
-    "@helmsman/web": "workspace:*"
+    "@helmsman/daemon": "workspace:*"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
+    "@helmsman/web": "workspace:*",
     "@types/node": "^26.6.4",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
