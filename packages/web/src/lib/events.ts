@@ -31,6 +31,17 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'ci.passed': 'Checks passed',
   'ci.failed': 'Checks failed',
   'review.commented': 'Review comment sent to the agent',
+  'stage.started': 'Stage started',
+  'stage.reported': 'Stage reported done',
+  'stage.check-failed': 'A stage check failed',
+  'stage.checked': 'Stage checks passed',
+  'stage.approved': 'Stage approved',
+  'stage.passed': 'Stage passed',
+  'stage.reopened': 'Sent back to an earlier stage',
+  'stage.skipped': 'Stage skipped',
+  'context.fetched': 'Context fetched',
+  'issue.linked': 'Issue linked',
+  'issue.created': 'Issue created',
 }
 
 export function describeEvent(type: EventType): string {

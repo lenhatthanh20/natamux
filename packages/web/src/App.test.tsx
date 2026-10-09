@@ -1,4 +1,4 @@
-import { applyTaskEvent, type EventType, type Task, type TaskEvent } from '@helmsman/core'
+import { applyTaskEvent, type EventType, LEGACY_PIPELINE, type Task, type TaskEvent } from '@helmsman/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
@@ -144,10 +144,14 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         at: '2026-10-08T12:00:00.000Z',
         payload: {},
       }
-      const applied = applyTaskEvent(target.state, event)
+      const applied = applyTaskEvent(
+        { stage: target.stage, state: target.state, lanes: target.lanes },
+        event,
+        LEGACY_PIPELINE,
+      )
       log.push({ accepted: applied.accepted, event })
       const updated = applied.accepted
-        ? { ...target, state: applied.state, updatedAt: event.at }
+        ? { ...target, ...applied.position, updatedAt: event.at }
         : target
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated, accepted: applied.accepted })
