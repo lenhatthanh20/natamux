@@ -97,11 +97,13 @@ describe('GitHub Copilot CLI', () => {
       stopReason: 'end_turn',
       stop_hook_active: false,
     }
-    expect(normalize('copilot', { ...recorded, [COPILOT_EVENT_FIELD]: 'agentStop' })).toMatchObject({
-      signal: 'turn-ended',
-      cwd: '/tmp/cp-test',
-      details: { hook: 'agentStop', sessionId: recorded.sessionId },
-    })
+    expect(normalize('copilot', { ...recorded, [COPILOT_EVENT_FIELD]: 'agentStop' })).toMatchObject(
+      {
+        signal: 'turn-ended',
+        cwd: '/tmp/cp-test',
+        details: { hook: 'agentStop', sessionId: recorded.sessionId },
+      },
+    )
   })
 
   it('needs the event that the hook command names', () => {
