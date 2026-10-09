@@ -56,17 +56,18 @@ export function entryCounts(entry: ChangeEntry): LineCounts | null {
 
 // The sum over the entries that have counts, or null when none has.
 export function totalCounts(list: readonly ChangeEntry[]): LineCounts | null {
-  let total: LineCounts | null = null
+  let counted = false
+  let added = 0
+  let removed = 0
   for (const entry of list) {
     const counts = entryCounts(entry)
     if (counts !== null) {
-      total = {
-        added: (total?.added ?? 0) + counts.added,
-        removed: (total?.removed ?? 0) + counts.removed,
-      }
+      counted = true
+      added += counts.added
+      removed += counts.removed
     }
   }
-  return total
+  return counted ? { added, removed } : null
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
