@@ -119,6 +119,8 @@ const TABS: readonly { tab: WorkspaceTab; key: string; title: string }[] = [
   { tab: 'terminal', key: '1', title: 'Show the Terminal tab' },
   { tab: 'changes', key: '2', title: 'Show the Changes tab' },
   { tab: 'history', key: '3', title: 'Show the History tab' },
+  { tab: 'progress', key: '4', title: 'Show the Progress tab' },
+  { tab: 'docs', key: '5', title: 'Show the Docs tab' },
 ]
 
 export const COMMANDS: readonly Command[] = [
@@ -469,6 +471,12 @@ export const COMMANDS: readonly Command[] = [
     title: 'Show tasks as a board',
     category: 'View',
     run: ({ actions }) => actions.setLayout('board'),
+  },
+  {
+    id: 'view.progress',
+    title: 'Show tasks against their stages',
+    category: 'View',
+    run: ({ actions }) => actions.setLayout('progress'),
   },
   ...THEMES.map(
     ({ theme, title }): Command => ({

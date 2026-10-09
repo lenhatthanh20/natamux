@@ -1,5 +1,6 @@
 import {
   type ChangeEntry,
+  type ContextSourceType,
   changeEntrySchema,
   type DiffStat,
   diffStatSchema,
@@ -10,6 +11,8 @@ import {
   type GitHubIssue,
   gitGraphSchema,
   githubIssueSchema,
+  type ProjectSettings,
+  projectSettingsSchema,
   type Repo,
   repoSchema,
   type Task,
@@ -26,6 +29,20 @@ export type NewWorkspaceInput = {
   base?: string
   agent?: string
   prompt?: string
+  context?: { source: ContextSourceType; ref: string }
+}
+
+export type StageAction = 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start'
+
+export type StageActionInput = { stage?: string; to?: string; reason?: string }
+
+export type StageFile = { name: string; size: number; modifiedAt: string }
+
+export type LoadedSettings = {
+  settings: ProjectSettings
+  error: string | null
+  found: boolean
+  path: string
 }
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -368,6 +385,74 @@ export function createApi(
         branches: stringList(body.branches),
         current: typeof body.current === 'string' ? body.current : null,
       }
+    },
+
+    async stageAction(
+      taskId: string,
+      action: StageAction,
+      input: StageActionInput = {},
+    ): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/stage`, { action, ...input }),
+      )
+      return taskSchema.parse(body.task)
+    },
+
+    async listStageFiles(taskId: string): Promise<StageFile[]> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/files`))
+      if (!Array.isArray(body.files)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.files.map((entry) => {
+        const file = asRecord(entry)
+        return {
+          name: String(file.name),
+          size: Number(file.size),
+          modifiedAt: String(file.modifiedAt),
+        }
+      })
+    },
+
+    async readStageFile(taskId: string, name: string): Promise<string> {
+      const body = asRecord(
+        await request(
+          'GET',
+          `/tasks/${encodeURIComponent(taskId)}/files/${encodeURIComponent(name)}`,
+        ),
+      )
+      return String(body.text ?? '')
+    },
+
+    async writeStageFile(taskId: string, name: string, text: string): Promise<void> {
+      await request(
+        'PUT',
+        `/tasks/${encodeURIComponent(taskId)}/files/${encodeURIComponent(name)}`,
+        {
+          text,
+        },
+      )
+    },
+
+    async createIssue(taskId: string): Promise<Task> {
+      const body = asRecord(await request('POST', `/tasks/${encodeURIComponent(taskId)}/issue`))
+      return taskSchema.parse(body.task)
+    },
+
+    async getSettings(repo: string): Promise<LoadedSettings> {
+      const body = asRecord(await request('GET', `/repos/${encodeURIComponent(repo)}/settings`))
+      return {
+        settings: projectSettingsSchema.parse(body.settings),
+        error: typeof body.error === 'string' ? body.error : null,
+        found: body.found === true,
+        path: String(body.path ?? ''),
+      }
+    },
+
+    async saveSettings(repo: string, raw: unknown): Promise<ProjectSettings> {
+      const body = asRecord(
+        await request('PUT', `/repos/${encodeURIComponent(repo)}/settings`, raw),
+      )
+      return projectSettingsSchema.parse(body.settings)
     },
 
     async removeWorkspace(taskId: string): Promise<RemoveWorkspaceResult> {

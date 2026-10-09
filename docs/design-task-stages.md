@@ -1,6 +1,6 @@
 # Design: task stages, task context and issue links
 
-Status: draft for review. Nothing here is built yet.
+Status: built in the stage pull requests (#60 to #63). The notes at the end say where the code differs from this text.
 
 ## 1. Goal
 
@@ -151,7 +151,7 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 | `testing` | The command exits. With an agent part, the agent runs `helmsman done` first, then the command runs |
 | `release` | The pull request watcher sees the pull request merged |
 
-- `helmsman done` sends `stage.reported`. It reads the task from `HELMSMAN_TASK_ID` and the stage from `HELMSMAN_STAGE`, which the daemon sets in each stage terminal. Today it sends `agent.finished`; that changes.
+- `helmsman done` sends `stage.reported`. It reads the task from `HELMSMAN_TASK_ID` and the terminal from `HELMSMAN_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
 - **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `helmsman done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
 
 **Step 2: the checks.** After the report the daemon checks the result itself:
@@ -197,7 +197,7 @@ A step of the pipeline is one stage, or a group of stages that run at the same t
 - **End of the group:** when every lane is finished (approved or passed), the task moves to the next step. Review then shows the diff and `test-spec.md` together.
 - **Task state:** `state` is the most urgent lane state, in this order: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`. So "Needs me" shows the task when any lane needs you.
 - **Agents:** each lane has its own agent session in its own terminal, in the same worktree. Implement keeps terminal 1 and the session of the earlier stages; Test spec gets a new terminal.
-  - The terminal gets `HELMSMAN_STAGE`, and `helmsman hook` sends it with each hook, so the daemon knows which lane a hook is about.
+  - The terminal gets `HELMSMAN_TERMINAL`, and each hook sends it (`X-Helmsman-Terminal`), so the daemon knows which lane a hook is about.
   - Test spec writes only `.helmsman-task/test-spec.md`, which git ignores, so the two agents do not touch the same files.
 - **Why Test spec does not read the code:** it is written from the spec alone, like a separate tester, so it checks what was asked, not what was built. Implement does not wait for it; it writes its own tests from the spec and the plan. In Testing, an agent adds a test for each case in `test-spec.md` that the code does not test yet.
 - **Events name the lane:** `stage.approved`, `stage.passed`, `stage.reopened` and `stage.skipped` carry `payload.stage` inside a group.
@@ -353,7 +353,7 @@ Other rules:
 - `stage-runner.ts`:
   - Enters a stage: starts the agent or sends it the prompt, or runs the test command, or opens the pull request.
   - Enters a group: one agent per lane, a new terminal for each lane after the first.
-  - Listens to `stage.reported`, finds the lane by `HELMSMAN_STAGE`, runs the checks of 3.5, and passes or waits at the gate.
+  - Listens to `stage.reported`, finds the lane by `HELMSMAN_TERMINAL`, runs the checks of 3.5, and passes or waits at the gate.
   - Listens to `agent.finished` (the `Stop` hook): without a report it moves the stage to `needs-input`.
 - `stage-checks.ts`: the checks of 3.5 (file, sections, commits, clean worktree, `check` command).
 - `stage-files.ts`: the folder rules of 3.4 and the `.git/info/exclude` entry.
@@ -376,7 +376,7 @@ Other rules:
 ### 7.3 `cli`
 
 New commands:
-- `helmsman stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal `--stage` comes from `HELMSMAN_STAGE`.
+- `helmsman stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal the stage comes from `HELMSMAN_TERMINAL`.
 - `helmsman done` now sends `stage.reported` for the stage of its terminal.
 - `helmsman task link <task> --issue <key> --url <url>`.
 - `helmsman task create --context github-issue:42`.
@@ -505,3 +505,17 @@ Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their co
   - Jira and Linear issue creation.
   - Comments on the issue at each stage.
   - The `url` source.
+
+## 11. Notes on the build
+
+Where the code differs from the text above, or is not built yet:
+
+- **Terminal, not stage, in the environment:** the main agent session keeps terminal 1 across stages, so the daemon maps a terminal to a stage (`HELMSMAN_TERMINAL`) instead of setting the stage in the environment.
+- **Release starts as ready, not as "waits for you":** it waits for its pull request to be merged, which is not shown under "Needs me". `stage.passed` or a merge finishes it.
+- **Without `.helmsman.json`** a repository uses the default pipeline. Tasks made before stages keep the legacy pipeline (implement, review, release).
+- **Not built yet:**
+  - The `url` context source, Jira and Linear issue creation, comments on the issue at each stage.
+  - The Implement card does not list its commits yet; the History tab has them.
+  - Stage files show as plain text, not rendered markdown.
+  - Project settings are edited as JSON, not with a stage list editor.
+  - A mark for stages that wait for a person, in every view.
