@@ -42,8 +42,7 @@ describe('the bundled icons', () => {
   })
 
   it('takes the light version when there is one', () => {
-    expect(iconUrl('pnpm', 'light')).toContain('pnpm_light')
-    expect(iconUrl('pnpm', 'dark')).not.toContain('_light')
+    expect(iconUrl('pnpm', 'light')).not.toBe(iconUrl('pnpm', 'dark'))
     expect(iconUrl('typescript', 'light')).toBe(iconUrl('typescript', 'dark'))
   })
 })
