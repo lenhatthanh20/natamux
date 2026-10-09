@@ -58,7 +58,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
       ],
       LEGACY_PIPELINE,
     )
-    expect(approved.position).toEqual(at('release', 'review'))
+    expect(approved.position).toEqual(at('release', 'ready'))
   })
 
   it('goes back to a running implement stage when changes are requested', () => {
@@ -217,7 +217,7 @@ describe('applyTaskEvent with the default pipeline', () => {
 
   it('passes an auto stage when the agent finishes its turn', () => {
     expect(run(at('testing', 'running'), event('agent.finished')).position).toEqual(
-      at('release', 'review'),
+      at('release', 'ready'),
     )
   })
 

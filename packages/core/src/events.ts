@@ -92,7 +92,7 @@ type Move = { from: readonly TaskState[]; to: TaskState | 'finish' | 'gate' }
 
 const MOVES: Partial<Record<EventType, Move>> = {
   'task.readied': { from: ['draft'], to: 'ready' },
-  'task.blocked': { from: ['ready'], to: 'blocked' },
+  'task.blocked': { from: ['ready', 'running'], to: 'blocked' },
   'task.unblocked': { from: ['blocked'], to: 'ready' },
   'task.retried': { from: ['failed'], to: 'ready' },
   'agent.started': { from: ['ready'], to: 'running' },
@@ -109,7 +109,7 @@ const MOVES: Partial<Record<EventType, Move>> = {
   // Approve anyway: a stage whose checks failed twice can still be approved.
   'stage.approved': { from: ['review', 'needs-input'], to: 'finish' },
   'review.approved': { from: ['review', 'needs-input'], to: 'finish' },
-  'stage.passed': { from: ['running', 'review'], to: 'finish' },
+  'stage.passed': { from: ['ready', 'running', 'review'], to: 'finish' },
   'stage.skipped': {
     from: ['draft', 'ready', 'running', 'needs-input', 'review', 'blocked', 'failed'],
     to: 'finish',

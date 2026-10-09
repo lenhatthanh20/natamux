@@ -196,11 +196,10 @@ export function combinedState(lanes: Readonly<Record<string, TaskState>>): TaskS
   return URGENCY.find((state) => states.includes(state)) ?? 'done'
 }
 
-// The state a stage starts in. A stage that only waits for a person waits at once.
+// The state a stage starts in. A stage that only waits for a person waits at once. A release
+// waits for its pull request to be merged, which is not a wait for you.
 export function entryState(stage: Pick<Stage, 'kind'>): TaskState {
-  return stage.kind === 'review' || stage.kind === 'manual' || stage.kind === 'release'
-    ? 'review'
-    : 'ready'
+  return stage.kind === 'review' || stage.kind === 'manual' ? 'review' : 'ready'
 }
 
 export function enterStep(step: Step, state?: TaskState): StagePosition {
