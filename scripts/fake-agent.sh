@@ -81,7 +81,7 @@ work() {
 # at once. A paste from the dashboard comes in bracket marks, which are dropped.
 read_prompt() {
   local line text
-  IFS= read -r line || exit 0
+  IFS= read -r line || return 1
   text=$line
   while IFS= read -r -t 0.5 line; do
     text+=$'\n'$line
@@ -202,11 +202,14 @@ if [[ $prompt == *"helmsman done"* ]]; then
   printf '\e[2m╭──────────────────────────────────────────────╮\e[0m\n'
   printf '\e[2m│\e[0m \e[1mFake agent\e[0m, a stand-in for Claude Code in dev \e[2m│\e[0m\n'
   printf '\e[2m╰──────────────────────────────────────────────╯\e[0m\n\n'
+  # The terminal closed: stop, as an agent would.
+  trap 'exit 0' HUP TERM
   next=$prompt
   while true; do
     do_stage "$next"
     printf '\e[2m(waiting for the next prompt)\e[0m\n'
-    next=$(read_prompt)
+    next=$(read_prompt) || exit 0
+    [ -n "$next" ] || exit 0
   done
 fi
 
