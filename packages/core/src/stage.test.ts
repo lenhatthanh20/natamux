@@ -1,0 +1,148 @@
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-settings.js'
+import {
+  combinedState,
+  DEFAULT_PIPELINE,
+  enterStep,
+  firstPosition,
+  LEGACY_STEP_REFS,
+  pipelineSchema,
+  resolveSteps,
+  stageName,
+  stepIndex,
+  stepRefsOf,
+} from './stage.js'
+
+describe('pipelineSchema', () => {
+  it('accepts the default pipeline', () => {
+    expect(pipelineSchema.parse(DEFAULT_PIPELINE)).toEqual(DEFAULT_PIPELINE)
+  })
+
+  it('rejects a stage id used twice, also inside a group', () => {
+    const twice = [
+      { id: 'spec', kind: 'agent', gate: 'manual' },
+      {
+        id: 'build',
+        parallel: [
+          { id: 'spec', kind: 'agent', gate: 'manual' },
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+        ],
+      },
+    ]
+    expect(pipelineSchema.safeParse(twice).success).toBe(false)
+  })
+
+  it('allows only agent and manual stages, 2 to 4, in a group', () => {
+    const group = (parallel: unknown[]) => [{ id: 'build', parallel }]
+    const agent = (id: string) => ({ id, kind: 'agent', gate: 'auto' })
+    expect(pipelineSchema.safeParse(group([agent('a')])).success).toBe(false)
+    expect(pipelineSchema.safeParse(group([agent('a'), agent('b')])).success).toBe(true)
+    expect(pipelineSchema.safeParse(group(['a', 'b', 'c', 'd', 'e'].map(agent))).success).toBe(
+      false,
+    )
+    expect(
+      pipelineSchema.safeParse(group([agent('a'), { id: 'r', kind: 'review', gate: 'manual' }]))
+        .success,
+    ).toBe(false)
+  })
+
+  it('rejects an empty pipeline and a bad stage id', () => {
+    expect(pipelineSchema.safeParse([]).success).toBe(false)
+    expect(pipelineSchema.safeParse([{ id: 'Spec', kind: 'agent', gate: 'auto' }]).success).toBe(
+      false,
+    )
+  })
+})
+
+describe('projectSettingsSchema', () => {
+  it('fills every field of an empty file', () => {
+    expect(projectSettingsSchema.parse({})).toEqual(DEFAULT_PROJECT_SETTINGS)
+    expect(DEFAULT_PROJECT_SETTINGS.stages).toEqual(DEFAULT_PIPELINE)
+    expect(DEFAULT_PROJECT_SETTINGS.tracker).toEqual({
+      type: 'github',
+      createIssue: 'on-spec-approved',
+      linkInPr: true,
+    })
+  })
+
+  it('reads context sources by type', () => {
+    const settings = projectSettingsSchema.parse({
+      context: {
+        sources: [
+          { type: 'mcp', name: 'Jira', prompt: 'Read {ref} with the jira MCP server' },
+          { type: 'skill', name: 'Ticket', skill: 'fetch-ticket' },
+        ],
+      },
+    })
+    expect(settings.context.sources.map((source) => source.type)).toEqual(['mcp', 'skill'])
+    expect(
+      projectSettingsSchema.safeParse({ context: { sources: [{ type: 'mcp', name: 'Jira' }] } })
+        .success,
+    ).toBe(false)
+  })
+})
+
+describe('resolveSteps', () => {
+  it('turns the step ids of a task back into steps with their settings', () => {
+    expect(resolveSteps(stepRefsOf(DEFAULT_PIPELINE), DEFAULT_PIPELINE)).toEqual(DEFAULT_PIPELINE)
+  })
+
+  it('finds a stage of a group for a task that has it on its own', () => {
+    const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
+    expect(implement).toEqual({
+      id: 'implement',
+      kind: 'agent',
+      gate: 'auto',
+      requireCommit: true,
+      requireClean: true,
+    })
+  })
+
+  it('makes a stage that is gone from the settings a manual one', () => {
+    expect(resolveSteps(['security'], DEFAULT_PIPELINE)).toEqual([
+      { id: 'security', kind: 'manual', gate: 'manual' },
+    ])
+  })
+})
+
+describe('positions', () => {
+  it('starts a task in draft at its first step', () => {
+    expect(firstPosition(DEFAULT_PIPELINE)).toEqual({ stage: 'context', state: 'draft', lanes: {} })
+  })
+
+  it('starts a review stage waiting for you, and a group with a state per stage', () => {
+    const review = DEFAULT_PIPELINE[4]
+    const build = DEFAULT_PIPELINE[3]
+    if (review === undefined || build === undefined) {
+      throw new Error('The default pipeline changed')
+    }
+    expect(enterStep(review)).toEqual({ stage: 'review', state: 'review', lanes: {} })
+    expect(enterStep(build)).toEqual({
+      stage: 'build',
+      state: 'ready',
+      lanes: { 'test-spec': 'ready', implement: 'ready' },
+    })
+  })
+
+  it('shows the most urgent lane of a group', () => {
+    expect(combinedState({ a: 'running', b: 'review' })).toBe('review')
+    expect(combinedState({ a: 'needs-input', b: 'failed' })).toBe('needs-input')
+    expect(combinedState({ a: 'done', b: 'running' })).toBe('running')
+    expect(combinedState({ a: 'done', b: 'done' })).toBe('done')
+  })
+
+  it('finds the step of a stage inside a group', () => {
+    expect(stepIndex(DEFAULT_PIPELINE, 'implement')).toBe(3)
+    expect(stepIndex(DEFAULT_PIPELINE, 'build')).toBe(3)
+    expect(stepIndex(DEFAULT_PIPELINE, 'nope')).toBe(-1)
+  })
+})
+
+describe('stageName', () => {
+  it('uses the name, else the id in words', () => {
+    expect(stageName({ id: 'test-spec' })).toBe('Test spec')
+    expect(stageName({ id: 'build', name: 'Test spec and Implement' })).toBe(
+      'Test spec and Implement',
+    )
+  })
+})

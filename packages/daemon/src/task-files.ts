@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type Task, taskSchema } from '@helmsman/core'
+import { type Task, taskSchema, upgradeTaskFields } from '@helmsman/core'
 import matter from 'gray-matter'
 
 const TASK_FILE_NAME = /^(T-\d+)\.md$/
@@ -27,7 +27,7 @@ export function parseTaskFile(text: string): Task {
   const fields = Object.fromEntries(
     Object.entries(data).map(([key, value]) => [key, dateToIsoString(value)]),
   )
-  return taskSchema.parse({ ...fields, description: content.trim() })
+  return taskSchema.parse(upgradeTaskFields({ ...fields, description: content.trim() }))
 }
 
 export function serializeTask(task: Task): string {
