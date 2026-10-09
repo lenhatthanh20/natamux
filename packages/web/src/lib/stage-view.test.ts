@@ -1,7 +1,7 @@
 import { DEFAULT_PIPELINE, type Stage } from '@helmsman/core'
 import { describe, expect, it } from 'vitest'
-import { finishedWhen, formatDuration, stageCount } from './stage-view'
 import { linkKind } from '../components/StageMarker'
+import { finishedWhen, formatDuration, stageCount } from './stage-view'
 
 describe('formatDuration', () => {
   it.each([
@@ -23,9 +23,9 @@ describe('finishedWhen', () => {
     expect(finishedWhen({ id: 'release', kind: 'release', gate: 'manual' })).toBe(
       'Finished when the pull request is merged.',
     )
-    expect(finishedWhen({ id: 'x', kind: 'manual', gate: 'manual', doneWhen: 'Legal signs off.' })).toBe(
-      'Legal signs off.',
-    )
+    expect(
+      finishedWhen({ id: 'x', kind: 'manual', gate: 'manual', doneWhen: 'Legal signs off.' }),
+    ).toBe('Legal signs off.')
   })
 })
 
@@ -44,6 +44,9 @@ describe('linkKind', () => {
 describe('stageCount', () => {
   it('counts done and skipped stages as finished', () => {
     const entry = (status: 'done' | 'skipped' | 'current') => ({ status }) as never
-    expect(stageCount([entry('done'), entry('skipped'), entry('current')])).toEqual({ done: 2, total: 3 })
+    expect(stageCount([entry('done'), entry('skipped'), entry('current')])).toEqual({
+      done: 2,
+      total: 3,
+    })
   })
 })
