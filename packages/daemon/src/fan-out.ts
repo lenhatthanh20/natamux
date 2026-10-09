@@ -1,5 +1,5 @@
 import type { Task } from '@helmsman/core'
-import type { AgentRunner } from './agent-runner.js'
+import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import type { WorkspaceService } from './workspace-service.js'
 
@@ -13,7 +13,7 @@ export function tryLabel(taskId: string): string {
 type FanOutParts = {
   tasks: TaskService
   workspaces: WorkspaceService
-  agents: AgentRunner
+  stages: Pick<StageRunner, 'startByHand'>
 }
 
 // Makes `count` copies of a task, to let several agents try the same work. With `start`, each copy
@@ -42,7 +42,7 @@ export async function fanOut(
     })
     if (options.start) {
       await parts.workspaces.create(task.id)
-      task = parts.agents.start(task.id, 'claude-code')
+      task = await parts.stages.startByHand(task.id, 'claude-code')
     }
     created.push(task)
   }

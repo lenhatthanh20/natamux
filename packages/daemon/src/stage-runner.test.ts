@@ -379,6 +379,29 @@ describe('a prompt for a running agent', () => {
     expect(pty.written.join('')).not.toContain('The checks of this stage failed')
   })
 
+  it('starts one agent when a person starts it while the new workspace starts the stage', async () => {
+    const task = await created({ title: 'Export tasks' })
+    await workspaces.create(task.id)
+
+    const after = await runner.startByHand(task.id, 'claude-code')
+    await runner.settle()
+
+    expect(after).toMatchObject({ stage: 'spec', state: 'running' })
+    expect(ptys).toHaveLength(1)
+    expect(ptys[0]?.written.join('').split(`agent-launch-${task.id}.sh`)).toHaveLength(2)
+  })
+
+  it('gives a prompt to the agent that runs, rather than starting another', async () => {
+    const task = await withWorkspace((await created({ title: 'Export tasks' })).id)
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    await runner.startByHand(task.id, 'claude-code', 'Also add a test')
+
+    expect(ptys).toHaveLength(1)
+    expect(pty.written.join('')).toContain('\x1b[200~Also add a test')
+  })
+
   it('ends the shells of a task that is cancelled', async () => {
     const { task, pty } = await atSpecWithShell('node')
 
