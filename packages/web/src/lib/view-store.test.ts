@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withDetailOpen, withTab } from './view-store'
+import { isUnseen, withDetailOpen, withSeen, withTab } from './view-store'
 
 describe('withDetailOpen', () => {
   it('sets and changes the flag of one task', () => {
@@ -34,5 +34,33 @@ describe('withTab', () => {
       'T-0002': 'history',
     })
     expect(withTab(first, 'T-0001', 'terminal')).toEqual({ 'T-0001': 'terminal' })
+  })
+})
+
+describe('seen states', () => {
+  it('counts a task as unseen only when its state differs from the recorded one', () => {
+    expect(isUnseen({ 'T-0001': 'running' }, { id: 'T-0001', state: 'review' })).toBe(true)
+    expect(isUnseen({ 'T-0001': 'running' }, { id: 'T-0001', state: 'running' })).toBe(false)
+  })
+
+  it('does not mark a task that was never recorded', () => {
+    expect(isUnseen({}, { id: 'T-0001', state: 'review' })).toBe(false)
+  })
+
+  it('records a baseline without changing what was recorded', () => {
+    const seen = withSeen(
+      { 'T-0001': 'running' },
+      [
+        { id: 'T-0001', state: 'review' },
+        { id: 'T-0002', state: 'ready' },
+      ],
+      false,
+    )
+    expect(seen).toEqual({ 'T-0001': 'running', 'T-0002': 'ready' })
+  })
+
+  it('overwrites the record when the user looked at the task', () => {
+    const seen = withSeen({ 'T-0001': 'running' }, [{ id: 'T-0001', state: 'review' }], true)
+    expect(seen).toEqual({ 'T-0001': 'review' })
   })
 })

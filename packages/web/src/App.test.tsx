@@ -345,7 +345,7 @@ describe('App', () => {
 
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: '1 task needs you' })).toBeTruthy()
+    expect(await screen.findByRole('img', { name: '1 waiting' })).toBeTruthy()
     const table = screen.getByRole('table')
     expect(within(table).getByText('Fix timezone bug')).toBeTruthy()
     expect(within(table).getByText('Add export')).toBeTruthy()
@@ -359,7 +359,9 @@ describe('App', () => {
 
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    await screen.findByRole('table')
+    expect(screen.getByText('Nothing needs you')).toBeTruthy()
+    expect(screen.queryByRole('img', { name: /waiting/ })).toBeNull()
   })
 
   it('goes back to the token form when the daemon rejects the token', async () => {
@@ -381,7 +383,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('heading', { name: '1 task needs you' })
+    await screen.findByRole('img', { name: '1 waiting' })
 
     await user.click(
       within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
@@ -389,7 +391,7 @@ describe('App', () => {
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: /Approve/ }))
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    expect(await screen.findByText('Nothing needs you')).toBeTruthy()
     expect(
       calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
     ).toBe(true)
@@ -457,8 +459,8 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
 
-    const heading = await screen.findByRole('heading', { name: '1 task needs you' })
-    const strip = heading.closest('section')
+    const badge = await screen.findByRole('img', { name: '1 waiting' })
+    const strip = badge.closest('section')
     expect(strip?.textContent).toContain('quiet')
 
     await user.click(
@@ -481,7 +483,8 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
 
-    expect(await screen.findByRole('heading', { name: 'Nothing needs you.' })).toBeTruthy()
+    await screen.findByRole('table')
+    expect(screen.getByText('Nothing needs you')).toBeTruthy()
   })
 
   it('does not list "agent is working" lines in the activity of a task', async () => {
@@ -906,10 +909,12 @@ describe('App', () => {
     await user.click(within(table).getByRole('button', { name: /Speed up \(try 2\)/ }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0002' })
     const tries = within(details).getByRole('region', { name: 'Tries' })
-    const keep = within(tries).getAllByRole('button', { name: 'Keep this one' })[1] as HTMLElement
+    const keep = within(tries).getAllByRole('button', { name: 'Keep this try' })[1] as HTMLElement
     await user.click(keep)
     const confirm = screen.getByRole('dialog', { name: 'Keep T-0002?' })
-    await user.click(within(confirm).getByRole('button', { name: 'Cancel the others' }))
+    await user.click(
+      within(confirm).getByRole('button', { name: 'Keep this try, cancel the others' }),
+    )
 
     expect(await screen.findByText('Cancelled 1 other try.')).toBeTruthy()
     expect(
@@ -941,7 +946,7 @@ describe('App', () => {
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true)
   })
 
-  it('moves the selection with j and opens the details with Enter', async () => {
+  it('moves the selection with j and opens the workspace with Enter', async () => {
     installDaemon([reviewTask, runningTask])
     const user = userEvent.setup()
     render(<App />)
@@ -951,7 +956,7 @@ describe('App', () => {
     await user.keyboard('j')
     await user.keyboard('{Enter}')
 
-    expect(screen.getByRole('complementary', { name: /Details of T-000/ })).toBeTruthy()
+    expect(screen.getByRole('region', { name: /Workspace of T-000/ })).toBeTruthy()
   })
 
   it('opens the workspace of a task from the sidebar', async () => {
@@ -1066,7 +1071,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('heading', { name: '1 task needs you' })
+    await screen.findByRole('img', { name: '1 waiting' })
 
     const socket = FakeSocket.instances[0]
     expect(socket?.url).toContain('/api/events?token=secret')
@@ -1079,9 +1084,7 @@ describe('App', () => {
       })
     })
 
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: '2 tasks need you' })).toBeTruthy(),
-    )
+    await waitFor(() => expect(screen.getByRole('img', { name: '2 waiting' })).toBeTruthy())
   })
   it('hides and shows the sidebar from the title bar', async () => {
     installDaemon([reviewTask, runningTask])
@@ -1215,5 +1218,221 @@ describe('App', () => {
 
     await user.keyboard('?')
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()
+  })
+
+  it('sorts the table from the column headers and says which column is sorted', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Alpha' }),
+      makeTask({ id: 'T-0002', title: 'Beta' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const table = await screen.findByRole('table')
+    const titles = () =>
+      [...table.querySelectorAll('tbody [data-roving]')].map((row) => row.textContent)
+
+    expect(titles()).toEqual(['Beta', 'Alpha'])
+    await user.click(within(table).getByRole('button', { name: 'Task' }))
+    expect(titles()).toEqual(['Alpha', 'Beta'])
+    expect(
+      within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort'),
+    ).toBe('ascending')
+    await user.click(within(table).getByRole('button', { name: 'Task' }))
+    expect(titles()).toEqual(['Beta', 'Alpha'])
+    expect(
+      within(table).getByRole('columnheader', { name: 'Task' }).getAttribute('aria-sort'),
+    ).toBe('descending')
+  })
+
+  it('says when a filter matches nothing, and clears it', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.type(screen.getByLabelText('Search tasks'), 'zzzz')
+    expect(await screen.findByText('No tasks match “zzzz”')).toBeTruthy()
+    expect(screen.getByText('No matches in helmsman (1 hidden)')).toBeTruthy()
+    expect(screen.getByText('Not filtered')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }))
+    expect(await screen.findByRole('table')).toBeTruthy()
+    expect((screen.getByLabelText('Search tasks') as HTMLInputElement).value).toBe('')
+  })
+
+  it('filters by state from the chips, and counts follow the search', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Fix login', state: 'review' }),
+      makeTask({ id: 'T-0002', title: 'Fix export', state: 'ready' }),
+      makeTask({ id: 'T-0003', title: 'Other thing', state: 'ready' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const table = await screen.findByRole('table')
+
+    const filter = screen.getByRole('list', { name: 'Filter by state' })
+    expect(within(filter).getByRole('button', { name: /Ready/ }).textContent).toContain('2')
+    await user.type(screen.getByLabelText('Search tasks'), 'fix')
+    expect(within(filter).getByRole('button', { name: /Ready/ }).textContent).toContain('1')
+
+    await user.click(within(filter).getByRole('button', { name: /Ready/ }))
+    expect(within(table).queryByText('Fix login')).toBeNull()
+    expect(within(table).getByText('Fix export')).toBeTruthy()
+  })
+
+  it('hides finished columns on the board until asked', async () => {
+    installDaemon([reviewTask, makeTask({ id: 'T-0005', title: 'Shipped', state: 'done' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    await user.click(screen.getByRole('radio', { name: 'Board' }))
+
+    expect(screen.queryByRole('region', { name: 'Done' })).toBeNull()
+    await user.click(screen.getByRole('checkbox', { name: 'Show finished' }))
+    const done = screen.getByRole('region', { name: 'Done' })
+    expect(within(done).getByText('Shipped')).toBeTruthy()
+  })
+
+  it('moves through the table rows with the arrow keys and opens with Enter', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Alpha' }),
+      makeTask({ id: 'T-0002', title: 'Beta' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const table = await screen.findByRole('table')
+    const rows = () => [...table.querySelectorAll<HTMLElement>('tbody [data-roving]')]
+
+    expect(rows().filter((row) => row.tabIndex === 0)).toHaveLength(1)
+    act(() => rows()[0]?.focus())
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(rows()[1])
+    expect(rows().filter((row) => row.tabIndex === 0)).toEqual([rows()[1]])
+
+    await user.keyboard('i')
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('region', { name: 'Workspace of T-0001' })).toBeTruthy()
+  })
+
+  it('keeps the sidebar tree as one tab stop and renames a row with F2', async () => {
+    const { calls } = installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002',
+      }),
+      makeTask({
+        id: 'T-0003',
+        title: 'Fix login',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0003',
+        branch: 'helmsman/t-0003',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const tree = screen.getByRole('region', { name: 'Workspaces' })
+    const stops = () => [...tree.querySelectorAll<HTMLElement>('[data-roving]')]
+
+    expect(stops().filter((stop) => stop.tabIndex === 0)).toHaveLength(1)
+    act(() => stops()[0]?.focus())
+    await user.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(stops()[1])
+    await user.keyboard('{End}')
+    expect(document.activeElement).toBe(stops()[stops().length - 1])
+
+    const row = tree.querySelector<HTMLElement>('[data-roving="task:T-0002"]')
+    act(() => row?.focus())
+    await user.keyboard('{F2}')
+    const field = screen.getByLabelText('New name for T-0002') as HTMLInputElement
+    expect(field.selectionStart).toBe(0)
+    expect(field.selectionEnd).toBe('Add export'.length)
+    await user.keyboard('Add CSV export{Enter}')
+
+    await waitFor(() => expect(calls.some((call) => call.method === 'PATCH')).toBe(true))
+    expect(document.activeElement?.getAttribute('data-roving')).toBe('task:T-0002')
+  })
+
+  it('folds and unfolds a repository with Left and Right', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'helmsman/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const tree = screen.getByRole('region', { name: 'Workspaces' })
+    const group = tree.querySelector<HTMLElement>('[data-roving="repo:default"]')
+    act(() => group?.focus())
+
+    await user.keyboard('{ArrowLeft}')
+    expect(group?.getAttribute('aria-expanded')).toBe('false')
+    expect(within(tree).queryByRole('button', { name: /Add export/ })).toBeNull()
+    await user.keyboard('{ArrowRight}')
+    expect(group?.getAttribute('aria-expanded')).toBe('true')
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement?.getAttribute('data-roving')).toBe('task:T-0002')
+    await user.keyboard('{ArrowLeft}')
+    expect(document.activeElement).toBe(group)
+  })
+
+  it('lists three tasks that need the user and the rest behind "Show all"', async () => {
+    installDaemon(
+      ['T-0001', 'T-0002', 'T-0003', 'T-0004', 'T-0005'].map((id) =>
+        makeTask({ id, title: `Review ${id}`, state: 'review' }),
+      ),
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const strip = screen.getByRole('region', { name: 'Needs you' })
+
+    expect(within(strip).getAllByRole('listitem')).toHaveLength(3)
+    await user.click(within(strip).getByRole('button', { name: 'Show all 5' }))
+    expect(within(strip).getAllByRole('listitem')).toHaveLength(5)
+  })
+
+  it('folds a section of the details and remembers it', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix it' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+
+    expect(within(details).getByText('No notes. Add some with Edit.')).toBeTruthy()
+    await user.click(within(details).getByRole('button', { name: 'Notes' }))
+    expect(within(details).queryByText('No notes. Add some with Edit.')).toBeNull()
+    expect(window.localStorage.getItem('helmsman.section.notes')).toBe('false')
   })
 })

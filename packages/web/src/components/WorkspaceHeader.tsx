@@ -3,10 +3,11 @@ import { ArrowUpFromLine, ExternalLink, GitBranch, GitPullRequest } from 'lucide
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { copyText } from '../lib/clipboard'
-import { pullRequestButton, pushButton, splitMiddle } from '../lib/workspace'
+import { pullRequestButton, pushButton } from '../lib/workspace'
 import { StateBadge } from './StateBadge'
 import { Button } from './ui/Button'
 import { Menu, type MenuItem } from './ui/Menu'
+import { MiddleTruncate } from './ui/MiddleTruncate'
 import { button, ICON } from './ui/styles'
 
 // Under this width of the main area, the pull request button gets its short label.
@@ -38,7 +39,6 @@ export function WorkspaceHeader({
   const compact = width !== null && width < COMPACT_BELOW
   const push = pushButton(task.branch, ahead, base)
   const pullRequest = pullRequestButton(task.branch, ahead, base, compact)
-  const branch = task.branch === null ? null : splitMiddle(task.branch)
   const busy = pending !== null
 
   const menu: MenuItem[] = [
@@ -72,7 +72,7 @@ export function WorkspaceHeader({
         {task.title}
       </h2>
       <StateBadge state={task.state} />
-      {branch !== null && task.branch !== null && (
+      {task.branch !== null && (
         <button
           type="button"
           onClick={() => copyText(task.branch ?? '', 'the branch name')}
@@ -81,10 +81,7 @@ export function WorkspaceHeader({
           className="flex h-6 min-w-0 shrink items-center gap-1.5 rounded-md border border-line px-1.5 font-mono text-xs text-ink-2 hover:bg-hover hover:text-ink max-md:hidden"
         >
           <GitBranch size={ICON.xs} aria-hidden="true" className="shrink-0" />
-          <span className="flex min-w-0">
-            <span className="truncate">{branch.head}</span>
-            {branch.tail !== '' && <span className="shrink-0">{branch.tail}</span>}
-          </span>
+          <MiddleTruncate text={task.branch} />
         </button>
       )}
       <span className="min-w-0 flex-1" />

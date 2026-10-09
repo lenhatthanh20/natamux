@@ -15,6 +15,7 @@ import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
 import { Button } from './ui/Button'
 import { Combobox } from './ui/Combobox'
+import { CountBadge } from './ui/CountBadge'
 import { EmptyState } from './ui/EmptyState'
 import { Segmented } from './ui/Segmented'
 
@@ -69,9 +70,7 @@ export function AgentPanes({
     <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col">
       <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-1.5">
         <h2 className="text-md font-semibold tracking-tight">Agents</h2>
-        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-badge px-[5px] text-2xs font-semibold text-ink-2">
-          {shown.length}
-        </span>
+        <CountBadge count={shown.length} />
         <span className="flex-1" />
         {others.length > 0 && shown.length < MAX_PANES && (
           <Combobox
