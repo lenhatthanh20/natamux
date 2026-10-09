@@ -84,6 +84,13 @@ export function formatTaskList(tasks: readonly Task[]): string {
 export function formatTask(task: Task): string {
   const lines = [
     `${task.id}  ${task.title}`,
+    `Stage:      ${task.stage}${
+      Object.keys(task.lanes).length === 0
+        ? ''
+        : ` (${Object.entries(task.lanes)
+            .map(([stage, state]) => `${stage} ${state}`)
+            .join(', ')})`
+    }`,
     `State:      ${task.state}`,
     `Priority:   ${task.priority}`,
     `Labels:     ${task.labels.join(', ') || '-'}`,

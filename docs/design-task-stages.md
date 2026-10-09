@@ -449,7 +449,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 - **Board, one section per repository,** with that repository's columns. Tasks whose `stages` differ from the current settings (made before a change) go into a sub-section "Earlier pipeline", with columns of their own, so no row is out of line.
 - **Groups** of 2 to 4 stages: their columns share a band and the "Side by side" label on the board; on the task page their cards wrap.
 - **Long pipelines:** the board scrolls sideways; the Task and Next columns stay in place.
-- **A stage id that is gone from the settings:** shown with its id as its name, as kind `manual`.
+- **A stage id that is gone from the settings:** a default stage keeps its default settings; a custom one is shown with its id as its name, as kind `manual`.
 - **Evidence comes from the kind and the checks of a stage,** not its name. A custom `agent` stage with `output`, `sections` and `check` shows its file, its sections and its command result. A `manual` stage shows only who approved it and when.
 - **"Finished when …"** for a stage not reached yet is built from its checks; the stage field `doneWhen` replaces it.
 
