@@ -3,18 +3,20 @@ import type { WorkspaceTab } from './view-store'
 // The address bar follows the view, so a reload or a link brings it back (UI spec 5.5).
 //   /                          all tasks, as a table
 //   /board                     all tasks, as a board
+//   /progress                  all tasks against their stages
 //   /agents                    the agents grid
 //   /t/T-0018                  all tasks with the details of T-0018 open
-//   /w/T-0018/terminal         the workspace of T-0018 (also changes and history)
+//   /w/T-0018/terminal         the workspace of T-0018 (also changes, history, progress, docs)
 //   /w/T-0018/changes?file=src/a.ts
 export type Route =
   | { kind: 'tasks' }
   | { kind: 'board' }
+  | { kind: 'progress' }
   | { kind: 'agents' }
   | { kind: 'task'; id: string }
   | { kind: 'workspace'; id: string; tab: WorkspaceTab; file: string | null }
 
-const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history']
+const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history', 'progress', 'docs']
 const TASK_ID = /^[A-Za-z]+-\d+$/
 
 function taskId(segment: string | undefined): string | null {
@@ -35,6 +37,9 @@ export function parseRoute(pathname: string, search = ''): Route {
   const [, first, second, third] = pathname.replace(/\/+$/, '').split('/')
   if (first === 'board') {
     return { kind: 'board' }
+  }
+  if (first === 'progress') {
+    return { kind: 'progress' }
   }
   if (first === 'agents') {
     return { kind: 'agents' }
@@ -61,6 +66,8 @@ export function routePath(route: Route): string {
       return '/'
     case 'board':
       return '/board'
+    case 'progress':
+      return '/progress'
     case 'agents':
       return '/agents'
     case 'task':
@@ -83,7 +90,7 @@ export type RouteView = {
   agentsOpen: boolean
   selectedId: string | null
   detailOpenByTask: Readonly<Record<string, boolean>>
-  layout: 'table' | 'board'
+  layout: 'table' | 'board' | 'progress'
 }
 
 export function routeOf(view: RouteView): Route {
@@ -101,7 +108,7 @@ export function routeOf(view: RouteView): Route {
   if (view.selectedId !== null && view.detailOpenByTask[view.selectedId] === true) {
     return { kind: 'task', id: view.selectedId }
   }
-  return { kind: view.layout === 'board' ? 'board' : 'tasks' }
+  return { kind: view.layout === 'table' ? 'tasks' : view.layout }
 }
 
 // A change of the file query alone replaces the history entry: stepping through files must not
