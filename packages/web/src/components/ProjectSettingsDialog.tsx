@@ -32,7 +32,9 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
       try {
         raw = JSON.parse(value)
       } catch (error) {
-        throw new Error(`This is not JSON: ${error instanceof Error ? error.message : String(error)}`)
+        throw new Error(
+          `This is not JSON: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
       return save(raw)
     },
@@ -72,7 +74,13 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
           <Button variant="ghost" size="md" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" size="md" shortcut="Mod+Enter" busy={saving.isPending} onClick={() => saving.mutate()}>
+          <Button
+            variant="primary"
+            size="md"
+            shortcut="Mod+Enter"
+            busy={saving.isPending}
+            onClick={() => saving.mutate()}
+          >
             Save
           </Button>
         </>
