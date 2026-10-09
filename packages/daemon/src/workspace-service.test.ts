@@ -267,7 +267,7 @@ describe('changes and fileDiff', () => {
     writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
 
     expect(await workspaces.changes(task.id)).toEqual([
-      { path: 'notes.txt', status: 'U', originalPath: null },
+      { path: 'notes.txt', status: 'U', originalPath: null, added: 1, removed: 0 },
     ])
   })
 
@@ -300,6 +300,19 @@ describe('changes and fileDiff', () => {
     rmSync(join(workspace, 'notes.txt'))
 
     await expect(workspaces.fileDiff(task.id, 'notes.txt')).rejects.toThrow(FileNotChangedError)
+  })
+
+  it('gives one side of a changed image, and refuses an image that did not change', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0]))
+
+    const image = await workspaces.fileImage(task.id, 'logo.png', 'modified')
+
+    expect(image.type).toBe('image/png')
+    expect([...image.bytes]).toEqual([0x89, 0x50, 0x4e, 0x47, 0])
+    await expect(workspaces.fileImage(task.id, 'other.png', 'modified')).rejects.toThrow(
+      FileNotChangedError,
+    )
   })
 
   it('refuses a task that has no workspace', async () => {

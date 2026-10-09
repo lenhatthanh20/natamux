@@ -11,6 +11,7 @@ import {
   type GitHubIssue,
   gitGraphSchema,
   githubIssueSchema,
+  type ImageSide,
   type ProjectSettings,
   projectSettingsSchema,
   type Repo,
@@ -117,10 +118,9 @@ export function createApi(
   token: string,
   fetchFunction: FetchFunction = (input, init) => fetch(input, init),
 ) {
-  async function request(method: string, path: string, body?: unknown): Promise<unknown> {
-    let response: Response
+  async function send(method: string, path: string, body?: unknown): Promise<Response> {
     try {
-      response = await fetchFunction(`/api${path}`, {
+      return await fetchFunction(`/api${path}`, {
         method,
         headers: {
           authorization: `Bearer ${token}`,
@@ -131,13 +131,30 @@ export function createApi(
     } catch {
       throw new Error('Cannot reach the daemon. Is it running?')
     }
+  }
 
+  async function failure(response: Response): Promise<ApiError> {
     const text = await response.text()
     const parsed = text === '' ? undefined : parseJson(text)
+    return new ApiError(response.status, describeError(response.status, parsed))
+  }
+
+  async function request(method: string, path: string, body?: unknown): Promise<unknown> {
+    const response = await send(method, path, body)
     if (!response.ok) {
-      throw new ApiError(response.status, describeError(response.status, parsed))
+      throw await failure(response)
     }
-    return parsed
+    const text = await response.text()
+    return text === '' ? undefined : parseJson(text)
+  }
+
+  // For an answer that is not JSON, such as an image.
+  async function requestBlob(path: string): Promise<Blob> {
+    const response = await send('GET', path)
+    if (!response.ok) {
+      throw await failure(response)
+    }
+    return response.blob()
   }
 
   return {
@@ -199,6 +216,12 @@ export function createApi(
         `/tasks/${encodeURIComponent(taskId)}/changes/file?path=${encodeURIComponent(path)}`,
       )
       return fileDiffSchema.parse(body)
+    },
+
+    // One side of a changed image: the last commit (original) or the file now (modified).
+    async getFileImage(taskId: string, path: string, side: ImageSide): Promise<Blob> {
+      const query = `path=${encodeURIComponent(path)}&side=${side}`
+      return requestBlob(`/tasks/${encodeURIComponent(taskId)}/changes/image?${query}`)
     },
 
     async getGitGraph(taskId: string): Promise<GitGraph> {

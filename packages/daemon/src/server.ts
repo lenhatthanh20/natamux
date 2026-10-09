@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import websocket from '@fastify/websocket'
 import {
+  IMAGE_SIDES,
   issueLinkSchema,
   repoIdSchema,
   TASK_ID_HEADER,
@@ -19,7 +20,15 @@ import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
 import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
-import { GitError, GitHubError, NothingToCommitError, OutsideWorkspaceError } from './git.js'
+import {
+  GitError,
+  GitHubError,
+  ImageSideMissingError,
+  ImageTooLargeError,
+  NotAnImageError,
+  NothingToCommitError,
+  OutsideWorkspaceError,
+} from './git.js'
 import type { IssueImporter } from './issue-importer.js'
 import { IssueLinkError, type IssueLinker } from './issue-linker.js'
 import { newWorkspace } from './new-workspace.js'
@@ -80,6 +89,7 @@ const hookParamsSchema = z.object({ agent: z.string().min(1) })
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+const changedImageQuerySchema = changedFileQuerySchema.extend({ side: z.enum(IMAGE_SIDES) })
 const fanOutBodySchema = z.object({
   count: z.number().int().min(1).max(MAX_TRIES),
   start: z.boolean().default(false),
@@ -211,8 +221,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof TemplateNotFoundError || error instanceof RepoNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
-    if (error instanceof FileNotChangedError) {
+    if (error instanceof FileNotChangedError || error instanceof ImageSideMissingError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
+    }
+    if (error instanceof NotAnImageError) {
+      return reply.code(400).send({ error: 'invalid_request', message: error.message })
+    }
+    if (error instanceof ImageTooLargeError) {
+      return reply.code(413).send({ error: 'too_large', message: error.message })
     }
     if (
       error instanceof WorkspaceConflictError ||
@@ -396,6 +412,20 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { path } = changedFileQuerySchema.parse(request.query)
     return options.workspaces.fileDiff(id, path)
+  })
+
+  // The bytes of one side of a changed image. An SVG can hold scripts, so the answer may not run
+  // anything, even when it is opened on its own.
+  app.get('/tasks/:id/changes/image', async (request, reply) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { path, side } = changedImageQuerySchema.parse(request.query)
+    const { type, bytes } = await options.workspaces.fileImage(id, path, side)
+    return reply
+      .header('content-type', type)
+      .header('cache-control', 'no-store')
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+      .send(bytes)
   })
 
   app.get('/tasks/:id/graph', async (request) => {

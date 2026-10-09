@@ -2,6 +2,7 @@ import type {
   ChangeEntry,
   FileDiff,
   GitGraph as GitGraphData,
+  ImageSide,
   Task,
   TerminalSize,
 } from '@helmsman/core'
@@ -47,6 +48,8 @@ type ChangesViewProps = {
   activity?: string
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
+  // One side of a changed image, as bytes.
+  loadImage: (path: string, side: ImageSide) => Promise<Blob>
   loadGraph: () => Promise<GitGraphData>
   loadEvents: () => Promise<StoredEvent[]>
   connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
@@ -89,6 +92,7 @@ export function ChangesView({
   activity,
   loadChanges,
   loadFile,
+  loadImage,
   loadGraph,
   loadEvents,
   connectTerminal,
@@ -300,6 +304,7 @@ export function ChangesView({
             taskId={task.id}
             loadChanges={loadChanges}
             loadFile={loadFile}
+            loadImage={loadImage}
             sendToAgent={sendToAgent}
             onCommit={commitFiles}
             committing={pending === 'commit'}

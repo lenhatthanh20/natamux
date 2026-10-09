@@ -587,7 +587,9 @@ describe('changes', () => {
       headers: authorization,
     })
     expect(list.statusCode).toBe(200)
-    expect(list.json().changes).toEqual([{ path: 'notes.txt', status: 'U', originalPath: null }])
+    expect(list.json().changes).toEqual([
+      { path: 'notes.txt', status: 'U', originalPath: null, added: 1, removed: 0 },
+    ])
 
     const file = await app.inject({
       method: 'GET',
@@ -643,6 +645,74 @@ describe('changes', () => {
   it('needs the token', async () => {
     const response = await app.inject({ method: 'GET', url: '/tasks/T-0001/changes' })
     expect(response.statusCode).toBe(401)
+  })
+})
+
+describe('changed images', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])
+
+  async function workspaceWithImage(): Promise<string> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const workspace: string = created.json().task.workspace
+    writeFileSync(join(workspace, 'logo.png'), PNG)
+    return workspace
+  }
+
+  const image = (query: string) =>
+    app.inject({
+      method: 'GET',
+      url: `/tasks/T-0001/changes/image?${query}`,
+      headers: authorization,
+    })
+
+  it('sends the bytes with a type, nosniff and a policy that runs nothing', async () => {
+    await workspaceWithImage()
+
+    const response = await image('path=logo.png&side=modified')
+
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['content-type']).toBe('image/png')
+    expect(response.headers['x-content-type-options']).toBe('nosniff')
+    expect(response.headers['cache-control']).toBe('no-store')
+    expect(response.headers['content-security-policy']).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    )
+    expect([...response.rawPayload]).toEqual([...PNG])
+  })
+
+  it('answers 400 for an unknown side or a file that is not an image', async () => {
+    const workspace = await workspaceWithImage()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect((await image('path=logo.png&side=both')).statusCode).toBe(400)
+    expect((await image('path=notes.txt&side=modified')).statusCode).toBe(400)
+  })
+
+  it('answers 404 for a side that is not there, or a file that did not change', async () => {
+    await workspaceWithImage()
+
+    expect((await image('path=logo.png&side=original')).statusCode).toBe(404)
+    expect((await image('path=other.png&side=modified')).statusCode).toBe(404)
+  })
+
+  it('answers 413 for an image that is too large', async () => {
+    const workspace = await workspaceWithImage()
+    writeFileSync(join(workspace, 'big.png'), Buffer.alloc(5_000_001))
+
+    const response = await image('path=big.png&side=modified')
+
+    expect(response.statusCode).toBe(413)
+    expect(response.json().error).toBe('too_large')
   })
 })
 
