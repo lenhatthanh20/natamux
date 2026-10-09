@@ -172,7 +172,10 @@ function clientErrorStatus(error: unknown): number | undefined {
 }
 
 export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, rewriteUrl: (request) => stripApiPrefix(request.url ?? '/') })
+  const app = Fastify({
+    logger: false,
+    rewriteUrl: (request) => stripApiPrefix(request.url ?? '/'),
+  })
   const hooks = new AgentHookService(options.service, options.stages)
   await app.register(websocket)
   const servesPage =

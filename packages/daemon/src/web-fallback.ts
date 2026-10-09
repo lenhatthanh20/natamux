@@ -119,6 +119,5 @@ export function registerWebFallback(
     })
   })
   return (request) =>
-    request.is404 &&
-    ((wantsPage(request) && existsSync(indexPath)) || fileFor(request) !== null)
+    request.is404 && ((wantsPage(request) && existsSync(indexPath)) || fileFor(request) !== null)
 }

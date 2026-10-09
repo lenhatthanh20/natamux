@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import type { execFile } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -160,14 +160,18 @@ describe('the helmsman command', () => {
   it('runs the CLI with the app runtime as Node.js', () => {
     const file = writeCliShim(dir, "/Apps/Helms'man", '/app/cli/main.js', 'darwin')
     const text = readFileSync(file, 'utf8')
-    expect(text).toContain("ELECTRON_RUN_AS_NODE=1 exec '/Apps/Helms'\\''man' '/app/cli/main.js' \"$@\"")
+    expect(text).toContain(
+      "ELECTRON_RUN_AS_NODE=1 exec '/Apps/Helms'\\''man' '/app/cli/main.js' \"$@\"",
+    )
     expect(statSync(file).mode & 0o111).not.toBe(0)
   })
 
   it('is a .cmd file on Windows', () => {
     const file = writeCliShim(dir, 'C:\\Helmsman\\Helmsman.exe', 'C:\\cli\\main.js', 'win32')
     expect(file.endsWith('helmsman.cmd')).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain('"C:\\Helmsman\\Helmsman.exe" "C:\\cli\\main.js" %*')
+    expect(readFileSync(file, 'utf8')).toContain(
+      '"C:\\Helmsman\\Helmsman.exe" "C:\\cli\\main.js" %*',
+    )
   })
 })
 
