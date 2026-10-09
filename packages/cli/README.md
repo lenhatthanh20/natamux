@@ -26,6 +26,10 @@ helmsman task edit T-0001 --title "Fix the parser" --priority urgent
 helmsman agent start T-0001 --prompt "Start with the failing test"
 helmsman ask "Should the export keep old columns?"
 helmsman done
+helmsman stage approve T-0001 --stage test-spec
+helmsman stage back T-0001 --to plan --reason "Add the error cases"
+helmsman task link T-0001 --issue ABC-123 --url https://jira.example.com/browse/ABC-123
+helmsman task create "Export tasks" --context github-issue:42
 ```
 
 ```sh
@@ -37,7 +41,11 @@ claude --settings "$(helmsman hooks claude-code)"
 
 `hooks claude-code` prints Claude Code settings that report the session's progress to the daemon, so the task moves between running, needs input and in review by itself. It needs no token to print and never writes the token into the output. See `docs/claude-code-adapter.md`.
 
-`ask` and `done` are for an agent that has no hooks: tell it to run them. They report on the task of the terminal (`HELMSMAN_TASK_ID`, which Helmsman sets in its terminals), or on `--task T-0001`. `ask` moves a running task to needs input; `done` moves it to in review.
+`ask` and `done` report on the task of the terminal (`HELMSMAN_TASK_ID`, which Helmsman sets in its terminals), or on `--task T-0001`. `ask` moves a running stage to needs input. `done` says the stage of this terminal is done (`HELMSMAN_TERMINAL` tells which stage inside a group); the daemon then checks it, and the stage waits for your approval or moves on. Every stage prompt asks the agent to run it.
+
+`stage` moves a task through its stages: `approve`, `back` (to an earlier stage, with `--to` and `--reason`), `skip`, `pass`, `fail` and `start`. Name the stage with `--stage` when two run side by side.
+
+`task link` links a task to its issue or ticket elsewhere; `task create --context` says where its context comes from (`manual`, `github-issue:42`, `skill:ABC-1`, `mcp:ABC-1`).
 
 `agent start` types the agent's command into the task's terminal, as **Start Claude Code** in the dashboard does.
 
