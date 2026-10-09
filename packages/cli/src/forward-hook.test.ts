@@ -46,6 +46,14 @@ describe('forwardHook', () => {
     expect(debug).toEqual([])
   })
 
+  it('drops the byte order mark that Cursor puts first on Windows', async () => {
+    const { calls, run } = setup({ stdin: `\uFEFF${HOOK_JSON}` })
+
+    await run()
+
+    expect(calls[0]?.body).toBe(HOOK_JSON)
+  })
+
   it('posts the JSON of the hook as it is, with the token', async () => {
     const { calls, run } = setup()
 
@@ -151,6 +159,19 @@ describe('helmsman hook', () => {
     expect(result.stdout).toBe('')
     expect(result.stderr).toBe('')
     expect(result.calls).toEqual(['http://127.0.0.1:4317/hooks/claude-code'])
+  })
+
+  it('names the event of a Copilot hook in the address', async () => {
+    const result = await runHook(['hook', 'copilot', 'agentStop'], { HELMSMAN_TOKEN: 'secret' })
+
+    expect(result.calls).toEqual(['http://127.0.0.1:4317/hooks/copilot?event=agentStop'])
+  })
+
+  it('answers {} for the agents that read JSON, even outside a Helmsman session', async () => {
+    for (const agent of ['cursor', 'gemini']) {
+      expect((await runHook(['hook', agent], {})).stdout).toBe('{}\n')
+    }
+    expect((await runHook(['hook', 'codex'], {})).stdout).toBe('')
   })
 
   it('exits 0 and prints nothing outside a Helmsman session', async () => {

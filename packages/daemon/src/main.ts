@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { claudeCodeHookSettings } from '@helmsman/core'
+import { geminiHookSettings, LAUNCHABLE_AGENTS } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
@@ -69,13 +70,24 @@ const terminals = new TerminalService({
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
 writeFileSync(claudeSettingsPath, `${JSON.stringify(claudeCodeHookSettings(daemonUrl), null, 2)}\n`)
+const geminiSettingsPath = join(config.dataDir, 'gemini-settings.json')
+writeFileSync(geminiSettingsPath, `${JSON.stringify(geminiHookSettings(), null, 2)}\n`)
+// HELMSMAN_CLAUDE_COMMAND, HELMSMAN_CODEX_ARGS and so on: the agent id in capitals.
+const perAgent = (suffix: string) =>
+  Object.fromEntries(
+    LAUNCHABLE_AGENTS.map((agent) => [
+      agent,
+      process.env[`HELMSMAN_${agent === 'claude-code' ? 'CLAUDE' : agent.toUpperCase()}_${suffix}`],
+    ]),
+  )
 const agents = new AgentRunner({
   tasks: service,
   terminals,
   claudeSettingsPath,
-  claudeCommand: process.env.HELMSMAN_CLAUDE_COMMAND,
-  copilotCommand: process.env.HELMSMAN_COPILOT_COMMAND,
-  copilotArgs: process.env.HELMSMAN_COPILOT_ARGS,
+  geminiSettingsPath,
+  programs: perAgent('COMMAND'),
+  extraArgs: perAgent('ARGS'),
+  onLaunch: (launch) => genericSignals.watchLaunch(launch),
 })
 
 const stages = new StageRunner({

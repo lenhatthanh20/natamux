@@ -11,6 +11,7 @@ import {
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useState } from 'react'
+import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -30,6 +31,7 @@ import {
 import { formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { StageMarker } from './StageMarker'
+import { StartAgentControl } from './StartAgentControl'
 import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { Select } from './ui/Select'
@@ -46,6 +48,8 @@ type ProgressTabProps = {
   onOpenFile: (name: string) => void
   // What the agent in the first terminal does now, such as "Edit src/a.ts".
   activity?: string
+  // Starts an agent for the stage, for one that failed to start or stopped.
+  startAgent?: (agent: AgentId) => Promise<Task>
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -77,6 +81,7 @@ export function ProgressTab({
   createIssue,
   onOpenFile,
   activity,
+  startAgent,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -99,6 +104,10 @@ export function ProgressTab({
     mutationFn: ({ name, input }: { name: StageAction; input?: StageActionInput }) =>
       act(name, input),
     onError: (error, { name }) => toast(FAILED_ACTION[name], 'error', { detail: error.message }),
+  })
+  const starting = useMutation({
+    mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
+    onError: (error) => toast('Could not start the agent.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -151,6 +160,9 @@ export function ProgressTab({
         onAction={(name) => run(name, { stage: stage.id })}
         onSendBack={() => setSendingBack(entry)}
         onOpenFile={onOpenFile}
+        agent={task.agent}
+        starting={starting.isPending}
+        onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
         activity={
           entry.status === 'current' &&
           entry.state === 'running' &&
@@ -544,8 +556,14 @@ function StageCard({
   onSendBack,
   onOpenFile,
   activity,
+  agent,
+  starting,
+  onStartAgent,
 }: {
   activity?: string
+  agent: string | null
+  starting: boolean
+  onStartAgent?: (agent: AgentId) => void
   stage: Stage
   progress: StageProgress
   file: StageFile | undefined
@@ -730,6 +748,11 @@ function StageCard({
                   Start
                 </Button>
               )}
+              {(state === 'failed' || state === 'needs-input') &&
+                STARTS_ITSELF.has(stage.kind) &&
+                onStartAgent !== undefined && (
+                  <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />
+                )}
               <Button size="xs" variant="ghost" disabled={busy} onClick={() => onAction('skip')}>
                 Skip
               </Button>

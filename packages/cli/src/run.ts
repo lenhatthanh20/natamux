@@ -13,6 +13,9 @@ import {
 import { forwardHook } from './forward-hook.js'
 import { claudeCodeHookSettings } from './hooks.js'
 
+// Agents that read a hook's output as JSON.
+const JSON_ANSWER_AGENTS: readonly string[] = ['cursor', 'gemini']
+
 export type CliIo = {
   stdout: (text: string) => void
   stderr: (text: string) => void
@@ -244,10 +247,16 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
     return EXIT_OK
   }
 
-  // Always exit 0 and print nothing: it runs inside an agent and must never get in its way.
+  // Always exit 0: it runs inside an agent and must never get in its way. It prints an empty JSON
+  // answer for the agents that read one (Cursor blocks a shell command on an answer that is not
+  // JSON), and nothing for the others.
   if (command.name === 'hook.forward') {
+    if (JSON_ANSWER_AGENTS.includes(command.agent)) {
+      io.stdout('{}\n')
+    }
     await forwardHook({
       agent: command.agent,
+      event: command.event,
       env,
       readStdin: options.readStdin ?? (async () => ''),
       fetch: options.fetch ?? fetch,

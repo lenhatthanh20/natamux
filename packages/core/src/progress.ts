@@ -96,6 +96,10 @@ export function stageProgress(
       const approved = sinceStart.filter((event) => APPROVALS.includes(event.type)).at(-1)
       const checked = sinceStart.filter((event) => event.type === 'stage.checked').at(-1)
       const failed = sinceStart.filter((event) => event.type === 'stage.check-failed').at(-1)
+      // Why the stage's agent failed, such as a shell that could not find it.
+      const agentFailed = sinceStart
+        .filter((event) => event.type === 'agent.failed' || event.type === 'stage.failed')
+        .at(-1)
       const skipped = ended?.type === 'stage.skipped'
       const reopened = events.filter((event) => sendsBackTo(event) === stage.id).at(-1)
 
@@ -130,7 +134,9 @@ export function stageProgress(
         reasons:
           failed !== undefined && (checked === undefined || failed.at > checked.at)
             ? strings(failed.payload.reasons)
-            : [],
+            : state === 'failed' && typeof agentFailed?.payload.reason === 'string'
+              ? [agentFailed.payload.reason]
+              : [],
         sentBackFor: typeof reopened?.payload.reason === 'string' ? reopened.payload.reason : null,
       }
     }),

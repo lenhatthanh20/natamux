@@ -55,7 +55,7 @@ export function toolSummary(input: ClaudeCodeInput): string | undefined {
   }
   const toolInput = input.tool_input ?? {}
   const text = (key: string) => (typeof toolInput[key] === 'string' ? toolInput[key] : undefined)
-  const file = text('file_path') ?? text('notebook_path')
+  const file = text('file_path') ?? text('notebook_path') ?? text('absolute_path') ?? text('path')
   if (file) {
     return shorten(`${tool} ${relativePath(file, input.cwd)}`)
   }

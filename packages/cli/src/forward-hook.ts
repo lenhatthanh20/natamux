@@ -6,6 +6,8 @@ const REQUEST_TIMEOUT_MS = 3000
 
 type ForwardOptions = {
   agent: string
+  // Named by the hook command when the agent's JSON does not say it.
+  event?: string
   env: Record<string, string | undefined>
   readStdin: () => Promise<string>
   fetch: FetchFunction
@@ -24,7 +26,8 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
   }
 
   try {
-    const body = await options.readStdin()
+    // Cursor on Windows starts its JSON with a byte order mark, which JSON parsers refuse.
+    const body = (await options.readStdin()).replace(/^\uFEFF/, '')
     if (body.trim() === '') {
       return
     }
@@ -43,7 +46,8 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
     }
 
     const baseUrl = (env.HELMSMAN_URL?.trim() || DEFAULT_URL).replace(/\/+$/, '')
-    const response = await options.fetch(`${baseUrl}/hooks/${encodeURIComponent(agent)}`, {
+    const query = options.event === undefined ? '' : `?event=${encodeURIComponent(options.event)}`
+    const response = await options.fetch(`${baseUrl}/hooks/${encodeURIComponent(agent)}${query}`, {
       method: 'POST',
       headers,
       body,

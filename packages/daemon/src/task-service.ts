@@ -362,14 +362,15 @@ export class TaskService {
   }
 
   // Writes down that an agent was started in the task's terminal, and names it on the task.
-  recordAgentLaunch(taskId: string, agent: string): Task {
+  // The program is the command the shell looks for, to tell when it was not found.
+  recordAgentLaunch(taskId: string, agent: string, program?: string): Task {
     const task = this.getTask(taskId)
     const event: TaskEvent = {
       taskId,
       source: 'human',
       type: 'agent.launched',
       at: this.timestamp(),
-      payload: { agent },
+      payload: program === undefined ? { agent } : { agent, program },
     }
     const updated: Task = { ...task, agent, updatedAt: event.at }
 
