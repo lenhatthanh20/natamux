@@ -6,6 +6,7 @@ export type AppEventName =
   | 'focus-part'
   | 'workspace-tab'
   | 'diff-step'
+  | 'diff-change-step'
   | 'refresh-changes'
   | 'diff-comment'
   | 'terminal-find'

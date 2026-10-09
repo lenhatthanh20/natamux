@@ -16,11 +16,35 @@ type MonacoFileProps = {
   onLine?: (line: number) => void
 }
 
+// Every line marked as added or removed.
+function wholeFile(
+  model: MonacoEditor.ITextModel,
+  kind: 'added' | 'removed',
+): MonacoEditor.IModelDeltaDecoration[] {
+  return [
+    {
+      range: new monaco.Range(1, 1, Math.max(model.getLineCount(), 1), 1),
+      options: {
+        isWholeLine: true,
+        className: kind === 'added' ? 'hm-whole-added' : 'hm-whole-removed',
+        linesDecorationsClassName: kind === 'added' ? 'hm-gutter-added' : 'hm-gutter-removed',
+      },
+    },
+  ]
+}
+
 // A file that did not exist before (or is gone now) is not a diff. It is shown whole, read only,
 // with every line marked, and without the empty last line that its final line break would add.
 export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFileProps) {
   const container = useRef<HTMLElement>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const decorationsRef = useRef<MonacoEditor.IEditorDecorationsCollection | null>(null)
+  const latestText = useRef(text)
+  latestText.current = text
+  // The text the model holds, so a refresh with the same text costs nothing.
+  const shownText = useRef<string | null>(null)
+  // Monaco moves the cursor when the text is set. That move is not the user's.
+  const quiet = useRef(false)
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
   const theme = useResolvedTheme()
@@ -30,13 +54,18 @@ export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFil
   wrapRef.current = wrap
   const uiSize = useUiSize()
 
+  // Only a new file or a new UI size builds the editor again. New text goes into the same model.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new UI size builds the editor again, with the new font size.
   useEffect(() => {
     const element = container.current
     if (!element) {
       return
     }
-    const model = monaco.editor.createModel(trimTrailingNewline(text), languageForPath(path))
+    shownText.current = latestText.current
+    const model = monaco.editor.createModel(
+      trimTrailingNewline(latestText.current),
+      languageForPath(path),
+    )
     const editor = monaco.editor.create(element, {
       model,
       readOnly: true,
@@ -60,28 +89,44 @@ export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFil
       theme: themeRef.current === 'dark' ? DARK_THEME : LIGHT_THEME,
     })
     editorRef.current = editor
-    editor.createDecorationsCollection([
-      {
-        range: new monaco.Range(1, 1, Math.max(model.getLineCount(), 1), 1),
-        options: {
-          isWholeLine: true,
-          className: kind === 'added' ? 'hm-whole-added' : 'hm-whole-removed',
-          linesDecorationsClassName: kind === 'added' ? 'hm-gutter-added' : 'hm-gutter-removed',
-        },
-      },
-    ])
-    const cursor = editor.onDidChangeCursorPosition((event) =>
-      onLineRef.current?.(event.position.lineNumber),
-    )
+    decorationsRef.current = editor.createDecorationsCollection(wholeFile(model, kind))
+    const cursor = editor.onDidChangeCursorPosition((event) => {
+      if (!quiet.current) {
+        onLineRef.current?.(event.position.lineNumber)
+      }
+    })
 
     return () => {
       editorRef.current = null
+      decorationsRef.current = null
+      shownText.current = null
       cursor.dispose()
       editor.setModel(null)
       model.dispose()
       editor.dispose()
     }
-  }, [path, text, kind, uiSize])
+  }, [path, kind, uiSize])
+
+  // The agent may change the file while it is open. The reader keeps the place.
+  useEffect(() => {
+    const editor = editorRef.current
+    const model = editor?.getModel()
+    if (!editor || !model || shownText.current === null || shownText.current === text) {
+      return
+    }
+    shownText.current = text
+    const view = editor.saveViewState()
+    quiet.current = true
+    try {
+      model.setValue(trimTrailingNewline(text))
+      decorationsRef.current?.set(wholeFile(model, kind))
+      if (view !== null) {
+        editor.restoreViewState(view)
+      }
+    } finally {
+      quiet.current = false
+    }
+  }, [text, kind])
 
   useEffect(() => {
     monaco.editor.setTheme(theme === 'dark' ? DARK_THEME : LIGHT_THEME)

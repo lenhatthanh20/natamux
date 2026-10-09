@@ -1,33 +1,28 @@
-import type { ChangeEntry, FileDiff } from '@helmsman/core'
-import { useQuery } from '@tanstack/react-query'
-import {
-  ChevronDown,
-  ChevronUp,
-  Columns2,
-  FileDiff as FileDiffIcon,
-  RefreshCw,
-  Rows2,
-  WrapText,
-} from 'lucide-react'
-import { type KeyboardEvent, lazy, Suspense, useEffect, useState } from 'react'
+import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@helmsman/core'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FileDiff as FileDiffIcon, RefreshCw } from 'lucide-react'
+import { type KeyboardEvent, lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
+import { useFileViewMode } from '../hooks/useFileViewMode'
+import { useStoredFlag } from '../hooks/useStoredFlag'
 import { useAppEvent } from '../lib/app-events'
+import { fileOrder } from '../lib/change-tree'
 import {
   CHANGE_LABEL,
-  countLabel,
   countLines,
   splitPath,
   stepFile,
   wholeFileKind,
   wrapsByDefault,
 } from '../lib/changes'
-import { shortcutOf } from '../lib/commands'
 import { AgentComment } from './AgentComment'
+import { ChangedFiles } from './ChangedFiles'
+import { type BodyKind, DiffToolbar } from './DiffToolbar'
+import { ImageDiff } from './ImageDiff'
 import { Button } from './ui/Button'
 import { EmptyState } from './ui/EmptyState'
 import { IconButton } from './ui/IconButton'
 import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
-import { Segmented } from './ui/Segmented'
 import { Select } from './ui/Select'
 import { SkeletonList } from './ui/Skeleton'
 import { textarea } from './ui/styles'
@@ -41,6 +36,9 @@ const REFRESH_MS = 10_000
 const WIDE_FROM = 720
 // Side by side needs this much room for the diff itself.
 const SIDE_BY_SIDE_FROM = 720
+// Under this width the layout switch shows icons only.
+const FULL_LABELS_FROM = 960
+const NO_CHANGES: ChangeEntry[] = []
 
 const LETTER_COLOR: Record<ChangeEntry['status'], string> = {
   M: 'text-modified',
@@ -55,6 +53,7 @@ type ChangesPanelProps = {
   taskId: string
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
+  loadImage: (path: string, side: ImageSide) => Promise<Blob>
   sendToAgent: (text: string) => Promise<unknown>
   // Commits and says so. Resolves true when it worked, so the box can empty itself.
   onCommit: (message: string, fileCount: number) => Promise<boolean>
@@ -66,43 +65,146 @@ type ChangesPanelProps = {
   onFileChange?: (path: string | null) => void
 }
 
-function FileBody({
-  file,
-  sideBySide,
-  wrap,
-  onLine,
-  onStats,
-}: {
+type LineStats = { added: number; removed: number }
+type ChangeInfo = { index: number; total: number }
+
+// An image that cannot be shown as text, or an SVG that the reader wants to see drawn.
+function showsImage(file: FileDiff, svgPreview: boolean): boolean {
+  return imageTypeOf(file.path) !== null && (file.binary || file.tooLarge || svgPreview)
+}
+
+function bodyKindOf(file: FileDiff | undefined, svgPreview: boolean): BodyKind {
+  if (file === undefined) {
+    return 'pending'
+  }
+  if (showsImage(file, svgPreview)) {
+    return 'image'
+  }
+  if (file.binary || file.tooLarge) {
+    return 'notice'
+  }
+  return wholeFileKind(file.status) === null ? 'text' : 'whole'
+}
+
+function Notice({ children }: { children: string }) {
+  return (
+    <p role="status" className="p-4 text-muted">
+      {children}
+    </p>
+  )
+}
+
+type FileBodyProps = {
+  taskId: string
   file: FileDiff
   sideBySide: boolean
   wrap: boolean
+  collapseUnchanged: boolean
+  ignoreWhitespace: boolean
+  showMoves: boolean
+  svgPreview: boolean
+  // Both sides have the same text.
+  sameText: boolean
+  // The diff found no change, but the texts differ: only whitespace or line endings changed.
+  whitespaceOnly: boolean
+  onShowWhitespace: () => void
+  loadImage: (path: string, side: ImageSide) => Promise<Blob>
   onLine: (line: number) => void
-  onStats: (stats: { added: number; removed: number }) => void
-}) {
+  onStats: (stats: LineStats) => void
+  onChanges: (info: ChangeInfo) => void
+}
+
+function FileBody({
+  taskId,
+  file,
+  sideBySide,
+  wrap,
+  collapseUnchanged,
+  ignoreWhitespace,
+  showMoves,
+  svgPreview,
+  sameText,
+  whitespaceOnly,
+  onShowWhitespace,
+  loadImage,
+  onLine,
+  onStats,
+  onChanges,
+}: FileBodyProps) {
+  if (showsImage(file, svgPreview)) {
+    return (
+      <ImageDiff
+        taskId={taskId}
+        path={file.path}
+        status={file.status}
+        layout={sideBySide ? 'side' : 'stacked'}
+        loadImage={loadImage}
+      />
+    )
+  }
   if (file.binary) {
-    return <p className="p-4 text-muted">This file is binary. It changed, but it is not shown.</p>
+    return <Notice>This file is binary. It changed, but it is not shown.</Notice>
   }
   if (file.tooLarge) {
-    return <p className="p-4 text-muted">This file is larger than 1 MB, so it is not shown.</p>
+    return <Notice>This file is larger than 1 MB, so it is not shown.</Notice>
   }
+  const viewer = <SkeletonList rows={6} rowHeight={28} label="Loading the viewer" />
   const kind = wholeFileKind(file.status)
-  const whole = kind === 'added' ? file.modified : kind === 'removed' ? file.original : null
-  return (
-    <Suspense fallback={<SkeletonList rows={6} rowHeight={28} label="Loading the viewer" />}>
-      {kind !== null && whole !== null ? (
+  if (kind !== null) {
+    const whole = (kind === 'added' ? file.modified : file.original) ?? ''
+    if (whole === '') {
+      return <Notice>Empty file.</Notice>
+    }
+    return (
+      <Suspense fallback={viewer}>
         <MonacoFile path={file.path} text={whole} kind={kind} wrap={wrap} onLine={onLine} />
-      ) : (
+      </Suspense>
+    )
+  }
+  if (sameText) {
+    return (
+      <Notice>
+        {file.status === 'R'
+          ? 'Renamed without changes.'
+          : 'The text did not change. Only the file mode may differ.'}
+      </Notice>
+    )
+  }
+  return (
+    <>
+      {whitespaceOnly && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-1.5 text-muted"
+        >
+          <span className="min-w-0 flex-1">
+            {ignoreWhitespace
+              ? 'Only whitespace or line endings changed.'
+              : 'Only line endings changed.'}
+          </span>
+          {ignoreWhitespace && (
+            <Button size="sm" onClick={onShowWhitespace}>
+              Show whitespace
+            </Button>
+          )}
+        </div>
+      )}
+      <Suspense fallback={viewer}>
         <MonacoDiff
           path={file.path}
           original={file.original ?? ''}
           modified={file.modified ?? ''}
           sideBySide={sideBySide}
           wrap={wrap}
+          collapseUnchanged={collapseUnchanged}
+          ignoreWhitespace={ignoreWhitespace}
+          showMoves={showMoves}
           onLine={onLine}
           onStats={onStats}
+          onChanges={onChanges}
         />
-      )}
-    </Suspense>
+      </Suspense>
+    </>
   )
 }
 
@@ -111,6 +213,7 @@ export function ChangesPanel({
   taskId,
   loadChanges,
   loadFile,
+  loadImage,
   sendToAgent,
   onCommit,
   committing,
@@ -119,21 +222,42 @@ export function ChangesPanel({
   onFileChange,
 }: ChangesPanelProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(requestedFile)
-  const [sideBySide, setSideBySide] = useState(true)
+  const [sideBySide, setSideBySide] = useStoredFlag('helmsman.diff-side-by-side', true)
+  const [collapseUnchanged, setCollapseUnchanged] = useStoredFlag(
+    'helmsman.diff-collapse-unchanged',
+    true,
+  )
+  const [ignoreWhitespace, setIgnoreWhitespace] = useStoredFlag(
+    'helmsman.diff-ignore-whitespace',
+    true,
+  )
+  const [showMoves, setShowMoves] = useStoredFlag('helmsman.diff-show-moves', false)
+  const [wrapProse, setWrapProse] = useStoredFlag('helmsman.diff-wrap-prose', true)
+  const [wrapCode, setWrapCode] = useStoredFlag('helmsman.diff-wrap-code', false)
   const [wrapChoice, setWrapChoice] = useState<boolean | null>(null)
+  // The SVG file whose image shows instead of its text.
+  const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [line, setLine] = useState<number | null>(null)
-  const [stats, setStats] = useState<{ path: string; added: number; removed: number } | null>(null)
+  const [stats, setStats] = useState<({ path: string } & LineStats) | null>(null)
+  const [changeInfo, setChangeInfo] = useState<({ path: string } & ChangeInfo) | null>(null)
+  const [viewMode, setViewMode] = useFileViewMode()
   const [rootRef, rootWidth] = useElementWidth<HTMLDivElement>()
   const files = useStoredWidth('helmsman.files-width', 260, 200, 420)
+  const queryClient = useQueryClient()
 
   const changes = useQuery({
     queryKey: ['changes', taskId],
     queryFn: loadChanges,
     refetchInterval: REFRESH_MS,
   })
-  const list = changes.data ?? []
-  const current = list.find((entry) => entry.path === selectedPath) ?? list[0] ?? null
+  const list = changes.data ?? NO_CHANGES
+  // The order the file panel shows, so [ and ] move the way the eye reads it.
+  const order = useMemo(() => fileOrder(list, viewMode), [list, viewMode])
+  const current =
+    list.find((entry) => entry.path === selectedPath) ??
+    list.find((entry) => entry.path === order[0]) ??
+    null
 
   const file = useQuery({
     queryKey: ['file-diff', taskId, current?.path, current?.status],
@@ -146,14 +270,27 @@ export function ChangesPanel({
     enabled: current !== null,
     refetchInterval: REFRESH_MS,
   })
+  const shown = current !== null && file.data?.path === current.path ? file.data : undefined
+  const sameText = useMemo(() => shown !== undefined && shown.original === shown.modified, [shown])
 
   // Unmeasured counts as wide: the first frame has the file panel, and tests have no layout.
   const wide = rootWidth === null || rootWidth >= WIDE_FROM
   const diffWidth =
     rootWidth === null ? Number.POSITIVE_INFINITY : rootWidth - (wide ? files.width : 0)
   const canSideBySide = diffWidth >= SIDE_BY_SIDE_FROM
+  // The stored choice stays when the window is narrow, and comes back when it is wide again.
   const inline = !sideBySide || !canSideBySide
-  const wrap = wrapChoice ?? (current === null ? false : wrapsByDefault(current.path))
+  const prose = current === null ? false : wrapsByDefault(current.path)
+  const wrap = prose ? wrapProse : wrapCode
+  const setWrap = prose ? setWrapProse : setWrapCode
+  const isSvg = current !== null && imageTypeOf(current.path) === 'image/svg+xml'
+  const svgPreview = isSvg && previewPath === current?.path
+  const body = bodyKindOf(shown, svgPreview)
+  const fileStats = current !== null && stats?.path === current.path ? stats : null
+  const fileChanges = current !== null && changeInfo?.path === current.path ? changeInfo : null
+  // The preview switch is for an SVG that is shown as text. A big SVG is an image anyway.
+  const svgSwitch =
+    isSvg && shown !== undefined && !shown.binary && !shown.tooLarge ? svgPreview : null
 
   const choose = (path: string | null) => {
     if (path !== null) {
@@ -161,17 +298,11 @@ export function ChangesPanel({
       setLine(null)
     }
   }
-  const step = (by: 1 | -1) =>
-    choose(
-      stepFile(
-        list.map((entry) => entry.path),
-        current?.path ?? null,
-        by,
-      ),
-    )
+  const step = (by: 1 | -1) => choose(stepFile(order, current?.path ?? null, by))
+  // Images are under 'file-diff' too, so they are read again as well.
   const refresh = () => {
-    changes.refetch()
-    file.refetch()
+    void changes.refetch()
+    void queryClient.invalidateQueries({ queryKey: ['file-diff', taskId] })
   }
 
   // [ and ] move between files, Shift+R reads again, Mod+Shift+A goes to the comment box. The keys
@@ -238,49 +369,29 @@ export function ChangesPanel({
   )
 
   const toolbar = current !== null && (
-    <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-1">
-      <DiffTitle entry={current} />
-      <span className="flex-1" />
-      <DiffCounts
-        path={current.path}
-        file={file.data}
-        stats={stats?.path === current.path ? stats : null}
-      />
-      <Segmented
-        label="Diff layout"
-        value={inline ? 'inline' : 'side'}
-        onChange={(value) => setSideBySide(value === 'side')}
-        options={[
-          {
-            value: 'side',
-            label: 'Side by side',
-            icon: Columns2,
-            disabledReason: canSideBySide ? undefined : 'Needs a wider window',
-          },
-          { value: 'inline', label: 'Inline', icon: Rows2 },
-        ]}
-      />
-      <IconButton
-        label="Wrap long lines"
-        icon={WrapText}
-        aria-pressed={wrap}
-        onClick={() => setWrapChoice(!wrap)}
-      />
-      <IconButton
-        label="Previous file"
-        icon={ChevronUp}
-        shortcut={shortcutOf('diff.previous')}
-        disabled={list.length < 2}
-        onClick={() => step(-1)}
-      />
-      <IconButton
-        label="Next file"
-        icon={ChevronDown}
-        shortcut={shortcutOf('diff.next')}
-        disabled={list.length < 2}
-        onClick={() => step(1)}
-      />
-    </div>
+    <DiffToolbar
+      entry={current}
+      file={shown}
+      body={body}
+      stats={fileStats}
+      changes={fileChanges}
+      inline={inline}
+      sideBySideBlocked={canSideBySide ? undefined : 'Needs a wider window'}
+      onSideBySide={setSideBySide}
+      compact={diffWidth < FULL_LABELS_FROM}
+      collapseUnchanged={collapseUnchanged}
+      onCollapseUnchanged={setCollapseUnchanged}
+      wrap={wrap}
+      onWrap={setWrap}
+      svgPreview={svgSwitch}
+      onSvgPreview={(preview) => setPreviewPath(preview ? current.path : null)}
+      ignoreWhitespace={ignoreWhitespace}
+      onIgnoreWhitespace={setIgnoreWhitespace}
+      showMoves={showMoves}
+      onShowMoves={setShowMoves}
+      canStepFiles={order.length >= 2}
+      onStepFile={step}
+    />
   )
 
   const diff = (
@@ -295,13 +406,23 @@ export function ChangesPanel({
             {file.error.message}
           </p>
         )}
-        {current !== null && file.data && (
+        {current !== null && shown !== undefined && (
           <FileBody
-            file={file.data}
+            taskId={taskId}
+            file={shown}
             sideBySide={!inline}
             wrap={wrap}
+            collapseUnchanged={collapseUnchanged}
+            ignoreWhitespace={ignoreWhitespace}
+            showMoves={showMoves}
+            svgPreview={svgPreview}
+            sameText={sameText}
+            whitespaceOnly={fileChanges?.total === 0}
+            onShowWhitespace={() => setIgnoreWhitespace(false)}
+            loadImage={loadImage}
             onLine={setLine}
             onStats={(next) => setStats({ path: current.path, ...next })}
+            onChanges={(next) => setChangeInfo({ path: current.path, ...next })}
           />
         )}
       </div>
@@ -319,6 +440,7 @@ export function ChangesPanel({
     )
   }
 
+  const byPath = new Map(list.map((entry) => [entry.path, entry]))
   return (
     <div ref={rootRef} className={`flex min-h-0 flex-1 ${wide ? '' : 'flex-col overflow-y-auto'}`}>
       {wide ? (
@@ -327,34 +449,28 @@ export function ChangesPanel({
           style={{ width: files.width }}
           className="flex shrink-0 flex-col bg-surface"
         >
-          <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line pr-1 pl-3">
-            <span className="flex-1 text-xs font-medium whitespace-nowrap text-muted">
-              {changes.data ? countLabel(list.length) : 'Reading changes.'}
-            </span>
-            <IconButton
-              label="Refresh"
-              icon={RefreshCw}
-              size="xs"
-              shortcut={shortcutOf('changes.refresh')}
-              onClick={refresh}
-            />
-          </div>
-          {changes.isError && (
-            <p role="alert" className="p-3">
-              {changes.error.message}
-            </p>
-          )}
-          {changes.isPending && <SkeletonList rows={6} rowHeight={28} label="Reading changes" />}
-          <ul aria-label="Changed files" className="min-h-0 flex-1 overflow-y-auto p-1">
-            {list.map((entry) => (
-              <FileRow
-                key={entry.path}
-                entry={entry}
-                selected={entry.path === current?.path}
-                onSelect={() => choose(entry.path)}
-              />
-            ))}
-          </ul>
+          <ChangedFiles
+            taskId={taskId}
+            list={list}
+            loaded={changes.data !== undefined}
+            mode={viewMode}
+            onModeChange={setViewMode}
+            selectedPath={current?.path ?? null}
+            onSelect={choose}
+            onRefresh={refresh}
+            status={
+              <>
+                {changes.isError && (
+                  <p role="alert" className="p-3">
+                    {changes.error.message}
+                  </p>
+                )}
+                {changes.isPending && (
+                  <SkeletonList rows={6} rowHeight={28} label="Reading changes" />
+                )}
+              </>
+            }
+          />
           {commitBox}
         </aside>
       ) : (
@@ -365,9 +481,9 @@ export function ChangesPanel({
             onChange={(event) => choose(event.target.value)}
             className="flex-1"
           >
-            {list.map((entry) => (
-              <option key={entry.path} value={entry.path}>
-                {entry.status} {entry.path}
+            {order.map((path) => (
+              <option key={path} value={path}>
+                {byPath.get(path)?.status} {path}
               </option>
             ))}
           </Select>

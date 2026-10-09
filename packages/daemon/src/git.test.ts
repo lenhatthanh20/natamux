@@ -1,20 +1,26 @@
 import { existsSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ChangeEntry, ChangeStatus } from '@helmsman/core'
+import type { ChangeEntry, ChangeStatus, ImageSide } from '@helmsman/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
   commitAll,
+  countTextLines,
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
   GitError,
   GitHubError,
+  ImageSideMissingError,
+  ImageTooLargeError,
   listChanges,
+  MAX_IMAGE_BYTES,
+  NotAnImageError,
   NothingToCommitError,
   OutsideWorkspaceError,
   parseLog,
   parseNumstat,
+  parseNumstatZ,
   parsePullRequestView,
   parseRefs,
   parseStatus,
@@ -23,6 +29,7 @@ import {
   type RunGh,
   readDiffStat,
   readFileDiff,
+  readFileImage,
   readGitGraph,
   readPullRequestStatus,
   removeWorktree,
@@ -288,6 +295,121 @@ describe('readFileDiff', () => {
     await expect(readFileDiff(worktreePath, change('link.txt', 'U'))).rejects.toThrow(
       OutsideWorkspaceError,
     )
+  })
+})
+
+describe('parseNumstatZ', () => {
+  it('reads plain, renamed and binary records, keyed by the path now', () => {
+    const output = ['3\t1\tsrc/a.ts', '0\t0\t', 'old.ts', 'new.ts', '-\t-\tlogo.png', ''].join('\0')
+
+    expect(parseNumstatZ(output)).toEqual(
+      new Map([
+        ['src/a.ts', { added: 3, removed: 1 }],
+        ['new.ts', { added: 0, removed: 0 }],
+        ['logo.png', { added: null, removed: null }],
+      ]),
+    )
+    expect(parseNumstatZ('')).toEqual(new Map())
+  })
+})
+
+describe('countTextLines', () => {
+  it('counts line breaks, and a last line without one', () => {
+    expect(countTextLines(Buffer.from(''))).toBe(0)
+    expect(countTextLines(Buffer.from('a\nb\n'))).toBe(2)
+    expect(countTextLines(Buffer.from('a\nb'))).toBe(2)
+    expect(countTextLines(Buffer.from('\n'))).toBe(1)
+  })
+})
+
+describe('listChanges with counts', () => {
+  it('counts the lines of modified, deleted, untracked and binary files', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'tracked.txt'), 'one\n')
+    writeFileSync(join(worktreePath, 'gone.txt'), 'a\nb\n')
+    writeFileSync(join(worktreePath, 'data.bin'), Buffer.from([1, 0, 2]))
+    runGit(worktreePath, 'add', '.')
+    runGit(worktreePath, 'commit', '-m', 'add files')
+
+    writeFileSync(join(worktreePath, 'tracked.txt'), 'one\ntwo\nthree\n')
+    rmSync(join(worktreePath, 'gone.txt'))
+    writeFileSync(join(worktreePath, 'data.bin'), Buffer.from([1, 0, 3]))
+    writeFileSync(join(worktreePath, 'new.txt'), 'a\nb\nc')
+    writeFileSync(join(worktreePath, 'new.bin'), Buffer.from([0, 1]))
+
+    expect(await listChanges(worktreePath, { counts: true })).toEqual([
+      { path: 'data.bin', status: 'M', originalPath: null, added: null, removed: null },
+      { path: 'gone.txt', status: 'D', originalPath: null, added: 0, removed: 2 },
+      { path: 'new.bin', status: 'U', originalPath: null, added: null, removed: null },
+      { path: 'new.txt', status: 'U', originalPath: null, added: 3, removed: 0 },
+      { path: 'tracked.txt', status: 'M', originalPath: null, added: 2, removed: 0 },
+    ])
+  })
+
+  it('leaves the counts out by default', async () => {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'new.txt'), 'a\n')
+
+    const [entry] = await listChanges(worktreePath)
+
+    expect(entry && 'added' in entry).toBe(false)
+  })
+})
+
+describe('readFileImage', () => {
+  const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]
+  const read = (path: string, status: ChangeStatus, side: ImageSide) =>
+    readFileImage(worktreePath, { path, status, originalPath: null }, side)
+
+  async function prepare(): Promise<void> {
+    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    writeFileSync(join(worktreePath, 'logo.png'), Buffer.from([...PNG_HEAD, 1]))
+    runGit(worktreePath, 'add', 'logo.png')
+    runGit(worktreePath, 'commit', '-m', 'add logo')
+  }
+
+  it('gives both sides of a modified image', async () => {
+    await prepare()
+    writeFileSync(join(worktreePath, 'logo.png'), Buffer.from([...PNG_HEAD, 2]))
+
+    const before = await read('logo.png', 'M', 'original')
+    const after = await read('logo.png', 'M', 'modified')
+
+    expect(before.type).toBe('image/png')
+    expect([...before.bytes]).toEqual([...PNG_HEAD, 1])
+    expect(after.type).toBe('image/png')
+    expect([...after.bytes]).toEqual([...PNG_HEAD, 2])
+  })
+
+  it('has no original for a new image, and no modified side for a deleted one', async () => {
+    await prepare()
+    writeFileSync(join(worktreePath, 'new.png'), Buffer.from(PNG_HEAD))
+
+    await expect(read('new.png', 'A', 'original')).rejects.toThrow(ImageSideMissingError)
+    await expect(read('logo.png', 'D', 'modified')).rejects.toThrow(ImageSideMissingError)
+  })
+
+  it('refuses an image that is too large', async () => {
+    await prepare()
+    writeFileSync(join(worktreePath, 'big.png'), Buffer.alloc(MAX_IMAGE_BYTES + 1))
+
+    await expect(read('big.png', 'U', 'modified')).rejects.toThrow(ImageTooLargeError)
+  })
+
+  it('refuses a link that leaves the worktree', async () => {
+    await prepare()
+    const secret = join(repo.root, 'secret.png')
+    writeFileSync(secret, Buffer.from(PNG_HEAD))
+    symlinkSync(secret, join(worktreePath, 'link.png'))
+
+    await expect(read('link.png', 'U', 'modified')).rejects.toThrow(OutsideWorkspaceError)
+  })
+
+  it('refuses a file that is not an image', async () => {
+    await prepare()
+    writeFileSync(join(worktreePath, 'a.ts'), 'export {}\n')
+
+    await expect(read('a.ts', 'U', 'modified')).rejects.toThrow(NotAnImageError)
   })
 })
 

@@ -829,6 +829,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             }}
             loadChanges={() => api.listChanges(changesTask.id)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
+            loadImage={(path, side) => api.getFileImage(changesTask.id, path, side)}
             loadGraph={() => api.getGitGraph(changesTask.id)}
             loadEvents={() => api.listEvents(changesTask.id)}
             resume={() => eventMutation.mutate({ taskId: changesTask.id, type: 'agent.resumed' })}
