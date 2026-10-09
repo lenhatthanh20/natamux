@@ -59,6 +59,15 @@ export function isQuiet(task: Task, now: Date): boolean {
   return task.state === 'running' && now.getTime() - Date.parse(task.updatedAt) >= QUIET_AFTER_MS
 }
 
+// What the agent button of a task does. While the agent works or waits there is nothing to start.
+// After it ended or failed, starting it again is a restart.
+export function agentAction(task: Pick<Task, 'state' | 'agent'>): 'start' | 'restart' | null {
+  if (task.state === 'running' || task.state === 'needs-input') {
+    return null
+  }
+  return task.agent === null ? 'start' : 'restart'
+}
+
 // Tasks that need the user: waiting on them, or running but quiet. The longest wait comes first.
 export function needsMeTasks(tasks: readonly Task[], now: Date): Task[] {
   return tasks

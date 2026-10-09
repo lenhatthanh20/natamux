@@ -1,9 +1,12 @@
 import type { TerminalServerMessage } from '@helmsman/core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
+  KILL_GRACE_MS,
+  lastLines,
   MAX_SESSIONS,
   NoTerminalError,
+  REPLAY_SCROLLBACK_LINES,
   SCROLLBACK_CHARS,
   TerminalLimitError,
   TerminalService,
@@ -193,6 +196,125 @@ describe('several terminals of a task', () => {
     expect(ptys).toHaveLength(2)
     expect(ptys[1]?.written).toEqual(['claude\r'])
     expect(service.isOpen('T-0001', '1')).toBe(true)
+  })
+})
+
+describe('closing a shell', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('forgets the shell at once, and a new shell with the same name is a new process', () => {
+    const { service, ptys } = setup()
+    const old = client()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', old, size, '2')
+    ptys[1]?.emit('old output')
+
+    service.closeOne('T-0001', '2')
+    expect(service.list('T-0001')).toEqual(['1'])
+    expect(old.messages.at(-1)).toEqual({ type: 'exit', code: null })
+
+    const fresh = client()
+    service.attach('T-0001', fresh, size, '2')
+    expect(ptys).toHaveLength(3)
+    expect(ptys[2]?.pid).not.toBe(ptys[1]?.pid)
+    expect(fresh.messages).toEqual([])
+  })
+
+  it('forgets the shell even when its process is slow to end, and kills it after the grace time', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size, '2')
+    const stubborn = ptys[0]
+    if (!stubborn) {
+      throw new Error('No shell was started.')
+    }
+    stubborn.stubborn = true
+
+    service.closeOne('T-0001', '2')
+    expect(service.isOpen('T-0001', '2')).toBe(false)
+    expect(stubborn.signals).toEqual(['SIGHUP'])
+    expect(stubborn.killed).toBe(false)
+
+    vi.advanceTimersByTime(KILL_GRACE_MS)
+    expect(stubborn.signals).toEqual(['SIGHUP', 'SIGKILL'])
+    expect(stubborn.killed).toBe(true)
+  })
+
+  it('does not send SIGKILL to a shell that ended after SIGHUP', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size, '2')
+
+    service.closeOne('T-0001', '2')
+    vi.advanceTimersByTime(KILL_GRACE_MS * 2)
+
+    expect(ptys[0]?.signals).toEqual(['SIGHUP'])
+  })
+
+  it('does not hand the output of a closed shell to anyone', () => {
+    const { spawn, ptys } = fakeSpawner()
+    const heard: string[] = []
+    const service = new TerminalService({
+      spawn,
+      workspaceOf: (taskId) => `/work/${taskId}`,
+      onOutput: (_task, _terminal, data) => heard.push(data),
+    })
+    service.attach('T-0001', client(), size, '2')
+    service.closeOne('T-0001', '2')
+
+    ptys[0]?.emit('late')
+
+    expect(heard).toEqual([])
+  })
+})
+
+describe('attaching to a running shell', () => {
+  it('sets the size of the new screen before it replays the output', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit('hello')
+
+    service.attach('T-0001', client(), { cols: 100, rows: 30 })
+
+    expect(ptys[0]?.sizes).toEqual([{ cols: 100, rows: 30 }])
+  })
+
+  it('does not resize a shell that it starts', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    expect(ptys[0]?.sizes).toEqual([])
+  })
+
+  it('replays the last screen and a thousand lines, not everything', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}`)
+    ptys[0]?.emit(`${lines.join('\n')}\n`)
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    const replay = later.messages[0]
+    const text = replay?.type === 'output' ? replay.data : ''
+    expect(text.split('\n').filter((line) => line !== '')).toHaveLength(
+      size.rows + REPLAY_SCROLLBACK_LINES,
+    )
+    expect(text.endsWith('line 2999\n')).toBe(true)
+  })
+})
+
+describe('lastLines', () => {
+  it('keeps the last lines, and the final line break', () => {
+    expect(lastLines('a\nb\nc\n', 2)).toBe('b\nc\n')
+    expect(lastLines('a\nb\nc', 2)).toBe('b\nc')
+  })
+
+  it('returns everything when there are fewer lines', () => {
+    expect(lastLines('a\nb', 5)).toBe('a\nb')
+    expect(lastLines('', 5)).toBe('')
+    expect(lastLines('\nb', 5)).toBe('\nb')
   })
 })
 

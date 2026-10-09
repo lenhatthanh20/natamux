@@ -8,7 +8,8 @@ export type PtyProcess = {
   onExit: (listener: (code: number | null) => void) => void
   write: (data: string) => void
   resize: (cols: number, rows: number) => void
-  kill: () => void
+  // A signal name such as 'SIGHUP'. Without one, the default of the platform.
+  kill: (signal?: string) => void
 }
 
 export type SpawnPty = (
@@ -37,11 +38,32 @@ export class TerminalLimitError extends Error {
 export const SCROLLBACK_CHARS = 200_000
 export const MAX_SESSIONS = 20
 export const TICKET_TTL_MS = 30_000
+// A new dashboard gets the last screen and this many lines before it, not the whole history.
+export const REPLAY_SCROLLBACK_LINES = 1000
+// A shell gets this long to end after SIGHUP, then it is killed.
+export const KILL_GRACE_MS = 2000
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
 const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
 // A task can have several terminals, named "1", "2" and so on. The agent runs in the first.
 export const MAIN_TERMINAL = '1'
+
+// The last `count` lines of a text, line breaks kept.
+export function lastLines(text: string, count: number): string {
+  // A text that ends with a line break has an empty last line, which is not counted.
+  let start = text.endsWith('\n') ? text.length - 1 : text.length
+  for (let seen = 0; seen < count; seen += 1) {
+    if (start <= 0) {
+      return text
+    }
+    const found = text.lastIndexOf('\n', start - 1)
+    if (found === -1) {
+      return text
+    }
+    start = found
+  }
+  return text.slice(start + 1)
+}
 
 function sessionKey(taskId: string, terminal: string): string {
   return `${taskId}/${terminal}`
@@ -53,6 +75,9 @@ type Session = {
   pty: PtyProcess
   scrollback: string
   clients: Set<TerminalClient>
+  size: TerminalSize
+  // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
+  stopKillTimer?: () => void
 }
 
 type TerminalServiceOptions = {
@@ -126,9 +151,17 @@ export class TerminalService {
     size: TerminalSize,
     terminal = MAIN_TERMINAL,
   ): () => void {
+    const existed = this.sessions.has(sessionKey(taskId, terminal))
     const session = this.ensure(taskId, terminal, size)
+    if (existed) {
+      // The screen is drawn for this size, so the shell must know it before the replay.
+      this.setSize(session, size)
+    }
     if (session.scrollback !== '') {
-      client.send({ type: 'output', data: session.scrollback })
+      client.send({
+        type: 'output',
+        data: lastLines(session.scrollback, size.rows + REPLAY_SCROLLBACK_LINES),
+      })
     }
     session.clients.add(client)
     return () => {
@@ -156,12 +189,40 @@ export class TerminalService {
   }
 
   resize(taskId: string, size: TerminalSize, terminal = MAIN_TERMINAL): void {
-    this.sessions.get(sessionKey(taskId, terminal))?.pty.resize(size.cols, size.rows)
+    const session = this.sessions.get(sessionKey(taskId, terminal))
+    if (session) {
+      this.setSize(session, size)
+    }
   }
 
-  // Ends one shell of a task.
+  // The shell is told only when the size really changes.
+  private setSize(session: Session, size: TerminalSize): void {
+    if (session.size.cols !== size.cols || session.size.rows !== size.rows) {
+      session.size = size
+      session.pty.resize(size.cols, size.rows)
+    }
+  }
+
+  // Ends one shell of a task. It is forgotten at once, so a new shell with the same name starts a
+  // new process with an empty screen, even when the old process is slow to end.
   closeOne(taskId: string, terminal: string): void {
-    this.sessions.get(sessionKey(taskId, terminal))?.pty.kill()
+    const key = sessionKey(taskId, terminal)
+    const session = this.sessions.get(key)
+    if (!session) {
+      return
+    }
+    this.sessions.delete(key)
+    session.scrollback = ''
+    for (const client of session.clients) {
+      client.send({ type: 'exit', code: null })
+    }
+    session.clients.clear()
+
+    // A shell that ignores SIGHUP (or a program in it that does) must not stay alive.
+    const timer = setTimeout(() => session.pty.kill('SIGKILL'), KILL_GRACE_MS)
+    timer.unref()
+    session.stopKillTimer = () => clearTimeout(timer)
+    session.pty.kill('SIGHUP')
   }
 
   // Ends every shell of a task, for example before its workspace is removed.
@@ -172,8 +233,8 @@ export class TerminalService {
   }
 
   closeAll(): void {
-    for (const session of this.sessions.values()) {
-      session.pty.kill()
+    for (const session of [...this.sessions.values()]) {
+      this.closeOne(session.taskId, session.terminal)
     }
   }
 
@@ -200,10 +261,14 @@ export class TerminalService {
       },
     })
     const key = sessionKey(taskId, terminal)
-    const session: Session = { taskId, terminal, pty, scrollback: '', clients: new Set() }
+    const session: Session = { taskId, terminal, pty, size, scrollback: '', clients: new Set() }
     this.sessions.set(key, session)
 
     pty.onData((data) => {
+      if (this.sessions.get(key) !== session) {
+        // A closed shell may still print while it ends. Nobody looks at it any more.
+        return
+      }
       session.scrollback = (session.scrollback + data).slice(-SCROLLBACK_CHARS)
       for (const client of session.clients) {
         client.send({ type: 'output', data })
@@ -215,6 +280,7 @@ export class TerminalService {
       }
     })
     pty.onExit((code) => {
+      session.stopKillTimer?.()
       if (this.sessions.get(key) === session) {
         this.sessions.delete(key)
       }

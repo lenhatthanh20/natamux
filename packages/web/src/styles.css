@@ -547,6 +547,44 @@
   animation: hm-shimmer 1.5s linear infinite;
 }
 
+/* A new or deleted file is shown whole, with every line marked. */
+.hm-whole-added {
+  background: var(--add-bg);
+}
+
+.hm-whole-removed {
+  background: var(--remove-bg);
+}
+
+.hm-gutter-added::before,
+.hm-gutter-removed::before {
+  display: block;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.hm-gutter-added::before {
+  content: "+";
+  color: var(--add);
+}
+
+.hm-gutter-removed::before {
+  content: "\2212";
+  color: var(--remove);
+}
+
+/* The terminal's scrollbar shows when the pointer is over the pane. */
+.hm-terminal .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.hm-terminal:hover .xterm-viewport,
+.hm-terminal:focus-within .xterm-viewport {
+  scrollbar-color: var(--scroll-hover) transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

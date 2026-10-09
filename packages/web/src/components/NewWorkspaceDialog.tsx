@@ -1,6 +1,6 @@
 import type { Repo, Task } from '@helmsman/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { type FormEvent, type KeyboardEvent, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import type { NewWorkspaceInput } from '../lib/api'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { Button } from './ui/Button'
@@ -59,11 +59,6 @@ export function NewWorkspaceDialog({
     event.preventDefault()
     if (title.trim() !== '' && !making.isPending) {
       making.mutate()
-    }
-  }
-  const submitOnShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      submit(event)
     }
   }
 
@@ -161,7 +156,6 @@ export function NewWorkspaceDialog({
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={submitOnShortcut}
               rows={4}
               placeholder="Optional. The agent starts with this prompt, and it becomes the task's notes."
               aria-label="Prompt for the agent"
