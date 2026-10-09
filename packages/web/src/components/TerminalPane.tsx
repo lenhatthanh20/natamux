@@ -1,7 +1,8 @@
 import type { TerminalSize } from '@helmsman/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
-import { type CSSProperties, lazy, type ReactNode, Suspense } from 'react'
-import { terminalShortcut } from '../lib/terminal-keys'
+import { type CSSProperties, lazy, type ReactNode, Suspense, useRef } from 'react'
+import { useAppEvent } from '../lib/app-events'
+import { shortcutOf } from '../lib/commands'
 import { IconButton } from './ui/IconButton'
 import { Skeleton } from './ui/Skeleton'
 
@@ -54,18 +55,19 @@ export function TerminalPane({
   hidden,
   style,
 }: TerminalPaneProps) {
+  const pane = useRef<HTMLElement>(null)
+  // Mod+Shift+Enter is a command; it maximizes the pane that has the focus.
+  useAppEvent('pane-maximize', () => {
+    if (pane.current?.contains(document.activeElement)) {
+      onToggleMaximize()
+    }
+  })
   return (
     <section
+      ref={pane}
       aria-label={label}
       hidden={hidden}
       style={style}
-      onKeyDown={(event) => {
-        // The terminal lets this key through to the page, see TerminalView.
-        if (terminalShortcut(event.nativeEvent) === 'maximize') {
-          event.preventDefault()
-          onToggleMaximize()
-        }
-      }}
       className="group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
     >
       {needsInput && (
@@ -98,7 +100,7 @@ export function TerminalPane({
           label={maximized ? `Restore ${label}` : `Maximize ${label}`}
           icon={maximized ? Minimize2 : Maximize2}
           size="xs"
-          shortcut="Mod+Shift+Enter"
+          shortcut={shortcutOf('pane.maximize')}
           aria-pressed={maximized}
           onClick={onToggleMaximize}
         />

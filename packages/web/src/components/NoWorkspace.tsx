@@ -1,6 +1,7 @@
 import type { Task } from '@helmsman/core'
 import { FolderGit2, Play } from 'lucide-react'
 import { useState } from 'react'
+import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
 import { StateBadge } from './StateBadge'
 import { Button } from './ui/Button'
 import { Combobox } from './ui/Combobox'
@@ -54,8 +55,10 @@ export function NoWorkspace({
                   <Combobox
                     label="Branch from"
                     placeholder={from}
-                    options={branches.branches.map((name) => ({ value: name, label: name }))}
-                    onPick={setBase}
+                    options={branchOptions(branches.branches, branches.current, null)}
+                    value={base ?? branches.current ?? ''}
+                    onChange={(name) => setBase(name === branches.current ? undefined : name)}
+                    collapsedGroups={[TASK_BRANCH_GROUP]}
                   />
                 </span>
               )}

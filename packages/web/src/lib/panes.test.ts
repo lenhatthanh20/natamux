@@ -5,7 +5,6 @@ import {
   columnsFor,
   MAX_PANES,
   maxColumns,
-  paneColumns,
   paneSpan,
   paneStateText,
   parsePaneLayout,
@@ -32,12 +31,6 @@ function makeTask(overrides: Partial<Task>): Task {
     ...overrides,
   })
 }
-
-describe('paneColumns', () => {
-  it('puts up to three panes side by side, then wraps', () => {
-    expect([0, 1, 2, 3, 4, 5, 6].map(paneColumns)).toEqual([1, 1, 2, 3, 2, 3, 3])
-  })
-})
 
 describe('agentPaneTasks', () => {
   const working = makeTask({ id: 'T-0001' })

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { isUnseen, withDetailOpen, withSeen, withTab } from './view-store'
+import {
+  initialViewData,
+  isUnseen,
+  useViewStore,
+  withDetailOpen,
+  withRecent,
+  withSeen,
+  withTab,
+} from './view-store'
 
 describe('withDetailOpen', () => {
   it('sets and changes the flag of one task', () => {
@@ -62,5 +70,87 @@ describe('seen states', () => {
   it('overwrites the record when the user looked at the task', () => {
     const seen = withSeen({ 'T-0001': 'running' }, [{ id: 'T-0001', state: 'review' }], true)
     expect(seen).toEqual({ 'T-0001': 'review' })
+  })
+})
+
+describe('withRecent', () => {
+  it('puts the newest first and lists each workspace once', () => {
+    expect(withRecent(['T-0002', 'T-0001'], 'T-0001')).toEqual(['T-0001', 'T-0002'])
+    expect(withRecent([], 'T-0003')).toEqual(['T-0003'])
+  })
+
+  it('keeps the newest 20', () => {
+    let recent: string[] = []
+    for (let index = 0; index < 25; index += 1) {
+      recent = withRecent(recent, `T-${index}`)
+    }
+    expect(recent).toHaveLength(20)
+    expect(recent[0]).toBe('T-24')
+    expect(recent).not.toContain('T-0')
+  })
+})
+
+describe('applyRoute', () => {
+  const reset = () => useViewStore.setState({ ...initialViewData })
+
+  it('opens a workspace on its tab and file, and selects its task', () => {
+    reset()
+    useViewStore
+      .getState()
+      .applyRoute({ kind: 'workspace', id: 'T-0007', tab: 'changes', file: 'src/a.ts' })
+    expect(useViewStore.getState()).toMatchObject({
+      changesTaskId: 'T-0007',
+      changesTab: 'changes',
+      changesFile: 'src/a.ts',
+      selectedId: 'T-0007',
+      agentsOpen: false,
+    })
+    expect(useViewStore.getState().recent[0]).toBe('T-0007')
+  })
+
+  it('opens the details of a task over the list', () => {
+    reset()
+    useViewStore.getState().openChanges('T-0001')
+    useViewStore.getState().applyRoute({ kind: 'task', id: 'T-0007' })
+    expect(useViewStore.getState()).toMatchObject({
+      changesTaskId: null,
+      selectedId: 'T-0007',
+      detailOpenByTask: { 'T-0007': true },
+    })
+  })
+
+  it('shows the agents grid, or a list with the layout of the address and no details', () => {
+    reset()
+    useViewStore.getState().applyRoute({ kind: 'agents' })
+    expect(useViewStore.getState()).toMatchObject({ agentsOpen: true, changesTaskId: null })
+
+    useViewStore.getState().applyRoute({ kind: 'task', id: 'T-0007' })
+    useViewStore.getState().applyRoute({ kind: 'board' })
+    expect(useViewStore.getState()).toMatchObject({
+      layout: 'board',
+      agentsOpen: false,
+      detailOpenByTask: { 'T-0007': false },
+    })
+    useViewStore.getState().applyRoute({ kind: 'tasks' })
+    expect(useViewStore.getState().layout).toBe('table')
+  })
+})
+
+describe('the shown tab', () => {
+  it('follows the tab that the user picks in the open workspace only', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().openChanges('T-0001', 'terminal')
+    useViewStore.getState().rememberTab('T-0001', 'history')
+    expect(useViewStore.getState().changesTab).toBe('history')
+    useViewStore.getState().rememberTab('T-0002', 'changes')
+    expect(useViewStore.getState().changesTab).toBe('history')
+    expect(useViewStore.getState().tabByTask['T-0002']).toBe('changes')
+  })
+
+  it('forgets the file when another workspace opens', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().setChangesFile('src/a.ts')
+    useViewStore.getState().openChanges('T-0002')
+    expect(useViewStore.getState().changesFile).toBeNull()
   })
 })

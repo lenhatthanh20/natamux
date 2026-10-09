@@ -4,14 +4,6 @@ import { STATE_LABEL } from './tasks'
 // More panes than this make each terminal too small to read.
 export const MAX_PANES = 6
 
-// Columns of the pane grid: side by side up to three, then two rows.
-export function paneColumns(count: number): number {
-  if (count <= 3) {
-    return Math.max(count, 1)
-  }
-  return count === 4 ? 2 : 3
-}
-
 function hasAgent(task: Task): boolean {
   return task.workspace !== null && (task.state === 'running' || task.state === 'needs-input')
 }
