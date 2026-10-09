@@ -21,9 +21,9 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
 }
 
 const BUTTON_SIZE: Record<ButtonSize, string> = {
-  xs: 'h-6 px-2',
-  sm: 'h-7 px-2.5',
-  md: 'h-8 px-3',
+  xs: 'h-(--control-h-xs) px-2',
+  sm: 'h-(--control-h) px-2.5',
+  md: 'h-(--control-h-md) px-3',
 }
 
 export function button(variant: ButtonVariant = 'secondary', size: ButtonSize = 'sm'): string {
@@ -33,7 +33,10 @@ export function button(variant: ButtonVariant = 'secondary', size: ButtonSize = 
 
 export type IconButtonSize = 'xs' | 'sm'
 
-const ICON_BUTTON_SIZE: Record<IconButtonSize, string> = { xs: 'size-6', sm: 'size-7' }
+const ICON_BUTTON_SIZE: Record<IconButtonSize, string> = {
+  xs: 'size-(--control-h-xs)',
+  sm: 'size-(--control-h)',
+}
 
 // A square button that holds only an icon. Use the IconButton component: it needs a name.
 export function iconButton(size: IconButtonSize = 'sm'): string {
@@ -43,10 +46,10 @@ export function iconButton(size: IconButtonSize = 'sm'): string {
 const FIELD =
   'min-w-0 rounded-md border border-control bg-input text-ink ring-contrast placeholder:text-placeholder hover:border-control-hover'
 
-export const input = `h-7 px-2.5 ${FIELD}`
+export const input = `h-(--control-h) px-2.5 ${FIELD}`
 
 // Fields in dialogs are 32px.
-export const inputLg = `h-8 px-2.5 ${FIELD}`
+export const inputLg = `h-(--control-h-md) px-2.5 ${FIELD}`
 
 export const textarea = `px-2.5 py-2 ${FIELD}`
 
@@ -59,7 +62,7 @@ export const kbd =
 
 // A row in a list or a menu: 28px, quiet hover, a ring that stays inside the row.
 export const listRow =
-  'focus-inset flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-ink-2 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink'
+  'focus-inset flex h-(--row-h) w-full items-center gap-1.5 rounded-md px-2 text-left text-ink-2 hover:bg-hover hover:text-ink aria-pressed:bg-selected aria-pressed:text-ink'
 
 // A small heading over a group of fields or rows.
 export const sectionTitle = 'text-xs font-medium text-muted'

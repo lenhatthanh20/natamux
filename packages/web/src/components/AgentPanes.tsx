@@ -1,5 +1,5 @@
 import type { Task, TerminalSize } from '@helmsman/core'
-import { agentPaneTasks, MAX_PANES, paneColumns } from '../lib/panes'
+import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { TerminalPane } from './TerminalPane'
 import { Select } from './ui/Select'
 
@@ -28,7 +28,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
     <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col gap-2 p-2">
       <header className="flex h-9 items-center gap-3 px-2">
         <h2 className="font-semibold">Agents</h2>
-        <span className="text-muted">
+        <span className="whitespace-nowrap text-muted">
           {shown.length} of {MAX_PANES} panes
         </span>
         <span className="flex-1" />
@@ -58,10 +58,7 @@ export function AgentPanes({ tasks, chosen, onChange, connect, onOpenTask }: Age
           workspace.
         </p>
       ) : (
-        <div
-          className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
-          style={{ gridTemplateColumns: `repeat(${paneColumns(shown.length)}, minmax(0, 1fr))` }}
-        >
+        <div className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] grid-cols-[repeat(auto-fit,minmax(min(20rem,100%),1fr))] gap-2 overflow-auto lg:max-xl:grid-cols-[repeat(auto-fit,minmax(max(20rem,calc(50%-0.25rem)),1fr))] max-md:auto-rows-[60vh]">
           {shown.map((task) => (
             <TerminalPane
               key={task.id}
