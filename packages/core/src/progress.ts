@@ -45,7 +45,9 @@ const ENDS: readonly TaskEvent['type'][] = [
 ]
 
 function strings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 // The progress of every stage of a task, in order. `events` are the task's accepted events,
@@ -99,9 +101,10 @@ export function stageProgress(
         endedAt: status === 'done' || status === 'skipped' ? (ended?.at ?? null) : null,
         approvedBy: approved?.source ?? null,
         passes: strings(checked?.payload.passes),
-        reasons: failed !== undefined && (checked === undefined || failed.at > checked.at)
-          ? strings(failed.payload.reasons)
-          : [],
+        reasons:
+          failed !== undefined && (checked === undefined || failed.at > checked.at)
+            ? strings(failed.payload.reasons)
+            : [],
         sentBackFor: typeof reopened?.payload.reason === 'string' ? reopened.payload.reason : null,
       }
     }),

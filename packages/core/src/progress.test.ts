@@ -10,7 +10,13 @@ function event(
   source: TaskEvent['source'] = 'system',
 ): TaskEvent {
   minute += 1
-  return { taskId: 'T-1', source, type, at: `2026-10-09T09:${String(minute).padStart(2, '0')}:00.000Z`, payload }
+  return {
+    taskId: 'T-1',
+    source,
+    type,
+    at: `2026-10-09T09:${String(minute).padStart(2, '0')}:00.000Z`,
+    payload,
+  }
 }
 
 describe('stageProgress', () => {
@@ -65,13 +71,21 @@ describe('stageProgress', () => {
     const testSpec = progress.find((stage) => stage.stage === 'test-spec')
     const implement = progress.find((stage) => stage.stage === 'implement')
     expect(testSpec).toMatchObject({ status: 'current', state: 'review' })
-    expect(implement).toMatchObject({ status: 'done', rounds: 2, sentBackFor: 'Add the error cases' })
+    expect(implement).toMatchObject({
+      status: 'done',
+      rounds: 2,
+      sentBackFor: 'Add the error cases',
+    })
   })
 
   it('marks a skipped stage, and every stage of a done task', () => {
     minute = 0
     const events = [event('stage.skipped', { stage: 'context' })]
-    const progress = stageProgress({ stage: 'spec', state: 'ready', lanes: {} }, events, DEFAULT_PIPELINE)
+    const progress = stageProgress(
+      { stage: 'spec', state: 'ready', lanes: {} },
+      events,
+      DEFAULT_PIPELINE,
+    )
     expect(progress[0]?.status).toBe('skipped')
 
     const done = stageProgress({ stage: 'release', state: 'done', lanes: {} }, [], DEFAULT_PIPELINE)

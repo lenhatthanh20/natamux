@@ -152,10 +152,7 @@ export function ProgressBoard({
               </span>
             </div>
             <div className="overflow-x-auto">
-              <div
-                className="grid min-w-max"
-                style={{ gridTemplateColumns: columns }}
-              >
+              <div className="grid min-w-max" style={{ gridTemplateColumns: columns }}>
                 <div className="contents">
                   <div className="border-b border-line px-4 py-2 text-xs font-medium text-muted">
                     Task
@@ -163,7 +160,10 @@ export function ProgressBoard({
                   {stages.map(({ stage, inGroup }) => {
                     const here = section.open.filter((task) => {
                       const step = section.steps[stepIndex(section.steps, task.stage)]
-                      return step !== undefined && stagesOf(step).some((candidate) => candidate.id === stage.id)
+                      return (
+                        step !== undefined &&
+                        stagesOf(step).some((candidate) => candidate.id === stage.id)
+                      )
                     })
                     const waiting = here.filter((task) =>
                       needsMe(inGroup ? (task.lanes[stage.id] ?? 'done') : task.state),
@@ -171,13 +171,16 @@ export function ProgressBoard({
                     return (
                       <div
                         key={stage.id}
-                       
                         className={`flex flex-col items-center gap-0.5 border-b border-line px-1 py-2 ${inGroup ? 'bg-raised' : ''}`}
                       >
-                        <span className="text-xs font-medium text-ink-2">{stage.name ?? stage.id}</span>
+                        <span className="text-xs font-medium text-ink-2">
+                          {stage.name ?? stage.id}
+                        </span>
                         <span className="flex items-center gap-1 text-2xs text-muted tabular-nums">
                           <span className="rounded-full bg-raised px-1.5">{here.length}</span>
-                          {waiting > 0 && <span className="font-medium text-signal">{waiting} wait</span>}
+                          {waiting > 0 && (
+                            <span className="font-medium text-signal">{waiting} wait</span>
+                          )}
                         </span>
                       </div>
                     )
@@ -207,7 +210,9 @@ export function ProgressBoard({
                             {STATE_LABEL[task.state]}
                           </span>
                           {task.stageSince !== null && task.state !== 'done' && (
-                            <span className="tabular-nums">{formatDuration(task.stageSince, now)}</span>
+                            <span className="tabular-nums">
+                              {formatDuration(task.stageSince, now)}
+                            </span>
                           )}
                         </span>
                       </div>
@@ -216,11 +221,16 @@ export function ProgressBoard({
                         const before = progress[index - 1]
                         const after = progress[index + 1]
                         // Stages of one group sit side by side; no line runs between them.
-                        const left = before !== undefined && group !== null && before.group === group ? undefined : before
-                        const right = after !== undefined && group !== null && after.group === group ? undefined : after
+                        const left =
+                          before !== undefined && group !== null && before.group === group
+                            ? undefined
+                            : before
+                        const right =
+                          after !== undefined && group !== null && after.group === group
+                            ? undefined
+                            : after
                         return (
                           <div
-                           
                             key={entry.stage}
                             className={`flex items-center border-b border-line group-hover:bg-hover ${group !== null ? 'bg-raised' : ''}`}
                           >
@@ -254,7 +264,9 @@ export function ProgressBoard({
               <button
                 type="button"
                 aria-expanded={showDone[section.key] === true}
-                onClick={() => setShowDone((current) => ({ ...current, [section.key]: !current[section.key] }))}
+                onClick={() =>
+                  setShowDone((current) => ({ ...current, [section.key]: !current[section.key] }))
+                }
                 className="focus-inset flex h-9 w-full items-center gap-1.5 px-4 text-left text-xs font-medium text-muted hover:bg-hover hover:text-ink"
               >
                 <ChevronRight
@@ -271,4 +283,3 @@ export function ProgressBoard({
     </div>
   )
 }
-

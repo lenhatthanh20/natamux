@@ -274,7 +274,10 @@ export function ChangesView({
       )}
 
       {tab === 'docs' && (
-        <div {...tabPanelProps('workspace', 'docs', 'Docs')} className="flex min-h-0 flex-1 flex-col">
+        <div
+          {...tabPanelProps('workspace', 'docs', 'Docs')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           <DocsTab
             taskId={task.id}
             now={now}

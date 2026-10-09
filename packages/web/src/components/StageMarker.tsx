@@ -43,7 +43,8 @@ export function StageMarker({
   // What a screen reader says; the stage name and its state.
   label: string
 }) {
-  const colorState = status === 'done' ? 'done' : status === 'current' ? (state ?? 'ready') : 'draft'
+  const colorState =
+    status === 'done' ? 'done' : status === 'current' ? (state ?? 'ready') : 'draft'
   return (
     <span
       className="stage-node"
