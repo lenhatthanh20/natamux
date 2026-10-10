@@ -43,6 +43,12 @@ const WITH_ISSUES: LoadedSettings = {
   path: '/work/natamux/.natamux.json',
 }
 
+// Settings that offer only the user's own notes.
+const NOTES_ONLY: LoadedSettings = {
+  ...WITH_ISSUES,
+  settings: { ...DEFAULT_PROJECT_SETTINGS, context: { sources: [{ type: 'manual' }] } },
+}
+
 // Settings that offer every kind of context source.
 const EVERY_SOURCE: LoadedSettings = {
   ...WITH_ISSUES,
@@ -293,6 +299,26 @@ describe('the Start a task dialog', () => {
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
     expect(create.mock.calls[0]?.[0]?.context).toEqual({ source: 'skill', ref: 'ABC-1' })
+  })
+
+  it('goes back to My notes in a project that does not offer the picked source', async () => {
+    const { create } = dialog({
+      loadSettings: async (repo) => (repo === 'web' ? NOTES_ONLY : WITH_ISSUES),
+    })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(
+      await screen.findByLabelText('Where the context comes from'),
+      'github-issue',
+    )
+    await user.selectOptions(screen.getByLabelText('Project'), 'web')
+
+    await user.type(await screen.findByLabelText('Task notes'), 'Keep the old URL')
+    expect(screen.queryByLabelText('Reference of the context')).toBeNull()
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ repo: 'web', prompt: 'Keep the old URL' })
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('context')
   })
 
   it('shows the same notes again when My notes is picked back, and sends them once', async () => {

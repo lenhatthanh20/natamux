@@ -67,7 +67,7 @@ export function NewWorkspaceDialog({
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
   const [notes, setNotes] = useState('')
-  const [source, setSource] = useState<ContextSourceType>('manual')
+  const [pickedSource, setSource] = useState<ContextSourceType>('manual')
   const [ref, setRef] = useState('')
   const settings = useQuery({
     queryKey: ['settings', repo],
@@ -75,6 +75,8 @@ export function NewWorkspaceDialog({
     enabled: loadSettings !== undefined,
   })
   const sources = settings.data?.settings.context.sources ?? [{ type: 'manual' as const }]
+  // Another project may not offer the source picked in the first one.
+  const source = sources.some((item) => item.type === pickedSource) ? pickedSource : 'manual'
 
   const branches = useQuery({
     queryKey: ['branches', repo],
