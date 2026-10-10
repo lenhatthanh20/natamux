@@ -1096,7 +1096,7 @@ describe('start an agent', () => {
     expect(ptys[0]?.written[0]).toContain('agent-launch-')
   })
 
-  it('answers 404 for an agent it cannot start and 409 without a workspace', async () => {
+  it('answers 404 for an agent it cannot start, and makes a missing workspace', async () => {
     await app.inject({
       method: 'POST',
       url: '/tasks',
@@ -1110,14 +1110,18 @@ describe('start an agent', () => {
       payload: { agent: 'nope' },
     })
     expect(unknown.statusCode).toBe(404)
+    const before = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(before.json().task.workspace).toBeNull()
 
-    const none = await app.inject({
+    const started = await app.inject({
       method: 'POST',
       url: '/tasks/T-0001/agent',
       headers: authorization,
       payload: { agent: 'claude-code' },
     })
-    expect(none.statusCode).toBe(409)
+    expect(started.statusCode).toBe(200)
+    expect(started.json().task.workspace).not.toBeNull()
+    expect(ptys[0]?.written.join('')).toContain('agent-launch-')
   })
 })
 

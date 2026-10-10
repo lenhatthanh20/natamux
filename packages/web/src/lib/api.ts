@@ -247,10 +247,15 @@ export function createApi(
       return body.tasks.map((task) => taskSchema.parse(task))
     },
 
-    // Starts an agent in the terminal of the task's workspace.
-    async startAgent(taskId: string, agent: string, prompt?: string): Promise<Task> {
+    // Starts an agent in the terminal of the task's workspace. A task with no workspace gets one
+    // first, from `base` when it is given.
+    async startAgent(taskId: string, agent: string, prompt?: string, base?: string): Promise<Task> {
       const body = asRecord(
-        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent`, { agent, prompt }),
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent`, {
+          agent,
+          prompt,
+          base,
+        }),
       )
       return taskSchema.parse(body.task)
     },

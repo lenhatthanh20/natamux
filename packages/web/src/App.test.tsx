@@ -272,7 +272,14 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     const agentPath = /^\/api\/tasks\/(T-\d+)\/agent$/.exec(path)
     const agentTask = tasks.find((task) => task.id === agentPath?.[1])
     if (agentTask && method === 'POST') {
-      const updated: Task = { ...agentTask, agent: 'claude-code' }
+      // Like the daemon: a task with no workspace gets one first.
+      const { agent } = JSON.parse(String(init?.body)) as { agent: string }
+      const updated: Task = {
+        ...agentTask,
+        agent,
+        workspace: agentTask.workspace ?? `/work/${agentTask.id}`,
+        branch: agentTask.branch ?? `natamux/${agentTask.id.toLowerCase()}`,
+      }
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return json({ task: updated })
     }
@@ -720,7 +727,7 @@ describe('App', () => {
     expect(push.getAttribute('data-tip')).toBe('This task has no branch to push')
   })
 
-  it('starts Claude Code: makes the workspace, then opens its terminal', async () => {
+  it('starts Claude Code in a new workspace and opens its terminal', async () => {
     const { calls } = installDaemon([
       makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'ready' }),
     ])
@@ -738,7 +745,7 @@ describe('App', () => {
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     const posts = calls.filter((call) => call.method === 'POST').map((call) => call.path)
-    expect(posts).toEqual(['/api/tasks/T-0001/workspace', '/api/tasks/T-0001/agent'])
+    expect(posts).toEqual(['/api/tasks/T-0001/agent'])
   })
 
   it('edits the details of a task', async () => {

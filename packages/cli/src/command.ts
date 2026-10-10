@@ -49,7 +49,14 @@ export type Command =
     }
   | { name: 'task.list'; state?: TaskState; json: boolean }
   | { name: 'task.edit'; id: string; changes: TaskChanges; json: boolean }
-  | { name: 'agent.start'; id: string; agent: string; prompt?: string; json: boolean }
+  | {
+      name: 'agent.start'
+      id: string
+      agent: string
+      prompt?: string
+      base?: string
+      json: boolean
+    }
   // For an agent without hooks: say it waits for the user, or that its turn is over. Without
   // --task, the task comes from NATAMUX_TASK_ID.
   | { name: 'agent.ask'; id?: string; question: string; stage?: string; json: boolean }
@@ -65,7 +72,8 @@ export type Command =
       json: boolean
     }
   | { name: 'task.link'; id: string; provider: string; key: string; url: string; json: boolean }
-  | { name: 'task.show'; id: string; json: boolean }
+  // Without an id, the task of this terminal (NATAMUX_TASK_ID).
+  | { name: 'task.show'; id?: string; json: boolean }
   | {
       name: 'event.send'
       id: string
@@ -226,7 +234,7 @@ export function parseCommand(argv: readonly string[]): Command {
     }
     if (second === 'show') {
       noExtraArguments(rest.slice(1))
-      return { name: 'task.show', id: taskId(rest[0]), json }
+      return { name: 'task.show', id: rest[0] === undefined ? undefined : taskId(rest[0]), json }
     }
     if (second === 'edit') {
       noExtraArguments(rest.slice(1))
@@ -280,6 +288,7 @@ export function parseCommand(argv: readonly string[]): Command {
       id: taskId(rest[0]),
       agent: values.agent ?? 'claude-code',
       prompt: values.prompt,
+      ...(values.base === undefined ? {} : { base: values.base }),
       json,
     }
   }

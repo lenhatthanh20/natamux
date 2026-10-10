@@ -47,7 +47,7 @@ claude --settings "$(natamux hooks claude-code)"
 
 `task link` links a task to its issue or ticket elsewhere; `task create --context` says where its context comes from (`manual`, `github-issue:42`, `skill:ABC-1`, `mcp:ABC-1`).
 
-`agent start` types the agent's command into the task's terminal, as **Start Claude Code** in the dashboard does.
+`agent start` types the agent's command into the task's terminal, as **Start agent** in the dashboard does. A task with no workspace gets one first (`--base` picks the branch it starts from). `task show` without an id shows the task of the terminal (`NATAMUX_TASK_ID`).
 
 `workspace create` makes a git worktree and a branch for the task. `workspace remove` deletes the worktree folder, so it needs `--yes`. Git refuses when the worktree has files that are not committed. With `--delete-branch` the branch goes too, but only when it is fully merged.
 
