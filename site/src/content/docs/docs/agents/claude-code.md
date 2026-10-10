@@ -1,0 +1,96 @@
+---
+title: Claude Code
+description: Run Claude Code in a Natamux task, and make a Claude Code session you started yourself report to the dashboard.
+sidebar:
+  order: 1
+---
+
+Claude Code is the default agent. Natamux starts it with hooks for that session only, so the dashboard knows when it works, asks or is done.
+
+## Before you start
+
+Install Claude Code and log in. Follow the [Claude Code documentation](https://code.claude.com/docs). Check that `claude` runs in your terminal.
+
+## What Natamux runs
+
+| | |
+|---|---|
+| Program | `claude` |
+| Command line | `claude --settings <file> [extra args] '<prompt>'` |
+| Change the program | `NATAMUX_CLAUDE_COMMAND` |
+| Add arguments | `NATAMUX_CLAUDE_ARGS` |
+
+Set the variables in the environment of the daemon (or the desktop app) before it starts:
+
+```sh
+export NATAMUX_CLAUDE_COMMAND=/opt/tools/claude
+export NATAMUX_CLAUDE_ARGS="--model sonnet"
+```
+
+Start the agent from the dashboard (**New workspace**, or **Start agent** on a stage), or from the command line:
+
+```sh
+natamux agent start T-42 --agent claude-code
+```
+
+`claude-code` is the default value of `--agent`.
+
+## How hooks are added
+
+The daemon writes `claude-code-settings.json` into its data folder when it starts. It holds one `http` hook for each event below. The hooks post to the daemon on loopback. Nothing changes in your own `~/.claude` files.
+
+The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from the environment of the Claude Code process. Natamux terminals set them. The token is never written into the settings file.
+
+## Events and states
+
+| Hook event | Meaning | Task state |
+|---|---|---|
+| `UserPromptSubmit` | A prompt was sent | running |
+| `PreToolUse`, `PostToolUse` | The agent works | no change (a tool that ran after a question moves the task back to running) |
+| `PermissionRequest` | Claude Code is about to ask for permission | needs input |
+| `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | Claude Code waits for you | needs input |
+| `Stop` | The agent finished its answer | needs input |
+| `StopFailure` | An API error ended the turn | failed |
+
+Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/natamux/docs/concepts/stages/).
+
+## A session you start yourself
+
+If you start `claude` by hand, give it the hooks:
+
+```sh
+export NATAMUX_TOKEN=<token the daemon printed>
+export NATAMUX_TASK_ID=T-42   # optional inside the task's workspace
+claude --settings "$(natamux hooks claude-code)"
+```
+
+`natamux hooks claude-code` prints the settings JSON. It needs no token and does not call the daemon. It points the hooks at `NATAMUX_URL`, or `http://127.0.0.1:4317` when that is not set.
+
+The daemon finds the task from `NATAMUX_TASK_ID`. Without it, it uses the task whose workspace holds the session's working directory.
+
+:::caution
+If your machine uses an HTTP proxy, Claude Code may send the hooks through it, and the proxy can refuse the call. Set `NO_PROXY="localhost,127.0.0.1"` and `no_proxy` before you start `claude`.
+:::
+
+## The Natamux plugin
+
+The repository has a Claude Code plugin with one skill, `natamux-task`. It teaches Claude Code to work inside a task: read the task, ask you a question, report each stage with `natamux done`, and file follow-up tasks.
+
+Install it in Claude Code:
+
+```text
+/plugin marketplace add lenhatthanh20/natamux
+/plugin install natamux@natamux
+```
+
+The skill matters only in a session that Natamux started, because it needs `NATAMUX_TASK_ID`. The `natamux` command must be on the `PATH`, with `NATAMUX_TOKEN` and `NATAMUX_URL` set. Natamux terminals set them.
+
+## Tested
+
+Real Claude Code sessions. The permission path (`PermissionRequest` and the permission `Notification`) was tested with made-up input only.
+
+## Limits
+
+- `Stop` does not fire when you interrupt Claude Code with Esc. The task stays running. After 10 minutes with no hook, the dashboard marks it quiet.
+- Because `Stop` fires after every answer, a task shows "needs input" at the end of each turn, even when the agent only asked a question in plain text.
+- `--settings` adds to your own hooks. It does not replace them.
