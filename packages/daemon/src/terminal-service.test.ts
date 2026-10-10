@@ -168,22 +168,26 @@ describe('TerminalService', () => {
     expect(ptys).toHaveLength(1)
   })
 
-  it('keeps the newest lines, as many as the dashboard keeps above its screen', async () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-    const count = TERMINAL_SCROLLBACK_LINES + 500
-    ptys[0]?.emit(numbered(count))
+  it(
+    'keeps the newest lines, as many as the dashboard keeps above its screen',
+    async () => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      const count = TERMINAL_SCROLLBACK_LINES + 500
+      ptys[0]?.emit(numbered(count))
 
-    const later = client()
-    service.attach('T-0001', later, size)
-    await service.settled('T-0001')
+      const later = client()
+      service.attach('T-0001', later, size)
+      await service.settled('T-0001')
 
-    const rows = await screenOf(later.messages)
-    expect(rows.length).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_LINES + size.rows)
-    expect(rows).toContain(`line ${count - TERMINAL_SCROLLBACK_LINES}`)
-    expect(rows).not.toContain('line 1')
-    expect(rows.at(-1)).toBe(`line ${count}`)
-  }, LONG_TEST_MS)
+      const rows = await screenOf(later.messages)
+      expect(rows.length).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_LINES + size.rows)
+      expect(rows).toContain(`line ${count - TERMINAL_SCROLLBACK_LINES}`)
+      expect(rows).not.toContain('line 1')
+      expect(rows.at(-1)).toBe(`line ${count}`)
+    },
+    LONG_TEST_MS,
+  )
 
   it('tells the clients when the shell ends, and starts a new one next time', () => {
     const { service, ptys } = setup()
@@ -369,19 +373,23 @@ describe('attaching to a running shell', () => {
     expect(ptys[0]?.sizes).toEqual([])
   })
 
-  it('replays the whole history, from the first line', async () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-    for (let index = 1; index <= 8000; index += 1) {
-      ptys[0]?.emit(`line ${index}\r\n`)
-    }
+  it(
+    'replays the whole history, from the first line',
+    async () => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      for (let index = 1; index <= 8000; index += 1) {
+        ptys[0]?.emit(`line ${index}\r\n`)
+      }
 
-    const later = client()
-    service.attach('T-0001', later, size)
-    await service.settled('T-0001')
+      const later = client()
+      service.attach('T-0001', later, size)
+      await service.settled('T-0001')
 
-    expect(await screenOf(later.messages)).toEqual(numberedLines(8000))
-  }, LONG_TEST_MS)
+      expect(await screenOf(later.messages)).toEqual(numberedLines(8000))
+    },
+    LONG_TEST_MS,
+  )
 
   it.each([5000, 5001, size.rows + 1000, size.rows + 1001])(
     'replays all of %i lines, past the old limits',
@@ -398,25 +406,29 @@ describe('attaching to a running shell', () => {
     },
   )
 
-  it('keeps a long agent session on a wide screen: 10,000 colored lines of 186 chars', async () => {
-    const wide = { cols: 200, rows: 40 }
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), wide)
-    const lines = Array.from(
-      { length: 10_000 },
-      (_, index) => `${String(index + 1).padStart(5, '0')} ${'z'.repeat(180)}`,
-    )
-    for (const line of lines) {
-      ptys[0]?.emit(`\u001b[32m${line.slice(0, 5)}\u001b[0m${line.slice(5)}\r\n`)
-    }
+  it(
+    'keeps a long agent session on a wide screen: 10,000 colored lines of 186 chars',
+    async () => {
+      const wide = { cols: 200, rows: 40 }
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), wide)
+      const lines = Array.from(
+        { length: 10_000 },
+        (_, index) => `${String(index + 1).padStart(5, '0')} ${'z'.repeat(180)}`,
+      )
+      for (const line of lines) {
+        ptys[0]?.emit(`\u001b[32m${line.slice(0, 5)}\u001b[0m${line.slice(5)}\r\n`)
+      }
 
-    const later = client()
-    service.attach('T-0001', later, wide)
-    await service.settled('T-0001')
+      const later = client()
+      service.attach('T-0001', later, wide)
+      await service.settled('T-0001')
 
-    expect(await screenOf(later.messages, wide)).toEqual(lines)
-    expect(outputOf(later.messages)).toContain('\u001b[32m00001')
-  }, LONG_TEST_MS)
+      expect(await screenOf(later.messages, wide)).toEqual(lines)
+      expect(outputOf(later.messages)).toContain('\u001b[32m00001')
+    },
+    LONG_TEST_MS,
+  )
 
   it('replays the last line even without a line break', async () => {
     const { service, ptys } = setup()
