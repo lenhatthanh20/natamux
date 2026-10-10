@@ -8,7 +8,7 @@ import { iconUrl } from './FileIcon'
 export function AgentBadge({ agent }: { agent: string | null }) {
   const theme = useResolvedTheme()
   // A shell the daemon counts as an agent's, in a task with no agent id.
-  const label = agent === null ? 'Agent' : agentLabel(agent)
+  const label = agent ? agentLabel(agent) : 'Agent'
   const icon = agentIcon(agent)
   const url = icon === undefined ? undefined : iconUrl(icon, theme)
   return (

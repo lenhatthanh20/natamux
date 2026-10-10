@@ -147,7 +147,7 @@ export function AgentPanes({
                     </button>
                   </>
                 }
-                agent={task.agent ?? undefined}
+                agent={task.agent || undefined}
                 stateText={paneStateText(task.state, activity?.[task.id])}
                 needsInput={task.state === 'needs-input'}
                 connect={(size) => connect(task.id, size)}
