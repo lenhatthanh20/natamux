@@ -34,7 +34,7 @@ type WorkspaceListProps = {
   pinnedIds: readonly string[]
   diffStats?: Readonly<Record<string, DiffStat>>
   activity?: Readonly<Record<string, string>>
-  // What waiting agents asked, by task id.
+  // What waiting agents asked, or why tasks failed, by task id.
   questions?: Readonly<Record<string, string | null>>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>

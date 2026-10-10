@@ -13,6 +13,8 @@ type NeedsMeStripProps = {
   currentId: string | null
   // A filter is active in the sidebar. This list ignores it, and says so.
   filtered: boolean
+  // What a waiting agent asked, or why a task failed, by task id.
+  questions?: Readonly<Record<string, string | null>>
   onOpen: (id: string) => void
 }
 
@@ -22,7 +24,14 @@ const SHOWN = 3
 const signalTitle = 'text-2xs font-semibold uppercase tracking-[0.06em] text-signal'
 
 // The top of the sidebar: the one place to look to know which task needs you.
-export function NeedsMeStrip({ waiting, now, currentId, filtered, onOpen }: NeedsMeStripProps) {
+export function NeedsMeStrip({
+  waiting,
+  now,
+  currentId,
+  filtered,
+  questions = {},
+  onOpen,
+}: NeedsMeStripProps) {
   const [all, setAll] = useState(false)
   const rows = all ? waiting : waiting.slice(0, SHOWN)
   const hidden = waiting.length - SHOWN
@@ -52,33 +61,56 @@ export function NeedsMeStrip({ waiting, now, currentId, filtered, onOpen }: Need
       {!any && <p className="flex h-7 items-center px-2 text-muted">Nothing needs you</p>}
       {any && (
         <ul className="flex flex-col">
-          {rows.map((task) => (
-            <li key={task.id}>
-              <button
-                type="button"
-                onClick={() => onOpen(task.id)}
-                aria-current={task.id === currentId ? 'true' : undefined}
-                aria-label={rowLabel(task, now)}
-                className="focus-inset flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-hover aria-[current=true]:bg-selected"
-              >
-                {/* The first line is only the title, so a long title has the whole width. */}
-                <span className="flex w-full items-center gap-2">
-                  <StatusGlyph state={task.state} quiet={isQuiet(task, now)} />
-                  <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
-                </span>
-                {/* Indented by the glyph and the gap, so it starts under the title. */}
-                <span className="flex w-full items-center gap-2 pl-6 text-xs">
-                  {stageLabel(task) !== null && (
-                    <span className="min-w-0 truncate text-muted">{stageLabel(task)}</span>
-                  )}
-                  <span className="shrink-0 text-signal">{needsMeReason(task, now)}</span>
-                  <span className="ml-auto shrink-0 text-muted">
-                    {formatAge(task.updatedAt, now)}
+          {rows.map((task) => {
+            const text = questions[task.id] ?? null
+            const failed = task.state === 'failed'
+            return (
+              <li key={task.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(task.id)}
+                  aria-current={task.id === currentId ? 'true' : undefined}
+                  aria-label={rowLabel(task, now)}
+                  className="focus-inset flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-hover aria-[current=true]:bg-selected"
+                >
+                  {/* The first line is only the title, so a long title has the whole width. */}
+                  <span className="flex w-full items-center gap-2">
+                    <StatusGlyph state={task.state} quiet={isQuiet(task, now)} />
+                    <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
                   </span>
-                </span>
-              </button>
-            </li>
-          ))}
+                  {/* Indented by the glyph and the gap, so it starts under the title. */}
+                  <span className="flex w-full items-center gap-2 pl-6 text-xs">
+                    {stageLabel(task) !== null && (
+                      <span
+                        className={
+                          text === null
+                            ? 'min-w-0 truncate text-muted'
+                            : 'max-w-[40%] min-w-0 shrink-0 truncate text-muted'
+                        }
+                      >
+                        {stageLabel(task)}
+                      </span>
+                    )}
+                    {text === null ? (
+                      <span className="shrink-0 text-signal">{needsMeReason(task, now)}</span>
+                    ) : (
+                      // The question or the failure as text, so the user knows why before opening.
+                      <span
+                        data-tip-overflow
+                        data-state={failed ? 'failed' : undefined}
+                        className={`min-w-0 flex-1 truncate ${failed ? 'text-(--chip-fg)' : 'text-signal'}`}
+                      >
+                        {text}
+                      </span>
+                    )}
+                    <span className="ml-auto shrink-0 text-muted">
+                      {formatAge(task.updatedAt, now)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
       {hidden > 0 && (

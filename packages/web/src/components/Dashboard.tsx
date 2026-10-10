@@ -430,8 +430,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     detailsWidth: details.width,
   })
   const phone = shellLayout.details === 'page'
-  // What waiting agents asked, for the sidebar rows.
-  const asking = tasks.filter((task) => task.state === 'needs-input' && task.workspace !== null)
+  // What waiting agents asked, or why tasks failed, for the sidebar rows.
+  const asking = tasks.filter(
+    (task) => (task.state === 'needs-input' || task.state === 'failed') && task.workspace !== null,
+  )
   const askQueries = useQueries({
     queries: asking.map((task) => ({
       queryKey: ['events', task.id, task.updatedAt],
@@ -774,6 +776,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   now={now}
                   currentId={changesTaskId}
                   filtered={search.trim() !== ''}
+                  questions={questions}
                   onOpen={(id) => {
                     openTask(id)
                     afterPick()
