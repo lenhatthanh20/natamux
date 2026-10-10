@@ -176,8 +176,13 @@ describe('when it is offered', () => {
 
     expect(screen.queryByRole('button', { name: 'Start a task in old' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Start a task in natamux' })).toBeTruthy()
-    // The empty lines of natamux and Web app; the group of old says only "No workspaces."
-    expect(screen.getAllByRole('button', { name: 'Start a task' })).toHaveLength(2)
+    // The empty lines of natamux, Web app and old, in that order. Only old's has no link.
+    const lines = screen.getAllByText(/No workspaces\./)
+    expect(lines.map((line) => within(line).queryByRole('button') !== null)).toEqual([
+      true,
+      true,
+      false,
+    ])
   })
 
   it('stays on the row while the finished list is folded, always shown on touch screens', () => {
