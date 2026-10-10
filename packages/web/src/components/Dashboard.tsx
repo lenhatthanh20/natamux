@@ -32,7 +32,7 @@ import {
 import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
-import { detailsViewFor, useViewStore } from '../lib/view-store'
+import { detailsOpenFor, detailsViewFor, useViewStore } from '../lib/view-store'
 import { rowText, tabToOpen, waitReason } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
@@ -421,7 +421,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       return lanes === undefined ? [] : [[task.id, lanes]]
     }),
   )
-  const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
+  const dockedBesideWorkspace = besideWorkspace && shellLayout.details === 'docked'
+  const detailsOpenOf = (id: string) =>
+    detailsOpenFor(detailOpenByTask[id], dockedBesideWorkspace && id === changesTask?.id)
+  const detailOpen = detailTask !== null && !agentsOpen && detailsOpenOf(detailTask.id)
   const busy =
     eventMutation.isPending ||
     workspaceMutation.isPending ||
@@ -546,7 +549,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     },
     toggleSelectedDetails: () => {
       if (selectedTask) {
-        setDetailOpen(selectedTask.id, !detailOpenByTask[selectedTask.id])
+        setDetailOpen(selectedTask.id, !detailsOpenOf(selectedTask.id))
       }
     },
     editSelected: () => {
@@ -915,7 +918,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 tab === 'changes' &&
                 shellLayout.details === 'docked' &&
                 main < 900 &&
-                detailOpenByTask[changesTask.id] === true
+                detailsOpenOf(changesTask.id)
               ) {
                 setDetailOpen(changesTask.id, false)
               }

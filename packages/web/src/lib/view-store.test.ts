@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  detailsOpenFor,
   detailsViewFor,
   initialViewData,
   isUnseen,
@@ -32,6 +33,21 @@ describe('withDetailOpen', () => {
     expect(Object.keys(flags)).toHaveLength(200)
     expect(flags['T-0']).toBeUndefined()
     expect(flags['T-204']).toBe(true)
+  })
+})
+
+describe('detailsOpenFor', () => {
+  it('follows the choice of the user', () => {
+    expect(detailsOpenFor(true, false)).toBe(true)
+    expect(detailsOpenFor(true, true)).toBe(true)
+    expect(detailsOpenFor(false, true)).toBe(false)
+    expect(detailsOpenFor(false, false)).toBe(false)
+  })
+
+  // The caller passes false for a task without a workspace and for a sheet or a page.
+  it('opens the details docked beside a workspace until the user chooses', () => {
+    expect(detailsOpenFor(undefined, true)).toBe(true)
+    expect(detailsOpenFor(undefined, false)).toBe(false)
   })
 })
 
@@ -144,13 +160,42 @@ describe('applyRoute', () => {
 
     useViewStore.getState().applyRoute({ kind: 'task', id: 'T-0007' })
     useViewStore.getState().applyRoute({ kind: 'board' })
+    // Not a choice of the user: the workspace of the task still opens with its details.
     expect(useViewStore.getState()).toMatchObject({
       layout: 'board',
       agentsOpen: false,
-      detailOpenByTask: { 'T-0007': false },
+      detailOpenByTask: {},
     })
     useViewStore.getState().applyRoute({ kind: 'tasks' })
     expect(useViewStore.getState().layout).toBe('table')
+  })
+
+  it.each([{ kind: 'tasks' }, { kind: 'board' }, { kind: 'progress' }] as const)(
+    'writes no choice of the user when the $kind address hides the details',
+    (route) => {
+      reset()
+      useViewStore.getState().select('T-0007')
+      useViewStore.getState().setDetailOpen('T-0007', true)
+      useViewStore.getState().setDetailOpen('T-0008', true)
+      useViewStore.getState().applyRoute(route)
+      expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0008': true })
+    },
+  )
+
+  it('keeps the details closed that the user closed when a list address shows', () => {
+    reset()
+    useViewStore.getState().select('T-0007')
+    useViewStore.getState().setDetailOpen('T-0007', false)
+    useViewStore.getState().applyRoute({ kind: 'tasks' })
+    expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0007': false })
+  })
+
+  it('writes no choice of the user when a workspace address opens', () => {
+    reset()
+    useViewStore
+      .getState()
+      .applyRoute({ kind: 'workspace', id: 'T-0007', tab: 'terminal', file: null })
+    expect(useViewStore.getState().detailOpenByTask).toEqual({})
   })
 })
 

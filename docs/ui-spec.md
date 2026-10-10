@@ -315,7 +315,7 @@ Only part 5 scrolls (fixes NAV-16).
 
 **Main** (`<main id="main">`), `bg-canvas`, `container-type: inline-size; container-name: main`. Min widths: terminal content 480, diff 560, table 360 (card list below 560).
 
-**Details** (`<aside>`), `bg-surface`, default 360, min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
+**Details** (`<aside>`), `bg-surface`, default 360, min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
 
 **Status bar** (`components/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
@@ -673,7 +673,7 @@ Rules:
 
 | Action | Result |
 |---|---|
-| Click a workspace row (sidebar, needs-you, jump palette) | Opens the workspace in main. Tab: Terminal when running/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state. |
+| Click a workspace row (sidebar, needs-you, jump palette) | Opens the workspace in main. Tab: Terminal when running/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state; never opened or closed, they open where they dock (see Details in 3.1). |
 | Click a table row / board card | Selects it and opens details (dock or sheet by 3.2). |
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Shell 1 to the Agents grid. |

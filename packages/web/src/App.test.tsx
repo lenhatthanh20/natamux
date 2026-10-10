@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { routeOf } from './lib/route'
 import { useToasts } from './lib/toasts'
 import { initialViewData, useViewStore } from './lib/view-store'
 
@@ -395,6 +396,21 @@ function openWorkspace(id: string) {
     useViewStore.getState().select(id)
     useViewStore.getState().openChanges(id, 'terminal')
   })
+}
+
+// A measured window: the layout then follows its width, as in a browser.
+function stubWindowWidth(width: number) {
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    matches: false,
+    media,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+  vi.stubGlobal('innerWidth', width)
 }
 
 async function openStageFile(user: ReturnType<typeof userEvent.setup>, details: HTMLElement) {
@@ -1395,12 +1411,14 @@ describe('App', () => {
     await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
     const empty = await screen.findByRole('region', { name: 'Workspace of T-0001' })
     expect(within(empty).getByText(/no workspace yet/)).toBeTruthy()
+    // No workspace, no progress to watch: the details stay closed.
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
 
     await user.click(within(sidebar).getByRole('button', { name: /All tasks/ }))
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
-  it('opens the changes from the sidebar without the details', async () => {
+  it('opens the changes from the sidebar with the details beside them', async () => {
     installDaemon([
       makeTask({
         id: 'T-0002',
@@ -1420,12 +1438,12 @@ describe('App', () => {
     await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
     await user.click(screen.getByRole('menuitem', { name: 'View changes' }))
     expect(await screen.findByRole('region', { name: 'Changes of T-0002' })).toBeTruthy()
-    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+
     await user.click(screen.getByRole('button', { name: 'Hide details' }))
     expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
   })
 
   it('keeps the details of a task open after a visit to another workspace', async () => {
@@ -1453,7 +1471,7 @@ describe('App', () => {
 
     await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
     await screen.findByRole('region', { name: 'Changes of T-0002' })
-    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
 
     await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
     await screen.findByRole('region', { name: 'Workspace of T-0001' })
@@ -1505,7 +1523,7 @@ describe('App', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
 
     await screen.findByRole('region', { name: 'Changes of T-0098' })
-    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'Details of T-0098' })).toBeTruthy()
     expect(useViewStore.getState().selectedId).toBe('T-0098')
     expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0002': true })
   })
@@ -1722,8 +1740,8 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
-    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: 'Details of T-0098' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy()
     const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(
@@ -2058,7 +2076,6 @@ describe('App', () => {
     act(() => useViewStore.getState().openChanges('T-0001', 'terminal'))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     const progressTab = within(details).getByRole('tab', { name: 'Progress' })
     expect(progressTab.getAttribute('aria-selected')).toBe('true')
@@ -2093,9 +2110,11 @@ describe('App', () => {
       return within(details).getByRole('tab', { name: 'Progress' }).getAttribute('aria-selected')
     }
 
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     expect(progressShown()).toBe('true')
     await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(progressShown()).toBe('true')
+    await user.keyboard('i')
     await user.keyboard('i')
     expect(progressShown()).toBe('true')
     await user.keyboard('i')
@@ -2111,12 +2130,10 @@ describe('App', () => {
     await screen.findByRole('table')
     openWorkspace('T-0001')
     await screen.findByRole('region', { name: 'Changes of T-0001' })
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     const first = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(first).getByRole('tab', { name: 'Details' }))
 
     openWorkspace('T-0002')
-    act(() => useViewStore.getState().setDetailOpen('T-0002', true))
     const second = await screen.findByRole('complementary', { name: 'Details of T-0002' })
     const detailsTab = within(second).getByRole('tab', { name: 'Details' })
     expect(detailsTab.getAttribute('aria-selected')).toBe('true')
@@ -2132,7 +2149,6 @@ describe('App', () => {
     await screen.findByRole('table')
     openWorkspace('T-0001')
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
 
     await openStageFile(user, details)
@@ -2202,8 +2218,8 @@ describe('App', () => {
     await screen.findByRole('table')
     openWorkspace('T-0001')
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    await user.click(screen.getByRole('button', { name: 'Show details' }))
     const shown = () => screen.queryByRole('complementary', { name: 'Details of T-0001' })
+    expect(shown()).toBeTruthy()
 
     for (const tab of ['History', 'Docs', 'Terminal']) {
       await user.click(within(view).getByRole('tab', { name: tab }))
@@ -2211,6 +2227,456 @@ describe('App', () => {
     }
     await user.click(within(view).getByRole('tab', { name: 'Changes' }))
     expect(shown()).toBeNull()
+    // The close counts for the task, so the details stay closed on the other tabs.
+    await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
+    expect(shown()).toBeNull()
+  })
+
+  it('opens the details beside a workspace until the user closes them', async () => {
+    installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const shown = (id: string) => screen.queryByRole('complementary', { name: `Details of ${id}` })
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown('T-0001')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    expect(shown('T-0001')).toBeNull()
+
+    openWorkspace('T-0002')
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(shown('T-0002')).toBeTruthy()
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown('T-0001')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(shown('T-0001')).toBeTruthy()
+
+    // A list address hides the details, but that is not the user closing them.
+    act(() => useViewStore.getState().applyRoute({ kind: 'tasks' }))
+    await screen.findByRole('table')
+    expect(shown('T-0001')).toBeNull()
+    act(() =>
+      useViewStore
+        .getState()
+        .applyRoute({ kind: 'workspace', id: 'T-0001', tab: 'terminal', file: null }),
+    )
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown('T-0001')).toBeTruthy()
+  })
+
+  it('opens the details of a workspace address on its own', async () => {
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    act(() =>
+      useViewStore
+        .getState()
+        .applyRoute({ kind: 'workspace', id: 'T-0001', tab: 'terminal', file: null }),
+    )
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const progressTab = within(details).getByRole('tab', { name: 'Progress' })
+    expect(progressTab.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('does not open the details of a workspace on their own where they would cover it', async () => {
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }))
+    vi.stubGlobal('innerWidth', 900)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeTruthy()
+  })
+
+  it.each(['table', 'board', 'progress'] as const)(
+    'keeps the details closed while the selection moves in the %s layout',
+    async (layout) => {
+      useViewStore.setState({ layout })
+      installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+      const user = userEvent.setup()
+      render(<App />)
+      await signIn(user)
+      await screen.findAllByRole('button', { name: /Fix timezone bug/ })
+
+      await user.keyboard('j')
+      await user.keyboard('j')
+      await user.keyboard('k')
+      expect(useViewStore.getState().selectedId).not.toBeNull()
+      expect(screen.queryByRole('complementary', { name: /Details of/ })).toBeNull()
+      expect(routeOf(useViewStore.getState()).kind).toBe(layout === 'table' ? 'tasks' : layout)
+    },
+  )
+
+  it.each([
+    [
+      'the jump palette',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.keyboard('{Control>}k{/Control}')
+        await user.keyboard('timezone{Enter}')
+      },
+    ],
+    [
+      'Enter on a table row',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.keyboard('j')
+        await user.keyboard('{Enter}')
+      },
+    ],
+    [
+      'the needs-you strip',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        const strip = screen.getByRole('region', { name: 'Needs you' })
+        const [row] = within(strip).getAllByRole('button', { name: /Fix timezone bug/ })
+        await user.click(row as HTMLElement)
+      },
+    ],
+  ])('opens the details beside a workspace opened from %s', async (_way, open) => {
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await open(user)
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const progressTab = within(details).getByRole('tab', { name: 'Progress' })
+    expect(progressTab.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy()
+    // The default is not a choice of the user, so nothing is remembered for the task.
+    expect(useViewStore.getState().detailOpenByTask).toEqual({})
+  })
+
+  it.each([
+    [1280, true],
+    [1279, false],
+  ])('at a window %i px wide opens the details on its own: %s', async (width, opens) => {
+    stubWindowWidth(width)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const details = screen.queryByRole('complementary', { name: 'Details of T-0001' })
+    expect(details !== null).toBe(opens)
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+  })
+
+  it('opens the details on the view the user picked last', async () => {
+    useViewStore.setState({ detailsView: 'details' })
+    installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const selected = (id: string, tab: string) => {
+      const details = screen.getByRole('complementary', { name: `Details of ${id}` })
+      return within(details).getByRole('tab', { name: tab }).getAttribute('aria-selected')
+    }
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(selected('T-0001', 'Details')).toBe('true')
+
+    const first = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(first).getByRole('tab', { name: 'Progress' }))
+    openWorkspace('T-0002')
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(selected('T-0002', 'Progress')).toBe('true')
+    expect(window.localStorage.getItem('natamux.details-view')).toBe('progress')
+  })
+
+  it('opens the details of a Changes address, and shows nothing for an unknown task', async () => {
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    act(() =>
+      useViewStore
+        .getState()
+        .applyRoute({ kind: 'workspace', id: 'T-0001', tab: 'changes', file: null }),
+    )
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+
+    act(() =>
+      useViewStore
+        .getState()
+        .applyRoute({ kind: 'workspace', id: 'T-9999', tab: 'terminal', file: null }),
+    )
+    expect(screen.queryByRole('complementary', { name: /Details of/ })).toBeNull()
+  })
+
+  it.each([
+    [
+      'the close button',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+        await user.click(within(details).getByRole('button', { name: 'Close details' }))
+      },
+    ],
+    [
+      'the title bar toggle',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.click(screen.getByRole('button', { name: 'Hide details' }))
+      },
+    ],
+    [
+      'Mod+Alt+B',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+      },
+    ],
+    [
+      'i',
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await user.keyboard('i')
+      },
+    ],
+  ])('keeps the details of a task closed with %s', async (_control, close) => {
+    installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const shown = (id: string) => screen.queryByRole('complementary', { name: `Details of ${id}` })
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await close(user)
+    expect(shown('T-0001')).toBeNull()
+
+    openWorkspace('T-0002')
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(shown('T-0002')).toBeTruthy()
+
+    // Back by another way, after a visit to the list.
+    act(() => useViewStore.getState().applyRoute({ kind: 'tasks' }))
+    await screen.findByRole('table')
+    await user.keyboard('{Control>}k{/Control}')
+    await user.keyboard('timezone{Enter}')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown('T-0001')).toBeNull()
+  })
+
+  it('keeps the details open that the user opened again, and the last choice wins', async () => {
+    installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const shown = () => screen.queryByRole('complementary', { name: 'Details of T-0001' })
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await user.keyboard('i')
+    await user.keyboard('i')
+    openWorkspace('T-0002')
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown()).toBeTruthy()
+
+    await user.keyboard('i')
+    await user.keyboard('i')
+    await user.keyboard('i')
+    openWorkspace('T-0002')
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown()).toBeNull()
+  })
+
+  it('shows the progress from the palette in details that are open already', async () => {
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('tab', { name: 'Details' }))
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.keyboard('>Show the task progress{Enter}')
+    const progressTab = within(
+      screen.getByRole('complementary', { name: 'Details of T-0001' }),
+    ).getByRole('tab', { name: 'Progress' })
+    expect(progressTab.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it.each([{ kind: 'tasks' }, { kind: 'board' }, { kind: 'progress' }] as const)(
+    'opens the details again after a visit to the $kind address',
+    async (route) => {
+      installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+      const user = userEvent.setup()
+      render(<App />)
+      await signIn(user)
+      await screen.findByRole('table')
+      const shown = (id: string) =>
+        screen.queryByRole('complementary', { name: `Details of ${id}` })
+      const visit = async (id: string) => {
+        act(() => useViewStore.getState().applyRoute(route))
+        await waitFor(() => expect(screen.queryByRole('region', { name: /Changes of/ })).toBeNull())
+        expect(shown(id)).toBeNull()
+        act(() =>
+          useViewStore
+            .getState()
+            .applyRoute({ kind: 'workspace', id, tab: 'terminal', file: null }),
+        )
+        await screen.findByRole('region', { name: `Changes of ${id}` })
+      }
+
+      openWorkspace('T-0001')
+      await screen.findByRole('region', { name: 'Changes of T-0001' })
+      await visit('T-0001')
+      expect(shown('T-0001')).toBeTruthy()
+
+      // A close of the user stays.
+      openWorkspace('T-0002')
+      await screen.findByRole('region', { name: 'Changes of T-0002' })
+      await user.click(screen.getByRole('button', { name: 'Hide details' }))
+      await visit('T-0002')
+      expect(shown('T-0002')).toBeNull()
+    },
+  )
+
+  it('takes the details off a workspace when the window gets narrow, and back when wide', async () => {
+    stubWindowWidth(1400)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+
+    vi.stubGlobal('innerWidth', 900)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    vi.stubGlobal('innerWidth', 1400)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+
+    vi.stubGlobal('innerWidth', 900)
+    act(() => window.dispatchEvent(new Event('resize')))
+    await user.keyboard('i')
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeTruthy()
+  })
+
+  it('does not open the details on their own when a wide sidebar leaves main too narrow', async () => {
+    window.localStorage.setItem('natamux.sidebar-width', '440')
+    stubWindowWidth(1300)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+  })
+
+  it('opens the details once a workspace is made from the empty workspace view', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    openWorkspace('T-0001')
+    const empty = await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    await user.click(within(empty).getByRole('button', { name: 'Create workspace' }))
+
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(await screen.findByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
+  it('opens the details on Progress for the old Progress address, also after a close', async () => {
+    useViewStore.setState({ detailsView: 'details' })
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    act(() =>
+      useViewStore.getState().applyRoute({
+        kind: 'workspace',
+        id: 'T-0001',
+        tab: 'terminal',
+        file: null,
+        showProgress: true,
+      }),
+    )
+    const details = await screen.findByRole('complementary', { name: 'Details of T-0001' })
+    const progressTab = within(details).getByRole('tab', { name: 'Progress' })
+    expect(progressTab.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('keeps the Changes close for its task only, also after a visit to the list', async () => {
+    stubWindowWidth(1400)
+    installDaemon([workspaceTask(), workspaceTask({ id: 'T-0002', title: 'Add export' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const shown = (id: string) => screen.queryByRole('complementary', { name: `Details of ${id}` })
+
+    openWorkspace('T-0001')
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await user.click(within(view).getByRole('tab', { name: 'Changes' }))
+    expect(shown('T-0001')).toBeNull()
+
+    openWorkspace('T-0002')
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(shown('T-0002')).toBeTruthy()
+
+    act(() => useViewStore.getState().applyRoute({ kind: 'tasks' }))
+    openWorkspace('T-0001')
+    await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(shown('T-0001')).toBeNull()
+
+    // Opened again by hand on Changes, they stay.
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(shown('T-0001')).toBeTruthy()
   })
 
   it('sorts the table from the column headers and says which column is sorted', async () => {

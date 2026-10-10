@@ -97,6 +97,12 @@ export function detailsViewFor(picked: DetailsView | null, inWorkspace: boolean)
   return picked ?? (inWorkspace ? 'progress' : 'details')
 }
 
+// Until the user opens or closes them, the details are open where they dock beside a workspace,
+// so its progress is in sight. As a sheet or a page they would cover the terminal.
+export function detailsOpenFor(choice: boolean | undefined, dockedBesideWorkspace: boolean) {
+  return choice ?? dockedBesideWorkspace
+}
+
 function isWorkspaceTab(value: unknown): value is WorkspaceTab {
   return value === 'changes' || value === 'history' || value === 'terminal'
 }
@@ -263,7 +269,8 @@ type ViewData = {
   seenState: Record<string, TaskState>
   search: string
   selectedId: string | null
-  // Whether the details of each task are open. A task without an entry has them closed.
+  // Whether the user opened or closed the details of each task. See detailsOpenFor for a task
+  // without an entry.
   detailOpenByTask: Record<string, boolean>
   // The view of the details that the user picked last. Null: never picked.
   detailsView: DetailsView | null
@@ -445,15 +452,18 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
         const detailOpenByTask = withDetailOpen(current.detailOpenByTask, route.id, true)
         return { changesTaskId: null, agentsOpen: false, selectedId: route.id, detailOpenByTask }
       }
-      // A list address shows no details: the address of the details is /t/<id>.
+      // A list address shows no details: the address of the details is /t/<id>. The user did not
+      // close them, so the open entry is dropped, not set to closed: the workspace of the task
+      // still opens with its details.
       const layout: Layout =
         route.kind === 'board' || route.kind === 'progress' ? route.kind : 'table'
       saveLayout(layout)
-      const open = current.selectedId !== null && current.detailOpenByTask[current.selectedId]
-      const detailOpenByTask =
-        current.selectedId !== null && open
-          ? withDetailOpen(current.detailOpenByTask, current.selectedId, false)
-          : current.detailOpenByTask
+      const { selectedId } = current
+      let detailOpenByTask = current.detailOpenByTask
+      if (selectedId !== null && detailOpenByTask[selectedId] === true) {
+        const { [selectedId]: _hidden, ...rest } = current.detailOpenByTask
+        detailOpenByTask = rest
+      }
       return { layout, changesTaskId: null, agentsOpen: false, detailOpenByTask }
     }),
   rememberTab: (taskId, tab) =>
