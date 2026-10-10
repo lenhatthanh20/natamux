@@ -104,7 +104,11 @@ describe('parseCommand', () => {
     })
 
     it('shows the task of the terminal without an id, and needs a valid id', () => {
-      expect(parseCommand(['task', 'show'])).toEqual({ name: 'task.show', id: undefined, json: false })
+      expect(parseCommand(['task', 'show'])).toEqual({
+        name: 'task.show',
+        id: undefined,
+        json: false,
+      })
       expect(() => parseCommand(['task', 'show', '42'])).toThrow(/not a task id/)
     })
 

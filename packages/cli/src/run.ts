@@ -274,7 +274,9 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
 
   // `ask`, `done` and `task show` run inside a task's terminal, which knows its task.
   if (
-    (command.name === 'agent.ask' || command.name === 'agent.done' || command.name === 'task.show') &&
+    (command.name === 'agent.ask' ||
+      command.name === 'agent.done' ||
+      command.name === 'task.show') &&
     command.id === undefined
   ) {
     const fromEnv = env.NATAMUX_TASK_ID?.trim()

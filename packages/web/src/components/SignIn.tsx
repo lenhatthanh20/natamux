@@ -60,7 +60,8 @@ export function SignIn({ message, onSubmit }: SignInProps) {
             />
           </div>
           <p id={helpId} className="text-xs text-muted">
-            It is <code className="font-mono">NATAMUX_TOKEN</code> of the daemon. Without it, the daemon makes one and prints it when it starts.
+            It is <code className="font-mono">NATAMUX_TOKEN</code> of the daemon. Without it, the
+            daemon makes one and prints it when it starts.
           </p>
         </div>
         {message !== null && (

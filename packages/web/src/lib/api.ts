@@ -251,7 +251,11 @@ export function createApi(
     // first, from `base` when it is given.
     async startAgent(taskId: string, agent: string, prompt?: string, base?: string): Promise<Task> {
       const body = asRecord(
-        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent`, { agent, prompt, base }),
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent`, {
+          agent,
+          prompt,
+          base,
+        }),
       )
       return taskSchema.parse(body.task)
     },
