@@ -25,7 +25,7 @@ export type CliOptions = {
   env: Record<string, string | undefined>
   io: CliIo
   fetch?: FetchFunction
-  // Where `helmsman hook` reads the JSON of the agent's hook. Defaults to an empty input.
+  // Where `natamux hook` reads the JSON of the agent's hook. Defaults to an empty input.
   readStdin?: () => Promise<string>
 }
 
@@ -40,8 +40,8 @@ function printJson(io: CliIo, data: unknown): void {
 // The terminal the command runs in, when it is a terminal of that task. Inside a group it tells
 // the daemon which stage the agent there works on.
 function terminalOf(env: Record<string, string | undefined>, taskId: string): string | undefined {
-  const terminal = env.HELMSMAN_TERMINAL?.trim()
-  return terminal && env.HELMSMAN_TASK_ID?.trim() === taskId ? terminal : undefined
+  const terminal = env.NATAMUX_TERMINAL?.trim()
+  return terminal && env.NATAMUX_TASK_ID?.trim() === taskId ? terminal : undefined
 }
 
 async function execute(
@@ -235,8 +235,8 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
     command = parseCommand(argv)
   } catch (error) {
     if (error instanceof UsageError) {
-      io.stderr(`${error.message}\nRun "helmsman help" for usage.\n`)
-      // `helmsman hook` runs inside an agent, which treats exit code 2 as "block this action".
+      io.stderr(`${error.message}\nRun "natamux help" for usage.\n`)
+      // `natamux hook` runs inside an agent, which treats exit code 2 as "block this action".
       return argv[0] === 'hook' ? EXIT_OK : EXIT_USAGE
     }
     throw error
@@ -267,29 +267,29 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
 
   // This command only prints settings, so it needs no token and does not call the daemon.
   if (command.name === 'hooks.claude-code') {
-    const settings = claudeCodeHookSettings(env.HELMSMAN_URL?.trim() || DEFAULT_URL)
+    const settings = claudeCodeHookSettings(env.NATAMUX_URL?.trim() || DEFAULT_URL)
     printJson(io, settings)
     return EXIT_OK
   }
 
   // `ask` and `done` run inside an agent's terminal, which knows its task.
   if ((command.name === 'agent.ask' || command.name === 'agent.done') && command.id === undefined) {
-    const fromEnv = env.HELMSMAN_TASK_ID?.trim()
+    const fromEnv = env.NATAMUX_TASK_ID?.trim()
     if (!fromEnv) {
-      io.stderr('Name the task with --task T-42, or set HELMSMAN_TASK_ID.\n')
+      io.stderr('Name the task with --task T-42, or set NATAMUX_TASK_ID.\n')
       return EXIT_USAGE
     }
     command = { ...command, id: fromEnv }
   }
 
-  const token = env.HELMSMAN_TOKEN?.trim()
+  const token = env.NATAMUX_TOKEN?.trim()
   if (!token) {
-    io.stderr('HELMSMAN_TOKEN is not set. Use the token the daemon printed when it started.\n')
+    io.stderr('NATAMUX_TOKEN is not set. Use the token the daemon printed when it started.\n')
     return EXIT_USAGE
   }
 
   const client = new DaemonClient({
-    baseUrl: env.HELMSMAN_URL?.trim() || DEFAULT_URL,
+    baseUrl: env.NATAMUX_URL?.trim() || DEFAULT_URL,
     token,
     fetch: options.fetch ?? fetch,
   })

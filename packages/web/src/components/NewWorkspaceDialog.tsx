@@ -1,4 +1,4 @@
-import type { ContextSource, ContextSourceType, Repo, Task } from '@helmsman/core'
+import type { ContextSource, ContextSourceType, Repo, Task } from '@natamux/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'

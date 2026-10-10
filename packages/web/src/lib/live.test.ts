@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { describe, expect, it, vi } from 'vitest'
 import { closeSocket, liveSocketUrl, parseLiveMessage } from './live'
 

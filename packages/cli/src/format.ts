@@ -1,10 +1,11 @@
-import { EVENT_SOURCES, TASK_PRIORITIES, TASK_STATES, type Task } from '@helmsman/core'
+import { EVENT_SOURCES, TASK_PRIORITIES, TASK_STATES, type Task } from '@natamux/core'
 import type { RemoveWorkspaceResult, SendEventResult, StoredEvent } from './client.js'
 import { SENDABLE_EVENT_TYPES } from './command.js'
 
 export const DEFAULT_URL = 'http://127.0.0.1:4317'
 
-export const USAGE = `Usage: helmsman <command> [options]
+export const USAGE = `Usage: natamux <command> [options]
+       nmx <command> [options]   (short name)
 
 Commands:
   task create <title>        Create a draft task
@@ -32,7 +33,7 @@ Options:
   --agent <name>        task create: agent that works on the task; agent start: which agent
   --depends-on <id>     task create, task edit: task that must finish first (repeat for more)
   --prompt <text>       agent start: first prompt (default: the task title and notes)
-  --task <id>           ask, done: the task (default: HELMSMAN_TASK_ID)
+  --task <id>           ask, done: the task (default: NATAMUX_TASK_ID)
   --context <source>    task create: where its context comes from, such as github-issue:42
   --stage <id>          stage, done, ask: the stage, when two run side by side
   --to <id>             stage back: the stage to go back to (default: the last agent stage)
@@ -52,11 +53,11 @@ Options:
 Event types: ${SENDABLE_EVENT_TYPES.join(', ')}
 
 Environment:
-  HELMSMAN_TOKEN        Token of the daemon (required, except for hooks claude-code)
-  HELMSMAN_URL          Address of the daemon (default: ${DEFAULT_URL})
-  HELMSMAN_TASK_ID      The task of this terminal: its hooks, ask and done report on it.
-                        Terminals that Helmsman opens set it
-  HELMSMAN_TERMINAL     The terminal of the task, which tells the stage done is about
+  NATAMUX_TOKEN         Token of the daemon (required, except for hooks claude-code)
+  NATAMUX_URL           Address of the daemon (default: ${DEFAULT_URL})
+  NATAMUX_TASK_ID       The task of this terminal: its hooks, ask and done report on it.
+                        Terminals that Natamux opens set it
+  NATAMUX_TERMINAL      The terminal of the task, which tells the stage done is about
 `
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {

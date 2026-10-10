@@ -4,7 +4,7 @@ import {
   LEGACY_PIPELINE,
   type Task,
   type TaskEvent,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
@@ -81,7 +81,7 @@ function json(data: unknown, status = 200): Response {
 function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   let tasks = [...initial]
   let templates: { id: string; name: string; labels: string[] }[] = []
-  let repos = [{ id: 'default', name: 'helmsman', path: '/work/helmsman' }]
+  let repos = [{ id: 'default', name: 'natamux', path: '/work/natamux' }]
   const calls: Call[] = []
   const log: { accepted: boolean; event: TaskEvent }[] = [
     ...initial.map((task) => ({
@@ -119,7 +119,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
         description: input.prompt ?? '',
         agent: input.agent ?? null,
         workspace: '/work/T-0098',
-        branch: 'helmsman/t-0098-new',
+        branch: 'natamux/t-0098-new',
       })
       tasks = [task, ...tasks]
       return json({ task }, 201)
@@ -169,7 +169,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       const updated: Task = {
         ...workspaceTask,
         workspace: creating ? `/work/${workspaceTask.id}` : null,
-        branch: creating ? `helmsman/${workspaceTask.id.toLowerCase()}` : null,
+        branch: creating ? `natamux/${workspaceTask.id.toLowerCase()}` : null,
       }
       tasks = tasks.map((task) => (task.id === updated.id ? updated : task))
       return creating ? json({ task: updated }, 201) : json({ task: updated, branchDeleted: true })
@@ -289,7 +289,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
     if (/^\/api\/tasks\/T-\d+\/graph$/.test(path) && method === 'GET') {
       const commit = { author: 'Ann', date: '2026-10-08T09:00:00.000Z', refs: [] }
       return json({
-        branch: 'helmsman/t-0001',
+        branch: 'natamux/t-0001',
         head: 'bbbbbbbbbb',
         base: 'main',
         ahead: 1,
@@ -301,7 +301,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
             hash: 'bbbbbbbbbb',
             parents: ['aaaaaaaaaa'],
             subject: 'Fix the parser',
-            refs: ['helmsman/t-0001'],
+            refs: ['natamux/t-0001'],
             onBranch: true,
           },
           { ...commit, hash: 'aaaaaaaaaa', parents: [], subject: 'init', onBranch: false },
@@ -543,8 +543,8 @@ describe('App', () => {
         title: 'Fix timezone bug',
         state: 'running',
         updatedAt: new Date().toISOString(),
-        workspace: '/work/.helmsman/worktrees/T-0001',
-        branch: 'helmsman/t-0001-fix-timezone-bug',
+        workspace: '/work/.natamux/worktrees/T-0001',
+        branch: 'natamux/t-0001-fix-timezone-bug',
       }),
     ])
     const user = userEvent.setup()
@@ -557,8 +557,8 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
 
-    expect(byTip(details, '/work/.helmsman/worktrees/T-0001')).toBeTruthy()
-    expect(byTip(details, 'helmsman/t-0001-fix-timezone-bug')).toBeTruthy()
+    expect(byTip(details, '/work/.natamux/worktrees/T-0001')).toBeTruthy()
+    expect(byTip(details, 'natamux/t-0001-fix-timezone-bug')).toBeTruthy()
   })
 
   it('opens the changes of a workspace, shows a file diff, and closes with Escape', async () => {
@@ -569,7 +569,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0001',
-        branch: 'helmsman/t-0001',
+        branch: 'natamux/t-0001',
       }),
     ])
     const user = userEvent.setup()
@@ -613,7 +613,7 @@ describe('App', () => {
     await user.click(within(view).getByRole('tab', { name: 'History' }))
     const commits = await within(view).findByRole('list', { name: 'Commits' })
     expect(within(commits).getByText('Fix the parser')).toBeTruthy()
-    expect(within(commits).getByText('helmsman/t-0001')).toBeTruthy()
+    expect(within(commits).getByText('natamux/t-0001')).toBeTruthy()
     expect(within(commits).getByText('bbbbbbb')).toBeTruthy()
     expect(within(view).getByText('1 commit ahead of main, 0 behind.')).toBeTruthy()
 
@@ -639,7 +639,7 @@ describe('App', () => {
           title: 'Fix timezone bug',
           state: 'needs-input',
           workspace: '/work/T-0001',
-          branch: 'helmsman/t-0001',
+          branch: 'natamux/t-0001',
         }),
       ],
       [
@@ -685,7 +685,7 @@ describe('App', () => {
         id: 'T-0001',
         title: 'Fix timezone bug',
         workspace: '/work/T-0001',
-        branch: 'helmsman/t-0001',
+        branch: 'natamux/t-0001',
       }),
       makeTask({ id: 'T-0003', title: 'No branch yet', workspace: '/work/T-0003' }),
     ])
@@ -1004,7 +1004,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002',
+        branch: 'natamux/t-0002',
       }),
     ])
     const user = userEvent.setup()
@@ -1035,7 +1035,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002',
+        branch: 'natamux/t-0002',
       }),
     ])
     const user = userEvent.setup()
@@ -1087,7 +1087,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002-add-export',
+        branch: 'natamux/t-0002-add-export',
       }),
     ])
     const user = userEvent.setup()
@@ -1100,7 +1100,7 @@ describe('App', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Pin to the top' }))
 
     expect(within(sidebar).getByRole('heading', { name: 'Pinned' })).toBeTruthy()
-    expect(window.localStorage.getItem('helmsman.pinned')).toBe('["T-0002"]')
+    expect(window.localStorage.getItem('natamux.pinned')).toBe('["T-0002"]')
   })
 
   it('shows a change that arrives over the live connection', async () => {
@@ -1134,7 +1134,7 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Workspaces' })).toBeTruthy()
     await user.click(toggle)
     expect(screen.queryByRole('navigation', { name: 'Workspaces' })).toBeNull()
-    expect(window.localStorage.getItem('helmsman.sidebar-open')).toBe('false')
+    expect(window.localStorage.getItem('natamux.sidebar-open')).toBe('false')
 
     await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
     expect(screen.getByRole('navigation', { name: 'Workspaces' })).toBeTruthy()
@@ -1222,7 +1222,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Account' }))
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Large' }))
     expect(document.documentElement.style.getPropertyValue('--ui-zoom')).toBe('1.077')
-    expect(window.localStorage.getItem('helmsman.ui-size')).toBe('large')
+    expect(window.localStorage.getItem('natamux.ui-size')).toBe('large')
   })
 
   it('asks before it signs out, and keeps the session on Cancel', async () => {
@@ -1234,7 +1234,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'Account' }))
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
-    const dialog = screen.getByRole('dialog', { name: 'Sign out of Helmsman?' })
+    const dialog = screen.getByRole('dialog', { name: 'Sign out of Natamux?' })
     expect(within(dialog).getByText('Your tasks keep running.')).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -1265,7 +1265,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0001',
-        branch: 'helmsman/t-0001',
+        branch: 'natamux/t-0001',
       }),
     ])
     const user = userEvent.setup()
@@ -1361,7 +1361,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0001',
-        branch: 'helmsman/t-0001',
+        branch: 'natamux/t-0001',
       }),
     ])
     const user = userEvent.setup()
@@ -1415,7 +1415,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002',
+        branch: 'natamux/t-0002',
       }),
     ])
     const user = userEvent.setup()
@@ -1425,7 +1425,7 @@ describe('App', () => {
 
     await user.type(screen.getByLabelText('Search tasks'), 'zzzz')
     expect(await screen.findByText('No tasks match “zzzz”')).toBeTruthy()
-    expect(screen.getByText('No matches in helmsman (1 hidden)')).toBeTruthy()
+    expect(screen.getByText('No matches in natamux (1 hidden)')).toBeTruthy()
     expect(screen.getByText('Not filtered')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Clear filter' }))
@@ -1499,7 +1499,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002',
+        branch: 'natamux/t-0002',
       }),
       makeTask({
         id: 'T-0003',
@@ -1507,7 +1507,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0003',
-        branch: 'helmsman/t-0003',
+        branch: 'natamux/t-0003',
       }),
     ])
     const user = userEvent.setup()
@@ -1544,7 +1544,7 @@ describe('App', () => {
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0002',
-        branch: 'helmsman/t-0002',
+        branch: 'natamux/t-0002',
       }),
     ])
     const user = userEvent.setup()
@@ -1595,6 +1595,6 @@ describe('App', () => {
     expect(within(details).getByText('No notes. Add some with Edit.')).toBeTruthy()
     await user.click(within(details).getByRole('button', { name: 'Notes' }))
     expect(within(details).queryByText('No notes. Add some with Edit.')).toBeNull()
-    expect(window.localStorage.getItem('helmsman.section.notes')).toBe('false')
+    expect(window.localStorage.getItem('natamux.section.notes')).toBe('false')
   })
 })

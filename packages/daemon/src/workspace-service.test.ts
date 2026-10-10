@@ -58,9 +58,7 @@ describe('slugify and branchNameFor', () => {
   })
 
   it('builds a branch name from the task id and title', () => {
-    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe(
-      'helmsman/t-0042-fix-the-bug',
-    )
+    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe('natamux/t-0042-fix-the-bug')
   })
 })
 
@@ -71,9 +69,9 @@ describe('create', () => {
     const updated = await workspaces.create(task.id)
 
     expect(updated.workspace).toBe(join(repo.root, 'worktrees', 'T-0001'))
-    expect(updated.branch).toBe('helmsman/t-0001-fix-the-bug')
+    expect(updated.branch).toBe('natamux/t-0001-fix-the-bug')
     expect(existsSync(join(updated.workspace ?? '', '.git'))).toBe(true)
-    expect(branchExists('helmsman/t-0001-fix-the-bug')).toBe(true)
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
     expect(tasks.getTask(task.id)).toEqual(updated)
   })
 
@@ -128,7 +126,7 @@ describe('create', () => {
 
   it('leaves the task as it was when git fails', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
-    runGit(repo.dir, 'branch', 'helmsman/t-0001-fix-the-bug')
+    runGit(repo.dir, 'branch', 'natamux/t-0001-fix-the-bug')
 
     await expect(workspaces.create(task.id)).rejects.toThrow(GitError)
 
@@ -147,7 +145,7 @@ describe('remove', () => {
     expect(result.task.workspace).toBeNull()
     expect(result.task.branch).toBeNull()
     expect(existsSync(created.workspace ?? '')).toBe(false)
-    expect(branchExists('helmsman/t-0001-fix-the-bug')).toBe(false)
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(false)
     expect(tasks.listEvents(task.id).at(-1)?.event.type).toBe('workspace.removed')
   })
 
@@ -158,8 +156,8 @@ describe('remove', () => {
     const result = await workspaces.remove(task.id, { deleteBranch: false })
 
     expect(result.branchDeleted).toBe(false)
-    expect(result.task.branch).toBe('helmsman/t-0001-fix-the-bug')
-    expect(branchExists('helmsman/t-0001-fix-the-bug')).toBe(true)
+    expect(result.task.branch).toBe('natamux/t-0001-fix-the-bug')
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
   })
 
   it('keeps a branch that has commits that are not merged', async () => {
@@ -171,8 +169,8 @@ describe('remove', () => {
 
     expect(result.branchDeleted).toBe(false)
     expect(result.task.workspace).toBeNull()
-    expect(result.task.branch).toBe('helmsman/t-0001-fix-the-bug')
-    expect(branchExists('helmsman/t-0001-fix-the-bug')).toBe(true)
+    expect(result.task.branch).toBe('natamux/t-0001-fix-the-bug')
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
   })
 
   it('refuses a worktree with changes not committed, before ending its shells', async () => {
@@ -227,7 +225,7 @@ describe('remove', () => {
 
     const again = await workspaces.create(task.id)
 
-    expect(again.branch).toBe('helmsman/t-0001-fix-the-bug')
+    expect(again.branch).toBe('natamux/t-0001-fix-the-bug')
     expect(runGit(again.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('work')
   })
 })

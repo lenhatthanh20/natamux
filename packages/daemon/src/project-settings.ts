@@ -4,11 +4,11 @@ import {
   DEFAULT_PROJECT_SETTINGS,
   type ProjectSettings,
   projectSettingsSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { ZodError } from 'zod'
 import type { RepoService } from './repo-service.js'
 
-export const SETTINGS_FILE = '.helmsman.json'
+export const SETTINGS_FILE = '.natamux.json'
 
 export type LoadedSettings = {
   settings: ProjectSettings
@@ -51,7 +51,7 @@ export function parseSettings(text: string): ProjectSettings {
 
 type Cached = { mtimeMs: number; loaded: LoadedSettings }
 
-// `.helmsman.json` of each repository. Read again when the file changes, so an edit in the
+// `.natamux.json` of each repository. Read again when the file changes, so an edit in the
 // editor counts at once.
 export class ProjectSettingsService {
   private readonly repos: Pick<RepoService, 'pathOf'>

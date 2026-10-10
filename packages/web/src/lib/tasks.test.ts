@@ -4,7 +4,7 @@ import {
   TASK_STATES,
   type Task,
   type TaskState,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
@@ -204,7 +204,7 @@ describe('countByState', () => {
 describe('filterTasks', () => {
   const tasks = [
     makeTask({ id: 'T-0001', title: 'Fix timezone', state: 'running', agent: 'claude-code' }),
-    makeTask({ id: 'T-0002', title: 'Add export', state: 'review', branch: 'helmsman/export' }),
+    makeTask({ id: 'T-0002', title: 'Add export', state: 'review', branch: 'natamux/export' }),
     makeTask({ id: 'T-0003', title: 'Cleanup', state: 'review', labels: ['chore'] }),
   ]
 
@@ -224,7 +224,7 @@ describe('filterTasks', () => {
     ['timezone', ['T-0001']],
     ['T-0003', ['T-0003']],
     ['CLAUDE', ['T-0001']],
-    ['helmsman/export', ['T-0002']],
+    ['natamux/export', ['T-0002']],
     ['chore', ['T-0003']],
     ['nothing like this', []],
   ])('searches %j in title, id, agent, branch and labels', (search, expected) => {
@@ -263,8 +263,8 @@ describe('formatAge', () => {
 describe('sortTasks', () => {
   const tasks = [
     makeTask({ id: 'T-0001', title: 'beta', state: 'done', agent: 'claude-code' }),
-    makeTask({ id: 'T-0002', title: 'Alpha', state: 'running', branch: 'helmsman/b' }),
-    makeTask({ id: 'T-0010', title: 'gamma', state: 'running', branch: 'helmsman/a' }),
+    makeTask({ id: 'T-0002', title: 'Alpha', state: 'running', branch: 'natamux/b' }),
+    makeTask({ id: 'T-0010', title: 'gamma', state: 'running', branch: 'natamux/a' }),
     makeTask({ id: 'T-0003', title: 'delta', state: 'needs-input' }),
     makeTask({ id: 'T-0004', title: 'eps', state: 'review', pr: 'https://github.com/o/r/pull/12' }),
     makeTask({ id: 'T-0005', title: 'zeta', state: 'review', pr: 'https://github.com/o/r/pull/9' }),

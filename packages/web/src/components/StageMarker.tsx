@@ -1,4 +1,4 @@
-import type { StageStatus, TaskState } from '@helmsman/core'
+import type { StageStatus, TaskState } from '@natamux/core'
 import { Check, Minus, Pause, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { STATE_LABEL } from '../lib/tasks'

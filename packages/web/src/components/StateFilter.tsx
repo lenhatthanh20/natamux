@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { ListFilter } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'

@@ -1,10 +1,10 @@
-# Helmsman — Feature Plan
+# Natamux — Feature Plan
 
-Status: draft v0.1. Helmsman is an independent product. Other tools are used as reference only; no code, text or structure is copied.
+Status: draft v0.1. Natamux is an independent product. Other tools are used as reference only; no code, text or structure is copied.
 
 ## 1. Vision
 
-Helmsman is an Agent Development Environment (ADE) built around one question: **what is every agent doing right now, and which one needs me?**
+Natamux is an Agent Development Environment (ADE) built around one question: **what is every agent doing right now, and which one needs me?**
 
 - Run many coding agents in parallel, each in its own isolated workspace.
 - Manage the work as tasks, not as terminal tabs.
@@ -16,7 +16,7 @@ Tagline: *The next generation of an ADE.*
 
 - Task first. A task owns its workspace, its agent runs, its diff and its pull request.
 - Status is a fact, not a guess. It comes from agent events (hooks, exit codes, git, CI), never from parsing terminal text when an event exists.
-- Agent-agnostic. Helmsman is for the public, so it works with the agents people already use: Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, OpenCode and any other command line agent. Exact states come from each agent's hooks; an agent without hooks is followed through its terminal. See `agent-adapters.md`.
+- Agent-agnostic. Natamux is for the public, so it works with the agents people already use: Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, OpenCode and any other command line agent. Exact states come from each agent's hooks; an agent without hooks is followed through its terminal. See `agent-adapters.md`.
 - Local first. Data lives on the user's machine, in plain files where possible.
 - Keyboard first, fast to open, fast to read.
 - Small surface. Few features done well beats a long list.
@@ -25,7 +25,7 @@ Tagline: *The next generation of an ADE.*
 
 Findings come from third-party comparison articles and project pages. They are not verified against each product. Re-check before relying on any row.
 
-| Tool | Notable features | What Helmsman takes from it |
+| Tool | Notable features | What Natamux takes from it |
 |---|---|---|
 | Orca (stablyai/orca, MIT) | Parallel worktrees; many CLI agents; GitHub and Linear tasks; SSH worktrees; CLI that agents can drive; supervised orchestration (run, task, dispatch, worker_done, escalation); plugin API with panels and events; mobile companion | Agents can drive the app through a CLI; worktree-per-task; plugin panels; status events |
 | Conductor | Strong UX; worktree per agent; diff-first review; one-click PR; CI checks inline; closed source, Mac only | Diff-first review; one-click PR; polished first run |
@@ -39,7 +39,7 @@ Findings come from third-party comparison articles and project pages. They are n
 | Sculptor | Container isolation; pairing mode | Optional container isolation (later) |
 | Nimbalyst (was Crystal) | Parallel sessions plus visual editing of markdown and mockups. Crystal was deprecated in February 2026 | Rich markdown view for task notes |
 
-Lesson from the market: several free ADEs stopped or shut down. Helmsman must have a clear reason to exist and a clear way to be paid for (see section 9).
+Lesson from the market: several free ADEs stopped or shut down. Natamux must have a clear reason to exist and a clear way to be paid for (see section 9).
 
 ## 4. Differentiators
 
@@ -63,8 +63,8 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Option: run a task in the main checkout, no worktree | v1 |
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters). Done: Claude Code, with its hooks given through `--settings` | MVP |
 | Embedded terminal per workspace (multiple tabs). Done: several shells per task, as tabs; each keeps running when the dashboard closes, with recent output on reconnect. The agent runs in shell 1 | MVP |
-| Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.helmsman-setup` (or `.helmsman-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
-| Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `HELMSMAN_PORT` | v1 |
+| Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.natamux-setup` (or `.natamux-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
+| Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `NATAMUX_PORT` | v1 |
 | Clean up a workspace: confirm first, then remove worktree and branch | MVP |
 | Fan-out: one prompt to several agents, compare results, keep the winner. Done: **Fan out** copies a task 1 to 5 times, each with its own workspace and Claude Code; the copies share a `tries-…` label and are compared side by side in the details (state, diff size, pull request); **Keep this one** cancels the other tries | v1 |
 | SSH and remote workspaces | Later |
@@ -83,14 +83,14 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Subtasks (one level). Done: add them in the details of a task, which counts how many are done; a subtask shows its parent | v1 |
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
 | Approval gates: a task can require a human decision before it moves on. Done: each stage has a manual or auto gate (docs/design-task-stages.md) | v1 |
-| Stages per project: Context → Spec → Plan → [Test spec ‖ Implement] → Review → Testing → Release by default, changed in `.helmsman.json` (drop, reorder, add, run side by side). Done: the daemon starts each stage, takes `helmsman done`, checks the result (file, sections, commits, clean worktree, a command), and sends failed checks back to the agent once | v1 |
+| Stages per project: Context → Spec → Plan → [Test spec ‖ Implement] → Review → Testing → Release by default, changed in `.natamux.json` (drop, reorder, add, run side by side). Done: the daemon starts each stage, takes `natamux done`, checks the result (file, sections, commits, clean worktree, a command), and sends failed checks back to the agent once | v1 |
 | Task context from typed notes, a GitHub issue (with comments), a skill or an MCP server, written to `context.md`. Done | v1 |
 | Stage files (`context.md`, `spec.md`, `plan.md`, `test-spec.md`) in the worktree, ignored by git, kept with the task, editable in the Docs tab. Done | v1 |
 | Event log files: every event is also kept in `tasks/T-0001.events.jsonl`, and the index is rebuilt from them. Done | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |
 | Reusable task templates and prompts. Done: save a task as a template (notes, priority, labels) and pick it when adding a task; templates are markdown files in `<data dir>/templates` | v1 |
 | Import tasks from GitHub issues. Done: pick open issues (`gh issue list`) and make draft tasks; an issue is imported once | v1 |
-| A GitHub issue for a task made in the app. Done: opened when the spec is approved (or with the pull request, or by hand), and the pull request body says `Closes #N`; `helmsman task link` links a ticket elsewhere | v1 |
+| A GitHub issue for a task made in the app. Done: opened when the spec is approved (or with the pull request, or by hand), and the pull request body says `Closes #N`; `natamux task link` links a ticket elsewhere | v1 |
 | Import from Linear, Jira and others | Later |
 | Search and filter by state, label, agent | MVP |
 
@@ -139,13 +139,13 @@ Goals:
 |---|---|
 | Adapter interface: one function per agent that turns its hook input into a signal (prompt sent, waiting for the user, turn ended, failed) | MVP |
 | Claude Code adapter using its hooks for status events | MVP |
-| `helmsman hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
+| `natamux hook <agent>` and `POST /hooks/:agent`, so agents that can only run a command can report | MVP |
 | Codex, Gemini CLI, Cursor and GitHub Copilot CLI adapters from their hooks. Done: each agent starts from the dashboard with hooks for its session only (docs/agent-adapters.md); Copilot checked in a real session, the others against their documented input | v1 |
 | Generic adapter for any CLI (status from process and output idle time, terminal bell). Done: output in a task's first terminal is a sign of life (so a silent agent shows as quiet), and the terminal bell from an agent without hooks moves a running task to needs input | v1 |
 | OpenCode plugin | v1 |
 | Agent Client Protocol (ACP) client | Later |
-| Helmsman CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
-| Helmsman plugin for Claude Code (skills that use the CLI). Done: `plugins/helmsman`, with a `helmsman-task` skill, installable from this repository as a marketplace | v1 |
+| Natamux CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
+| Natamux plugin for Claude Code (skills that use the CLI). Done: `plugins/natamux`, with a `natamux-task` skill, installable from this repository as a marketplace | v1 |
 | Account and usage display per agent | Later |
 
 ### 5.6 Extensibility and sharing

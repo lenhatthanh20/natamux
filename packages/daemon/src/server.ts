@@ -13,7 +13,7 @@ import {
   templateIdSchema,
   terminalClientMessageSchema,
   terminalSizeSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
@@ -528,7 +528,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { ticket: options.terminals.issueTicket(id) }
   })
 
-  // A shell in the task's workspace. Frames are JSON, see terminal.ts in @helmsman/core.
+  // A shell in the task's workspace. Frames are JSON, see terminal.ts in @natamux/core.
   app.get('/tasks/:id/terminal', { websocket: true }, (socket, request) => {
     const params = taskParamsSchema.safeParse(request.params)
     const query = terminalQuerySchema.safeParse(request.query)

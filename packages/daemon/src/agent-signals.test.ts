@@ -1,4 +1,4 @@
-import { applyTaskEvent, LEGACY_PIPELINE, TASK_STATES, type TaskState } from '@helmsman/core'
+import { applyTaskEvent, LEGACY_PIPELINE, TASK_STATES, type TaskState } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { AGENT_SIGNALS, type AgentSignal, planSignalEvents } from './agent-signals.js'
 

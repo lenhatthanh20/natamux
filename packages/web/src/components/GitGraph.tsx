@@ -1,4 +1,4 @@
-import type { GitGraph as GitGraphData } from '@helmsman/core'
+import type { GitGraph as GitGraphData } from '@natamux/core'
 import { RefreshCw } from 'lucide-react'
 import { shortcutOf } from '../lib/commands'
 import { layoutGraph } from '../lib/graph-layout'

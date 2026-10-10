@@ -1,5 +1,5 @@
 {
-  "name": "helmsman",
+  "name": "natamux",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
@@ -16,9 +16,9 @@
   "postStartCommand": "scripts/dev.sh up",
   "forwardPorts": [5173, 4317, 8080],
   "portsAttributes": {
-    "5173": { "label": "Helmsman dashboard (dev)", "onAutoForward": "notify" },
-    "4317": { "label": "Helmsman daemon (dev)", "onAutoForward": "silent" },
-    "8080": { "label": "Helmsman (production compose)", "onAutoForward": "silent" }
+    "5173": { "label": "Natamux dashboard (dev)", "onAutoForward": "notify" },
+    "4317": { "label": "Natamux daemon (dev)", "onAutoForward": "silent" },
+    "8080": { "label": "Natamux (production compose)", "onAutoForward": "silent" }
   },
   "hostRequirements": {
     "cpus": 2

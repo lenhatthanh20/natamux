@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react'
 export type Theme = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
-const THEME_KEY = 'helmsman.theme'
+const THEME_KEY = 'natamux.theme'
 const choiceListeners = new Set<() => void>()
 
 export function parseTheme(raw: string | null | undefined): Theme {

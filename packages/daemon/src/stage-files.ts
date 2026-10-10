@@ -12,13 +12,13 @@ import {
 } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { tasksDir } from './task-files.js'
 
 const execFileAsync = promisify(execFile)
 
 // The folder in a worktree where agents read and write the stage files. Git ignores it.
-export const STAGE_DIR = '.helmsman-task'
+export const STAGE_DIR = '.natamux-task'
 
 const FILE_NAME = /^[\w-]+(\.[\w-]+)*\.md$/
 export const MAX_STAGE_FILE_BYTES = 1_000_000

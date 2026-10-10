@@ -88,7 +88,7 @@ export function TitleBar({
             />
           )}
         </span>
-        <h1 className="shrink-0 font-semibold text-ink max-lg:hidden">Helmsman</h1>
+        <h1 className="shrink-0 font-semibold text-ink max-lg:hidden">Natamux</h1>
         <span aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-line-strong max-lg:hidden" />
         <div className="flex min-w-0 flex-1 items-center">
           <Crumb view={view} />

@@ -41,7 +41,7 @@ export async function waitForHealth(
   throw new Error(`The daemon did not answer at ${url} in ${options.timeoutMs / 1000} seconds`)
 }
 
-const PATH_MARK = '__HELMSMAN_PATH__'
+const PATH_MARK = '__NATAMUX_PATH__'
 
 // The PATH that the user's login shell sets up. Undefined when it cannot be read in time.
 export function loginShellPath(

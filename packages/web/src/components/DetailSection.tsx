@@ -24,7 +24,7 @@ export function DetailSection({
   aside,
   children,
 }: DetailSectionProps) {
-  const [open, setOpen] = useStoredFlag(`helmsman.section.${id}`, defaultOpen)
+  const [open, setOpen] = useStoredFlag(`natamux.section.${id}`, defaultOpen)
 
   return (
     <section aria-label={title} className="border-t border-line">

@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { useEffect, useRef, useState } from 'react'
 import { notificationFor, statesById, tasksThatStartedWaiting } from '../lib/notify'
 

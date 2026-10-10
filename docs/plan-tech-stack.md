@@ -1,4 +1,4 @@
-# Helmsman — Tech Stack Plan
+# Natamux — Tech Stack Plan
 
 Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are open.
 
@@ -15,7 +15,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 ```
           ┌────────────┐   ┌───────────┐   ┌──────────────┐
           │ Dashboard  │   │    CLI    │   │ Agent (hooks │
-          │ (web, React)│   │ helmsman  │   │  + CLI calls)│
+          │ (web, React)│   │  natamux  │   │  + CLI calls)│
           └─────┬──────┘   └─────┬─────┘   └──────┬───────┘
                 │ HTTP + WebSocket│                │
                 └────────┬────────┴────────────────┘
@@ -48,7 +48,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 | PTY | node-pty | Standard way to run agent CLIs in a terminal |
 | Terminal UI | xterm.js | Standard in-browser terminal |
 | Git | Shell out to the `git` binary | Worktree support is complete there; no heavy library |
-| Storage: tasks | Markdown files with YAML front matter in `.helmsman/tasks/` of each repo | Human-readable, diffable, git-friendly |
+| Storage: tasks | Markdown files with YAML front matter in `.natamux/tasks/` of each repo | Human-readable, diffable, git-friendly |
 | Storage: runtime | SQLite through Node's built-in `node:sqlite` (Node 22.13 or newer) | Fast queries, event log, index of the task files. No native package to install. Marked "active development" in Node 22, so keep all SQL in one file (`task-index.ts`) |
 | Index rule | The SQLite index is a cache that can be rebuilt from the files | No lock-in, easy recovery |
 | UI framework | React + Vite | Large ecosystem, fast dev loop |
@@ -65,7 +65,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 
 Status must come from events, not screen scraping.
 
-- **Native adapters:** each agent's hooks are turned into four signals (prompt sent, waiting for the user, turn ended, failed) by a small adapter. Claude Code's `http` hooks post straight to the daemon (`POST /hooks/claude-code`); agents that can only run a command use `helmsman hook <agent>`, which forwards the hook's JSON. See `agent-adapters.md` for what each agent offers and the design, and `claude-code-adapter.md` for the Claude Code mapping.
+- **Native adapters:** each agent's hooks are turned into four signals (prompt sent, waiting for the user, turn ended, failed) by a small adapter. Claude Code's `http` hooks post straight to the daemon (`POST /hooks/claude-code`); agents that can only run a command use `natamux hook <agent>`, which forwards the hook's JSON. See `agent-adapters.md` for what each agent offers and the design, and `claude-code-adapter.md` for the Claude Code mapping.
 - **Generic adapter:** use process exit code, output-idle time and terminal bell. Mark states as "estimated" in the UI.
 - **Git and CI:** watch the worktree for diff size; poll the GitHub API for PR and CI state.
 
@@ -73,7 +73,7 @@ Event shape (draft): `{ taskId, source, type, at, payload }`. The task file hold
 
 ## 5. Data model (draft)
 
-Task file `.helmsman/tasks/<id>.md`:
+Task file `.natamux/tasks/<id>.md`:
 
 ```
 ---
@@ -83,7 +83,7 @@ state: running
 priority: normal
 labels: [bug]
 agent: claude-code
-branch: helmsman/t-0042-fix-timezone
+branch: natamux/t-0042-fix-timezone
 workspace: <path>
 pr: null
 dependsOn: []
@@ -110,21 +110,21 @@ Order of work:
 - The Electron shell comes after the daemon and dashboard are stable.
 - The shell only hosts the web dashboard and starts the daemon. No business logic lives in it.
 
-Tooling: plain `tsc` for the shell (`packages/desktop`), no bundler; the daemon runs in an Electron utility process and serves the built dashboard itself (`HELMSMAN_WEB_DIR`). `electron-builder` for packaging and auto-update (step 11). Built on 2026-10-09, see `packages/desktop/README.md`.
+Tooling: plain `tsc` for the shell (`packages/desktop`), no bundler; the daemon runs in an Electron utility process and serves the built dashboard itself (`NATAMUX_WEB_DIR`). `electron-builder` for packaging and auto-update (step 11). Built on 2026-10-09, see `packages/desktop/README.md`.
 
 ### Native code per OS
 
 Keep a small `native` area for things the web layer cannot do. Add only when needed:
 - Notifications and their permission state.
 - Global shortcuts and keyboard layout quirks.
-- Windows: PATH, registry and launcher details for the `helmsman` command.
+- Windows: PATH, registry and launcher details for the `natamux` command.
 - macOS: Dock and menu bar details.
 
 ### Windows notes (verify before promising support)
 
 - Terminals use ConPTY. Test agent CLIs under PowerShell, cmd and WSL.
 - Keep worktree folder names short; long paths and `\` versus `/` cause problems with git.
-- The `helmsman` command must be callable from the shell that the agent hooks use.
+- The `natamux` command must be callable from the shell that the agent hooks use.
 - Check how each agent CLI installs and runs on Windows before listing it as supported.
 
 ### Distribution costs
@@ -155,12 +155,12 @@ Keep a small `native` area for things the web layer cannot do. Add only when nee
 ## 9. Repository layout (draft)
 
 ```
-helmsman/
+natamux/
 ├── docs/                     plans and decisions
 ├── packages/
 │   ├── core/                 shared types, schemas, state machine
 │   ├── daemon/               Fastify server, services, adapters
-│   ├── cli/                  `helmsman` command
+│   ├── cli/                  `natamux` command
 │   ├── web/                  React dashboard
 │   ├── desktop/              Electron shell (after the MVP)
 │   ├── native/               per-OS code, only when needed

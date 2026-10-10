@@ -1,5 +1,5 @@
 {
-  "name": "@helmsman/daemon",
+  "name": "@natamux/daemon",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.3.3",
-    "@helmsman/core": "workspace:*",
+    "@natamux/core": "workspace:*",
     "fastify": "^5.12.5",
     "gray-matter": "^4.0.3",
     "node-pty": "^1.0.0",

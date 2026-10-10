@@ -1,4 +1,4 @@
-import { needsMe, type Repo, type Task, type TaskState } from '@helmsman/core'
+import { needsMe, type Repo, type Task, type TaskState } from '@natamux/core'
 import { isQuiet } from './tasks'
 
 export const DEFAULT_REPO_ID = 'default'
@@ -54,12 +54,12 @@ export function workspaceGroups(
   return { pinned, groups }
 }
 
-// The branch without the "helmsman/t-0001-" part, which the row shows already.
+// The branch without the "natamux/t-0001-" part, which the row shows already.
 export function shortBranch(task: Pick<Task, 'id' | 'branch'>): string {
   if (task.branch === null) {
     return ''
   }
-  const prefix = `helmsman/${task.id.toLowerCase()}-`
+  const prefix = `natamux/${task.id.toLowerCase()}-`
   return task.branch.startsWith(prefix) ? task.branch.slice(prefix.length) : task.branch
 }
 

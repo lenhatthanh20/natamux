@@ -1,4 +1,4 @@
-import type { ChangeEntry, FileDiff } from '@helmsman/core'
+import type { ChangeEntry, FileDiff } from '@natamux/core'
 import {
   ArrowDown,
   ArrowUp,

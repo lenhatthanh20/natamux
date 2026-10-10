@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { needsMeTasks, sortByRecent } from './tasks'
 
 export type SidebarGroup = { state: TaskState; tasks: Task[] }

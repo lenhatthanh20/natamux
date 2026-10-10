@@ -1,4 +1,4 @@
-import type { ChangeStatus, ImageSide } from '@helmsman/core'
+import type { ChangeStatus, ImageSide } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

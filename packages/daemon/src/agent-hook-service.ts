@@ -1,5 +1,5 @@
 import { isAbsolute, relative, sep } from 'node:path'
-import { type EventType, type Task, type TaskState, taskIdSchema } from '@helmsman/core'
+import { type EventType, type Task, type TaskState, taskIdSchema } from '@natamux/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { planSignalEvents } from './agent-signals.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
@@ -106,7 +106,7 @@ export class AgentHookService {
     }
 
     const lane = this.stages.laneFor(task, terminal)
-    // The turn in which the agent ran `helmsman done` ends as planned, not "stopped early".
+    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early".
     const reportedTurn =
       hook.signal === 'turn-ended' && this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
     if (reportedTurn) {

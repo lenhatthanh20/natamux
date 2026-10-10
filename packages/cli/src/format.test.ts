@@ -1,4 +1,4 @@
-import { taskSchema } from '@helmsman/core'
+import { taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { formatTask } from './format.js'
 

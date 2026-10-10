@@ -5,7 +5,7 @@ import type {
   ImageSide,
   Task,
   TerminalSize,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, ListChecks, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'

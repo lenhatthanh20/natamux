@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS } from '@helmsman/core'
+import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProjectSettingsService, SETTINGS_FILE, SettingsInputError } from './project-settings.js'
 
@@ -9,7 +9,7 @@ let folder: string
 let service: ProjectSettingsService
 
 beforeEach(() => {
-  folder = mkdtempSync(join(tmpdir(), 'helmsman-settings-'))
+  folder = mkdtempSync(join(tmpdir(), 'natamux-settings-'))
   service = new ProjectSettingsService({ repos: { pathOf: () => folder } })
 })
 

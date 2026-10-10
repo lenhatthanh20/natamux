@@ -1,4 +1,4 @@
-import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@helmsman/core'
+import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@natamux/core'
 import { ChevronRight, ListTodo } from 'lucide-react'
 import { useState } from 'react'
 import { usePhone } from '../hooks/useLayoutMode'

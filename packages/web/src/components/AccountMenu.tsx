@@ -56,7 +56,7 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
       />
       {asking && (
         <ConfirmDialog
-          title="Sign out of Helmsman?"
+          title="Sign out of Natamux?"
           description="Your tasks keep running."
           confirmLabel="Sign out"
           onConfirm={onSignOut}

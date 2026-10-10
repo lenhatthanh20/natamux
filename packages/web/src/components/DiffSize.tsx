@@ -1,4 +1,4 @@
-import type { DiffStat } from '@helmsman/core'
+import type { DiffStat } from '@natamux/core'
 
 // "+12 −3": how much a task changed. Nothing when it changed nothing.
 export function DiffSize({

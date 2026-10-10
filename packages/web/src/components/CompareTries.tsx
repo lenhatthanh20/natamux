@@ -1,4 +1,4 @@
-import type { DiffStat, Task } from '@helmsman/core'
+import type { DiffStat, Task } from '@natamux/core'
 import { useState } from 'react'
 import { pullRequestNumber } from '../lib/pull-request'
 import { DetailSection } from './DetailSection'

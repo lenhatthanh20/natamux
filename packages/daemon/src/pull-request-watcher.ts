@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { GitHubError, type RunGh, readPullRequestStatus, runGh } from './git.js'
 import type { TaskService } from './task-service.js'
 

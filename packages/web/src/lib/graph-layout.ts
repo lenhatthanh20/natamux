@@ -1,4 +1,4 @@
-import type { GraphCommit } from '@helmsman/core'
+import type { GraphCommit } from '@natamux/core'
 
 // One row of the graph. Lanes are columns. A row draws three kinds of lines:
 // - through: lanes that pass from the top to the bottom of the row

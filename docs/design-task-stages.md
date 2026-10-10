@@ -77,7 +77,7 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests |
 | `release` | release | manual | — |
 
-- **Every agent prompt** ends with "When you are done, run `helmsman done`" (section 3.5).
+- **Every agent prompt** ends with "When you are done, run `natamux done`" (section 3.5).
 - **Gate `manual`:** when the stage output is ready, the state becomes `review` and the task waits for you.
 - **Gate `auto`:** when the stage output is ready, the task moves to the next stage at once.
 - **Gate `auto` and failures:** a failed `testing` stage goes to `failed`. You then retry it, or send the task back to `implement` with the test output as the next prompt.
@@ -103,18 +103,18 @@ Four actions, each one an event:
 
 Stage files are `context.md`, `spec.md`, `plan.md`, `test-spec.md` and test output.
 
-- **While the task has a workspace:** they are in `.helmsman-task/` inside the worktree.
+- **While the task has a workspace:** they are in `.natamux-task/` inside the worktree.
   - The agent reads and writes there without leaving its folder, so no extra permission prompts.
-  - The daemon adds `.helmsman-task/` to the repository's `.git/info/exclude`, so the files are never committed.
+  - The daemon adds `.natamux-task/` to the repository's `.git/info/exclude`, so the files are never committed.
 - **Without a workspace, and as a copy:** they are in `<data dir>/tasks/T-0001/`.
   - The daemon copies the worktree files there on each approval and before the workspace is removed.
   - A removed workspace does not lose them.
 - **Editing:** you can edit a stage file in the app before you approve it, for example to fix the spec by hand. This edits the working copy.
 - **Reading:** the daemon reads the working copy while the worktree exists, else the archived copy.
-- **A task without a worktree yet:** stage files are written straight to `<data dir>/tasks/T-0001/`. When the workspace is made, the daemon copies them into `.helmsman-task/`.
+- **A task without a worktree yet:** stage files are written straight to `<data dir>/tasks/T-0001/`. When the workspace is made, the daemon copies them into `.natamux-task/`.
 - **Leaving the machine:** only `spec.md`, when `createIssue` is `on-spec-approved` (section 5). Nothing else is sent anywhere.
 
-With the default folders (`<data dir>` = `<repo>/.helmsman/`):
+With the default folders (`<data dir>` = `<repo>/.natamux/`):
 
 ```
 <data dir>/
@@ -130,7 +130,7 @@ With the default folders (`<data dir>` = `<repo>/.helmsman/`):
 └── worktrees/
     └── <task folder>/            the task's git worktree
         ├── src/ …
-        └── .helmsman-task/       working stage files, ignored by git
+        └── .natamux-task/        working stage files, ignored by git
             ├── context.md
             ├── spec.md
             ├── plan.md
@@ -145,27 +145,27 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 
 | Kind | Report |
 |---|---|
-| `context` | Manual: you save the text. GitHub issue: `gh issue view` succeeded. Skill or MCP: the agent runs `helmsman done` |
-| `agent` | The agent runs `helmsman done`. The stage prompt ends with that instruction |
+| `context` | Manual: you save the text. GitHub issue: `gh issue view` succeeded. Skill or MCP: the agent runs `natamux done` |
+| `agent` | The agent runs `natamux done`. The stage prompt ends with that instruction |
 | `review`, `manual` | None; your approval is the report |
-| `testing` | The command exits. With an agent part, the agent runs `helmsman done` first, then the command runs |
+| `testing` | The command exits. With an agent part, the agent runs `natamux done` first, then the command runs |
 | `release` | The pull request watcher sees the pull request merged |
 
-- `helmsman done` sends `stage.reported`. It reads the task from `HELMSMAN_TASK_ID` and the terminal from `HELMSMAN_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
-- **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `helmsman done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
+- `natamux done` sends `stage.reported`. It reads the task from `NATAMUX_TASK_ID` and the terminal from `NATAMUX_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
+- **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `natamux done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
 
 **Step 2: the checks.** After the report the daemon checks the result itself:
 
 | Stage | Check | Default |
 |---|---|---|
-| Every stage with `output` | The file exists in `.helmsman-task/`, is not empty, and was changed after the stage started (so a file from an earlier round does not count) | On |
+| Every stage with `output` | The file exists in `.natamux-task/`, is not empty, and was changed after the stage started (so a file from an earlier round does not count) | On |
 | Every stage with `sections` | The file has a heading for each listed section | See below |
 | `context` | `context.md`, as above | On |
 | `spec` | Sections: Goal, Scope, Out of scope, Acceptance criteria | On |
 | `plan` | Sections: Steps, Files, Tests | On |
 | `test-spec` | Section Cases, with at least one case under it (a `###` heading or a list item) | On |
 | `implement` | At least one new commit on the task branch since the stage started (`requireCommit`) | On |
-| `implement` | No uncommitted changes in the worktree (`requireClean`); `.helmsman-task/` is ignored, so it does not count | On |
+| `implement` | No uncommitted changes in the worktree (`requireClean`); `.natamux-task/` is ignored, so it does not count | On |
 | Any stage with `check` | The command (for example `pnpm typecheck`) exits with 0 | Off |
 | `testing` | The test command exits with 0 | On |
 
@@ -182,11 +182,11 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 | Event | When |
 |---|---|
 | `stage.started` | The stage begins (`startedAt`) |
-| `stage.reported` | `helmsman done`, Mark as done, or the report of the kind |
+| `stage.reported` | `natamux done`, Mark as done, or the report of the kind |
 | `stage.check-failed` | A check failed; `payload.reasons` lists why |
 | `stage.approved` / `stage.passed` | The gate let it through (`endedAt`; `approvedBy` for `stage.approved`) |
 
-**Settings.** Each stage can change its checks in `.helmsman.json`: `output`, `sections`, `requireCommit`, `requireClean`, `check`. An empty `sections` list turns the section check off.
+**Settings.** Each stage can change its checks in `.natamux.json`: `output`, `sections`, `requireCommit`, `requireClean`, `check`. An empty `sections` list turns the section check off.
 
 ### 3.6 Parallel stages
 
@@ -197,8 +197,8 @@ A step of the pipeline is one stage, or a group of stages that run at the same t
 - **End of the group:** when every lane is finished (approved or passed), the task moves to the next step. Review then shows the diff and `test-spec.md` together.
 - **Task state:** `state` is the most urgent lane state, in this order: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`. So "Needs me" shows the task when any lane needs you.
 - **Agents:** each lane has its own agent session in its own terminal, in the same worktree. Implement keeps terminal 1 and the session of the earlier stages; Test spec gets a new terminal.
-  - The terminal gets `HELMSMAN_TERMINAL`, and each hook sends it (`X-Helmsman-Terminal`), so the daemon knows which lane a hook is about.
-  - Test spec writes only `.helmsman-task/test-spec.md`, which git ignores, so the two agents do not touch the same files.
+  - The terminal gets `NATAMUX_TERMINAL`, and each hook sends it (`X-Natamux-Terminal`), so the daemon knows which lane a hook is about.
+  - Test spec writes only `.natamux-task/test-spec.md`, which git ignores, so the two agents do not touch the same files.
 - **Why Test spec does not read the code:** it is written from the spec alone, like a separate tester, so it checks what was asked, not what was built. Implement does not wait for it; it writes its own tests from the spec and the plan. In Testing, an agent adds a test for each case in `test-spec.md` that the code does not test yet.
 - **Events name the lane:** `stage.approved`, `stage.passed`, `stage.reopened` and `stage.skipped` carry `payload.stage` inside a group.
 - **Send back:** Review can send the task back to one stage of a group. That lane runs again; the other keeps its result.
@@ -206,7 +206,7 @@ A step of the pipeline is one stage, or a group of stages that run at the same t
 
 ### 3.7 Where task data lives
 
-All of it is in the daemon's data folder (`HELMSMAN_DATA_DIR`, default `<repo>/.helmsman/`), on the machine that runs the daemon.
+All of it is in the daemon's data folder (`NATAMUX_DATA_DIR`, default `<repo>/.natamux/`), on the machine that runs the daemon.
 
 | Where | What | Role |
 |---|---|---|
@@ -235,7 +235,7 @@ All of it is in the daemon's data folder (`HELMSMAN_DATA_DIR`, default `<repo>/.
 Agent sources (`skill`, `mcp`):
 - The agent runs in the task's worktree, with the prompt from the project settings.
 - It writes `context.md`.
-- Helmsman does not set up MCP servers or skills. The agent uses the ones it already has (its user settings or the repository's `.mcp.json`).
+- Natamux does not set up MCP servers or skills. The agent uses the ones it already has (its user settings or the repository's `.mcp.json`).
 
 The `context` stage ends when `context.md` exists. With gate `manual` you read it, edit it if needed, and approve. A `manual` source is the exception: its context is only the task's own title and notes, so there is nothing new to read, and the stage passes by itself (`stage.passed`). Otherwise every new backlog task would wait in Needs you.
 
@@ -270,7 +270,7 @@ issue: { provider: 'github' | string; key: string; url: string } | null
 
 - **`github`:** the daemon runs `gh issue create --title --body` in the repository and keeps the address.
 - **Other trackers (Jira, Linear):** later.
-  - The plan: an agent with that tracker's MCP server makes the item, then calls `helmsman task link T-0001 --issue ABC-123 --url …`.
+  - The plan: an agent with that tracker's MCP server makes the item, then calls `natamux task link T-0001 --issue ABC-123 --url …`.
   - The CLI command is part of this work, so an agent can already link an item by hand.
 
 ### 5.3 Pull request
@@ -285,9 +285,9 @@ Comments on the issue when the stage changes are later.
 
 The app has one default pipeline: the eight stages of section 1, with Test spec and Implement side by side. A repository without settings uses it.
 
-A project changes it in a file `.helmsman.json` at the root of the repository, next to `.helmsman-setup`. It is committed, so the team shares it. Every field is optional; a missing field takes the default.
+A project changes it in a file `.natamux.json` at the root of the repository, next to `.natamux-setup`. It is committed, so the team shares it. Every field is optional; a missing field takes the default.
 
-The name is not `.helmsman/project.json`, because `.helmsman/` is the daemon's default data folder.
+The name is not `.natamux/project.json`, because `.natamux/` is the daemon's default data folder.
 
 ```json
 {
@@ -349,11 +349,11 @@ Other rules:
 
 ### 7.2 `daemon`
 
-- `project-settings.ts`: reads `.helmsman.json` of a repository, caches it, and watches the file.
+- `project-settings.ts`: reads `.natamux.json` of a repository, caches it, and watches the file.
 - `stage-runner.ts`:
   - Enters a stage: starts the agent or sends it the prompt, or runs the test command, or opens the pull request.
   - Enters a group: one agent per lane, a new terminal for each lane after the first.
-  - Listens to `stage.reported`, finds the lane by `HELMSMAN_TERMINAL`, runs the checks of 3.5, and passes or waits at the gate.
+  - Listens to `stage.reported`, finds the lane by `NATAMUX_TERMINAL`, runs the checks of 3.5, and passes or waits at the gate.
   - Listens to `agent.finished` (the `Stop` hook): without a report it moves the stage to `needs-input`.
 - `stage-checks.ts`: the checks of 3.5 (file, sections, commits, clean worktree, `check` command).
 - `stage-files.ts`: the folder rules of 3.4 and the `.git/info/exclude` entry.
@@ -370,16 +370,16 @@ Other rules:
 - The testing command reports through the CLI:
 
   ```
-  <command> && helmsman stage pass T-0001 || helmsman stage fail T-0001
+  <command> && natamux stage pass T-0001 || natamux stage fail T-0001
   ```
 
 ### 7.3 `cli`
 
 New commands:
-- `helmsman stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal the stage comes from `HELMSMAN_TERMINAL`.
-- `helmsman done` now sends `stage.reported` for the stage of its terminal.
-- `helmsman task link <task> --issue <key> --url <url>`.
-- `helmsman task create --context github-issue:42`.
+- `natamux stage approve|back|skip|pass|fail <task> [--stage <id>]`. Inside an agent terminal the stage comes from `NATAMUX_TERMINAL`.
+- `natamux done` now sends `stage.reported` for the stage of its terminal.
+- `natamux task link <task> --issue <key> --url <url>`.
+- `natamux task create --context github-issue:42`.
 
 ### 7.4 `web`
 
@@ -419,7 +419,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 - **Reduced motion** (`prefers-reduced-motion`): nothing moves. Running shows a still three-quarter ring; the flowing line becomes a plain dashed line.
 - **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
-- **Mock-up:** the canvas "Helmsman stage progress" shows both views, with a light and dark switch.
+- **Mock-up:** the canvas "Natamux stage progress" shows both views, with a light and dark switch.
 
 **Task progress page** (the Progress tab of a task). It shows what each stage did and the evidence that it is finished.
 
@@ -481,7 +481,7 @@ Task files without `stage` are read like this. Nothing is rewritten until the ta
 
 - **`stages`:** old tasks get `implement`, `review`, `release`. That is the work they had before, so no old task suddenly waits for a spec.
 - **`issue`:** an old task with an "Imported from <url>" line gets `issue` from that line.
-- **Agents started before the change** were not told to run `helmsman done`. Their next `Stop` moves the task to `needs-input` with Mark as done, instead of to review.
+- **Agents started before the change** were not told to run `natamux done`. Their next `Stop` moves the task to `needs-input` with Mark as done, instead of to review.
 
 ## 9. Build order
 
@@ -510,9 +510,9 @@ Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their co
 
 Where the code differs from the text above, or is not built yet:
 
-- **Terminal, not stage, in the environment:** the main agent session keeps terminal 1 across stages, so the daemon maps a terminal to a stage (`HELMSMAN_TERMINAL`) instead of setting the stage in the environment.
+- **Terminal, not stage, in the environment:** the main agent session keeps terminal 1 across stages, so the daemon maps a terminal to a stage (`NATAMUX_TERMINAL`) instead of setting the stage in the environment.
 - **Release starts as ready, not as "waits for you":** it waits for its pull request to be merged, which is not shown under "Needs me". `stage.passed` or a merge finishes it.
-- **Without `.helmsman.json`** a repository uses the default pipeline. Tasks made before stages keep the legacy pipeline (implement, review, release).
+- **Without `.natamux.json`** a repository uses the default pipeline. Tasks made before stages keep the legacy pipeline (implement, review, release).
 - **Not built yet:**
   - The `url` context source, Jira and Linear issue creation, comments on the issue at each stage.
   - The Implement card does not list its commits yet; the History tab has them.

@@ -1,4 +1,4 @@
-import { type DiffStat, portRange, type Task } from '@helmsman/core'
+import { type DiffStat, portRange, type Task } from '@natamux/core'
 import {
   ArrowLeft,
   Ban,

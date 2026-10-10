@@ -1,4 +1,4 @@
-import type { Task, TaskEvent } from '@helmsman/core'
+import type { Task, TaskEvent } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TaskIndex } from './task-index.js'
 

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS } from '@helmsman/core'
+import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
@@ -27,7 +27,7 @@ function makeService(existingIndex: TaskIndex): TaskService {
 }
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-service-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-service-'))
   index = new TaskIndex(':memory:')
   messages = []
   service = makeService(index)
@@ -276,13 +276,13 @@ describe('recordGit', () => {
     const task = service.createTask({ title: 'Fix it' })
 
     service.recordGit(task.id, 'git.committed', { hash: 'abc', subject: 'Fix it' })
-    const pushed = service.recordGit(task.id, 'git.pushed', { branch: 'helmsman/t-0001' })
+    const pushed = service.recordGit(task.id, 'git.pushed', { branch: 'natamux/t-0001' })
 
     expect(pushed).toMatchObject({ state: 'draft', pr: null })
     expect(service.listEvents(task.id).map((entry) => entry.event)).toMatchObject([
       { type: 'task.created' },
       { type: 'git.committed', source: 'git', payload: { hash: 'abc', subject: 'Fix it' } },
-      { type: 'git.pushed', source: 'git', payload: { branch: 'helmsman/t-0001' } },
+      { type: 'git.pushed', source: 'git', payload: { branch: 'natamux/t-0001' } },
     ])
   })
 

@@ -12,7 +12,7 @@ import {
   type ImageSide,
   imageTypeOf,
   type PullRequestStatus,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 const execFileAsync = promisify(execFile)
 
@@ -449,7 +449,7 @@ export async function currentBranch(cwd: string): Promise<string | null> {
   }
 }
 
-// "HEAD -> helmsman/t-0001, tag: v1, main" becomes ["helmsman/t-0001", "tag: v1", "main"].
+// "HEAD -> natamux/t-0001, tag: v1, main" becomes ["natamux/t-0001", "tag: v1", "main"].
 // "origin/HEAD" is left out: it only repeats the default branch of the remote.
 export function parseRefs(decoration: string): string[] {
   return decoration

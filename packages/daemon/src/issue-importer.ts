@@ -1,4 +1,4 @@
-import { type GitHubIssue, importedFromLine, type Task } from '@helmsman/core'
+import { type GitHubIssue, importedFromLine, type Task } from '@natamux/core'
 import { GitHubError, type RunGh, runGh } from './git.js'
 import type { TaskService } from './task-service.js'
 

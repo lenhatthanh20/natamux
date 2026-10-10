@@ -22,7 +22,7 @@ import {
   taskEventSchema,
   taskSchema,
   taskTemplateSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 export type NewWorkspaceInput = {
   title: string

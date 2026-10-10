@@ -1,0 +1,6 @@
+{
+  "name": "natamux",
+  "version": "0.1.0",
+  "description": "Lets Claude Code work inside a Natamux task: read it, ask the user, report done, file follow-up tasks.",
+  "author": { "name": "Natamux" }
+}

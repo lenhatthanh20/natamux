@@ -3,7 +3,7 @@ import { statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type { Stage } from '@helmsman/core'
+import type { Stage } from '@natamux/core'
 import { STAGE_DIR } from './stage-files.js'
 
 const execFileAsync = promisify(execFile)

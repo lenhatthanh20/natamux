@@ -4,7 +4,7 @@ import {
   type TaskState,
   taskEventSchema,
   taskSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 import type { TaskPriority } from './command.js'
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -95,7 +95,7 @@ function describeIssue(issue: unknown): string {
 
 function describeError(status: number, body: unknown): string {
   if (status === 401) {
-    return 'The daemon rejected the token. Check HELMSMAN_TOKEN.'
+    return 'The daemon rejected the token. Check NATAMUX_TOKEN.'
   }
   if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
     const fields = Object.fromEntries(Object.entries(body))

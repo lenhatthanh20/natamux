@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type Task, taskSchema, upgradeTaskFields } from '@helmsman/core'
+import { type Task, taskSchema, upgradeTaskFields } from '@natamux/core'
 import matter from 'gray-matter'
 
 const TASK_FILE_NAME = /^(T-\d+)\.md$/

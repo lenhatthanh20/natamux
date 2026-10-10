@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type Task, type TaskTemplate, taskTemplateSchema } from '@helmsman/core'
+import { type Task, type TaskTemplate, taskTemplateSchema } from '@natamux/core'
 import matter from 'gray-matter'
 import { z } from 'zod'
 import type { TaskService } from './task-service.js'

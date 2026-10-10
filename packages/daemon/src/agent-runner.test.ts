@@ -20,7 +20,7 @@ let runner: AgentRunner
 let terminals: TerminalService
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-agents-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-agents-'))
   index = new TaskIndex(':memory:')
   tasks = new TaskService({ dataDir, index, bus: new EventBus() })
   const spawner = fakeSpawner()
@@ -55,7 +55,7 @@ function script(taskId: string): string {
 
 function taskWithWorkspace(title = 'Fix the bug', description = '') {
   const task = tasks.createTask({ title, description })
-  return tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'helmsman/t-0001' })
+  return tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'natamux/t-0001' })
 }
 
 describe('quoteArgument', () => {

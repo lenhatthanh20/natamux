@@ -23,7 +23,7 @@ import {
   taskEventSchema,
   taskIdSchema,
   taskSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { z } from 'zod'
 import type { EventBus } from './event-bus.js'
 import { appendEventLine, readEventLog, writeEventLog } from './event-log.js'
@@ -125,7 +125,7 @@ type TaskServiceOptions = {
   index: TaskIndex
   bus: EventBus
   now?: () => Date
-  // The settings of a repository (`.helmsman.json`). Default: the legacy pipeline.
+  // The settings of a repository (`.natamux.json`). Default: the legacy pipeline.
   settingsOf?: SettingsOf
 }
 
@@ -276,7 +276,7 @@ export class TaskService {
     const task = this.getTask(taskId)
     const input = applyEventInputSchema.parse(rawInput)
     const steps = this.stepsOf(task)
-    // A button or `helmsman ask` may leave out the stage; the log keeps the one it was about.
+    // A button or `natamux ask` may leave out the stage; the log keeps the one it was about.
     const event: TaskEvent = completeEvent(
       positionOf(task),
       taskEventSchema.parse({ ...input, taskId, at: this.timestamp() }),

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Stage } from '@helmsman/core'
+import type { Stage } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestRepo } from './git-repo.fixture.js'
 import { type CheckInput, countItems, runStageChecks, shellCommand } from './stage-checks.js'
@@ -9,7 +9,7 @@ import { type CheckInput, countItems, runStageChecks, shellCommand } from './sta
 let folder: string
 
 beforeEach(() => {
-  folder = mkdtempSync(join(tmpdir(), 'helmsman-checks-'))
+  folder = mkdtempSync(join(tmpdir(), 'natamux-checks-'))
   mkdirSync(folder, { recursive: true })
 })
 
@@ -46,7 +46,7 @@ describe('runStageChecks', () => {
   it('fails a missing, empty or old output', async () => {
     const stage: Stage = { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' }
     expect((await runStageChecks(input(stage))).reasons).toEqual([
-      '.helmsman-task/spec.md is missing',
+      '.natamux-task/spec.md is missing',
     ])
 
     writeFileSync(join(folder, 'spec.md'), '  \n')
@@ -110,7 +110,7 @@ describe('runStageChecks', () => {
       const result = await runStageChecks(
         {
           stage,
-          folder: join(repo.dir, '.helmsman-task'),
+          folder: join(repo.dir, '.natamux-task'),
           cwd: repo.dir,
           isWorktree: true,
           startedAt: null,

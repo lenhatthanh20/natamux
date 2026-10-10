@@ -1,4 +1,4 @@
-import { type Task, waitingOn } from '@helmsman/core'
+import { type Task, waitingOn } from '@natamux/core'
 
 export const LABEL_CHIP =
   'inline-flex h-5 shrink-0 items-center rounded-sm border border-line px-1.5 text-xs whitespace-nowrap text-ink-2'

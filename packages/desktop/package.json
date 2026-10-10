@@ -1,5 +1,5 @@
 {
-  "name": "@helmsman/desktop",
+  "name": "@natamux/desktop",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,18 +15,18 @@
     "rebuild-native": "electron-rebuild --force --only node-pty --module-dir ../daemon"
   },
   "dependencies": {
-    "@helmsman/cli": "workspace:*",
-    "@helmsman/daemon": "workspace:*"
+    "@natamux/cli": "workspace:*",
+    "@natamux/daemon": "workspace:*"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
-    "@helmsman/web": "workspace:*",
+    "@natamux/web": "workspace:*",
     "@types/node": "^26.6.4",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },
-  "description": "Helmsman desktop app",
-  "author": "Helmsman"
+  "description": "Natamux desktop app",
+  "author": "Natamux"
 }

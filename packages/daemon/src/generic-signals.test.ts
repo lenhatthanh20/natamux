@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS } from '@helmsman/core'
+import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
@@ -15,7 +15,7 @@ let tasks: TaskService
 let signals: GenericSignals
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-generic-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-generic-'))
   index = new TaskIndex(':memory:')
   clock = new Date('2026-10-08T09:00:00.000Z')
   tasks = new TaskService({ dataDir, index, bus: new EventBus(), now: () => clock })
@@ -130,7 +130,7 @@ describe('a shell that cannot find the agent', () => {
     const failed = tasks.listEvents(task.id).at(-1)?.event
     expect(tasks.getTask(task.id).state).toBe('failed')
     expect(failed?.type).toBe('agent.failed')
-    expect(String(failed?.payload.reason)).toContain('HELMSMAN_CLAUDE_COMMAND')
+    expect(String(failed?.payload.reason)).toContain('NATAMUX_CLAUDE_COMMAND')
   })
 
   it('pays no heed to other words, to other programs, or after the first seconds', () => {

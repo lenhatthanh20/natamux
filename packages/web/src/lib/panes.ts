@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { STATE_LABEL } from './tasks'
 
 // More panes than this make each terminal too small to read.

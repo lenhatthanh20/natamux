@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import { FolderGit2, Plus, Search, SquareTerminal, X } from 'lucide-react'
 import {

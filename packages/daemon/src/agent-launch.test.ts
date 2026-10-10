@@ -39,7 +39,7 @@ describe('launchCommand', () => {
     const codex = launchCommand('codex', { ...base, program: 'codex' })
     expect(codex.startsWith('codex --dangerously-bypass-hook-trust -c ')).toBe(true)
     expect(codex).toContain(
-      `'hooks.Stop=[{hooks=[{type="command",command="helmsman hook codex",timeout=5}]}]'`,
+      `'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'`,
     )
     expect(codex.endsWith(" 'Fix it'")).toBe(true)
   })
@@ -52,7 +52,7 @@ describe('launchCommand', () => {
 })
 
 describe('the hook settings', () => {
-  it('send every event Helmsman reads to `helmsman hook <agent>`', () => {
+  it('send every event Natamux reads to `natamux hook <agent>`', () => {
     expect(codexHookArgs().filter((arg) => arg !== '-c')).toHaveLength(6)
     expect(Object.keys(geminiHookSettings().hooks)).toEqual([
       'BeforeAgent',
@@ -64,14 +64,14 @@ describe('the hook settings', () => {
     expect(copilotHookFile().hooks.agentStop).toEqual([
       {
         type: 'command',
-        bash: 'helmsman hook copilot agentStop',
-        powershell: 'helmsman hook copilot agentStop',
+        bash: 'natamux hook copilot agentStop',
+        powershell: 'natamux hook copilot agentStop',
         timeoutSec: 5,
       },
     ])
     expect(cursorHookFile()).toMatchObject({
       version: 1,
-      hooks: { stop: [{ command: 'helmsman hook cursor', timeout: 5 }] },
+      hooks: { stop: [{ command: 'natamux hook cursor', timeout: 5 }] },
     })
   })
 })
@@ -80,7 +80,7 @@ describe('prepareWorkspace', () => {
   let repo: string
 
   beforeEach(() => {
-    repo = mkdtempSync(join(tmpdir(), 'helmsman-launch-'))
+    repo = mkdtempSync(join(tmpdir(), 'natamux-launch-'))
     execFileSync('git', ['init', '-q'], { cwd: repo })
   })
 
@@ -91,10 +91,10 @@ describe('prepareWorkspace', () => {
   it('writes the hook file and keeps it out of git, once', () => {
     expect(prepareWorkspace('copilot', repo)).toBe(true)
     expect(prepareWorkspace('copilot', repo)).toBe(true)
-    expect(existsSync(join(repo, '.github/hooks/helmsman.json'))).toBe(true)
+    expect(existsSync(join(repo, '.github/hooks/natamux.json'))).toBe(true)
     const exclude = readFileSync(join(repo, '.git/info/exclude'), 'utf8')
     expect(
-      exclude.split('\n').filter((line) => line === '/.github/hooks/helmsman.json'),
+      exclude.split('\n').filter((line) => line === '/.github/hooks/natamux.json'),
     ).toHaveLength(1)
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' })).toBe('')
   })

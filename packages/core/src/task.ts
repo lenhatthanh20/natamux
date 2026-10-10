@@ -25,7 +25,7 @@ export const taskContextSchema = z.object({
 
 export type TaskContext = z.infer<typeof taskContextSchema>
 
-// The item that tracks the task outside Helmsman: a GitHub issue (#42), a Jira ticket (ABC-123).
+// The item that tracks the task outside Natamux: a GitHub issue (#42), a Jira ticket (ABC-123).
 export const issueLinkSchema = z.object({
   provider: z.string().trim().min(1).max(40),
   key: z.string().trim().min(1).max(100),

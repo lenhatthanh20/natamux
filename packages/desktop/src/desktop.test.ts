@@ -16,7 +16,7 @@ type Done = (error: Error | null, stdout: string) => void
 let dir: string
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'helmsman-desktop-'))
+  dir = mkdtempSync(join(tmpdir(), 'natamux-desktop-'))
 })
 
 afterEach(() => {
@@ -68,16 +68,16 @@ describe('daemonEnv', () => {
     loginPath: `/opt/homebrew/bin${delimiter}/usr/bin`,
   }
 
-  it('gives the daemon its place, and the shells the helmsman command first on the PATH', () => {
+  it('gives the daemon its place, and the shells the natamux command first on the PATH', () => {
     const env = daemonEnv({ PATH: '/usr/bin', HOME: '/home/me' }, 'secret', place)
     expect(env).toMatchObject({
       HOME: '/home/me',
-      HELMSMAN_HOST: '127.0.0.1',
-      HELMSMAN_PORT: '4318',
-      HELMSMAN_TOKEN: 'secret',
-      HELMSMAN_DATA_DIR: '/data',
-      HELMSMAN_REPO_DIR: '/repo',
-      HELMSMAN_WEB_DIR: '/web',
+      NATAMUX_HOST: '127.0.0.1',
+      NATAMUX_PORT: '4318',
+      NATAMUX_TOKEN: 'secret',
+      NATAMUX_DATA_DIR: '/data',
+      NATAMUX_REPO_DIR: '/repo',
+      NATAMUX_WEB_DIR: '/web',
       PATH: ['/app/bin', '/opt/homebrew/bin', '/usr/bin'].join(delimiter),
     })
   })
@@ -145,7 +145,7 @@ describe('startup', () => {
   it('reads the PATH of the login shell between its marks', async () => {
     const run = ((_file: string, args: string[], _options: unknown, done: Done) => {
       expect(args[0]).toBe('-ilc')
-      done(null, 'Welcome!\n__HELMSMAN_PATH__/opt/homebrew/bin:/usr/bin__HELMSMAN_PATH__')
+      done(null, 'Welcome!\n__NATAMUX_PATH__/opt/homebrew/bin:/usr/bin__NATAMUX_PATH__')
     }) as unknown as typeof execFile
     expect(await loginShellPath('/bin/zsh', run)).toBe('/opt/homebrew/bin:/usr/bin')
     expect(await loginShellPath(undefined, run)).toBeUndefined()
@@ -156,22 +156,29 @@ describe('startup', () => {
   })
 })
 
-describe('the helmsman command', () => {
+describe('the natamux command', () => {
   it('runs the CLI with the app runtime as Node.js', () => {
-    const file = writeCliShim(dir, "/Apps/Helms'man", '/app/cli/main.js', 'darwin')
+    const file = writeCliShim(dir, "/Apps/Nata'mux", '/app/cli/main.js', 'darwin')
+    expect(file).toBe(join(dir, 'natamux'))
     const text = readFileSync(file, 'utf8')
     expect(text).toContain(
-      "ELECTRON_RUN_AS_NODE=1 exec '/Apps/Helms'\\''man' '/app/cli/main.js' \"$@\"",
+      "ELECTRON_RUN_AS_NODE=1 exec '/Apps/Nata'\\''mux' '/app/cli/main.js' \"$@\"",
     )
     expect(statSync(file).mode & 0o111).not.toBe(0)
   })
 
+  it('also writes the short name nmx', () => {
+    writeCliShim(dir, '/Apps/Natamux', '/app/cli/main.js', 'darwin')
+    const short = join(dir, 'nmx')
+    expect(readFileSync(short, 'utf8')).toBe(readFileSync(join(dir, 'natamux'), 'utf8'))
+    expect(statSync(short).mode & 0o111).not.toBe(0)
+  })
+
   it('is a .cmd file on Windows', () => {
-    const file = writeCliShim(dir, 'C:\\Helmsman\\Helmsman.exe', 'C:\\cli\\main.js', 'win32')
-    expect(file.endsWith('helmsman.cmd')).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain(
-      '"C:\\Helmsman\\Helmsman.exe" "C:\\cli\\main.js" %*',
-    )
+    const file = writeCliShim(dir, 'C:\\Natamux\\Natamux.exe', 'C:\\cli\\main.js', 'win32')
+    expect(file.endsWith('natamux.cmd')).toBe(true)
+    expect(readFileSync(file, 'utf8')).toContain('"C:\\Natamux\\Natamux.exe" "C:\\cli\\main.js" %*')
+    expect(readFileSync(join(dir, 'nmx.cmd'), 'utf8')).toBe(readFileSync(file, 'utf8'))
   })
 })
 

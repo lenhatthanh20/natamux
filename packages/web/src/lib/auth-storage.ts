@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'helmsman.auth'
+const STORAGE_KEY = 'natamux.auth'
 
 export function loadToken(): string | null {
   try {

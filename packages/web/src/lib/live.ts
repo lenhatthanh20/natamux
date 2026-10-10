@@ -1,4 +1,4 @@
-import { type Task, taskSchema } from '@helmsman/core'
+import { type Task, taskSchema } from '@natamux/core'
 
 export function liveSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,

@@ -3,10 +3,10 @@ import type { AgentAdapter, AgentSignal } from './agent-signals.js'
 import { toolSummary } from './claude-code-hooks.js'
 
 // The event a hook of GitHub Copilot CLI belongs to. Copilot does not name it in the JSON, so
-// `helmsman hook copilot <event>` adds it (see copilotHookFile).
-export const COPILOT_EVENT_FIELD = 'helmsman_event'
+// `natamux hook copilot <event>` adds it (see copilotHookFile).
+export const COPILOT_EVENT_FIELD = 'natamux_event'
 
-// The part of the JSON that Copilot CLI sends to a hook which Helmsman reads, in its camelCase form
+// The part of the JSON that Copilot CLI sends to a hook which Natamux reads, in its camelCase form
 // (docs.github.com, Copilot CLI hooks reference).
 export const copilotInputSchema = z.object({
   [COPILOT_EVENT_FIELD]: z.string().min(1),

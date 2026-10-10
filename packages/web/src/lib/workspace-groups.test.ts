@@ -1,4 +1,4 @@
-import { type Task, taskSchema } from '@helmsman/core'
+import { type Task, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { collapsedHint, shortBranch, workspaceGroups } from './workspace-groups'
 
@@ -31,7 +31,7 @@ function makeTask(overrides: Partial<Task>): Task {
 }
 
 const repos = [
-  { id: 'default', name: 'helmsman' },
+  { id: 'default', name: 'natamux' },
   { id: 'web', name: 'Web app' },
 ]
 
@@ -44,7 +44,7 @@ describe('workspaceGroups', () => {
 
     const { groups } = workspaceGroups(repos, [older, newer, web, backlog], [])
 
-    expect(groups.map((group) => group.repo.name)).toEqual(['helmsman', 'Web app'])
+    expect(groups.map((group) => group.repo.name)).toEqual(['natamux', 'Web app'])
     expect(groups[0]?.open.map((task) => task.id)).toEqual(['T-0002', 'T-0001'])
     expect(groups[1]?.open.map((task) => task.id)).toEqual(['T-0003'])
   })
@@ -75,7 +75,7 @@ describe('workspaceGroups', () => {
 
 describe('shortBranch', () => {
   it('drops the part that names the task', () => {
-    expect(shortBranch({ id: 'T-0012', branch: 'helmsman/t-0012-fix-login' })).toBe('fix-login')
+    expect(shortBranch({ id: 'T-0012', branch: 'natamux/t-0012-fix-login' })).toBe('fix-login')
     expect(shortBranch({ id: 'T-0012', branch: 'feature/x' })).toBe('feature/x')
     expect(shortBranch({ id: 'T-0012', branch: null })).toBe('')
   })

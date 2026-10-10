@@ -28,7 +28,7 @@ function setup(
   const run = () =>
     forwardHook({
       agent: 'claude-code',
-      env: options.env ?? { HELMSMAN_TOKEN: 'secret' },
+      env: options.env ?? { NATAMUX_TOKEN: 'secret' },
       readStdin: async () => options.stdin ?? HOOK_JSON,
       fetch: fetchFunction,
       debug: (text) => debug.push(text),
@@ -37,7 +37,7 @@ function setup(
 }
 
 describe('forwardHook', () => {
-  it('does nothing without HELMSMAN_TOKEN, because the session is not one of Helmsman', async () => {
+  it('does nothing without NATAMUX_TOKEN, because the session is not one of Natamux', async () => {
     const { calls, debug, run } = setup({ env: {} })
 
     await run()
@@ -67,19 +67,19 @@ describe('forwardHook', () => {
     expect(calls[0]?.headers.get('content-type')).toBe('application/json')
   })
 
-  it('names the task when HELMSMAN_TASK_ID is set, and sends no header when it is not', async () => {
-    const named = setup({ env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_TASK_ID: 'T-0007' } })
+  it('names the task when NATAMUX_TASK_ID is set, and sends no header when it is not', async () => {
+    const named = setup({ env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'T-0007' } })
     await named.run()
-    expect(named.calls[0]?.headers.get('x-helmsman-task')).toBe('T-0007')
+    expect(named.calls[0]?.headers.get('x-natamux-task')).toBe('T-0007')
 
     const unnamed = setup()
     await unnamed.run()
-    expect(unnamed.calls[0]?.headers.has('x-helmsman-task')).toBe(false)
+    expect(unnamed.calls[0]?.headers.has('x-natamux-task')).toBe(false)
   })
 
-  it('uses HELMSMAN_URL and drops a trailing slash', async () => {
+  it('uses NATAMUX_URL and drops a trailing slash', async () => {
     const { calls, run } = setup({
-      env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_URL: 'http://example.test:9000/' },
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_URL: 'http://example.test:9000/' },
     })
 
     await run()
@@ -109,16 +109,16 @@ describe('forwardHook', () => {
     expect(unreachable.debug).toEqual([])
   })
 
-  it('says what went wrong when HELMSMAN_DEBUG is set', async () => {
+  it('says what went wrong when NATAMUX_DEBUG is set', async () => {
     const answers = setup({
-      env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_DEBUG: '1' },
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_DEBUG: '1' },
       respond: () => new Response('no', { status: 500 }),
     })
     await answers.run()
     expect(answers.debug.join('')).toContain('the daemon answered 500')
 
     const unreachable = setup({
-      env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_DEBUG: '1' },
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_DEBUG: '1' },
       respond: () => {
         throw new TypeError('fetch failed')
       },
@@ -128,7 +128,7 @@ describe('forwardHook', () => {
   })
 })
 
-describe('helmsman hook', () => {
+describe('natamux hook', () => {
   async function runHook(argv: string[], env: Record<string, string | undefined>) {
     const calls: string[] = []
     let stdout = ''
@@ -153,7 +153,7 @@ describe('helmsman hook', () => {
   }
 
   it('forwards the hook, exits 0 and prints nothing', async () => {
-    const result = await runHook(['hook', 'claude-code'], { HELMSMAN_TOKEN: 'secret' })
+    const result = await runHook(['hook', 'claude-code'], { NATAMUX_TOKEN: 'secret' })
 
     expect(result.code).toBe(EXIT_OK)
     expect(result.stdout).toBe('')
@@ -162,19 +162,19 @@ describe('helmsman hook', () => {
   })
 
   it('names the event of a Copilot hook in the address', async () => {
-    const result = await runHook(['hook', 'copilot', 'agentStop'], { HELMSMAN_TOKEN: 'secret' })
+    const result = await runHook(['hook', 'copilot', 'agentStop'], { NATAMUX_TOKEN: 'secret' })
 
     expect(result.calls).toEqual(['http://127.0.0.1:4317/hooks/copilot?event=agentStop'])
   })
 
-  it('answers {} for the agents that read JSON, even outside a Helmsman session', async () => {
+  it('answers {} for the agents that read JSON, even outside a Natamux session', async () => {
     for (const agent of ['cursor', 'gemini']) {
       expect((await runHook(['hook', agent], {})).stdout).toBe('{}\n')
     }
     expect((await runHook(['hook', 'codex'], {})).stdout).toBe('')
   })
 
-  it('exits 0 and prints nothing outside a Helmsman session', async () => {
+  it('exits 0 and prints nothing outside a Natamux session', async () => {
     const result = await runHook(['hook', 'claude-code'], {})
 
     expect(result.code).toBe(EXIT_OK)
@@ -183,7 +183,7 @@ describe('helmsman hook', () => {
   })
 
   it('exits 0 even for a wrong command, so the agent is not blocked', async () => {
-    const result = await runHook(['hook'], { HELMSMAN_TOKEN: 'secret' })
+    const result = await runHook(['hook'], { NATAMUX_TOKEN: 'secret' })
 
     expect(result.code).toBe(EXIT_OK)
     expect(result.stdout).toBe('')

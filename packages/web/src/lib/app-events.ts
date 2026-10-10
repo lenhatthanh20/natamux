@@ -15,7 +15,7 @@ export type AppEventName =
   | 'edit-task'
 
 export function fireAppEvent(name: AppEventName, detail?: unknown): void {
-  window.dispatchEvent(new CustomEvent(`helmsman:${name}`, { detail }))
+  window.dispatchEvent(new CustomEvent(`natamux:${name}`, { detail }))
 }
 
 export function useAppEvent<T = undefined>(name: AppEventName, handler: (detail: T) => void) {
@@ -23,7 +23,7 @@ export function useAppEvent<T = undefined>(name: AppEventName, handler: (detail:
   latest.current = handler
   useEffect(() => {
     const listener = (event: Event) => latest.current((event as CustomEvent<T>).detail)
-    window.addEventListener(`helmsman:${name}`, listener)
-    return () => window.removeEventListener(`helmsman:${name}`, listener)
+    window.addEventListener(`natamux:${name}`, listener)
+    return () => window.removeEventListener(`natamux:${name}`, listener)
   }, [name])
 }

@@ -6,7 +6,7 @@ import {
   LEGACY_PIPELINE,
   type ProjectSettings,
   type Task,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { closingLine, IssueLinkError, IssueLinker, issueUrl } from './issue-linker.js'
@@ -22,7 +22,7 @@ let settings: ProjectSettings
 let ghCalls: string[][]
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-issues-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-issues-'))
   index = new TaskIndex(':memory:')
   settings = DEFAULT_PROJECT_SETTINGS
   const bus = new EventBus()

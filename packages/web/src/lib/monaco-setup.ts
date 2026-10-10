@@ -41,8 +41,8 @@ const noDiagnostics = {
 monacoTypeScript.typescriptDefaults.setDiagnosticsOptions(noDiagnostics)
 monacoTypeScript.javascriptDefaults.setDiagnosticsOptions(noDiagnostics)
 
-export const LIGHT_THEME = 'helmsman-light'
-export const DARK_THEME = 'helmsman-dark'
+export const LIGHT_THEME = 'natamux-light'
+export const DARK_THEME = 'natamux-dark'
 
 // Colors from the design tokens: the editor sits on the canvas, and the diff uses green and red
 // washes that keep the text readable. The words that changed get a stronger wash on top of the

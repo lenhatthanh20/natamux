@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

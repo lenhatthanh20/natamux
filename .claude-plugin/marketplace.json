@@ -1,11 +1,11 @@
 {
-  "name": "helmsman",
-  "owner": { "name": "Helmsman" },
+  "name": "natamux",
+  "owner": { "name": "Natamux" },
   "plugins": [
     {
-      "name": "helmsman",
-      "source": "./plugins/helmsman",
-      "description": "Lets Claude Code work inside a Helmsman task: read it, ask the user, report done, file follow-up tasks."
+      "name": "natamux",
+      "source": "./plugins/natamux",
+      "description": "Lets Claude Code work inside a Natamux task: read it, ask the user, report done, file follow-up tasks."
     }
   ]
 }

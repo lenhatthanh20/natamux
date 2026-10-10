@@ -7,7 +7,7 @@ import { SETUP_SCRIPT, SETUP_SCRIPT_WINDOWS, setupCommand } from './setup-script
 let folder: string
 
 beforeEach(() => {
-  folder = mkdtempSync(join(tmpdir(), 'helmsman-setup-'))
+  folder = mkdtempSync(join(tmpdir(), 'natamux-setup-'))
 })
 
 afterEach(() => {
@@ -20,8 +20,8 @@ describe('setupCommand', () => {
 
     writeFileSync(join(folder, SETUP_SCRIPT), 'pnpm install\n')
 
-    expect(setupCommand(folder, 'linux')).toBe('sh ./.helmsman-setup')
-    expect(setupCommand(folder, 'darwin')).toBe('sh ./.helmsman-setup')
+    expect(setupCommand(folder, 'linux')).toBe('sh ./.natamux-setup')
+    expect(setupCommand(folder, 'darwin')).toBe('sh ./.natamux-setup')
   })
 
   it('runs the PowerShell script on Windows', () => {
@@ -29,6 +29,6 @@ describe('setupCommand', () => {
     expect(setupCommand(folder, 'win32')).toBeNull()
 
     writeFileSync(join(folder, SETUP_SCRIPT_WINDOWS), 'pnpm install\n')
-    expect(setupCommand(folder, 'win32')).toBe('& ./.helmsman-setup.ps1')
+    expect(setupCommand(folder, 'win32')).toBe('& ./.natamux-setup.ps1')
   })
 })

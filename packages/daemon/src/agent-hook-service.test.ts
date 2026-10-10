@@ -31,7 +31,7 @@ describe('AgentHookService', () => {
   })
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'helmsman-hooks-'))
+    root = mkdtempSync(join(tmpdir(), 'natamux-hooks-'))
     const dataDir = join(root, 'data')
     mkdirSync(dataDir)
     index = new TaskIndex(':memory:')
@@ -108,7 +108,7 @@ describe('AgentHookService', () => {
     step('PostToolUse')
     expect(tasks.getTask(task.id).state).toBe('running')
 
-    // The agent did not run `helmsman done`, so the turn end waits for you.
+    // The agent did not run `natamux done`, so the turn end waits for you.
     step('Stop')
     expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
@@ -187,7 +187,7 @@ describe('AgentHookService, sign of life', () => {
     tasks.listEvents(taskId).filter((entry) => entry.event.type === 'agent.active')
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'helmsman-activity-'))
+    root = mkdtempSync(join(tmpdir(), 'natamux-activity-'))
     const dataDir = join(root, 'data')
     mkdirSync(dataDir)
     index = new TaskIndex(':memory:')

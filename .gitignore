@@ -8,6 +8,6 @@ coverage/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
-.helmsman/
+.natamux/
 .pnpm-store/
 release/

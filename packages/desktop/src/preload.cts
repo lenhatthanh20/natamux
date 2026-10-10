@@ -3,9 +3,9 @@
 import electron = require('electron')
 
 // The dashboard keeps the daemon's token under this key (packages/web/src/lib/auth-storage.ts).
-const STORAGE_KEY = 'helmsman.auth'
+const STORAGE_KEY = 'natamux.auth'
 
-const daemonToken: unknown = electron.ipcRenderer.sendSync('helmsman:daemon-token')
+const daemonToken: unknown = electron.ipcRenderer.sendSync('natamux:daemon-token')
 if (typeof daemonToken === 'string' && daemonToken !== '') {
   try {
     window.localStorage.setItem(STORAGE_KEY, daemonToken)

@@ -1,4 +1,4 @@
-import type { DiffStat, Task } from '@helmsman/core'
+import type { DiffStat, Task } from '@natamux/core'
 import { Copy, FileDiff, FolderMinus, GitBranch, Pencil, Pin, PinOff } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import { formatAge, formatExact, isQuiet, rowLabel } from '../lib/tasks'

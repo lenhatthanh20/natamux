@@ -3,11 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TOKEN="${HELMSMAN_TOKEN:-devtoken}"
+TOKEN="${NATAMUX_TOKEN:-devtoken}"
 DEMO_TITLE="Demo: changes and history"
 # The containers see the repository at this path. A worktree only works at the path git gave it,
 # so the demo runs git in the container and writes files through the host path.
-CONTAINER_ROOT=/workspaces/helmsman
+CONTAINER_ROOT=/workspaces/natamux
 
 usage() {
   cat <<'TEXT'
@@ -47,15 +47,15 @@ up() {
   # The codespace runs `up` on every start. A `demo` typed at the same time would race it for the
   # same container names, so the second run waits for the first.
   if command -v flock >/dev/null; then
-    exec 9>"${TMPDIR:-/tmp}/helmsman-dev.lock"
+    exec 9>"${TMPDIR:-/tmp}/natamux-dev.lock"
     flock 9
   fi
   wait_for_docker
   # Commits from the dashboard carry your name, and a push uses the token of the codespace.
-  export HELMSMAN_GIT_NAME="${HELMSMAN_GIT_NAME:-$(git config user.name || true)}"
-  export HELMSMAN_GIT_EMAIL="${HELMSMAN_GIT_EMAIL:-$(git config user.email || true)}"
+  export NATAMUX_GIT_NAME="${NATAMUX_GIT_NAME:-$(git config user.name || true)}"
+  export NATAMUX_GIT_EMAIL="${NATAMUX_GIT_EMAIL:-$(git config user.email || true)}"
   export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  HELMSMAN_UID="$(id -u)" HELMSMAN_GID="$(id -g)" docker compose up -d --build
+  NATAMUX_UID="$(id -u)" NATAMUX_GID="$(id -g)" docker compose up -d --build
   echo "Waiting for the daemon and the dashboard..."
   wait_for_ports
   echo
@@ -64,7 +64,7 @@ up() {
 }
 
 cli() {
-  docker compose exec -T daemon helmsman "$@"
+  docker compose exec -T daemon natamux "$@"
 }
 
 # Reads JSON from stdin and prints one value, picked by a JavaScript expression on `data`.
@@ -73,7 +73,7 @@ pick() {
 }
 
 demo_git() {
-  docker compose exec -T daemon git -C "$1" -c user.name="Helmsman demo" -c user.email=demo@example.invalid \
+  docker compose exec -T daemon git -C "$1" -c user.name="Natamux demo" -c user.email=demo@example.invalid \
     -c commit.gpgsign=false "${@:2}"
 }
 
@@ -126,7 +126,7 @@ api_post() {
 
 seed() {
   # claude is not in the dev image. The fake agent prints steps and calls the same hooks.
-  export HELMSMAN_CLAUDE_COMMAND="$CONTAINER_ROOT/scripts/fake-agent.sh"
+  export NATAMUX_CLAUDE_COMMAND="$CONTAINER_ROOT/scripts/fake-agent.sh"
   up
   if [ -n "$(cli task list --json | pick "data.find((t) => t.title === '$SEED_TITLE')?.id")" ]; then
     echo "The seed tasks are there already."

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Helmsman: an Agent Development Environment (ADE). Run many coding agents in parallel, manage the work as tasks, see every task's state on one dashboard.
+Natamux: an Agent Development Environment (ADE). Run many coding agents in parallel, manage the work as tasks, see every task's state on one dashboard.
 
 ## Read first
 

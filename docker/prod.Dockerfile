@@ -25,11 +25,11 @@ ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 FROM manifests AS build
 RUN pnpm install --frozen-lockfile
 COPY packages packages
-RUN pnpm --filter @helmsman/core --filter @helmsman/daemon --filter @helmsman/web build
+RUN pnpm --filter @natamux/core --filter @natamux/daemon --filter @natamux/web build
 
 # The daemon and what it needs, without dev dependencies.
 FROM manifests AS daemon-deps
-RUN pnpm install --frozen-lockfile --prod --filter "@helmsman/daemon..."
+RUN pnpm install --frozen-lockfile --prod --filter "@natamux/daemon..."
 
 FROM node:22-bookworm-slim AS daemon
 # git is how the daemon makes the worktree of a task.
@@ -37,10 +37,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
-    HELMSMAN_HOST=0.0.0.0 \
-    HELMSMAN_DATA_DIR=/data \
-    HELMSMAN_REPO_DIR=/repo \
-    HELMSMAN_WORKTREES_DIR=/data/worktrees \
+    NATAMUX_HOST=0.0.0.0 \
+    NATAMUX_DATA_DIR=/data \
+    NATAMUX_REPO_DIR=/repo \
+    NATAMUX_WORKTREES_DIR=/data/worktrees \
     HOME=/tmp
 WORKDIR /app
 COPY --from=daemon-deps /app /app

@@ -1,4 +1,4 @@
-import type { TerminalSize } from '@helmsman/core'
+import type { TerminalSize } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'

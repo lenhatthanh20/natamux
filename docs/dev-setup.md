@@ -27,7 +27,7 @@ Set in `pnpm-workspace.yaml`:
 pnpm build && pnpm lint && pnpm test
 ```
 
-Run `build` first: packages import each other through their built `dist` folders, so `lint` (type check) and `test` need `@helmsman/core` built. `pnpm format` fixes formatting and import order.
+Run `build` first: packages import each other through their built `dist` folders, so `lint` (type check) and `test` need `@natamux/core` built. `pnpm format` fixes formatting and import order.
 
 ## CI
 
