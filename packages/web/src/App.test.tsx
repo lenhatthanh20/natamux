@@ -1234,10 +1234,12 @@ describe('App', () => {
     await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Add export/ }))
     expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: 'New workspace' }))
-    const dialog = screen.getByRole('dialog', { name: 'New workspace' })
-    await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
-    await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Start a task' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Start a task' })
+    await user.type(within(dialog).getByLabelText('Task title'), 'Fix the login')
+    await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
 
     await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
