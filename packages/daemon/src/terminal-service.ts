@@ -74,49 +74,50 @@ function cutPoint(text: string, from: number): number {
   if (line !== -1 && line - from < CUT_SEARCH_CHARS) {
     return line + 1
   }
-  const escape = text.indexOf('\u001b', from)
-  if (escape !== -1 && escape - from < CUT_SEARCH_CHARS) {
-    return escape
+  const sequence = text.indexOf('\u001b', from)
+  if (sequence !== -1 && sequence - from < CUT_SEARCH_CHARS) {
+    return sequence
   }
   return isLowSurrogate(text.charCodeAt(from)) ? from + 1 : from
 }
 
-// The output of a shell, at most `limit` chars of the newest.
+// The output of a shell: the newest output, never more than `limit` chars.
 export class OutputHistory {
   private chunks: string[] = []
-  private length = 0
+  private chars = 0
 
   constructor(private readonly limit = TERMINAL_HISTORY_CHARS) {}
 
+  get size(): number {
+    return this.chars
+  }
+
   append(data: string): void {
     this.chunks.push(data)
-    this.length += data.length
-    // A trim copies the whole history, so it waits until a quarter more than the limit.
-    if (this.length > this.limit * 1.25) {
-      this.trim()
+    this.chars += data.length
+    if (this.chars > this.limit) {
+      // A trim copies the whole history, so it frees an eighth of the limit, not just one chunk.
+      this.keepLast(this.limit - Math.floor(this.limit / 8))
     }
   }
 
   text(): string {
-    this.trim()
+    if (this.chunks.length > 1) {
+      this.chunks = [this.chunks.join('')]
+    }
     return this.chunks[0] ?? ''
   }
 
   clear(): void {
     this.chunks = []
-    this.length = 0
+    this.chars = 0
   }
 
-  private trim(): void {
-    if (this.chunks.length <= 1 && this.length <= this.limit) {
-      return
-    }
-    let text = this.chunks.join('')
-    if (text.length > this.limit) {
-      text = text.slice(cutPoint(text, text.length - this.limit))
-    }
-    this.chunks = text === '' ? [] : [text]
-    this.length = text.length
+  private keepLast(count: number): void {
+    const text = this.chunks.join('')
+    const kept = text.slice(cutPoint(text, text.length - count))
+    this.chunks = kept === '' ? [] : [kept]
+    this.chars = kept.length
   }
 }
 

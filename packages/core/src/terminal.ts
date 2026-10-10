@@ -9,7 +9,7 @@ const MAX_SIZE = 1000
 // the daemon keeps this much output, so a new dashboard can show all of it again. Change them
 // together.
 export const TERMINAL_SCROLLBACK_LINES = 10_000
-export const TERMINAL_HISTORY_CHARS = 2_000_000
+export const TERMINAL_HISTORY_CHARS = 3_000_000
 
 export const terminalSizeSchema = z.object({
   cols: z.coerce.number().int().min(1).max(MAX_SIZE),
