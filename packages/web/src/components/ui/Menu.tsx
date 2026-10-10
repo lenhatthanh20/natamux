@@ -178,6 +178,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
           )
         }
         const Icon = item.icon
+        // The hint is inside the button, so the label names the item: the hint only describes it.
         const hint = item.hint === undefined ? undefined : `${hintId}-${index}`
         return (
           <button
@@ -187,6 +188,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
               ? { role: 'menuitem' }
               : { role: 'menuitemcheckbox', 'aria-checked': item.checked })}
             disabled={item.disabled}
+            aria-label={hint === undefined ? undefined : item.label}
             aria-describedby={hint}
             onClick={() => {
               onClose(true)

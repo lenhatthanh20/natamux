@@ -2,12 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
-import {
-  RepoInputError,
-  RepoInUseError,
-  RepoNotFoundError,
-  RepoService,
-} from './repo-service.js'
+import { RepoInputError, RepoInUseError, RepoNotFoundError, RepoService } from './repo-service.js'
 
 let repo: TestRepo
 let repos: RepoService
