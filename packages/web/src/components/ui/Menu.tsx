@@ -3,6 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -24,6 +25,9 @@ export type MenuAction = {
   shortcut?: string
   // A toggle: a check mark shows when true.
   checked?: boolean
+  // A second line under the label, such as why the item is disabled. Not a tooltip: a disabled
+  // item takes no focus and may get no pointer events, so a tooltip would never show.
+  hint?: string
 }
 
 export type MenuItem = MenuAction | { type: 'separator' } | { type: 'label'; label: string }
@@ -49,6 +53,7 @@ type PopupProps = {
 function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps) {
   const list = useRef<HTMLDivElement>(null)
   const typed = useRef({ text: '', at: 0 })
+  const hintId = useId()
   const [position, setPosition] = useState<{ top: number; left: number; flipped: boolean } | null>(
     null,
   )
@@ -173,6 +178,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
           )
         }
         const Icon = item.icon
+        const hint = item.hint === undefined ? undefined : `${hintId}-${index}`
         return (
           <button
             key={item.label}
@@ -181,11 +187,12 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
               ? { role: 'menuitem' }
               : { role: 'menuitemcheckbox', 'aria-checked': item.checked })}
             disabled={item.disabled}
+            aria-describedby={hint}
             onClick={() => {
               onClose(true)
               item.onSelect()
             }}
-            className={`flex h-7 items-center gap-2 rounded px-2 text-left hover:bg-hover focus:bg-hover focus:outline-none disabled:opacity-50 ${item.danger === true ? 'text-danger-text' : 'text-ink'}`}
+            className={`flex items-center gap-2 rounded px-2 text-left hover:bg-hover focus:bg-hover focus:outline-none disabled:opacity-50 ${hint === undefined ? 'h-7' : 'min-h-7 py-1'} ${item.danger === true ? 'text-danger-text' : 'text-ink'}`}
           >
             {Icon !== undefined ? (
               <Icon
@@ -200,7 +207,16 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
                 className={`shrink-0 ${item.checked ? '' : 'invisible'}`}
               />
             ) : null}
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {hint === undefined ? (
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            ) : (
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate">{item.label}</span>
+                <span id={hint} className="truncate text-xs text-muted">
+                  {item.hint}
+                </span>
+              </span>
+            )}
             {item.shortcut !== undefined && (
               <span className="shrink-0 pl-4 font-mono text-xs text-muted">
                 {formatShortcut(item.shortcut)}

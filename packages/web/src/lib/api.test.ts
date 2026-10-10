@@ -135,6 +135,24 @@ describe('createApi', () => {
     })
   })
 
+  it('removes a repository', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => new Response(null, { status: 204 }))
+
+    await createApi('secret', fetchFunction).removeRepo('web-app')
+
+    expect(calls[0]).toMatchObject({ url: '/api/repos/web-app', method: 'DELETE' })
+  })
+
+  it('gives the reason when a repository cannot be removed', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({ error: 'conflict', message: 'Remove the 1 workspace of web-app first' }, 409),
+    )
+
+    await expect(createApi('secret', fetchFunction).removeRepo('web-app')).rejects.toThrow(
+      'Remove the 1 workspace of web-app first',
+    )
+  })
+
   it('throws an ApiError with the status when the daemon rejects the token', async () => {
     const { fetchFunction } = fakeFetch(() => json({ error: 'unauthorized' }, 401))
 

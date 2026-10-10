@@ -78,10 +78,17 @@ function json(data: unknown, status = 200): Response {
 }
 
 // A small stand-in for the daemon. It applies events with the real state machine.
-function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
+const defaultRepo = { id: 'default', name: 'natamux', path: '/work/natamux' }
+const webRepo = { id: 'web', name: 'Web app', path: '/work/web' }
+
+function installDaemon(
+  initial: Task[],
+  extraEvents: TaskEvent[] = [],
+  initialRepos = [defaultRepo],
+) {
   let tasks = [...initial]
   let templates: { id: string; name: string; labels: string[] }[] = []
-  let repos = [{ id: 'default', name: 'natamux', path: '/work/natamux' }]
+  let repos = [...initialRepos]
   const calls: Call[] = []
   const log: { accepted: boolean; event: TaskEvent }[] = [
     ...initial.map((task) => ({
@@ -229,6 +236,17 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       repos = [...repos, repo]
       return json({ repo }, 201)
     }
+    const repoPath = /^\/api\/repos\/([a-z0-9-]+)$/.exec(path)
+    if (repoPath && method === 'DELETE') {
+      const id = repoPath[1]
+      const inUse = tasks.filter((task) => task.repo === id && task.workspace !== null).length
+      if (inUse > 0) {
+        const message = `Remove the ${inUse} workspace of ${id} first`
+        return json({ error: 'conflict', message }, 409)
+      }
+      repos = repos.filter((repo) => repo.id !== id)
+      return new Response(null, { status: 204 })
+    }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }
@@ -319,7 +337,11 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   })
 
   vi.stubGlobal('fetch', fetchMock)
-  return { calls }
+  // Changes what the daemon holds without telling the dashboard, as another client would.
+  const setTasks = (next: Task[]) => {
+    tasks = next
+  }
+  return { calls, setTasks }
 }
 
 // Full texts live in data-tip attributes, which the tooltip layer shows on hover.
@@ -935,6 +957,96 @@ describe('App', () => {
     await waitFor(() =>
       expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
     )
+  })
+
+  it('removes a repository from its sidebar group after asking', async () => {
+    const { calls } = installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const removeCalls = () =>
+      calls.filter((call) => call.method === 'DELETE' && call.path === '/api/repos/web')
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for natamux' }))
+    expect(screen.getByRole('menuitem', { name: 'New workspace' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Remove repository' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
+    let confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    expect(within(confirm).getByText(/\/work\/web/)).toBeTruthy()
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(removeCalls()).toHaveLength(0)
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
+    confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await screen.findByText('Removed Web app.')).toBeTruthy()
+    await waitFor(() =>
+      expect(within(sidebar).queryByRole('button', { name: 'Actions for Web app' })).toBeNull(),
+    )
+    expect(removeCalls()).toHaveLength(1)
+  })
+
+  it('keeps the remove item off while the repository has workspaces', async () => {
+    const { calls } = installDaemon(
+      [makeTask({ id: 'T-0003', title: 'Fix header', repo: 'web', workspace: '/work/T-0003' })],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    const header = await within(sidebar).findByRole('button', { name: /^Web app/ })
+    act(() => header.focus())
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+
+    const remove = await screen.findByRole('menuitem', { name: 'Remove repository' })
+    expect((remove as HTMLButtonElement).disabled).toBe(true)
+    expect(remove.getAttribute('aria-describedby')).toBeTruthy()
+    expect(screen.getByText('Remove its workspaces first')).toBeTruthy()
+    expect(calls.some((call) => call.path === '/api/repos/web')).toBe(false)
+  })
+
+  it('shows why the daemon did not remove a repository and keeps its group', async () => {
+    const { setTasks } = installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    setTasks([makeTask({ id: 'T-0004', repo: 'web', workspace: '/work/T-0004' })])
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
+    const confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await screen.findByText('Remove the 1 workspace of web first')).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
+  })
+
+  it('opens the project settings from the repository menu', async () => {
+    installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Settings' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Project settings of Web app' })).toBeTruthy()
   })
 
   it('compares tries and keeps one, cancelling the others', async () => {

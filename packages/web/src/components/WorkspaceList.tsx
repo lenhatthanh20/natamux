@@ -1,5 +1,13 @@
 import type { DiffStat, Repo, Task, TaskState } from '@natamux/core'
-import { ChevronRight, FolderGit2, FolderPlus, Pin, Plus } from 'lucide-react'
+import {
+  ChevronRight,
+  FolderGit2,
+  FolderMinus,
+  FolderPlus,
+  Pin,
+  Plus,
+  Settings,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useRovingFocus } from '../hooks/useRovingFocus'
 import { shortcutOf } from '../lib/commands'
@@ -7,12 +15,14 @@ import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import { isUnseen } from '../lib/view-store'
 import { collapsedHint, DEFAULT_REPO_ID, workspaceGroups } from '../lib/workspace-groups'
 import { CountBadge } from './ui/CountBadge'
+import { ConfirmDialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
+import { Menu, type MenuItem, openContextMenu } from './ui/Menu'
 import { ICON, sectionTitle } from './ui/styles'
 import { WorkspaceRow } from './WorkspaceRow'
 
 type WorkspaceListProps = {
-  repos: readonly Pick<Repo, 'id' | 'name'>[]
+  repos: readonly Pick<Repo, 'id' | 'name' | 'path'>[]
   // The workspaces to show: the filter is already applied.
   tasks: readonly Task[]
   // Every task, to count what the filter hides in each repository.
@@ -36,6 +46,8 @@ type WorkspaceListProps = {
   // Opens the dialog for a new workspace, in that repository when one is given.
   onNewWorkspace: (repo?: string) => void
   onAddRepo: () => void
+  onRepoSettings: (id: string) => void
+  onRemoveRepo: (id: string) => void
 }
 
 type Entry = TreeRow & { label: string }
@@ -61,8 +73,11 @@ export function WorkspaceList({
   onRemove,
   onNewWorkspace,
   onAddRepo,
+  onRepoSettings,
+  onRemoveRepo,
 }: WorkspaceListProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const [removing, setRemoving] = useState<Pick<Repo, 'id' | 'name' | 'path'> | null>(null)
   const [finishedOpen, setFinishedOpen] = useState<ReadonlySet<string>>(new Set())
   const { pinned, groups } = workspaceGroups(repos, tasks, pinnedIds)
   const repoName = (task: Task) =>
@@ -72,6 +87,35 @@ export function WorkspaceList({
   const totalIn = (repoId: string) =>
     allTasks.filter((task) => task.workspace !== null && (task.repo ?? DEFAULT_REPO_ID) === repoId)
       .length
+
+  // A group of a repository that is gone (its tasks are still there) has no actions of its own.
+  const repoItems = (id: string): MenuItem[] => {
+    const known = repos.find((repo) => repo.id === id)
+    if (known === undefined) {
+      return []
+    }
+    const items: MenuItem[] = [
+      { label: 'New workspace', icon: Plus, onSelect: () => onNewWorkspace(id) },
+      { label: 'Settings', icon: Settings, onSelect: () => onRepoSettings(id) },
+    ]
+    if (id === DEFAULT_REPO_ID) {
+      return items
+    }
+    // Every workspace counts, also the ones the filter hides: the daemon refuses them all.
+    const busy = totalIn(id) > 0
+    return [
+      ...items,
+      { type: 'separator' },
+      {
+        label: 'Remove repository',
+        icon: FolderMinus,
+        danger: true,
+        disabled: busy,
+        hint: busy ? 'Remove its workspaces first' : undefined,
+        onSelect: () => setRemoving(known),
+      },
+    ]
+  }
 
   const flip = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set)
@@ -218,6 +262,8 @@ export function WorkspaceList({
         const shownFinished = finishedOpen.has(repo.id)
         const hidden = totalIn(repo.id) - open.length - finished.length
         const hiddenInGroup = filtered && open.length + finished.length === 0 && hidden > 0
+        const items = repoItems(repo.id)
+        const menuLabel = `Actions for ${repo.name}`
         return (
           <div key={repo.id} className="flex flex-col">
             <div className="group flex h-7 items-center rounded-md pr-0.5 hover:bg-hover">
@@ -226,6 +272,26 @@ export function WorkspaceList({
                 {...roving.item(`repo:${repo.id}`)}
                 aria-expanded={!isCollapsed}
                 onClick={() => setCollapsed(flip(collapsed, repo.id))}
+                onContextMenu={(event) => {
+                  if (items.length > 0) {
+                    openContextMenu(event, items, menuLabel)
+                  }
+                }}
+                onKeyDown={(event) => {
+                  const menuKey =
+                    (event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu'
+                  if (menuKey && items.length > 0) {
+                    event.stopPropagation()
+                    openContextMenu(
+                      {
+                        preventDefault: () => event.preventDefault(),
+                        currentTarget: event.currentTarget,
+                      },
+                      items,
+                      menuLabel,
+                    )
+                  }
+                }}
                 className="focus-inset flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-md px-1.5 text-left"
               >
                 <ChevronRight
@@ -253,6 +319,7 @@ export function WorkspaceList({
                 onClick={() => onNewWorkspace(repo.id)}
                 className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
               />
+              {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
               <ul className="flex flex-col">
@@ -300,6 +367,16 @@ export function WorkspaceList({
           </div>
         )
       })}
+
+      {removing !== null && (
+        <ConfirmDialog
+          title={`Remove ${removing.name} from Natamux?`}
+          description={`Natamux forgets this repository. The folder ${removing.path} and its branches stay on disk. Tasks without a workspace keep their link and come back if you add the folder again.`}
+          confirmLabel="Remove"
+          onConfirm={() => onRemoveRepo(removing.id)}
+          onClose={() => setRemoving(null)}
+        />
+      )}
     </section>
   )
 }
