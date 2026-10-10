@@ -24,12 +24,20 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   implement: [
     'Task: {title}',
     'Read {dir}/spec.md and {dir}/plan.md when they are there.',
-    'Write the tests first, then the code that makes them pass. Commit your work when it is done.',
+    'Write the tests first, then the code that makes them pass. {commit}',
   ].join('\n'),
   testing: [
     'Task: {title}',
-    'For each case in {dir}/test-spec.md that has no test yet, add one. Then run all the tests and fix what fails. Commit your work.',
+    'For each case in {dir}/test-spec.md that has no test yet, add one. Then run all the tests and fix what fails. {commit}',
   ].join('\n'),
+}
+
+// By default you read the changes before they are committed. A stage that checks for a commit
+// has to ask for one, or the agent can never pass it.
+function commitRule(stage: Stage): string {
+  return stage.requireCommit === true
+    ? 'Commit your work when it is done.'
+    : 'Do not commit. Leave the changes for review.'
 }
 
 function generic(stage: Stage): string {
@@ -59,7 +67,9 @@ export function stagePrompt(
   task: Pick<Task, 'title' | 'description' | 'context'>,
 ): string {
   const template = stage.prompt ?? DEFAULT_PROMPTS[stage.id] ?? generic(stage)
-  return `${fill(template, values(task))}\n${DONE}`
+  // Only the default prompts get {commit}, so a prompt of your own is never changed.
+  const commit = stage.prompt === undefined ? { commit: commitRule(stage) } : {}
+  return `${fill(template, { ...values(task), ...commit })}\n${DONE}`
 }
 
 // The prompt for a context source that an agent reads: a skill or an MCP server.

@@ -123,7 +123,8 @@ export const DEFAULT_PIPELINE: Step[] = [
         output: 'test-spec.md',
         sections: ['Cases'],
       },
-      { id: 'implement', kind: 'agent', gate: 'auto', requireCommit: true, requireClean: true },
+      // No commit check: the agent leaves its changes for you to read before you commit them.
+      { id: 'implement', kind: 'agent', gate: 'auto' },
     ],
   },
   { id: 'review', kind: 'review', gate: 'manual' },
