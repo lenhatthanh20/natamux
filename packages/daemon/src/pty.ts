@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { spawn } from 'node-pty'
 import { descendants } from './process-tree.js'
+import { shellCommand } from './shell-command.js'
 import type { SpawnPty } from './terminal-service.js'
 
 // An agent runs as a job of the shell. Ending only the shell leaves it running with no terminal,
@@ -22,19 +22,10 @@ function signalTree(root: number, signal: string | undefined): void {
   }
 }
 
-function shellPath(env: NodeJS.ProcessEnv): string {
-  if (process.platform === 'win32') {
-    return 'powershell.exe'
-  }
-  if (env.SHELL && existsSync(env.SHELL)) {
-    return env.SHELL
-  }
-  return existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh'
-}
-
 // The real pseudo terminal. Only main.ts imports this file, so tests never load the native module.
 export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
-  const pty = spawn(shellPath(env), [], { name: 'xterm-256color', cols, rows, cwd, env })
+  const shell = shellCommand(env, process.platform)
+  const pty = spawn(shell.file, shell.args, { name: 'xterm-256color', cols, rows, cwd, env })
   return {
     onData: (listener) => {
       pty.onData(listener)

@@ -1514,3 +1514,31 @@ describe('repositories', () => {
     expect(relative.statusCode).toBe(400)
   })
 })
+
+describe('project settings', () => {
+  const settingsUrl = '/repos/default/settings'
+
+  it('saves the permission mode of the agents, and refuses an unknown one', async () => {
+    const before = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(before.json().settings.agents).toEqual({ permissionMode: 'auto' })
+
+    const saved = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: authorization,
+      payload: { agents: { permissionMode: 'ask' } },
+    })
+    expect(saved.statusCode).toBe(200)
+    const after = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(after.json().settings.agents).toEqual({ permissionMode: 'ask' })
+
+    const wrong = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: authorization,
+      payload: { agents: { permissionMode: 'yolo' } },
+    })
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().message).toContain('agents.permissionMode')
+  })
+})

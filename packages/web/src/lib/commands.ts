@@ -46,7 +46,7 @@ export type CommandActions = {
 
 export type CommandContext = { state: CommandState; actions: CommandActions }
 
-export type CommandCategory = 'App' | 'View' | 'Task' | 'Workspace' | 'Theme' | 'Repo'
+export type CommandCategory = 'App' | 'View' | 'Task' | 'Workspace' | 'Theme' | 'Project'
 
 // The groups of the shortcut sheet, in the order of the keyboard map in the UI spec (5.1).
 export const SHEET_GROUPS = [
@@ -252,8 +252,8 @@ export const COMMANDS: readonly Command[] = [
   },
   {
     id: 'workspace.new',
-    title: 'New workspace',
-    category: 'Workspace',
+    title: 'Start a task',
+    category: 'Task',
     shortcuts: ['c'],
     group: 'Single keys',
     suggested: true,
@@ -552,14 +552,14 @@ export const COMMANDS: readonly Command[] = [
   ),
   {
     id: 'repo.add',
-    title: 'Add a repository',
-    category: 'Repo',
+    title: 'Add a project',
+    category: 'Project',
     run: ({ actions }) => actions.openRepos(),
   },
   {
     id: 'repo.import',
     title: 'Import GitHub issues',
-    category: 'Repo',
+    category: 'Project',
     run: ({ actions }) => actions.openImport(),
   },
 ]

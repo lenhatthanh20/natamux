@@ -72,12 +72,13 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `spec` | agent | manual | Read `context.md`. Write `spec.md`: goal, scope, out of scope, acceptance criteria. Do not change code |
 | `plan` | agent | manual | Read `context.md` and `spec.md`. Write `plan.md`: the steps, the files to change, the tests to add. Do not change code |
 | `test-spec` (parallel) | agent | manual | Read `context.md` and `spec.md`, not the code. Write `test-spec.md`: under a Cases heading, test cases with input, expected result and edge cases. Do not change code |
-| `implement` (parallel) | agent | auto | Read `spec.md` and `plan.md`. Write the tests first, then the code that makes them pass. Commit when done |
+| `implement` (parallel) | agent | auto | Read `spec.md` and `plan.md`. Write the tests first, then the code that makes them pass. Do not commit: you read the changes first |
 | `review` | review | manual | — |
-| `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests |
+| `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests. The agent does not commit |
 | `release` | release | manual | — |
 
 - **Every agent prompt** ends with "When you are done, run `natamux done`" (section 3.5).
+- **Commits:** the `implement` and `testing` prompts tell the agent not to commit. You read the changes in the Changes tab and commit them there. A stage with `requireCommit` asks the agent to commit instead.
 - **Gate `manual`:** when the stage output is ready, the state becomes `review` and the task waits for you.
 - **Gate `auto`:** when the stage output is ready, the task moves to the next stage at once.
 - **Gate `auto` and failures:** a failed `testing` stage goes to `failed`. You then retry it, or send the task back to `implement` with the test output as the next prompt.
@@ -164,8 +165,8 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 | `spec` | Sections: Goal, Scope, Out of scope, Acceptance criteria | On |
 | `plan` | Sections: Steps, Files, Tests | On |
 | `test-spec` | Section Cases, with at least one case under it (a `###` heading or a list item) | On |
-| `implement` | At least one new commit on the task branch since the stage started (`requireCommit`) | On |
-| `implement` | No uncommitted changes in the worktree (`requireClean`); `.natamux-task/` is ignored, so it does not count | On |
+| Any stage with `requireCommit` | At least one new commit on the task branch since the stage started | Off |
+| Any stage with `requireClean` | No uncommitted changes in the worktree; `.natamux-task/` is ignored, so it does not count | Off |
 | Any stage with `check` | The command (for example `pnpm typecheck`) exits with 0 | Off |
 | `testing` | The test command exits with 0 | On |
 

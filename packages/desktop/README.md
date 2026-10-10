@@ -10,8 +10,8 @@ The desktop app: an Electron shell for macOS and Windows. It holds no logic of i
   - port 4317 when free, else any free port;
   - a token kept in the app's data folder, so it stays the same between runs;
   - data in `<user data>/data`;
-  - the PATH of your login shell, so the agents installed with Homebrew, nvm and the like are found when the app starts from the Dock;
-  - a `natamux` command first on that PATH, for `natamux done` and `natamux ask` in the agents' terminals. It runs the CLI with the app's own runtime.
+  - the PATH of your login shell, so the agents installed with Homebrew, nvm and the like are found when the app starts from the Dock. When it cannot be read, the daemon log says why and which PATH is used instead;
+  - a `natamux` command first on that PATH, for `natamux done` and `natamux ask` in the agents' terminals. It runs the CLI with the app's own runtime. Its folder is also in `NATAMUX_BIN_DIR`, so the daemon puts it first again for each agent after the shell's profile has run.
 - **Opens the dashboard** at `http://127.0.0.1:<port>/`. The preload script puts the token where the dashboard keeps it, so the page starts signed in.
 - **Keeps the window on the dashboard.** Links to other sites open in your browser; only `http`, `https` and `mailto` open at all. The page runs sandboxed, with no Node.js.
 - **Updates itself** from the latest GitHub release: checks 30 seconds after start and every 6 hours, downloads in the background, checks `SHA256SUMS.txt`, installs on restart (`updater.ts`, design in `docs/design-desktop-update.md`). Only a packaged app checks. `NATAMUX_UPDATE_AS_VERSION=0.0.0` makes it act as an older version, so a release can update to itself in a test. The log is `logs/update.log`.
