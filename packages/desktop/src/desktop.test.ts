@@ -6,7 +6,7 @@ import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeCliShim } from './cli-shim.js'
 import { loadOrCreateDaemonToken } from './daemon-access.js'
-import { daemonEnv } from './daemon-env.js'
+import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
@@ -92,12 +92,34 @@ describe('daemonEnv', () => {
   })
 
   it('keeps the app PATH when the login shell gave none, and drops ELECTRON_RUN_AS_NODE', () => {
-    const env = daemonEnv({ PATH: '/usr/bin', ELECTRON_RUN_AS_NODE: '1' }, 'secret', {
-      ...place,
-      loginPath: undefined,
-    })
+    const noLogin = { ...place, loginPath: undefined }
+    const env = daemonEnv({ PATH: '/usr/bin', ELECTRON_RUN_AS_NODE: '1' }, 'secret', noLogin, [])
     expect(env.PATH).toBe(['/app/bin', '/usr/bin'].join(delimiter))
     expect('ELECTRON_RUN_AS_NODE' in env).toBe(false)
+  })
+
+  it('adds the common install folders when the login shell gave no PATH', () => {
+    const noLogin = { ...place, loginPath: undefined }
+    const env = daemonEnv({ PATH: '/usr/bin' }, 'secret', noLogin, [
+      '/opt/homebrew/bin',
+      '/usr/bin',
+    ])
+    expect(env.PATH).toBe(['/app/bin', '/usr/bin', '/opt/homebrew/bin'].join(delimiter))
+  })
+
+  it('puts the natamux command first, then the login PATH once, with no fallback folders', () => {
+    const loginPath = ['/opt/homebrew/bin', '/app/bin', '/opt/homebrew/bin'].join(delimiter)
+    const repeated = { ...place, loginPath }
+    expect(daemonEnv({ PATH: '/usr/bin' }, 'secret', repeated, ['/usr/local/bin']).PATH).toBe(
+      ['/app/bin', '/opt/homebrew/bin'].join(delimiter),
+    )
+  })
+
+  it('knows the common install folders that exist, on macOS and Linux only', () => {
+    const exists = (folder: string) => folder !== '/opt/homebrew/sbin'
+    expect(fallbackBinDirs('darwin', exists)).toEqual(['/opt/homebrew/bin', '/usr/local/bin'])
+    expect(fallbackBinDirs('linux', () => false)).toEqual([])
+    expect(fallbackBinDirs('win32', exists)).toEqual([])
   })
 })
 
