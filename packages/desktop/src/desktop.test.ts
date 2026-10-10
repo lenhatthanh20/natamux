@@ -156,6 +156,13 @@ describe('startup', () => {
   })
 })
 
+// Windows has no execute bit; the shim there is a .cmd file instead.
+function expectRunnable(file: string): void {
+  if (process.platform !== 'win32') {
+    expect(statSync(file).mode & 0o111).not.toBe(0)
+  }
+}
+
 describe('the natamux command', () => {
   it('runs the CLI with the app runtime as Node.js', () => {
     const file = writeCliShim(dir, "/Apps/Nata'mux", '/app/cli/main.js', 'darwin')
@@ -164,14 +171,14 @@ describe('the natamux command', () => {
     expect(text).toContain(
       "ELECTRON_RUN_AS_NODE=1 exec '/Apps/Nata'\\''mux' '/app/cli/main.js' \"$@\"",
     )
-    expect(statSync(file).mode & 0o111).not.toBe(0)
+    expectRunnable(file)
   })
 
   it('also writes the short name nmx', () => {
     writeCliShim(dir, '/Apps/Natamux', '/app/cli/main.js', 'darwin')
     const short = join(dir, 'nmx')
     expect(readFileSync(short, 'utf8')).toBe(readFileSync(join(dir, 'natamux'), 'utf8'))
-    expect(statSync(short).mode & 0o111).not.toBe(0)
+    expectRunnable(short)
   })
 
   it('is a .cmd file on Windows', () => {
