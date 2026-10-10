@@ -104,6 +104,19 @@ describe('removeWorktree', () => {
 
     expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir])
   })
+
+  it('leaves another worktree and its folder alone when it clears a stale entry', async () => {
+    const otherPath = join(repo.root, 'worktrees', 'T-0002')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    await addWorktree(repo.dir, otherPath, 'natamux/t-0002-example')
+    writeFileSync(join(otherPath, 'notes.txt'), 'work in progress')
+    rmSync(worktreePath, { recursive: true, force: true })
+
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir, otherPath])
+    expect(existsSync(join(otherPath, 'notes.txt'))).toBe(true)
+  })
 })
 
 describe('parseWorktreeList', () => {
@@ -176,6 +189,22 @@ describe('worktreeState', () => {
     symlinkSync(join(repo.root, 'worktrees'), link)
 
     expect(await worktreeState(repo.dir, join(link, 'T-0001'))).toBe('stale')
+  })
+
+  it('is stale for a deleted folder whose path has a space', async () => {
+    const spaced = join(repo.root, 'Application Support', 'T-0001')
+    await addWorktree(repo.dir, spaced, 'natamux/t-0001-example')
+    rmSync(spaced, { recursive: true, force: true })
+
+    expect(await worktreeState(repo.dir, spaced)).toBe('stale')
+  })
+
+  it('matches a path with a trailing slash', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    expect(await worktreeState(repo.dir, `${worktreePath}/`)).toBe('present')
+
+    rmSync(worktreePath, { recursive: true, force: true })
+    expect(await worktreeState(repo.dir, `${worktreePath}/`)).toBe('stale')
   })
 
   it('is missing when the folder was deleted and pruned', async () => {
