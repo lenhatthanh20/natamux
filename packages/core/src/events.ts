@@ -56,6 +56,7 @@ export const EVENT_TYPES = [
   'context.fetched',
   'issue.linked',
   'issue.created',
+  'agent.waiting',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -107,6 +108,9 @@ const MOVES: Partial<Record<EventType, Move>> = {
   // ask something in plain text. The daemon drops the turn end that follows a report.
   'agent.finished': { from: ['running'], to: 'needs-input' },
   'agent.failed': { from: ['running', 'needs-input'], to: 'failed' },
+  // The agent ended its turn, but its background work (a shell, a monitor, a scheduled prompt)
+  // will wake it again, so the stage goes on running.
+  'agent.waiting': { from: ['running'], to: 'running' },
   // "Mark as done" from needs-input runs the checks again.
   'stage.reported': { from: ['running', 'needs-input'], to: 'running' },
   'stage.checked': { from: ['running'], to: 'gate' },

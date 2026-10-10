@@ -106,10 +106,13 @@ export class AgentHookService {
     }
 
     const lane = this.stages.laneFor(task, terminal)
-    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early".
+    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early", even
+    // when background work is still running.
     const reportedTurn =
-      hook.signal === 'turn-ended' && this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
+      (hook.signal === 'turn-ended' || hook.signal === 'turn-paused') &&
+      this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
     if (reportedTurn) {
+      this.activities.delete(task.id)
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []

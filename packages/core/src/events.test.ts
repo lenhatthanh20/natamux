@@ -278,6 +278,14 @@ describe('applyTaskEvent with the default pipeline', () => {
     )
   })
 
+  it('keeps a stage running while the agent waits for its background work', () => {
+    expect(run(at('plan', 'running'), event('agent.waiting'))).toEqual({
+      position: at('plan', 'running'),
+      accepted: [true],
+    })
+    expect(run(at('plan', 'needs-input'), event('agent.waiting')).accepted).toEqual([false])
+  })
+
   it('fails a stage whose command failed', () => {
     expect(run(at('testing', 'running'), event('stage.failed')).position).toEqual(
       at('testing', 'failed'),

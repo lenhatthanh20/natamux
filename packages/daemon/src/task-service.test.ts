@@ -96,6 +96,53 @@ describe('applyEvent', () => {
     expect(result.task.state).toBe('review')
   })
 
+  describe('the wait for background work', () => {
+    function waitingTask() {
+      const task = service.createTask({ title: 'First' })
+      service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+      service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+      return service.applyEvent(task.id, { source: 'agent', type: 'agent.waiting' }).task
+    }
+
+    it('starts with agent.waiting, which keeps the state', () => {
+      const task = waitingTask()
+
+      expect(task.state).toBe('running')
+      expect(task.backgroundSince).toBe(task.updatedAt)
+      expect(readTaskFile(dataDir, task.id)?.backgroundSince).toBe(task.backgroundSince)
+    })
+
+    it('goes on through events of the daemon, such as checks that pass', () => {
+      const task = waitingTask()
+
+      service.recordPullRequestStatus(task.id, { state: 'open', checks: 'passing' })
+
+      expect(service.listEvents(task.id).at(-1)?.event.type).toBe('ci.passed')
+      expect(service.getTask(task.id).backgroundSince).toBe(task.backgroundSince)
+    })
+
+    it('ends with the next event of the agent', () => {
+      const task = waitingTask()
+
+      const result = service.applyEvent(task.id, { source: 'agent', type: 'agent.finished' })
+
+      expect(result.task.state).toBe('needs-input')
+      expect(result.task.backgroundSince).toBeNull()
+    })
+
+    it('ends when a person moves the task', () => {
+      const task = waitingTask()
+
+      const result = service.applyEvent(task.id, {
+        source: 'human',
+        type: 'state.overridden',
+        payload: { to: 'review' },
+      })
+
+      expect(result.task.backgroundSince).toBeNull()
+    })
+  })
+
   it('does not let a client send task.created', () => {
     const task = service.createTask({ title: 'First' })
     expect(() => service.applyEvent(task.id, { source: 'human', type: 'task.created' })).toThrow()

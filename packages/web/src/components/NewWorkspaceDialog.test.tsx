@@ -22,6 +22,7 @@ const TASK: Task = {
   stages: ['implement'],
   lanes: {},
   stageSince: null,
+  backgroundSince: null,
   context: null,
   issue: null,
   parentId: null,

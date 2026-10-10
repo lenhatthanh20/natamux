@@ -154,6 +154,7 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 
 - `natamux done` sends `stage.reported`. It reads the task from `NATAMUX_TASK_ID` and the terminal from `NATAMUX_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
 - **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `natamux done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
+- **A paused turn is not a stop.** When the `Stop` lists background work that will wake the agent again (a background shell, a monitor, a scheduled prompt), the stage stays `running` with "Waiting for …" as its summary (`agent.waiting`, see `docs/claude-code-adapter.md`).
 
 **Step 2: the checks.** After the report the daemon checks the result itself:
 

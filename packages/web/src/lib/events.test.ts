@@ -78,4 +78,32 @@ describe('groupEvents', () => {
   it('has no lines without events', () => {
     expect(groupEvents([])).toEqual([])
   })
+
+  it('lists all the background work the agent waits for, from the newest event of a run', () => {
+    const waiting = (seq: number, waitingFor: unknown): StoredEvent => {
+      const base = stored(seq, 'agent.waiting', 'agent')
+      return { ...base, event: { ...base.event, payload: { waitingFor } } }
+    }
+    const lines = groupEvents([
+      waiting(1, ['Bash: pnpm lint']),
+      waiting(2, ['Bash: pnpm test', 'subagent: Review diff', 'scheduled prompt: check CI']),
+    ])
+
+    expect(lines.map(describeLine)).toEqual([
+      'Agent waits for its background work ×2: Bash: pnpm test; subagent: Review diff; ' +
+        'scheduled prompt: check CI · Agent',
+    ])
+    expect(lines[0]?.detail).toBe(
+      'Bash: pnpm test; subagent: Review diff; scheduled prompt: check CI',
+    )
+  })
+
+  it('has no detail for other events, or for a list it cannot read', () => {
+    const odd = stored(1, 'agent.waiting', 'agent')
+    const lines = groupEvents([
+      { ...odd, event: { ...odd.event, payload: { waitingFor: 'Bash: ls' } } },
+      stored(2, 'agent.finished', 'agent'),
+    ])
+    expect(lines.map((line) => line.detail)).toEqual([undefined, undefined])
+  })
 })
