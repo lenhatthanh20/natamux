@@ -42,6 +42,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     stages: ['implement', 'review', 'release'],
     lanes: {},
     stageSince: null,
+    backgroundSince: null,
     context: null,
     issue: null,
     parentId: null,
@@ -172,6 +173,16 @@ describe('isQuiet', () => {
       expect(isQuiet({ ...task, state }, new Date('2026-10-09T09:00:00.000Z'))).toBe(false)
     },
   )
+
+  it.each([
+    '2026-10-08T09:01:00.000Z',
+    '2026-10-08T09:10:00.000Z',
+    '2026-10-08T09:11:00.000Z',
+    '2026-10-08T15:00:00.000Z',
+  ])('is never true while the agent waits for its background work, at %s', (now) => {
+    const waiting = { ...task, backgroundSince: task.updatedAt }
+    expect(isQuiet(waiting, new Date(now))).toBe(false)
+  })
 })
 
 describe('needsMeTasks', () => {
@@ -194,6 +205,19 @@ describe('needsMeTasks', () => {
       makeTask({ id: 'T-0003', state: 'review', updatedAt: '2026-10-08T09:00:00.000Z' }),
     ]
     expect(needsMeTasks(tasks, now).map((task) => task.id)).toEqual(['T-0001', 'T-0003'])
+  })
+
+  it('leaves out a running task that waits for background work, however long it waits', () => {
+    const tasks = [
+      makeTask({
+        id: 'T-0001',
+        state: 'running',
+        updatedAt: '2026-10-08T07:00:00.000Z',
+        backgroundSince: '2026-10-08T07:00:00.000Z',
+      }),
+    ]
+    expect(needsMeTasks(tasks, now)).toEqual([])
+    expect(needsMeReason(tasks[0] as Task, now)).not.toBe('quiet')
   })
 
   // The daemon moves the stage of an agent it ends with the workspace back to ready.

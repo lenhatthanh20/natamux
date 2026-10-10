@@ -31,6 +31,7 @@ const TASK: Task = {
   stages: ['context', 'spec', 'plan'],
   lanes: {},
   stageSince: '2026-10-10T08:11:00.000Z',
+  backgroundSince: null,
   context: null,
   issue: null,
   parentId: null,
@@ -89,6 +90,7 @@ const FULL_TASK: Task = {
     'review',
   ],
   stageSince: '2026-10-10T08:21:00.000Z',
+  backgroundSince: null,
 }
 
 const FULL_EVENTS: StoredEvent[] = [

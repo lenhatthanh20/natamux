@@ -29,6 +29,7 @@ const task: Task = {
   stages: ['implement', 'review', 'release'],
   lanes: {},
   stageSince: null,
+  backgroundSince: null,
   context: null,
   issue: null,
   parentId: null,

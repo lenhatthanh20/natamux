@@ -113,6 +113,15 @@ function moveTask(task: Task, position: StagePosition, moved: boolean, at: strin
   }
 }
 
+// An agent waits for its background work from its first `agent.waiting` until it shows up again,
+// or the task leaves running. Other events, such as checks that pass, do not end the wait.
+function backgroundSinceAfter(task: Task, event: TaskEvent, state: TaskState): string | null {
+  if (event.type === 'agent.waiting') {
+    return task.backgroundSince ?? event.at
+  }
+  return state !== 'running' || event.source === 'agent' ? null : task.backgroundSince
+}
+
 export class TaskEditError extends Error {
   constructor(message: string) {
     super(message)
@@ -285,7 +294,11 @@ export class TaskService {
 
     const { position, accepted, moved } = applyTaskEvent(positionOf(task), event, steps)
     const updated: Task = accepted
-      ? { ...moveTask(task, position, moved, event.at), updatedAt: event.at }
+      ? {
+          ...moveTask(task, position, moved, event.at),
+          backgroundSince: backgroundSinceAfter(task, event, position.state),
+          updatedAt: event.at,
+        }
       : task
 
     if (accepted) {
@@ -488,7 +501,8 @@ export class TaskService {
 
   // Writes down that the agent of a running task is still at work, so the time of its last update
   // is the time of its last sign of life. At most once per `minIntervalMs`, so a busy agent does
-  // not fill the log. Returns whether it wrote anything.
+  // not fill the log, except that the first sign of life ends a wait for background work at once.
+  // Returns whether it wrote anything.
   recordActivity(taskId: string, minIntervalMs = ACTIVITY_INTERVAL_MS): boolean {
     const task = this.getTask(taskId)
     if (task.state !== 'running') {
@@ -496,12 +510,15 @@ export class TaskService {
     }
 
     const at = this.timestamp()
-    if (Date.parse(at) - Date.parse(task.updatedAt) < minIntervalMs) {
+    if (
+      task.backgroundSince === null &&
+      Date.parse(at) - Date.parse(task.updatedAt) < minIntervalMs
+    ) {
       return false
     }
 
     const event: TaskEvent = { taskId, source: 'agent', type: 'agent.active', at, payload: {} }
-    const updated: Task = { ...task, updatedAt: at }
+    const updated: Task = { ...task, backgroundSince: null, updatedAt: at }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)

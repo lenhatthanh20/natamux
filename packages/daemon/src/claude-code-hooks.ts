@@ -10,6 +10,9 @@ export const claudeCodeInputSchema = z.object({
   message: z.string().optional(),
   tool_name: z.string().optional(),
   tool_input: z.record(z.string(), z.unknown()).optional(),
+  // Read entry by entry in `backgroundWork`, so a bad entry does not lose the hook.
+  background_tasks: z.unknown().optional(),
+  session_crons: z.unknown().optional(),
 })
 
 export type ClaudeCodeInput = z.infer<typeof claudeCodeInputSchema>
@@ -23,20 +26,78 @@ const ASKING_NOTIFICATIONS: readonly string[] = [
   'agent_needs_input',
 ]
 
-function details(input: ClaudeCodeInput): Record<string, unknown> {
+function details(input: ClaudeCodeInput, waitingFor: readonly string[]): Record<string, unknown> {
   return {
     hook: input.hook_event_name,
     ...(input.session_id === undefined ? {} : { sessionId: input.session_id }),
     ...(input.notification_type === undefined ? {} : { notificationType: input.notification_type }),
     ...(input.message === undefined ? {} : { message: input.message.slice(0, MAX_MESSAGE_LENGTH) }),
+    ...(waitingFor.length === 0
+      ? {}
+      : {
+          waitingFor: waitingFor
+            .slice(0, MAX_WAITING_ENTRIES)
+            .map((entry) => shorten(entry, MAX_WAITING_LENGTH)),
+        }),
   }
 }
 
 const SUMMARY_LENGTH = 80
 
-function shorten(text: string): string {
+function shorten(text: string, length = SUMMARY_LENGTH): string {
   const line = text.replace(/\s+/g, ' ').trim()
-  return line.length > SUMMARY_LENGTH ? `${line.slice(0, SUMMARY_LENGTH - 1)}…` : line
+  return line.length > length ? `${line.slice(0, length - 1)}…` : line
+}
+
+const MAX_WAITING_ENTRIES = 5
+const MAX_WAITING_LENGTH = 200
+
+const backgroundTaskSchema = z.object({
+  type: z.string().min(1),
+  status: z.string().optional(),
+  description: z.string().optional(),
+  command: z.string().optional(),
+})
+
+const sessionCronSchema = z.object({
+  prompt: z.string().optional(),
+  schedule: z.string().optional(),
+})
+
+// Not checked against a real session yet; any other status counts as still running.
+const FINISHED_STATUSES: readonly string[] = ['completed', 'failed', 'killed', 'stopped']
+
+function entries<T>(list: unknown, schema: z.ZodType<T>): T[] {
+  return Array.isArray(list)
+    ? list.flatMap((entry) => {
+        const parsed = schema.safeParse(entry)
+        return parsed.success ? [parsed.data] : []
+      })
+    : []
+}
+
+// What a stopping session still has in flight, such as "Bash: pnpm test". Each of these wakes
+// Claude Code again when it ends or fires, so the session is paused, not done.
+export function backgroundWork(input: ClaudeCodeInput): string[] {
+  const tasks = entries(input.background_tasks, backgroundTaskSchema)
+    .filter((task) => task.status === undefined || !FINISHED_STATUSES.includes(task.status))
+    .map((task) => {
+      // Claude Code runs a background shell with its Bash tool, so it reads like a Bash summary.
+      const name = task.type === 'shell' ? 'Bash' : task.type
+      const what = task.command ?? task.description
+      return what ? `${name}: ${what}` : name
+    })
+  const crons = entries(input.session_crons, sessionCronSchema).map((cron) => {
+    const what = cron.prompt ?? cron.schedule
+    return what ? `scheduled prompt: ${what}` : 'scheduled prompt'
+  })
+  return [...tasks, ...crons]
+}
+
+// "Waiting for Bash: pnpm test and 2 more", cut to the length of a summary.
+function waitingSummary(waitingFor: readonly string[]): string {
+  const more = waitingFor.length > 1 ? ` and ${waitingFor.length - 1} more` : ''
+  return `${shorten(`Waiting for ${waitingFor[0]}`, SUMMARY_LENGTH - more.length)}${more}`
 }
 
 // A path inside the session's folder is shown from there.
@@ -82,7 +143,7 @@ export function claudeCodeSignal(input: ClaudeCodeInput): AgentSignal | undefine
         ? 'asking'
         : undefined
     case 'Stop':
-      return 'turn-ended'
+      return backgroundWork(input).length > 0 ? 'turn-paused' : 'turn-ended'
     case 'StopFailure':
       return 'failed'
     default:
@@ -94,6 +155,7 @@ export const claudeCodeAdapter: AgentAdapter = {
   id: 'claude-code',
   normalize(raw) {
     const input = claudeCodeInputSchema.parse(raw)
+    const waitingFor = input.hook_event_name === 'Stop' ? backgroundWork(input) : []
     const signal = claudeCodeSignal(input)
     if (signal === undefined) {
       return undefined
@@ -104,7 +166,9 @@ export const claudeCodeAdapter: AgentAdapter = {
         ? toolSummary(input)
         : input.hook_event_name === 'UserPromptSubmit'
           ? 'Reading the prompt'
-          : undefined
-    return { signal, cwd: input.cwd, details: details(input), summary }
+          : waitingFor.length > 0
+            ? waitingSummary(waitingFor)
+            : undefined
+    return { signal, cwd: input.cwd, details: details(input, waitingFor), summary }
   },
 }

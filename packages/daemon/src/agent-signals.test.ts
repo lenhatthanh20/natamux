@@ -36,6 +36,21 @@ describe('planSignalEvents', () => {
     },
   )
 
+  it('keeps a running task running when the agent pauses for background work', () => {
+    expect(types('running', 'turn-paused')).toEqual(['agent.waiting'])
+  })
+
+  it('first resumes, then waits, when the agent was waiting for the user', () => {
+    expect(types('needs-input', 'turn-paused')).toEqual(['agent.resumed', 'agent.waiting'])
+  })
+
+  it.each<TaskState>(['draft', 'ready', 'review', 'blocked', 'failed', 'done', 'cancelled'])(
+    'ignores a paused turn in a task that is %s',
+    (state) => {
+      expect(types(state, 'turn-paused')).toEqual([])
+    },
+  )
+
   it('maps a failure to failed', () => {
     expect(types('running', 'failed')).toEqual(['agent.failed'])
     expect(types('needs-input', 'failed')).toEqual(['agent.resumed', 'agent.failed'])

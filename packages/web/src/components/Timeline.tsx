@@ -43,6 +43,9 @@ export function Timeline({ taskId, updatedAt, now, loadEvents }: TimelineProps) 
               <span className="min-w-0">
                 {describeEvent(line.type)}
                 {line.count > 1 && <span className="text-muted"> ×{line.count}</span>}
+                {line.detail !== undefined && (
+                  <span className="break-words text-muted">: {line.detail}</span>
+                )}
                 {!line.accepted && <span className="text-muted"> (did not fit, ignored)</span>}
                 <span className="text-muted"> · {line.actor}</span>
               </span>

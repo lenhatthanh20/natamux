@@ -11,6 +11,7 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 - A hook that cannot reach its endpoint, or gets a non-2xx answer, is a non-blocking error. Claude Code goes on.
 - Every hook gets `session_id`, `cwd` (the directory the session started in), `transcript_path`, `hook_event_name` and `permission_mode`. `agent_id` is added inside a subagent.
 - `Stop` fires **whenever Claude finishes responding, not only when a task is done**. It does not fire when the user interrupts. An API error fires `StopFailure` instead.
+- `Stop` also gets `background_tasks` (work still in flight: `shell`, `subagent`, `monitor`, `workflow` and more, each with `type`, `status`, `description`, and `command` for a shell) and `session_crons` (scheduled prompts of the session). The docs (read 2026-10-11) say they tell "session is done" from "session is paused waiting for background work to wake it back up". Both are missing in older versions.
 - `Notification` has a `notification_type`. Among them: `permission_prompt` (an approval waited about six seconds), `idle_prompt` (Claude finished about 60 seconds ago and nobody typed), `elicitation_dialog`, `agent_needs_input`.
 - `PermissionRequest` fires when Claude Code is about to ask for permission, so it is faster than the `permission_prompt` notification.
 
@@ -25,14 +26,18 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | running | `agent.asked` | needs input |
 | `PostToolUse` | needs input | `agent.resumed` | running (the permission was answered) |
 | `PreToolUse` | any | none (a sign of life) | unchanged; the tool and its file or command become the task's one-line summary, such as "Edit src/a.ts" |
-| `Stop` | running | `agent.finished` | needs input |
-| `Stop` | needs input | `agent.resumed`, `agent.finished` | needs input |
+| `Stop` with no background work | running | `agent.finished` | needs input |
+| `Stop` with no background work | needs input | `agent.resumed`, `agent.finished` | needs input |
+| `Stop` with background work | running | `agent.waiting` | running |
+| `Stop` with background work | needs input | `agent.resumed`, `agent.waiting` | running |
 | `StopFailure` | running | `agent.failed` | failed |
 | `StopFailure` | needs input | `agent.resumed`, `agent.failed` | failed |
 
 Everything else is ignored and not logged, so the event log does not fill with calls that change nothing. `idle_prompt` is ignored: `Stop` already moved the task to needs input.
 
 **A choice to know about:** because `Stop` fires after every answer, a task lands in "needs input" at the end of each turn, even when the agent only asked a question in plain text. The dashboard then says "this task is waiting for you", which is true. The stage is done only when the agent runs `natamux done`; the daemon drops the `Stop` that follows that report, runs the checks, and the stage then waits for approval ("in review") or moves on. A person can also mark the stage as done, or type the next prompt, which resumes it.
+
+**Background work.** A `Stop` is "with background work" when `background_tasks` has an entry whose `status` is not `completed`, `failed`, `killed` or `stopped`, or `session_crons` has an entry. The agent then only paused: the work wakes it again, for example when `pnpm test` in a background shell ends. So the task stays running, the `agent.waiting` event lists the work (at most 5 entries of 200 characters, in `payload.waitingFor`), and the task's one-line summary says "Waiting for Bash: pnpm test and 1 more". The task keeps `backgroundSince` until the agent shows up again or the task leaves running; until then it is never "quiet". Entries that cannot be read are skipped, so a `Stop` with only bad entries ends the turn as before. The `Stop` after `natamux done` is dropped as always, with or without background work.
 
 ## Which task a hook belongs to
 
@@ -71,7 +76,7 @@ claude --settings '<data dir>/claude-code-settings.json' '<title> - <description
 
 `Stop` does not fire when the user interrupts Claude Code (Esc). A task that was running then stays "running" until the next hook arrives. Other ADEs have the same problem (Orca guesses an interrupt for this). Seen in the real session below: the last event of the test was an `agent.resumed` with no `agent.finished` after it.
 
-What Natamux does about it: every hook of a running task, even one that changes nothing (for example `PostToolUse`), moves the time of the task's last update, at most once every 30 seconds, and logs an `agent.active` event (the dashboard does not list those). When a running task has had no update for 10 minutes, the dashboard marks it "quiet", lists it among the tasks that need you, and says it may be stuck, interrupted or closed. It is a hint, not a state: the task stays running until you or the agent change it. The 10 minutes are a guess: a long command keeps an agent silent without any hook, so such a task can be marked quiet by mistake.
+What Natamux does about it: every hook of a running task, even one that changes nothing (for example `PostToolUse`), moves the time of the task's last update, at most once every 30 seconds, and logs an `agent.active` event (the dashboard does not list those). When a running task has had no update for 10 minutes, and its agent does not wait for background work, the dashboard marks it "quiet", lists it among the tasks that need you, and says it may be stuck, interrupted or closed. It is a hint, not a state: the task stays running until you or the agent change it. The 10 minutes are a guess: a long command keeps an agent silent without any hook, so such a task can be marked quiet by mistake.
 
 ## Verified with a real session
 
@@ -88,6 +93,7 @@ What Natamux does about it: every hook of a running task, even one that changes 
 - The permission path (`PermissionRequest`, and `Notification` with `permission_prompt`). In the test, Claude Code did not ask for permission to create a file, so those hooks never fired. The tester's guess is that the session ran in an auto permission mode (not checked). Skipped on purpose; it is covered only by tests with made-up input.
 - How fast a permission prompt moves the task to "needs input".
 - How Claude Code behaves when the daemon answers slowly. The hooks use a 5 second timeout.
+- `Stop` with background work. Built from the docs only. Still to check with a real session: the `status` values of `background_tasks`, which hook comes first when a background shell ends, and whether a scheduled wakeup shows in `session_crons`.
 - Every other hook event (`SubagentStop`, `TaskCompleted`, `WorktreeCreate` and more). They could give finer states later.
 - A session that Claude Desktop or the VS Code extension runs: the docs say `permission_prompt` is timed differently there.
 - Finding the task by the working directory (no `NATAMUX_TASK_ID`). The session in the test ran outside the workspace, so only the header path was tried.
