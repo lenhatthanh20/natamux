@@ -73,7 +73,9 @@ export function WorkspaceHeader({
         {task.title}
       </h2>
       <StateBadge state={task.state} lanes={laneSummary(task)} />
-      {task.branch !== null && (
+      {/* In a narrow header the title needs the room more. The sidebar row and the details show
+          the branch too. */}
+      {task.branch !== null && !compact && (
         <button
           type="button"
           onClick={() => copyText(task.branch ?? '', 'the branch name')}
