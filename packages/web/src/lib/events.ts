@@ -43,6 +43,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'context.fetched': 'Context fetched',
   'issue.linked': 'Issue linked',
   'issue.created': 'Issue created',
+  'agent.waiting': 'Agent waits for its background work',
   'agent.stopped': 'Agent stopped',
 }
 
@@ -80,6 +81,17 @@ export type ActivityLine = {
   count: number
   // The newest event of the run: its time is the time of the line.
   at: string
+  // More about the newest event, such as the background work an agent waits for.
+  detail?: string
+}
+
+function detailOf(event: TaskEvent): string | undefined {
+  const waitingFor = event.payload.waitingFor
+  if (event.type !== 'agent.waiting' || !Array.isArray(waitingFor)) {
+    return undefined
+  }
+  const entries = waitingFor.filter((entry): entry is string => typeof entry === 'string')
+  return entries.length > 0 ? entries.join('; ') : undefined
 }
 
 // Consecutive events of the same kind, from the same actor, become one line with a count, so
@@ -89,11 +101,23 @@ export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
   for (const { seq, accepted, event } of events) {
     const actor = actorOf(event.source)
     const last = lines[lines.length - 1]
+    const detail = detailOf(event)
     if (last?.type === event.type && last.actor === actor && last.accepted === accepted) {
       last.count += 1
       last.at = event.at
+      if (detail !== undefined) {
+        last.detail = detail
+      }
     } else {
-      lines.push({ seq, accepted, type: event.type, actor, count: 1, at: event.at })
+      lines.push({
+        seq,
+        accepted,
+        type: event.type,
+        actor,
+        count: 1,
+        at: event.at,
+        ...(detail === undefined ? {} : { detail }),
+      })
     }
   }
   return lines
@@ -102,5 +126,6 @@ export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
 // "Details edited ×4 · You"
 export function describeLine(line: ActivityLine): string {
   const times = line.count > 1 ? ` ×${line.count}` : ''
-  return `${describeEvent(line.type)}${times} · ${line.actor}`
+  const detail = line.detail === undefined ? '' : `: ${line.detail}`
+  return `${describeEvent(line.type)}${times}${detail} · ${line.actor}`
 }

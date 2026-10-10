@@ -1,7 +1,15 @@
 import type { EventType, TaskState } from '@natamux/core'
 
 // What an agent tells Natamux, whatever the agent calls it.
-export const AGENT_SIGNALS = ['prompt', 'activity', 'asking', 'turn-ended', 'failed'] as const
+// `turn-paused`: the turn ended, but the agent's background work will wake it again.
+export const AGENT_SIGNALS = [
+  'prompt',
+  'activity',
+  'asking',
+  'turn-ended',
+  'turn-paused',
+  'failed',
+] as const
 
 export type AgentSignal = (typeof AGENT_SIGNALS)[number]
 
@@ -75,6 +83,9 @@ export function planSignalEvents(
 
     case 'turn-ended':
       return endTurn(state, 'agent.finished', payload)
+
+    case 'turn-paused':
+      return endTurn(state, 'agent.waiting', payload)
 
     case 'failed':
       return endTurn(state, 'agent.failed', payload)

@@ -675,6 +675,50 @@ describe('Claude Code hooks', () => {
     expect(await stateOf('T-0001')).toBe('needs-input')
   })
 
+  it('keeps the task running when the agent stops with background work', async () => {
+    await createTask()
+    const header = { 'x-natamux-task': 'T-0001' }
+    await post({ hook_event_name: 'UserPromptSubmit' }, header)
+
+    const response = await post(
+      {
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm test' }],
+        session_crons: [],
+      },
+      header,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(await stateOf('T-0001')).toBe('running')
+  })
+
+  it.each<[unknown, unknown]>([
+    [null, null],
+    ['x', 'x'],
+    [42, 42],
+    [{}, {}],
+    [
+      [null, 7, { status: 'running' }],
+      [null, 'daily'],
+    ],
+  ])(
+    'answers 200 and ends the turn as before for the background work %j and crons %j',
+    async (backgroundTasks, sessionCrons) => {
+      await createTask()
+      const header = { 'x-natamux-task': 'T-0001' }
+      await post({ hook_event_name: 'UserPromptSubmit' }, header)
+
+      const response = await post(
+        { hook_event_name: 'Stop', background_tasks: backgroundTasks, session_crons: sessionCrons },
+        header,
+      )
+
+      expect(response.statusCode).toBe(200)
+      expect(await stateOf('T-0001')).toBe('needs-input')
+    },
+  )
+
   it('finds the task by the workspace of the working directory', async () => {
     await createTask()
     const created = await app.inject({

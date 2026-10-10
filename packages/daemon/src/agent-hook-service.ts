@@ -109,10 +109,13 @@ export class AgentHookService {
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
 
     const lane = this.stages.laneFor(task, terminal)
-    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early".
+    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early", even
+    // when background work is still running.
     const reportedTurn =
-      hook.signal === 'turn-ended' && this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
+      (hook.signal === 'turn-ended' || hook.signal === 'turn-paused') &&
+      this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
     if (reportedTurn) {
+      this.forgetActivity(task.id, terminal ?? MAIN_TERMINAL)
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []
@@ -141,6 +144,16 @@ export class AgentHookService {
     if (hook.signal === 'turn-ended' || hook.signal === 'failed' || hook.signal === 'asking') {
       lines.delete(terminal)
     }
+    this.keepActivity(taskId, lines)
+  }
+
+  private forgetActivity(taskId: string, terminal: string): void {
+    const lines = this.activities.get(taskId) ?? new Map<string, AgentActivity>()
+    lines.delete(terminal)
+    this.keepActivity(taskId, lines)
+  }
+
+  private keepActivity(taskId: string, lines: Map<string, AgentActivity>): void {
     if (lines.size === 0) {
       this.activities.delete(taskId)
     } else {
