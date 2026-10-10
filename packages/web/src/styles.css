@@ -591,6 +591,137 @@
   color: var(--remove);
 }
 
+/* A stage file in the Docs tab. Wide tables and code scroll in their own block, not the panel. */
+.hm-markdown {
+  max-width: 48rem;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  overflow-wrap: anywhere;
+}
+
+.hm-markdown > :first-child {
+  margin-top: 0;
+}
+
+.hm-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hm-markdown h1 {
+  font-size: var(--text-xl);
+  line-height: var(--text-xl--line-height);
+}
+
+.hm-markdown h2 {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-lg);
+  line-height: var(--text-lg--line-height);
+}
+
+.hm-markdown h3 {
+  font-size: var(--text-md);
+  line-height: var(--text-md--line-height);
+}
+
+.hm-markdown :is(p, ul, ol, blockquote, pre, table, hr) {
+  margin: 0 0 0.75rem;
+}
+
+.hm-markdown :is(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.hm-markdown ul {
+  list-style: disc;
+}
+
+.hm-markdown ol {
+  list-style: decimal;
+}
+
+.hm-markdown li > :is(ul, ol) {
+  margin-bottom: 0;
+}
+
+.hm-markdown li.task-list-item {
+  list-style: none;
+}
+
+.hm-markdown li.task-list-item input {
+  margin: 0 0.375rem 0 -1.125rem;
+  vertical-align: -1px;
+}
+
+.hm-markdown a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hm-markdown strong {
+  font-weight: 600;
+}
+
+.hm-markdown blockquote {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-2);
+}
+
+.hm-markdown code {
+  padding: 0.0625rem 0.25rem;
+  border-radius: 4px;
+  background: var(--raised);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.hm-markdown pre {
+  overflow-x: auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  font-size: var(--text-xs);
+  line-height: 1.25rem;
+  overflow-wrap: normal;
+}
+
+.hm-markdown pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.hm-markdown table {
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.hm-markdown :is(th, td) {
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.hm-markdown th {
+  background: var(--raised);
+  font-weight: 600;
+}
+
+.hm-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
 /* The terminal's scrollbar shows when the pointer is over the pane. */
 .hm-terminal .xterm-viewport {
   scrollbar-width: thin;
