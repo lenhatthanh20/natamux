@@ -207,6 +207,54 @@ describe('remove', () => {
     expect(closed).toEqual([task.id])
   })
 
+  it('makes the stage of the agent it ends wait to start again', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.state).toBe('ready')
+    expect(tasks.getTask(task.id).state).toBe('ready')
+    expect(eventTypes(task.id).slice(-2)).toEqual(['workspace.removed', 'agent.stopped'])
+  })
+
+  it('also stops an agent that ended its turn while the worktree was removed', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    const ending = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      // The agent's Stop hook as its shell ends.
+      closeTerminals: (taskId) => {
+        tasks.applyEvent(taskId, { source: 'agent', type: 'agent.finished' })
+      },
+    })
+
+    const result = await ending.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.state).toBe('ready')
+  })
+
+  it('keeps a stage that waits for approval', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review' },
+    })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.state).toBe('review')
+    expect(eventTypes(task.id).at(-1)).toBe('workspace.removed')
+  })
+
   it('refuses a task that has no workspace', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
 

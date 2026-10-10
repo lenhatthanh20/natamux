@@ -43,6 +43,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'context.fetched': 'Context fetched',
   'issue.linked': 'Issue linked',
   'issue.created': 'Issue created',
+  'agent.stopped': 'Agent stopped',
 }
 
 export function describeEvent(type: EventType): string {

@@ -115,6 +115,7 @@ describe('AgentHookService', () => {
 
   it('drops the turn end that follows a report, and names the stage of the terminal', () => {
     const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
     const seen: (string | undefined)[] = []
     const reporting = new AgentHookService(tasks, {
       laneFor: (current, terminal) => {
@@ -129,6 +130,34 @@ describe('AgentHookService', () => {
     expect(reporting.handle('claude-code', hook('Stop'), task.id, '2').applied).toEqual([])
     expect(tasks.getTask(task.id).state).toBe('running')
     expect(seen).toEqual(['2', '2'])
+  })
+
+  // Natamux terminals run in the task's workspace only.
+  it('ignores a hook from a terminal of a task whose workspace was removed', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    service.handle('claude-code', hook('UserPromptSubmit'), task.id, '1')
+    tasks.recordWorkspace(task.id, { workspace: null, branch: 'b' })
+    const before = tasks.getTask(task.id)
+
+    for (const name of ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Stop']) {
+      expect(service.handle('claude-code', hook(name), task.id, '1')).toEqual({
+        taskId: null,
+        applied: [],
+      })
+    }
+
+    expect(tasks.getTask(task.id)).toEqual(before)
+    expect(service.activity()).toEqual({})
+  })
+
+  it('still follows an agent outside Natamux terminals that names a task with no workspace', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    expect(service.handle('claude-code', hook('UserPromptSubmit'), task.id).applied).toEqual([
+      'task.readied',
+      'agent.started',
+    ])
   })
 
   it('records the events as coming from the agent', () => {

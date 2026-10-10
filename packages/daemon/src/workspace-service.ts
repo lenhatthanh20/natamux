@@ -194,11 +194,13 @@ export class WorkspaceService {
         options.deleteBranch && task.branch !== null
           ? await deleteMergedBranch(repoDir, task.branch)
           : false
-      const updated = this.tasks.recordWorkspace(taskId, {
+      this.tasks.recordWorkspace(taskId, {
         workspace: null,
         branch: branchDeleted ? null : task.branch,
       })
-      return { task: updated, branchDeleted }
+      // After the workspace is cleared: a hook of the ending agent may have moved the task while
+      // git worked, and later hooks are ignored (see AgentHookService).
+      return { task: this.tasks.stopAgents(taskId), branchDeleted }
     })
   }
 
