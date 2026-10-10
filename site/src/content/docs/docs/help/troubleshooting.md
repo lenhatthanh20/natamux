@@ -44,7 +44,7 @@ The commands are `claude`, `codex`, `gemini`, `copilot` and `cursor-agent`.
 
 4. Restart Natamux so the daemon gets the new variable.
 
-The desktop app uses the PATH of your login shell. If you installed the agent after you opened the app, quit the app and open it again. Use `NATAMUX_<AGENT>_ARGS` to add options to an agent's command line. See [Environment variables](/natamux/docs/reference/environment-variables/).
+The desktop app uses the PATH of your login shell. If you installed the agent after you opened the app, quit the app and open it again. Use `NATAMUX_<AGENT>_ARGS` to add options to an agent's command line. See [Environment variables](/docs/reference/environment-variables/).
 
 ## The dashboard rejects my token
 
@@ -53,7 +53,7 @@ The dashboard shows "The daemon rejected that token. Paste the token it printed 
 - **Desktop app:** you are signed in automatically. If you see the token field anyway, quit and open the app again.
 - **Browser, Docker:** use the value of `NATAMUX_TOKEN` you set.
 - **Browser, daemon you started yourself without `NATAMUX_TOKEN`:** the daemon makes a new random token on every run and prints it once. Use the one from the latest start, or set `NATAMUX_TOKEN` to keep it.
-- **CLI:** `natamux` needs `NATAMUX_TOKEN` and, when the daemon is not on `http://127.0.0.1:4317`, `NATAMUX_URL`. The desktop app's token is in `daemon-token` in its [user data folder](/natamux/docs/guides/desktop-app/#where-things-are).
+- **CLI:** `natamux` needs `NATAMUX_TOKEN` and, when the daemon is not on `http://127.0.0.1:4317`, `NATAMUX_URL`. The desktop app's token is in `daemon-token` in its [user data folder](/docs/guides/desktop-app/#where-things-are).
 
 ## The port is in use
 
@@ -75,7 +75,7 @@ Natamux learns an agent's state from its hooks. If the task stays "ready" or nev
 3. Set `NATAMUX_DEBUG=1` in the terminal to see why a hook did not arrive. `natamux hook` is silent otherwise and never blocks the agent.
 4. A proxy on your machine can refuse calls to the daemon. Add `127.0.0.1` to `NO_PROXY`.
 
-Agents without hooks are followed by their output and bell. They can report with `natamux ask` and `natamux done`. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+Agents without hooks are followed by their output and bell. They can report with `natamux ask` and `natamux done`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## Removing a workspace fails
 

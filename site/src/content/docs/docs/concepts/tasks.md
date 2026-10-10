@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-A task is one unit of work for one agent. It has a title, notes, a state, and a place in a pipeline of [stages](/natamux/docs/concepts/stages/). Most tasks also have a [workspace](/natamux/docs/concepts/workspaces/): a git worktree and branch of their own.
+A task is one unit of work for one agent. It has a title, notes, a state, and a place in a pipeline of [stages](/docs/concepts/stages/). Most tasks also have a [workspace](/docs/concepts/workspaces/): a git worktree and branch of their own.
 
 Task ids look like `T-0001`. The number grows by one for each new task.
 
@@ -73,7 +73,7 @@ Common moves:
 - `failed` to `ready`: you retry.
 - `blocked` to `ready`: you unblock.
 
-With an automatic gate, a stage that passes its checks goes straight to the next stage. See [Stages](/natamux/docs/concepts/stages/).
+With an automatic gate, a stage that passes its checks goes straight to the next stage. See [Stages](/docs/concepts/stages/).
 
 :::note
 Natamux ignores an event that does not fit the current state. For example, a hook that reports a finished turn does nothing for a task that is `blocked`.
@@ -97,7 +97,7 @@ natamux task create "Fix login redirect" --label bug --label auth
 natamux task edit T-0001 --label bug
 ```
 
-`task edit --label` replaces the whole list. Search on the dashboard also matches labels. [Fan-out](/natamux/docs/guides/fan-out/) adds a label such as `tries-t-0001` to the original task and its copies.
+`task edit --label` replaces the whole list. Search on the dashboard also matches labels. [Fan-out](/docs/guides/fan-out/) adds a label such as `tries-t-0001` to the original task and its copies.
 
 ## Dependencies
 
@@ -138,7 +138,7 @@ The task that waited longest comes first. The command palette has a **Needs you*
 
 ## Where Natamux stores tasks
 
-Natamux keeps its files in the data folder. The default is `.natamux/` in the folder where the daemon starts. Set `NATAMUX_DATA_DIR` to change it. See [Environment variables](/natamux/docs/reference/environment-variables/).
+Natamux keeps its files in the data folder. The default is `.natamux/` in the folder where the daemon starts. Set `NATAMUX_DATA_DIR` to change it. See [Environment variables](/docs/reference/environment-variables/).
 
 | Path | What it holds |
 |---|---|
@@ -187,4 +187,4 @@ You can send an event yourself. This is useful for tools that Natamux does not k
 natamux event T-0001 task.blocked --payload '{"reason":"waiting for design"}'
 ```
 
-See the [CLI reference](/natamux/docs/reference/cli/) for all commands.
+See the [CLI reference](/docs/reference/cli/) for all commands.

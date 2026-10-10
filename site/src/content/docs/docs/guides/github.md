@@ -45,11 +45,11 @@ Click **Retry** after you fix it. **Show details** has the raw error.
 
 Natamux makes one draft task for each issue and says **Imported N issues.** The task has the issue title as its title, the issue text as its notes, and the issue labels as its labels. The notes end with a line such as `Imported from https://github.com/owner/repo/issues/42`.
 
-An issue becomes a task once. Issues that were imported already are ticked and greyed out, with the id of their task. With more than one repository, the import uses the repository selected in the **Repository** list of the task field. See [Dashboard](/natamux/docs/guides/dashboard/).
+An issue becomes a task once. Issues that were imported already are ticked and greyed out, with the id of their task. With more than one repository, the import uses the repository selected in the **Repository** list of the task field. See [Dashboard](/docs/guides/dashboard/).
 
 ## Use a GitHub issue as task context
 
-A task can read its context from a GitHub issue instead of its own notes. The first stage of the default pipeline fetches the context into `context.md`: the title, the link, the labels, the text and the comments of the issue. See [Stages](/natamux/docs/concepts/stages/).
+A task can read its context from a GitHub issue instead of its own notes. The first stage of the default pipeline fetches the context into `context.md`: the title, the link, the labels, the text and the comments of the issue. See [Stages](/docs/concepts/stages/).
 
 In the dashboard, open **New workspace** (`c`), then pick **A GitHub issue** in **Context from**. Enter `#42` or the address of the issue. This list shows only when the project offers more than one context source, which is the default.
 
@@ -94,7 +94,7 @@ If opening an issue fails in the background, the task stays without an issue and
 
 ## Pull requests
 
-**Create pull request** in the workspace header pushes the branch and opens a pull request. See [Changes and history](/natamux/docs/guides/changes-and-history/).
+**Create pull request** in the workspace header pushes the branch and opens a pull request. See [Changes and history](/docs/guides/changes-and-history/).
 
 When the task is linked to an issue and `tracker.linkInPr` is true (the default), the pull request body ends with `Closes #N`. GitHub then closes the issue when the pull request merges. For an issue of another tracker, the line is `Tracked in KEY: address`.
 
@@ -118,4 +118,4 @@ natamux task link T-0001 --issue ABC-123 --url https://jira.example.com/browse/A
 
 `--issue` is the key and `--url` is its address. Add `--provider jira` to name the tracker. Without `--provider`, the provider is `github` when the address contains `github.com`, and `tracker` otherwise.
 
-The link shows in **Context and issue** on the **Progress** tab. With `tracker.linkInPr` on, the pull request body ends with `Tracked in ABC-123: https://…`. Natamux does not read from or write to the other tracker. Jira is not used for context unless you add a `skill` or `mcp` context source. See [CLI reference](/natamux/docs/reference/cli/).
+The link shows in **Context and issue** on the **Progress** tab. With `tracker.linkInPr` on, the pull request body ends with `Tracked in ABC-123: https://…`. Natamux does not read from or write to the other tracker. Jira is not used for context unless you add a `skill` or `mcp` context source. See [CLI reference](/docs/reference/cli/).

@@ -41,7 +41,7 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 
 ## Hooks
 
-For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For Copilot and Cursor, the hook file goes into the task's worktree and is kept out of git. For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For Copilot and Cursor, the hook file goes into the task's worktree and is kept out of git. For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## The desktop app is unsigned
 

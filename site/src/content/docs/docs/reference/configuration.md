@@ -5,9 +5,9 @@ sidebar:
   order: 2
 ---
 
-Natamux reads project settings from a file named `.natamux.json` at the root of a repository. The file sets the [stages](/natamux/docs/concepts/stages/) that tasks go through, where task context comes from, and how Natamux works with your issue tracker.
+Natamux reads project settings from a file named `.natamux.json` at the root of a repository. The file sets the [stages](/docs/concepts/stages/) that tasks go through, where task context comes from, and how Natamux works with your issue tracker.
 
-Every field is optional. A repository without the file uses the defaults on this page. To set daemon options such as the port and data folder, see [Environment variables](/natamux/docs/reference/environment-variables/).
+Every field is optional. A repository without the file uses the defaults on this page. To set daemon options such as the port and data folder, see [Environment variables](/docs/reference/environment-variables/).
 
 ## How the file is loaded
 
@@ -50,7 +50,7 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 
 Details:
 
-- `kind` and `gate` are explained in [Stages](/natamux/docs/concepts/stages/).
+- `kind` and `gate` are explained in [Stages](/docs/concepts/stages/).
 - `output` is a file name in `.natamux-task/`. It has letters, digits, `_`, `-` and `.`, and ends in `.md`. It has no folder.
 - `prompt` can use `{title}`, `{description}`, `{dir}` and `{ref}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done.` after your text.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
@@ -170,7 +170,7 @@ Values of `createIssue`:
 | `on-spec-approved` | When you approve the `spec` stage. In a pipeline with no stage called `spec`, when the pull request is opened. |
 | `on-pr` | When the pull request is opened. |
 
-The issue gets the task title. Its body is the spec, or the task notes without one. With `linkInPr`, the pull request body ends with `Closes #42` for a GitHub issue, so the issue closes on merge. See [GitHub](/natamux/docs/guides/github/).
+The issue gets the task title. Its body is the spec, or the task notes without one. With `linkInPr`, the pull request body ends with `Closes #42` for a GitHub issue, so the issue closes on merge. See [GitHub](/docs/guides/github/).
 
 ## Examples
 
@@ -266,5 +266,5 @@ A `manual` stage waits for your approval. Use `doneWhen` to tell people what it 
 
 ## Related
 
-- [Stages](/natamux/docs/concepts/stages/): how kinds, gates and checks work
-- [HTTP API](/natamux/docs/reference/http-api/): read and write the settings from a script
+- [Stages](/docs/concepts/stages/): how kinds, gates and checks work
+- [HTTP API](/docs/reference/http-api/): read and write the settings from a script

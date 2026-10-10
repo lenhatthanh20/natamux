@@ -27,7 +27,7 @@ natamux ask "Keep the old CSV columns, or drop them?"
 natamux done
 ```
 
-Tell the agent about both commands in its instructions. For the options, see the [CLI reference](/natamux/docs/reference/cli/).
+Tell the agent about both commands in its instructions. For the options, see the [CLI reference](/docs/reference/cli/).
 
 ## Forward hook JSON
 
@@ -53,4 +53,4 @@ The daemon turns a hook into task events only for agents it has an adapter for: 
 natamux event T-42 agent.asked --source agent --payload '{"question":"Which database?"}'
 ```
 
-See the [CLI reference](/natamux/docs/reference/cli/) for the event types.
+See the [CLI reference](/docs/reference/cli/) for the event types.

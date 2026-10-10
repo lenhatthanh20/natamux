@@ -7,7 +7,7 @@ sidebar:
 
 A stage is one step of the work on a task, such as writing a spec or implementing code. Every task goes through a **pipeline** of stages. For each stage, Natamux starts the work, checks the result, and waits for your approval when the stage asks for it.
 
-![The stage progress view of a task](/natamux/screens/progress.png)
+![The stage progress view of a task](/screens/progress.png)
 
 ## The default pipeline
 
@@ -34,7 +34,7 @@ The group in the middle holds two stages:
 | Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
 | Implement | `agent` | auto | The agent writes tests and code, and commits. Natamux checks for a commit and a clean worktree. |
 
-To change the pipeline, see the [configuration reference](/natamux/docs/reference/configuration/).
+To change the pipeline, see the [configuration reference](/docs/reference/configuration/).
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, checks), not the list of stages of existing tasks.
 
@@ -75,7 +75,7 @@ When an agent runs `natamux done` (or you press **Mark as done**), Natamux runs 
 
 Natamux runs the output and git checks first. It runs the `check` command only when those pass. `requireCommit` and `requireClean` fail for a task that has no workspace.
 
-Stage files are Markdown files in the `.natamux-task/` folder of the worktree. They are named like `spec.md` and can be up to 1 MB. Natamux keeps git from tracking them. See [Workspaces](/natamux/docs/concepts/workspaces/).
+Stage files are Markdown files in the `.natamux-task/` folder of the worktree. They are named like `spec.md` and can be up to 1 MB. Natamux keeps git from tracking them. See [Workspaces](/docs/concepts/workspaces/).
 
 The progress view lists the checks that passed under **Show evidence**, and the reasons for those that failed.
 
@@ -170,12 +170,12 @@ The first stage of the default pipeline reads the context of the task. The sourc
 | `skill` | An agent runs a skill you configured and writes `context.md`. |
 | `mcp` | An agent runs a prompt you configured and writes `context.md`. |
 
-For `github-issue`, `gh` must be installed and logged in. See [GitHub](/natamux/docs/guides/github/). Configure the sources in `context.sources`; see the [configuration reference](/natamux/docs/reference/configuration/).
+For `github-issue`, `gh` must be installed and logged in. See [GitHub](/docs/guides/github/). Configure the sources in `context.sources`; see the [configuration reference](/docs/reference/configuration/).
 
 Natamux starts the context stage as soon as you create the task. The other stages start when the task reaches them, or when you start them.
 
 ## Related
 
-- [Tasks](/natamux/docs/concepts/tasks/): the states a stage can be in
-- [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/): how agents start and report
-- [Configuration](/natamux/docs/reference/configuration/): the `.natamux.json` file
+- [Tasks](/docs/concepts/tasks/): the states a stage can be in
+- [Agents and hooks](/docs/concepts/agents-and-hooks/): how agents start and report
+- [Configuration](/docs/reference/configuration/): the `.natamux.json` file

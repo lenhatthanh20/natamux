@@ -7,11 +7,11 @@ sidebar:
 
 ## Does Natamux send my code anywhere?
 
-No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine only when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. See [Security and privacy](/natamux/docs/help/security-and-privacy/).
+No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine only when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## Which agents does it support?
 
-Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts each one in the task's terminal and adds hooks, so the dashboard shows when it works, asks or finishes. Other terminal agents can report with `natamux ask` and `natamux done`. See [Agents](/natamux/docs/agents/other-agents/).
+Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts each one in the task's terminal and adds hooks, so the dashboard shows when it works, asks or finishes. Other terminal agents can report with `natamux ask` and `natamux done`. See [Agents](/docs/agents/other-agents/).
 
 ## Does it run on Windows?
 
@@ -27,7 +27,7 @@ No. You log in to your agents (and `gh`) as you do today. The dashboard uses a l
 
 ## Can two agents work on one task?
 
-A task has one worktree, and its agent runs in the task's first terminal. Some stages run side by side (Test spec and Implement), each with its own agent. To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/natamux/docs/guides/fan-out/).
+A task has one worktree, and its agent runs in the task's first terminal. Some stages run side by side (Test spec and Implement), each with its own agent. To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/docs/guides/fan-out/).
 
 You can also open more terminals in a task for your own shells.
 
@@ -50,11 +50,11 @@ No. Each task works in its own git worktree and branch. Natamux never pushes, me
 
 ## What happens when I quit the app?
 
-Quitting stops the daemon and every agent and shell. The app asks first when agents are working. Tasks, worktrees and changes stay. On macOS, closing the window keeps everything running. See [Desktop app](/natamux/docs/guides/desktop-app/).
+Quitting stops the daemon and every agent and shell. The app asks first when agents are working. Tasks, worktrees and changes stay. On macOS, closing the window keeps everything running. See [Desktop app](/docs/guides/desktop-app/).
 
 ## Can I use it in a browser instead of the desktop app?
 
-Yes. The dashboard is a web page served by the daemon. Open it and paste the daemon token. See [Install Natamux](/natamux/docs/getting-started/install/) and [Self-host with Docker](/natamux/docs/guides/self-host-docker/).
+Yes. The dashboard is a web page served by the daemon. Open it and paste the daemon token. See [Install Natamux](/docs/getting-started/install/) and [Self-host with Docker](/docs/guides/self-host-docker/).
 
 ## Does it update itself?
 

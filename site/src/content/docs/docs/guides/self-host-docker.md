@@ -8,7 +8,7 @@ sidebar:
 The production compose file runs two containers: the **daemon** and the **web** dashboard behind nginx.
 
 :::caution
-The images contain no coding agents (no Claude Code and so on). This setup keeps tasks, stages, workspaces and the dashboard. A worktree lives in a Docker volume, so nothing on your machine can edit it. Today it is for tracking tasks. To run real agents, use the [desktop app](/natamux/docs/guides/desktop-app/).
+The images contain no coding agents (no Claude Code and so on). This setup keeps tasks, stages, workspaces and the dashboard. A worktree lives in a Docker volume, so nothing on your machine can edit it. Today it is for tracking tasks. To run real agents, use the [desktop app](/docs/guides/desktop-app/).
 :::
 
 ## Start it

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-This walk-through uses the desktop app and one agent. It takes about ten minutes. You need the [requirements](/natamux/docs/getting-started/install/#requirements) and a git repository you can experiment in.
+This walk-through uses the desktop app and one agent. It takes about ten minutes. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
 
 ## 1. Pick a repository
 
@@ -37,7 +37,7 @@ For this guide, use **New workspace**. In the dialog:
 
 Click **Create workspace**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
 
-![The New workspace dialog with a name, a branch, an agent and a prompt](/natamux/screens/new-workspace.png)
+![The New workspace dialog with a name, a branch, an agent and a prompt](/screens/new-workspace.png)
 
 If you added a task to the backlog first, open it and click **Start agent** (or **Create workspace** if you only want a shell).
 
@@ -45,7 +45,7 @@ If you added a task to the backlog first, open it and click **Start agent** (or 
 
 Open the task. The **Terminal** tab shows the agent running in the task's worktree.
 
-![A task's terminal with an agent working](/natamux/screens/terminal.png)
+![A task's terminal with an agent working](/screens/terminal.png)
 
 On the dashboard, the state of the task updates by itself, because Natamux's hooks tell it when the agent works, asks or finishes. You can close the dashboard and the agent keeps running.
 
@@ -57,13 +57,13 @@ When an agent asks a question or waits for a permission, the task moves to **Nee
 2. Click **Answer in terminal** on the banner.
 3. Type your answer in the terminal.
 
-The task goes back to running. See [Dashboard](/natamux/docs/guides/dashboard/).
+The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
 
 ## 5. Review the stage
 
 Each task moves through stages. The **Progress** tab shows them and the evidence of each one.
 
-![The Progress view of tasks against their stages](/natamux/screens/progress.png)
+![The Progress view of tasks against their stages](/screens/progress.png)
 
 When a stage waits for you, the task is in review. Read what the agent produced, then:
 
@@ -71,13 +71,13 @@ When a stage waits for you, the task is in review. Read what the agent produced,
 - **Send back** returns the task to an earlier stage, with a note about what should change.
 - **Skip** leaves the stage out.
 
-See [Stages](/natamux/docs/concepts/stages/).
+See [Stages](/docs/concepts/stages/).
 
 ## 6. Look at the changes
 
 Open the **Changes** tab. It lists the changed files and shows a diff for each one, side by side or inline. The **History** tab shows the task's branch as a graph.
 
-![The Changes tab with a file tree and a diff](/natamux/screens/changes.png)
+![The Changes tab with a file tree and a diff](/screens/changes.png)
 
 ## 7. Commit, push and open a pull request
 
@@ -95,6 +95,6 @@ To clean up, open the task and remove its workspace. Natamux asks first and refu
 
 ## Next
 
-- [Tasks](/natamux/docs/concepts/tasks/) and [Workspaces](/natamux/docs/concepts/workspaces/)
-- [Desktop app](/natamux/docs/guides/desktop-app/)
-- [Troubleshooting](/natamux/docs/help/troubleshooting/)
+- [Tasks](/docs/concepts/tasks/) and [Workspaces](/docs/concepts/workspaces/)
+- [Desktop app](/docs/guides/desktop-app/)
+- [Troubleshooting](/docs/help/troubleshooting/)

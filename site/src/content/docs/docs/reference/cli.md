@@ -89,7 +89,7 @@ natamux agent start T-42 --agent codex --prompt "Add tests for the parser"
 natamux agent start T-42 --base develop
 ```
 
-The agent is one of `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. If the task has no workspace, `agent start` creates one first, from `--base` when you give it. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+The agent is one of `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. If the task has no workspace, `agent start` creates one first, from `--base` when you give it. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## ask and done
 
@@ -113,7 +113,7 @@ natamux stage back T-42 --to spec --reason "The spec misses the error case"
 natamux stage fail T-42 --reason "Tests do not pass"
 ```
 
-`back` goes to the stage named with `--to`. It cannot be used with `--stage`. See [Stages](/natamux/docs/concepts/stages/).
+`back` goes to the stage named with `--to`. It cannot be used with `--stage`. See [Stages](/docs/concepts/stages/).
 
 ## event and events
 
@@ -146,7 +146,7 @@ natamux hook copilot agentStop
 ```
 
 - `hooks claude-code` prints settings JSON. It needs no token and does not call the daemon.
-- `hook <agent> [event]` is for an agent's own hook. It reads JSON on stdin and posts it to the daemon. It prints nothing (`{}` for `cursor` and `gemini`), always exits 0, and does nothing without `NATAMUX_TOKEN`. Even a usage mistake exits 0, because agents treat exit code 2 as "block this action". See [Other agents](/natamux/docs/agents/other-agents/).
+- `hook <agent> [event]` is for an agent's own hook. It reads JSON on stdin and posts it to the daemon. It prints nothing (`{}` for `cursor` and `gemini`), always exits 0, and does nothing without `NATAMUX_TOKEN`. Even a usage mistake exits 0, because agents treat exit code 2 as "block this action". See [Other agents](/docs/agents/other-agents/).
 
 ## JSON output
 
@@ -174,4 +174,4 @@ natamux task list --json
 | `NATAMUX_TERMINAL` | The terminal of the task. Tells the daemon which stage `done` is about. Natamux terminals set it |
 | `NATAMUX_DEBUG` | `natamux hook` only. Any value prints problems to stderr |
 
-See [Environment variables](/natamux/docs/reference/environment-variables/) for the daemon's variables.
+See [Environment variables](/docs/reference/environment-variables/) for the daemon's variables.

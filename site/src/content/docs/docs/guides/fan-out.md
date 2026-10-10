@@ -27,10 +27,10 @@ For a task `T-0007`, Natamux:
 2. Makes N copies. Each copy is a new task titled `<title> (try 2)`, `(try 3)` and so on. A copy keeps the notes, priority, labels, dependencies and repository of the original, and gets the same `tries-…` label.
 3. With **Start Claude Code in each**, makes a workspace for each copy, with its own worktree and branch, and starts Claude Code in it.
 
-The tries do not meet: each has its own folder, branch and [dev ports](/natamux/docs/guides/terminal/#ports).
+The tries do not meet: each has its own folder, branch and [dev ports](/docs/guides/terminal/#ports).
 
 :::note
-Fan out starts Claude Code only. The other agents are not offered here. To use another agent, clear the tick and start each try yourself with **Start agent**. See [Agents](/natamux/docs/concepts/agents-and-hooks/).
+Fan out starts Claude Code only. The other agents are not offered here. To use another agent, clear the tick and start each try yourself with **Start agent**. See [Agents](/docs/concepts/agents-and-hooks/).
 :::
 
 :::caution
@@ -48,7 +48,7 @@ Open the details of any task in the group. When the group has more than one task
 | Size | Lines added and removed and the number of files, for example `+42 −7, 3 files` |
 | Pull request | The pull request number, once one exists |
 
-To read what a try did, open its workspace and use the **Changes** tab. See [Changes and history](/natamux/docs/guides/changes-and-history/). To watch all agents at once, use **Agents** in the sidebar.
+To read what a try did, open its workspace and use the **Changes** tab. See [Changes and history](/docs/guides/changes-and-history/). To watch all agents at once, use **Agents** in the sidebar.
 
 ## Keep one try
 

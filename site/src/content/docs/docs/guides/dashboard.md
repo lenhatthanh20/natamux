@@ -7,7 +7,7 @@ sidebar:
 
 The dashboard is the web app of the Natamux daemon. It shows every task, every workspace and every agent on one page, and it updates live.
 
-![The dashboard with the task table, the Needs you strip and the sidebar](/natamux/screens/dashboard.png)
+![The dashboard with the task table, the Needs you strip and the sidebar](/screens/dashboard.png)
 
 ## Layout
 
@@ -48,11 +48,11 @@ Pick a view with the **Layout** switch above the list.
 |---|---|
 | Table | One row per task. Click a column header to sort. |
 | Board | One column per state. **Show finished** adds the done and cancelled columns. |
-| Progress | Tasks against their [stages](/natamux/docs/concepts/stages/) |
+| Progress | Tasks against their [stages](/docs/concepts/stages/) |
 
-![The board view](/natamux/screens/board.png)
+![The board view](/screens/board.png)
 
-![The progress view](/natamux/screens/progress.png)
+![The progress view](/screens/progress.png)
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
@@ -73,7 +73,7 @@ Two lists appear next to the field when they have something to choose:
 - **Repository**, when you have more than one repository.
 - **Template**, when you saved a template. Choose **No template** to skip it. Save a template from the **More actions** menu of a task: **Save as template**.
 
-To start work right away, press `c` for **New workspace**. It makes a git worktree and a task, and can start an agent in it. See [Workspaces](/natamux/docs/concepts/workspaces/).
+To start work right away, press `c` for **New workspace**. It makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
 
 In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and use the actions for its state, such as **Mark ready**, **Approve** or **Retry**. **Cancel task** asks first.
 
@@ -100,7 +100,7 @@ Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to
 
 Press `Mod+J` for **Jump to a workspace**. It lists workspaces and their extra shells, with the ones that need you first.
 
-The palette also changes the view (**All tasks**, **Agents**, table, board, progress), the theme, the text size, and runs **Add a repository** and **Import GitHub issues**. See [Keyboard shortcuts](/natamux/docs/reference/shortcuts/) for every key.
+The palette also changes the view (**All tasks**, **Agents**, table, board, progress), the theme, the text size, and runs **Add a repository** and **Import GitHub issues**. See [Keyboard shortcuts](/docs/reference/shortcuts/) for every key.
 
 ## Task states
 
@@ -116,7 +116,7 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 | Done | Finished. |
 | Cancelled | Cancelled. |
 
-See [Tasks](/natamux/docs/concepts/tasks/) for how a task moves between states.
+See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 ## Needs you
 
@@ -146,7 +146,7 @@ Each repository has a **Settings** button for its stages, context sources and is
 
 ## Import issues
 
-Click **Import issues** in the status bar to turn open GitHub issues into draft tasks. See [GitHub](/natamux/docs/guides/github/).
+Click **Import issues** in the status bar to turn open GitHub issues into draft tasks. See [GitHub](/docs/guides/github/).
 
 ## Account menu
 

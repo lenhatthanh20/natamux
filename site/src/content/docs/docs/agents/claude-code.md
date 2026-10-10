@@ -52,7 +52,7 @@ The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from th
 | `Stop` | The agent finished its answer | needs input |
 | `StopFailure` | An API error ended the turn | failed |
 
-Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/natamux/docs/concepts/stages/).
+Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/docs/concepts/stages/).
 
 ## A session you start yourself
 
