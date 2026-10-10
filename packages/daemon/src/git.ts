@@ -78,9 +78,21 @@ export async function addWorktree(
   )
 }
 
-// Refuses to remove a worktree that has changes that are not committed.
-export async function removeWorktree(repoDir: string, worktreePath: string): Promise<void> {
-  await git(repoDir, ['worktree', 'remove', worktreePath])
+// Refuses to remove a worktree that has changes that are not committed, or submodules checked
+// out. `force` removes it either way.
+export async function removeWorktree(
+  repoDir: string,
+  worktreePath: string,
+  force = false,
+): Promise<void> {
+  await git(repoDir, ['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath])
+}
+
+// Whether a submodule is checked out in the worktree. Lines of submodules that are not start
+// with "-".
+export async function hasSubmodules(worktreePath: string): Promise<boolean> {
+  const output = await git(worktreePath, ['submodule', 'status'])
+  return lines(output).some((line) => !line.startsWith('-'))
 }
 
 // Reads the output of `git worktree list --porcelain`: the path of each worktree, main first.

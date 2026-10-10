@@ -278,6 +278,48 @@ describe('remove', () => {
     expect(tasks.getTask(task.id)).toMatchObject({ state: 'running', workspace: created.workspace })
   })
 
+  it('refuses a worktree whose status git cannot read, before ending its shells', async () => {
+    const { service, closed } = serviceWithShells()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await service.create(task.id)
+    writeFileSync(join(created.workspace ?? '', '.git'), 'not a git file\n')
+
+    await expect(service.remove(task.id, { deleteBranch: false })).rejects.toThrow(GitError)
+
+    expect(closed).toEqual([])
+    expect(tasks.getTask(task.id).workspace).toBe(created.workspace)
+  })
+
+  it('stops the agent when git refuses the worktree after its shells ended', async () => {
+    const { service, closed } = serviceWithShells()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await service.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    runGit(repo.dir, 'worktree', 'lock', created.workspace ?? '')
+
+    await expect(service.remove(task.id, { deleteBranch: false })).rejects.toThrow(/locked/)
+
+    expect(closed).toEqual([task.id])
+    expect(tasks.getTask(task.id)).toMatchObject({ state: 'ready', workspace: created.workspace })
+  })
+
+  it('removes a clean worktree with a submodule checked out', async () => {
+    const lib = join(repo.root, 'lib')
+    mkdirSync(lib)
+    runGit(lib, 'init', '-b', 'main')
+    runGit(lib, 'commit', '--allow-empty', '-m', 'lib')
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const path = (await workspaces.create(task.id)).workspace ?? ''
+    runGit(path, '-c', 'protocol.file.allow=always', 'submodule', 'add', lib, 'lib')
+    runGit(path, 'commit', '-m', 'Add lib')
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.workspace).toBeNull()
+    expect(existsSync(path)).toBe(false)
+  })
+
   it('removes a workspace made again the same way', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await workspaces.create(task.id)

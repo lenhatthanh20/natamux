@@ -51,7 +51,7 @@ const workspaces = new WorkspaceService({
   worktreesDir: config.worktreesDir,
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
-  closeTerminals: (taskId) => terminals.close(taskId),
+  closeTerminals: (taskId) => terminals.closeAndWait(taskId),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
