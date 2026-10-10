@@ -59,22 +59,32 @@ const EVERY_SOURCE: LoadedSettings = {
   },
 }
 
+type Repos = { id: string; name: string }[]
+
+const REPOS: Repos = [
+  { id: 'default', name: 'natamux' },
+  { id: 'web', name: 'Web & "app"' },
+]
+
 type DialogOptions = {
   loadSettings?: (repo: string) => Promise<LoadedSettings>
   create?: (input: NewWorkspaceInput) => Promise<Task>
   initialRepo?: string
+  repos?: Repos
 }
 
-function dialog({ loadSettings, create: makeTask, initialRepo }: DialogOptions = {}) {
+function dialog({
+  loadSettings,
+  create: makeTask,
+  initialRepo,
+  repos = REPOS,
+}: DialogOptions = {}) {
   const create = vi.fn(makeTask ?? (async (_input: NewWorkspaceInput) => TASK))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const view = (list: Repos) => (
     <QueryClientProvider client={client}>
       <NewWorkspaceDialog
-        repos={[
-          { id: 'default', name: 'natamux' },
-          { id: 'web', name: 'Web & "app"' },
-        ]}
+        repos={list}
         loadBranches={async () => ({ branches: ['main'], current: 'main' })}
         create={create}
         onCreated={vi.fn()}
@@ -82,9 +92,10 @@ function dialog({ loadSettings, create: makeTask, initialRepo }: DialogOptions =
         {...(loadSettings === undefined ? {} : { loadSettings })}
         {...(initialRepo === undefined ? {} : { initialRepo })}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { create }
+  const { rerender } = render(view(repos))
+  return { create, setRepos: (next: Repos) => rerender(view(next)) }
 }
 
 // The labels of the fields, top to bottom.
@@ -146,6 +157,29 @@ describe('the Start a task dialog', () => {
     const project = screen.getByLabelText('Project') as HTMLSelectElement
     expect(project.value).toBe('web')
     expect(project.selectedOptions[0]?.textContent).toBe('Web & "app"')
+  })
+
+  it('starts in the first project when the one it was opened for is gone', async () => {
+    const { create } = dialog({ initialRepo: 'old' })
+    const user = userEvent.setup()
+    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('default')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.repo).toBe('default')
+  })
+
+  it('starts in a real project when the projects load after it opens', async () => {
+    const { create, setRepos } = dialog({ repos: [] })
+    setRepos([{ id: 'web', name: 'Web app' }])
+    const user = userEvent.setup()
+    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('web')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.repo).toBe('web')
   })
 
   it('keeps the notes of a task with no agent', async () => {

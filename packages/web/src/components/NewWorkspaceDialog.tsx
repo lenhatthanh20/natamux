@@ -60,7 +60,10 @@ export function NewWorkspaceDialog({
   loadSettings,
 }: NewWorkspaceDialogProps) {
   const [title, setTitle] = useState(initialTitle)
-  const [repo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
+  const [pickedRepo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
+  // The picked project may be gone, or the list was not loaded when the dialog opened. Then the
+  // first project stands in, as the Select shows it.
+  const repo = repos.find((item) => item.id === pickedRepo)?.id ?? repos[0]?.id ?? pickedRepo
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
   const [notes, setNotes] = useState('')

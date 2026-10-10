@@ -171,6 +171,15 @@ describe('when it is offered', () => {
     ])
   })
 
+  it('offers no new task in the group of a project that is gone', () => {
+    list({ tasks: [makeTask({ id: 'T-0007', state: 'done', repo: 'old' })], pinnedIds: [] })
+
+    expect(screen.queryByRole('button', { name: 'Start a task in old' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Start a task in natamux' })).toBeTruthy()
+    // The empty lines of natamux and Web app; the group of old says only "No workspaces."
+    expect(screen.getAllByRole('button', { name: 'Start a task' })).toHaveLength(2)
+  })
+
   it('stays on the row while the finished list is folded, always shown on touch screens', () => {
     list()
 
