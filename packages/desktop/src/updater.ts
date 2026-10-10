@@ -177,6 +177,7 @@ export class Updater {
       }
       this.set({ name: 'downloading', release })
       const file = await this.download(release, name)
+      this.log(`ready: ${release.version} at ${file}`)
       this.set({ name: 'ready', release, file })
       await this.offerRestart(release, manual)
     } catch (error) {

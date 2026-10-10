@@ -55,3 +55,25 @@ Found and fixed while checking:
 - **Start agent** on a task with no workspace launched two agents: the new workspace started the Spec stage's agent, and the button started another, typed into the first. Starts by hand now go through the stage runner.
 
 Still to check with a real agent: the permission prompt of step 2.1, and the time to the agent's first answer in check 1.
+
+### 2026-10-10, regression before v0.1.3
+
+Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2 read by hand, and the fake agent run in a shell. The checks in a codespace and in the macOS app are still to run.
+
+| Change | Result |
+|---|---|
+| #90 loopback past a proxy | Read: fine. To run with `HTTP_PROXY` set |
+| #91 auto permission mode | Read: fine. To run with a real agent |
+| #92 login shells | Read: fine (zsh, bash, fish, nu; Windows unchanged). To run from Finder |
+| #93 macOS Apple silicon only | Bug: the dry run started no app and checked no update, since both steps ran on Linux only. Fixed: both run on macOS too |
+| #89 wording, notes | Read: fine |
+| #94 details hidden | Read: fine |
+| #95 no commit by default | Bug: the fake agent still committed, and in Testing it wrote over `test-spec.md`. Fixed, with `scripts/fake-agent.test.sh` in CI. `docs/e2e-stages-test.md` updated |
+| #96 remove a project | Bug: tasks without a workspace in a removed project failed every action with "Repository … not found", and their pull request status stopped. Fixed: they get the default settings |
+| #97 workspace whose worktree is gone | Read: fine |
+| #98 Windows worktree tests | CI |
+| #99 Homebrew folders on the PATH | Read: fine |
+
+Left for later:
+- v0.1.2 on an Intel Mac or Linux finds a newer release with no file for it. Timed checks fail quietly; **Check for Updates…** says "SHA256SUMS.txt has no line for …". No change in the app can reach those copies; the release notes should say the builds are paused.
+- Still to run: MVP checks 1–4, check 2.1 with a real agent (`agents.permissionMode` set to `default`), the cases of `docs/e2e-stages-test.md`, and the release dry run.
