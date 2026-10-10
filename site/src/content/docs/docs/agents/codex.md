@@ -16,7 +16,8 @@ Install Codex and log in. Follow the [Codex project page](https://github.com/ope
 | | |
 |---|---|
 | Program | `codex` |
-| Command line | `codex --dangerously-bypass-hook-trust -c 'hooks.<Event>=[…]' [extra args] '<prompt>'` |
+| Command line | `codex --dangerously-bypass-hook-trust --full-auto -c 'hooks.<Event>=[…]' [extra args] '<prompt>'` |
+| Permission flag | `--full-auto`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_CODEX_COMMAND` |
 | Add arguments | `NATAMUX_CODEX_ARGS` |
 

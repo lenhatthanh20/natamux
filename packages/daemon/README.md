@@ -14,7 +14,7 @@ Run in a codespace: `pnpm --filter @natamux/daemon dev`. Build `@natamux/core` f
 | `NATAMUX_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
 | `NATAMUX_<AGENT>_COMMAND` | `claude`, `codex`, `gemini`, `copilot`, `cursor-agent` | The program that starts each agent; `<AGENT>` is `CLAUDE`, `CODEX`, `GEMINI`, `COPILOT` or `CURSOR` (`scripts/dev.sh seed` sets a fake Claude) |
-| `NATAMUX_<AGENT>_ARGS` | none | Words added to the agent's command line, such as `--allow-all-tools` for Copilot |
+| `NATAMUX_<AGENT>_ARGS` | none | Words added to the agent's command line, such as `--model sonnet` for Claude Code |
 | `NATAMUX_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `NATAMUX_WEB_INDEX` | none | Path of the built dashboard's `index.html` (for example `packages/web/dist/index.html`). With it, deep links work, see below |
 | `NATAMUX_WEB_DIR` | none | The built dashboard (`packages/web/dist`). With it, the daemon serves the whole dashboard, and the API under `/api` too, on its own port; `NATAMUX_WEB_INDEX` defaults to its `index.html`. The desktop app uses this |

@@ -64,5 +64,15 @@ describe('ProjectSettingsService', () => {
     expect(service.save(null, raw).stages).toEqual(raw.stages)
     expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual(raw)
     expect(() => service.save(null, { stages: [] })).toThrow(SettingsInputError)
+    expect(() => service.save(null, { agents: { permissionMode: 'yolo' } })).toThrow(
+      'agents.permissionMode',
+    )
+  })
+
+  it('starts agents in auto mode when the file has a bad mode', () => {
+    writeFileSync(file(), JSON.stringify({ agents: { permissionMode: 'yolo' } }))
+    const loaded = service.load(null)
+    expect(loaded.error).toContain('agents.permissionMode')
+    expect(loaded.settings.agents.permissionMode).toBe('auto')
   })
 })
