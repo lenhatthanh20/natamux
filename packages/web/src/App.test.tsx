@@ -343,7 +343,11 @@ function installDaemon(
     }
     // Only the user's own notes, so the Start a task dialog shows no source picker.
     if (/^\/api\/repos\/[a-z0-9-]+\/settings$/.test(path) && method === 'GET') {
-      return json({ settings: { context: { sources: [{ type: 'manual' }] } }, found: false })
+      return json({
+        settings: { context: { sources: [{ type: 'manual' }] } },
+        found: true,
+        path: '/work/natamux/.natamux.json',
+      })
     }
     if (/^\/api\/tasks\/T-\d+\/files$/.test(path) && method === 'GET') {
       return json({ files: stageFiles })
@@ -511,6 +515,10 @@ describe('App', () => {
     )
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     await user.click(within(details).getByRole('button', { name: 'Create workspace' }))
+    // The new workspace opens beside the details, which then show its progress first.
+    const progressTab = within(details).getByRole('tab', { name: 'Progress' })
+    await waitFor(() => expect(progressTab.getAttribute('aria-selected')).toBe('true'))
+    await user.click(within(details).getByRole('tab', { name: 'Details' }))
     await waitFor(() => expect(byTip(details, '/work/T-0001')).toBeTruthy())
 
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
@@ -1037,8 +1045,8 @@ describe('App', () => {
     await user.click(await within(panel).findByRole('button', { name: 'Settings' }))
 
     const settings = await screen.findByRole('dialog', { name: 'Project settings of natamux' })
-    expect(settings.textContent).toContain(
-      'Stages, context sources, the issue tracker and the permission mode of the agents of this project.',
+    await waitFor(() =>
+      expect(settings.textContent).toContain('Saved in /work/natamux/.natamux.json.'),
     )
   })
 
