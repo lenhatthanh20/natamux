@@ -12,7 +12,6 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
-import { useAppEvent } from '../lib/app-events'
 import type {
   LoadedSettings,
   StageAction,
@@ -20,6 +19,7 @@ import type {
   StageFile,
   StoredEvent,
 } from '../lib/api'
+import { useAppEvent } from '../lib/app-events'
 import { describeEvent } from '../lib/events'
 import {
   finishedWhen,
