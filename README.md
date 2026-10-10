@@ -45,4 +45,13 @@ For tasks in every state with agents at work, run `scripts/dev.sh seed`. It star
 - Agents: [adapters](docs/agent-adapters.md), [Claude Code](docs/claude-code-adapter.md)
 - [MVP checks](docs/mvp-checks.md)
 
-Status: MVP checks pass (`docs/mvp-checks.md`). Runs in a browser tab, or in the desktop app (`packages/desktop`, not packaged yet).
+Status: MVP checks pass (`docs/mvp-checks.md`). Runs in a browser tab, or in the desktop app (`packages/desktop`).
+
+## Security and privacy
+
+- [SECURITY.md](SECURITY.md): how to report a vulnerability, and how Natamux protects the daemon, its token and your files.
+- [PRIVACY.md](PRIVACY.md): Natamux has no telemetry; what stays on your machine and what leaves it.
+
+## License
+
+[MIT](LICENSE)
