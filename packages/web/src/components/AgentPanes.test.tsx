@@ -209,7 +209,7 @@ describe('AgentPanes in a group', () => {
   })
 
   it('shows the task state when the terminals are not known yet', () => {
-    grid([build({ implement: 'running', 'test-spec': 'review' }, 'review')])
-    expect(stateLine()).toBe('In review')
+    grid([build({ implement: 'running', 'test-spec': 'needs-input' }, 'needs-input')])
+    expect(stateLine()).toBe('Needs your input')
   })
 })

@@ -97,7 +97,9 @@ export function TerminalPane({
         )}
         {stateText === undefined && <span className="flex-1" />}
         {hint !== undefined && (
-          <span data-tip-overflow className="min-w-0 truncate text-signal">{hint}</span>
+          <span data-tip-overflow className="min-w-0 truncate text-signal">
+            {hint}
+          </span>
         )}
         <IconButton
           label={maximized ? `Restore ${label}` : `Maximize ${label}`}

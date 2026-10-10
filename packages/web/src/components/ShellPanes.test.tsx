@@ -71,6 +71,12 @@ const agentIcons = (name: string) => header(name).querySelectorAll('img, svg.luc
 // The visible state line. The glyph also says the state to screen readers.
 const stateLine = (name: string) => header(name).querySelector('[data-tip-overflow]')?.textContent
 
+// Shell 2 appears once the terminal list loads, and its badge once the agent list loads.
+async function agentShown(name: string) {
+  await screen.findByRole('region', { name })
+  await within(header(name)).findByText('Claude Code')
+}
+
 const glyphState = (name: string) =>
   header(name).querySelector('[data-state]')?.getAttribute('data-state') ?? null
 
@@ -111,7 +117,7 @@ describe('ShellPanes agent badge', () => {
 describe('ShellPanes agent state', () => {
   it('gives each shell of a group the state of its own stage', async () => {
     group({ implement: 'running', 'test-spec': 'review' }, { '1': 'Edit src/a.ts' })
-    await within(header('Shell 2')).findByText('Claude Code')
+    await agentShown('Shell 2')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
     expect(stateLine('Shell 2')).toBe('In review')
     expect(glyphState('Shell 1')).toBe('running')
@@ -120,14 +126,14 @@ describe('ShellPanes agent state', () => {
 
   it('shows a finished stage as done while the other still runs', async () => {
     group({ implement: 'running', 'test-spec': 'done' })
-    await within(header('Shell 2')).findByText('Claude Code')
+    await agentShown('Shell 2')
     expect(stateLine('Shell 2')).toBe('Done')
     expect(stateLine('Shell 1')).toBe('Running')
   })
 
   it('marks only the shell that waits for the user', async () => {
     group({ implement: 'running', 'test-spec': 'needs-input' }, { '1': 'Edit src/a.ts' })
-    await within(header('Shell 2')).findByText('Claude Code')
+    await agentShown('Shell 2')
     expect(stateLine('Shell 2')).toBe('Needs your input')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
     expect(needsInputBar('Shell 2')).toBeTruthy()
@@ -139,14 +145,14 @@ describe('ShellPanes agent state', () => {
       { implement: 'running', 'test-spec': 'running' },
       { '1': 'Edit src/a.ts', '2': 'Edit test-spec.md' },
     )
-    await within(header('Shell 2')).findByText('Claude Code')
+    await agentShown('Shell 2')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
     expect(stateLine('Shell 2')).toBe('Running · Edit test-spec.md')
   })
 
   it('shows an agent in an extra shell outside a group without a state', async () => {
     shells('claude-code', ['1', '2'], ['1', '2'])
-    await within(header('Shell 2')).findByText('Claude Code')
+    await agentShown('Shell 2')
     expect(glyphState('Shell 2')).toBeNull()
     expect(stateLine('Shell 2')).toBeUndefined()
     expect(glyphState('Shell 1')).toBe('running')
