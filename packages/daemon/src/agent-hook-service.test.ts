@@ -47,15 +47,35 @@ describe('AgentHookService', () => {
   it('keeps what the agent does now, and forgets it when the turn ends', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     service.handle('claude-code', hook('UserPromptSubmit'), task.id)
-    expect(service.activity()[task.id]?.text).toBe('Reading the prompt')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Reading the prompt')
 
     service.handle(
       'claude-code',
       hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'pnpm test' } }),
       task.id,
     )
-    expect(service.activity()[task.id]?.text).toBe('Bash: pnpm test')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Bash: pnpm test')
 
+    service.handle('claude-code', hook('Stop'), task.id)
+    expect(service.activity()).toEqual({})
+  })
+
+  it('keeps what the agent of each terminal does apart', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    const edit = (path: string) =>
+      hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path } })
+
+    service.handle('claude-code', edit('src/a.ts'), task.id, '1')
+    service.handle('claude-code', edit('test-spec.md'), task.id, '2')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Edit src/a.ts')
+    expect(service.activity()[task.id]?.['2']?.text).toBe('Edit test-spec.md')
+
+    // The turn end in Shell 2 clears only its own line.
+    service.handle('claude-code', hook('Stop'), task.id, '2')
+    expect(Object.keys(service.activity()[task.id] ?? {})).toEqual(['1'])
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Edit src/a.ts')
+
+    // A hook without a terminal comes from the first one.
     service.handle('claude-code', hook('Stop'), task.id)
     expect(service.activity()).toEqual({})
   })
