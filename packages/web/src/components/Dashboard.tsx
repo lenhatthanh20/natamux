@@ -184,6 +184,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => toast(error.message, 'error'),
   })
 
+  const removeRepoMutation = useMutation({
+    mutationFn: (repo: Repo) => api.removeRepo(repo.id),
+    onSuccess: (_, repo) => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] })
+      if (newRepo === repo.id) {
+        setNewRepo('')
+      }
+      toast(`Removed ${repo.name}.`)
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
   const eventMutation = useMutation({
     mutationFn: ({ taskId, type }: { taskId: string; type: EventType }) =>
       api.sendEvent(taskId, type),
@@ -725,6 +737,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
                     onNewWorkspace={(repo) => setNewWorkspace({ repo })}
                     onAddRepo={() => setReposOpen(true)}
+                    onRepoSettings={(id) =>
+                      setSettingsRepo(repos.find((repo) => repo.id === id) ?? null)
+                    }
+                    onRemoveRepo={(id) => {
+                      const repo = repos.find((candidate) => candidate.id === id)
+                      if (repo !== undefined) {
+                        removeRepoMutation.mutate(repo)
+                      }
+                    }}
                   />
                 )
               }

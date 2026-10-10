@@ -52,7 +52,11 @@ beforeEach(async () => {
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
-  const repos = new RepoService({ dataDir, defaultPath: repo.dir })
+  const repos = new RepoService({
+    dataDir,
+    defaultPath: repo.dir,
+    tasks: () => service.listTasks(),
+  })
   const workspaces = new WorkspaceService({
     tasks: service,
     repoDir: repo.dir,
@@ -1512,6 +1516,81 @@ describe('repositories', () => {
       payload: { path: 'some/where' },
     })
     expect(relative.statusCode).toBe(400)
+  })
+
+  it('removes a repository once it has no workspaces, and keeps its tasks', async () => {
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'trunk')
+    runGit(other, 'commit', '--allow-empty', '-m', 'first')
+    const settingsText = '{ "stages": ["implement"] }\n'
+    writeFileSync(join(other, '.natamux.json'), settingsText)
+    await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other, name: 'Other app' },
+    })
+    for (const title of ['With a workspace', 'Without one']) {
+      await app.inject({
+        method: 'POST',
+        url: '/tasks',
+        headers: authorization,
+        payload: { title, repo: 'other-app' },
+      })
+    }
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    const busy = await app.inject({
+      method: 'DELETE',
+      url: '/repos/other-app',
+      headers: authorization,
+    })
+    expect(busy.statusCode).toBe(409)
+    expect(busy.json()).toMatchObject({
+      error: 'conflict',
+      message: 'Remove the 1 workspace of other-app first',
+    })
+
+    await app.inject({ method: 'DELETE', url: '/tasks/T-0001/workspace', headers: authorization })
+    const taskFile = join(repo.root, 'data', 'tasks', 'T-0002.md')
+    const taskText = readFileSync(taskFile, 'utf8')
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/repos/other-app',
+      headers: authorization,
+    })
+    expect(removed.statusCode).toBe(204)
+    expect(removed.body).toBe('')
+    const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(listed.json().repos.map((entry: { id: string }) => entry.id)).toEqual(['default'])
+    expect(existsSync(other)).toBe(true)
+    expect(readFileSync(join(other, '.natamux.json'), 'utf8')).toBe(settingsText)
+    expect(runGit(other, 'branch', '--list', 'natamux/*')).toContain('natamux/t-0001')
+    expect(readFileSync(taskFile, 'utf8')).toBe(taskText)
+
+    const kept = await app.inject({ method: 'GET', url: '/tasks/T-0002', headers: authorization })
+    expect(kept.json().task.repo).toBe('other-app')
+    const workspace = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0002/workspace',
+      headers: authorization,
+    })
+    expect(workspace.statusCode).toBe(404)
+    expect(workspace.json().message).toBe('Repository other-app is not known. Add it first')
+  })
+
+  it('refuses to remove the default repository, an unknown one, and a bad id', async () => {
+    const remove = (id: string) =>
+      app.inject({ method: 'DELETE', url: `/repos/${id}`, headers: authorization })
+
+    const fallback = await remove('default')
+    expect(fallback.statusCode).toBe(400)
+    expect(fallback.json().error).toBe('invalid_request')
+    const unknown = await remove('missing')
+    expect(unknown.statusCode).toBe(404)
+    expect(unknown.json().error).toBe('not_found')
+    expect((await remove('Bad_Id')).statusCode).toBe(400)
   })
 })
 
