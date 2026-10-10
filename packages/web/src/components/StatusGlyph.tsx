@@ -44,7 +44,16 @@ function usePrefersReducedMotion(): boolean {
 
 // The state of a task as one small icon in its own color. A running agent spins; a quiet one
 // shows the "needs you" mark instead.
-export function StatusGlyph({ state, quiet = false }: { state: TaskState; quiet?: boolean }) {
+// `tip` adds to the tooltip, such as the state of each stage of a group.
+export function StatusGlyph({
+  state,
+  quiet = false,
+  tip,
+}: {
+  state: TaskState
+  quiet?: boolean
+  tip?: string
+}) {
   const reduced = usePrefersReducedMotion()
   const spinning = state === 'running' && !quiet && !reduced
   // A still dotted circle stands in for the spinner when motion is reduced.
@@ -53,7 +62,7 @@ export function StatusGlyph({ state, quiet = false }: { state: TaskState; quiet?
   return (
     <span
       data-state={quiet ? 'needs-input' : state}
-      data-tip={label}
+      data-tip={tip === undefined ? label : `${label} · ${tip}`}
       className="inline-flex size-4 shrink-0 items-center justify-center text-[var(--chip-fg)]"
     >
       <Icon

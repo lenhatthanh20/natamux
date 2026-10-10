@@ -321,6 +321,20 @@ export class TaskService {
     return updated
   }
 
+  // Natamux ended the agents of the task, for example with its workspace. A stage whose agent ran
+  // or waited for you would stay so with no agent, and would show up in Needs you later.
+  stopAgents(taskId: string): Task {
+    const task = this.getTask(taskId)
+    const lanes: [string, TaskState][] =
+      Object.keys(task.lanes).length > 0 ? Object.entries(task.lanes) : [[task.stage, task.state]]
+    for (const [stage, state] of lanes) {
+      if (state === 'running' || state === 'needs-input') {
+        this.applyEvent(taskId, { source: 'system', type: 'agent.stopped', payload: { stage } })
+      }
+    }
+    return this.getTask(taskId)
+  }
+
   // Writes down a commit, a push or a new pull request. A pull request also sets `pr` of the task.
   recordGit(
     taskId: string,

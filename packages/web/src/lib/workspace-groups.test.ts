@@ -60,6 +60,17 @@ describe('workspaceGroups', () => {
     expect(result.groups[0]?.finished).toEqual([done])
   })
 
+  it('drops a task when its workspace is removed, and lists it again in a new one', () => {
+    const removed = makeTask({ id: 'T-0001', state: 'ready', workspace: null })
+    expect(workspaceGroups(repos, [removed], ['T-0001'])).toMatchObject({
+      pinned: [],
+      groups: [{ open: [] }, { open: [] }],
+    })
+
+    const again = { ...removed, workspace: '/work/T-0001' }
+    expect(workspaceGroups(repos, [again], []).groups[0]?.open).toEqual([again])
+  })
+
   it('keeps an empty repository, and adds a group for a repository it does not know', () => {
     const stray = makeTask({ id: 'T-0001', repo: 'api' })
 

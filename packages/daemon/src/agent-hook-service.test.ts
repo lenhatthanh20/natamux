@@ -47,15 +47,35 @@ describe('AgentHookService', () => {
   it('keeps what the agent does now, and forgets it when the turn ends', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     service.handle('claude-code', hook('UserPromptSubmit'), task.id)
-    expect(service.activity()[task.id]?.text).toBe('Reading the prompt')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Reading the prompt')
 
     service.handle(
       'claude-code',
       hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'pnpm test' } }),
       task.id,
     )
-    expect(service.activity()[task.id]?.text).toBe('Bash: pnpm test')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Bash: pnpm test')
 
+    service.handle('claude-code', hook('Stop'), task.id)
+    expect(service.activity()).toEqual({})
+  })
+
+  it('keeps what the agent of each terminal does apart', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    const edit = (path: string) =>
+      hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path } })
+
+    service.handle('claude-code', edit('src/a.ts'), task.id, '1')
+    service.handle('claude-code', edit('test-spec.md'), task.id, '2')
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Edit src/a.ts')
+    expect(service.activity()[task.id]?.['2']?.text).toBe('Edit test-spec.md')
+
+    // The turn end in Shell 2 clears only its own line.
+    service.handle('claude-code', hook('Stop'), task.id, '2')
+    expect(Object.keys(service.activity()[task.id] ?? {})).toEqual(['1'])
+    expect(service.activity()[task.id]?.['1']?.text).toBe('Edit src/a.ts')
+
+    // A hook without a terminal comes from the first one.
     service.handle('claude-code', hook('Stop'), task.id)
     expect(service.activity()).toEqual({})
   })
@@ -115,6 +135,7 @@ describe('AgentHookService', () => {
 
   it('drops the turn end that follows a report, and names the stage of the terminal', () => {
     const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
     const seen: (string | undefined)[] = []
     const reporting = new AgentHookService(tasks, {
       laneFor: (current, terminal) => {
@@ -129,6 +150,105 @@ describe('AgentHookService', () => {
     expect(reporting.handle('claude-code', hook('Stop'), task.id, '2').applied).toEqual([])
     expect(tasks.getTask(task.id).state).toBe('running')
     expect(seen).toEqual(['2', '2'])
+  })
+
+  // Natamux terminals run in the task's workspace only.
+  describe('after the workspace was removed', () => {
+    const lateHooks = [
+      hook('UserPromptSubmit'),
+      hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }),
+      hook('PermissionRequest'),
+      hook('Stop'),
+      hook('StopFailure'),
+    ]
+
+    // A task whose agent ran in terminal 1 until its workspace was removed.
+    function removedTask(state: 'running' | 'needs-input', title = 'Fix it') {
+      const task = tasks.createTask({ title })
+      tasks.recordWorkspace(task.id, { workspace: `/work/${task.id}`, branch: 'b' })
+      service.handle('claude-code', hook('UserPromptSubmit'), task.id, '1')
+      if (state === 'needs-input') {
+        service.handle('claude-code', hook('PermissionRequest'), task.id, '1')
+      }
+      tasks.recordWorkspace(task.id, { workspace: null, branch: 'b' })
+      return tasks.getTask(task.id)
+    }
+
+    it.each(['running', 'needs-input'] as const)(
+      'ignores every late hook from its terminal (agent was %s)',
+      (state) => {
+        const before = removedTask(state)
+        const events = tasks.listEvents(before.id).length
+
+        for (const late of lateHooks) {
+          expect(service.handle('claude-code', late, before.id, '1')).toEqual({
+            taskId: null,
+            applied: [],
+          })
+        }
+
+        expect(tasks.getTask(before.id)).toEqual(before)
+        expect(tasks.listEvents(before.id)).toHaveLength(events)
+        expect(service.activity()).toEqual({})
+      },
+    )
+
+    it('does not touch another task', () => {
+      const removed = removedTask('running')
+      const other = tasks.createTask({ title: 'Other' })
+      tasks.recordWorkspace(other.id, { workspace: `/work/${other.id}`, branch: 'c' })
+      service.handle('claude-code', hook('UserPromptSubmit'), other.id, '1')
+
+      service.handle('claude-code', hook('Stop'), removed.id, '1')
+
+      expect(tasks.getTask(other.id).state).toBe('running')
+      expect(service.handle('claude-code', hook('Stop'), other.id, '1').applied).toEqual([
+        'agent.finished',
+      ])
+    })
+
+    it('still ignores them after a restart', () => {
+      const before = removedTask('running')
+      const restarted = new AgentHookService(tasks)
+
+      expect(restarted.handle('claude-code', hook('Stop'), before.id, '1').applied).toEqual([])
+      expect(tasks.getTask(before.id)).toEqual(before)
+    })
+
+    it('follows the agent in a new workspace as usual', () => {
+      const before = removedTask('running')
+      tasks.applyEvent(before.id, {
+        source: 'system',
+        type: 'agent.stopped',
+        payload: { stage: before.stage },
+      })
+      tasks.recordWorkspace(before.id, { workspace: `/work/${before.id}`, branch: 'b' })
+
+      const step = (name: string) => service.handle('claude-code', hook(name), before.id, '1')
+      expect(step('UserPromptSubmit').applied).toEqual(['agent.started'])
+      expect(step('Stop').applied).toEqual(['agent.finished'])
+      expect(tasks.getTask(before.id).state).toBe('needs-input')
+    })
+
+    it('answers a hook with an unknown task as before', () => {
+      expect(service.handle('claude-code', hook('Stop'), 'T-0099', '1')).toEqual({
+        taskId: null,
+        applied: [],
+      })
+    })
+  })
+
+  it('still follows an agent outside Natamux terminals that names a task with no workspace', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    expect(service.handle('claude-code', hook('UserPromptSubmit'), task.id).applied).toEqual([
+      'task.readied',
+      'agent.started',
+    ])
+    expect(service.handle('claude-code', hook('PermissionRequest'), task.id).applied).toEqual([
+      'agent.asked',
+    ])
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
 
   it('records the events as coming from the agent', () => {
