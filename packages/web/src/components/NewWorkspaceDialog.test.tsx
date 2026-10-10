@@ -42,23 +42,55 @@ const WITH_ISSUES: LoadedSettings = {
   path: '/work/natamux/.natamux.json',
 }
 
-function dialog(loadSettings?: (repo: string) => Promise<LoadedSettings>) {
-  const create = vi.fn(async (_input: NewWorkspaceInput) => TASK)
+// Settings that offer every kind of context source.
+const EVERY_SOURCE: LoadedSettings = {
+  ...WITH_ISSUES,
+  settings: {
+    ...DEFAULT_PROJECT_SETTINGS,
+    context: {
+      sources: [
+        { type: 'manual' },
+        { type: 'github-issue' },
+        { type: 'skill', name: 'Ticket', skill: 'read-ticket' },
+        { type: 'mcp', name: 'Tracker', prompt: 'Read {ref}.' },
+      ],
+    },
+  },
+}
+
+type DialogOptions = {
+  loadSettings?: (repo: string) => Promise<LoadedSettings>
+  create?: (input: NewWorkspaceInput) => Promise<Task>
+  initialRepo?: string
+}
+
+function dialog({ loadSettings, create: makeTask, initialRepo }: DialogOptions = {}) {
+  const create = vi.fn(makeTask ?? (async (_input: NewWorkspaceInput) => TASK))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <NewWorkspaceDialog
-        repos={[{ id: 'default', name: 'natamux' }]}
+        repos={[
+          { id: 'default', name: 'natamux' },
+          { id: 'web', name: 'Web & "app"' },
+        ]}
         loadBranches={async () => ({ branches: ['main'], current: 'main' })}
         create={create}
         onCreated={vi.fn()}
         onClose={vi.fn()}
         {...(loadSettings === undefined ? {} : { loadSettings })}
+        {...(initialRepo === undefined ? {} : { initialRepo })}
       />
     </QueryClientProvider>,
   )
   return { create }
 }
+
+// The labels of the fields, top to bottom.
+const fieldLabels = () =>
+  [...screen.getByRole('dialog').querySelectorAll('form span.text-xs')].map(
+    (label) => label.textContent,
+  )
 
 const startButton = () => screen.getByRole('button', { name: 'Start task' })
 
@@ -75,6 +107,46 @@ describe('the Start a task dialog', () => {
     expect(screen.queryByRole('button', { name: 'Advanced' })).toBeNull()
   })
 
+  it('says what it makes, and starts with the project, the title and the notes', () => {
+    dialog()
+    const element = screen.getByRole('dialog', { name: 'Start a task' })
+    expect(element.textContent).toContain(
+      'A new task with its own workspace: a git worktree on a new branch.',
+    )
+    expect(fieldLabels().slice(0, 3)).toEqual(['Project', 'Title', 'Notes'])
+    expect(screen.getByLabelText('Project')).toBeTruthy()
+    expect(screen.getByLabelText('Task title')).toBeTruthy()
+    expect(screen.queryByText('What should the agent do?')).toBeNull()
+    expect(screen.queryByText(/Repository|Workspace name/)).toBeNull()
+  })
+
+  it('gives the notes field its hint and room for a few lines', () => {
+    dialog()
+    const notes = screen.getByLabelText('Task notes') as HTMLTextAreaElement
+    expect(notes.tagName).toBe('TEXTAREA')
+    expect(notes.placeholder).toBe(
+      "Optional. What to do and why. The agent reads this as the task's context.",
+    )
+    expect(notes.rows).toBe(4)
+    expect(notes.className).toContain('resize-y')
+  })
+
+  it('shows the notes when the project offers more sources, with My notes first', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES })
+    const source = (await screen.findByLabelText(
+      'Where the context comes from',
+    )) as HTMLSelectElement
+    expect(source.value).toBe('manual')
+    expect(screen.getByLabelText('Task notes')).toBeTruthy()
+  })
+
+  it('picks the project it was opened for', () => {
+    dialog({ initialRepo: 'web' })
+    const project = screen.getByLabelText('Project') as HTMLSelectElement
+    expect(project.value).toBe('web')
+    expect(project.selectedOptions[0]?.textContent).toBe('Web & "app"')
+  })
+
   it('keeps the notes of a task with no agent', async () => {
     const { create } = dialog()
     const user = userEvent.setup()
@@ -87,6 +159,32 @@ describe('the Start a task dialog', () => {
     const input = create.mock.calls[0]?.[0]
     expect(input?.prompt).toBe('Keep the old URL')
     expect(input?.agent).toBeUndefined()
+  })
+
+  it('keeps the line breaks inside the notes', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.type(
+      screen.getByLabelText('Task notes'),
+      '{Enter}Keep the old URL.{Enter}{Enter}Ask first.{Enter}',
+    )
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.prompt).toBe('Keep the old URL.\n\nAsk first.')
+  })
+
+  it('sends the notes with any agent', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(screen.getByLabelText('Agent'), 'codex')
+    await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ agent: 'codex', prompt: 'Keep the old URL' })
   })
 
   it('sends the notes with the agent', async () => {
@@ -108,7 +206,7 @@ describe('the Start a task dialog', () => {
     const { create } = dialog()
     const user = userEvent.setup()
     await user.type(screen.getByLabelText('Task title'), 'Fix the login')
-    await user.type(screen.getByLabelText('Task notes'), '   ')
+    await user.type(screen.getByLabelText('Task notes'), '  {Enter}   {Enter} ')
     await user.click(startButton())
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
@@ -134,9 +232,87 @@ describe('the Start a task dialog', () => {
     expect(input).not.toHaveProperty('prompt')
   })
 
+  it('hides the notes for a skill or an MCP server, and keeps them for My notes', async () => {
+    const { create } = dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
+    const source = await screen.findByLabelText('Where the context comes from')
+
+    for (const type of ['skill', 'mcp', 'github-issue', 'skill']) {
+      await user.selectOptions(source, type)
+      expect(screen.queryByLabelText('Task notes')).toBeNull()
+    }
+    await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({ source: 'skill', ref: 'ABC-1' })
+  })
+
+  it('shows the same notes again when My notes is picked back, and sends them once', async () => {
+    const { create } = dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
+    const source = await screen.findByLabelText('Where the context comes from')
+    for (const type of ['mcp', 'manual', 'github-issue', 'manual']) {
+      await user.selectOptions(source, type)
+    }
+
+    expect((screen.getByLabelText('Task notes') as HTMLTextAreaElement).value).toBe(
+      'Keep the old URL',
+    )
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ prompt: 'Keep the old URL' })
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('context')
+  })
+
   it('asks for a title first', () => {
     dialog()
     expect(startButton().getAttribute('aria-disabled')).toBe('true')
     expect(startButton().getAttribute('data-tip')).toBe('Enter a title')
+  })
+
+  it('shows Starting the task while it waits, and Start task after an error', async () => {
+    const pending: { fail?: (reason: Error) => void } = {}
+    dialog({
+      create: () =>
+        new Promise<Task>((_resolve, reject) => {
+          pending.fail = reject
+        }),
+    })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    expect(await screen.findByRole('button', { name: 'Starting the task' })).toBeTruthy()
+    pending.fail?.(new Error('There is no local branch named main'))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(startButton()).toBeTruthy()
+  })
+
+  it('adds a line with Enter in the notes and starts the task with Mod+Enter', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    const notes = screen.getByLabelText('Task notes') as HTMLTextAreaElement
+    await user.click(notes)
+    await user.keyboard('Keep{Enter}the URL')
+    expect(notes.value).toBe('Keep\nthe URL')
+    expect(create).not.toHaveBeenCalled()
+
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.prompt).toBe('Keep\nthe URL')
+  })
+
+  it('starts nothing with Mod+Enter while the title is empty', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.click(screen.getByLabelText('Task notes'))
+    await user.keyboard('Keep the URL{Meta>}{Enter}{/Meta}{Control>}{Enter}{/Control}')
+    expect(create).not.toHaveBeenCalled()
   })
 })

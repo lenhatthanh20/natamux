@@ -183,6 +183,57 @@ describe('the command palette', () => {
     expect(on.onCreateTask).toHaveBeenCalledWith('zzzqx')
   })
 
+  it('starts a task with the query as its title, without the spaces around it', async () => {
+    const { on } = palette()
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('combobox'), '  zzzqx "a b"  ')
+    const options = optionText()
+    expect(options[0]).toContain('Add task “zzzqx "a b"”')
+    expect(options[1]).toContain('Start task “zzzqx "a b"”')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(on.onNewWorkspace).toHaveBeenCalledWith({ title: 'zzzqx "a b"' })
+    expect(on.onCreateTask).not.toHaveBeenCalled()
+  })
+
+  it('offers no Add task or Start task rows while nothing is typed', () => {
+    palette()
+    expect(optionText().some((text) => /^(Add|Start) task “/.test(text))).toBe(false)
+  })
+
+  it('lists the project commands under Project, not Repo', async () => {
+    const { on } = palette()
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('combobox'), '>project')
+    const options = optionText()
+    expect(options.some((text) => text.includes('Project: Add a project'))).toBe(true)
+    expect(options.some((text) => text.includes('Project: Import GitHub issues'))).toBe(true)
+    expect(options.some((text) => text.startsWith('Repo:'))).toBe(false)
+
+    const add = options.findIndex((text) => text.includes('Project: Add a project'))
+    await user.keyboard(`${'{ArrowDown}'.repeat(add)}{Enter}`)
+    expect(on.onRunCommand.mock.calls[0]?.[0]).toMatchObject({ id: 'repo.add' })
+  })
+
+  it('lists the Start a task command under Task', async () => {
+    const { on } = palette()
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('combobox'), '>start a task')
+    expect(optionText()[0]).toContain('Task: Start a task')
+    await user.keyboard('{Enter}')
+    expect(on.onRunCommand.mock.calls[0]?.[0]).toMatchObject({ id: 'workspace.new' })
+  })
+
+  it('finds a project under Projects and starts a task in it', async () => {
+    const { on } = palette({ repos: [{ id: 'web', name: 'Web app' }] })
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('combobox'), 'web app')
+    expect(screen.getByText('Projects', { selector: 'p' })).toBeTruthy()
+    const row = optionText().findIndex((text) => text.includes('Start a task here'))
+    expect(optionText()[row]).toContain('Web app')
+    await user.keyboard(`${'{ArrowDown}'.repeat(row)}{Enter}`)
+    expect(on.onNewWorkspace).toHaveBeenCalledWith({ repo: 'web' })
+  })
+
   it('removes the Needs you scope with Backspace, and sets it with Tab', async () => {
     palette({ initialScope: 'needs-you' })
     const user = userEvent.setup()
