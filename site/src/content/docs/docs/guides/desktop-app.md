@@ -50,6 +50,8 @@ How the new version goes in depends on how you installed the app:
 | `.deb` | **Restart Now** installs it with `pkexec dpkg -i`, which asks for your password. If that fails, the app shows the `sudo apt install` command to run |
 | `.tar.gz`, or a macOS app run from the disk image | The app tells you about the new version and opens the release page. Download it yourself |
 
+The Intel Mac and Linux builds are paused after 0.1.2. On those systems the app finds no update file in a newer release, and **Check for Updates…** shows the error.
+
 When a check fails, the app tries again at the next check. **Check for Updates…** shows the error. Every step is written to `logs/update.log`.
 
 The check sends no data about you or your tasks. See [Security and privacy](/docs/help/security-and-privacy/).

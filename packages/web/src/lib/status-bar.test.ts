@@ -57,7 +57,7 @@ describe('forcedByWidth', () => {
     }
   })
 
-  it('turns Repos and Import into icons from 1024 to 1279', () => {
+  it('turns Projects and Import into icons from 1024 to 1279', () => {
     const { iconOnly, folded } = forcedByWidth(1100)
     expect([...iconOnly].sort()).toEqual(['import', 'repos'])
     expect(folded.size).toBe(0)

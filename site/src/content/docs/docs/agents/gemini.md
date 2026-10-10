@@ -20,7 +20,8 @@ Per `docs/agent-adapters.md`, the Gemini CLI free tier was replaced by the Antig
 | | |
 |---|---|
 | Program | `gemini` |
-| Command line | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini [extra args] -i '<prompt>'` |
+| Command line | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo [extra args] -i '<prompt>'` |
+| Permission flag | `--approval-mode yolo`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_GEMINI_COMMAND` |
 | Add arguments | `NATAMUX_GEMINI_ARGS` |
 

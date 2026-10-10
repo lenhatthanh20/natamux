@@ -24,7 +24,7 @@ Context → Spec → Plan → [ Test spec ‖ Implement ] → Review → Testing
 | Plan | `agent` | manual | The agent writes `plan.md`. It does not change code. |
 | Test spec and Implement | group | | Two stages run side by side, see below. |
 | Review | `review` | manual | You read the changes and approve them, or send the task back. |
-| Testing | `testing` | auto | The agent adds missing tests, runs all tests and fixes failures. |
+| Testing | `testing` | auto | The agent adds missing tests, runs all tests and fixes failures. It does not commit. |
 | Release | `release` | manual | The task finishes when its pull request is merged. |
 
 The group in the middle holds two stages:
@@ -32,7 +32,7 @@ The group in the middle holds two stages:
 | Stage | Kind | Gate | What happens |
 |---|---|---|---|
 | Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
-| Implement | `agent` | auto | The agent writes tests and code, and commits. Natamux checks for a commit and a clean worktree. |
+| Implement | `agent` | auto | The agent writes tests and code. It does not commit: you read the changes in the **Changes** tab and commit them. |
 
 To change the pipeline, see the [configuration reference](/docs/reference/configuration/).
 
@@ -74,6 +74,8 @@ When an agent runs `natamux done` (or you press **Mark as done**), Natamux runs 
 | Command | `check` | The shell command exits with 0. It runs in the worktree and gets 10 minutes. |
 
 Natamux runs the output and git checks first. It runs the `check` command only when those pass. `requireCommit` and `requireClean` fail for a task that has no workspace.
+
+The default pipeline has no commit check, so agents leave their changes uncommitted. Set `requireCommit` on a stage to make its agent commit: the default prompt then asks for a commit instead.
 
 Stage files are Markdown files in the `.natamux-task/` folder of the worktree. They are named like `spec.md` and can be up to 1 MB. Natamux keeps git from tracking them. See [Workspaces](/docs/concepts/workspaces/).
 

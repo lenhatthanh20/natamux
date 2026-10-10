@@ -1,6 +1,5 @@
 import type { ContextSource, ContextSourceType, Repo, Task } from '@natamux/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ChevronRight } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { AGENT_CHOICES } from '../lib/agents'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
@@ -49,7 +48,7 @@ const REF_PLACEHOLDER: Record<ContextSourceType, string> = {
 
 const FIELD_LABEL = 'text-xs font-medium text-muted'
 
-// A new git worktree with its own task, and an agent in it when one is chosen.
+// Starts a task: the task, its git worktree, and an agent in it when one is chosen.
 export function NewWorkspaceDialog({
   repos,
   initialRepo,
@@ -64,8 +63,7 @@ export function NewWorkspaceDialog({
   const [repo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
-  const [prompt, setPrompt] = useState('')
-  const [advanced, setAdvanced] = useState(false)
+  const [notes, setNotes] = useState('')
   const [source, setSource] = useState<ContextSourceType>('manual')
   const [ref, setRef] = useState('')
   const repoParam = repo === DEFAULT_REPO_ID ? undefined : repo
@@ -87,7 +85,8 @@ export function NewWorkspaceDialog({
         ...(repoParam === undefined ? {} : { repo: repoParam }),
         ...(base === '' ? {} : { base }),
         ...(agent === '' ? {} : { agent }),
-        ...(agent === '' || prompt.trim() === '' ? {} : { prompt: prompt.trim() }),
+        // Only notes typed by hand are the task's context; another source brings its own.
+        ...(source !== 'manual' || notes.trim() === '' ? {} : { prompt: notes.trim() }),
         ...(source === 'manual' ? {} : { context: { source, ref: ref.trim() } }),
       }),
     onSuccess: (task) => {
@@ -113,8 +112,8 @@ export function NewWorkspaceDialog({
 
   return (
     <Dialog
-      title="New workspace"
-      description="A git worktree on its own branch, with a task to follow it."
+      title="Start a task"
+      description="A new task with its own workspace: a git worktree on a new branch."
       size="md"
       onClose={onClose}
       footer={
@@ -131,21 +130,21 @@ export function NewWorkspaceDialog({
             busy={making.isPending}
             disabledReason={missing}
           >
-            {making.isPending ? 'Making the workspace' : 'Create workspace'}
+            {making.isPending ? 'Starting the task' : 'Start task'}
           </Button>
         </>
       }
     >
       <form id="new-workspace" onSubmit={submit} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <span className={FIELD_LABEL}>Repository</span>
+          <span className={FIELD_LABEL}>Project</span>
           <Select
             value={repo}
             onChange={(event) => {
               setRepo(event.target.value)
               setBase('')
             }}
-            aria-label="Repository of the workspace"
+            aria-label="Project"
             fieldSize="md"
             className="w-full"
           >
@@ -157,16 +156,29 @@ export function NewWorkspaceDialog({
           </Select>
         </div>
         <label className="flex flex-col gap-1">
-          <span className={FIELD_LABEL}>Name</span>
+          <span className={FIELD_LABEL}>Title</span>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Fix the login redirect"
             data-autofocus
-            aria-label="Workspace name"
+            aria-label="Task title"
             className={inputLg}
           />
         </label>
+        {source === 'manual' && (
+          <label className="flex flex-col gap-1">
+            <span className={FIELD_LABEL}>Notes</span>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={4}
+              placeholder="Optional. What to do and why. The agent reads this as the task's context."
+              aria-label="Task notes"
+              className={`${textarea} resize-y`}
+            />
+          </label>
+        )}
         <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Branch from</span>
           <Combobox
@@ -226,36 +238,6 @@ export function NewWorkspaceDialog({
             <option value="">No agent, a plain shell</option>
           </Select>
         </div>
-        {agent !== '' && (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              aria-expanded={advanced}
-              onClick={() => setAdvanced((open) => !open)}
-              className="focus-inset -ml-1 flex h-7 w-fit items-center gap-1 rounded-md px-1 text-xs font-medium text-ink-2 hover:text-ink"
-            >
-              <ChevronRight
-                size={12}
-                aria-hidden="true"
-                className={advanced ? 'rotate-90' : undefined}
-              />
-              Advanced
-            </button>
-            {advanced && (
-              <label className="flex flex-col gap-1">
-                <span className={FIELD_LABEL}>What should the agent do?</span>
-                <textarea
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  rows={4}
-                  placeholder="Optional. The agent starts with this prompt, and it becomes the task's notes."
-                  aria-label="Prompt for the agent"
-                  className={`${textarea} resize-y`}
-                />
-              </label>
-            )}
-          </div>
-        )}
         {making.isError && (
           <p role="alert" className="text-remove">
             {making.error.message}

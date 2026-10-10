@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { iconUrl } from '../components/FileIcon'
+import { agentIconNames } from './agents'
 import { fileIconName, namedIcons } from './file-icons'
 
 describe('fileIconName', () => {
@@ -37,7 +38,9 @@ describe('fileIconName', () => {
 
 describe('the bundled icons', () => {
   it('has every icon the maps name', () => {
-    const missing = namedIcons().filter((name) => iconUrl(name, 'dark') === undefined)
+    const missing = [...namedIcons(), ...agentIconNames()].filter(
+      (name) => iconUrl(name, 'dark') === undefined,
+    )
     expect(missing).toEqual([])
   })
 

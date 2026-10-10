@@ -16,14 +16,15 @@ Install Copilot CLI and sign in. Follow the [GitHub documentation](https://docs.
 | | |
 |---|---|
 | Program | `copilot` |
-| Command line | `copilot [extra args] -i '<prompt>'` |
+| Command line | `copilot --allow-all-tools [extra args] -i '<prompt>'` |
+| Permission flag | `--allow-all-tools`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_COPILOT_COMMAND` |
 | Add arguments | `NATAMUX_COPILOT_ARGS` |
 
-For example, to let Copilot use tools without asking:
+For example, to pick the model:
 
 ```sh
-export NATAMUX_COPILOT_ARGS="--allow-all-tools"
+export NATAMUX_COPILOT_ARGS="--model gpt-5"
 ```
 
 Start the agent from the dashboard, or:

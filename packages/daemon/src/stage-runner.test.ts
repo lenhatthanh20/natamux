@@ -262,24 +262,21 @@ describe('a group', () => {
 
     expect(task.lanes).toEqual({ 'test-spec': 'running', implement: 'running' })
     expect(launchScript(task.id)).toContain('Write the tests first')
+    expect(launchScript(task.id)).toContain('Do not commit')
     expect(launchScript(task.id, '2')).toContain('test-spec.md')
     expect(runner.laneFor(task, '2')).toEqual({ stage: 'test-spec', state: 'running' })
     expect(runner.laneFor(task, '1')).toEqual({ stage: 'implement', state: 'running' })
   })
 
-  it('needs a new commit and a clean worktree to finish implement', async () => {
+  it('finishes implement with changes that are not committed, and leaves them so', async () => {
     const task = await atBuild()
     const workspace = task.workspace ?? ''
     writeFileSync(join(workspace, 'export.ts'), 'export {}\n')
-    runGit(workspace, 'add', '.')
-    runGit(workspace, 'commit', '-m', 'Add the export')
 
     await runner.act(task.id, 'report', { terminal: '1' })
     expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'running', implement: 'done' })
-    expect(tasks.listEvents(task.id).at(-1)?.event.payload.passes).toEqual([
-      '1 new commit since the stage started',
-      'Every change is committed',
-    ])
+    expect(tasks.listEvents(task.id).at(-1)?.event.payload.passes).toEqual([])
+    expect(runGit(workspace, 'status', '--porcelain')).toContain('export.ts')
   })
 
   it('asks for the stage name when two stages could be meant', async () => {
@@ -538,6 +535,32 @@ describe('a pipeline of its own', () => {
     await runner.settle()
 
     expect(cwds).toEqual([task.workspace])
+    expect(tasks.getTask(task.id).stage).toBe('review')
+  })
+
+  it('asks for a commit and checks for it when the settings turn it on', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto', requireCommit: true, requireClean: true },
+        { id: 'review', kind: 'review', gate: 'manual' },
+      ],
+    }
+    const task = await started()
+    expect(launchScript(task.id)).toContain('Commit your work when it is done.')
+    const workspace = task.workspace ?? ''
+    writeFileSync(join(workspace, 'export.ts'), 'export {}\n')
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(tasks.listEvents(task.id).at(-1)?.event.payload.reasons).toEqual([
+      'There is no new commit since the stage started',
+      '1 file is not committed',
+    ])
+
+    runGit(workspace, 'add', '.')
+    runGit(workspace, 'commit', '-m', 'Add the export')
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
     expect(tasks.getTask(task.id).stage).toBe('review')
   })
 

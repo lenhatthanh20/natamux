@@ -63,4 +63,13 @@ describe('the address bar and the view', () => {
     // Going back does not add entries of its own.
     expect(useViewStore.getState().changesTaskId).toBeNull()
   })
+
+  it('opens the details when the browser goes back to their address', async () => {
+    history.pushState(null, '', '/t/T-0009')
+    history.pushState(null, '', '/')
+    await popstate(() => history.back())
+    expect(location.pathname).toBe('/t/T-0009')
+    expect(useViewStore.getState().selectedId).toBe('T-0009')
+    expect(useViewStore.getState().detailOpenByTask['T-0009']).toBe(true)
+  })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   initialViewData,
   isUnseen,
@@ -152,5 +152,59 @@ describe('the shown tab', () => {
     useViewStore.getState().setChangesFile('src/a.ts')
     useViewStore.getState().openChanges('T-0002')
     expect(useViewStore.getState().changesFile).toBeNull()
+  })
+})
+
+describe('the details on a new visit', () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // The store reads storage when its module loads.
+  async function freshStore() {
+    vi.resetModules()
+    return (await import('./view-store')).useViewStore
+  }
+
+  it.each([
+    ['one open task', '{"T-0001":true}'],
+    ['many open tasks', '{"T-0001":true,"T-0002":true,"T-0003":true}'],
+    ['broken JSON', '{oops'],
+    ['true', 'true'],
+    ['a list', '[]'],
+    ['null', 'null'],
+  ])('starts with the details closed when %s was stored', async (_name, stored) => {
+    globalThis.localStorage.setItem('natamux.detail-open', stored)
+    const store = await freshStore()
+    expect(store.getState().detailOpenByTask).toEqual({})
+    // The old value is left alone.
+    expect(globalThis.localStorage.getItem('natamux.detail-open')).toBe(stored)
+  })
+
+  it('starts with the details closed when nothing was stored', async () => {
+    const store = await freshStore()
+    expect(store.getState().detailOpenByTask).toEqual({})
+    expect(store.getState().selectedId).toBeNull()
+  })
+
+  it('starts with the details closed when the storage is blocked', async () => {
+    const blocked = () => {
+      throw new Error('blocked')
+    }
+    vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked })
+    const store = await freshStore()
+    expect(store.getState().detailOpenByTask).toEqual({})
+    expect(() => store.getState().setDetailOpen('T-0001', true)).not.toThrow()
+  })
+
+  it('does not store the details flags', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().setDetailOpen('T-0001', true)
+    expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0001': true })
+    expect(globalThis.localStorage.getItem('natamux.detail-open')).toBeNull()
   })
 })

@@ -1,11 +1,11 @@
 ---
 title: Install Natamux
-description: Download the desktop app for macOS or Linux, or run Natamux from source or in Docker.
+description: Download the desktop app for macOS on Apple silicon, or run Natamux from source or in Docker.
 sidebar:
   order: 1
 ---
 
-Natamux is a desktop app for macOS and Linux. There is no Windows build yet. From version 0.1.2 the app [updates itself](/docs/guides/desktop-app/#updates).
+Natamux is a desktop app for macOS on Apple silicon. The Intel Mac and Linux builds are paused, and there is no Windows build yet. From version 0.1.2 the app [updates itself](/docs/guides/desktop-app/#updates).
 
 ## Requirements
 
@@ -20,10 +20,16 @@ Get the file for your system from the [latest release](https://github.com/lenhat
 | System | File |
 |---|---|
 | macOS, Apple silicon (M1 and later) | [`Natamux-mac-arm64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-arm64.dmg) |
+
+<!--
+Paused builds. Move these rows back into the table when they are released again.
 | macOS, Intel | [`Natamux-mac-x64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-x64.dmg) |
 | Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
 | Debian, Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
+-->
+
+The Intel Mac and Linux builds are paused. The last release with them is [v0.1.2](https://github.com/lenhatthanh20/natamux/releases/tag/v0.1.2). You can also build the app from source with `scripts/package-desktop.sh`; see `packages/desktop/README.md`.
 
 :::caution
 The apps are **not signed** with an Apple certificate. Download them only from the Natamux releases page, and follow the first-open steps below.

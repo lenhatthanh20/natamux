@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProjectSettingsService, SETTINGS_FILE, SettingsInputError } from './project-settings.js'
+import { RepoNotFoundError } from './repo-service.js'
 
 let folder: string
 let service: ProjectSettingsService
@@ -64,5 +65,28 @@ describe('ProjectSettingsService', () => {
     expect(service.save(null, raw).stages).toEqual(raw.stages)
     expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual(raw)
     expect(() => service.save(null, { stages: [] })).toThrow(SettingsInputError)
+    expect(() => service.save(null, { agents: { permissionMode: 'yolo' } })).toThrow(
+      'agents.permissionMode',
+    )
+  })
+
+  it('starts agents in auto mode when the file has a bad mode', () => {
+    writeFileSync(file(), JSON.stringify({ agents: { permissionMode: 'yolo' } }))
+    const loaded = service.load(null)
+    expect(loaded.error).toContain('agents.permissionMode')
+    expect(loaded.settings.agents.permissionMode).toBe('auto')
+  })
+
+  it('gives tasks of a removed repository the defaults, but does not load or save it', () => {
+    const removed = new ProjectSettingsService({
+      repos: {
+        pathOf: (repo) => {
+          throw new RepoNotFoundError(repo ?? 'default')
+        },
+      },
+    })
+    expect(removed.get('gone')).toEqual(DEFAULT_PROJECT_SETTINGS)
+    expect(() => removed.load('gone')).toThrow(RepoNotFoundError)
+    expect(() => removed.save('gone', {})).toThrow(RepoNotFoundError)
   })
 })

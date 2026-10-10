@@ -321,6 +321,10 @@ export function createApi(
       return repoSchema.parse(body.repo)
     },
 
+    async removeRepo(id: string): Promise<void> {
+      await request('DELETE', `/repos/${encodeURIComponent(id)}`)
+    },
+
     async listTemplates(): Promise<TaskTemplate[]> {
       const body = asRecord(await request('GET', '/templates'))
       if (!Array.isArray(body.templates)) {

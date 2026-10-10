@@ -126,7 +126,7 @@ export function TitleBar({
           />
         )}
         <IconButton
-          label="New workspace"
+          label="Start a task"
           icon={Plus}
           shortcut={shortcutOf('workspace.new')}
           tipSide="bottom"

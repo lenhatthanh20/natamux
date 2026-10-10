@@ -71,17 +71,24 @@ class FakeSocket {
   }
 }
 
-type Call = { method: string; path: string; authorization: string | null }
+type Call = { method: string; path: string; authorization: string | null; body: string | null }
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status })
 }
 
 // A small stand-in for the daemon. It applies events with the real state machine.
-function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
+const defaultRepo = { id: 'default', name: 'natamux', path: '/work/natamux' }
+const webRepo = { id: 'web', name: 'Web app', path: '/work/web' }
+
+function installDaemon(
+  initial: Task[],
+  extraEvents: TaskEvent[] = [],
+  initialRepos = [defaultRepo],
+) {
   let tasks = [...initial]
   let templates: { id: string; name: string; labels: string[] }[] = []
-  let repos = [{ id: 'default', name: 'natamux', path: '/work/natamux' }]
+  let repos = [...initialRepos]
   const calls: Call[] = []
   const log: { accepted: boolean; event: TaskEvent }[] = [
     ...initial.map((task) => ({
@@ -103,6 +110,7 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       method,
       path,
       authorization: new Headers(init?.headers).get('authorization'),
+      body: typeof init?.body === 'string' ? init.body : null,
     })
     const body: { title?: string; type?: EventType; parentId?: string } =
       typeof init?.body === 'string' ? JSON.parse(init.body) : {}
@@ -229,11 +237,23 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       repos = [...repos, repo]
       return json({ repo }, 201)
     }
+    const repoPath = /^\/api\/repos\/([a-z0-9-]+)$/.exec(path)
+    if (repoPath && method === 'DELETE') {
+      const id = repoPath[1]
+      const inUse = tasks.filter((task) => task.repo === id && task.workspace !== null).length
+      if (inUse > 0) {
+        const message = `Remove the ${inUse} workspace of ${id} first`
+        return json({ error: 'conflict', message }, 409)
+      }
+      repos = repos.filter((repo) => repo.id !== id)
+      return new Response(null, { status: 204 })
+    }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
-      return json({ terminals: ['1'] })
+      const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
+      return json({ terminals: ['1'], agents: task?.agent ? ['1'] : [] })
     }
     if (path === '/api/github/issues' && method === 'GET') {
       return json({
@@ -319,7 +339,11 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
   })
 
   vi.stubGlobal('fetch', fetchMock)
-  return { calls }
+  // Changes what the daemon holds without telling the dashboard, as another client would.
+  const setTasks = (next: Task[]) => {
+    tasks = next
+  }
+  return { calls, setTasks }
 }
 
 // Full texts live in data-tip attributes, which the tooltip layer shows on hover.
@@ -573,6 +597,7 @@ describe('App', () => {
       makeTask({
         id: 'T-0001',
         title: 'Fix timezone bug',
+        agent: 'codex',
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0001',
@@ -628,8 +653,11 @@ describe('App', () => {
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
     await user.click(within(view).getByRole('button', { name: 'New shell' }))
-    expect(within(view).getByRole('region', { name: 'Shell 1' })).toBeTruthy()
-    expect(within(view).getByRole('region', { name: 'Shell 2' })).toBeTruthy()
+    const agentShell = within(view).getByRole('region', { name: 'Shell 1' })
+    const plainShell = within(view).getByRole('region', { name: 'Shell 2' })
+    expect(await within(agentShell).findByText('Codex')).toBeTruthy()
+    expect(within(plainShell).queryByText('Codex')).toBeNull()
+    expect(within(plainShell).queryByText('Agent')).toBeNull()
 
     await user.keyboard('{Escape}')
     await waitFor(() =>
@@ -781,6 +809,9 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'Import issues' }))
     const panel = await screen.findByRole('dialog', { name: 'Import GitHub issues' })
+    expect(panel.textContent).toContain(
+      'Open GitHub issues of this project. Each one you pick becomes a task.',
+    )
     await user.click(await within(panel).findByRole('checkbox'))
     await user.click(within(panel).getByRole('button', { name: 'Import 1 issue' }))
 
@@ -914,27 +945,305 @@ describe('App', () => {
     expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
   })
 
-  it('adds a repository and makes new tasks in it', async () => {
+  it('adds a project and makes new tasks in it', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(screen.getByRole('button', { name: 'Repos' }))
-    const panel = await screen.findByRole('dialog', { name: 'Repositories' })
-    await user.type(within(panel).getByLabelText('Repository folder'), '/work/web')
-    await user.type(within(panel).getByLabelText('Repository name'), 'Web app')
-    await user.click(within(panel).getByRole('button', { name: 'Add repository' }))
+    await user.click(screen.getByRole('button', { name: 'Projects' }))
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    expect(panel.textContent).toContain(
+      "Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them.",
+    )
+    expect(within(panel).getByLabelText('Project folder').getAttribute('placeholder')).toBe(
+      '/path/to/the/git/repository',
+    )
+    await user.type(within(panel).getByLabelText('Project folder'), '/work/web')
+    await user.type(within(panel).getByLabelText('Project name'), 'Web app')
+    await user.click(within(panel).getByRole('button', { name: 'Add project' }))
 
     expect(await within(panel).findByText('/work/web')).toBeTruthy()
-    await user.selectOptions(await screen.findByLabelText('Repository'), 'web')
+    await user.selectOptions(await screen.findByLabelText('Project'), 'web')
     await user.type(screen.getByLabelText('New task title'), 'Fix the header')
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 
     await waitFor(() =>
       expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
     )
+  })
+
+  it('opens the projects panel from the sidebar, and the settings of a project from it', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await user.click(within(sidebar).getByRole('button', { name: 'Add a project' }))
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.click(await within(panel).findByRole('button', { name: 'Settings' }))
+
+    const settings = await screen.findByRole('dialog', { name: 'Project settings of natamux' })
+    expect(settings.textContent).toContain(
+      'Stages, context sources, the issue tracker and the permission mode of the agents of this project.',
+    )
+  })
+
+  it('names the project of a task in its details', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug', repo: 'web' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: /^Details/ }))
+    expect(within(details).getByText('Project')).toBeTruthy()
+    expect(within(details).queryByText('Repository')).toBeNull()
+  })
+
+  it('opens Start a task from the sidebar header, the project group and its empty line', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug', state: 'ready' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    expect(within(sidebar).getByText(/No workspaces\./)).toBeTruthy()
+
+    const openers = [
+      ...within(sidebar).getAllByRole('button', { name: 'Start a task' }),
+      within(sidebar).getByRole('button', { name: 'Start a task in natamux' }),
+    ]
+    expect(openers).toHaveLength(3)
+    for (const opener of openers) {
+      await user.click(opener)
+      const dialog = await screen.findByRole('dialog', { name: 'Start a task' })
+      expect((within(dialog).getByLabelText('Project') as HTMLSelectElement).value).toBe('default')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    }
+  })
+
+  it('starts a task in the project of the group whose + was clicked', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Projects' }))
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.type(within(panel).getByLabelText('Project folder'), '/work/web')
+    await user.type(within(panel).getByLabelText('Project name'), 'Web <app> & co')
+    await user.click(within(panel).getByRole('button', { name: 'Add project' }))
+    expect(await within(panel).findByText('/work/web')).toBeTruthy()
+    await user.keyboard('{Escape}')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await user.click(
+      await within(sidebar).findByRole('button', { name: 'Start a task in Web <app> & co' }),
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'Start a task' })
+    expect((within(dialog).getByLabelText('Project') as HTMLSelectElement).value).toBe('web')
+  })
+
+  it('offers Add task and Start a task when there are no tasks', async () => {
+    installDaemon([])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    const empty = (await screen.findByText('No tasks yet')).parentElement as HTMLElement
+    expect(
+      within(empty).getByText('Add a task to the backlog, or start one now in its own workspace.'),
+    ).toBeTruthy()
+    expect(within(empty).getByRole('button', { name: /^Add task/ })).toBeTruthy()
+    await user.click(within(empty).getByRole('button', { name: /^Start a task/ }))
+    expect(await screen.findByRole('dialog', { name: 'Start a task' })).toBeTruthy()
+  })
+
+  it('removes a project from its sidebar group after asking', async () => {
+    const { calls } = installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const removeCalls = () =>
+      calls.filter((call) => call.method === 'DELETE' && call.path === '/api/repos/web')
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for natamux' }))
+    expect(screen.getByRole('menuitem', { name: 'Start a task' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Remove project' })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    let confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    expect(within(confirm).getByText(/\/work\/web/)).toBeTruthy()
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(removeCalls()).toHaveLength(0)
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Remove Web app from Natamux?' })).toBeNull()
+    expect(removeCalls()).toHaveLength(0)
+
+    await user.pointer({
+      keys: '[MouseRight]',
+      target: within(sidebar).getByRole('button', { name: /^Web app/ }),
+    })
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await screen.findByText('Removed Web app.')).toBeTruthy()
+    await waitFor(() =>
+      expect(within(sidebar).queryByRole('button', { name: 'Actions for Web app' })).toBeNull(),
+    )
+    expect(removeCalls()).toHaveLength(1)
+  })
+
+  it('keeps the remove item off while the project has workspaces', async () => {
+    const { calls } = installDaemon(
+      [makeTask({ id: 'T-0003', title: 'Fix header', repo: 'web', workspace: '/work/T-0003' })],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    const header = await within(sidebar).findByRole('button', { name: /^Web app/ })
+    act(() => header.focus())
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+
+    const remove = await screen.findByRole('menuitem', { name: 'Remove project' })
+    expect((remove as HTMLButtonElement).disabled).toBe(true)
+    expect(remove.getAttribute('aria-describedby')).toBeTruthy()
+    expect(screen.getByText('Remove its workspaces first')).toBeTruthy()
+    expect(calls.some((call) => call.path === '/api/repos/web')).toBe(false)
+  })
+
+  it('counts a finished workspace as one that keeps the project', async () => {
+    installDaemon(
+      [
+        makeTask({
+          id: 'T-0006',
+          title: 'Shipped',
+          state: 'done',
+          repo: 'web',
+          workspace: '/work/T-0006',
+        }),
+      ],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+
+    const remove = screen.getByRole('menuitem', { name: 'Remove project' })
+    expect((remove as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('forgets a removed project everywhere and keeps its tasks', async () => {
+    const { calls } = installDaemon(
+      [makeTask({ id: 'T-0005', title: 'Draft for web', repo: 'web' })],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const repoInPalette = async () => {
+      await user.click(
+        within(screen.getByRole('banner')).getByRole('button', { name: /Search or run a command/ }),
+      )
+      const palette = screen.getByRole('dialog', { name: 'Command palette' })
+      await user.keyboard('Web app')
+      const found = within(palette)
+        .queryAllByRole('option')
+        .some((option) => option.textContent?.includes('Start a task here'))
+      await user.keyboard('{Escape}')
+      return found
+    }
+
+    expect(await repoInPalette()).toBe(true)
+    await user.selectOptions(await screen.findByLabelText('Project'), 'web')
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    const confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Removed Web app.')).toBeTruthy()
+
+    await waitFor(() => expect(screen.queryByLabelText('Project')).toBeNull())
+    expect(within(screen.getByRole('table')).getByText('Draft for web')).toBeTruthy()
+    expect(await repoInPalette()).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Projects' }))
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    expect(within(panel).getByText('/work/natamux')).toBeTruthy()
+    expect(within(panel).queryByText('/work/web')).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.type(screen.getByLabelText('New task title'), 'After the remove')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
+    )
+    const created = calls.find((call) => call.method === 'POST' && call.path === '/api/tasks')
+    expect(JSON.parse(created?.body ?? '{}').repo).toBeUndefined()
+  })
+
+  it('shows why the daemon did not remove a project and keeps its group', async () => {
+    const { setTasks } = installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    setTasks([makeTask({ id: 'T-0004', repo: 'web', workspace: '/work/T-0004' })])
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    const confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await screen.findByText('Remove the 1 workspace of web first')).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
+  })
+
+  it('opens the project settings from the project menu', async () => {
+    installDaemon([runningTask], [], [defaultRepo, webRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Settings' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Project settings of Web app' })).toBeTruthy()
   })
 
   it('compares tries and keeps one, cancelling the others', async () => {
@@ -1033,6 +1342,261 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
+  it('opens the changes from the sidebar without the details', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
+    await user.click(screen.getByRole('menuitem', { name: 'View changes' }))
+    expect(await screen.findByRole('region', { name: 'Changes of T-0002' })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+  })
+
+  it('keeps the details of a task open after a visit to another workspace', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
+  it('edits a selected task with closed details', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('j')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    await user.keyboard('e')
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    expect(await within(details).findByRole('form', { name: 'Edit T-0001' })).toBeTruthy()
+  })
+
+  it('shows no details on start, even for a selected task', async () => {
+    window.localStorage.setItem('natamux.detail-open', '{"T-0001":true}')
+    useViewStore.setState({ selectedId: 'T-0001' })
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
+  })
+
+  it('keeps the details of another task as they were when a workspace is made', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Add export/ }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+
+    // The details have a header too; the title bar comes first.
+    const [titleBar] = screen.getAllByRole('banner')
+    await user.click(within(titleBar as HTMLElement).getByRole('button', { name: 'Start a task' }))
+    const dialog = screen.getByRole('dialog', { name: 'Start a task' })
+    await user.type(within(dialog).getByLabelText('Task title'), 'Fix the login')
+    await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
+
+    await screen.findByRole('region', { name: 'Changes of T-0098' })
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
+    expect(useViewStore.getState().selectedId).toBe('T-0098')
+    expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0002': true })
+  })
+
+  it('opens a subtask from the details and leaves its details as they were', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Release 1.0', state: 'review', stage: 'review' }),
+      makeTask({ id: 'T-0003', title: 'Write the notes', parentId: 'T-0001' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: /Release 1\.0/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const subtasks = within(details).getByRole('region', { name: 'Subtasks' })
+    await user.click(within(subtasks).getByRole('button', { name: /Write the notes/ }))
+
+    expect(await screen.findByRole('region', { name: 'Workspace of T-0003' })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0003' })).toBeNull()
+    expect(useViewStore.getState().detailOpenByTask['T-0001']).toBe(true)
+  })
+
+  it('shows and hides the details with Mod+Alt+B', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    // No task is selected yet: nothing to show.
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.keyboard('j')
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy()
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
+  })
+
+  it('shows and hides the details of the selected task with i', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('i')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.keyboard('j')
+    await user.keyboard('i')
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.keyboard('i')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+  })
+
+  it('shows the details of a task address, and none for an unknown task', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    act(() => useViewStore.getState().applyRoute({ kind: 'task', id: 'T-0002' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+
+    act(() => useViewStore.getState().applyRoute({ kind: 'task', id: 'T-9999' }))
+    expect(screen.queryByRole('complementary', { name: /Details of/ })).toBeNull()
+    expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('closes the details with their close button and with Escape', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const row = () =>
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ })
+
+    await user.click(row())
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.click(row())
+    await user.click(row())
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+  })
+
+  it('shows no details sheet in a narrow window until asked', async () => {
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }))
+    vi.stubGlobal('innerWidth', 900)
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('j')
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    vi.stubGlobal('innerWidth', 1400)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    vi.stubGlobal('innerWidth', 900)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+
+    await user.keyboard('i')
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeTruthy()
+  })
+
+  it('leaves the details as they were when the sidebar is hidden and shown', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
   it('shows the running agents side by side and closes a pane', async () => {
     installDaemon([
       reviewTask,
@@ -1063,22 +1627,45 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
-  it('makes a workspace with an agent from the sidebar and opens its terminal', async () => {
+  it('names the agent in the header of each agent pane', async () => {
+    const working = { state: 'running', updatedAt: new Date().toISOString() } as const
+    installDaemon([
+      makeTask({ ...working, id: 'T-0002', agent: 'claude-code', workspace: '/work/T-0002' }),
+      makeTask({ ...working, id: 'T-0003', agent: null, workspace: '/work/T-0003' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await user.click(within(sidebar).getByRole('button', { name: /Agents/ }))
+    const grid = screen.getByRole('region', { name: 'Agents' })
+    const claude = within(grid).getByRole('region', { name: 'Agent of T-0002' })
+    expect(within(claude).getByText('Claude Code')).toBeTruthy()
+    const none = within(grid).getByRole('region', { name: 'Agent of T-0003' })
+    expect(within(none).queryByText('Agent')).toBeNull()
+  })
+
+  it('starts a task with notes from the title bar and opens its terminal', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(screen.getByRole('button', { name: 'New workspace' }))
-    const dialog = screen.getByRole('dialog', { name: 'New workspace' })
-    await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
-    await user.click(within(dialog).getByRole('button', { name: 'Advanced' }))
-    await user.type(within(dialog).getByLabelText('Prompt for the agent'), 'Keep the old URL')
-    await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Start a task' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Start a task' })
+    await user.type(within(dialog).getByLabelText('Task title'), 'Fix the login')
+    await user.type(within(dialog).getByLabelText('Task notes'), 'Keep the old URL')
+    await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
     const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(
@@ -1337,7 +1924,7 @@ describe('App', () => {
 
     await user.keyboard('{Escape}')
     await user.keyboard('c')
-    expect(screen.getByRole('dialog', { name: 'New workspace' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Start a task' })).toBeTruthy()
     await user.keyboard('{Escape}')
     await user.keyboard('?')
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()

@@ -3,6 +3,7 @@ import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
 import { type CSSProperties, lazy, type ReactNode, Suspense, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { shortcutOf } from '../lib/commands'
+import { AgentBadge } from './AgentBadge'
 import { IconButton } from './ui/IconButton'
 import { Skeleton } from './ui/Skeleton'
 
@@ -15,8 +16,8 @@ type TerminalPaneProps = {
   // The icon before the title: a shell icon, or the state glyph of an agent.
   icon: ReactNode
   title: ReactNode
-  // "Agent", only when an agent runs in this pane.
-  role?: string
+  // Set only when an agent runs in this pane: its id, or null when the task has none.
+  agent?: string | null
   // The line after the title: the state and what the agent does now.
   stateText?: string
   // The agent waits for the user: the pane shows a bar and a tint.
@@ -41,7 +42,7 @@ export function TerminalPane({
   label,
   icon,
   title,
-  role,
+  agent,
   stateText,
   needsInput = false,
   connect,
@@ -74,7 +75,7 @@ export function TerminalPane({
         <span aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 bg-signal" />
       )}
       <header
-        className={`flex h-8 shrink-0 items-center gap-2 border-b border-line pr-1 pl-2.5 text-xs ${
+        className={`@container flex h-8 shrink-0 items-center gap-2 border-b border-line pr-1 pl-2.5 text-xs ${
           needsInput ? 'bg-signal-soft' : 'bg-surface'
         }`}
       >
@@ -82,11 +83,7 @@ export function TerminalPane({
         <span className="flex min-w-0 items-center gap-1.5 font-medium text-muted group-focus-within/pane:text-ink">
           {title}
         </span>
-        {role !== undefined && (
-          <span className="shrink-0 rounded border border-line px-1.5 text-2xs font-medium text-ink-2">
-            {role}
-          </span>
-        )}
+        {agent !== undefined && <AgentBadge agent={agent} />}
         {stateText !== undefined && (
           <span
             data-tip-overflow
