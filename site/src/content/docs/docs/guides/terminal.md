@@ -39,7 +39,8 @@ Things to know:
 - Panes sit side by side and fill the width. The last pane takes the rest of its row.
 - On a phone, one shell fills the screen. Chips named **Shell 1**, **Shell 2** switch between them.
 - Closing a shell ends its process and everything that runs in it.
-- A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again. Natamux keeps up to 200,000 characters of output for this.
+- A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again, drawn for the pane's size.
+- When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
 - Natamux runs at most 20 shells in all.
 
 To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or use **Search or run a command**. The palette lists the extra shells under their workspace.
@@ -48,7 +49,7 @@ To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or
 
 `Mod+F` (`Ctrl+Shift+F` on Windows and Linux) opens **Find**. Press `Enter` for the next match and `Shift+Enter` for the previous one. **Match case** and **Use regular expression** are toggles. `Esc` closes the bar.
 
-When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. Each pane keeps 10,000 lines of scrollback. A shell keeps its output while no one looks at it, so when you switch tasks or reload the dashboard, you can scroll back to where the output began. The output is gone when the shell ends, or when Natamux restarts or updates.
+When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. Each pane keeps 10,000 lines of scrollback. A shell keeps its screen and the 10,000 lines above it while no one looks at it, so when you switch tasks or reload the dashboard, you can scroll back to where the output began. When the pane is narrower or wider than before, long lines wrap again to fit it, as in any terminal. The output is gone when the shell ends, or when Natamux restarts or updates.
 
 ### Keys that belong to the shell
 

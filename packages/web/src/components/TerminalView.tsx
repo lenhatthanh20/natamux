@@ -113,14 +113,17 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
         socket.send(JSON.stringify(message))
       }
     }
-    // The size that the daemon knows. It hears of a size only when it changes.
+    // The size that this screen sent last. It sends a size when it changes, and again when the
+    // screen takes the focus: another screen of the same shell may have set its own size since.
     let sentSize = { cols: terminal.cols, rows: terminal.rows }
-    const sendSize = () => {
-      if (terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
+    const sendSize = (always = false) => {
+      if (always || terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
         sentSize = { cols: terminal.cols, rows: terminal.rows }
         send({ type: 'resize', ...sentSize })
       }
     }
+    const claimSize = () => sendSize(true)
+    terminal.textarea?.addEventListener('focus', claimSize)
 
     setStatus('connecting')
     setError(null)
@@ -172,7 +175,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       })
 
     const input = terminal.onData((data) => send({ type: 'input', data }))
-    const resized = terminal.onResize(sendSize)
+    const resized = terminal.onResize(() => sendSize())
     const updateScrolled = () => {
       const buffer = terminal.buffer.active
       setScrolledUp(buffer.viewportY < buffer.baseY)
@@ -209,6 +212,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       disposed = true
       clearTimeout(fitTimer)
       observer.disconnect()
+      terminal.textarea?.removeEventListener('focus', claimSize)
       input.dispose()
       resized.dispose()
       scrolled.dispose()
