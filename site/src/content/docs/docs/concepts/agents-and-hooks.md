@@ -37,7 +37,7 @@ The agent that starts is, in this order: the one you choose when you start it, t
 
 ## How Natamux knows what the agent does
 
-Every agent has its own hook names. Natamux turns them into five common signals:
+Every agent has its own hook names. Natamux turns them into six common signals:
 
 | Signal | Meaning | Effect on the task |
 |---|---|---|
@@ -45,9 +45,14 @@ Every agent has its own hook names. Natamux turns them into five common signals:
 | `activity` | The agent ran a tool. | A task in `needs-input` becomes `running`, because a permission was answered. Otherwise the dashboard shows that the agent is alive. |
 | `asking` | The agent waits for you: a permission or a question. | A `running` task becomes `needs-input`. |
 | `turn-ended` | The agent finished its turn. | A `running` task becomes `needs-input`, unless the agent ran `natamux done` first. |
+| `turn-paused` | The agent finished its turn, but background work will wake it again. | The task stays `running`, and its summary says what the agent waits for, such as `Waiting for Bash: pnpm test`. It is not quiet. |
 | `failed` | The agent stopped with an error. | A `running` or `needs-input` task becomes `failed`. |
 
 A turn that ends without `natamux done` means the agent stopped early, for example to ask something in plain text. The stage is done only when the agent runs `natamux done`. Then the checks run. See [Stages](/docs/concepts/stages/).
+
+### Waiting for background work
+
+Some agents start work in the background, such as a test run in a background shell, a monitor or a scheduled prompt, and end their turn while it runs. That is not a question for you. The daemon logs `agent.waiting`, keeps the task `running` and shows `Waiting for …` with what the agent waits for, for example `Waiting for Bash: pnpm test and 1 more`. The task is not quiet and is not in **Needs you**. When the work wakes the agent, the usual hooks go on. Claude Code reports this today. See [Claude Code](/docs/agents/claude-code/#events-and-states).
 
 Hooks also send a one-line summary of what the agent does now, such as `Edit src/a.ts`. The dashboard shows it.
 

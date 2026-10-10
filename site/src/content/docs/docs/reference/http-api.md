@@ -40,8 +40,9 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `GET /tasks/:id/changes` | Files changed in the workspace |
 | `POST /workspaces` | Make a task with a worktree and optionally start an agent |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
-| `GET /repos` | Repositories Natamux manages |
-| `DELETE /repos/:id` | Forget a repository. Answers 409 while it has workspaces |
+| `GET /repos` | Projects Natamux manages |
+| `POST /repos` | Add a project `{ path, name? }` |
+| `DELETE /repos/:id` | Forget a project. Any project can be removed. Answers 409 while it has workspaces |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
 
@@ -49,7 +50,7 @@ The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Termi
 
 A browser cannot set headers on a WebSocket, so:
 
-- `GET /events` (WebSocket) streams live task changes. Pass the token as `?token=<token>`.
+- `GET /events` (WebSocket) streams live task changes. It also sends a `repos.changed` message when a project is added or removed, so a dashboard can read `GET /repos` again. Pass the token as `?token=<token>`.
 - Terminals open with a one-time ticket. Call `POST /tasks/:id/terminal/ticket` to get `{ ticket }`, then open `GET /tasks/:id/terminal?ticket=...` (WebSocket) within 30 seconds.
 
 ## The full table

@@ -132,7 +132,7 @@ The dashboard shows a strip called **Needs you**. It lists the tasks that wait f
 | Review | State `review`. |
 | Failed | State `failed`. |
 | Blocked | State `blocked`. |
-| Quiet | State `running`, with no sign of life for 10 minutes. The agent may be stuck, interrupted or closed. |
+| Quiet | State `running`, with no sign of life for 10 minutes. The agent may be stuck, interrupted or closed. A task whose agent waits for background work is never quiet. |
 
 The task that waited longest comes first. The command palette has a **Needs you** scope with the same list.
 

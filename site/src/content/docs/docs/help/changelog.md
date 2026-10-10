@@ -7,6 +7,17 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## Unreleased
+
+- The **Progress** view moved from a workspace tab into the details panel, next to the terminal. Key `4` now shows **Docs**. The details panel is open by default beside a workspace. See [Progress](/docs/concepts/stages/#progress).
+- The **Docs** tab shows Markdown as formatted text. Switch to **Source** for the raw text. See [The Docs tab](/docs/concepts/stages/#the-docs-tab).
+- Each terminal shows the state of its own stage, not the state of the whole task.
+- **Remove finished workspaces** in the menu of a project, and on its "N finished" row. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Any project can be removed. The app opens with no project: use **File → Add Project…** (no restart). The live socket tells open dashboards when the project list changes.
+- A task whose agent waits for background work stays running and says what it waits for. It is not quiet. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work).
+- The **Needs you** section has an amber frame and a bell, with two-line rows. A task whose workspace was removed leaves it.
+- Fix: after you reconnect, a terminal shows the screen of the shell, not its raw output. The pane in use sets the size of the shell. See [Terminal](/docs/guides/terminal/).
+
 ## v0.1.3 (2026-10-11)
 
 - **Remove project** in the menu of a repository's group in the sidebar. See [Repositories](/docs/guides/dashboard/#repositories).

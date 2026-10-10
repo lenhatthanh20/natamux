@@ -28,7 +28,7 @@ export NATAMUX_CLAUDE_COMMAND=/opt/tools/claude
 export NATAMUX_CLAUDE_ARGS="--model sonnet"
 ```
 
-Start the agent from the dashboard (**New workspace**, or **Start agent** on a stage), or from the command line:
+Start the agent from the dashboard (**Start a task**, or **Start agent** on a stage), or from the command line:
 
 ```sh
 natamux agent start T-42 --agent claude-code
@@ -56,7 +56,7 @@ The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from th
 | `PreToolUse`, `PostToolUse` | The agent works | no change (a tool that ran after a question moves the task back to running) |
 | `PermissionRequest` | Claude Code is about to ask for permission | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | Claude Code waits for you | needs input |
-| `Stop` | The agent finished its answer | needs input |
+| `Stop` | The agent finished its answer | needs input. When background work is still running (a background shell, a monitor or a scheduled prompt), the agent only paused: the task stays running and says `Waiting for Bash: pnpm test`, until the work wakes the agent again. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work) |
 | `StopFailure` | An API error ended the turn | failed |
 
 Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/docs/concepts/stages/).

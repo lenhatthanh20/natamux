@@ -15,11 +15,13 @@ The window has five parts.
 
 | Part | What it holds |
 |---|---|
-| Title bar | The sidebar toggle, where you are, **Search or run a command**, the "N need you" chip, **New workspace** and the details toggle |
-| Sidebar | A filter field, **All tasks**, **Agents**, **Needs you**, and **Workspaces** grouped by repository |
+| Title bar | The sidebar toggle, where you are, **Search or run a command**, the "N need you" chip, **Start a task** and the details toggle |
+| Sidebar | A filter field, **All tasks**, **Agents**, **Needs you**, and **Workspaces** grouped by project |
 | Main area | The task list as a table, board or progress view, or the open workspace |
 | Details panel | The selected task, in two views: **Progress** (its stages, with Approve) and **Details** (notes, workspace, pull request, subtasks, tries) |
-| Status bar | The connection state, running count, **Repos**, **Import issues**, **Notify me**, shortcuts and the account menu |
+| Status bar | The connection state, running count, **Projects**, **Import issues**, **Notify me**, shortcuts and the account menu |
+
+The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
 
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
@@ -30,13 +32,13 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 - **All tasks** shows the task list in the main area. The number is every task.
 - **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto.
 - **Needs you** lists the tasks that wait for you. See [Needs you](#needs-you).
-- **Workspaces** lists workspaces in folders, one per repository. A workspace row shows its state, title, age, branch, the size of its diff, and what the agent does now or asks.
+- **Workspaces** lists workspaces in folders, one per project. A workspace row shows its state, title, age, branch, the size of its diff, and what the agent does now or asks.
 
 In the workspace list:
 
-- Click a repository to fold or unfold it. Click **+** next to it for **New workspace in** that repository. **Add a repository** and **Add a workspace** are in the section header.
-- Right-click a repository, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings** and **Remove project**.
-- Finished workspaces (done or cancelled) are folded under "N finished".
+- Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
+- Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
+- Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path** and **Remove workspace**. Pinned workspaces move to a **Pinned** section at the top.
 - Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.
@@ -71,10 +73,10 @@ The task is created as a draft and selected. The field empties at once, so you c
 
 Two lists appear next to the field when they have something to choose:
 
-- **Repository**, when you have more than one repository.
+- **Project**, when you have more than one project.
 - **Template**, when you saved a template. Choose **No template** to skip it. Save a template from the **More actions** menu of a task: **Save as template**.
 
-To start work right away, press `c` for **New workspace**. It makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
+To start work right away, press `c` for **Start a task**. It makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
 
 In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and use the actions for its state, such as **Mark ready**, **Approve** or **Retry**. **Cancel task** asks first.
 
@@ -88,20 +90,20 @@ The **Needs you** strip ignores the filter. It says **Not filtered** while a fil
 
 ## Command palette
 
-Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search tasks, commands and repositories.
+Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search tasks, commands and projects.
 
 | You type | Result |
 |---|---|
 | Nothing | Needs you, recent workspaces and suggested commands |
 | `>` and text | Commands only |
 | `#` and digits | Tasks by id |
-| Text with no match | **Add a task** or **New workspace** with that text as the title |
+| Text with no match | **Add a task** or **Start a task** with that text as the title |
 
 Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to `Alt+9` pick a row by number. `Tab` changes the scope.
 
 Press `Mod+J` for **Jump to a workspace**. It lists workspaces and their extra shells, with the ones that need you first.
 
-The palette also changes the view (**All tasks**, **Agents**, table, board, progress), the theme, the text size, and runs **Add a repository** and **Import GitHub issues**. See [Keyboard shortcuts](/docs/reference/shortcuts/) for every key.
+The palette also changes the view (**All tasks**, **Agents**, table, board, progress), the theme, the text size, and runs **Add a project** and **Import GitHub issues**. See [Keyboard shortcuts](/docs/reference/shortcuts/) for every key.
 
 ## Task states
 
@@ -123,9 +125,11 @@ See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
-- The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
+- The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage, the reason and how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
 - The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks.
 - The browser tab title shows the count: `(2) Natamux`.
+
+A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed leaves the strip.
 
 ## Notifications
 
@@ -137,15 +141,15 @@ The button is gone once you decide. If you blocked notifications, the status bar
 
 ## Repositories
 
-Click **Repos** in the status bar, or **Add a repository** in the sidebar, to see the repositories the daemon manages. To add one:
+Click **Projects** in the status bar, or **Add a project** in the sidebar, to see the projects (git repositories) the daemon manages. To add one:
 
 1. Enter the **Folder**, a full path on the machine that runs the daemon.
 2. Optionally enter a **Name**. The folder name is used otherwise.
-3. Click **Add repository**.
+3. Click **Add project**.
 
-Each repository has a **Settings** button for its stages, context sources and issue tracker.
+Each project has a **Settings** button for its stages, context sources and issue tracker.
 
-To remove a repository, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. Any project can be removed. With no project left, the sidebar offers to add one.
+To remove a project, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. Any project can be removed. With no project left, the sidebar offers to add one.
 
 ## Import issues
 
