@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
@@ -129,5 +129,12 @@ describe('newWorkspace', () => {
       WorkspaceConflictError,
     )
     expect(tasks.listTasks()).toHaveLength(0)
+  })
+
+  it('cancels the new task when the worktree cannot be made', async () => {
+    vi.spyOn(parts.workspaces, 'create').mockRejectedValue(new Error('index.lock exists'))
+
+    await expect(newWorkspace(parts, { title: 'X' })).rejects.toThrow('index.lock exists')
+    expect(tasks.listTasks().map((task) => task.state)).toEqual(['cancelled'])
   })
 })
