@@ -116,13 +116,7 @@ describe('resolveSteps', () => {
 
   it('finds a stage of a group for a task that has it on its own', () => {
     const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
-    expect(implement).toEqual({
-      id: 'implement',
-      kind: 'agent',
-      gate: 'auto',
-      requireCommit: true,
-      requireClean: true,
-    })
+    expect(implement).toEqual({ id: 'implement', kind: 'agent', gate: 'auto' })
   })
 
   it('makes a stage of its own that is gone from the settings a manual one', () => {

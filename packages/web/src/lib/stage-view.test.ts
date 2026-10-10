@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE, type Stage } from '@natamux/core'
+import { DEFAULT_PIPELINE, type Stage, stagesOf } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
 import { finishedWhen, formatDuration, stageCount, stepTime } from './stage-view'
@@ -27,6 +27,15 @@ describe('finishedWhen', () => {
     expect(
       finishedWhen({ id: 'x', kind: 'manual', gate: 'manual', doneWhen: 'Legal signs off.' }),
     ).toBe('Legal signs off.')
+  })
+
+  it('names a commit only when the stage needs one', () => {
+    const implement = DEFAULT_PIPELINE.flatMap(stagesOf).find((stage) => stage.id === 'implement')
+    if (implement === undefined) {
+      throw new Error('The default pipeline has no implement stage')
+    }
+    expect(finishedWhen(implement)).not.toContain('committed')
+    expect(finishedWhen({ ...implement, requireCommit: true })).toContain('the work is committed')
   })
 })
 

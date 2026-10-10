@@ -201,7 +201,7 @@ The flag comes before the words of `NATAMUX_<AGENT>_ARGS`. When those words repe
 
 ### Drop the planning stages
 
-Go from context straight to code. Remove `spec`, `plan` and the group, and add one `implement` stage:
+Go from context straight to code. Remove `spec`, `plan` and the group, and add one `implement` stage. With `requireCommit` and `requireClean` the agent commits its work. Without them it leaves the changes for you to commit:
 
 ```json
 {
