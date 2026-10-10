@@ -8,6 +8,8 @@ export type TabItem<T extends string> = {
   label: string
   icon?: LucideIcon
   count?: number
+  // What the count means, for screen readers: "2 changed files". The number alone without it.
+  countLabel?: string
 }
 
 type TabsProps<T extends string> = {
@@ -114,6 +116,10 @@ export function Tabs<T extends string>({
                 role="tab"
                 aria-selected={selected}
                 aria-controls={`${idPrefix}-panel-${tab.id}`}
+                // The count is a description, so the tab's name stays its label.
+                aria-describedby={
+                  tab.count === undefined ? undefined : `${tabId(idPrefix, tab.id)}-count`
+                }
                 tabIndex={selected ? 0 : -1}
                 onClick={() => onChange(tab.id)}
                 className={`focus-inset relative flex shrink-0 items-center gap-1.5 px-2.5 text-sm font-medium ${
@@ -123,9 +129,17 @@ export function Tabs<T extends string>({
                 {Icon !== undefined && <Icon size={ICON.sm} aria-hidden="true" />}
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-badge px-[5px] text-2xs font-semibold text-ink-2">
-                    {tab.count}
-                  </span>
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-badge px-[5px] text-2xs font-semibold text-ink-2"
+                    >
+                      {tab.count}
+                    </span>
+                    <span id={`${tabId(idPrefix, tab.id)}-count`} hidden>
+                      {tab.countLabel ?? String(tab.count)}
+                    </span>
+                  </>
                 )}
                 {selected && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-ink" />}
               </button>

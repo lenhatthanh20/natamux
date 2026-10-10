@@ -293,6 +293,7 @@ export function ChangesView({
             label: 'Changes',
             icon: FileDiffIcon,
             count: uncommitted !== null && uncommitted > 0 ? uncommitted : undefined,
+            countLabel: uncommitted === 1 ? '1 changed file' : `${uncommitted} changed files`,
           },
           { id: 'history', label: 'History', icon: History },
           { id: 'docs', label: 'Docs', icon: FileText },
