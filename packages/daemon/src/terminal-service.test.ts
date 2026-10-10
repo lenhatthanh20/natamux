@@ -1,13 +1,13 @@
-import type { TerminalServerMessage } from '@natamux/core'
+import { TERMINAL_HISTORY_CHARS, type TerminalServerMessage } from '@natamux/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   KILL_GRACE_MS,
-  lastLines,
   MAX_SESSIONS,
   NoTerminalError,
-  REPLAY_SCROLLBACK_LINES,
-  SCROLLBACK_CHARS,
+  OutputHistory,
+  REPLAY_CHUNK_CHARS,
+  replayChunks,
   TerminalLimitError,
   TerminalService,
   TICKET_TTL_MS,
@@ -35,6 +35,19 @@ function setup(options: { now?: () => number } = {}) {
 function client() {
   const messages: TerminalServerMessage[] = []
   return { messages, send: (message: TerminalServerMessage) => messages.push(message) }
+}
+
+// A text with a lone half of a surrogate pair, which shows as a broken character.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+
+// The lines "line 1" to "line <count>", as a shell prints them.
+function numbered(count: number): string {
+  return Array.from({ length: count }, (_, index) => `line ${index + 1}\r\n`).join('')
+}
+
+// All the output a client got, as one text.
+function outputOf(messages: TerminalServerMessage[]): string {
+  return messages.map((message) => (message.type === 'output' ? message.data : '')).join('')
 }
 
 describe('TerminalService', () => {
@@ -121,18 +134,21 @@ describe('TerminalService', () => {
     expect(ptys).toHaveLength(1)
   })
 
-  it('keeps only the newest output', () => {
+  it('keeps only the newest output, from the start of a line', () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
-    ptys[0]?.emit('x'.repeat(SCROLLBACK_CHARS))
-    ptys[0]?.emit('end')
+    const line = `${'x'.repeat(99)}\n`
+    ptys[0]?.emit(line.repeat(TERMINAL_HISTORY_CHARS / line.length))
+    ptys[0]?.emit('half a line')
+    ptys[0]?.emit('end\n')
 
     const later = client()
     service.attach('T-0001', later, size)
 
-    const replay = later.messages[0]
-    expect(replay?.type === 'output' && replay.data.length).toBe(SCROLLBACK_CHARS)
-    expect(replay?.type === 'output' && replay.data.endsWith('end')).toBe(true)
+    const text = outputOf(later.messages)
+    expect(text.length).toBeLessThanOrEqual(TERMINAL_HISTORY_CHARS)
+    expect(text.startsWith(line)).toBe(true)
+    expect(text.endsWith('half a lineend\n')).toBe(true)
   })
 
   it('tells the clients when the shell ends, and starts a new one next time', () => {
@@ -317,34 +333,239 @@ describe('attaching to a running shell', () => {
     expect(ptys[0]?.sizes).toEqual([])
   })
 
-  it('replays the last screen and a thousand lines, not everything', () => {
+  it('replays the whole history, from the first line', () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
-    const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}`)
-    ptys[0]?.emit(`${lines.join('\n')}\n`)
+    for (let index = 1; index <= 8000; index += 1) {
+      ptys[0]?.emit(`line ${index}\r\n`)
+    }
 
     const later = client()
     service.attach('T-0001', later, size)
 
-    const replay = later.messages[0]
-    const text = replay?.type === 'output' ? replay.data : ''
-    expect(text.split('\n').filter((line) => line !== '')).toHaveLength(
-      size.rows + REPLAY_SCROLLBACK_LINES,
+    const text = outputOf(later.messages)
+    expect(text.startsWith('line 1\r\n')).toBe(true)
+    expect(text.endsWith('line 8000\r\n')).toBe(true)
+    expect(text.split('\r\n').filter((line) => line !== '')).toHaveLength(8000)
+  })
+
+  it.each([5000, 5001, size.rows + 1000, size.rows + 1001])(
+    'replays all of %i lines, past the old limits',
+    (count) => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      ptys[0]?.emit(numbered(count))
+
+      const later = client()
+      service.attach('T-0001', later, size)
+
+      expect(outputOf(later.messages)).toBe(numbered(count))
+    },
+  )
+
+  it('keeps a long agent session: 10,000 colored lines of about 200 chars', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const lines = Array.from(
+      { length: 10_000 },
+      (_, index) =>
+        `\u001b[32m${String(index + 1).padStart(5, '0')}\u001b[0m ${'z'.repeat(180)}\r\n`,
     )
-    expect(text.endsWith('line 2999\n')).toBe(true)
+    for (const line of lines) {
+      ptys[0]?.emit(line)
+    }
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    expect(outputOf(later.messages)).toBe(lines.join(''))
+  })
+
+  it('replays the last line even without a line break', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit('line 1\r\n$ ')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    expect(outputOf(later.messages)).toBe('line 1\r\n$ ')
+  })
+
+  it('replays nothing for a shell without output', () => {
+    const { service } = setup()
+    service.attach('T-0001', client(), size)
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    expect(later.messages).toEqual([])
+  })
+
+  it('gives every client that attaches the whole history', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit(numbered(3000))
+
+    const first = client()
+    const second = client()
+    service.attach('T-0001', first, size)
+    service.attach('T-0001', second, { cols: 100, rows: 30 })
+
+    expect(outputOf(first.messages)).toBe(numbered(3000))
+    expect(outputOf(second.messages)).toBe(numbered(3000))
+  })
+
+  it('gives a returning client the output printed while it was away, after the old output', () => {
+    const { service, ptys } = setup()
+    const detach = service.attach('T-0001', client(), size)
+    ptys[0]?.emit('before\r\n')
+    detach()
+    ptys[0]?.emit('while away\r\n')
+
+    const back = client()
+    service.attach('T-0001', back, size)
+
+    expect(outputOf(back.messages)).toBe('before\r\nwhile away\r\n')
+  })
+
+  it('joins the replay and the live output with no line lost or shown twice', () => {
+    const { service, ptys } = setup()
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    ptys[0]?.emit(numbered(2000))
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    ptys[0]?.emit('live\r\n')
+
+    expect(outputOf(later.messages)).toBe(`${numbered(2000)}live\r\n`)
+    expect(outputOf(watching.messages)).toBe(`${numbered(2000)}live\r\n`)
+  })
+
+  it('replays a long history in pieces of a bounded size', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const output = `${'y'.repeat(79)}\n`.repeat(5000)
+    ptys[0]?.emit(output)
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    expect(later.messages.length).toBeGreaterThan(1)
+    for (const message of later.messages) {
+      expect(message.type === 'output' && message.data.length).toBeLessThanOrEqual(
+        REPLAY_CHUNK_CHARS,
+      )
+    }
+    expect(outputOf(later.messages)).toBe(output)
   })
 })
 
-describe('lastLines', () => {
-  it('keeps the last lines, and the final line break', () => {
-    expect(lastLines('a\nb\nc\n', 2)).toBe('b\nc\n')
-    expect(lastLines('a\nb\nc', 2)).toBe('b\nc')
+describe('OutputHistory', () => {
+  it('keeps everything below the limit', () => {
+    const history = new OutputHistory(100)
+    history.append('a\n')
+    history.append('b')
+    expect(history.text()).toBe('a\nb')
   })
 
-  it('returns everything when there are fewer lines', () => {
-    expect(lastLines('a\nb', 5)).toBe('a\nb')
-    expect(lastLines('', 5)).toBe('')
-    expect(lastLines('\nb', 5)).toBe('\nb')
+  it('drops the oldest lines first, and starts at a line', () => {
+    // The cut falls in the line "two", so all of that line goes.
+    const history = new OutputHistory(8)
+    history.append('one\ntwo\nthree\n')
+    expect(history.text()).toBe('three\n')
+  })
+
+  it('keeps the newest whole lines within the limit, in one piece or many', () => {
+    const output = Array.from({ length: 500 }, (_, index) => `line ${index}\r\n`).join('')
+    const whole = new OutputHistory(1000)
+    whole.append(output)
+    const pieces = new OutputHistory(1000)
+    for (const char of output) {
+      pieces.append(char)
+      expect(pieces.size).toBeLessThanOrEqual(1000)
+    }
+
+    for (const history of [whole, pieces]) {
+      const text = history.text()
+      expect(text.length).toBeLessThanOrEqual(1000)
+      expect(text.startsWith('line ')).toBe(true)
+      expect(output.endsWith(text)).toBe(true)
+    }
+  })
+
+  it('drops nothing up to the limit, and drops the oldest one char over it', () => {
+    const history = new OutputHistory(10)
+    history.append('aaaaaaaaa')
+    expect(history.text()).toBe('aaaaaaaaa')
+    history.append('\n')
+    expect(history.text()).toBe('aaaaaaaaa\n')
+    history.append('b')
+    expect(history.text()).toBe('b')
+  })
+
+  it('stays within the limit with a line longer than the limit', () => {
+    const history = new OutputHistory(100)
+    for (let index = 0; index < 50; index += 1) {
+      history.append('x'.repeat(7))
+      expect(history.size).toBeLessThanOrEqual(100)
+    }
+    expect(history.text()).toMatch(/^x+$/)
+  })
+
+  it('stays within the limit with progress output that only uses carriage returns', () => {
+    const history = new OutputHistory(100)
+    for (let percent = 0; percent <= 100; percent += 1) {
+      history.append(`\rDownloading ${percent}%`)
+      expect(history.size).toBeLessThanOrEqual(100)
+    }
+    expect(history.text().endsWith('Downloading 100%')).toBe(true)
+  })
+
+  it('cuts before an escape sequence when there is no line break near the cut', () => {
+    const history = new OutputHistory(20)
+    history.append(`${'a'.repeat(30)}\u001b[31mred text`)
+    expect(history.text()).toBe('\u001b[31mred text')
+  })
+
+  it('does not start with the second half of a surrogate pair', () => {
+    const history = new OutputHistory(5)
+    // Without a line break or an escape, the cut falls inside the emoji.
+    history.append('ab😀cdef')
+    expect(history.text()).toBe('cdef')
+  })
+
+  it.each([3, 4, 5, 6, 7, 8, 9, 10])(
+    'never keeps half a character of mixed text, with a limit of %i',
+    (limit) => {
+      const text = 'Việt 日本 😀😀'
+      const history = new OutputHistory(limit)
+      history.append(text)
+      const kept = history.text()
+      expect(text.endsWith(kept)).toBe(true)
+      expect(kept).not.toMatch(LONE_SURROGATE)
+    },
+  )
+
+  it('is empty after clear', () => {
+    const history = new OutputHistory(100)
+    history.append('a')
+    history.clear()
+    expect(history.text()).toBe('')
+  })
+})
+
+describe('replayChunks', () => {
+  it('splits a text into pieces of at most the given size', () => {
+    expect(replayChunks('abcdefg', 3)).toEqual(['abc', 'def', 'g'])
+    expect(replayChunks('', 3)).toEqual([])
+  })
+
+  it('never splits a surrogate pair', () => {
+    const chunks = replayChunks('ab😀cd', 3)
+    expect(chunks).toEqual(['ab', '😀c', 'd'])
+    expect(chunks.join('')).toBe('ab😀cd')
   })
 })
 

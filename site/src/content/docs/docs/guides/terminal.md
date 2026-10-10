@@ -48,7 +48,7 @@ To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or
 
 `Mod+F` (`Ctrl+Shift+F` on Windows and Linux) opens **Find**. Press `Enter` for the next match and `Shift+Enter` for the previous one. **Match case** and **Use regular expression** are toggles. `Esc` closes the bar.
 
-When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. Each pane keeps 5,000 lines of scrollback.
+When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. Each pane keeps 10,000 lines of scrollback. A shell keeps its output while no one looks at it, so when you switch tasks or reload the dashboard, you can scroll back to where the output began. The output is gone when the shell ends, or when Natamux restarts or updates.
 
 ### Keys that belong to the shell
 
