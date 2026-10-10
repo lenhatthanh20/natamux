@@ -50,6 +50,8 @@ type WorkspaceListProps = {
   // Opens the dialog for a new workspace, in that repository when one is given.
   onNewWorkspace: (repo?: string) => void
   onAddRepo: () => void
+  // The daemon has no project: the list offers to add one.
+  noProjects?: boolean
   onRepoSettings: (id: string) => void
   onRemoveRepo: (id: string) => void
 }
@@ -79,6 +81,7 @@ export function WorkspaceList({
   removingFinished = false,
   onNewWorkspace,
   onAddRepo,
+  noProjects = false,
   onRepoSettings,
   onRemoveRepo,
 }: WorkspaceListProps) {
@@ -123,9 +126,6 @@ export function WorkspaceList({
       { label: 'Settings', icon: Settings, onSelect: () => onRepoSettings(id) },
       ...clearItems(id),
     ]
-    if (id === DEFAULT_REPO_ID) {
-      return items
-    }
     // Every workspace counts, also the ones the filter hides: the daemon refuses them all.
     const busy = totalIn(id) > 0
     return [
@@ -402,6 +402,19 @@ export function WorkspaceList({
           </div>
         )
       })}
+
+      {noProjects && groups.length === 0 && (
+        <div className="flex items-center gap-2 py-1 pl-2 text-xs text-muted">
+          <span>No projects yet</span>
+          <button
+            type="button"
+            onClick={onAddRepo}
+            className="text-ink underline-offset-2 hover:underline"
+          >
+            Add project
+          </button>
+        </div>
+      )}
 
       {clearing !== null && (
         <ClearFinishedDialog

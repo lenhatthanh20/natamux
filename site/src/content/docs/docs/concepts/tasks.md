@@ -23,7 +23,7 @@ Task ids look like `T-0001`. The number grows by one for each new task.
 | `pr`, `prStatus` | The pull request of the task, and the state of the pull request and its checks. |
 | `dependsOn` | Ids of tasks that must be done first. |
 | `parentId` | The task this one is a part of. |
-| `repo` | The repository the task belongs to. Empty means the default repository. |
+| `repo` | The repository the task belongs to. Empty means the repository with the id `default`. |
 | `stage`, `stages`, `lanes` | The current stage, the stages of the task, and the state of each stage that runs side by side. |
 | `context`, `issue` | Where the task context comes from, and the issue or ticket that tracks the task. |
 | `createdAt`, `updatedAt` | Timestamps. |

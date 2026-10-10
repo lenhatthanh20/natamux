@@ -5,7 +5,8 @@ import type { Task } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { GitHubError, type RunGh } from './git.js'
-import { isWatched, PullRequestWatcher } from './pull-request-watcher.js'
+import { isWatched, PullRequestWatcher, repoFolderOr } from './pull-request-watcher.js'
+import { RepoNotFoundError } from './repo-service.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 
@@ -24,8 +25,11 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true })
 })
 
-function taskWithPr(number: number): Task {
-  const task = tasks.createTask({ title: `Task ${number}` })
+function taskWithPr(number: number, repo?: string): Task {
+  const task = tasks.createTask({
+    title: `Task ${number}`,
+    ...(repo === undefined ? {} : { repo }),
+  })
   return tasks.recordGit(task.id, 'pr.opened', { url: `https://github.com/o/r/pull/${number}` })
 }
 
@@ -52,10 +56,56 @@ describe('PullRequestWatcher', () => {
       return JSON.stringify({ state: 'OPEN', isDraft: false, statusCheckRollup: [] })
     }
 
-    await new PullRequestWatcher({ tasks, cwd: '/repo', gh }).checkAll()
+    await new PullRequestWatcher({ tasks, cwdOf: () => '/repo', gh }).checkAll()
 
     expect(asked.sort()).toEqual([first.pr, second.pr])
     expect(tasks.getTask(first.id).prStatus).toEqual({ state: 'open', checks: 'none' })
+  })
+
+  it('runs gh in the folder of the repository of each task', async () => {
+    taskWithPr(1)
+    taskWithPr(2, 'web')
+    const folders: string[] = []
+    const gh: RunGh = async (cwd) => {
+      folders.push(cwd)
+      return JSON.stringify({ state: 'OPEN', isDraft: false, statusCheckRollup: [] })
+    }
+    const cwdOf = (repo: string | null) => (repo === null ? '/default' : `/${repo}`)
+
+    await new PullRequestWatcher({ tasks, cwdOf, gh }).checkAll()
+
+    expect(folders.sort()).toEqual(['/default', '/web'])
+  })
+
+  it('runs gh in each project folder, and in the data folder for a removed project', async () => {
+    const watched = [
+      taskWithPr(1, 'default'),
+      taskWithPr(2, 'p2'),
+      taskWithPr(3),
+      taskWithPr(4, 'gone'),
+    ]
+    const folderOf: Record<string, string> = { default: '/a', p2: '/b' }
+    const repos = {
+      pathOf: (repo: string | null) => {
+        const folder = folderOf[repo ?? 'default']
+        if (folder === undefined) {
+          throw new RepoNotFoundError(repo ?? 'default')
+        }
+        return folder
+      },
+    }
+    const asked = new Map<string, string>()
+    const gh: RunGh = async (cwd, args) => {
+      asked.set(args[2] ?? '', cwd)
+      return JSON.stringify({ state: 'MERGED', isDraft: false, statusCheckRollup: [] })
+    }
+
+    await new PullRequestWatcher({ tasks, cwdOf: repoFolderOr(repos, '/data'), gh }).checkAll()
+
+    expect(watched.map((task) => asked.get(task.pr ?? ''))).toEqual(['/a', '/b', '/a', '/data'])
+    for (const task of watched) {
+      expect(tasks.getTask(task.id).prStatus?.state).toBe('merged')
+    }
   })
 
   it('goes on after a failure and reports the same failure once', async () => {
@@ -67,7 +117,7 @@ describe('PullRequestWatcher', () => {
     }
     const watcher = new PullRequestWatcher({
       tasks,
-      cwd: '/repo',
+      cwdOf: () => '/repo',
       gh,
       log: (message) => logged.push(message),
     })

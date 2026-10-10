@@ -106,7 +106,8 @@ const fanOutBodySchema = z.object({
 const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
 const newWorkspaceBodySchema = z.object({
   title: z.string().trim().min(1).max(200),
-  repo: repoIdSchema.optional(),
+  // Null, like none, is the default repository.
+  repo: repoIdSchema.nullish().transform((repo) => repo ?? undefined),
   base: z.string().min(1).max(255).optional(),
   // The first stage starts at once, so it must be an agent the daemon can start.
   agent: z.enum(LAUNCHABLE_AGENTS).optional(),
@@ -123,6 +124,8 @@ const importIssuesBodySchema = z.object({
   repo: repoIdSchema.optional(),
 })
 const repoQuerySchema = z.object({ repo: repoIdSchema.optional() })
+// A task may name its repository as null, like none: the default one.
+const taskRepoBodySchema = z.object({ repo: repoIdSchema.nullish() })
 const createWorkspaceBodySchema = z
   .object({ base: z.string().min(1).max(255).optional() })
   .optional()
@@ -277,10 +280,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   })
 
   app.post('/tasks', async (request, reply) => {
-    const { repo } = repoQuerySchema.parse(request.body ?? {})
-    if (repo !== undefined) {
-      options.repos.get(repo)
-    }
+    const { repo } = taskRepoBodySchema.parse(request.body ?? {})
+    options.repos.get(repo ?? null)
     const task = options.service.createTask(request.body)
     return reply.code(201).send({ task })
   })
@@ -293,6 +294,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/templates/:id/tasks', async (request, reply) => {
     const { id } = z.object({ id: templateIdSchema }).parse(request.params)
+    const { repo } = taskRepoBodySchema.parse(request.body ?? {})
+    options.repos.get(repo ?? null)
     return reply.code(201).send({ task: options.templates.createTask(id, request.body) })
   })
 
@@ -302,12 +305,15 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/repos', async () => ({ repos: options.repos.list() }))
 
   app.post('/repos', async (request, reply) => {
-    return reply.code(201).send({ repo: await options.repos.add(request.body) })
+    const repo = await options.repos.add(request.body)
+    options.bus.publish({ kind: 'repos.changed' })
+    return reply.code(201).send({ repo })
   })
 
   app.delete('/repos/:id', async (request, reply) => {
     const { id } = repoParamsSchema.parse(request.params)
     options.repos.remove(id)
+    options.bus.publish({ kind: 'repos.changed' })
     return reply.code(204).send()
   })
 
@@ -482,6 +488,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // A task, its worktree and its agent in one step.
   app.post('/workspaces', async (request, reply) => {
     const input = newWorkspaceBodySchema.parse(request.body)
+    // Before the task is made, so a missing repository leaves no task behind.
+    options.repos.get(input.repo ?? null)
     const parts = {
       tasks: options.service,
       workspaces: options.workspaces,

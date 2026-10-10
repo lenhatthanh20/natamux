@@ -145,7 +145,7 @@ Click **Repos** in the status bar, or **Add a repository** in the sidebar, to se
 
 Each repository has a **Settings** button for its stages, context sources and issue tracker.
 
-To remove a repository, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. The repository the daemon was started for cannot be removed.
+To remove a repository, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. Any project can be removed. With no project left, the sidebar offers to add one.
 
 ## Import issues
 

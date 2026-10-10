@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// The repository the daemon was started for. It is always there and cannot be removed.
+// The id of the repository that tasks without one belong to. It can be removed like any other.
 export const DEFAULT_REPO = 'default'
 
 export const repoIdSchema = z

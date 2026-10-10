@@ -7,7 +7,8 @@ const FALLBACK_BIN_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/loca
 export type DaemonPlace = {
   port: number
   dataDir: string
-  repoDir: string
+  // The repository to add once as the first project. Undefined: none.
+  repoDir: string | undefined
   webDir: string
   // Holds the `natamux` command for the agents' shells.
   binDir: string
@@ -42,9 +43,13 @@ export function daemonEnv(
     NATAMUX_PORT: String(place.port),
     NATAMUX_TOKEN: daemonToken,
     NATAMUX_DATA_DIR: place.dataDir,
-    NATAMUX_REPO_DIR: place.repoDir,
     NATAMUX_WEB_DIR: place.webDir,
     NATAMUX_BIN_DIR: place.binDir,
+  }
+  if (place.repoDir === undefined) {
+    delete env.NATAMUX_REPO_DIR
+  } else {
+    env.NATAMUX_REPO_DIR = place.repoDir
   }
   // Left set, it would make every Electron app the agents start run as plain Node.js.
   delete env.ELECTRON_RUN_AS_NODE

@@ -7,13 +7,13 @@ sidebar:
 
 This walk-through uses the desktop app and one agent. It takes about ten minutes. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
 
-## 1. Pick a repository
+## 1. Add a project
 
-Open Natamux. On the first launch, a dialog titled **Open a repository** asks you to pick the repository whose tasks Natamux runs.
+Open Natamux. The app starts its daemon and opens the dashboard, already signed in. On the first launch there is no project yet, and the sidebar says **No projects yet**.
 
-Pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository.
+Add the repository whose tasks Natamux runs. Use **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux) and pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository. You can also click **Add project** in the sidebar and type the folder.
 
-The app starts its daemon and opens the dashboard, already signed in. To change the repository later, use **File → Open Repository…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux).
+Add more projects the same way, at any time.
 
 :::note
 Running the dashboard in a browser instead? Open it and paste the token into the **Daemon token** field. It is `NATAMUX_TOKEN` of the daemon, or the token the daemon printed when it started. The browser keeps it for this address only.

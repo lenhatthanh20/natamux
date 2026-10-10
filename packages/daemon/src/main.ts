@@ -10,7 +10,7 @@ import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { spawnShell } from './pty.js'
-import { PullRequestWatcher } from './pull-request-watcher.js'
+import { PullRequestWatcher, repoFolderOr } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
 import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
@@ -28,7 +28,7 @@ const index = new TaskIndex(join(config.dataDir, 'index.sqlite'))
 const bus = new EventBus()
 const repos = new RepoService({
   dataDir: config.dataDir,
-  defaultPath: config.repoDir,
+  ...(config.repoDir === undefined ? {} : { defaultPath: config.repoDir }),
   tasks: () => service.listTasks(),
 })
 const settings = new ProjectSettingsService({ repos })
@@ -48,7 +48,6 @@ const issueLinker = new IssueLinker({
 issueLinker.start()
 const workspaces = new WorkspaceService({
   tasks: service,
-  repoDir: config.repoDir,
   worktreesDir: config.worktreesDir,
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
@@ -105,7 +104,10 @@ const stages = new StageRunner({
 })
 stages.start()
 
-const pullRequests = new PullRequestWatcher({ tasks: service, cwd: config.repoDir })
+const pullRequests = new PullRequestWatcher({
+  tasks: service,
+  cwdOf: repoFolderOr(repos, config.dataDir),
+})
 pullRequests.start()
 
 const app = await buildServer({
@@ -130,7 +132,7 @@ await app.listen({ host: config.host, port: config.port })
 
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)
-console.log(`Repository: ${config.repoDir}`)
+console.log(`Projects: ${repos.list().length}`)
 if (config.tokenWasGenerated) {
   console.log(`Token for this run: ${config.token}`)
 }

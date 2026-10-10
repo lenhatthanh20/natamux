@@ -148,7 +148,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const mergeTask = (task: Task) =>
     queryClient.setQueryData<Task[]>(TASKS_KEY, (current) => upsertTask(current ?? [], task))
 
-  const liveStatus = useLiveTasks(token, mergeTask)
+  const liveStatus = useLiveTasks(token, mergeTask, () =>
+    queryClient.invalidateQueries({ queryKey: ['repos'] }),
+  )
 
   useEffect(() => {
     if (liveStatus === 'live') {
@@ -164,24 +166,41 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
   const repos = reposQuery.data ?? []
-  // The repository of new tasks and of issue imports. Empty: the daemon's own.
+  const noProjects = reposQuery.isSuccess && repos.length === 0
+  // The repository picked for new tasks and issue imports. Empty: the first one.
   const [newRepo, setNewRepo] = useState('')
+  const taskRepo = repos.some((repo) => repo.id === newRepo) ? newRepo : repos[0]?.id
   const [reposOpen, setReposOpen] = useState(false)
   const [settingsRepo, setSettingsRepo] = useState<Repo | null>(null)
+  // With no project there is nowhere to make a workspace: the projects panel opens instead.
+  const openNewWorkspace = (input: { repo?: string; title?: string }) => {
+    if (noProjects) {
+      toast('Add a project first.')
+      setReposOpen(true)
+      return
+    }
+    setNewWorkspace(input)
+  }
   const branchesRepo =
     tasks.find((task) => task.id === (changesTaskId ?? selectedId))?.repo ?? undefined
   const branchesQuery = useQuery({
     queryKey: ['branches', branchesRepo],
     queryFn: () => api.listBranches(branchesRepo),
+    // A removed project has no branches to ask for.
+    enabled: repos.some((repo) => repo.id === (branchesRepo ?? 'default')),
   })
   const templatesQuery = useQuery({ queryKey: ['templates'], queryFn: () => api.listTemplates() })
   const [templateId, setTemplateId] = useState('')
 
   const createMutation = useMutation({
-    mutationFn: (title: string) =>
-      templateId === ''
-        ? api.createTask(title, undefined, newRepo || undefined)
-        : api.createTaskFromTemplate(templateId, title),
+    mutationFn: async (title: string) => {
+      if (noProjects) {
+        throw new Error('Add a project first.')
+      }
+      return templateId === ''
+        ? api.createTask(title, undefined, taskRepo)
+        : api.createTaskFromTemplate(templateId, title, taskRepo)
+    },
     onSuccess: (task) => {
       mergeTask(task)
       select(task.id)
@@ -550,7 +569,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     toggleDetails,
     showShortcuts: () => setShortcutsOpen(true),
     focusFilter,
-    newWorkspace: () => setNewWorkspace({}),
+    newWorkspace: () => openNewWorkspace({}),
     newTask: () => {
       closeChanges()
       // The field is in the task list, which may only now be shown.
@@ -617,7 +636,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const submitNewTask = (event: FormEvent) => {
     event.preventDefault()
     const title = newTitle.trim()
-    if (title !== '') {
+    if (title !== '' && !noProjects) {
       // Cleared now, not when the daemon answers: the next title may be typed while it works.
       setNewTitle('')
       createMutation.mutate(title, {
@@ -697,7 +716,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onSearch={() => actions.openPalette()}
             needsYou={waitingCount}
             onNeedsYou={() => actions.openJump('needs-you')}
-            onNewWorkspace={() => setNewWorkspace({})}
+            onNewWorkspace={() => openNewWorkspace({})}
             detailsOpen={detailOpen}
             detailsDisabledReason={
               detailTask === null || agentsOpen ? 'Select a task to show its details' : undefined
@@ -793,8 +812,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
                     onRemoveFinished={(ids) => removeFinishedMutation.mutate(ids)}
                     removingFinished={removeFinishedMutation.isPending}
-                    onNewWorkspace={(repo) => setNewWorkspace({ repo })}
+                    onNewWorkspace={(repo) => openNewWorkspace({ repo })}
                     onAddRepo={() => setReposOpen(true)}
+                    noProjects={noProjects}
                     onRepoSettings={(id) =>
                       setSettingsRepo(repos.find((repo) => repo.id === id) ?? null)
                     }
@@ -1051,13 +1071,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 <div className="flex gap-2">
                   {repos.length > 1 && (
                     <Select
-                      value={newRepo}
+                      value={taskRepo ?? ''}
                       onChange={(event) => setNewRepo(event.target.value)}
                       aria-label="Project"
                       className="w-40"
                     >
                       {repos.map((repo) => (
-                        <option key={repo.id} value={repo.id === 'default' ? '' : repo.id}>
+                        <option key={repo.id} value={repo.id}>
                           {repo.name}
                         </option>
                       ))}
@@ -1085,7 +1105,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 icon={Plus}
                 // Not busy while a task is added: a disabled submit button stops Enter, and the
                 // next title is often typed before the daemon answers.
-                disabledReason={newTitle.trim() === '' ? 'Type a title first' : undefined}
+                disabledReason={
+                  noProjects
+                    ? 'Add a project first'
+                    : newTitle.trim() === ''
+                      ? 'Type a title first'
+                      : undefined
+                }
               >
                 Add task
               </Button>
@@ -1115,7 +1141,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         size="md"
                         icon={SquareTerminal}
                         shortcut={shortcutOf('workspace.new')}
-                        onClick={() => setNewWorkspace({})}
+                        onClick={() => openNewWorkspace({})}
                       >
                         Start a task
                       </Button>
@@ -1201,7 +1227,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       <ContextMenuHost />
       {newWorkspace !== null && (
         <NewWorkspaceDialog
-          repos={repos.length > 0 ? repos : [{ id: 'default', name: 'default' }]}
+          repos={repos}
           initialRepo={newWorkspace.repo}
           initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
@@ -1240,9 +1266,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       )}
       {importOpen && (
         <IssueImport
-          repo={newRepo || undefined}
-          loadIssues={() => api.listIssues(newRepo || undefined)}
-          importIssues={(numbers) => api.importIssues(numbers, newRepo || undefined)}
+          repo={taskRepo}
+          loadIssues={() => api.listIssues(taskRepo)}
+          importIssues={(numbers) => api.importIssues(numbers, taskRepo)}
           onImported={(created) => {
             for (const task of created) {
               mergeTask(task)
@@ -1285,7 +1311,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 }),
             })
           }
-          onNewWorkspace={setNewWorkspace}
+          onNewWorkspace={openNewWorkspace}
         />
       )}
     </>

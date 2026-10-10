@@ -51,7 +51,7 @@ export const taskSchema = z.object({
   dependsOn: z.array(taskIdSchema).default([]),
   // The task this one is a part of. One level only: a subtask has no subtasks.
   parentId: taskIdSchema.nullable().default(null),
-  // The repository of the task. Null is the daemon's own repository (DEFAULT_REPO).
+  // The repository of the task. Null is the one with the id DEFAULT_REPO.
   repo: repoIdSchema.nullable().default(null),
   // The current step: a stage id, or a group id while stages run side by side.
   stage: stageIdSchema.default('implement'),

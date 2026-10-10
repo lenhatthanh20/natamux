@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type Task, type TaskTemplate, taskTemplateSchema } from '@natamux/core'
+import { repoIdSchema, type Task, type TaskTemplate, taskTemplateSchema } from '@natamux/core'
 import matter from 'gray-matter'
 import { z } from 'zod'
 import type { TaskService } from './task-service.js'
@@ -9,7 +9,10 @@ import { slugify } from './workspace-service.js'
 const TEMPLATE_FILE_NAME = /^([a-z0-9-]+)\.md$/
 
 export const newTemplateInputSchema = taskTemplateSchema.omit({ id: true })
-export const fromTemplateInputSchema = z.object({ title: z.string().trim().min(1).max(200) })
+export const fromTemplateInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  repo: repoIdSchema.nullish(),
+})
 
 export class TemplateNotFoundError extends Error {
   constructor(id: string) {
@@ -80,9 +83,10 @@ export class TemplateService {
   // A new draft task with the template's notes, priority and labels, and the given title.
   createTask(id: string, rawInput: unknown): Task {
     const template = this.get(id)
-    const { title } = fromTemplateInputSchema.parse(rawInput)
+    const { title, repo } = fromTemplateInputSchema.parse(rawInput)
     return this.tasks.createTask({
       title,
+      ...(repo ? { repo } : {}),
       description: template.description,
       priority: template.priority,
       labels: template.labels,

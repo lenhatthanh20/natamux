@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeCliShim } from './cli-shim.js'
-import { loadOrCreateDaemonToken } from './daemon-access.js'
+import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
-import { isGitRepository, loadSettings, saveSettings } from './settings.js'
+import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 
 type Done = (error: Error | null, stdout: string, stderr: string) => void
@@ -41,6 +41,41 @@ describe('the daemon token', () => {
   })
 })
 
+describe('adding a project', () => {
+  it('posts the folder to the daemon with the token', async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = []
+    const fake = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      return new Response(JSON.stringify({ repo: { id: 'web' } }), { status: 201 })
+    }) as typeof fetch
+
+    const problem = await addProject('http://127.0.0.1:4318', 'secret', '/work/web', fake)
+
+    expect(problem).toBeUndefined()
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://127.0.0.1:4318/repos')
+    expect(calls[0]?.init?.method).toBe('POST')
+    expect(new Headers(calls[0]?.init?.headers).get('authorization')).toBe('Bearer secret')
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ path: '/work/web' })
+  })
+
+  it('tells why the daemon refused the folder, or could not be reached', async () => {
+    const body = JSON.stringify({ error: 'invalid_request', message: '/w is added already' })
+    const refused = (async () => new Response(body, { status: 400 })) as typeof fetch
+    expect(await addProject('http://x', 'secret', '/w', refused)).toBe('/w is added already')
+
+    const broken = (async () => new Response('oops', { status: 500 })) as typeof fetch
+    expect(await addProject('http://x', 'secret', '/w', broken)).toBe(
+      'The daemon answered with status 500',
+    )
+
+    const down = (async () => {
+      throw new Error('connect ECONNREFUSED')
+    }) as typeof fetch
+    expect(await addProject('http://x', 'secret', '/w', down)).toBe('connect ECONNREFUSED')
+  })
+})
+
 describe('settings', () => {
   it('keeps the repository, and starts over from a broken file', () => {
     const file = join(dir, 'settings.json')
@@ -63,6 +98,17 @@ describe('settings', () => {
     expect(isGitRepository(dir)).toBe(false)
     writeFileSync(join(dir, '.git'), 'gitdir: /elsewhere\n')
     expect(isGitRepository(dir)).toBe(true)
+  })
+
+  it('starts the daemon with the repository of an older version only while it is still one', () => {
+    expect(startingRepoDir({})).toBeUndefined()
+    expect(startingRepoDir({ repoDir: dir })).toBeUndefined()
+    expect(startingRepoDir({ repoDir: join(dir, 'gone') })).toBeUndefined()
+    const file = join(dir, 'settings.json')
+    writeFileSync(file, JSON.stringify({ repoDir: '', autoUpdate: true }))
+    expect(startingRepoDir(loadSettings(file))).toBeUndefined()
+    writeFileSync(join(dir, '.git'), 'gitdir: /elsewhere\n')
+    expect(startingRepoDir({ repoDir: dir })).toBe(dir)
   })
 })
 
@@ -89,6 +135,14 @@ describe('daemonEnv', () => {
       NATAMUX_BIN_DIR: '/app/bin',
       PATH: ['/app/bin', '/opt/homebrew/bin', '/usr/bin'].join(delimiter),
     })
+  })
+
+  it('gives the daemon no repository when there is none', () => {
+    const env = daemonEnv({ NATAMUX_REPO_DIR: '/from/the/shell' }, 'secret', {
+      ...place,
+      repoDir: undefined,
+    })
+    expect('NATAMUX_REPO_DIR' in env).toBe(false)
   })
 
   it('keeps the app PATH when the login shell gave none, and drops ELECTRON_RUN_AS_NODE', () => {

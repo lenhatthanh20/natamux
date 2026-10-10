@@ -64,7 +64,7 @@ The dashboard shows "The daemon rejected that token. Paste the token it printed 
 
 ## The daemon stopped
 
-The desktop app shows "The Natamux daemon stopped" with the last lines of the log, or "Natamux could not start its daemon". Read those lines and the [log](#where-the-logs-are). If the repository was moved or removed, pick it again with **File → Open Repository…**.
+The desktop app shows "The Natamux daemon stopped" with the last lines of the log, or "Natamux could not start its daemon". Read those lines and the [log](#where-the-logs-are). If a repository was moved, remove its project and add the new folder with **File → Add Project…**.
 
 ## A task does not change state while the agent works
 

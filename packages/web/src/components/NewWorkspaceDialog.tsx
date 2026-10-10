@@ -66,7 +66,6 @@ export function NewWorkspaceDialog({
   const [notes, setNotes] = useState('')
   const [source, setSource] = useState<ContextSourceType>('manual')
   const [ref, setRef] = useState('')
-  const repoParam = repo === DEFAULT_REPO_ID ? undefined : repo
   const settings = useQuery({
     queryKey: ['settings', repo],
     queryFn: () => loadSettings?.(repo) ?? Promise.reject(new Error('No settings')),
@@ -75,14 +74,14 @@ export function NewWorkspaceDialog({
   const sources = settings.data?.settings.context.sources ?? [{ type: 'manual' as const }]
 
   const branches = useQuery({
-    queryKey: ['branches', repoParam],
-    queryFn: () => loadBranches(repoParam),
+    queryKey: ['branches', repo],
+    queryFn: () => loadBranches(repo),
   })
   const making = useMutation({
     mutationFn: () =>
       create({
         title: title.trim(),
-        ...(repoParam === undefined ? {} : { repo: repoParam }),
+        repo,
         ...(base === '' ? {} : { base }),
         ...(agent === '' ? {} : { agent }),
         // Only notes typed by hand are the task's context; another source brings its own.

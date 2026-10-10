@@ -136,6 +136,18 @@ describe('createApi', () => {
     })
   })
 
+  it('makes a task from a template in the project it is given', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task }, 201))
+
+    await createApi('secret', fetchFunction).createTaskFromTemplate('bug-fix', 'Fix it', 'web')
+
+    expect(calls[0]).toMatchObject({
+      url: '/api/templates/bug-fix/tasks',
+      method: 'POST',
+      body: { title: 'Fix it', repo: 'web' },
+    })
+  })
+
   it('removes a repository', async () => {
     const { calls, fetchFunction } = fakeFetch(() => new Response(null, { status: 204 }))
 

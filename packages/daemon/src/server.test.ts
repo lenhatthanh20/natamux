@@ -37,6 +37,7 @@ let repo: TestRepo
 let index: TaskIndex
 let app: FastifyInstance
 let ptys: FakePty[]
+let bus: EventBus
 let webIndexPath: string
 const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
@@ -51,7 +52,7 @@ beforeEach(async () => {
   writeFileSync(join(repo.root, 'web', 'assets', 'index-abc.js'), 'console.log(1)\n')
   writeFileSync(join(repo.root, 'secret.txt'), 'not for the browser\n')
   index = new TaskIndex(':memory:')
-  const bus = new EventBus()
+  bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
   const repos = new RepoService({
     dataDir,
@@ -80,7 +81,7 @@ beforeEach(async () => {
   })
   const pullRequests = new PullRequestWatcher({
     tasks: service,
-    cwd: repo.dir,
+    cwdOf: () => repo.dir,
     gh: async () => JSON.stringify({ state: 'MERGED', isDraft: false, statusCheckRollup: [] }),
   })
   app = await buildServer({
@@ -1437,6 +1438,15 @@ describe('templates', () => {
       payload: { title: 'x' },
     })
     expect(missing.statusCode).toBe(404)
+
+    const elsewhere = await app.inject({
+      method: 'POST',
+      url: '/templates/bug-fix/tasks',
+      headers: authorization,
+      payload: { title: 'x', repo: 'nope' },
+    })
+    expect(elsewhere.statusCode).toBe(404)
+    expect(elsewhere.json().message).toBe('Repository nope is not known. Add it first')
   })
 })
 
@@ -1655,17 +1665,113 @@ describe('repositories', () => {
     expect(workspace.json().message).toBe('Repository other-app is not known. Add it first')
   })
 
-  it('refuses to remove the default repository, an unknown one, and a bad id', async () => {
+  it('removes the default repository like any other', async () => {
     const remove = (id: string) =>
       app.inject({ method: 'DELETE', url: `/repos/${id}`, headers: authorization })
+    await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'In the default repository' },
+    })
 
-    const fallback = await remove('default')
-    expect(fallback.statusCode).toBe(400)
-    expect(fallback.json().error).toBe('invalid_request')
+    const busy = await remove('default')
+    expect(busy.statusCode).toBe(409)
+    expect(busy.json().message).toBe('Remove the 1 workspace of default first')
+
+    await app.inject({ method: 'DELETE', url: '/tasks/T-0001/workspace', headers: authorization })
+    const removed = await remove('default')
+    expect(removed.statusCode).toBe(204)
+    const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(listed.json().repos).toEqual([])
+    expect(existsSync(repo.dir)).toBe(true)
+
+    const again = await remove('default')
+    expect(again.statusCode).toBe(404)
+    expect(again.json().error).toBe('not_found')
     const unknown = await remove('missing')
     expect(unknown.statusCode).toBe(404)
     expect(unknown.json().error).toBe('not_found')
     expect((await remove('Bad_Id')).statusCode).toBe(400)
+  })
+
+  it('asks for a project first when a task names none and there is no default one', async () => {
+    await app.inject({ method: 'DELETE', url: '/repos/default', headers: authorization })
+
+    const task = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Nowhere to go' },
+    })
+    expect(task.statusCode).toBe(404)
+    expect(task.json().message).toMatch(/Add a project first/)
+
+    const workspace = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Nowhere to go' },
+    })
+    expect(workspace.statusCode).toBe(404)
+    expect(workspace.json().message).toMatch(/Add a project first/)
+
+    for (const url of ['/tasks', '/workspaces']) {
+      const explicit = await app.inject({
+        method: 'POST',
+        url,
+        headers: authorization,
+        payload: { title: 'Nowhere to go', repo: null },
+      })
+      expect(explicit.statusCode).toBe(404)
+      expect(explicit.json().message).toMatch(/Add a project first/)
+    }
+
+    const listed = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(listed.json().tasks).toEqual([])
+    expect(existsSync(join(repo.root, 'worktrees'))).toBe(false)
+    const repos = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(repos.statusCode).toBe(200)
+  })
+
+  it('puts a task that names no repository, or null, in the default one', async () => {
+    for (const payload of [{ title: 'Missing' }, { title: 'Null', repo: null }]) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/tasks',
+        headers: authorization,
+        payload,
+      })
+      expect(created.statusCode).toBe(201)
+      expect(created.json().task.repo).toBeNull()
+    }
+    const workspace = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Null workspace', repo: null },
+    })
+    expect(workspace.statusCode).toBe(201)
+    expect(workspace.json().task.workspace).toContain('T-0003')
+  })
+
+  it('tells the dashboards when a repository is added or removed', async () => {
+    const messages: unknown[] = []
+    bus.subscribe((message) => messages.push(message))
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'trunk')
+
+    await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other },
+    })
+    await app.inject({ method: 'DELETE', url: '/repos/other', headers: authorization })
+    await app.inject({ method: 'DELETE', url: '/repos/missing', headers: authorization })
+
+    expect(messages).toEqual([{ kind: 'repos.changed' }, { kind: 'repos.changed' }])
   })
 })
 
