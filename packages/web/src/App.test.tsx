@@ -83,6 +83,8 @@ function json(data: unknown, status = 200): Response {
 const defaultRepo = { id: 'default', name: 'natamux', path: '/work/natamux' }
 // The stage files of every task in the stand-in daemon.
 let stageFiles: { name: string; size: number; modifiedAt: string }[] = []
+// The shells each workspace has open next to the first one.
+let extraShells: string[] = []
 const webRepo = { id: 'web', name: 'Web app', path: '/work/web' }
 
 function installDaemon(
@@ -259,11 +261,12 @@ function installDaemon(
     }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
       const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
+      const terminals = ['1', ...extraShells]
       if (!task?.agent) {
-        return json({ terminals: ['1'], agents: [], lanes: {} })
+        return json({ terminals, agents: [], lanes: {} })
       }
       const lanes = { '1': { stage: task.stage, state: task.state } }
-      return json({ terminals: ['1'], agents: ['1'], lanes })
+      return json({ terminals, agents: ['1'], lanes })
     }
     if (route === '/api/github/issues' && method === 'GET') {
       return json({
@@ -448,6 +451,7 @@ const runningTask = makeTask({
 beforeEach(() => {
   window.localStorage.clear()
   stageFiles = []
+  extraShells = []
   useViewStore.setState({ ...initialViewData, pinned: [] })
   useToasts.setState({ toasts: [] })
   FakeSocket.instances = []
@@ -2184,6 +2188,27 @@ describe('App', () => {
 
     expect(await screen.findByRole('region', { name: 'Changes of T-0001' })).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull()
+  })
+
+  it('opens the Terminal tab for a shell picked in the jump palette', async () => {
+    installDaemon([workspaceTask()])
+    extraShells = ['2']
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    // The task was left on its Changes tab.
+    act(() => useViewStore.getState().rememberTab('T-0001', 'changes'))
+
+    await user.keyboard('{Control>}j{/Control}')
+    const jump = screen.getByRole('dialog', { name: 'Jump to a workspace' })
+    await user.click(await within(jump).findByRole('option', { name: /Shell 2/ }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    await waitFor(() => expect(useViewStore.getState().shellRequest).toBeNull())
   })
 
   it('opens the palette from the title bar, and the jump palette from the needs-you pill', async () => {
