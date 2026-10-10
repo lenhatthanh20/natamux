@@ -55,7 +55,10 @@ beforeEach(() => {
   parts = { tasks, workspaces, stages }
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // Background git work in the worktree would keep its folder busy on Windows.
+  await parts.stages.settle()
+  parts.stages.stop()
   index.close()
   repo.cleanup()
 })
