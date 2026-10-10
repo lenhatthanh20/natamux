@@ -80,7 +80,7 @@ const stages = [
             <a class="btn" href={docs}>Read the docs</a>
           </div>
           <p class="fine">
-            Version {version} for <a href={files.macArm}>Apple silicon</a>, <a href={files.macIntel}>Intel Macs</a> and
+            Version {version} for <a href={files.macArm}>Apple silicon</a>, <a href={files.macIntel}>Intel Macs</a> and{' '}
             <a href={`${docs}getting-started/install/`}>Linux</a>. Free and open source under MIT.
           </p>
         </div>
@@ -220,7 +220,7 @@ nmx done</code></pre>
           <div class="tabpanel" role="tabpanel" id="tab-mac" aria-labelledby="t-mac">
             <p>
               Download <a href={files.macArm}>Apple silicon</a> or <a href={files.macIntel}>Intel</a>, drag
-              Natamux to Applications and open it once. This first release is not signed yet, so macOS
+              Natamux to Applications and open it once. Releases are not signed yet, so macOS
               blocks it: open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.
               Or clear the download mark:
             </p>
@@ -243,7 +243,7 @@ nmx done</code></pre>
           </div>
         </div>
         <p class="more">
-          Checksums, the AppImage sandbox note and the command line in your own shell:
+          Checksums, the AppImage sandbox note and the command line in your own shell:{' '}
           <a href={`${docs}getting-started/install/`}>the install guide</a>.
         </p>
       </section>
@@ -565,7 +565,7 @@ nmx done</code></pre>
       .pane .state[data-state='review'] { color: #b9a6ff; }
       .pane.flag { border-color: color-mix(in srgb, var(--amber) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
       .pane pre {
-        margin: 0; padding: 10px 12px; height: 7.6em; font-size: 0.78rem; line-height: 1.25; color: #c9d3e6;
+        margin: 0; padding: 10px 12px; height: calc(7.5em + 20px); font-size: 0.78rem; line-height: 1.25; color: #c9d3e6;
         display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
       }
       .pane .l { white-space: pre; min-height: 1.25em; }
