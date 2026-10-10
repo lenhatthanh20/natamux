@@ -71,7 +71,7 @@ class FakeSocket {
   }
 }
 
-type Call = { method: string; path: string; authorization: string | null }
+type Call = { method: string; path: string; authorization: string | null; body: string | null }
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status })
@@ -110,6 +110,7 @@ function installDaemon(
       method,
       path,
       authorization: new Headers(init?.headers).get('authorization'),
+      body: typeof init?.body === 'string' ? init.body : null,
     })
     const body: { title?: string; type?: EventType; parentId?: string } =
       typeof init?.body === 'string' ? JSON.parse(init.body) : {}
@@ -984,6 +985,15 @@ describe('App', () => {
 
     await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
     await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Remove Web app from Natamux?' })).toBeNull()
+    expect(removeCalls()).toHaveLength(0)
+
+    await user.pointer({
+      keys: '[MouseRight]',
+      target: within(sidebar).getByRole('button', { name: /^Web app/ }),
+    })
+    await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
     confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
     await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
 
@@ -1015,6 +1025,84 @@ describe('App', () => {
     expect(remove.getAttribute('aria-describedby')).toBeTruthy()
     expect(screen.getByText('Remove its workspaces first')).toBeTruthy()
     expect(calls.some((call) => call.path === '/api/repos/web')).toBe(false)
+  })
+
+  it('counts a finished workspace as one that keeps the repository', async () => {
+    installDaemon(
+      [
+        makeTask({
+          id: 'T-0006',
+          title: 'Shipped',
+          state: 'done',
+          repo: 'web',
+          workspace: '/work/T-0006',
+        }),
+      ],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
+
+    const remove = screen.getByRole('menuitem', { name: 'Remove repository' })
+    expect((remove as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('forgets a removed repository everywhere and keeps its tasks', async () => {
+    const { calls } = installDaemon(
+      [makeTask({ id: 'T-0005', title: 'Draft for web', repo: 'web' })],
+      [],
+      [defaultRepo, webRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const repoInPalette = async () => {
+      await user.click(
+        within(screen.getByRole('banner')).getByRole('button', { name: /Search or run a command/ }),
+      )
+      const palette = screen.getByRole('dialog', { name: 'Command palette' })
+      await user.keyboard('Web app')
+      const found = within(palette)
+        .queryAllByRole('option')
+        .some((option) => option.textContent?.includes('New workspace here'))
+      await user.keyboard('{Escape}')
+      return found
+    }
+
+    expect(await repoInPalette()).toBe(true)
+    await user.selectOptions(await screen.findByLabelText('Repository'), 'web')
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove repository' }))
+    const confirm = screen.getByRole('dialog', { name: 'Remove Web app from Natamux?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Removed Web app.')).toBeTruthy()
+
+    await waitFor(() => expect(screen.queryByLabelText('Repository')).toBeNull())
+    expect(within(screen.getByRole('table')).getByText('Draft for web')).toBeTruthy()
+    expect(await repoInPalette()).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Repos' }))
+    const panel = await screen.findByRole('dialog', { name: 'Repositories' })
+    expect(within(panel).getByText('/work/natamux')).toBeTruthy()
+    expect(within(panel).queryByText('/work/web')).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.type(screen.getByLabelText('New task title'), 'After the remove')
+    await user.click(screen.getByRole('button', { name: 'Add task' }))
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
+    )
+    const created = calls.find((call) => call.method === 'POST' && call.path === '/api/tasks')
+    expect(JSON.parse(created?.body ?? '{}').repo).toBeUndefined()
   })
 
   it('shows why the daemon did not remove a repository and keeps its group', async () => {

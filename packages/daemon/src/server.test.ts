@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -1398,6 +1405,8 @@ describe('repositories', () => {
     mkdirSync(other)
     runGit(other, 'init', '-b', 'trunk')
     runGit(other, 'commit', '--allow-empty', '-m', 'first')
+    const settingsText = '{ "stages": ["implement"] }\n'
+    writeFileSync(join(other, '.natamux.json'), settingsText)
     await app.inject({
       method: 'POST',
       url: '/repos',
@@ -1426,6 +1435,8 @@ describe('repositories', () => {
     })
 
     await app.inject({ method: 'DELETE', url: '/tasks/T-0001/workspace', headers: authorization })
+    const taskFile = join(repo.root, 'data', 'tasks', 'T-0002.md')
+    const taskText = readFileSync(taskFile, 'utf8')
     const removed = await app.inject({
       method: 'DELETE',
       url: '/repos/other-app',
@@ -1436,6 +1447,9 @@ describe('repositories', () => {
     const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
     expect(listed.json().repos.map((entry: { id: string }) => entry.id)).toEqual(['default'])
     expect(existsSync(other)).toBe(true)
+    expect(readFileSync(join(other, '.natamux.json'), 'utf8')).toBe(settingsText)
+    expect(runGit(other, 'branch', '--list', 'natamux/*')).toContain('natamux/t-0001')
+    expect(readFileSync(taskFile, 'utf8')).toBe(taskText)
 
     const kept = await app.inject({ method: 'GET', url: '/tasks/T-0002', headers: authorization })
     expect(kept.json().task.repo).toBe('other-app')
