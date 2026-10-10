@@ -1,7 +1,7 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import { type EventType, type Task, type TaskState, taskIdSchema } from '@natamux/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
-import { planSignalEvents } from './agent-signals.js'
+import { type NormalizedHook, planSignalEvents } from './agent-signals.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
 import { MAIN_TERMINAL } from './terminal-service.js'
 
@@ -43,9 +43,9 @@ const NO_STAGES: StageLookup = {
 export class AgentHookService {
   private readonly tasks: TaskService
   private readonly stages: StageLookup
-  // What the agent of each task does now. Kept in memory only: it is gone after a restart, and
-  // a new hook fills it again.
-  private readonly activities = new Map<string, AgentActivity>()
+  // What the agent in each terminal of each task does now, by task id, then terminal. Kept in
+  // memory only: it is gone after a restart, and a new hook fills it again.
+  private readonly activities = new Map<string, Map<string, AgentActivity>>()
 
   constructor(tasks: TaskService, stages: StageLookup = NO_STAGES) {
     this.tasks = tasks
@@ -71,8 +71,10 @@ export class AgentHookService {
       .find((task) => task.workspace !== null && isInside(task.workspace, cwd))
   }
 
-  activity(): Record<string, AgentActivity> {
-    return Object.fromEntries(this.activities)
+  activity(): Record<string, Record<string, AgentActivity>> {
+    return Object.fromEntries(
+      [...this.activities].map(([taskId, lines]) => [taskId, Object.fromEntries(lines)]),
+    )
   }
 
   // Throws UnknownAgentError for an agent without an adapter, and a ZodError when the input is not
@@ -97,13 +99,14 @@ export class AgentHookService {
     if (!task) {
       return { taskId: null, applied: [] }
     }
-
-    if (hook.summary !== undefined) {
-      this.activities.set(task.id, { text: hook.summary, at: new Date().toISOString() })
-    }
-    if (hook.signal === 'turn-ended' || hook.signal === 'failed' || hook.signal === 'asking') {
+    // Natamux terminals run in the task's workspace only. Without one, the hook comes from an agent
+    // that the removal of the workspace ended.
+    if (task.workspace === null && terminal !== undefined) {
       this.activities.delete(task.id)
+      return { taskId: null, applied: [] }
     }
+
+    this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
 
     const lane = this.stages.laneFor(task, terminal)
     // The turn in which the agent ran `natamux done` ends as planned, not "stopped early", even
@@ -112,7 +115,7 @@ export class AgentHookService {
       (hook.signal === 'turn-ended' || hook.signal === 'turn-paused') &&
       this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
     if (reportedTurn) {
-      this.activities.delete(task.id)
+      this.forgetActivity(task.id, terminal ?? MAIN_TERMINAL)
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []
@@ -130,5 +133,31 @@ export class AgentHookService {
       this.tasks.recordActivity(task.id)
     }
     return { taskId: task.id, applied }
+  }
+
+  // Each terminal keeps its own line, so the end of a turn in one does not clear the other.
+  private noteActivity(taskId: string, terminal: string, hook: NormalizedHook): void {
+    const lines = this.activities.get(taskId) ?? new Map<string, AgentActivity>()
+    if (hook.summary !== undefined) {
+      lines.set(terminal, { text: hook.summary, at: new Date().toISOString() })
+    }
+    if (hook.signal === 'turn-ended' || hook.signal === 'failed' || hook.signal === 'asking') {
+      lines.delete(terminal)
+    }
+    this.keepActivity(taskId, lines)
+  }
+
+  private forgetActivity(taskId: string, terminal: string): void {
+    const lines = this.activities.get(taskId) ?? new Map<string, AgentActivity>()
+    lines.delete(terminal)
+    this.keepActivity(taskId, lines)
+  }
+
+  private keepActivity(taskId: string, lines: Map<string, AgentActivity>): void {
+    if (lines.size === 0) {
+      this.activities.delete(taskId)
+    } else {
+      this.activities.set(taskId, lines)
+    }
   }
 }

@@ -252,6 +252,47 @@ describe('createApi', () => {
     expect(await createApi('secret', fetchFunction).getGitGraph('T-0001')).toEqual(graph)
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/graph')
   })
+
+  it('reads the stage and state of each agent terminal', async () => {
+    const { calls, fetchFunction } = fakeFetch(() =>
+      json({
+        terminals: ['1', '2', '3'],
+        agents: ['1', '2'],
+        lanes: {
+          '1': { stage: 'implement', state: 'running' },
+          '2': { stage: 'test-spec', state: 'review' },
+        },
+      }),
+    )
+
+    expect(await createApi('secret', fetchFunction).listAgentTerminals('T-0001')).toEqual({
+      '1': { stage: 'implement', state: 'running' },
+      '2': { stage: 'test-spec', state: 'review' },
+    })
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/terminals')
+  })
+
+  it('reads what the agent of each terminal does, and the latest line of each task', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({
+        activity: {
+          'T-0001': {
+            '1': { text: 'Edit src/a.ts', at: '2026-10-08T09:00:00.000Z' },
+            '2': { text: 'Edit test-spec.md', at: '2026-10-08T09:00:05.000Z' },
+          },
+          'T-0002': { '1': { text: 'Bash: pnpm test', at: '2026-10-08T09:00:00.000Z' } },
+        },
+      }),
+    )
+
+    expect(await createApi('secret', fetchFunction).listActivity()).toEqual({
+      byTask: { 'T-0001': 'Edit test-spec.md', 'T-0002': 'Bash: pnpm test' },
+      byTerminal: {
+        'T-0001': { '1': 'Edit src/a.ts', '2': 'Edit test-spec.md' },
+        'T-0002': { '1': 'Bash: pnpm test' },
+      },
+    })
+  })
 })
 
 describe('getFileImage', () => {

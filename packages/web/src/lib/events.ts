@@ -44,6 +44,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'issue.linked': 'Issue linked',
   'issue.created': 'Issue created',
   'agent.waiting': 'Agent waits for its background work',
+  'agent.stopped': 'Agent stopped',
 }
 
 export function describeEvent(type: EventType): string {

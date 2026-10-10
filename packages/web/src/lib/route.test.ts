@@ -35,6 +35,18 @@ describe('parseRoute', () => {
     expect(parseRoute('/w/T-0018/other')).toMatchObject({ tab: 'terminal' })
   })
 
+  it('reads the old Progress tab as the terminal with the progress beside it', () => {
+    expect(parseRoute('/w/T-0018/progress')).toEqual({
+      kind: 'workspace',
+      id: 'T-0018',
+      tab: 'terminal',
+      file: null,
+      showProgress: true,
+    })
+    expect(routePath(parseRoute('/w/T-0018/progress'))).toBe('/w/T-0018/terminal')
+    expect(parseRoute('/w/T-0018/docs')).toMatchObject({ tab: 'docs' })
+  })
+
   it('forgives a trailing slash and the case of the id', () => {
     expect(parseRoute('/board/')).toEqual({ kind: 'board' })
     expect(parseRoute('/t/t-0018')).toEqual({ kind: 'task', id: 'T-0018' })

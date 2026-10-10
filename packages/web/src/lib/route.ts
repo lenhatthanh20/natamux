@@ -6,7 +6,8 @@ import type { WorkspaceTab } from './view-store'
 //   /progress                  all tasks against their stages
 //   /agents                    the agents grid
 //   /t/T-0018                  all tasks with the details of T-0018 open
-//   /w/T-0018/terminal         the workspace of T-0018 (also changes, history, progress, docs)
+//   /w/T-0018/terminal         the workspace of T-0018 (also changes, history, docs)
+//   /w/T-0018/progress         the old Progress tab: the terminal, and the details on Progress
 //   /w/T-0018/changes?file=src/a.ts
 export type Route =
   | { kind: 'tasks' }
@@ -14,9 +15,15 @@ export type Route =
   | { kind: 'progress' }
   | { kind: 'agents' }
   | { kind: 'task'; id: string }
-  | { kind: 'workspace'; id: string; tab: WorkspaceTab; file: string | null }
+  | {
+      kind: 'workspace'
+      id: string
+      tab: WorkspaceTab
+      file: string | null
+      showProgress?: boolean
+    }
 
-const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history', 'progress', 'docs']
+const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history', 'docs']
 const TASK_ID = /^[A-Za-z]+-\d+$/
 
 function taskId(segment: string | undefined): string | null {
@@ -52,6 +59,9 @@ export function parseRoute(pathname: string, search = ''): Route {
     const id = taskId(second)
     if (id === null) {
       return { kind: 'tasks' }
+    }
+    if (third === 'progress') {
+      return { kind: 'workspace', id, tab: 'terminal', file: null, showProgress: true }
     }
     const tab = TABS.find((candidate) => candidate === third) ?? 'terminal'
     const file = new URLSearchParams(search).get('file')

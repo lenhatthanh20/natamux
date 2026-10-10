@@ -15,7 +15,7 @@ import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import type { LoadedSettings } from '../lib/api'
 import { formatDuration, stepsKey } from '../lib/stage-view'
-import { isQuiet, STATE_LABEL } from '../lib/tasks'
+import { isQuiet, laneSummary, STATE_LABEL } from '../lib/tasks'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { linkKind, StageLink, StageMarker } from './StageMarker'
 import { Button } from './ui/Button'
@@ -256,7 +256,11 @@ export function ProgressBoard({
                         </button>
                         <span className="flex items-center gap-2 text-xs text-muted">
                           <span className="font-mono">{task.id}</span>
-                          <span className="state-chip" data-state={task.state}>
+                          <span
+                            className="state-chip"
+                            data-state={task.state}
+                            data-tip={laneSummary(task)}
+                          >
                             {STATE_LABEL[task.state]}
                           </span>
                           {task.stageSince !== null && task.state !== 'done' && (

@@ -384,7 +384,7 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 
 ### 4.7 Tabs (`ui/Tabs.tsx`)
 - Row 36, bottom border line. Tab: pad x 10, 13/500, icon 14 + label gap 6, muted; hover ink; selected ink + 2px ink bar at the bottom (inside the row). Optional count badge.
-- `role="tablist"`/`tab`/`tabpanel`, `aria-controls`. One tab stop; Left/Right/Home/End move and activate. Number keys 1-3 activate workspace tabs (see 5.1).
+- `role="tablist"`/`tab`/`tabpanel`, `aria-controls`. One tab stop; Left/Right/Home/End move and activate. Number keys 1-4 activate workspace tabs (see 5.1).
 - Overflow: horizontal scroll with 16px edge fades; no wrap. Right side of the row holds tab-specific actions (New shell, layout).
 
 ### 4.8 List row (generic)
@@ -436,8 +436,11 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 - Kbd (`ui/Kbd.tsx`): height 18, min-width 18, pad x 4, radius 4, 11/500 mono, bg raised, 1px line, `box-shadow: inset 0 -1px 0 var(--line-strong)`, muted text. Renders platform keys: macOS glyphs joined (`⌘K`, `⇧⌘P`), Windows words with `+` (`Ctrl+K`). Source: `lib/keys.ts` `formatShortcut('Mod+K')`.
 
 ### 4.12 Needs-you section (`components/NeedsMeStrip.tsx`, `SidebarTaskRow.tsx`)
-- Header row 28: caps "Needs you" + signal count badge. No amber block background; only a 2px `--signal-line` bar on the left of the section when count > 0 (stops the "warning banner" look, NAV-24).
-- Rows are single-line 28px: glyph 16, title 13/500 truncate, reason chip 12 ("asks", "review", "failed", "blocked", "quiet"), age 12 muted.
+- Frame when count > 0: 1px `--signal-line` border on all sides, radius 8, `--signal-soft` background, pad 4. When 0 the border is transparent and there is no background, so the calm state stays calm and the text does not move. This replaces the earlier "left bar only, no amber background" rule (NAV-24) on purpose, at the user's request (T-0026): the section should stand out.
+- Header row 28: `BellRing` 14 in `--signal` + caps "Needs you" in `--signal` + signal count badge. When 0, no icon and the title is muted.
+- Rows are two lines, about 44px, pad 6 8, one button:
+  - Line 1: glyph 16, title 13/500, truncate. Only the title, so it has the whole width.
+  - Line 2, 12px, indented 24 to start under the title: stage muted (when there is one), reason in `--signal` ("asks", "review", "failed", "blocked", "quiet"), age muted at the right.
 - Cap at 3 rows + "Show all 5" link row. Ordered by longest wait. Rows here are not highlighted again in the tree below.
 - When 0: one muted line "Nothing needs you" (28px), so the section never jumps.
 - The section ignores the sidebar filter on purpose (must stay in sight); a caps note "Not filtered" appears when a filter is active (NAV-15 count mismatch explained).
@@ -572,6 +575,7 @@ Shared shell:
 
 ### 4.27 Details panel sections (`components/TaskDetail.tsx`)
 - Header 40: id mono 12 muted, then icon buttons 28: Edit (`Pencil`, `E`), More ("..."), Close (`X`, `Esc`). In page mode (< 768) Back (`ArrowLeft`) replaces Close.
+- View tabs under the header (36): **Progress** and **Details**. Progress is the task progress of `design-task-stages.md` 7.5, in one column, so the user can watch the terminal and approve a stage without a tab change. The view the user picks is remembered for all tasks (`natamux.details-view`). Until then, the details beside an open workspace show Progress, and beside the list show Details. Edit always shows Details. The palette command "Show the task progress" and Send back open Progress.
 - Title block pad 16: title 16/600 (wraps), chips row (state, priority, labels) gap 6.
 - Action row: primary state action (`button primary`), secondary actions, agent action (Start agent / Restart agent / hidden while running, WS-17). Label above in caps "Actions" only in the narrow page mode.
 - Banners (when relevant), pad 10 12, radius 6: quiet ("No sign of life for 12m. The agent may be stuck.") and waiting ("Waits for T-0009 to be done"), bg signal-soft, 1px signal-line.
@@ -629,7 +633,7 @@ Rules:
 | | `i` | Show / hide details of the selected task |
 | | `e` | Edit the selected task in details |
 | | `a` / `r` | Approve / Request changes (review state only; existing) |
-| | `1` `2` `3` | Workspace tabs: Terminal, Changes, History |
+| | `1` `2` `3` `4` | Workspace tabs: Terminal, Changes, History, Docs |
 | | `[` / `]` | Previous / next changed file (Changes tab) |
 | | `R` (Shift+r) | Refresh changes / history |
 | Lists and trees | Home / End | First / last |
@@ -827,7 +831,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in natamux (8 hidden)"); state counts follow the search; needs-you shows "Not filtered" note. |
 | L-10 | P1 | NAV-17, RA-23 | `WorkspaceList.tsx`, `WorkspaceRow.tsx`, new `hooks/useRovingFocus.ts` | Tree is one tab stop; keys per 4.9 (arrows, Home/End, Left/Right groups, Enter, F2, Shift+F10, Delete, type-ahead). Row "..." button gets `tabIndex={-1}`. |
 | L-11 | P1 | NAV-23, NAV-27 (anatomy) | `WorkspaceRow.tsx` | Row anatomy per 4.9: age on line 1 swapping with "..." on hover/focus; slug gets full line 2; rename field replaces only the title line (24px), select-all in both entry paths, focus returns to the row; finished rows use `--muted` color, no opacity. |
-| L-12 | P1 | NAV-24 | `components/NeedsMeStrip.tsx`, `components/SidebarTaskRow.tsx` | Section per 4.12: caps header + count, left signal bar instead of amber block, single-line 28px rows with reason chip, cap 3 + "Show all N". |
+| L-12 | P1 | NAV-24 | `components/NeedsMeStrip.tsx`, `components/SidebarTaskRow.tsx` | Section per 4.12: caps header + count, left signal bar instead of amber block, single-line 28px rows with reason chip, cap 3 + "Show all N". Since T-0026: amber frame and two-line rows instead (see 4.12). |
 | L-13 | P1 | WS-23 | `Dashboard.tsx`, `components/NoWorkspace.tsx` | Enter / double-click / palette open a workspace-less task in the No-workspace main view (EmptyState with [Create workspace] + branch Combobox + [Start agent]); after "Create workspace" in details, open the new workspace on Terminal (same as the dialog path). |
 | L-14 | P1 | NAV-31 | `Dashboard.tsx` (view header), `AgentPanes.tsx` | View titles 15/600 + count badge; view header 44 per 4.29. |
 | L-15 | P2 | NAV-25, NAV-26 | `WorkspaceList.tsx`, `lib/workspace-groups.ts` | Pinned header count; repo prefix on pinned rows; collapsed group shows a state dot when it hides the current or a needs-you workspace. |

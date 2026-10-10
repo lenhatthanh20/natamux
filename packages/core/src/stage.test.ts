@@ -12,8 +12,10 @@ import {
   stageOfTerminal,
   stepIndex,
   stepRefsOf,
+  terminalLane,
   terminalOfStage,
 } from './stage.js'
+import type { TaskState } from './task-state.js'
 
 describe('pipelineSchema', () => {
   it('accepts the default pipeline', () => {
@@ -183,5 +185,58 @@ describe('terminals of a group', () => {
     expect(terminalOfStage(build, 'test-spec')).toBe('2')
     expect(stageOfTerminal(build, '2')?.id).toBe('test-spec')
     expect(stageOfTerminal(build, '3')).toBeUndefined()
+  })
+})
+
+describe('terminalLane', () => {
+  const build = DEFAULT_PIPELINE[3]
+  const spec = DEFAULT_PIPELINE[1]
+  if (build === undefined || spec === undefined) {
+    throw new Error('The default pipeline changed')
+  }
+  const inBuild = (lanes: Record<string, TaskState>) => ({
+    stage: build.id,
+    state: combinedState(lanes),
+    lanes,
+  })
+
+  it('gives each terminal of a group the state of its own lane', () => {
+    const position = inBuild({ implement: 'running', 'test-spec': 'review' })
+    expect(position.state).toBe('review')
+    expect(terminalLane(position, build, '1')).toEqual({ stage: 'implement', state: 'running' })
+    expect(terminalLane(position, build, '2')).toEqual({ stage: 'test-spec', state: 'review' })
+  })
+
+  it('keeps the lanes apart when one needs input', () => {
+    const position = inBuild({ implement: 'running', 'test-spec': 'needs-input' })
+    expect(position.state).toBe('needs-input')
+    expect(terminalLane(position, build, '1').state).toBe('running')
+    expect(terminalLane(position, build, '2').state).toBe('needs-input')
+  })
+
+  it('shows a finished lane as done, also when it is gone from the lanes', () => {
+    const finished = inBuild({ implement: 'running', 'test-spec': 'done' })
+    expect(terminalLane(finished, build, '2')).toEqual({ stage: 'test-spec', state: 'done' })
+    expect(terminalLane({ stage: build.id, state: 'running', lanes: {} }, build, '2')).toEqual({
+      stage: 'test-spec',
+      state: 'done',
+    })
+  })
+
+  it('gives no lane to a terminal the group does not use', () => {
+    const position = inBuild({ implement: 'running', 'test-spec': 'review' })
+    expect(terminalLane(position, build, '3')).toEqual({ stage: null, state: null })
+  })
+
+  it('gives the task state to Shell 1 outside a group, and no lane to the others', () => {
+    const position = { stage: spec.id, state: 'running' as const, lanes: {} }
+    expect(terminalLane(position, spec, '1')).toEqual({ stage: 'spec', state: 'running' })
+    expect(terminalLane(position, spec, '2')).toEqual({ stage: null, state: null })
+  })
+
+  it('uses the stage of the task when its step is unknown', () => {
+    const position = { stage: 'gone', state: 'review' as const, lanes: {} }
+    expect(terminalLane(position, undefined, '1')).toEqual({ stage: 'gone', state: 'review' })
+    expect(terminalLane(position, undefined, '2')).toEqual({ stage: null, state: null })
   })
 })

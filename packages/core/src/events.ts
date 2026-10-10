@@ -57,6 +57,7 @@ export const EVENT_TYPES = [
   'issue.linked',
   'issue.created',
   'agent.waiting',
+  'agent.stopped',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -111,6 +112,8 @@ const MOVES: Partial<Record<EventType, Move>> = {
   // The agent ended its turn, but its background work (a shell, a monitor, a scheduled prompt)
   // will wake it again, so the stage goes on running.
   'agent.waiting': { from: ['running'], to: 'running' },
+  // Natamux ended the agent, for example with its workspace. The stage starts again by hand.
+  'agent.stopped': { from: ['running', 'needs-input'], to: 'ready' },
   // "Mark as done" from needs-input runs the checks again.
   'stage.reported': { from: ['running', 'needs-input'], to: 'running' },
   'stage.checked': { from: ['running'], to: 'gate' },

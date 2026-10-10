@@ -59,6 +59,8 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 Same for every agent: the `NATAMUX_TASK_ID` environment variable first, then the workspace that holds the agent's working directory (`cwd`, or one of Cursor's `workspace_roots`).
 
+A hook from a Natamux terminal (it has `NATAMUX_TERMINAL`) for a task with no workspace is ignored. Terminals run only in a workspace, so the hook comes from an agent that ended when its workspace was removed. Removing a workspace also sends `agent.stopped`, which moves a running or waiting stage back to ready.
+
 ## How other ADEs do it
 
 Read from their open source code on 2026-10-08 (GitHub). Names of files are in the repositories named below.

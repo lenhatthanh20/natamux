@@ -270,4 +270,32 @@ export function stageOfTerminal(step: Step, terminal: string): Stage | undefined
   return stagesOf(step).find((stage) => terminalOfStage(step, stage.id) === terminal)
 }
 
+// The stage an agent terminal works on, and the state of that stage. Both are null for a terminal
+// that no stage uses, such as an extra shell where the user started an agent.
+export const terminalLaneSchema = z.object({
+  stage: z.string().min(1).nullable(),
+  state: taskStateSchema.nullable(),
+})
+
+export type TerminalLane = z.infer<typeof terminalLaneSchema>
+
+const NO_LANE: TerminalLane = { stage: null, state: null }
+
+// In a group each terminal has the state of its own lane, not the state of the whole task.
+export function terminalLane(
+  position: StagePosition,
+  step: Step | undefined,
+  terminal: string,
+): TerminalLane {
+  if (step === undefined || !isGroup(step)) {
+    const stage = step?.id ?? position.stage
+    return terminal === '1' ? { stage, state: position.state } : NO_LANE
+  }
+  const stage = stageOfTerminal(step, terminal)
+  if (stage === undefined) {
+    return NO_LANE
+  }
+  return { stage: stage.id, state: position.lanes[stage.id] ?? 'done' }
+}
+
 export const lanesSchema = z.record(stageIdSchema, taskStateSchema)
