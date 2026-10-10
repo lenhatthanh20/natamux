@@ -148,9 +148,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      windowsLine(
-        "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'",
-      ),
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 
@@ -242,9 +240,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      windowsLine(
-        "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'",
-      ),
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 
