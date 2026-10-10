@@ -48,7 +48,7 @@ jobs:
           user_dir="$RUNNER_TEMP/desktop-user"
           mkdir -p "$user_dir"
           printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
-          xvfb-run -a packages/desktop/release/linux-unpacked/natamux --no-sandbox --user-data-dir="$user_dir"
+          xvfb-run -a packages/desktop/release/linux-unpacked/natamux-desktop --no-sandbox --user-data-dir="$user_dir"
       - uses: actions/upload-artifact@v7
         with:
           name: natamux-${{ matrix.name }}

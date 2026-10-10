@@ -29,6 +29,8 @@ linux:
     - deb
     - tar.gz
   category: Development
+  # `natamux` is the command line; the app gets its own name on the PATH.
+  executableName: natamux-desktop
   synopsis: Run many coding agents in parallel
   maintainer: lenhatthanh20 <lenhatthanh20@users.noreply.github.com>
   vendor: Natamux
