@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.2 (2026-10-10)
+
+- The desktop app updates itself. It checks GitHub for a new release, downloads it in the background, checks it against `SHA256SUMS.txt` and installs it on restart. See [Updates](/docs/guides/desktop-app/#updates).
+- **Check for Updates…** and **Check for Updates Automatically** in the app menu (macOS) or the **Help** menu (Linux).
+
 ## v0.1.1 (2026-10-10)
 
 - The macOS app is now `Natamux.app` (it was `natamux.app`).

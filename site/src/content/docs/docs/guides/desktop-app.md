@@ -24,9 +24,35 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 | **File → Open Repository…** (`Cmd/Ctrl+Shift+O`) | Pick another repository. The daemon starts again with it |
 | **File → Show Daemon Log** | Opens the daemon log file |
 
+| **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Linux |
+| **Check for Updates Automatically** | Turns the timed update checks off and on. Next to the item above |
+
 The app also has the standard Edit, View and Window menus.
 
 Links to other sites open in your browser. Only `http`, `https` and `mailto` links open at all.
+
+## Updates
+
+The app updates itself, the way other desktop apps do.
+
+1. About 30 seconds after it starts, and then every 6 hours, the app asks GitHub for the latest release.
+2. When there is a newer version, it downloads it in the background. The menu item shows **Downloading Update 0.1.2…**.
+3. It checks the download against `SHA256SUMS.txt` of the release. On macOS it also checks the new app's signature and version.
+4. A dialog says **Natamux 0.1.2 is ready** with **Restart Now**, **Later** and **What's New**. The menu item becomes **Restart to Update to 0.1.2**.
+5. **Restart Now** asks first when agents are working, as quitting does. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
+
+How the new version goes in depends on how you installed the app:
+
+| Installed as | Update |
+|---|---|
+| macOS app in Applications, or any folder you can write | Swapped in when the app quits. If you just quit while an update is ready, the next start is the new version |
+| AppImage | The file is replaced as soon as the download is checked. **Restart Now** starts the new one |
+| `.deb` | **Restart Now** installs it with `pkexec dpkg -i`, which asks for your password. If that fails, the app shows the `sudo apt install` command to run |
+| `.tar.gz`, or a macOS app run from the disk image | The app tells you about the new version and opens the release page. Download it yourself |
+
+When a check fails, the app tries again at the next check. **Check for Updates…** shows the error. Every step is written to `logs/update.log`.
+
+The check sends no data about you or your tasks. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## Where things are
 
@@ -39,10 +65,12 @@ The app keeps its files in the user data folder.
 
 | Path in that folder | Holds |
 |---|---|
-| `settings.json` | The repository you picked |
+| `settings.json` | The repository you picked, and whether timed update checks are on |
 | `daemon-token` | The daemon token, readable only by you. It stays the same between runs |
 | `data/` | Tasks, the task index and worktrees (`data/tasks`, `data/worktrees`) |
 | `logs/daemon.log` | The daemon's output |
+| `logs/update.log` | Update checks, downloads and installs |
+| `updates/` | The downloaded update, until it is installed |
 | `bin/` | The `natamux` and `nmx` commands |
 
 To use the commands in your own shell, see [Use the natamux command in your own shell](/docs/getting-started/install/#use-the-natamux-command-in-your-own-shell).
@@ -68,4 +96,4 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 ## Limits
 
 - The apps are not signed or notarized yet. See [Install Natamux](/docs/getting-started/install/).
-- No automatic updates. Watch the releases page for new versions.
+- The update check reads only the latest release. Pre-release versions are never offered.

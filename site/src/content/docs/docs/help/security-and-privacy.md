@@ -18,6 +18,7 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
 - Data leaves your machine only when you or an agent you start makes it happen:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
   - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
+  - The desktop app asks `api.github.com` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick **Check for Updates Automatically** to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
 
 ## Agents run with your rights
 
@@ -38,6 +39,12 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
 - The scripts that start agents are written with mode `0600`.
 - Sign out in the dashboard's account menu to remove the token from the browser.
+
+## Updates
+
+- Updates come over HTTPS from the latest GitHub release of the repository.
+- The app compares the SHA-256 of the download with `SHA256SUMS.txt` of the same release. On macOS it also checks the new app's signature and version before the swap.
+- The checksum file comes from the same release, so it catches a broken download, not a forged release. Until the app is signed with a certificate, the trust rests on the GitHub repository.
 
 ## Hooks
 

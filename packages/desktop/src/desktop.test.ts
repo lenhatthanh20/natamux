@@ -51,6 +51,14 @@ describe('settings', () => {
     expect(loadSettings(file)).toEqual({})
   })
 
+  it('keeps the update choice, and drops a value of the wrong type', () => {
+    const file = join(dir, 'settings.json')
+    saveSettings(file, { repoDir: '/work/repo', autoUpdate: false })
+    expect(loadSettings(file)).toEqual({ repoDir: '/work/repo', autoUpdate: false })
+    writeFileSync(file, '{"autoUpdate":"no"}')
+    expect(loadSettings(file)).toEqual({})
+  })
+
   it('knows a git repository by its .git', () => {
     expect(isGitRepository(dir)).toBe(false)
     writeFileSync(join(dir, '.git'), 'gitdir: /elsewhere\n')
