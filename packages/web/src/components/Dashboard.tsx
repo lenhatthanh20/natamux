@@ -405,6 +405,22 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const questions = Object.fromEntries(
     asking.map((task, index) => [task.id, rowText(waitReason(askQueries[index]?.data))]),
   )
+  // The stage of each agent shell in the agents grid, so each pane shows its own state. An agent
+  // starts and ends in its shell without a task event, so this is read again often.
+  const paneTasks = agentsOpen ? agentPaneTasks(agentPanes, tasks) : []
+  const paneQueries = useQueries({
+    queries: paneTasks.map((task) => ({
+      queryKey: ['agent-terminals', task.id],
+      queryFn: () => api.listAgentTerminals(task.id),
+      refetchInterval: 5000,
+    })),
+  })
+  const paneTerminals = Object.fromEntries(
+    paneTasks.flatMap((task, index) => {
+      const lanes = paneQueries[index]?.data
+      return lanes === undefined ? [] : [[task.id, lanes]]
+    }),
+  )
   const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
     eventMutation.isPending ||
@@ -742,7 +758,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     currentId={changesTaskId}
                     pinnedIds={pinned}
                     diffStats={diffStatsQuery.data}
-                    activity={activityQuery.data}
+                    activity={activityQuery.data?.byTask}
                     onOpen={(id) => {
                       openTask(id)
                       afterPick()
@@ -888,7 +904,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
             onFileChange={setChangesFile}
-            activity={activityQuery.data?.[changesTask.id]}
+            activity={activityQuery.data?.byTask[changesTask.id]}
+            terminalActivity={activityQuery.data?.byTerminal[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
               const main =
@@ -952,7 +969,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onChange={setAgentPanes}
             layout={paneLayout}
             onLayout={setPaneLayout}
-            activity={activityQuery.data}
+            activity={activityQuery.data?.byTerminal}
+            terminals={paneTerminals}
             connect={async (taskId, size) => {
               const ticket = await api.terminalTicket(taskId)
               return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))
@@ -1116,7 +1134,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   tasks={orderedTasks}
                   repos={repos}
                   now={now}
-                  activity={activityQuery.data}
+                  activity={activityQuery.data?.byTask}
                   loadSettings={(repo) => api.getSettings(repo)}
                   onOpenTask={(id) => {
                     select(id)
@@ -1144,7 +1162,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
-                  activity={activityQuery.data}
+                  activity={activityQuery.data?.byTask}
                   showRepo={repos.length > 1}
                   sort={sort}
                   onSort={(key) => setSort(nextSort(sort, key))}

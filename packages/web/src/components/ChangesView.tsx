@@ -4,6 +4,7 @@ import type {
   GitGraph as GitGraphData,
   ImageSide,
   Task,
+  TerminalLane,
   TerminalSize,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,7 +13,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
 import type { StageFile, StoredEvent } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
-import { paneStateText } from '../lib/panes'
 import { toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
 import { waitReason } from '../lib/workspace'
@@ -38,8 +38,9 @@ type ChangesViewProps = {
   // The file of the address bar, and where to report the one that shows.
   file?: string | null
   onFileChange?: (path: string | null) => void
-  // What the agent does now, for the title bar of Shell 1.
+  // What the agent does now: the latest line of the task, and the line of each shell.
   activity?: string
+  terminalActivity?: Readonly<Record<string, string>>
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   // One side of a changed image, as bytes.
@@ -48,7 +49,7 @@ type ChangesViewProps = {
   loadEvents: () => Promise<StoredEvent[]>
   connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
-  loadAgentTerminals?: () => Promise<string[]>
+  loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
   closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
   push: () => Promise<Task>
@@ -84,6 +85,7 @@ export function ChangesView({
   file,
   onFileChange,
   activity,
+  terminalActivity,
   loadChanges,
   loadFile,
   loadImage,
@@ -234,10 +236,8 @@ export function ChangesView({
           className="flex min-h-0 flex-1 flex-col p-2"
         >
           <ShellPanes
-            taskId={task.id}
-            state={task.state}
-            agent={task.agent}
-            stateText={task.agent === null ? undefined : paneStateText(task.state, activity)}
+            task={task}
+            activity={terminalActivity}
             connect={connectTerminal}
             loadTerminals={loadTerminals}
             loadAgentTerminals={loadAgentTerminals}

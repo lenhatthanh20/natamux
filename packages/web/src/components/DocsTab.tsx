@@ -1,15 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText } from 'lucide-react'
 import { useState } from 'react'
+import { useStoredFlag } from '../hooks/useStoredFlag'
 import type { StageFile } from '../lib/api'
 import { formatAge } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { Markdown } from './Markdown'
 import { Button } from './ui/Button'
+import { Segmented } from './ui/Segmented'
 import { textarea } from './ui/styles'
 
 type Draft = { text: string; original: string; base: string | null }
 
 const FIRST_FILE = 'context.md'
+
+type ViewMode = 'rendered' | 'source'
+
+const VIEW_MODES = [
+  { value: 'rendered', label: 'Rendered' },
+  { value: 'source', label: 'Source' },
+] as const
 
 // Drafts outlive the tab: switching to another tab unmounts this one.
 const kept = new Map<string, Record<string, Draft>>()
@@ -54,6 +64,9 @@ export function DocsTab({
   const names = entries.map((entry) => entry.name)
   // Only for a task with no stage file: "Write context.md" starts the first one by hand.
   const [startNew, setStartNew] = useState(false)
+  // Kept per browser: a reader who checks the raw text wants it again on the next file.
+  const [source, setSource] = useStoredFlag('natamux.docs-source', false)
+  const mode: ViewMode = source ? 'source' : 'rendered'
   const current =
     file !== null && names.includes(file) ? file : (names[0] ?? (startNew ? FIRST_FILE : null))
   const entry = entries.find((candidate) => candidate.name === current)
@@ -184,20 +197,30 @@ export function DocsTab({
               </Button>
             </>
           ) : (
-            <Button
-              size="xs"
-              variant="secondary"
-              disabled={text.data === undefined && entry !== undefined}
-              onClick={() =>
-                setDraft(current, {
-                  text: text.data ?? '',
-                  original: text.data ?? '',
-                  base: modifiedAt,
-                })
-              }
-            >
-              Edit
-            </Button>
+            <>
+              {!text.isError && (
+                <Segmented
+                  label="Show the file"
+                  options={VIEW_MODES}
+                  value={mode}
+                  onChange={(next) => setSource(next === 'source')}
+                />
+              )}
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={text.data === undefined && entry !== undefined}
+                onClick={() =>
+                  setDraft(current, {
+                    text: text.data ?? '',
+                    original: text.data ?? '',
+                    base: modifiedAt,
+                  })
+                }
+              >
+                Edit
+              </Button>
+            </>
           )}
         </div>
         {stale && (
@@ -217,10 +240,14 @@ export function DocsTab({
             aria-label={`Text of ${current}`}
             className={`${textarea} m-3 min-h-0 flex-1 resize-none font-mono text-xs leading-5`}
           />
-        ) : (
+        ) : mode === 'source' ? (
           <pre className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ink">
             {text.data ?? ''}
           </pre>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            <Markdown text={text.data ?? ''} />
+          </div>
         )}
       </section>
     </div>

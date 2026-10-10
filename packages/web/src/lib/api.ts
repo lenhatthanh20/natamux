@@ -19,9 +19,11 @@ import {
   type Task,
   type TaskEvent,
   type TaskTemplate,
+  type TerminalLane,
   taskEventSchema,
   taskSchema,
   taskTemplateSchema,
+  terminalLaneSchema,
 } from '@natamux/core'
 
 export type NewWorkspaceInput = {
@@ -62,6 +64,13 @@ export type StoredEvent = {
 export type TaskChanges = Partial<
   Pick<Task, 'title' | 'description' | 'priority' | 'labels' | 'dependsOn'>
 >
+
+// What the agents do now, such as "Edit src/a.ts": the latest line of each task, and the line of
+// each terminal of each task.
+export type AgentActivity = {
+  byTask: Record<string, string>
+  byTerminal: Record<string, Record<string, string>>
+}
 
 export type RemoveWorkspaceResult = {
   task: Task
@@ -289,15 +298,28 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
-    // What the agent of each task does now, by task id, such as "Edit src/a.ts".
-    async listActivity(): Promise<Record<string, string>> {
+    async listActivity(): Promise<AgentActivity> {
       const activity = asRecord(asRecord(await request('GET', '/activity')).activity)
-      return Object.fromEntries(
-        Object.entries(activity).flatMap(([taskId, entry]) => {
-          const text = asRecord(entry).text
-          return typeof text === 'string' ? [[taskId, text]] : []
-        }),
-      )
+      const result: AgentActivity = { byTask: {}, byTerminal: {} }
+      for (const [taskId, terminals] of Object.entries(activity)) {
+        const lines: Record<string, string> = {}
+        let latest = ''
+        for (const [terminal, entry] of Object.entries(asRecord(terminals))) {
+          const { text, at } = asRecord(entry)
+          if (typeof text !== 'string') {
+            continue
+          }
+          lines[terminal] = text
+          // ISO times sort as text.
+          const when = typeof at === 'string' ? at : ''
+          if (result.byTask[taskId] === undefined || when > latest) {
+            result.byTask[taskId] = text
+            latest = when
+          }
+        }
+        result.byTerminal[taskId] = lines
+      }
+      return result
     },
 
     // The size of the work of every task with a workspace, by task id.
@@ -377,10 +399,16 @@ export function createApi(
       return stringList(body.terminals)
     },
 
-    // The names of the terminals where an agent runs now.
-    async listAgentTerminals(taskId: string): Promise<string[]> {
+    // The terminals where an agent runs now, by name, with the stage each one works on.
+    async listAgentTerminals(taskId: string): Promise<Record<string, TerminalLane>> {
       const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/terminals`))
-      return stringList(body.agents)
+      const lanes = body.lanes === undefined ? {} : asRecord(body.lanes)
+      return Object.fromEntries(
+        stringList(body.agents).map((name) => [
+          name,
+          terminalLaneSchema.parse(lanes[name] ?? { stage: null, state: null }),
+        ]),
+      )
     },
 
     async closeTerminal(taskId: string, terminal: string): Promise<string[]> {

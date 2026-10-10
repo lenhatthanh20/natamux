@@ -14,6 +14,8 @@ import {
   type Task,
   type TaskEvent,
   type TaskState,
+  type TerminalLane,
+  terminalLane,
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
@@ -274,6 +276,11 @@ export class StageRunner {
       ? (stageOfTerminal(step, terminal ?? MAIN_TERMINAL) ?? codeStage(step))
       : step
     return { stage: stage.id, state: laneState(task, step, stage.id) }
+  }
+
+  // The stage an agent in this terminal works on, and its own state, for the dashboard.
+  laneOfTerminal(task: Task, terminal: string): TerminalLane {
+    return terminalLane(task, findStep(this.tasks.stepsOf(task), task.stage), terminal)
   }
 
   // True once for the turn end that follows a report from this terminal.
