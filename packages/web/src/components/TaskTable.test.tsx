@@ -1,5 +1,6 @@
 import type { Task } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TaskTable } from './TaskTable'
 import { ContextMenuHost } from './ui/Menu'
@@ -43,7 +44,13 @@ const TASKS = [
 ]
 
 function table(tasks: readonly Task[] = TASKS) {
-  const handlers = { onSelect: vi.fn(), onOpen: vi.fn(), onToggleDetails: vi.fn() }
+  const handlers = {
+    onSelect: vi.fn(),
+    onOpen: vi.fn(),
+    onToggleDetails: vi.fn(),
+    onAction: vi.fn(),
+    onStartAgent: vi.fn(),
+  }
   render(
     <>
       <TaskTable
@@ -71,5 +78,44 @@ describe('TaskTable', () => {
     expect(within(rowOf('Fix flaky login test')).getByText('Claude Code')).toBeTruthy()
     expect(screen.queryByText('claude-code')).toBeNull()
     expect(within(rowOf('Write release notes')).getAllByText('-').length).toBeGreaterThan(0)
+  })
+
+  it('offers the task actions in the row menu, above the copy items', async () => {
+    const { onAction, onStartAgent } = table()
+    const user = userEvent.setup()
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Fix flaky login test') })
+    const labels = screen.getAllByRole('menuitem').map((item) => item.textContent ?? '')
+    const retry = labels.findIndex((label) => label.startsWith('Retry'))
+    expect(retry).toBeGreaterThan(-1)
+    expect(labels.findIndex((label) => label.startsWith('Restart agent'))).toBeGreaterThan(retry)
+    expect(labels.findIndex((label) => label.startsWith('Copy task id'))).toBeGreaterThan(retry)
+    expect(labels.at(-1)).toBe('Cancel task')
+
+    await user.click(screen.getByRole('menuitem', { name: /^Retry/ }))
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'T-0001' }),
+      expect.objectContaining({ type: 'task.retried' }),
+    )
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Fix flaky login test') })
+    await user.click(screen.getByRole('menuitem', { name: /^Restart agent/ }))
+    expect(onStartAgent).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0001' }))
+  })
+
+  it('asks before it cancels a task from the row menu', async () => {
+    const { onAction } = table()
+    const user = userEvent.setup()
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Write release notes') })
+    await user.click(screen.getByRole('menuitem', { name: /^Cancel task/ }))
+    expect(onAction).not.toHaveBeenCalled()
+
+    const dialog = screen.getByRole('dialog', { name: 'Cancel T-0002?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel task' }))
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'T-0002' }),
+      expect.objectContaining({ type: 'task.cancelled' }),
+    )
   })
 })

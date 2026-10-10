@@ -1246,6 +1246,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onOpen={openTask}
                   onToggleDetails={(id) => setDetailOpen(id, detailOpenByTask[id] !== true)}
                   onKeyboardMove={frozen.hold}
+                  onAction={runAction}
+                  onStartAgent={(task) => agentMutation.mutate({ task })}
                 />
               )}
             </div>
