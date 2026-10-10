@@ -172,13 +172,13 @@ describe('the command palette', () => {
     expect(on.onRunCommand.mock.calls[0]?.[0]).toMatchObject({ id: 'theme.dark' })
   })
 
-  it('offers to create a task or a workspace when nothing matches', async () => {
+  it('offers to add a task or start one when nothing matches', async () => {
     const { on } = palette()
     const user = userEvent.setup()
     await user.type(screen.getByRole('combobox'), 'zzzqx')
     const options = optionText()
-    expect(options[0]).toContain('Create task')
-    expect(options[1]).toContain('New workspace')
+    expect(options[0]).toContain('Add task')
+    expect(options[1]).toContain('Start task')
     await user.keyboard('{Enter}')
     expect(on.onCreateTask).toHaveBeenCalledWith('zzzqx')
   })

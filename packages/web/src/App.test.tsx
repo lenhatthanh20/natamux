@@ -914,21 +914,21 @@ describe('App', () => {
     expect(calls.some((call) => call.path === '/api/tasks/T-0001/fan-out')).toBe(true)
   })
 
-  it('adds a repository and makes new tasks in it', async () => {
+  it('adds a project and makes new tasks in it', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(screen.getByRole('button', { name: 'Repos' }))
-    const panel = await screen.findByRole('dialog', { name: 'Repositories' })
-    await user.type(within(panel).getByLabelText('Repository folder'), '/work/web')
-    await user.type(within(panel).getByLabelText('Repository name'), 'Web app')
-    await user.click(within(panel).getByRole('button', { name: 'Add repository' }))
+    await user.click(screen.getByRole('button', { name: 'Projects' }))
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.type(within(panel).getByLabelText('Project folder'), '/work/web')
+    await user.type(within(panel).getByLabelText('Project name'), 'Web app')
+    await user.click(within(panel).getByRole('button', { name: 'Add project' }))
 
     expect(await within(panel).findByText('/work/web')).toBeTruthy()
-    await user.selectOptions(await screen.findByLabelText('Repository'), 'web')
+    await user.selectOptions(await screen.findByLabelText('Project'), 'web')
     await user.type(screen.getByLabelText('New task title'), 'Fix the header')
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 
@@ -1063,19 +1063,20 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
-  it('makes a workspace with an agent from the sidebar and opens its terminal', async () => {
+  it('starts a task with notes from the title bar and opens its terminal', async () => {
     const { calls } = installDaemon([runningTask])
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
 
-    await user.click(screen.getByRole('button', { name: 'New workspace' }))
-    const dialog = screen.getByRole('dialog', { name: 'New workspace' })
-    await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
-    await user.click(within(dialog).getByRole('button', { name: 'Advanced' }))
-    await user.type(within(dialog).getByLabelText('Prompt for the agent'), 'Keep the old URL')
-    await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Start a task' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Start a task' })
+    await user.type(within(dialog).getByLabelText('Task title'), 'Fix the login')
+    await user.type(within(dialog).getByLabelText('Task notes'), 'Keep the old URL')
+    await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
@@ -1337,7 +1338,7 @@ describe('App', () => {
 
     await user.keyboard('{Escape}')
     await user.keyboard('c')
-    expect(screen.getByRole('dialog', { name: 'New workspace' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Start a task' })).toBeTruthy()
     await user.keyboard('{Escape}')
     await user.keyboard('?')
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeTruthy()
