@@ -7,6 +7,18 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.3 (2026-10-11)
+
+- **Remove project** in the menu of a repository's group in the sidebar. See [Repositories](/docs/guides/dashboard/#repositories).
+- Agents start in auto mode, so they do not stop to ask before each command. Set `"agents": { "permissionMode": "ask" }` in `.natamux.json` to get the prompts back. See [Auto mode](/docs/agents/claude-code/#auto-mode).
+- The Implement and Testing stages leave the changes uncommitted. You commit them in the **Changes** tab. See [Checks](/docs/concepts/stages/#checks).
+- **New workspace** is now **Start a task**, a repository is a "project", and the dialog shows the **Notes** field at once.
+- The task details panel starts closed. The terminal header shows the agent's icon and name.
+- Removing a workspace works when its worktree folder is already gone.
+- Fix: "command not found" when an agent starts. Task shells are login shells, and the app adds the Homebrew folders when it cannot read the login shell PATH.
+- Fix: agent hooks failed behind a company proxy. Task terminals add `127.0.0.1`, `localhost` and `::1` to `NO_PROXY`.
+- Only macOS on Apple silicon is built. The Intel Mac and Linux builds are paused; the last release with them is v0.1.2.
+
 ## v0.1.2 (2026-10-10)
 
 - The desktop app updates itself. It checks GitHub for a new release, downloads it in the background, checks it against `SHA256SUMS.txt` and installs it on restart. See [Updates](/docs/guides/desktop-app/#updates).
