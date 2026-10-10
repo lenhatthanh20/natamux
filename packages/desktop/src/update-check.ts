@@ -1,15 +1,20 @@
 // The parts of the updater that need no Electron, so tests can run them. See
 // docs/design-desktop-update.md.
 
-export const RELEASES_API = 'https://api.github.com/repos/lenhatthanh20/natamux/releases/latest'
+// GitHub redirects this page to /releases/tag/<tag> of the newest release that is not a draft or
+// a pre-release. Unlike the REST API, the web page has no hourly limit per address, which shared
+// networks and CI runners reach.
+export const LATEST_URL = 'https://github.com/lenhatthanh20/natamux/releases/latest'
 export const SUMS_FILE = 'SHA256SUMS.txt'
 
 export type InstallKind = 'mac' | 'appimage' | 'deb' | 'manual'
 
 export type Release = {
   version: string
+  // The release page.
   page: string
-  assets: { name: string; url: string }[]
+  // The files of the release are at <downloads><name>.
+  downloads: string
 }
 
 const VERSION = /^v?(\d+)\.(\d+)\.(\d+)$/
@@ -34,29 +39,19 @@ export function isNewer(candidate: string, current: string): boolean {
   return false
 }
 
-// The answer of the GitHub "latest release" API. Undefined when it is not a stable release.
-export function readRelease(body: unknown): Release | undefined {
-  if (typeof body !== 'object' || body === null) {
+// The release from the address /releases/latest ends at. Undefined when it is not a stable
+// release, or when there is no release and GitHub shows the list instead.
+export function releaseFromUrl(url: string): Release | undefined {
+  const match = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/releases\/tag\/([^/?#]+)$/.exec(url)
+  if (match === null) {
     return undefined
   }
-  const { tag_name, html_url, assets } = body as Record<string, unknown>
-  if (typeof tag_name !== 'string' || typeof html_url !== 'string' || !Array.isArray(assets)) {
+  const [, repo, tag] = match
+  const version = parseVersion(decodeURIComponent(tag ?? ''))
+  if (repo === undefined || tag === undefined || version === undefined) {
     return undefined
   }
-  const version = parseVersion(tag_name)
-  if (version === undefined) {
-    return undefined
-  }
-  return {
-    version: version.join('.'),
-    page: html_url,
-    assets: assets.flatMap((asset: unknown) => {
-      const { name, browser_download_url } = (asset ?? {}) as Record<string, unknown>
-      return typeof name === 'string' && typeof browser_download_url === 'string'
-        ? [{ name, url: browser_download_url }]
-        : []
-    }),
-  }
+  return { version: version.join('.'), page: url, downloads: `${repo}/releases/download/${tag}/` }
 }
 
 // The Natamux.app folder that holds the running program, from process.execPath.

@@ -27,9 +27,9 @@ import {
   isNewer,
   MAC_INSTALL_SCRIPT,
   macBundle,
-  RELEASES_API,
+  LATEST_URL,
   type Release,
-  readRelease,
+  releaseFromUrl,
   SUMS_FILE,
   sha256From,
 } from './update-check.js'
@@ -229,26 +229,22 @@ export class Updater {
   }
 
   private async latest(): Promise<Release> {
-    const response = await net.fetch(RELEASES_API, {
-      headers: { ...this.headers, accept: 'application/vnd.github+json' },
-    })
+    const response = await net.fetch(LATEST_URL, { method: 'HEAD', headers: this.headers })
     if (!response.ok) {
-      throw new Error(`GitHub answered ${response.status} for the latest release`)
+      throw new Error(`GitHub answered ${response.status} for ${LATEST_URL}`)
     }
-    const release = readRelease(await response.json())
+    const release = releaseFromUrl(response.url)
     if (release === undefined) {
-      throw new Error('The latest release has no version number such as v1.2.3')
+      throw new Error(`${response.url} is not a release with a version such as v1.2.3`)
     }
     return release
   }
 
   private async download(release: Release, name: string): Promise<string> {
-    const asset = release.assets.find((file) => file.name === name)
-    const sums = release.assets.find((file) => file.name === SUMS_FILE)
-    if (asset === undefined || sums === undefined) {
-      throw new Error(`The release ${release.version} has no ${asset ? SUMS_FILE : name}`)
-    }
-    const sumsResponse = await net.fetch(sums.url, { headers: this.headers })
+    const url = `${release.downloads}${name}`
+    const sumsResponse = await net.fetch(`${release.downloads}${SUMS_FILE}`, {
+      headers: this.headers,
+    })
     if (!sumsResponse.ok) {
       throw new Error(`Download of ${SUMS_FILE} failed: HTTP ${sumsResponse.status}`)
     }
@@ -272,8 +268,8 @@ export class Updater {
         ? join(dirname(appImage), `.Natamux-${release.version}.AppImage.part`)
         : join(folder, `${name}.part`)
 
-    this.log(`download: ${asset.url}`)
-    const actual = await this.save(asset.url, part)
+    this.log(`download: ${url}`)
+    const actual = await this.save(url, part)
     if (actual !== expected) {
       rmSync(part, { force: true })
       throw new Error(`The SHA-256 of ${name} does not match ${SUMS_FILE}`)

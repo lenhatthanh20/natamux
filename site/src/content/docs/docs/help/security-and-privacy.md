@@ -18,7 +18,7 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
 - Data leaves your machine only when you or an agent you start makes it happen:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
   - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
-  - The desktop app asks `api.github.com` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick **Check for Updates Automatically** to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
+  - The desktop app asks `github.com` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick **Check for Updates Automatically** to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
 
 ## Agents run with your rights
 

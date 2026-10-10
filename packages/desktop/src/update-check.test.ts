@@ -10,7 +10,7 @@ import {
   MAC_INSTALL_SCRIPT,
   macBundle,
   parseVersion,
-  readRelease,
+  releaseFromUrl,
   sha256From,
 } from './update-check.js'
 
@@ -42,29 +42,21 @@ describe('versions', () => {
   })
 })
 
-describe('readRelease', () => {
-  const assets = [
-    { name: 'Natamux-mac-arm64.dmg', browser_download_url: 'https://example.test/a.dmg' },
-    { name: 'SHA256SUMS.txt', browser_download_url: 'https://example.test/sums' },
-    { name: 42 },
-  ]
+describe('releaseFromUrl', () => {
+  const repo = 'https://github.com/natamux/natamux'
 
-  it('keeps the version, the page and the files of a stable release', () => {
-    const release = readRelease({ tag_name: 'v0.1.2', html_url: 'https://example.test/r', assets })
-    expect(release).toEqual({
+  it('reads the version, the page and the download folder of a stable release', () => {
+    expect(releaseFromUrl(`${repo}/releases/tag/v0.1.2`)).toEqual({
       version: '0.1.2',
-      page: 'https://example.test/r',
-      assets: [
-        { name: 'Natamux-mac-arm64.dmg', url: 'https://example.test/a.dmg' },
-        { name: 'SHA256SUMS.txt', url: 'https://example.test/sums' },
-      ],
+      page: `${repo}/releases/tag/v0.1.2`,
+      downloads: `${repo}/releases/download/v0.1.2/`,
     })
   })
 
-  it('drops a pre-release tag and an answer of another shape', () => {
-    expect(readRelease({ tag_name: 'v0.2.0-rc.1', html_url: 'x', assets })).toBeUndefined()
-    expect(readRelease({ message: 'Not Found' })).toBeUndefined()
-    expect(readRelease(null)).toBeUndefined()
+  it('drops a pre-release tag, the release list and other sites', () => {
+    expect(releaseFromUrl(`${repo}/releases/tag/v0.2.0-rc.1`)).toBeUndefined()
+    expect(releaseFromUrl(`${repo}/releases`)).toBeUndefined()
+    expect(releaseFromUrl('https://example.test/a/b/releases/tag/v1.0.0')).toBeUndefined()
   })
 })
 

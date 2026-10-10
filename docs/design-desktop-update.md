@@ -10,8 +10,9 @@ The desktop app finds a new release, downloads it in the background, and install
 
 ## Where the update comes from
 
-- Feed: `GET https://api.github.com/repos/lenhatthanh20/natamux/releases/latest`. It returns the newest release that is not a draft and not a pre-release. GitHub redirects the URL when the repository moves.
-- The app reads `tag_name` (`v0.1.2`), `html_url` (the release page), and `assets[]` (`name`, `browser_download_url`).
+- Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The app reads the tag from the address it ends at. When the repository moves, GitHub redirects the old address too.
+- Not the REST API (`api.github.com`): it allows 60 requests an hour for each address without a login, and shared networks and CI runners reach that. The dry run in CI got `403` from it.
+- Files: `https://github.com/<owner>/<repo>/releases/download/<tag>/<name>`, from the owner and repository in the address the redirect ends at.
 - The release must carry `SHA256SUMS.txt` (`release.yml` writes it) and the file for the platform:
 
 | Install kind | How the app finds it | File |
@@ -91,7 +92,7 @@ idle → checking → up-to-date
 
 ## Privacy
 
-The check is one request to `api.github.com` without any data about you or your tasks. GitHub sees your IP address and the app's version in the `User-Agent`. **Check for Updates Automatically** turns it off. `PRIVACY.md` says so.
+The check is one `HEAD` request to `github.com` without any data about you or your tasks. GitHub sees your IP address and the app's version in the `User-Agent`. **Check for Updates Automatically** turns it off. `PRIVACY.md` says so.
 
 ## Files
 
