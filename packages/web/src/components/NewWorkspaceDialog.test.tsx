@@ -214,7 +214,7 @@ describe('the Start a task dialog', () => {
   })
 
   it('hides the notes when the context comes from an issue, and does not send them', async () => {
-    const { create } = dialog(async () => WITH_ISSUES)
+    const { create } = dialog({ loadSettings: async () => WITH_ISSUES })
     const user = userEvent.setup()
     await user.type(screen.getByLabelText('Task title'), 'Fix the login')
     await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
