@@ -174,7 +174,7 @@ export function ShellPanes({
                 isAgent ? <StatusGlyph state={state} /> : <SquareTerminal size={14} aria-hidden />
               }
               title={`Shell ${name}`}
-              role={isAgent ? 'Agent' : undefined}
+              agent={isAgent ? agent : undefined}
               stateText={isAgent ? stateText : undefined}
               needsInput={isAgent && state === 'needs-input'}
               connect={(size) => connect(size, name)}

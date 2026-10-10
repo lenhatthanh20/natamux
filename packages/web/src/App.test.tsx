@@ -233,7 +233,8 @@ function installDaemon(initial: Task[], extraEvents: TaskEvent[] = []) {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
-      return json({ terminals: ['1'] })
+      const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
+      return json({ terminals: ['1'], agents: task?.agent ? ['1'] : [] })
     }
     if (path === '/api/github/issues' && method === 'GET') {
       return json({
@@ -573,6 +574,7 @@ describe('App', () => {
       makeTask({
         id: 'T-0001',
         title: 'Fix timezone bug',
+        agent: 'codex',
         state: 'running',
         updatedAt: new Date().toISOString(),
         workspace: '/work/T-0001',
@@ -628,8 +630,11 @@ describe('App', () => {
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
     await user.click(within(view).getByRole('button', { name: 'New shell' }))
-    expect(within(view).getByRole('region', { name: 'Shell 1' })).toBeTruthy()
-    expect(within(view).getByRole('region', { name: 'Shell 2' })).toBeTruthy()
+    const agentShell = within(view).getByRole('region', { name: 'Shell 1' })
+    const plainShell = within(view).getByRole('region', { name: 'Shell 2' })
+    expect(await within(agentShell).findByText('Codex')).toBeTruthy()
+    expect(within(plainShell).queryByText('Codex')).toBeNull()
+    expect(within(plainShell).queryByText('Agent')).toBeNull()
 
     await user.keyboard('{Escape}')
     await waitFor(() =>
@@ -1061,6 +1066,26 @@ describe('App', () => {
 
     await user.keyboard('{Escape}')
     expect(await screen.findByRole('table')).toBeTruthy()
+  })
+
+  it('names the agent in the header of each agent pane', async () => {
+    const working = { state: 'running', updatedAt: new Date().toISOString() } as const
+    installDaemon([
+      makeTask({ ...working, id: 'T-0002', agent: 'claude-code', workspace: '/work/T-0002' }),
+      makeTask({ ...working, id: 'T-0003', agent: null, workspace: '/work/T-0003' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await user.click(within(sidebar).getByRole('button', { name: /Agents/ }))
+    const grid = screen.getByRole('region', { name: 'Agents' })
+    const claude = within(grid).getByRole('region', { name: 'Agent of T-0002' })
+    expect(within(claude).getByText('Claude Code')).toBeTruthy()
+    const none = within(grid).getByRole('region', { name: 'Agent of T-0003' })
+    expect(within(none).queryByText('Agent')).toBeNull()
   })
 
   it('makes a workspace with an agent from the sidebar and opens its terminal', async () => {
