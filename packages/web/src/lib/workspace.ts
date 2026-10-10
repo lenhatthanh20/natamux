@@ -66,6 +66,18 @@ export function pullRequestButton(
   return { label }
 }
 
+// The git step to offer after one ends: a commit is pushed next, and a push opens the pull request
+// unless the task has one.
+export function nextGitStep(
+  done: 'commit' | 'push' | 'pull-request',
+  hasPullRequest: boolean,
+): 'push' | 'pull-request' | null {
+  if (done === 'commit') {
+    return 'push'
+  }
+  return done === 'push' && !hasPullRequest ? 'pull-request' : null
+}
+
 // What the agent asked, from the newest "agent.asked" event that carries a message.
 export function latestQuestion(events: readonly StoredEvent[]): string | null {
   for (const { event } of [...events].reverse()) {

@@ -13,9 +13,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
 import type { StageFile, StoredEvent } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
-import { toast } from '../lib/toasts'
+import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
-import { waitReason } from '../lib/workspace'
+import { nextGitStep, waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
@@ -188,14 +188,26 @@ export function ChangesView({
       const opened = await openPullRequest()
       return { text: 'Pull request opened.', url: opened.pr }
     },
-    onSuccess: ({ text, url }) => {
+    onSuccess: ({ text, url }, { action }) => {
       const link = url
-      toast(text, 'success', {
-        actions:
-          link === undefined || link === null
-            ? undefined
-            : [{ label: 'Open', run: () => window.open(link, '_blank', 'noopener,noreferrer') }],
-      })
+      // Each step offers the next one, so commit, push and pull request need no trip across the
+      // screen.
+      const next = nextGitStep(action, task.pr !== null)
+      const actions: ToastAction[] = []
+      if (link !== undefined && link !== null) {
+        actions.push({
+          label: 'Open',
+          run: () => window.open(link, '_blank', 'noopener,noreferrer'),
+        })
+      } else if (next !== null) {
+        actions.push({
+          label: next === 'push' ? 'Push' : 'Create pull request',
+          run: () => {
+            gitAction.mutate({ action: next })
+          },
+        })
+      }
+      toast(text, 'success', { actions: actions.length === 0 ? undefined : actions })
       refreshGit()
     },
     onError: (error, { action }) => toast(FAILED[action], 'error', { detail: error.message }),

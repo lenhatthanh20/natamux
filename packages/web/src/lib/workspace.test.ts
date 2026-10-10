@@ -5,6 +5,7 @@ import {
   createBlockedReason,
   latestQuestion,
   needsCommit,
+  nextGitStep,
   pullRequestButton,
   pushButton,
   reviewStages,
@@ -69,6 +70,15 @@ describe('pullRequestButton', () => {
     expect(pullRequestButton('b', 0, 'main', false, 4).reason).toBe(
       'Commit your 4 changed files first',
     )
+  })
+})
+
+describe('nextGitStep', () => {
+  it('offers a push after a commit, and a pull request after a push', () => {
+    expect(nextGitStep('commit', false)).toBe('push')
+    expect(nextGitStep('push', false)).toBe('pull-request')
+    expect(nextGitStep('push', true)).toBeNull()
+    expect(nextGitStep('pull-request', false)).toBeNull()
   })
 })
 
