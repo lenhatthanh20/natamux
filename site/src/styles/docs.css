@@ -1,0 +1,51 @@
+/* Starlight theme in the Natamux colors: navy, with the three lane colors of the icon. */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Martian+Mono:wdth,wght@75..100,400..600&display=swap');
+
+:root {
+  --sl-font: 'Instrument Sans', system-ui, sans-serif;
+  --sl-font-mono: 'Martian Mono', ui-monospace, monospace;
+  --sl-color-accent-low: #16264a;
+  --sl-color-accent: #7fa8ff;
+  --sl-color-accent-high: #d6e3ff;
+  --sl-color-white: #f4f7fb;
+  --sl-color-gray-1: #e3e8f1;
+  --sl-color-gray-2: #b9c3d6;
+  --sl-color-gray-3: #8a97ae;
+  --sl-color-gray-4: #4f5d78;
+  --sl-color-gray-5: #2a3856;
+  --sl-color-gray-6: #18233b;
+  --sl-color-black: #0d1526;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dfe8ff;
+  --sl-color-accent: #2f5fd0;
+  --sl-color-accent-high: #16264a;
+  --sl-color-white: #0d1526;
+  --sl-color-gray-1: #18233b;
+  --sl-color-gray-2: #2a3856;
+  --sl-color-gray-3: #4f5d78;
+  --sl-color-gray-4: #8a97ae;
+  --sl-color-gray-5: #c9d1df;
+  --sl-color-gray-6: #e8ecf3;
+  --sl-color-gray-7: #f3f5f9;
+  --sl-color-black: #ffffff;
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  font-size: 0.86em;
+}
+
+/* The three lanes as a thin rule under the header. */
+header.header {
+  border-bottom: 0;
+  box-shadow: 0 1px 0 var(--sl-color-hairline);
+}
+header.header::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -2px 0;
+  height: 2px;
+  background: linear-gradient(90deg, #f2b544 0 33.3%, #58d3a6 33.3% 66.6%, #7fa8ff 66.6% 100%);
+  opacity: 0.85;
+}
