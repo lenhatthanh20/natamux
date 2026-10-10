@@ -10,7 +10,7 @@ The desktop app finds a new release, downloads it in the background, and install
 
 ## Where the update comes from
 
-- Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The app reads the tag from the address it ends at. When the repository moves, GitHub redirects the old address too.
+- Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The app stops at each redirect (`net.request` with `redirect: 'manual'`; `net.fetch` leaves `Response.url` empty) and reads the tag from its address. When the repository moves, GitHub redirects the old address too.
 - Not the REST API (`api.github.com`): it allows 60 requests an hour for each address without a login, and shared networks and CI runners reach that. The dry run in CI got `403` from it.
 - Files: `https://github.com/<owner>/<repo>/releases/download/<tag>/<name>`, from the owner and repository in the address the redirect ends at.
 - The release must carry `SHA256SUMS.txt` (`release.yml` writes it) and the file for the platform:

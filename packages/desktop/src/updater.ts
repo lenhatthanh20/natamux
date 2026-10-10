@@ -229,15 +229,38 @@ export class Updater {
   }
 
   private async latest(): Promise<Release> {
-    const response = await net.fetch(LATEST_URL, { method: 'HEAD', headers: this.headers })
-    if (!response.ok) {
-      throw new Error(`GitHub answered ${response.status} for ${LATEST_URL}`)
+    let url = LATEST_URL
+    // A moved repository adds a redirect to its new /releases/latest first.
+    for (let hop = 0; hop < 5; hop++) {
+      url = await this.redirectOf(url)
+      const release = releaseFromUrl(url)
+      if (release !== undefined) {
+        return release
+      }
+      if (!url.endsWith('/releases/latest')) {
+        throw new Error(`${url} is not a release with a version such as v1.2.3`)
+      }
     }
-    const release = releaseFromUrl(response.url)
-    if (release === undefined) {
-      throw new Error(`${response.url} is not a release with a version such as v1.2.3`)
-    }
-    return release
+    throw new Error(`Too many redirects from ${LATEST_URL}`)
+  }
+
+  // net.fetch leaves Response.url empty after a redirect, so the request stops at the redirect.
+  private redirectOf(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const request = net.request({ url, method: 'HEAD', redirect: 'manual' })
+      for (const [name, value] of Object.entries(this.headers)) {
+        request.setHeader(name, value)
+      }
+      request.on('redirect', (_status, _method, redirectUrl) => {
+        resolve(redirectUrl)
+        request.abort()
+      })
+      request.on('response', (response) => {
+        reject(new Error(`GitHub answered ${response.statusCode} for ${url}, not a redirect`))
+      })
+      request.on('error', reject)
+      request.end()
+    })
   }
 
   private async download(release: Release, name: string): Promise<string> {
