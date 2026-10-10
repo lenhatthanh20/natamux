@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.1 (2026-10-10)
+
+- The macOS app is now `Natamux.app` (it was `natamux.app`).
+- Download files no longer carry the version in their name, such as `Natamux-mac-arm64.dmg`. Links to the latest release always get the newest build.
+- `natamux task show` without an id shows the task of the terminal you run it in.
+- `natamux agent start` on a task with no workspace makes the workspace first (`--base` picks the branch). The dashboard and the CLI start the agent you picked, not the task's default one.
+- The sign-in page says where the token comes from: `NATAMUX_TOKEN` of the daemon.
+
 ## v0.1.0 (2026-10-10)
 
 The first release. Run many coding agents in parallel, each task in its own git worktree and terminal, with every task's state on one dashboard.

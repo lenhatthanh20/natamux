@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Natamux v0.1.0 is a desktop app for macOS and Linux. There is no Windows build yet, and no automatic updates: watch the [releases page](https://github.com/lenhatthanh20/natamux/releases/latest) for new versions.
+Natamux is a desktop app for macOS and Linux. There is no Windows build yet, and no automatic updates: watch the [releases page](https://github.com/lenhatthanh20/natamux/releases/latest) for new versions.
 
 ## Requirements
 
@@ -19,11 +19,11 @@ Get the file for your system from the [latest release](https://github.com/lenhat
 
 | System | File |
 |---|---|
-| macOS, Apple silicon (M1 and later) | `Natamux-0.1.0-mac-arm64.dmg` |
-| macOS, Intel | `Natamux-0.1.0-mac-x64.dmg` |
-| Linux, any distribution | `Natamux-0.1.0-linux-x86_64.AppImage` |
-| Debian, Ubuntu | `Natamux-0.1.0-linux-amd64.deb` |
-| Linux, no install | `Natamux-0.1.0-linux-x64.tar.gz` |
+| macOS, Apple silicon (M1 and later) | [`Natamux-mac-arm64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-arm64.dmg) |
+| macOS, Intel | [`Natamux-mac-x64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-x64.dmg) |
+| Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
+| Debian, Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
+| Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
 
 :::caution
 The apps are **not signed** with an Apple certificate. Download them only from the Natamux releases page, and follow the first-open steps below.
@@ -45,27 +45,27 @@ The apps are **not signed** with an Apple certificate. Download them only from t
 ### AppImage
 
 ```sh
-chmod +x Natamux-0.1.0-linux-x86_64.AppImage
-./Natamux-0.1.0-linux-x86_64.AppImage
+chmod +x Natamux-linux-x86_64.AppImage
+./Natamux-linux-x86_64.AppImage
 ```
 
 On Ubuntu 24.04 and later, the system can block Chromium's sandbox, and the app does not start. Either install the `.deb` instead, or start the AppImage with `--no-sandbox`:
 
 ```sh
-./Natamux-0.1.0-linux-x86_64.AppImage --no-sandbox
+./Natamux-linux-x86_64.AppImage --no-sandbox
 ```
 
 ### Debian and Ubuntu (.deb)
 
 ```sh
-sudo apt install ./Natamux-0.1.0-linux-amd64.deb
+sudo apt install ./Natamux-linux-amd64.deb
 ```
 
 The package installs the app as `natamux-desktop`, so the name `natamux` stays free for the command line.
 
 ### tar.gz
 
-Unpack `Natamux-0.1.0-linux-x64.tar.gz` anywhere and run the app from the folder. The same sandbox note as for the AppImage applies.
+Unpack `Natamux-linux-x64.tar.gz` anywhere and run the app from the folder. The same sandbox note as for the AppImage applies.
 
 ## Verify the download
 

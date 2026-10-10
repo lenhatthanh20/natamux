@@ -9,7 +9,7 @@ Find the problem, then follow the fix. If nothing helps, check the [daemon log](
 
 ## macOS says the app is blocked
 
-The v0.1.0 app is not signed with an Apple certificate, so macOS blocks it the first time.
+The app is not signed with an Apple certificate, so macOS blocks it the first time.
 
 1. Open Natamux once.
 2. Open **System Settings → Privacy & Security** and click **Open Anyway**.
@@ -25,7 +25,7 @@ xattr -dr com.apple.quarantine /Applications/Natamux.app
 Ubuntu 24.04 and later can block Chromium's sandbox. Either install the `.deb`, or start the AppImage with `--no-sandbox`:
 
 ```sh
-./Natamux-0.1.0-linux-x86_64.AppImage --no-sandbox
+./Natamux-linux-x86_64.AppImage --no-sandbox
 ```
 
 ## "command not found" when I start an agent
