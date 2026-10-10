@@ -157,8 +157,8 @@ export function StatusBar({
     {
       id: 'repos',
       priority: 6,
-      label: 'Repos',
-      tip: 'Repositories',
+      label: 'Projects',
+      tip: 'Projects',
       icon: FolderGit2,
       onSelect: onRepos,
     },

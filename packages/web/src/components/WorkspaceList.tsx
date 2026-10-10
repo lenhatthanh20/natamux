@@ -190,9 +190,9 @@ export function WorkspaceList({
         <h2 id="workspaces-heading" className={`flex-1 ${sectionTitle}`}>
           Workspaces
         </h2>
-        <IconButton label="Add a repository" icon={FolderPlus} size="xs" onClick={onAddRepo} />
+        <IconButton label="Add a project" icon={FolderPlus} size="xs" onClick={onAddRepo} />
         <IconButton
-          label="Add a workspace"
+          label="Start a task"
           icon={Plus}
           size="xs"
           shortcut={shortcutOf('workspace.new')}
@@ -247,7 +247,7 @@ export function WorkspaceList({
                 )}
               </button>
               <IconButton
-                label={`New workspace in ${repo.name}`}
+                label={`Start a task in ${repo.name}`}
                 icon={Plus}
                 size="xs"
                 onClick={() => onNewWorkspace(repo.id)}
@@ -265,7 +265,7 @@ export function WorkspaceList({
                       onClick={() => onNewWorkspace(repo.id)}
                       className="text-ink underline-offset-2 hover:underline"
                     >
-                      Make one
+                      Start a task
                     </button>
                   </li>
                 )}

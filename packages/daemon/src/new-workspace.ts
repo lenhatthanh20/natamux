@@ -17,7 +17,7 @@ export type NewWorkspaceInput = {
   base?: string
   // The agent that works on the task's stages; none leaves a plain shell.
   agent?: string
-  // What to do. It becomes the task's notes, and so its context.
+  // The task's notes. With a manual context source they are its context.
   prompt?: string
   // Where the context comes from, when not from the notes: a GitHub issue, a skill, an MCP server.
   context?: TaskContext

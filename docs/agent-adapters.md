@@ -84,7 +84,7 @@ So there are three real approaches: hooks (Orca, Superset, Emdash), reading the 
 
 ## Built (2026-10-10)
 
-Each agent starts from the dashboard (**New workspace**, or **Start agent** on a stage or a failed task) with hooks for that session only. Nothing in the user's own settings changes.
+Each agent starts from the dashboard (**Start a task**, or **Start agent** on a stage or a failed task) with hooks for that session only. Nothing in the user's own settings changes.
 
 | Agent | Command | How its hooks are passed | Prompt sent | Waits for the user | Turn ended | Failed | Checked |
 |---|---|---|---|---|---|---|---|

@@ -70,7 +70,7 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
       title={`Project settings of ${repo.name}`}
       description={
         loaded.data?.path === undefined
-          ? 'Stages, context sources, the issue tracker and the permission mode of the agents of this repository.'
+          ? 'Stages, context sources, the issue tracker and the permission mode of the agents of this project.'
           : `Saved in ${loaded.data.path}. New tasks take these stages; tasks on their way keep theirs.`
       }
       size="lg"
