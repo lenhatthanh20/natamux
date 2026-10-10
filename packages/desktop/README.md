@@ -14,6 +14,7 @@ The desktop app: an Electron shell for macOS and Windows. It holds no logic of i
   - a `natamux` command first on that PATH, for `natamux done` and `natamux ask` in the agents' terminals. It runs the CLI with the app's own runtime.
 - **Opens the dashboard** at `http://127.0.0.1:<port>/`. The preload script puts the token where the dashboard keeps it, so the page starts signed in.
 - **Keeps the window on the dashboard.** Links to other sites open in your browser; only `http`, `https` and `mailto` open at all. The page runs sandboxed, with no Node.js.
+- **Updates itself** from the latest GitHub release: checks 30 seconds after start and every 6 hours, downloads in the background, checks `SHA256SUMS.txt`, installs on restart (`updater.ts`, design in `docs/design-desktop-update.md`). Only a packaged app checks. `NATAMUX_UPDATE_AS_VERSION=0.0.0` makes it act as an older version, so a release can update to itself in a test. The log is `logs/update.log`.
 - **Quitting** asks first when agents are working, because it stops them. Tasks, worktrees and changes stay. On macOS, closing the window keeps the app and the agents running.
 
 The user data folder is `~/Library/Application Support/Natamux` on macOS and `%APPDATA%\Natamux` on Windows. The daemon log is in its `logs` folder (**File → Show Daemon Log**).
@@ -51,4 +52,4 @@ NATAMUX_DESKTOP_SMOKE=1 xvfb-run -a pnpm --filter @natamux/desktop start -- --no
 
 ## Not here yet
 
-Packaging, signing, notarization and auto-update (build order step 11), and a CI run on macOS and Windows (step 10).
+Signing and notarization (build order step 11). After signing, the updater should also check that the new Mac app has the same Team ID.

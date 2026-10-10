@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Natamux is a desktop app for macOS and Linux. There is no Windows build yet, and no automatic updates: watch the [releases page](https://github.com/lenhatthanh20/natamux/releases/latest) for new versions.
+Natamux is a desktop app for macOS and Linux. There is no Windows build yet. From version 0.1.2 the app [updates itself](/docs/guides/desktop-app/#updates).
 
 ## Requirements
 

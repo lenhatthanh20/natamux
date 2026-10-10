@@ -4,14 +4,19 @@ import { dirname, join } from 'node:path'
 export type DesktopSettings = {
   // The repository the daemon starts with, picked on the first run.
   repoDir?: string
+  // False turns the timed update checks off. Missing means on.
+  autoUpdate?: boolean
 }
 
 export function loadSettings(file: string): DesktopSettings {
   try {
     const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
     if (typeof parsed === 'object' && parsed !== null) {
-      const { repoDir } = parsed as Record<string, unknown>
-      return typeof repoDir === 'string' && repoDir !== '' ? { repoDir } : {}
+      const { repoDir, autoUpdate } = parsed as Record<string, unknown>
+      return {
+        ...(typeof repoDir === 'string' && repoDir !== '' ? { repoDir } : {}),
+        ...(typeof autoUpdate === 'boolean' ? { autoUpdate } : {}),
+      }
     }
   } catch {
     // No settings yet, or a file that is not JSON: start over.

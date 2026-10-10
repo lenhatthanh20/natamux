@@ -58,7 +58,7 @@ Yes. The dashboard is a web page served by the daemon. Open it and paste the dae
 
 ## Does it update itself?
 
-Not yet. Watch the [releases page](https://github.com/lenhatthanh20/natamux/releases/latest).
+Yes, from version 0.1.2. The desktop app checks GitHub for a new release, downloads it in the background and installs it when you restart. Version 0.1.1 and older cannot update, so install 0.1.2 by hand once. See [Updates](/docs/guides/desktop-app/#updates).
 
 ## How do I uninstall it?
 

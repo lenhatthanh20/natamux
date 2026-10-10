@@ -20,6 +20,7 @@ import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
 import { freePort, loginShellPath, waitForHealth } from './startup.js'
+import { Updater } from './updater.js'
 
 // Before the paths are read: the user data folder is named after the app.
 app.setName('Natamux')
@@ -35,6 +36,7 @@ let daemonToken = ''
 let dashboardUrl = ''
 let window: BrowserWindow | undefined
 let quitConfirmed = false
+let updater: Updater | undefined
 const lastLines: string[] = []
 
 function log(text: string): void {
@@ -231,8 +233,27 @@ async function openRepository(): Promise<void> {
 
 function buildMenu(): void {
   const mac = process.platform === 'darwin'
+  const updates = updater?.menuItems() ?? []
   const template: MenuItemConstructorOptions[] = [
-    ...(mac ? [{ role: 'appMenu' as const }] : []),
+    ...(mac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              ...(updates.length > 0 ? [{ type: 'separator' as const }, ...updates] : []),
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ] satisfies MenuItemConstructorOptions[],
+          },
+        ]
+      : []),
     {
       label: 'File',
       submenu: [
@@ -245,8 +266,29 @@ function buildMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
+    ...(!mac && updates.length > 0 ? [{ label: 'Help', submenu: updates }] : []),
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+// Only a packaged app updates: a run from the repository has no release to replace.
+function makeUpdater(): Updater | undefined {
+  if (!app.isPackaged || process.env.NATAMUX_DESKTOP_SMOKE === '1') {
+    return undefined
+  }
+  return new Updater({
+    userData,
+    version: process.env.NATAMUX_UPDATE_AS_VERSION || app.getVersion(),
+    autoUpdate: loadSettings(settingsFile).autoUpdate !== false,
+    saveAutoUpdate: (on) =>
+      saveSettings(settingsFile, { ...loadSettings(settingsFile), autoUpdate: on }),
+    confirmRestart: () => confirmStop('Restart'),
+    quit: () => {
+      quitConfirmed = true
+      app.quit()
+    },
+    changed: buildMenu,
+  })
 }
 
 // The page reads the token once, as it loads. Only the dashboard may ask.
@@ -280,6 +322,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('will-quit', () => {
+    updater?.installOnQuit()
     daemon?.kill()
   })
 
@@ -297,6 +340,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(async () => {
+    updater = makeUpdater()
     buildMenu()
     let repoDir = loadSettings(settingsFile).repoDir
     if (repoDir === undefined || !isGitRepository(repoDir)) {
@@ -321,5 +365,6 @@ if (!app.requestSingleInstanceLock()) {
       return
     }
     createWindow()
+    updater?.start()
   })
 }

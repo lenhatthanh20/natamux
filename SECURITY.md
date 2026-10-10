@@ -42,6 +42,7 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 
 - The first releases are **not signed** with an Apple or Windows certificate. The macOS app has an ad hoc signature only. Download it only from this repository's Releases page.
 - The window shows only the local dashboard. Other links open in your browser.
+- **Updates** come over HTTPS from this repository's latest GitHub release. The app compares the SHA-256 of the download with `SHA256SUMS.txt` of the same release, and on macOS checks the app's signature and version before it swaps the app in. The checksum file comes from the same release, so it catches a broken download, not a forged release. Until the app is signed with a certificate, the trust rests on the GitHub repository alone.
 
 ## What is out of scope
 
