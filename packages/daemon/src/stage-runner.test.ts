@@ -391,6 +391,26 @@ describe('a prompt for a running agent', () => {
     expect(ptys[0]?.written.join('').split(`agent-launch-${task.id}.sh`)).toHaveLength(2)
   })
 
+  it('makes the missing workspace and starts the agent the person picked in it', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    let made = 0
+    const makeWorkspace = async () => {
+      made += 1
+      return workspaces.create(task.id)
+    }
+
+    const after = await runner.startByHand(task.id, 'codex', undefined, makeWorkspace)
+    await runner.settle()
+
+    expect(after).toMatchObject({ stage: 'spec', state: 'running', agent: 'codex' })
+    expect(after.workspace).not.toBeNull()
+    expect(ptys).toHaveLength(1)
+    expect(ptys[0]?.written.join('').split(`agent-launch-${task.id}.sh`)).toHaveLength(2)
+
+    await runner.startByHand(task.id, 'codex', 'Also add a test', makeWorkspace)
+    expect(made).toBe(1)
+  })
+
   it('gives a prompt to the agent that runs, rather than starting another', async () => {
     const task = await withWorkspace((await created({ title: 'Export tasks' })).id)
     const pty = ptys[0] as FakePty

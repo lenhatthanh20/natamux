@@ -111,6 +111,7 @@ const newWorkspaceBodySchema = z.object({
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
+  base: z.string().min(1).max(255).optional(),
 })
 const importIssuesBodySchema = z.object({
   numbers: z.array(z.number().int().positive()).min(1).max(100),
@@ -450,8 +451,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/tasks/:id/agent', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
-    const { agent, prompt } = startAgentBodySchema.parse(request.body)
-    return { task: await options.stages.startByHand(id, agent, prompt) }
+    const { agent, prompt, base } = startAgentBodySchema.parse(request.body)
+    const makeWorkspace = () => options.workspaces.create(id, base)
+    return { task: await options.stages.startByHand(id, agent, prompt, makeWorkspace) }
   })
 
   app.post('/tasks/:id/fan-out', async (request, reply) => {

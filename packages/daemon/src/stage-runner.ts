@@ -455,8 +455,25 @@ export class StageRunner {
 
   // An agent started by a person: Start agent in the dashboard, the CLI, or the tries of a fan-out.
   // A stage that waits for its agent starts it, with the stage prompt. An agent that runs already
-  // is left alone, since its command would be typed into it; a prompt goes to it instead.
-  async startByHand(taskId: string, agent: string, prompt?: string): Promise<Task> {
+  // is left alone, since its command would be typed into it; a prompt goes to it instead. A task
+  // with no workspace gets one from `makeWorkspace` first.
+  async startByHand(
+    taskId: string,
+    agent: string,
+    prompt?: string,
+    makeWorkspace?: () => Promise<unknown>,
+  ): Promise<Task> {
+    if (makeWorkspace !== undefined && this.tasks.getTask(taskId).workspace === null) {
+      // The new workspace starts the stage that waits for it. It must start the agent picked
+      // here, not the task's own.
+      this.chosenAgents.set(taskId, agent)
+      try {
+        await makeWorkspace()
+        await this.startWork.get(taskId)
+      } finally {
+        this.chosenAgents.delete(taskId)
+      }
+    }
     // A new workspace may be starting the stage right now.
     await this.startWork.get(taskId)
     if (prompt === undefined && !this.agentRuns(taskId)) {

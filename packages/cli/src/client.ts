@@ -161,9 +161,10 @@ export class DaemonClient {
     return taskSchema.parse(body.task)
   }
 
-  async startAgent(id: string, agent: string, prompt?: string): Promise<Task> {
+  // A task with no workspace gets one first, from `base` when it is given.
+  async startAgent(id: string, agent: string, prompt?: string, base?: string): Promise<Task> {
     const body = asRecord(
-      await this.request('POST', `${this.taskPath(id)}/agent`, { agent, prompt }),
+      await this.request('POST', `${this.taskPath(id)}/agent`, { agent, prompt, base }),
       'started agent',
     )
     return taskSchema.parse(body.task)

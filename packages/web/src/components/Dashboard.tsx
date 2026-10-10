@@ -310,14 +310,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => toast(error.message, 'error'),
   })
 
-  // Makes the workspace first when the task has none, then opens its terminal with the agent.
+  // The daemon makes the workspace first when the task has none, then starts the agent in it.
   const agentMutation = useMutation({
-    mutationFn: async ({ task, base, agent }: { task: Task; base?: string; agent?: AgentId }) => {
-      if (task.workspace === null) {
-        mergeTask(await api.createWorkspace(task.id, base))
-      }
-      return api.startAgent(task.id, agent ?? (isAgentId(task.agent) ? task.agent : DEFAULT_AGENT))
-    },
+    mutationFn: ({ task, base, agent }: { task: Task; base?: string; agent?: AgentId }) =>
+      api.startAgent(
+        task.id,
+        agent ?? (isAgentId(task.agent) ? task.agent : DEFAULT_AGENT),
+        undefined,
+        task.workspace === null ? base : undefined,
+      ),
     onSuccess: (task) => {
       mergeTask(task)
       openChanges(task.id, 'terminal')

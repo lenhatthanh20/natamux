@@ -224,6 +224,23 @@ describe('runCli', () => {
       expect(result.stdout).toContain('Branch:     -')
       expect(result.stdout).toContain('It is slow.')
     })
+
+    it('shows the task of the terminal, from NATAMUX_TASK_ID', async () => {
+      const result = await run(['task', 'show'], {
+        env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'T-7' },
+        handler: () => jsonResponse({ task: makeTask({ id: 'T-7' }) }),
+      })
+
+      expect(result.code).toBe(0)
+      expect(result.calls[0]?.url).toBe('http://127.0.0.1:4317/tasks/T-7')
+    })
+
+    it('needs an id outside a task terminal', async () => {
+      const result = await run(['task', 'show'])
+      expect(result.code).toBe(2)
+      expect(result.stderr).toContain('natamux task show T-42')
+      expect(result.calls).toEqual([])
+    })
   })
 
   describe('event', () => {
@@ -434,6 +451,14 @@ describe('more commands', () => {
       body: { agent: 'claude-code' },
     })
     expect(result.stdout).toBe('Started claude-code in the terminal of T-1\n')
+  })
+
+  it('sends the base branch for a new workspace with agent start', async () => {
+    const result = await run(['agent', 'start', 'T-1', '--agent', 'codex', '--base', 'develop'], {
+      handler: () => jsonResponse({ task: makeTask({ id: 'T-1' }) }),
+    })
+
+    expect(result.calls[0]).toMatchObject({ body: { agent: 'codex', base: 'develop' } })
   })
 
   it('asks for the task of the terminal, from NATAMUX_TASK_ID', async () => {

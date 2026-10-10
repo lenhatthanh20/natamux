@@ -103,8 +103,8 @@ describe('parseCommand', () => {
       })
     })
 
-    it('needs a valid id to show a task', () => {
-      expect(() => parseCommand(['task', 'show'])).toThrow(/task id is required/)
+    it('shows the task of the terminal without an id, and needs a valid id', () => {
+      expect(parseCommand(['task', 'show'])).toEqual({ name: 'task.show', id: undefined, json: false })
       expect(() => parseCommand(['task', 'show', '42'])).toThrow(/not a task id/)
     })
 
@@ -290,6 +290,9 @@ describe('more commands', () => {
       agent: 'claude-code',
       prompt: 'Go',
       json: false,
+    })
+    expect(parseCommand(['agent', 'start', 'T-2', '--base', 'develop'])).toMatchObject({
+      base: 'develop',
     })
     expect(() => parseCommand(['agent', 'stop', 'T-2'])).toThrow(UsageError)
   })

@@ -84,7 +84,7 @@ async function execute(
     }
 
     case 'task.show': {
-      const task = await client.getTask(command.id)
+      const task = await client.getTask(command.id ?? '')
       if (command.json) {
         printJson(io, task)
       } else {
@@ -128,7 +128,7 @@ async function execute(
     }
 
     case 'agent.start': {
-      const task = await client.startAgent(command.id, command.agent, command.prompt)
+      const task = await client.startAgent(command.id, command.agent, command.prompt, command.base)
       if (command.json) {
         printJson(io, task)
       } else {
@@ -272,11 +272,18 @@ export async function runCli(argv: readonly string[], options: CliOptions): Prom
     return EXIT_OK
   }
 
-  // `ask` and `done` run inside an agent's terminal, which knows its task.
-  if ((command.name === 'agent.ask' || command.name === 'agent.done') && command.id === undefined) {
+  // `ask`, `done` and `task show` run inside a task's terminal, which knows its task.
+  if (
+    (command.name === 'agent.ask' || command.name === 'agent.done' || command.name === 'task.show') &&
+    command.id === undefined
+  ) {
     const fromEnv = env.NATAMUX_TASK_ID?.trim()
     if (!fromEnv) {
-      io.stderr('Name the task with --task T-42, or set NATAMUX_TASK_ID.\n')
+      io.stderr(
+        command.name === 'task.show'
+          ? 'Name the task, for example natamux task show T-42, or set NATAMUX_TASK_ID.\n'
+          : 'Name the task with --task T-42, or set NATAMUX_TASK_ID.\n',
+      )
       return EXIT_USAGE
     }
     command = { ...command, id: fromEnv }
