@@ -52,7 +52,7 @@ export function loginShellPath(
   shell: string | undefined,
   run: typeof execFile = execFile,
 ): Promise<LoginShellPath> {
-  if (shell === undefined || shell === '') {
+  if (shell === undefined || shell.trim() === '') {
     return Promise.resolve({ problem: '$SHELL is not set' })
   }
   return new Promise((resolve) => {
@@ -63,10 +63,11 @@ export function loginShellPath(
       { timeout: LOGIN_SHELL_TIMEOUT_MS, encoding: 'utf8' },
       (error, stdout, stderr) => {
         const match = String(stdout ?? '').match(new RegExp(`${PATH_MARK}(.*?)${PATH_MARK}`, 's'))
+        const path = match?.[1]?.trim()
         // A failing line in a startup file makes the shell exit with an error after it printed
         // a good PATH.
-        if (match?.[1]) {
-          resolve({ path: match[1] })
+        if (path) {
+          resolve({ path })
           return
         }
         resolve({ problem: loginShellProblem(error, String(stderr ?? '')) })
@@ -93,4 +94,15 @@ function loginShellProblem(
     .map((line) => line.trim())
     .find((line) => line !== '')
   return `it exited with code ${error.code}${firstLine === undefined ? '' : `: ${firstLine}`}`
+}
+
+// The daemon log line for a login PATH that could not be read. None when it was read.
+export function loginPathLogLine(
+  login: LoginShellPath,
+  fallback: string | undefined,
+): string | undefined {
+  if ('path' in login) {
+    return undefined
+  }
+  return `Could not read the login shell PATH (${login.problem}); using ${fallback ?? '(none)'}\n`
 }

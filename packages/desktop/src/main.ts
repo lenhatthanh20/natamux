@@ -19,7 +19,7 @@ import { daemonEnv } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
-import { freePort, loginShellPath, waitForHealth } from './startup.js'
+import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { Updater } from './updater.js'
 
 // Before the paths are read: the user data folder is named after the app.
@@ -96,10 +96,10 @@ async function startDaemon(repoDir: string): Promise<void> {
   let loginPath: string | undefined
   if (process.platform !== 'win32') {
     const login = await loginShellPath(process.env.SHELL)
-    if ('path' in login) {
-      loginPath = login.path
-    } else {
-      log(`Could not read the login shell PATH (${login.problem}); using ${process.env.PATH}\n`)
+    loginPath = 'path' in login ? login.path : undefined
+    const problem = loginPathLogLine(login, process.env.PATH)
+    if (problem !== undefined) {
+      log(problem)
     }
   }
   daemonExited = false
