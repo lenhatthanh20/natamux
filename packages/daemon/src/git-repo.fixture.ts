@@ -34,7 +34,11 @@ export function createTestRepo(): TestRepo {
   runGit(dir, 'config', 'user.email', 'test@example.com')
   runGit(dir, 'config', 'commit.gpgsign', 'false')
   runGit(dir, 'commit', '--allow-empty', '-m', 'init')
-  return { root, dir, cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) }
+  return {
+    root,
+    dir,
+    cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }),
+  }
 }
 
 // A bare repository next to the test repository, added as its `origin`. Returns its path.
