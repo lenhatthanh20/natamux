@@ -19,5 +19,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // The longest App tests walk through a whole view. With coverage on in CI they took over the
+    // 5 s default now and then.
+    testTimeout: 20_000,
   },
 })

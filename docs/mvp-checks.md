@@ -58,7 +58,7 @@ Still to check with a real agent: the permission prompt of step 2.1, and the tim
 
 ### 2026-10-10, regression before v0.1.3
 
-Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2 read by hand, and the fake agent run in a shell. The checks in a codespace and in the macOS app are still to run.
+Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2 read by hand, and the fake agent run in a shell. Every case of the test spec that a unit test can cover has one: C8 got a new one, the others had them. The checks in a codespace and in the macOS app are still to run.
 
 | Change | Result |
 |---|---|
@@ -73,6 +73,7 @@ Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2
 | #97 workspace whose worktree is gone | Read: fine |
 | #98 Windows worktree tests | CI |
 | #99 Homebrew folders on the PATH | Read: fine |
+| CI coverage job | Bug: `App.test.tsx` "opens the changes of a workspace…" timed out at 5 s with coverage on, in 4 of the last 8 failed runs, on main too. Fixed: the web tests get 20 s |
 
 Left for later:
 - v0.1.2 on an Intel Mac or Linux finds a newer release with no file for it. Timed checks fail quietly; **Check for Updates…** says "SHA256SUMS.txt has no line for …". No change in the app can reach those copies; the release notes should say the builds are paused.
