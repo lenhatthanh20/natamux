@@ -11,6 +11,7 @@ import {
   mkdirSync,
   readdirSync,
   renameSync,
+  rmdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -356,6 +357,12 @@ export class Updater {
       await run('ditto', [join(mount, 'Natamux.app'), unpacked])
     } finally {
       await run('hdiutil', ['detach', mount, '-force']).catch(() => undefined)
+      // rmdir: only an empty folder, never the disk image if it is still attached.
+      try {
+        rmdirSync(mount)
+      } catch {
+        // Left for the next download, which clears the folder.
+      }
     }
     rmSync(dmg, { force: true })
     await run('codesign', ['--verify', '--deep', '--strict', unpacked])
