@@ -153,6 +153,28 @@ describe('context', () => {
     expect(context).toContain('Dates in UTC, please.')
   })
 
+  it('runs the skill that was picked, of two', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      context: {
+        sources: [
+          { type: 'manual' },
+          { type: 'skill', name: 'Jira', skill: 'jira-ticket' },
+          { type: 'skill', name: 'Linear', skill: 'linear-issue' },
+        ],
+      },
+    }
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', name: 'Linear', ref: 'LIN-7' },
+    })
+
+    const task = await withWorkspace(waiting.id)
+    expect(launchScript(task.id)).toContain('/linear-issue LIN-7')
+    expect(launchScript(task.id)).not.toContain('jira-ticket')
+  })
+
   it('writes the context into a workspace made while the issue was read', async () => {
     const task = tasks.createTask({
       title: 'Export',

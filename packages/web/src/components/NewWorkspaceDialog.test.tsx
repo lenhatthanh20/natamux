@@ -65,6 +65,21 @@ const EVERY_SOURCE: LoadedSettings = {
   },
 }
 
+// Settings with two skills, which share a type.
+const TWO_SKILLS: LoadedSettings = {
+  ...WITH_ISSUES,
+  settings: {
+    ...DEFAULT_PROJECT_SETTINGS,
+    context: {
+      sources: [
+        { type: 'manual' },
+        { type: 'skill', name: 'Jira', skill: 'jira-ticket' },
+        { type: 'skill', name: 'Linear', skill: 'linear-issue' },
+      ],
+    },
+  },
+}
+
 type Repos = { id: string; name: string }[]
 
 const REPOS: Repos = [
@@ -290,15 +305,39 @@ describe('the Start a task dialog', () => {
     await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
     const source = await screen.findByLabelText('Where the context comes from')
 
-    for (const type of ['skill', 'mcp', 'github-issue', 'skill']) {
-      await user.selectOptions(source, type)
+    for (const key of ['skill:Ticket', 'mcp:Tracker', 'github-issue', 'skill:Ticket']) {
+      await user.selectOptions(source, key)
       expect(screen.queryByLabelText('Task notes')).toBeNull()
     }
     await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
     await user.click(startButton())
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
-    expect(create.mock.calls[0]?.[0]?.context).toEqual({ source: 'skill', ref: 'ABC-1' })
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      name: 'Ticket',
+      ref: 'ABC-1',
+    })
+  })
+
+  it('picks the second of two skills and names it', async () => {
+    const { create } = dialog({ loadSettings: async () => TWO_SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    const source = (await screen.findByLabelText(
+      'Where the context comes from',
+    )) as HTMLSelectElement
+    await user.selectOptions(source, 'skill:Linear')
+    expect(source.selectedOptions[0]?.textContent).toBe('Linear (skill)')
+    await user.type(screen.getByLabelText('Reference of the context'), 'LIN-7')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      name: 'Linear',
+      ref: 'LIN-7',
+    })
   })
 
   it('goes back to My notes in a project that does not offer the picked source', async () => {
@@ -327,8 +366,8 @@ describe('the Start a task dialog', () => {
     await user.type(screen.getByLabelText('Task title'), 'Fix the login')
     await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
     const source = await screen.findByLabelText('Where the context comes from')
-    for (const type of ['mcp', 'manual', 'github-issue', 'manual']) {
-      await user.selectOptions(source, type)
+    for (const key of ['mcp:Tracker', 'manual', 'github-issue', 'manual']) {
+      await user.selectOptions(source, key)
     }
 
     expect((screen.getByLabelText('Task notes') as HTMLTextAreaElement).value).toBe(
