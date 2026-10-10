@@ -13,6 +13,7 @@ import {
   STATE_ORDER,
   stageLabel,
 } from '../lib/tasks'
+import { AgentName } from './AgentBadge'
 import { DiffSize } from './DiffSize'
 import { LABEL_CHIP } from './TaskChips'
 import { CountBadge } from './ui/CountBadge'
@@ -87,7 +88,7 @@ function Card({
       <span className="line-clamp-2 font-medium break-words">{task.title}</span>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted empty:hidden">
         {stageLabel(task) !== null && <span>{stageLabel(task)}</span>}
-        {task.agent !== null && <span>{task.agent}</span>}
+        {task.agent !== null && <AgentName agent={task.agent} />}
         <DiffSize stat={stat} empty={null} />
         {task.pr !== null && <span>{pullRequestNumber(task.pr)}</span>}
         {waits.length > 0 && <span>waits for {waits.join(', ')}</span>}

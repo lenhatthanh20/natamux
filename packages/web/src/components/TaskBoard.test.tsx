@@ -94,4 +94,12 @@ describe('TaskBoard', () => {
     await user.click(screen.getByRole('button', { name: 'Expand Failed, 1 task' }))
     expect(screen.getByRole('button', { name: /Fix flaky login test/ })).toBeTruthy()
   })
+
+  it('names the agent as the pickers do, not by its stored id', () => {
+    board()
+
+    const card = screen.getByRole('button', { name: /Fix flaky login test/ })
+    expect(within(card).getByText('Claude Code')).toBeTruthy()
+    expect(within(card).queryByText('claude-code')).toBeNull()
+  })
 })

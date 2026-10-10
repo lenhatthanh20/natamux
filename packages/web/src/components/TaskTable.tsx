@@ -18,6 +18,7 @@ import {
   type TaskSort,
 } from '../lib/tasks'
 import { shortBranch } from '../lib/workspace-groups'
+import { AgentName } from './AgentBadge'
 import { DiffSize } from './DiffSize'
 import { StateBadge } from './StateBadge'
 import { StatusGlyph } from './StatusGlyph'
@@ -241,8 +242,10 @@ export function TaskTable({
           <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">
             {note}
           </span>
+        ) : task.agent === null ? (
+          <span className="text-muted">-</span>
         ) : (
-          <span className="block truncate text-muted">{task.agent ?? '-'}</span>
+          <AgentName agent={task.agent} className="text-muted" />
         )
       case 'branch':
         return task.branch === null ? (
