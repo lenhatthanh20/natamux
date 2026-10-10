@@ -170,6 +170,16 @@ export function ChangesView({
     refetchInterval: 5000,
   })
 
+  // The dashboard reports a failed start.
+  const starting = useMutation({
+    mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
+  })
+  // Before its events are read, a failed task still says it failed, not that it waits.
+  const reason =
+    task.state === 'failed' && events.data === undefined
+      ? ({ kind: 'failed', reason: null } as const)
+      : waitReason(events.data)
+
   const refreshGit = () => {
     for (const key of ['changes', 'file-diff', 'graph']) {
       queryClient.invalidateQueries({ queryKey: [key, task.id] })
@@ -243,8 +253,10 @@ export function ChangesView({
       />
       {waiting && (
         <NeedsInputBanner
-          reason={waitReason(events.data)}
+          reason={reason}
+          failed={task.state === 'failed'}
           resuming={resuming}
+          starting={starting.isPending}
           onAnswer={() => {
             pickTab('terminal')
             setFocusToken((value) => value + 1)
@@ -252,7 +264,7 @@ export function ChangesView({
           onResume={resume}
           onStartAgent={
             task.state === 'failed' && startAgent !== undefined
-              ? (agent) => void startAgent(agent).catch(() => undefined)
+              ? (agent) => starting.mutate(agent)
               : undefined
           }
           agent={task.agent}

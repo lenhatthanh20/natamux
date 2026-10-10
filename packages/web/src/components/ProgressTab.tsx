@@ -30,6 +30,7 @@ import {
 } from '../lib/stage-view'
 import { formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { STATE_TONE } from './Banner'
 import { DetailSection } from './DetailSection'
 import { StageMarker } from './StageMarker'
 import { StartAgentControl } from './StartAgentControl'
@@ -51,6 +52,9 @@ type ProgressTabProps = {
   activity?: string
   // Starts an agent for the stage, for one that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
+  // The banner of the workspace beside the details offers Start agent for a failed task, so the
+  // stage card does not offer it a second time.
+  startInBanner?: boolean
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -86,6 +90,7 @@ export function ProgressTab({
   onOpenFile,
   activity,
   startAgent,
+  startInBanner = false,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -190,6 +195,7 @@ export function ProgressTab({
         onSendBack={() => setSendingBack(entry)}
         onOpenFile={onOpenFile}
         agent={task.agent}
+        startInBanner={startInBanner}
         starting={starting.isPending}
         onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
         activity={
@@ -549,11 +555,13 @@ function StageCard({
   onOpenFile,
   activity,
   agent,
+  startInBanner,
   starting,
   onStartAgent,
 }: {
   activity?: string
   agent: string | null
+  startInBanner: boolean
   starting: boolean
   onStartAgent?: (agent: AgentId) => void
   stage: Stage
@@ -723,7 +731,11 @@ function StageCard({
           )}
 
           {current && progress.reasons.length > 0 && (
-            <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm">
+            <ul
+              // A failed stage is red, as its chip; checks that wait for the user are amber.
+              data-state={state === 'failed' ? 'failed' : undefined}
+              className={`m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border px-3 py-2 text-sm ${state === 'failed' ? STATE_TONE : 'border-signal-line bg-signal-soft'}`}
+            >
               {progress.reasons.map((reason) => (
                 <li key={reason} className="whitespace-pre-wrap break-words text-ink">
                   {reason}
@@ -789,7 +801,7 @@ function StageCard({
                     Start
                   </Button>
                 )}
-                {(state === 'failed' || state === 'needs-input') &&
+                {((state === 'failed' && !startInBanner) || state === 'needs-input') &&
                   STARTS_ITSELF.has(stage.kind) &&
                   onStartAgent !== undefined && (
                     <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />

@@ -5,7 +5,8 @@ import { ICON } from './ui/styles'
 // Amber asks for an answer; the other tones take the colors of their task state.
 export type BannerTone = 'signal' | 'failed' | 'review'
 
-const STATE_TONE =
+// A soft wash and line in the color of the state named by a data-state attribute.
+export const STATE_TONE =
   'border-[color-mix(in_srgb,var(--chip-fg)_30%,transparent)] bg-[color-mix(in_srgb,var(--chip-fg)_8%,transparent)]'
 
 const FRAME: Record<BannerTone, string> = {

@@ -115,6 +115,7 @@ type Options = {
   act?: Act
   activity?: string
   startAgent?: (agent: AgentId) => Promise<Task>
+  startInBanner?: boolean
 }
 
 afterEach(() => {
@@ -142,6 +143,7 @@ function progress(options: Options = {}) {
         onOpenFile={onOpenFile}
         activity={options.activity}
         startAgent={options.startAgent}
+        startInBanner={options.startInBanner}
       />
     </QueryClientProvider>
   )
@@ -430,6 +432,24 @@ describe('the actions of the current stage', () => {
     await waitFor(() => expect(start.getAttribute('aria-busy')).toBeNull())
     expect(startAgent).toHaveBeenCalledWith('claude-code')
     expect(useToasts.getState().toasts).toEqual([])
+  })
+
+  it('shows why the agent failed in red, and Start agent once per screen', async () => {
+    const failed = stored(5, 'agent.failed', '2026-10-10T08:15:00.000Z', {
+      stage: 'spec',
+      reason: 'claude: command not found',
+    })
+    progress({
+      task: { ...TASK, state: 'failed' },
+      events: [...EVENTS, failed],
+      startAgent: async () => TASK,
+      startInBanner: true,
+    })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const reason = within(spec).getByText('claude: command not found')
+    expect(reason.closest('ul')?.getAttribute('data-state')).toBe('failed')
+    expect(within(spec).queryByRole('button', { name: 'Start agent' })).toBeNull()
   })
 
   it('skips the stage and marks a running one as done', async () => {
