@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -442,6 +442,29 @@ describe('workspaces', () => {
       task: { workspace: null, branch: null },
     })
     expect(existsSync(workspace)).toBe(false)
+  })
+
+  it('removes a workspace whose folder was already deleted', async () => {
+    await createTask()
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    rmSync(created.json().task.workspace, { recursive: true, force: true })
+    runGit(repo.dir, 'worktree', 'prune')
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+
+    expect(removed.statusCode).toBe(200)
+    expect(removed.json()).toMatchObject({
+      branchDeleted: false,
+      task: { workspace: null, branch: 'natamux/t-0001-fix-the-bug' },
+    })
   })
 
   it('answers 409 for a second workspace', async () => {

@@ -207,6 +207,139 @@ describe('remove', () => {
     )
   })
 
+  // A folder deleted outside Natamux: `pruned` when git forgot it too, else git still lists it.
+  function deleteFolder(path: string, pruned: boolean): void {
+    rmSync(path, { recursive: true, force: true })
+    if (pruned) {
+      runGit(repo.dir, 'worktree', 'prune')
+    }
+  }
+
+  function listedWorktrees(): string {
+    return runGit(repo.dir, 'worktree', 'list', '--porcelain')
+  }
+
+  const deletedCases: [string, boolean][] = [
+    ['pruned', true],
+    ['still listed by git', false],
+  ]
+
+  it('clears a workspace whose folder was deleted and pruned', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    deleteFolder(created.workspace ?? '', true)
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.branchDeleted).toBe(false)
+    expect(result.task.workspace).toBeNull()
+    expect(result.task.branch).toBe('natamux/t-0001-fix-the-bug')
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
+    expect(tasks.listEvents(task.id).at(-1)?.event.type).toBe('workspace.removed')
+  })
+
+  it('clears the git entry of a workspace whose folder was deleted', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    const path = created.workspace ?? ''
+    deleteFolder(path, false)
+    expect(listedWorktrees()).toContain(path)
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.workspace).toBeNull()
+    expect(listedWorktrees()).not.toContain(path)
+    expect(tasks.listEvents(task.id).at(-1)?.event.type).toBe('workspace.removed')
+  })
+
+  it.each(deletedCases)('deletes a merged branch of a deleted folder (%s)', async (_, pruned) => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    deleteFolder(created.workspace ?? '', pruned)
+
+    const result = await workspaces.remove(task.id, { deleteBranch: true })
+
+    expect(result.branchDeleted).toBe(true)
+    expect(result.task.branch).toBeNull()
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(false)
+  })
+
+  it.each(deletedCases)(
+    'keeps the branch of a deleted folder that has commits not merged (%s)',
+    async (_, pruned) => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      const created = await workspaces.create(task.id)
+      runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+      deleteFolder(created.workspace ?? '', pruned)
+
+      const result = await workspaces.remove(task.id, { deleteBranch: true })
+
+      expect(result.branchDeleted).toBe(false)
+      expect(result.task.workspace).toBeNull()
+      expect(result.task.branch).toBe('natamux/t-0001-fix-the-bug')
+      expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
+    },
+  )
+
+  it.each(deletedCases)('ends the shells of a deleted folder once (%s)', async (_, pruned) => {
+    const closed: string[] = []
+    const guarded = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      closeTerminals: (taskId) => closed.push(taskId),
+    })
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await guarded.create(task.id)
+    deleteFolder(created.workspace ?? '', pruned)
+
+    await guarded.remove(task.id, { deleteBranch: false })
+
+    expect(closed).toEqual([task.id])
+  })
+
+  it.each(deletedCases)(
+    'makes a new workspace at the same path after a deleted folder (%s)',
+    async (_, pruned) => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      const created = await workspaces.create(task.id)
+      runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+      deleteFolder(created.workspace ?? '', pruned)
+      await workspaces.remove(task.id, { deleteBranch: true })
+
+      const again = await workspaces.create(task.id)
+
+      expect(again.workspace).toBe(created.workspace)
+      expect(again.branch).toBe('natamux/t-0001-fix-the-bug')
+      expect(runGit(again.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('work')
+    },
+  )
+
+  it('refuses a folder that is not a git worktree, and leaves it alone', async () => {
+    const closed: string[] = []
+    const guarded = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      closeTerminals: (taskId) => closed.push(taskId),
+    })
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await guarded.create(task.id)
+    const path = created.workspace ?? ''
+    deleteFolder(path, true)
+    mkdirSync(path)
+    writeFileSync(join(path, 'notes.txt'), 'my own files')
+
+    const error = await guarded.remove(task.id, { deleteBranch: true }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(WorkspaceConflictError)
+    expect((error as Error).message).toContain(path)
+    expect(closed).toEqual([])
+    expect(existsSync(join(path, 'notes.txt'))).toBe(true)
+    expect(tasks.getTask(task.id).workspace).toBe(path)
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
+  })
+
   it('lets the task get a new workspace after the old one is removed', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await workspaces.create(task.id)
