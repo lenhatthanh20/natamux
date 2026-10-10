@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Reference for the .natamux.json file that sets the stages, context sources and issue tracker of a repository.
+description: Reference for the .natamux.json file that sets the stages, context sources, issue tracker and agent permission mode of a repository.
 sidebar:
   order: 2
 ---
@@ -26,6 +26,7 @@ To edit the file in the dashboard, open the project settings of the repository. 
 | `stages` | array of stages and groups | The [default pipeline](#default-pipeline) | The steps of every task, in order. At least one. |
 | `context` | object | `{ "sources": [{ "type": "manual" }, { "type": "github-issue" }] }` | Where task context can come from. |
 | `tracker` | object | `{ "type": "github", "createIssue": "on-spec-approved", "linkInPr": true }` | The issue tracker. |
+| `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission. |
 
 ## `stages`
 
@@ -171,6 +172,30 @@ Values of `createIssue`:
 | `on-pr` | When the pull request is opened. |
 
 The issue gets the task title. Its body is the spec, or the task notes without one. With `linkInPr`, the pull request body ends with `Closes #42` for a GitHub issue, so the issue closes on merge. See [GitHub](/docs/guides/github/).
+
+## `agents`
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `permissionMode` | `auto` or `ask` | `auto` | `auto` starts each agent with the flag below, so it asks for permission less often. `ask` adds no flag: each agent follows your own settings. |
+
+The flag of each agent in `auto`:
+
+| Agent | Flag | What it allows |
+|---|---|---|
+| Claude Code | `--permission-mode auto` | Claude Code checks each action and asks only when one looks risky. |
+| Codex | `--full-auto` | Edits and commands inside its sandbox of the worktree, without asking. |
+| Gemini CLI | `--approval-mode yolo` | Every tool call, without asking. |
+| Copilot CLI | `--allow-all-tools` | Every tool, without asking. It still checks paths and URLs. |
+| Cursor CLI | `--force` | Every command that is not denied in its settings, without asking. |
+
+Only Claude Code has a check on each action in this mode. The other agents run commands without asking, in the task's worktree with your user rights. Use `ask` for a repository where that is not safe:
+
+```json
+{ "agents": { "permissionMode": "ask" } }
+```
+
+The flag comes before the words of `NATAMUX_<AGENT>_ARGS`. When those words repeat or change the flag, the agent's own rule for flags decides. The setting counts for the next agent Natamux starts, not for one that runs.
 
 ## Examples
 
