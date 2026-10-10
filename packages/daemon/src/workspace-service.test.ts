@@ -240,6 +240,61 @@ describe('remove', () => {
     expect(result.task.state).toBe('ready')
   })
 
+  it('makes a stage whose agent waited for you wait to start again', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.asked' })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.state).toBe('ready')
+  })
+
+  // Failed, blocked and done do not depend on a live agent: the task keeps them.
+  it.each(['failed', 'blocked', 'done'] as const)('keeps a task that is %s', async (state) => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'state.overridden', payload: { to: state } })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task.state).toBe(state)
+    expect(eventTypes(task.id).at(-1)).toBe('workspace.removed')
+  })
+
+  it('keeps the state of a running task when the removal is refused', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'work in progress')
+
+    await expect(workspaces.remove(task.id, { deleteBranch: false })).rejects.toThrow(
+      WorkspaceConflictError,
+    )
+
+    expect(tasks.getTask(task.id)).toMatchObject({ state: 'running', workspace: created.workspace })
+  })
+
+  it('removes a workspace made again the same way', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await workspaces.create(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    await workspaces.remove(task.id, { deleteBranch: false })
+
+    const again = await workspaces.create(task.id)
+    expect(again).toMatchObject({ state: 'ready', workspace: workspaces.worktreePathFor(task.id) })
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: false })
+
+    expect(result.task).toMatchObject({ state: 'ready', workspace: null })
+    expect(eventTypes(task.id).filter((type) => type === 'agent.stopped')).toHaveLength(2)
+  })
+
   it('keeps a stage that waits for approval', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await workspaces.create(task.id)
