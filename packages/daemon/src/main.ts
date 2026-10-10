@@ -26,7 +26,11 @@ const config = loadConfig(process.env, process.cwd())
 mkdirSync(config.dataDir, { recursive: true })
 const index = new TaskIndex(join(config.dataDir, 'index.sqlite'))
 const bus = new EventBus()
-const repos = new RepoService({ dataDir: config.dataDir, defaultPath: config.repoDir })
+const repos = new RepoService({
+  dataDir: config.dataDir,
+  defaultPath: config.repoDir,
+  tasks: () => service.listTasks(),
+})
 const settings = new ProjectSettingsService({ repos })
 const service = new TaskService({
   dataDir: config.dataDir,
@@ -87,6 +91,7 @@ const agents = new AgentRunner({
   geminiSettingsPath,
   programs: perAgent('COMMAND'),
   extraArgs: perAgent('ARGS'),
+  binDir: process.env.NATAMUX_BIN_DIR,
   onLaunch: (launch) => genericSignals.watchLaunch(launch),
 })
 

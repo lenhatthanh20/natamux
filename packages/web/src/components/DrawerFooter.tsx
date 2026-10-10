@@ -36,7 +36,7 @@ export function DrawerFooter({
         {needsYou > 0 && <span className="text-signal">{needsYou} need you</span>}
       </p>
       <div className="flex items-center gap-1">
-        <IconButton label="Repos" icon={FolderGit2} onClick={onRepos} />
+        <IconButton label="Projects" icon={FolderGit2} onClick={onRepos} />
         <IconButton label="Import issues" icon={Download} onClick={onImport} />
         <IconButton label="Keyboard shortcuts" icon={Keyboard} onClick={onShortcuts} />
         <span className="flex-1" />

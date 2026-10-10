@@ -129,8 +129,8 @@ describe('tabToOpen', () => {
 })
 
 describe('createBlockedReason', () => {
-  it('needs a name, and a reference for a source other than manual', () => {
-    expect(createBlockedReason(' ', 'manual', '')).toBe('Enter a name')
+  it('needs a title, and a reference for a source other than manual', () => {
+    expect(createBlockedReason(' ', 'manual', '')).toBe('Enter a title')
     expect(createBlockedReason('Fix', 'manual', '')).toBeUndefined()
     expect(createBlockedReason('Fix', 'github-issue', ' ')).toBe(
       'Enter the reference of the context',

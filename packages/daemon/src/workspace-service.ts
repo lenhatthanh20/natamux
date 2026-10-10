@@ -16,6 +16,7 @@ import {
   readGitGraph,
   removeWorktree,
   runGh,
+  worktreeState,
 } from './git.js'
 import type { RepoService } from './repo-service.js'
 import type { TaskService } from './task-service.js'
@@ -155,6 +156,7 @@ export class WorkspaceService {
   }
 
   // Removes the worktree folder. The branch goes too when it is fully merged, otherwise it stays.
+  // A folder that was already deleted outside Natamux is only cleared from git and the task.
   async remove(taskId: string, options: { deleteBranch: boolean }): Promise<RemoveWorkspaceResult> {
     return this.exclusive(taskId, async () => {
       const task = this.tasks.getTask(taskId)
@@ -162,19 +164,31 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} has no workspace`)
       }
 
-      // git refuses a worktree with changes that are not committed. Refuse it here, before the
-      // agent and the shells of the task are ended for nothing.
-      const changes = await listChanges(task.workspace).catch(() => [])
-      if (changes.length > 0) {
-        const count = changes.length === 1 ? '1 change' : `${changes.length} changes`
+      const repoDir = this.repoDirOf(task.repo)
+      const state = await worktreeState(repoDir, task.workspace)
+      // The folder may hold someone's own files, so it is never deleted.
+      if (state === 'not-a-worktree') {
         throw new WorkspaceConflictError(
-          `${taskId} has ${count} that are not committed. Commit or discard them first`,
+          `${task.workspace} is not a git worktree of this repository, so it is not removed`,
         )
+      }
+      if (state === 'present') {
+        // git refuses a worktree with changes that are not committed. Refuse it here, before the
+        // agent and the shells of the task are ended for nothing.
+        const changes = await listChanges(task.workspace).catch(() => [])
+        if (changes.length > 0) {
+          const count = changes.length === 1 ? '1 change' : `${changes.length} changes`
+          throw new WorkspaceConflictError(
+            `${taskId} has ${count} that are not committed. Commit or discard them first`,
+          )
+        }
       }
       // A shell that runs in the folder would keep files open while git removes it.
       this.closeTerminals(taskId)
-      const repoDir = this.repoDirOf(task.repo)
-      await removeWorktree(repoDir, task.workspace)
+      // A stale entry keeps git from deleting the branch or adding the worktree again.
+      if (state !== 'missing') {
+        await removeWorktree(repoDir, task.workspace)
+      }
 
       const branchDeleted =
         options.deleteBranch && task.branch !== null

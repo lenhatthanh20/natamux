@@ -35,7 +35,12 @@ import { IssueLinkError, type IssueLinker } from './issue-linker.js'
 import { newWorkspace } from './new-workspace.js'
 import { type ProjectSettingsService, SettingsInputError } from './project-settings.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
-import { RepoInputError, RepoNotFoundError, type RepoService } from './repo-service.js'
+import {
+  RepoInputError,
+  RepoInUseError,
+  RepoNotFoundError,
+  type RepoService,
+} from './repo-service.js'
 import {
   archiveStageFiles,
   listStageFiles,
@@ -250,7 +255,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof GitHubError ||
       error instanceof TaskWaitingError ||
       error instanceof StageActionError ||
-      error instanceof IssueLinkError
+      error instanceof IssueLinkError ||
+      error instanceof RepoInUseError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -297,6 +303,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/repos', async (request, reply) => {
     return reply.code(201).send({ repo: await options.repos.add(request.body) })
+  })
+
+  app.delete('/repos/:id', async (request, reply) => {
+    const { id } = repoParamsSchema.parse(request.params)
+    options.repos.remove(id)
+    return reply.code(204).send()
   })
 
   app.get('/git/branches', async (request) => {

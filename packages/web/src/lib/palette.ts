@@ -179,7 +179,7 @@ export function allSections(input: AllInput): PaletteSection[] {
   const sections = [
     { id: 'tasks', title: 'Tasks', matches: taskMatches, max: MAX_TASKS },
     { id: 'commands', title: 'Commands', matches: commandMatches, max: MAX_COMMANDS },
-    { id: 'repos', title: 'Repositories', matches: repoMatches, max: MAX_REPOS },
+    { id: 'repos', title: 'Projects', matches: repoMatches, max: MAX_REPOS },
   ]
     .filter(({ matches }) => matches.length > 0)
     .map(({ id, title, matches, max }) => ({

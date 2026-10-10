@@ -4,11 +4,11 @@
 # workspace, and reports to Natamux through the same hooks that Claude Code calls.
 #
 # A stage prompt (it ends with "run `natamux done`") is done for real, roughly: the files the
-# prompt names are written with the sections it names, code stages commit, and failed checks that
-# come back are fixed. Then it waits for the next prompt, as Claude Code does. Marks in the task
-# title make it go wrong on purpose, for tests:
+# prompt names are written with the sections it names, code stages change code and commit when the
+# prompt asks for it, and failed checks that come back are fixed. Then it waits for the next
+# prompt, as Claude Code does. Marks in the task title make it go wrong on purpose, for tests:
 #   [miss-section]  leaves out the last section the first time
-#   [no-commit]     changes code but does not commit, the first time
+#   [no-commit]     does not commit the first time, even when the prompt asks for it
 #   [no-done]       ends its turn without `natamux done`
 #   [ask]           asks a question and waits for the answer first
 #
@@ -19,11 +19,17 @@
 #   none  works, then ends its turn
 set -u
 
-# Natamux starts it as: <this file> --settings <file> [prompt]
+# Natamux starts it as: <this file> --settings <file> [--permission-mode <mode>] [prompt]
 prompt=""
-if [ "$#" -ge 3 ]; then
-  prompt="${*: -1}"
-fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+  --settings | --permission-mode) shift 2 || shift ;;
+  *)
+    prompt="$1"
+    shift
+    ;;
+  esac
+done
 mode=finish
 case "$prompt" in
 loop:* | ask:* | fail:*)
@@ -177,15 +183,19 @@ do_stage() {
     mkdir -p .natamux-task && : >".natamux-task/.tried-${NATAMUX_TERMINAL:-1}-$(printf '%s' "$text" | cksum | cut -d' ' -f1)"
     local skip=no
     [[ $title == *"[miss-section]"* ]] && [ "$first" = yes ] && skip=yes
+    # Code stages say whether to commit; the files they name are input, not output.
+    local code=no
+    [[ $text == *"Write the tests first"* || $text == *"Commit your work"* || $text == *"Do not commit"* ]] && code=yes
     if [[ $text =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ these\ sections:\ ([^.]+)\. ]]; then
       write_file "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "$skip"
     elif [[ $text =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ a\ Cases\ section ]]; then
       write_file "${BASH_REMATCH[1]}" "Cases" no
-    elif [[ $text =~ (\.natamux-task/[a-z.-]+\.md) ]] && [[ $text != *"Write the tests first"* ]] && [[ $text != *"Commit your work"* ]]; then
+    elif [[ $text =~ (\.natamux-task/[a-z.-]+\.md) ]] && [ "$code" = no ]; then
       write_file "${BASH_REMATCH[1]}" "Summary" no
     fi
-    if [[ $text == *"Write the tests first"* ]] || [[ $text == *"Commit your work"* ]]; then
-      local commit=yes
+    if [ "$code" = yes ]; then
+      local commit=no
+      [[ $text == *"Commit your work"* ]] && commit=yes
       [[ $title == *"[no-commit]"* ]] && [ "$first" = yes ] && commit=no
       change_code "$commit"
     fi

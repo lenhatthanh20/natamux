@@ -36,6 +36,7 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 - Natamux learns what an agent does through the agent's hooks. For each agent it starts, it adds hook settings that call `natamux hook` or the daemon's local address. Those calls carry the task id and the token from the terminal's environment, and nothing else.
 - For Copilot and Cursor, the hook file goes into the task's worktree (`.github/hooks/natamux.json`, `.cursor/hooks.json`) and is kept out of git through `.git/info/exclude`. A file of your own with the same name is left alone.
 - For Codex, Natamux passes `--dangerously-bypass-hook-trust` so that the hooks it adds for that session run without a trust prompt. It only affects the hooks Natamux passes on the command line.
+- By default Natamux starts each agent with a flag that skips most permission prompts: `--permission-mode auto` (Claude Code), `--full-auto` (Codex), `--approval-mode yolo` (Gemini CLI), `--allow-all-tools` (Copilot CLI), `--force` (Cursor CLI). Only Claude Code checks each action; the others run commands without asking. `"agents": { "permissionMode": "ask" }` in `.natamux.json` turns the flags off.
 - Each task works in its own git worktree. Natamux never pushes, merges or deletes a branch unless you click the button or run the command for it.
 
 ### The desktop app

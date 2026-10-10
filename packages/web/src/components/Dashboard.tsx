@@ -184,6 +184,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => toast(error.message, 'error'),
   })
 
+  const removeRepoMutation = useMutation({
+    mutationFn: (repo: Repo) => api.removeRepo(repo.id),
+    onSuccess: (_, repo) => {
+      queryClient.invalidateQueries({ queryKey: ['repos'] })
+      if (newRepo === repo.id) {
+        setNewRepo('')
+      }
+      toast(`Removed ${repo.name}.`)
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
   const eventMutation = useMutation({
     mutationFn: ({ taskId, type }: { taskId: string; type: EventType }) =>
       api.sendEvent(taskId, type),
@@ -714,7 +726,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       afterPick()
                     }}
                     onViewChanges={(id) => {
-                      chooseTask(id)
+                      select(id)
                       openChanges(id, 'changes')
                       afterPick()
                     }}
@@ -725,6 +737,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
                     onNewWorkspace={(repo) => setNewWorkspace({ repo })}
                     onAddRepo={() => setReposOpen(true)}
+                    onRepoSettings={(id) =>
+                      setSettingsRepo(repos.find((repo) => repo.id === id) ?? null)
+                    }
+                    onRemoveRepo={(id) => {
+                      const repo = repos.find((candidate) => candidate.id === id)
+                      if (repo !== undefined) {
+                        removeRepoMutation.mutate(repo)
+                      }
+                    }}
                   />
                 )
               }
@@ -955,7 +976,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     <Select
                       value={newRepo}
                       onChange={(event) => setNewRepo(event.target.value)}
-                      aria-label="Repository"
+                      aria-label="Project"
                       className="w-40"
                     >
                       {repos.map((repo) => (
@@ -1019,12 +1040,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         shortcut={shortcutOf('workspace.new')}
                         onClick={() => setNewWorkspace({})}
                       >
-                        New workspace
+                        Start a task
                       </Button>
                     </>
                   }
                 >
-                  Add a task to the backlog, or start a workspace to work right away.
+                  Add a task to the backlog, or start one now in its own workspace.
                 </EmptyState>
               ) : visibleTasks.length === 0 ? (
                 <EmptyState
@@ -1107,7 +1128,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)
-            chooseTask(task.id)
+            select(task.id)
             openChanges(task.id, 'terminal')
             toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
           }}

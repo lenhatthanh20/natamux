@@ -1,9 +1,19 @@
-import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
+import { worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
@@ -11,6 +21,7 @@ import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
 import { buildServer, isAuthorized } from './server.js'
+import { archiveDir } from './stage-files.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -42,7 +53,11 @@ beforeEach(async () => {
   index = new TaskIndex(':memory:')
   const bus = new EventBus()
   const service = new TaskService({ dataDir, index, bus })
-  const repos = new RepoService({ dataDir, defaultPath: repo.dir })
+  const repos = new RepoService({
+    dataDir,
+    defaultPath: repo.dir,
+    tasks: () => service.listTasks(),
+  })
   const workspaces = new WorkspaceService({
     tasks: service,
     repoDir: repo.dir,
@@ -442,6 +457,121 @@ describe('workspaces', () => {
       task: { workspace: null, branch: null },
     })
     expect(existsSync(workspace)).toBe(false)
+  })
+
+  it('removes a workspace whose folder was already deleted', async () => {
+    await createTask()
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    rmSync(created.json().task.workspace, { recursive: true, force: true })
+    runGit(repo.dir, 'worktree', 'prune')
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+
+    expect(removed.statusCode).toBe(200)
+    expect(removed.json()).toMatchObject({
+      branchDeleted: false,
+      task: { workspace: null, branch: 'natamux/t-0001-fix-the-bug' },
+    })
+  })
+
+  async function createWorkspace(): Promise<{ workspace: string; branch: string }> {
+    await createTask()
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    return created.json().task
+  }
+
+  function removeWorkspace(query = '') {
+    return app.inject({
+      method: 'DELETE',
+      url: `/tasks/T-0001/workspace${query}`,
+      headers: authorization,
+    })
+  }
+
+  it('removes a workspace whose folder was deleted with its merged branch', async () => {
+    const { workspace } = await createWorkspace()
+    rmSync(workspace, { recursive: true, force: true })
+    runGit(repo.dir, 'worktree', 'prune')
+
+    const removed = await removeWorkspace('?deleteBranch=true')
+
+    expect(removed.statusCode).toBe(200)
+    expect(removed.json()).toMatchObject({
+      branchDeleted: true,
+      task: { workspace: null, branch: null },
+    })
+  })
+
+  it('removes a workspace whose folder was deleted while git still lists it', async () => {
+    const { workspace, branch } = await createWorkspace()
+    rmSync(workspace, { recursive: true, force: true })
+
+    const removed = await removeWorkspace()
+
+    expect(removed.statusCode).toBe(200)
+    expect(removed.json()).toMatchObject({ task: { workspace: null, branch } })
+    expect(await worktreeState(repo.dir, workspace)).toBe('missing')
+  })
+
+  it('answers 409 with the path for a folder that is not a git worktree', async () => {
+    const { workspace } = await createWorkspace()
+    rmSync(workspace, { recursive: true, force: true })
+    runGit(repo.dir, 'worktree', 'prune')
+    mkdirSync(workspace)
+
+    const removed = await removeWorkspace()
+
+    expect(removed.statusCode).toBe(409)
+    expect(removed.json().message).toContain(workspace)
+    expect(existsSync(workspace)).toBe(true)
+  })
+
+  it('answers 409 for a worktree with changes that are not committed', async () => {
+    const { workspace } = await createWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'work in progress')
+
+    const removed = await removeWorkspace()
+
+    expect(removed.statusCode).toBe(409)
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+  })
+
+  it('keeps the earlier stage files when the folder was already deleted', async () => {
+    const { workspace } = await createWorkspace()
+    const archive = archiveDir(join(repo.root, 'data'), 'T-0001')
+    mkdirSync(archive, { recursive: true })
+    writeFileSync(join(archive, 'spec.md'), '# Goal\nKeep me.\n')
+    rmSync(workspace, { recursive: true, force: true })
+
+    const removed = await removeWorkspace()
+
+    expect(removed.statusCode).toBe(200)
+    expect(readFileSync(join(archive, 'spec.md'), 'utf8')).toBe('# Goal\nKeep me.\n')
+  })
+
+  it('archives nothing from a folder that was already deleted', async () => {
+    const { workspace } = await createWorkspace()
+    const archive = archiveDir(join(repo.root, 'data'), 'T-0001')
+    const archived = () => (existsSync(archive) ? readdirSync(archive) : [])
+    const before = archived()
+    rmSync(workspace, { recursive: true, force: true })
+
+    const removed = await removeWorkspace()
+
+    expect(removed.statusCode).toBe(200)
+    expect(archived()).toEqual(before)
   })
 
   it('answers 409 for a second workspace', async () => {
@@ -1387,5 +1517,108 @@ describe('repositories', () => {
       payload: { path: 'some/where' },
     })
     expect(relative.statusCode).toBe(400)
+  })
+
+  it('removes a repository once it has no workspaces, and keeps its tasks', async () => {
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'trunk')
+    runGit(other, 'commit', '--allow-empty', '-m', 'first')
+    const settingsText = '{ "stages": ["implement"] }\n'
+    writeFileSync(join(other, '.natamux.json'), settingsText)
+    await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other, name: 'Other app' },
+    })
+    for (const title of ['With a workspace', 'Without one']) {
+      await app.inject({
+        method: 'POST',
+        url: '/tasks',
+        headers: authorization,
+        payload: { title, repo: 'other-app' },
+      })
+    }
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    const busy = await app.inject({
+      method: 'DELETE',
+      url: '/repos/other-app',
+      headers: authorization,
+    })
+    expect(busy.statusCode).toBe(409)
+    expect(busy.json()).toMatchObject({
+      error: 'conflict',
+      message: 'Remove the 1 workspace of other-app first',
+    })
+
+    await app.inject({ method: 'DELETE', url: '/tasks/T-0001/workspace', headers: authorization })
+    const taskFile = join(repo.root, 'data', 'tasks', 'T-0002.md')
+    const taskText = readFileSync(taskFile, 'utf8')
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/repos/other-app',
+      headers: authorization,
+    })
+    expect(removed.statusCode).toBe(204)
+    expect(removed.body).toBe('')
+    const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(listed.json().repos.map((entry: { id: string }) => entry.id)).toEqual(['default'])
+    expect(existsSync(other)).toBe(true)
+    expect(readFileSync(join(other, '.natamux.json'), 'utf8')).toBe(settingsText)
+    expect(runGit(other, 'branch', '--list', 'natamux/*')).toContain('natamux/t-0001')
+    expect(readFileSync(taskFile, 'utf8')).toBe(taskText)
+
+    const kept = await app.inject({ method: 'GET', url: '/tasks/T-0002', headers: authorization })
+    expect(kept.json().task.repo).toBe('other-app')
+    const workspace = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0002/workspace',
+      headers: authorization,
+    })
+    expect(workspace.statusCode).toBe(404)
+    expect(workspace.json().message).toBe('Repository other-app is not known. Add it first')
+  })
+
+  it('refuses to remove the default repository, an unknown one, and a bad id', async () => {
+    const remove = (id: string) =>
+      app.inject({ method: 'DELETE', url: `/repos/${id}`, headers: authorization })
+
+    const fallback = await remove('default')
+    expect(fallback.statusCode).toBe(400)
+    expect(fallback.json().error).toBe('invalid_request')
+    const unknown = await remove('missing')
+    expect(unknown.statusCode).toBe(404)
+    expect(unknown.json().error).toBe('not_found')
+    expect((await remove('Bad_Id')).statusCode).toBe(400)
+  })
+})
+
+describe('project settings', () => {
+  const settingsUrl = '/repos/default/settings'
+
+  it('saves the permission mode of the agents, and refuses an unknown one', async () => {
+    const before = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(before.json().settings.agents).toEqual({ permissionMode: 'auto' })
+
+    const saved = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: authorization,
+      payload: { agents: { permissionMode: 'ask' } },
+    })
+    expect(saved.statusCode).toBe(200)
+    const after = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(after.json().settings.agents).toEqual({ permissionMode: 'ask' })
+
+    const wrong = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: authorization,
+      payload: { agents: { permissionMode: 'yolo' } },
+    })
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().message).toContain('agents.permissionMode')
   })
 })

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
   type ChangeEntry,
@@ -80,6 +81,48 @@ export async function addWorktree(
 // Refuses to remove a worktree that has changes that are not committed.
 export async function removeWorktree(repoDir: string, worktreePath: string): Promise<void> {
   await git(repoDir, ['worktree', 'remove', worktreePath])
+}
+
+// Reads the output of `git worktree list --porcelain`: the path of each worktree, main first.
+export function parseWorktreeList(output: string): string[] {
+  const prefix = 'worktree '
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length))
+}
+
+export async function listWorktreePaths(repoDir: string): Promise<string[]> {
+  return parseWorktreeList(await git(repoDir, ['worktree', 'list', '--porcelain']))
+}
+
+// stale: git lists the worktree but its folder is gone. missing: git does not list it and the
+// folder is gone. not-a-worktree: the folder is there but git does not know it.
+export type WorktreeState = 'present' | 'stale' | 'missing' | 'not-a-worktree'
+
+// git lists real paths, so a path is resolved the same way before it is compared. A folder that
+// is gone is resolved through its parent.
+async function comparablePath(path: string): Promise<string> {
+  try {
+    return await realpath(path)
+  } catch {
+    try {
+      return join(await realpath(dirname(path)), basename(path))
+    } catch {
+      return resolve(path)
+    }
+  }
+}
+
+export async function worktreeState(repoDir: string, worktreePath: string): Promise<WorktreeState> {
+  const exists = existsSync(worktreePath)
+  const wanted = await comparablePath(worktreePath)
+  const listed = await Promise.all((await listWorktreePaths(repoDir)).map(comparablePath))
+  const registered = listed.includes(wanted)
+  if (exists) {
+    return registered ? 'present' : 'not-a-worktree'
+  }
+  return registered ? 'stale' : 'missing'
 }
 
 export class OutsideWorkspaceError extends Error {

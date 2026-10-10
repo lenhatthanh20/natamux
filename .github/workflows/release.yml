@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag such as v0.1.0 builds the desktop app for macOS (Apple silicon and Intel) and
-# Linux, then publishes one GitHub release with every file. The notes come from
+# Pushing a tag such as v0.1.0 builds the desktop app for macOS on Apple silicon, then publishes
+# one GitHub release with every file. The Intel Mac and Linux builds are paused to save storage;
+# uncomment their matrix lines to release them again. The notes come from
 # docs/releases/<tag>.md. Not signed with a certificate yet (build order step 11).
 on:
   push:
@@ -29,8 +30,9 @@ jobs:
       matrix:
         include:
           - { name: mac-arm64, os: macos-26, args: --mac --arm64 }
-          - { name: mac-x64, os: macos-26-intel, args: --mac --x64 }
-          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
+          # Paused. Uncomment to release these again.
+          # - { name: mac-x64, os: macos-26-intel, args: --mac --x64 }
+          # - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -71,6 +73,43 @@ jobs:
           cat "$user_dir/logs/update.log"
           gh release download --pattern SHA256SUMS.txt --output - \
             | grep ' Natamux-linux-x86_64.AppImage$' | sed "s| .*|  $app|" | sha256sum -c
+      - name: Start the packaged app (macOS)
+        if: runner.os == 'macOS'
+        env:
+          NATAMUX_DESKTOP_SMOKE: "1"
+        run: |
+          user_dir="$RUNNER_TEMP/desktop-user"
+          mkdir -p "$user_dir"
+          printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
+          app=$(ls -d packages/desktop/release/mac*/Natamux.app | head -n 1)
+          "$app/Contents/MacOS/Natamux" --user-data-dir="$user_dir"
+      # Acting as version 0.0.0, a copy of the new app must download the .dmg of the latest
+      # release, check it and unpack a Natamux.app of that version. Killed before it quits, so the
+      # copy is not replaced.
+      - name: Update to the latest release (dry run, macOS)
+        if: runner.os == 'macOS' && github.event_name == 'workflow_dispatch' && !inputs.publish
+        env:
+          NATAMUX_UPDATE_AS_VERSION: 0.0.0
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          user_dir="$RUNNER_TEMP/update-user"
+          mkdir -p "$user_dir"
+          printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
+          app="$RUNNER_TEMP/Natamux.app"
+          ditto "$(ls -d packages/desktop/release/mac*/Natamux.app | head -n 1)" "$app"
+          "$app/Contents/MacOS/Natamux" --user-data-dir="$user_dir" &
+          pid=$!
+          log="$user_dir/logs/update.log"
+          for _ in $(seq 240); do
+            grep -qE ' (ready|failed): ' "$log" 2>/dev/null && break
+            sleep 1
+          done
+          kill -9 "$pid" || true
+          cat "$log"
+          grep -q ' ready: ' "$log"
+          latest=$(gh release view --json tagName --jq .tagName)
+          version=$(plutil -extract CFBundleShortVersionString raw "$user_dir"/updates/*/Natamux.app/Contents/Info.plist)
+          test "$version" = "${latest#v}"
       - uses: actions/upload-artifact@v7
         with:
           name: natamux-${{ matrix.name }}

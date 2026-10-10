@@ -79,6 +79,17 @@ describe('projectSettingsSchema', () => {
       createIssue: 'on-spec-approved',
       linkInPr: true,
     })
+    expect(DEFAULT_PROJECT_SETTINGS.agents).toEqual({ permissionMode: 'auto' })
+  })
+
+  it('takes auto or ask as the permission mode of the agents', () => {
+    expect(projectSettingsSchema.parse({ agents: {} }).agents.permissionMode).toBe('auto')
+    expect(
+      projectSettingsSchema.parse({ agents: { permissionMode: 'ask' } }).agents.permissionMode,
+    ).toBe('ask')
+    const wrong = projectSettingsSchema.safeParse({ agents: { permissionMode: 'yolo' } })
+    expect(wrong.success).toBe(false)
+    expect(wrong.error?.issues[0]?.path).toEqual(['agents', 'permissionMode'])
   })
 
   it('reads context sources by type', () => {
@@ -105,13 +116,7 @@ describe('resolveSteps', () => {
 
   it('finds a stage of a group for a task that has it on its own', () => {
     const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
-    expect(implement).toEqual({
-      id: 'implement',
-      kind: 'agent',
-      gate: 'auto',
-      requireCommit: true,
-      requireClean: true,
-    })
+    expect(implement).toEqual({ id: 'implement', kind: 'agent', gate: 'auto' })
   })
 
   it('makes a stage of its own that is gone from the settings a manual one', () => {

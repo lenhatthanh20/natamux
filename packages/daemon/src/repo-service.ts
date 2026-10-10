@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, isAbsolute, join } from 'node:path'
-import { DEFAULT_REPO, type Repo, repoSchema } from '@natamux/core'
+import { DEFAULT_REPO, type Repo, repoSchema, type Task } from '@natamux/core'
 import { z } from 'zod'
 import { repositoryRoot } from './git.js'
 import { slugify } from './workspace-service.js'
@@ -38,15 +38,29 @@ export class RepoInputError extends Error {
   }
 }
 
+export class RepoInUseError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RepoInUseError'
+  }
+}
+
 // The repositories whose tasks Natamux manages. The daemon's own repository is always the first,
 // as "default"; the others are kept in <data dir>/repos.json.
 export class RepoService {
   private readonly file: string
   private readonly defaultPath: string
+  // A function, not the task service itself: the task service is made after this one.
+  private readonly tasks: () => readonly Pick<Task, 'repo' | 'workspace'>[]
 
-  constructor(options: { dataDir: string; defaultPath: string }) {
+  constructor(options: {
+    dataDir: string
+    defaultPath: string
+    tasks?: () => readonly Pick<Task, 'repo' | 'workspace'>[]
+  }) {
     this.file = join(options.dataDir, 'repos.json')
     this.defaultPath = options.defaultPath
+    this.tasks = options.tasks ?? (() => [])
   }
 
   list(): Repo[] {
@@ -91,6 +105,24 @@ export class RepoService {
     const repo = repoSchema.parse({ id, name, path: root })
     this.save([...this.stored(), repo])
     return repo
+  }
+
+  // Forgets the repository. Its folder, branches and tasks stay. A worktree still on disk would be
+  // lost to Natamux, so its workspaces go first.
+  remove(id: string): void {
+    if (id === DEFAULT_REPO) {
+      throw new RepoInputError('The default repository cannot be removed')
+    }
+    const stored = this.stored()
+    if (!stored.some((repo) => repo.id === id)) {
+      throw new RepoNotFoundError(id)
+    }
+    const inUse = this.tasks().filter((task) => task.repo === id && task.workspace !== null)
+    if (inUse.length > 0) {
+      const noun = inUse.length === 1 ? 'workspace' : 'workspaces'
+      throw new RepoInUseError(`Remove the ${inUse.length} ${noun} of ${id} first`)
+    }
+    this.save(stored.filter((repo) => repo.id !== id))
   }
 
   private stored(): Repo[] {
