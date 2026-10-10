@@ -31,6 +31,14 @@ export const trackerSettingsSchema = z.object({
   linkInPr: z.boolean().default(true),
 })
 
+// `ask` passes no flag, so each agent keeps the user's own permission setting.
+export const PERMISSION_MODES = ['auto', 'ask'] as const
+export type PermissionMode = (typeof PERMISSION_MODES)[number]
+
+export const agentSettingsSchema = z.object({
+  permissionMode: z.enum(PERMISSION_MODES).default('auto'),
+})
+
 // `.natamux.json` at the root of a repository. Every field may be left out.
 export const projectSettingsSchema = z.object({
   stages: pipelineSchema.default(DEFAULT_PIPELINE),
@@ -47,6 +55,7 @@ export const projectSettingsSchema = z.object({
     createIssue: 'on-spec-approved',
     linkInPr: true,
   }),
+  agents: agentSettingsSchema.default({ permissionMode: 'auto' }),
 })
 
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>

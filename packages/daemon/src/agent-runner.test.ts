@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UnknownAgentError } from './agent-hook-service.js'
 import { AgentRunner, firstPrompt, quoteArgument, TaskWaitingError } from './agent-runner.js'
@@ -88,7 +89,7 @@ describe('AgentRunner', () => {
     expect(ptys[0]?.options.cwd).toBe('/work/T-0001')
     expect(ptys[0]?.written).toEqual([`. '${script(task.id)}'\r`])
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "claude --settings '/data/claude code.json' 'Fix the bug - Don'\\''t break it.'\n",
+      "claude --settings '/data/claude code.json' --permission-mode auto 'Fix the bug - Don'\\''t break it.'\n",
     )
     expect(updated.agent).toBe('claude-code')
     expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
@@ -116,14 +117,14 @@ describe('AgentRunner', () => {
     const task = taskWithWorkspace()
     runner.start(task.id, 'claude-code', 'Only this')
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "claude --settings '/data/claude code.json' 'Only this'\n",
+      "claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n",
     )
     runner.start(task.id, 'claude-code', '  ')
 
     expect(ptys).toHaveLength(1)
     expect(ptys[0]?.written).toEqual([`. '${script(task.id)}'\r`, `. '${script(task.id)}'\r`])
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "claude --settings '/data/claude code.json'\n",
+      "claude --settings '/data/claude code.json' --permission-mode auto\n",
     )
   })
 
@@ -141,8 +142,40 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      "claude --settings 'C:\\data\\settings.json' 'Only this'\r",
+      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
     ])
+  })
+
+  it('reads the permission mode of the project at each start', () => {
+    let permissionMode: 'auto' | 'ask' = 'ask'
+    const project = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      settingsOf: () => ({ ...DEFAULT_PROJECT_SETTINGS, agents: { permissionMode } }),
+    })
+    const asking = new AgentRunner({
+      tasks: project,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+    })
+    const created = project.createTask({ title: 'Fix the bug' })
+    const task = project.recordWorkspace(created.id, {
+      workspace: '/work/T-0001',
+      branch: 'natamux/t-0001',
+    })
+
+    asking.start(task.id, 'claude-code', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "claude --settings '/data/claude code.json' 'Only this'\n",
+    )
+    permissionMode = 'auto'
+    asking.start(task.id, 'claude-code', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n",
+    )
   })
 
   it('refuses a task that waits for another one', () => {
@@ -170,13 +203,15 @@ describe('GitHub Copilot', () => {
       tasks,
       terminals,
       claudeSettingsPath: '/data/claude-code-settings.json',
-      copilotArgs: '--allow-all-tools',
+      copilotArgs: '--model gpt-5',
       platform: 'linux',
       launchDir: dataDir,
     })
     const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')
-    expect(readFileSync(script(task.id), 'utf8')).toBe("copilot --allow-all-tools -i 'Fix it'\n")
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "copilot --allow-all-tools --model gpt-5 -i 'Fix it'\n",
+    )
     expect(tasks.getTask(task.id).agent).toBe('copilot')
   })
 })

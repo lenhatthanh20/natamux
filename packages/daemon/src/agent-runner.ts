@@ -39,7 +39,7 @@ type AgentRunnerOptions = {
   // Gemini CLI settings with its hooks (see geminiHookSettings). Default: next to Claude's.
   geminiSettingsPath?: string
   // The command of each agent (NATAMUX_<AGENT>_COMMAND), and words to add to its command line
-  // (NATAMUX_<AGENT>_ARGS), such as --allow-all-tools for Copilot.
+  // (NATAMUX_<AGENT>_ARGS), such as --model sonnet for Claude Code.
   programs?: Partial<Record<LaunchableAgent, string | undefined>>
   extraArgs?: Partial<Record<LaunchableAgent, string | undefined>>
   claudeCommand?: string
@@ -125,6 +125,8 @@ export class AgentRunner {
       platform: this.platform,
       claudeSettingsPath: this.claudeSettingsPath,
       geminiSettingsPath: this.geminiSettingsPath,
+      // Read at each start, so a saved change counts for the next agent.
+      permissionMode: this.tasks.settingsOf(task.repo).agents.permissionMode,
     })
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)

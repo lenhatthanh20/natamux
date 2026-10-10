@@ -20,9 +20,47 @@ const base: LaunchOptions = {
   platform: 'linux',
   claudeSettingsPath: '/data/claude.json',
   geminiSettingsPath: '/data/gemini.json',
+  permissionMode: 'ask',
 }
 
+const auto: LaunchOptions = { ...base, permissionMode: 'auto' }
+
 describe('launchCommand', () => {
+  it('starts each agent in its auto mode, before the extra words and the prompt', () => {
+    expect(launchCommand('claude-code', { ...auto, program: 'claude', extraArgs: '--x' })).toBe(
+      "claude --settings '/data/claude.json' --permission-mode auto --x 'Fix it'",
+    )
+    expect(launchCommand('copilot', { ...auto, program: 'copilot', extraArgs: '--x' })).toBe(
+      "copilot --allow-all-tools --x -i 'Fix it'",
+    )
+    expect(launchCommand('cursor', { ...auto, program: 'cursor-agent', extraArgs: '--x' })).toBe(
+      "cursor-agent --force --x 'Fix it'",
+    )
+    expect(launchCommand('gemini', { ...auto, program: 'gemini', extraArgs: '--x' })).toBe(
+      "GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini --approval-mode yolo --x -i 'Fix it'",
+    )
+    const codex = launchCommand('codex', { ...auto, program: 'codex', extraArgs: '--x' })
+    expect(codex.startsWith('codex --dangerously-bypass-hook-trust --full-auto -c ')).toBe(true)
+    expect(codex.endsWith(" --x 'Fix it'")).toBe(true)
+  })
+
+  it('adds the auto mode on Windows and without a prompt', () => {
+    expect(launchCommand('claude-code', { ...auto, program: 'claude', prompt: '' })).toBe(
+      "claude --settings '/data/claude.json' --permission-mode auto",
+    )
+    expect(
+      launchCommand('claude-code', {
+        ...auto,
+        program: 'claude',
+        platform: 'win32',
+        prompt: "it's",
+      }),
+    ).toBe("claude --settings '/data/claude.json' --permission-mode auto 'it''s'")
+    expect(
+      launchCommand('gemini', { ...auto, program: 'gemini', platform: 'win32', prompt: '' }),
+    ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini --approval-mode yolo")
+  })
+
   it('starts each agent interactive, with its first prompt and its hooks', () => {
     expect(launchCommand('claude-code', { ...base, program: 'claude' })).toBe(
       "claude --settings '/data/claude.json' 'Fix it'",
@@ -38,6 +76,7 @@ describe('launchCommand', () => {
     )
     const codex = launchCommand('codex', { ...base, program: 'codex' })
     expect(codex.startsWith('codex --dangerously-bypass-hook-trust -c ')).toBe(true)
+    expect(codex).not.toContain('--full-auto')
     expect(codex).toContain(
       `'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'`,
     )
