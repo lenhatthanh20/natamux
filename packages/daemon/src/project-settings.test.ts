@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProjectSettingsService, SETTINGS_FILE, SettingsInputError } from './project-settings.js'
+import { RepoNotFoundError } from './repo-service.js'
 
 let folder: string
 let service: ProjectSettingsService
@@ -74,5 +75,18 @@ describe('ProjectSettingsService', () => {
     const loaded = service.load(null)
     expect(loaded.error).toContain('agents.permissionMode')
     expect(loaded.settings.agents.permissionMode).toBe('auto')
+  })
+
+  it('gives tasks of a removed repository the defaults, but does not load or save it', () => {
+    const removed = new ProjectSettingsService({
+      repos: {
+        pathOf: (repo) => {
+          throw new RepoNotFoundError(repo ?? 'default')
+        },
+      },
+    })
+    expect(removed.get('gone')).toEqual(DEFAULT_PROJECT_SETTINGS)
+    expect(() => removed.load('gone')).toThrow(RepoNotFoundError)
+    expect(() => removed.save('gone', {})).toThrow(RepoNotFoundError)
   })
 })
