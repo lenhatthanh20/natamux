@@ -1,13 +1,13 @@
-import type { TerminalServerMessage } from '@natamux/core'
+import { TERMINAL_HISTORY_CHARS, type TerminalServerMessage } from '@natamux/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   KILL_GRACE_MS,
-  lastLines,
   MAX_SESSIONS,
   NoTerminalError,
-  REPLAY_SCROLLBACK_LINES,
-  SCROLLBACK_CHARS,
+  OutputHistory,
+  REPLAY_CHUNK_CHARS,
+  replayChunks,
   TerminalLimitError,
   TerminalService,
   TICKET_TTL_MS,
@@ -35,6 +35,11 @@ function setup(options: { now?: () => number } = {}) {
 function client() {
   const messages: TerminalServerMessage[] = []
   return { messages, send: (message: TerminalServerMessage) => messages.push(message) }
+}
+
+// All the output a client got, as one text.
+function outputOf(messages: TerminalServerMessage[]): string {
+  return messages.map((message) => (message.type === 'output' ? message.data : '')).join('')
 }
 
 describe('TerminalService', () => {
@@ -91,18 +96,21 @@ describe('TerminalService', () => {
     expect(ptys).toHaveLength(1)
   })
 
-  it('keeps only the newest output', () => {
+  it('keeps only the newest output, from the start of a line', () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
-    ptys[0]?.emit('x'.repeat(SCROLLBACK_CHARS))
-    ptys[0]?.emit('end')
+    const line = `${'x'.repeat(99)}\n`
+    ptys[0]?.emit(line.repeat(TERMINAL_HISTORY_CHARS / line.length))
+    ptys[0]?.emit('half a line')
+    ptys[0]?.emit('end\n')
 
     const later = client()
     service.attach('T-0001', later, size)
 
-    const replay = later.messages[0]
-    expect(replay?.type === 'output' && replay.data.length).toBe(SCROLLBACK_CHARS)
-    expect(replay?.type === 'output' && replay.data.endsWith('end')).toBe(true)
+    const text = outputOf(later.messages)
+    expect(text.length).toBeLessThanOrEqual(TERMINAL_HISTORY_CHARS)
+    expect(text.startsWith(line)).toBe(true)
+    expect(text.endsWith('half a lineend\n')).toBe(true)
   })
 
   it('tells the clients when the shell ends, and starts a new one next time', () => {
@@ -287,34 +295,101 @@ describe('attaching to a running shell', () => {
     expect(ptys[0]?.sizes).toEqual([])
   })
 
-  it('replays the last screen and a thousand lines, not everything', () => {
+  it('replays the whole history, from the first line', () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
-    const lines = Array.from({ length: 3000 }, (_, index) => `line ${index}`)
-    ptys[0]?.emit(`${lines.join('\n')}\n`)
+    for (let index = 1; index <= 8000; index += 1) {
+      ptys[0]?.emit(`line ${index}\r\n`)
+    }
 
     const later = client()
     service.attach('T-0001', later, size)
 
-    const replay = later.messages[0]
-    const text = replay?.type === 'output' ? replay.data : ''
-    expect(text.split('\n').filter((line) => line !== '')).toHaveLength(
-      size.rows + REPLAY_SCROLLBACK_LINES,
-    )
-    expect(text.endsWith('line 2999\n')).toBe(true)
+    const text = outputOf(later.messages)
+    expect(text.startsWith('line 1\r\n')).toBe(true)
+    expect(text.endsWith('line 8000\r\n')).toBe(true)
+    expect(text.split('\r\n').filter((line) => line !== '')).toHaveLength(8000)
+  })
+
+  it('replays a long history in pieces of a bounded size', () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const output = `${'y'.repeat(79)}\n`.repeat(5000)
+    ptys[0]?.emit(output)
+
+    const later = client()
+    service.attach('T-0001', later, size)
+
+    expect(later.messages.length).toBeGreaterThan(1)
+    for (const message of later.messages) {
+      expect(message.type === 'output' && message.data.length).toBeLessThanOrEqual(
+        REPLAY_CHUNK_CHARS,
+      )
+    }
+    expect(outputOf(later.messages)).toBe(output)
   })
 })
 
-describe('lastLines', () => {
-  it('keeps the last lines, and the final line break', () => {
-    expect(lastLines('a\nb\nc\n', 2)).toBe('b\nc\n')
-    expect(lastLines('a\nb\nc', 2)).toBe('b\nc')
+describe('OutputHistory', () => {
+  it('keeps everything below the limit', () => {
+    const history = new OutputHistory(100)
+    history.append('a\n')
+    history.append('b')
+    expect(history.text()).toBe('a\nb')
   })
 
-  it('returns everything when there are fewer lines', () => {
-    expect(lastLines('a\nb', 5)).toBe('a\nb')
-    expect(lastLines('', 5)).toBe('')
-    expect(lastLines('\nb', 5)).toBe('\nb')
+  it('drops the oldest lines first, and starts at a line', () => {
+    // The last 8 chars start inside "two", so "two" goes as a whole.
+    const history = new OutputHistory(8)
+    history.append('one\ntwo\nthree\n')
+    expect(history.text()).toBe('three\n')
+  })
+
+  it('keeps the same text whether the output comes in one piece or many', () => {
+    const output = Array.from({ length: 500 }, (_, index) => `line ${index}\r\n`).join('')
+    const whole = new OutputHistory(1000)
+    whole.append(output)
+    const pieces = new OutputHistory(1000)
+    for (const char of output) {
+      pieces.append(char)
+    }
+
+    expect(pieces.text()).toBe(whole.text())
+    expect(whole.text().length).toBeLessThanOrEqual(1000)
+    expect(whole.text().endsWith('line 499\r\n')).toBe(true)
+  })
+
+  it('cuts before an escape sequence when there is no line break near the cut', () => {
+    const history = new OutputHistory(20)
+    history.append(`${'a'.repeat(30)}\u001b[31mred text`)
+    expect(history.text()).toBe('\u001b[31mred text')
+  })
+
+  it('does not start with the second half of a surrogate pair', () => {
+    const history = new OutputHistory(5)
+    // Without a line break or an escape, the cut falls inside the emoji.
+    history.append('ab😀cdef')
+    expect(history.text()).toBe('cdef')
+  })
+
+  it('is empty after clear', () => {
+    const history = new OutputHistory(100)
+    history.append('a')
+    history.clear()
+    expect(history.text()).toBe('')
+  })
+})
+
+describe('replayChunks', () => {
+  it('splits a text into pieces of at most the given size', () => {
+    expect(replayChunks('abcdefg', 3)).toEqual(['abc', 'def', 'g'])
+    expect(replayChunks('', 3)).toEqual([])
+  })
+
+  it('never splits a surrogate pair', () => {
+    const chunks = replayChunks('ab😀cd', 3)
+    expect(chunks).toEqual(['ab', '😀c', 'd'])
+    expect(chunks.join('')).toBe('ab😀cd')
   })
 })
 

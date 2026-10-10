@@ -5,6 +5,12 @@ import { z } from 'zod'
 const MAX_INPUT_CHARS = 64 * 1024
 const MAX_SIZE = 1000
 
+// How much history a terminal keeps: the dashboard keeps this many lines above the screen, and
+// the daemon keeps this much output, so a new dashboard can show all of it again. Change them
+// together.
+export const TERMINAL_SCROLLBACK_LINES = 10_000
+export const TERMINAL_HISTORY_CHARS = 2_000_000
+
 export const terminalSizeSchema = z.object({
   cols: z.coerce.number().int().min(1).max(MAX_SIZE),
   rows: z.coerce.number().int().min(1).max(MAX_SIZE),

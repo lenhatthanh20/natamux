@@ -1,4 +1,4 @@
-import type { TerminalSize } from '@natamux/core'
+import { TERMINAL_SCROLLBACK_LINES, type TerminalSize } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -83,7 +83,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       fontSize: TERMINAL_FONT_SIZE * uiZoom(),
       lineHeight: TERMINAL_LINE_HEIGHT,
       minimumContrastRatio: MIN_CONTRAST_RATIO,
-      scrollback: 5000,
+      scrollback: TERMINAL_SCROLLBACK_LINES,
       theme: terminalTheme(themeRef.current),
     })
     terminalRef.current = terminal
