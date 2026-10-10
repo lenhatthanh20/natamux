@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
@@ -137,6 +138,98 @@ describe('AgentRunner', () => {
       claudeSettingsPath: 'C:\\data\\settings.json',
       platform: 'win32',
       launchDir: dataDir,
+    })
+    const task = taskWithWorkspace()
+
+    windows.start(task.id, 'claude-code', 'Only this')
+
+    expect(spawner.ptys[0]?.written).toEqual([
+      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
+    ])
+  })
+
+  it('puts the natamux command first on the PATH of the agent', () => {
+    const withBin = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'darwin',
+      launchDir: dataDir,
+      binDir: "/Apps/Nata'mux/bin",
+    })
+    const task = taskWithWorkspace()
+
+    withBin.start(task.id, 'claude-code', 'Only this')
+
+    expect(ptys[0]?.written).toEqual([`. '${script(task.id)}'\r`])
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      `PATH='/Apps/Nata'\\''mux/bin':"$PATH" claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n`,
+    )
+  })
+
+  it('keeps a bin folder with a space as one PATH entry', () => {
+    const withBin = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'darwin',
+      launchDir: dataDir,
+      binDir: '/Users/me/Library/Application Support/Natamux/bin',
+    })
+    const task = taskWithWorkspace()
+
+    withBin.start(task.id, 'claude-code', 'Only this')
+
+    expect(readFileSync(script(task.id), 'utf8')).toMatch(
+      /^PATH='\/Users\/me\/Library\/Application Support\/Natamux\/bin':"\$PATH" claude /,
+    )
+  })
+
+  // The script is sourced by a real shell here. A fake natamux elsewhere on the PATH must lose.
+  it.skipIf(process.platform === 'win32')(
+    'runs the app natamux before another one in a real shell',
+    () => {
+      const appBin = join(dataDir, 'Application Support', 'bin')
+      const otherBin = join(dataDir, 'other')
+      for (const [dir, name] of [
+        [appBin, 'app'],
+        [otherBin, 'other'],
+      ] as const) {
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(join(dir, 'natamux'), `#!/bin/sh\necho ${name}\n`, { mode: 0o755 })
+      }
+      const task = taskWithWorkspace()
+      const source = (binDir: string | undefined) => {
+        new AgentRunner({
+          tasks,
+          terminals,
+          claudeSettingsPath: '/data/settings.json',
+          platform: process.platform,
+          launchDir: dataDir,
+          binDir,
+          programs: { 'claude-code': 'natamux' },
+        }).start(task.id, 'claude-code', 'Only this')
+        return execFileSync('/bin/sh', ['-c', '. "$1"', 'sh', script(task.id)], {
+          encoding: 'utf8',
+          env: { PATH: `${otherBin}:/usr/bin:/bin` },
+        }).trim()
+      }
+
+      expect(source(appBin)).toBe('app')
+      // Without a bin folder (a daemon not started by the app) the script still runs.
+      expect(source(undefined)).toBe('other')
+    },
+  )
+
+  it('leaves the PATH alone on Windows, even with a bin folder', () => {
+    const spawner = fakeSpawner()
+    const windows = new AgentRunner({
+      tasks,
+      terminals: new TerminalService({ spawn: spawner.spawn, workspaceOf: () => '/work/T-0001' }),
+      claudeSettingsPath: 'C:\\data\\settings.json',
+      platform: 'win32',
+      launchDir: dataDir,
+      binDir: 'C:\\Natamux\\bin',
     })
     const task = taskWithWorkspace()
 
