@@ -181,8 +181,8 @@ export function TaskDetail({
           idPrefix="details"
           value={shown}
           onChange={(next) => {
-            if (next !== shown) {
-              setEditing(false)
+            // Leaving the form would drop its unsaved changes; Save or Cancel closes it.
+            if (next !== shown && !editing) {
               onViewChange?.(next)
             }
           }}
