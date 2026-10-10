@@ -14,6 +14,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - The Implement and Testing stages leave the changes uncommitted. You commit them in the **Changes** tab. See [Checks](/docs/concepts/stages/#checks).
 - **New workspace** is now **Start a task**, a repository is a "project", and the dialog shows the **Notes** field at once.
 - The task details panel starts closed. The terminal header shows the agent's icon and name.
+- Fix: a terminal showed only its last 1,000 lines after you switched tasks or reloaded the dashboard. A shell now keeps all its output, and each pane keeps 10,000 lines of scrollback. See [Terminal](/docs/guides/terminal/).
 - Removing a workspace works when its worktree folder is already gone.
 - Fix: "command not found" when an agent starts. Task shells are login shells, and the app adds the Homebrew folders when it cannot read the login shell PATH.
 - Fix: agent hooks failed behind a company proxy. Task terminals add `127.0.0.1`, `localhost` and `::1` to `NO_PROXY`.
