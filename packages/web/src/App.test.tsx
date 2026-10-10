@@ -1234,9 +1234,9 @@ describe('App', () => {
     await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Add export/ }))
     expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
 
-    await user.click(
-      within(screen.getByRole('banner')).getByRole('button', { name: 'Start a task' }),
-    )
+    // The details have a header too; the title bar comes first.
+    const [titleBar] = screen.getAllByRole('banner')
+    await user.click(within(titleBar as HTMLElement).getByRole('button', { name: 'Start a task' }))
     const dialog = screen.getByRole('dialog', { name: 'Start a task' })
     await user.type(within(dialog).getByLabelText('Task title'), 'Fix the login')
     await user.click(within(dialog).getByRole('button', { name: 'Start task' }))
