@@ -6,7 +6,7 @@ import {
   projectSettingsSchema,
 } from '@natamux/core'
 import { ZodError } from 'zod'
-import type { RepoService } from './repo-service.js'
+import { RepoNotFoundError, type RepoService } from './repo-service.js'
 
 export const SETTINGS_FILE = '.natamux.json'
 
@@ -87,8 +87,17 @@ export class ProjectSettingsService {
     return loaded
   }
 
+  // Tasks keep the id of a removed repository. They still need stages to be moved, cancelled or
+  // watched, so they get the defaults.
   get(repo: string | null): ProjectSettings {
-    return this.load(repo).settings
+    try {
+      return this.load(repo).settings
+    } catch (error) {
+      if (error instanceof RepoNotFoundError) {
+        return DEFAULT_PROJECT_SETTINGS
+      }
+      throw error
+    }
   }
 
   // Writes the file in the repository's main folder. The person commits it.
