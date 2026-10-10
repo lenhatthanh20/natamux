@@ -25,7 +25,7 @@ const keepDrafts = (taskId: string, drafts: Record<string, Draft>) => {
 type DocsTabProps = {
   taskId: string
   now: Date
-  // The file to show first, from the Progress tab.
+  // The file to show first, from the progress in the details.
   file: string | null
   onFileChange: (name: string) => void
   loadFiles: () => Promise<StageFile[]>

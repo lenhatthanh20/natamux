@@ -36,6 +36,8 @@ export type CommandActions = {
   taskEvent: (type: EventType) => void
   stageAction: (action: 'skip' | 'approve' | 'report') => void
   showTab: (tab: WorkspaceTab) => void
+  // Opens the details of the task on its progress.
+  showProgress: () => void
   back: () => void
   showAllTasks: () => void
   showAgents: () => void
@@ -106,7 +108,7 @@ const taskActionCommands: Command[] = TASK_ACTIONS.map(({ type, title, key }) =>
 }))
 
 // Stage actions that need no more input. Send back asks for a stage and a reason, so it opens
-// the Progress tab, where that form is.
+// the progress in the details, where that form is.
 const STAGE_ACTIONS: readonly {
   action: 'skip' | 'approve' | 'report'
   title: string
@@ -136,7 +138,14 @@ const stageCommands: Command[] = [
     title: 'Send the task back to an earlier stage',
     category: 'Workspace',
     when: inStage,
-    run: ({ actions }) => actions.showTab('progress'),
+    run: ({ actions }) => actions.showProgress(),
+  },
+  {
+    id: 'progress.show',
+    title: 'Show the task progress',
+    category: 'Workspace',
+    when: ({ state }) => state.workspaceOpen || state.hasSelection,
+    run: ({ actions }) => actions.showProgress(),
   },
 ]
 
@@ -155,8 +164,7 @@ const TABS: readonly { tab: WorkspaceTab; key: string; title: string }[] = [
   { tab: 'terminal', key: '1', title: 'Show the Terminal tab' },
   { tab: 'changes', key: '2', title: 'Show the Changes tab' },
   { tab: 'history', key: '3', title: 'Show the History tab' },
-  { tab: 'progress', key: '4', title: 'Show the Progress tab' },
-  { tab: 'docs', key: '5', title: 'Show the Docs tab' },
+  { tab: 'docs', key: '4', title: 'Show the Docs tab' },
 ]
 
 export const COMMANDS: readonly Command[] = [

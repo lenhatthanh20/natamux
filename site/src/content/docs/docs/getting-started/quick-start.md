@@ -61,7 +61,7 @@ The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
 
 ## 5. Review the stage
 
-Each task moves through stages. The **Progress** tab shows them and the evidence of each one.
+Each task moves through stages. The **Progress** view of the details panel shows them and the evidence of each one, beside the terminal.
 
 ![The Progress view of tasks against their stages](/screens/progress.png)
 

@@ -384,7 +384,7 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 
 ### 4.7 Tabs (`ui/Tabs.tsx`)
 - Row 36, bottom border line. Tab: pad x 10, 13/500, icon 14 + label gap 6, muted; hover ink; selected ink + 2px ink bar at the bottom (inside the row). Optional count badge.
-- `role="tablist"`/`tab`/`tabpanel`, `aria-controls`. One tab stop; Left/Right/Home/End move and activate. Number keys 1-3 activate workspace tabs (see 5.1).
+- `role="tablist"`/`tab`/`tabpanel`, `aria-controls`. One tab stop; Left/Right/Home/End move and activate. Number keys 1-4 activate workspace tabs (see 5.1).
 - Overflow: horizontal scroll with 16px edge fades; no wrap. Right side of the row holds tab-specific actions (New shell, layout).
 
 ### 4.8 List row (generic)
@@ -572,6 +572,7 @@ Shared shell:
 
 ### 4.27 Details panel sections (`components/TaskDetail.tsx`)
 - Header 40: id mono 12 muted, then icon buttons 28: Edit (`Pencil`, `E`), More ("..."), Close (`X`, `Esc`). In page mode (< 768) Back (`ArrowLeft`) replaces Close.
+- View tabs under the header (36): **Progress** and **Details**. Progress is the task progress of `design-task-stages.md` 7.5, in one column, so the user can watch the terminal and approve a stage without a tab change. The view the user picks is remembered for all tasks (`natamux.details-view`). Until then, the details beside an open workspace show Progress, and beside the list show Details. Edit always shows Details. The palette command "Show the task progress" and Send back open Progress.
 - Title block pad 16: title 16/600 (wraps), chips row (state, priority, labels) gap 6.
 - Action row: primary state action (`button primary`), secondary actions, agent action (Start agent / Restart agent / hidden while running, WS-17). Label above in caps "Actions" only in the narrow page mode.
 - Banners (when relevant), pad 10 12, radius 6: quiet ("No sign of life for 12m. The agent may be stuck.") and waiting ("Waits for T-0009 to be done"), bg signal-soft, 1px signal-line.
@@ -629,7 +630,7 @@ Rules:
 | | `i` | Show / hide details of the selected task |
 | | `e` | Edit the selected task in details |
 | | `a` / `r` | Approve / Request changes (review state only; existing) |
-| | `1` `2` `3` | Workspace tabs: Terminal, Changes, History |
+| | `1` `2` `3` `4` | Workspace tabs: Terminal, Changes, History, Docs |
 | | `[` / `]` | Previous / next changed file (Changes tab) |
 | | `R` (Shift+r) | Refresh changes / history |
 | Lists and trees | Home / End | First / last |

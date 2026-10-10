@@ -9,8 +9,8 @@ import {
   type Task,
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
@@ -26,16 +26,16 @@ import {
   sentBackCount,
   stageCount,
   stageTime,
-  stepTime,
 } from '../lib/stage-view'
 import { formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { DetailSection } from './DetailSection'
 import { StageMarker } from './StageMarker'
 import { StartAgentControl } from './StartAgentControl'
 import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { Select } from './ui/Select'
-import { textarea } from './ui/styles'
+import { ICON, textarea } from './ui/styles'
 
 type ProgressTabProps = {
   task: Task
@@ -53,6 +53,8 @@ type ProgressTabProps = {
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
+const CHIP =
+  'inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs'
 const FAILED_ACTION: Record<StageAction, string> = {
   approve: 'Could not approve the stage.',
   reopen: 'Could not send the task back.',
@@ -70,7 +72,8 @@ function kilobytes(size: number): string {
   return size < 1024 ? `${size} B` : `${Math.round(size / 102.4) / 10} KB`
 }
 
-// The Progress tab of a task: where each stage is, and the evidence that it is finished.
+// The progress of a task, in one column for the narrow details panel: where each stage is, and
+// the evidence that it is finished.
 export function ProgressTab({
   task,
   now,
@@ -90,7 +93,7 @@ export function ProgressTab({
   const events = useQuery({
     queryKey: ['stage-events', task.id, task.updatedAt],
     queryFn: loadEvents,
-    // Keep the old list while the next one loads, or the whole tab (and an open dialog) would blink.
+    // Keep the old list while the next one loads, or the view (and an open dialog) would blink.
     placeholderData: keepPreviousData,
   })
   const files = useQuery({
@@ -99,6 +102,7 @@ export function ProgressTab({
     placeholderData: keepPreviousData,
   })
   const [sendingBack, setSendingBack] = useState<StageProgress | null>(null)
+  const stageList = useRef<HTMLOListElement>(null)
 
   const action = useMutation({
     mutationFn: ({ name, input }: { name: StageAction; input?: StageActionInput }) =>
@@ -117,6 +121,14 @@ export function ProgressTab({
 
   const loadedSettings = settings.data
   const loadedEvents = events.data
+  const ready = loadedSettings !== undefined && loadedEvents !== undefined
+  // The current stage is what the user opens the progress for.
+  useEffect(() => {
+    if (ready) {
+      stageList.current?.querySelector('[data-current]')?.scrollIntoView?.({ block: 'nearest' })
+    }
+  }, [ready])
+
   if (loadedSettings === undefined || loadedEvents === undefined) {
     const failure = settings.error ?? events.error
     return failure === null ? (
@@ -142,6 +154,11 @@ export function ProgressTab({
   const count = stageCount(progress)
   const open = task.state !== 'done' && task.state !== 'cancelled'
   const run = (name: StageAction, input?: StageActionInput) => action.mutate({ name, input })
+  const latest = loadedEvents
+    // "Agent is working" lines only keep the clock fresh; they would fill the list.
+    .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
+    .reverse()
+    .slice(0, 8)
 
   const card = (stage: Stage) => {
     const entry = byId.get(stage.id)
@@ -176,8 +193,8 @@ export function ProgressTab({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 p-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-col gap-3 p-3">
         <Overview
           task={task}
           now={now}
@@ -187,169 +204,149 @@ export function ProgressTab({
           sentBack={sentBackCount(accepted)}
         />
 
-        <div className="flex flex-wrap items-start gap-4">
-          <ol
-            className="m-0 flex min-w-0 flex-[999_1_560px] list-none flex-col p-0"
-            aria-label="Stages"
-          >
-            {steps.map((step, index) => {
-              const stages = stagesOf(step)
-              const first = byId.get(stages[0]?.id ?? '')
-              const last = index === steps.length - 1
-              const markerStatus = isGroup(step)
-                ? stages.some((stage) => byId.get(stage.id)?.status === 'current')
-                  ? 'current'
-                  : (first?.status ?? 'upcoming')
+        <ol ref={stageList} className="m-0 flex list-none flex-col p-0" aria-label="Stages">
+          {steps.map((step, index) => {
+            const stages = stagesOf(step)
+            const first = byId.get(stages[0]?.id ?? '')
+            const last = index === steps.length - 1
+            const markerStatus = isGroup(step)
+              ? stages.some((stage) => byId.get(stage.id)?.status === 'current')
+                ? 'current'
                 : (first?.status ?? 'upcoming')
-              const groupState =
-                isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
-              const next = steps[index + 1]
-              const nextFirst =
-                next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
-              return (
-                <li key={step.id} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3">
-                  <div className="flex flex-col items-center pt-3">
-                    <StageMarker
-                      status={markerStatus}
-                      state={groupState}
-                      size={22}
-                      label={`${step.name ?? stages.map((stage) => stage.id).join(' and ')}: ${markerStatus}`}
+              : (first?.status ?? 'upcoming')
+            const groupState =
+              isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
+            const next = steps[index + 1]
+            const nextFirst =
+              next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
+            return (
+              <li key={step.id} className="grid grid-cols-[20px_minmax(0,1fr)] gap-x-2">
+                <div className="flex flex-col items-center pt-3">
+                  <StageMarker
+                    status={markerStatus}
+                    state={groupState}
+                    size={18}
+                    label={`${step.name ?? stages.map((stage) => stage.id).join(' and ')}: ${markerStatus}`}
+                  />
+                  {!last && (
+                    <span
+                      aria-hidden="true"
+                      className="my-1.5 w-0.5 flex-1 rounded-full"
+                      style={{
+                        background:
+                          markerStatus === 'done' || markerStatus === 'skipped'
+                            ? 'color-mix(in srgb, var(--add) 50%, transparent)'
+                            : undefined,
+                        backgroundImage:
+                          markerStatus === 'done' || markerStatus === 'skipped'
+                            ? undefined
+                            : 'repeating-linear-gradient(180deg, var(--muted) 0 4px, transparent 4px 8px)',
+                      }}
                     />
-                    {!last && (
-                      <span
-                        aria-hidden="true"
-                        className="my-1.5 w-0.5 flex-1 rounded-full"
-                        style={{
-                          background:
-                            markerStatus === 'done' || markerStatus === 'skipped'
-                              ? 'color-mix(in srgb, var(--add) 50%, transparent)'
-                              : undefined,
-                          backgroundImage:
-                            markerStatus === 'done' || markerStatus === 'skipped'
-                              ? undefined
-                              : 'repeating-linear-gradient(180deg, var(--muted) 0 4px, transparent 4px 8px)',
-                        }}
-                      />
-                    )}
-                  </div>
-                  <div className="min-w-0 pb-3">
-                    {isGroup(step) ? (
-                      <section
-                        aria-label={step.name ?? 'Side by side'}
-                        className="rounded-2xl border border-line-strong bg-raised p-3"
-                      >
-                        <div className="flex flex-wrap items-baseline gap-2 px-1 pb-3">
+                  )}
+                </div>
+                <div className="min-w-0 pb-2">
+                  {isGroup(step) ? (
+                    <section
+                      aria-label={step.name ?? 'Side by side'}
+                      className="rounded-xl border border-line-strong bg-raised p-2"
+                    >
+                      <div className="flex flex-col gap-0.5 px-1 pb-2">
+                        <div className="flex flex-wrap items-baseline gap-x-2">
                           <h3 className="m-0 text-md font-semibold">
                             {step.name ?? stages.map((stage) => stage.id).join(' and ')}
                           </h3>
                           <span className="text-xs text-muted">side by side</span>
-                          <span className="flex-1" />
-                          <span className="text-xs text-muted">
-                            {nextFirst === undefined
-                              ? 'The task is done when both are finished'
-                              : `${nextFirst.name} starts when both are finished`}
-                          </span>
                         </div>
-                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-3">
-                          {stages.map(card)}
-                        </div>
-                      </section>
-                    ) : (
-                      card(step)
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
-
-          <aside
-            aria-label="Task facts"
-            className="flex min-w-0 max-w-[380px] flex-[1_1_280px] flex-col gap-3"
-          >
-            <section className={`${CARD} p-4`}>
-              <h2 className="m-0 mb-3 text-sm font-semibold">Context and issue</h2>
-              <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-                <dt className="text-muted">Context</dt>
-                <dd className="m-0 truncate">
-                  {task.context === null
-                    ? 'The task notes'
-                    : `${task.context.source}${task.context.ref === '' ? '' : ` ${task.context.ref}`}`}
-                </dd>
-                <dt className="text-muted">Issue</dt>
-                <dd className="m-0 truncate">
-                  {task.issue === null ? (
-                    loadedSettings.settings.tracker.type === 'github' && open ? (
-                      <Button
-                        size="xs"
-                        variant="secondary"
-                        busy={issue.isPending}
-                        onClick={() => issue.mutate()}
-                      >
-                        Create issue
-                      </Button>
-                    ) : (
-                      <span className="text-muted">None</span>
-                    )
+                        <span className="text-xs text-muted">
+                          {nextFirst === undefined
+                            ? 'The task is done when both are finished'
+                            : `${nextFirst.name} starts when both are finished`}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-2">{stages.map(card)}</div>
+                    </section>
                   ) : (
-                    <a
-                      href={task.issue.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-link"
-                    >
-                      {task.issue.key}
-                      <ExternalLink size={12} aria-hidden="true" />
-                    </a>
+                    card(step)
                   )}
-                </dd>
-                <dt className="text-muted">Pull request</dt>
-                <dd className="m-0 truncate">
-                  {task.pr === null ? (
-                    <span className="text-muted">Opens in Release</span>
-                  ) : (
-                    <a href={task.pr} target="_blank" rel="noreferrer" className="text-link">
-                      {task.pr.replace(/^https:\/\/github\.com\//, '')}
-                    </a>
-                  )}
-                </dd>
-              </dl>
-            </section>
-
-            <section className={`${CARD} p-4`}>
-              <h2 className="m-0 mb-3 text-sm font-semibold">Time per stage</h2>
-              <TimeBars progress={progress} now={now} />
-            </section>
-
-            <section className={`${CARD} p-4`}>
-              <h2 className="m-0 mb-2 text-sm font-semibold">Latest events</h2>
-              <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
-                {loadedEvents
-                  // "Agent is working" lines only keep the clock fresh; they would fill the list.
-                  .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
-                  .reverse()
-                  .slice(0, 8)
-                  .map(({ seq, event }) => (
-                    <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
-                      <span className="text-xs text-muted tabular-nums">
-                        {formatAge(event.at, now)}
-                      </span>
-                      <span className="truncate">
-                        {describeEvent(event.type)}
-                        {typeof event.payload.stage === 'string' ? (
-                          <span className="text-muted">
-                            {' '}
-                            · {byId.get(event.payload.stage)?.name ?? event.payload.stage}
-                          </span>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </section>
-          </aside>
-        </div>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
       </div>
+
+      <DetailSection id="progress-context" title="Context and issue">
+        <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+          <dt className="text-muted">Context</dt>
+          <dd className="m-0 truncate">
+            {task.context === null
+              ? 'The task notes'
+              : `${task.context.source}${task.context.ref === '' ? '' : ` ${task.context.ref}`}`}
+          </dd>
+          <dt className="text-muted">Issue</dt>
+          <dd className="m-0 truncate">
+            {task.issue === null ? (
+              loadedSettings.settings.tracker.type === 'github' && open ? (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  busy={issue.isPending}
+                  onClick={() => issue.mutate()}
+                >
+                  Create issue
+                </Button>
+              ) : (
+                <span className="text-muted">None</span>
+              )
+            ) : (
+              <a
+                href={task.issue.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-link"
+              >
+                {task.issue.key}
+                <ExternalLink size={12} aria-hidden="true" />
+              </a>
+            )}
+          </dd>
+          <dt className="text-muted">Pull request</dt>
+          <dd className="m-0 truncate">
+            {task.pr === null ? (
+              <span className="text-muted">Opens in Release</span>
+            ) : (
+              <a href={task.pr} target="_blank" rel="noreferrer" className="text-link">
+                {task.pr.replace(/^https:\/\/github\.com\//, '')}
+              </a>
+            )}
+          </dd>
+        </dl>
+      </DetailSection>
+
+      <DetailSection id="progress-time" title="Time per stage" defaultOpen={false}>
+        <TimeBars progress={progress} now={now} />
+      </DetailSection>
+
+      <DetailSection id="progress-events" title="Latest events" defaultOpen={false}>
+        {latest.length === 0 && <p className="m-0 text-sm text-muted">No events yet.</p>}
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm empty:hidden">
+          {latest.map(({ seq, event }) => (
+            <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
+              <span className="text-xs text-muted tabular-nums">{formatAge(event.at, now)}</span>
+              <span className="truncate">
+                {describeEvent(event.type)}
+                {typeof event.payload.stage === 'string' ? (
+                  <span className="text-muted">
+                    {' '}
+                    · {byId.get(event.payload.stage)?.name ?? event.payload.stage}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </DetailSection>
 
       {sendingBack !== null && (
         <SendBackDialog
@@ -404,8 +401,8 @@ function Overview({
     return Math.max(8, (end - Date.parse(entry.startedAt)) / 60_000)
   }
   return (
-    <section aria-label="Overview" className={`${CARD} flex flex-col gap-4 p-4`}>
-      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+    <section aria-label="Overview" className={`${CARD} flex flex-col gap-3 p-3`}>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Figure value={`${count.done} of ${count.total}`} label="stages done" />
         <Figure
           value={formatDuration(task.createdAt, finished ? task.updatedAt : now)}
@@ -419,41 +416,23 @@ function Overview({
           label={sentBack === 1 ? 'time sent back' : 'times sent back'}
         />
       </div>
-      <div>
-        <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
-          {steps.map((step) => {
-            const ids = stagesOf(step).map((stage) => stage.id)
-            const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
-            return (
-              <span
-                key={step.id}
-                className="flex min-w-2.5 flex-col gap-0.5"
-                style={{ flex: `${weight} 1 0` }}
-              >
-                {ids.map((id) => (
-                  <Segment key={id} entry={byId.get(id)} />
-                ))}
-              </span>
-            )
-          })}
-        </div>
-        <ul className="m-0 mt-2 flex list-none flex-wrap gap-x-5 gap-y-1.5 p-0">
-          {steps.map((step) => {
-            const entries = stagesOf(step).map((stage) => byId.get(stage.id))
-            const name = step.name ?? entries.map((entry) => entry?.name).join(' and ')
-            const time = stepTime(entries, now)
-            return (
-              <li
-                key={step.id}
-                data-tip={time === null ? name : `${name}: ${time}`}
-                className="min-w-0 text-xs leading-4"
-              >
-                <b className="block font-medium text-ink-2">{name}</b>
-                <span className="block text-muted">{time ?? '–'}</span>
-              </li>
-            )
-          })}
-        </ul>
+      {/* The names and times of the steps are in the stage list below. */}
+      <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
+        {steps.map((step) => {
+          const ids = stagesOf(step).map((stage) => stage.id)
+          const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
+          return (
+            <span
+              key={step.id}
+              className="flex min-w-2.5 flex-col gap-0.5"
+              style={{ flex: `${weight} 1 0` }}
+            >
+              {ids.map((id) => (
+                <Segment key={id} entry={byId.get(id)} />
+              ))}
+            </span>
+          )
+        })}
       </div>
     </section>
   )
@@ -461,8 +440,8 @@ function Overview({
 
 function Figure({ value, label }: { value: string; label: string }) {
   return (
-    <div>
-      <div className="text-xl font-semibold tracking-tight tabular-nums">{value}</div>
+    <div className="min-w-0">
+      <div className="text-lg font-semibold tracking-tight tabular-nums">{value}</div>
       <div className="text-xs text-muted">{label}</div>
     </div>
   )
@@ -520,9 +499,11 @@ function TimeBars({ progress, now }: { progress: readonly StageProgress[]; now: 
       {rows.map(({ entry, minutes }) => (
         <div
           key={entry.stage}
-          className="grid grid-cols-[76px_minmax(0,1fr)_56px] items-center gap-2 text-xs"
+          className="grid grid-cols-[minmax(64px,30%)_minmax(0,1fr)_52px] items-center gap-2 text-xs"
         >
-          <span className="truncate text-ink-2">{entry.name}</span>
+          <span className="truncate text-ink-2" data-tip={entry.name}>
+            {entry.name}
+          </span>
           <span className="h-1.5 overflow-hidden rounded-full bg-raised">
             <span
               data-state={entry.status === 'current' ? (entry.state ?? 'running') : 'done'}
@@ -577,56 +558,89 @@ function StageCard({
   onSendBack: () => void
   onOpenFile: (name: string) => void
 }) {
+  // A finished stage is one line until the user opens it; the current one is always open.
+  const [opened, setOpened] = useState(false)
   const time = stageTime(progress, now)
   const current = progress.status === 'current'
   const upcoming = progress.status === 'upcoming'
+  const finished = progress.status === 'done' || progress.status === 'skipped'
   const state = progress.state
+  const facts = [
+    time,
+    stage.gate === 'manual' && stage.kind !== 'release' && !finished ? 'you approve' : null,
+    progress.approvedBy !== null && progress.status === 'done'
+      ? `Approved by ${progress.approvedBy === 'human' ? 'you' : progress.approvedBy}`
+      : null,
+  ].filter((fact) => fact !== null)
+
+  const title = (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className={`text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>
+        {progress.name}
+      </span>
+      {current && state !== null ? (
+        <span className="state-chip" data-state={state}>
+          {STATE_LABEL[state]}
+        </span>
+      ) : (
+        <span className="state-chip" data-state={progress.status === 'done' ? 'done' : 'draft'}>
+          {progress.status === 'done'
+            ? 'Done'
+            : progress.status === 'skipped'
+              ? 'Skipped'
+              : 'Not started'}
+        </span>
+      )}
+      {progress.rounds > 1 && (
+        <span className="rounded-md bg-badge px-1.5 font-mono text-2xs font-semibold text-ink-2">
+          ×{progress.rounds}
+        </span>
+      )}
+    </span>
+  )
+  const factLine = facts.length > 0 && (
+    <span className="block text-xs text-muted tabular-nums">{facts.join(' · ')}</span>
+  )
+
   return (
     <article
       aria-label={progress.name}
+      data-current={current ? '' : undefined}
       className={
         upcoming
-          ? 'rounded-xl border border-dashed border-line-strong px-4 py-3'
-          : `${CARD} px-4 py-3 ${current ? 'ring-1 ring-[color-mix(in_srgb,var(--accent)_25%,transparent)]' : ''}`
+          ? 'rounded-xl border border-dashed border-line-strong px-3 py-2.5'
+          : `${CARD} px-3 py-2.5 ${current ? 'ring-1 ring-[color-mix(in_srgb,var(--accent)_25%,transparent)]' : ''}`
       }
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h4 className={`m-0 text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>
-          {progress.name}
+      {finished ? (
+        <h4 className="m-0">
+          <button
+            type="button"
+            aria-expanded={opened}
+            onClick={() => setOpened(!opened)}
+            className="focus-inset flex w-full items-start gap-1.5 text-left"
+          >
+            <ChevronRight
+              size={ICON.xs}
+              aria-hidden="true"
+              className={`mt-1.5 shrink-0 text-muted transition-transform ${opened ? 'rotate-90' : ''}`}
+            />
+            <span className="flex min-w-0 flex-col gap-0.5">
+              {title}
+              {factLine}
+            </span>
+          </button>
         </h4>
-        {current && state !== null ? (
-          <span className="state-chip" data-state={state}>
-            {STATE_LABEL[state]}
-          </span>
-        ) : (
-          <span className="state-chip" data-state={progress.status === 'done' ? 'done' : 'draft'}>
-            {progress.status === 'done'
-              ? 'Done'
-              : progress.status === 'skipped'
-                ? 'Skipped'
-                : 'Not started'}
-          </span>
-        )}
-        {stage.gate === 'manual' && stage.kind !== 'release' && (
-          <span className="text-xs text-muted">you approve</span>
-        )}
-        {progress.rounds > 1 && (
-          <span className="rounded-md bg-badge px-1.5 font-mono text-2xs font-semibold text-ink-2">
-            ×{progress.rounds}
-          </span>
-        )}
-        <span className="flex-1" />
-        {time !== null && <span className="text-xs text-muted tabular-nums">{time}</span>}
-        {progress.approvedBy !== null && progress.status === 'done' && (
-          <span className="text-xs text-muted">
-            Approved by {progress.approvedBy === 'human' ? 'you' : progress.approvedBy}
-          </span>
-        )}
-      </div>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          <h4 className="m-0">{title}</h4>
+          {factLine}
+        </div>
+      )}
 
       {upcoming ? (
-        <p className="m-0 mt-1.5 text-sm text-muted">{finishedWhen(stage)}</p>
-      ) : (
+        <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
+      ) : finished && !opened ? null : (
         <>
           {activity !== undefined && (
             <p
@@ -635,21 +649,24 @@ function StageCard({
             >
               <StageMarker status="current" state="running" size={14} label="Working" />
               <span>Now</span>
-              <span className="truncate font-mono text-xs text-ink">{activity}</span>
+              <span className="truncate font-mono text-xs text-ink" data-tip={activity}>
+                {activity}
+              </span>
             </p>
           )}
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <div className="mt-2.5 flex flex-wrap gap-1.5 empty:hidden">
             {stage.output !== undefined && (
               <button
                 type="button"
                 onClick={() => onOpenFile(stage.output ?? '')}
                 disabled={file === undefined}
-                className="focus-inset inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-ink-2 hover:text-ink disabled:opacity-60"
+                data-tip={stage.output}
+                className={`${CHIP} focus-inset text-ink-2 hover:text-ink disabled:opacity-60`}
               >
-                <FileText size={13} aria-hidden="true" />
-                <span className="font-mono">{stage.output}</span>
+                <FileText size={13} aria-hidden="true" className="shrink-0" />
+                <span className="truncate font-mono">{stage.output}</span>
                 {file === undefined ? (
-                  <span className="text-muted">
+                  <span className="shrink-0 text-muted">
                     {fileStatus === 'loading'
                       ? '–'
                       : fileStatus === 'error'
@@ -657,19 +674,19 @@ function StageCard({
                         : 'not written yet'}
                   </span>
                 ) : (
-                  <span className="text-muted">{kilobytes(file.size)}</span>
+                  <span className="shrink-0 text-muted">{kilobytes(file.size)}</span>
                 )}
               </button>
             )}
             {progress.passes.length > 0 && (
-              <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-ink-2">
-                <CircleCheck size={13} aria-hidden="true" className="text-add" />
+              <span className={`${CHIP} text-ink-2`}>
+                <CircleCheck size={13} aria-hidden="true" className="shrink-0 text-add" />
                 {progress.passes.length} {progress.passes.length === 1 ? 'check' : 'checks'} passed
               </span>
             )}
             {progress.sentBackFor !== null && progress.rounds > 1 && (
-              <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-ink-2">
-                <Undo2 size={13} aria-hidden="true" />
+              <span className={`${CHIP} text-ink-2`}>
+                <Undo2 size={13} aria-hidden="true" className="shrink-0" />
                 Sent back {progress.rounds - 1}×
               </span>
             )}
@@ -678,17 +695,18 @@ function StageCard({
                 href={pr}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-6 items-center gap-1.5 rounded-md border border-line bg-raised px-2 text-xs text-link"
+                data-tip={pr}
+                className={`${CHIP} text-link`}
               >
-                <ExternalLink size={13} aria-hidden="true" />
-                {pr.replace(/^https:\/\/github\.com\//, '')}
-                {merged && <span className="text-muted">merged</span>}
+                <ExternalLink size={13} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">{pr.replace(/^https:\/\/github\.com\//, '')}</span>
+                {merged && <span className="shrink-0 text-muted">merged</span>}
               </a>
             )}
           </div>
 
           {progress.sentBackFor !== null && progress.rounds > 1 && (
-            <p className="m-0 mt-2 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-sm">
+            <p className="m-0 mt-2 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-sm break-words">
               {progress.sentBackFor}
             </p>
           )}
@@ -696,7 +714,7 @@ function StageCard({
           {current && progress.reasons.length > 0 && (
             <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm">
               {progress.reasons.map((reason) => (
-                <li key={reason} className="whitespace-pre-wrap text-ink">
+                <li key={reason} className="whitespace-pre-wrap break-words text-ink">
                   {reason}
                 </li>
               ))}
@@ -710,13 +728,13 @@ function StageCard({
               </summary>
               <ul className="m-0 mt-1.5 flex list-none flex-col gap-1 p-0">
                 {progress.passes.map((pass) => (
-                  <li key={pass} className="flex items-start gap-2 text-ink-2">
+                  <li key={pass} className="flex items-start gap-2 break-words text-ink-2">
                     <CircleCheck
                       size={14}
                       aria-hidden="true"
                       className="mt-0.5 shrink-0 text-add"
                     />
-                    {pass}
+                    <span className="min-w-0">{pass}</span>
                   </li>
                 ))}
               </ul>
@@ -724,52 +742,54 @@ function StageCard({
           )}
 
           {current && canAct && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(state === 'running' || state === 'needs-input') && (
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => onAction('report')}
-                >
-                  Mark as done
-                </Button>
-              )}
-              {(state === 'draft' || state === 'ready') && !STARTS_ITSELF.has(stage.kind) && (
-                <p className="m-0 self-center text-xs text-muted">{finishedWhen(stage)}</p>
-              )}
-              {(state === 'draft' || state === 'ready') && STARTS_ITSELF.has(stage.kind) && (
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => onAction('start')}
-                >
-                  Start
-                </Button>
-              )}
-              {(state === 'failed' || state === 'needs-input') &&
-                STARTS_ITSELF.has(stage.kind) &&
-                onStartAgent !== undefined && (
-                  <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />
-                )}
-              <Button size="xs" variant="ghost" disabled={busy} onClick={() => onAction('skip')}>
-                Skip
-              </Button>
-              <Button size="xs" variant="ghost" disabled={busy} onClick={onSendBack}>
-                Send back
-              </Button>
-              <span className="flex-1" />
+            <div className="mt-3 flex flex-col gap-2">
+              {/* First and wide: the user approves here while watching the terminal. */}
               {(state === 'review' || state === 'needs-input') && (
                 <Button
-                  size="xs"
                   variant="primary"
+                  className="w-full"
                   disabled={busy}
                   onClick={() => onAction('approve')}
                 >
                   {state === 'needs-input' ? 'Approve anyway' : 'Approve'}
                 </Button>
               )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(state === 'running' || state === 'needs-input') && (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => onAction('report')}
+                  >
+                    Mark as done
+                  </Button>
+                )}
+                {(state === 'draft' || state === 'ready') && !STARTS_ITSELF.has(stage.kind) && (
+                  <p className="m-0 text-xs text-muted">{finishedWhen(stage)}</p>
+                )}
+                {(state === 'draft' || state === 'ready') && STARTS_ITSELF.has(stage.kind) && (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => onAction('start')}
+                  >
+                    Start
+                  </Button>
+                )}
+                {(state === 'failed' || state === 'needs-input') &&
+                  STARTS_ITSELF.has(stage.kind) &&
+                  onStartAgent !== undefined && (
+                    <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />
+                  )}
+                <Button size="xs" variant="ghost" disabled={busy} onClick={() => onAction('skip')}>
+                  Skip
+                </Button>
+                <Button size="xs" variant="ghost" disabled={busy} onClick={onSendBack}>
+                  Send back
+                </Button>
+              </div>
             </div>
           )}
         </>

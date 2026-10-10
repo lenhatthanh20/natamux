@@ -63,7 +63,7 @@ The reference can be `42`, `#42`, `owner/name#42` or the full issue address. An 
 
 When the task has no linked issue yet, Natamux links it to the issue it reads. If it cannot find an issue number, the stage fails with **Give the issue number, such as #42, to read the context from**.
 
-The **Progress** tab shows the context source and the issue in **Context and issue**.
+The **Progress** view of the details panel shows the context source and the issue in **Context and issue**.
 
 ## Open an issue for a task
 
@@ -88,7 +88,7 @@ You choose when with `tracker.createIssue` in the `.natamux.json` file at the ro
 }
 ```
 
-To open an issue by hand, go to the **Progress** tab of the task and click **Create issue** in **Context and issue**. A toast says **Opened issue #N.** The button shows only when the task has no issue yet and the tracker is `github`. Set `tracker.type` to `none` to turn issues off.
+To open an issue by hand, open the **Progress** view in the details of the task and click **Create issue** in **Context and issue**. A toast says **Opened issue #N.** The button shows only when the task has no issue yet and the tracker is `github`. Set `tracker.type` to `none` to turn issues off.
 
 If opening an issue fails in the background, the task stays without an issue and the daemon logs the error. Click **Create issue** to try again.
 
@@ -118,4 +118,4 @@ natamux task link T-0001 --issue ABC-123 --url https://jira.example.com/browse/A
 
 `--issue` is the key and `--url` is its address. Add `--provider jira` to name the tracker. Without `--provider`, the provider is `github` when the address contains `github.com`, and `tracker` otherwise.
 
-The link shows in **Context and issue** on the **Progress** tab. With `tracker.linkInPr` on, the pull request body ends with `Tracked in ABC-123: https://…`. Natamux does not read from or write to the other tracker. Jira is not used for context unless you add a `skill` or `mcp` context source. See [CLI reference](/docs/reference/cli/).
+The link shows in **Context and issue** in the **Progress** view of the details panel. With `tracker.linkInPr` on, the pull request body ends with `Tracked in ABC-123: https://…`. Natamux does not read from or write to the other tracker. Jira is not used for context unless you add a `skill` or `mcp` context source. See [CLI reference](/docs/reference/cli/).

@@ -18,7 +18,7 @@ The window has five parts.
 | Title bar | The sidebar toggle, where you are, **Search or run a command**, the "N need you" chip, **New workspace** and the details toggle |
 | Sidebar | A filter field, **All tasks**, **Agents**, **Needs you**, and **Workspaces** grouped by repository |
 | Main area | The task list as a table, board or progress view, or the open workspace |
-| Details panel | The selected task: notes, workspace, pull request, subtasks, tries |
+| Details panel | The selected task, in two views: **Progress** (its stages, with Approve) and **Details** (notes, workspace, pull request, subtasks, tries) |
 | Status bar | The connection state, running count, **Repos**, **Import issues**, **Notify me**, shortcuts and the account menu |
 
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.

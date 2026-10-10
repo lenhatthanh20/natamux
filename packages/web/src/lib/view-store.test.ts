@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  detailsViewFor,
   initialViewData,
   isUnseen,
   useViewStore,
@@ -108,6 +109,23 @@ describe('applyRoute', () => {
     expect(useViewStore.getState().recent[0]).toBe('T-0007')
   })
 
+  it('opens the progress in the details for the address of the old Progress tab', () => {
+    reset()
+    useViewStore.getState().applyRoute({
+      kind: 'workspace',
+      id: 'T-0007',
+      tab: 'terminal',
+      file: null,
+      showProgress: true,
+    })
+    expect(useViewStore.getState()).toMatchObject({
+      changesTaskId: 'T-0007',
+      changesTab: 'terminal',
+      detailOpenByTask: { 'T-0007': true },
+      detailsView: 'progress',
+    })
+  })
+
   it('opens the details of a task over the list', () => {
     reset()
     useViewStore.getState().openChanges('T-0001')
@@ -206,5 +224,87 @@ describe('the details on a new visit', () => {
     useViewStore.getState().setDetailOpen('T-0001', true)
     expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0001': true })
     expect(globalThis.localStorage.getItem('natamux.detail-open')).toBeNull()
+  })
+})
+
+describe('detailsViewFor', () => {
+  it('uses the view the user picked last', () => {
+    expect(detailsViewFor('details', true)).toBe('details')
+    expect(detailsViewFor('progress', false)).toBe('progress')
+  })
+
+  it('shows the progress beside an open workspace, and the details over the list', () => {
+    expect(detailsViewFor(null, true)).toBe('progress')
+    expect(detailsViewFor(null, false)).toBe('details')
+  })
+})
+
+describe('the view of the details', () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear()
+  })
+
+  async function freshStore() {
+    vi.resetModules()
+    return (await import('./view-store')).useViewStore
+  }
+
+  it('remembers the view the user picks, also on the next visit', async () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().setDetailsView('details')
+    expect(useViewStore.getState().detailsView).toBe('details')
+    expect(globalThis.localStorage.getItem('natamux.details-view')).toBe('details')
+    const store = await freshStore()
+    expect(store.getState().detailsView).toBe('details')
+  })
+
+  it('starts with no picked view when nothing or something unknown was stored', async () => {
+    expect((await freshStore()).getState().detailsView).toBeNull()
+    globalThis.localStorage.setItem('natamux.details-view', 'other')
+    expect((await freshStore()).getState().detailsView).toBeNull()
+  })
+
+  it('stores Progress again when the user picks it again', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().setDetailsView('details')
+    useViewStore.getState().setDetailsView('progress')
+    expect(globalThis.localStorage.getItem('natamux.details-view')).toBe('progress')
+    expect(globalThis.localStorage.length).toBe(1)
+  })
+
+  it('works without a storage', async () => {
+    const blocked = () => {
+      throw new Error('blocked')
+    }
+    vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked })
+    const store = await freshStore()
+    expect(store.getState().detailsView).toBeNull()
+    expect(() => store.getState().setDetailsView('details')).not.toThrow()
+    expect(store.getState().detailsView).toBe('details')
+    vi.unstubAllGlobals()
+  })
+
+  it('opens the details of a task on its progress', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().showProgress('T-0003')
+    expect(useViewStore.getState()).toMatchObject({
+      detailOpenByTask: { 'T-0003': true },
+      detailsView: 'progress',
+    })
+  })
+
+  it('drops a remembered Progress tab, which is gone', async () => {
+    globalThis.localStorage.setItem(
+      'natamux.tab-by-task',
+      '{"T-0001":"progress","T-0002":"history"}',
+    )
+    const store = await freshStore()
+    expect(store.getState().tabByTask).toEqual({ 'T-0002': 'history' })
+  })
+
+  it('remembers no tab when the stored tabs are broken', async () => {
+    globalThis.localStorage.setItem('natamux.tab-by-task', '{oops')
+    const store = await freshStore()
+    expect(store.getState().tabByTask).toEqual({})
   })
 })
