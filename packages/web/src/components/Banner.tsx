@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ICON } from './ui/styles'
 
 // Amber asks for an answer; the other tones take the colors of their task state.
@@ -24,6 +24,26 @@ type BannerProps = {
 
 // A full-width line under the workspace header: what the task waits for, and what to do.
 export function Banner({ tone, icon: Icon, children, actions }: BannerProps) {
+  const textId = useId()
+  const text = useRef<HTMLParagraphElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [clamped, setClamped] = useState(false)
+
+  // A long message is cut to two lines. The end often says how to fix the problem, so More shows
+  // the rest, also on a phone, where there is no tooltip.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: new text may fit, or no longer fit.
+  useLayoutEffect(() => {
+    const element = text.current
+    if (element === null || expanded) {
+      return
+    }
+    const check = () => setClamped(element.scrollHeight > element.clientHeight + 1)
+    check()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check)
+    observer?.observe(element)
+    return () => observer?.disconnect()
+  }, [expanded, children])
+
   return (
     <div
       role="status"
@@ -35,9 +55,26 @@ export function Banner({ tone, icon: Icon, children, actions }: BannerProps) {
         aria-hidden="true"
         className={`shrink-0 ${tone === 'signal' ? 'text-signal' : 'text-(--chip-fg)'}`}
       />
-      <p className="line-clamp-2 min-w-0 flex-1 basis-60 text-ink" data-tip-overflow>
-        {children}
-      </p>
+      <div className="flex min-w-0 flex-1 basis-60 items-baseline gap-2">
+        <p
+          ref={text}
+          id={textId}
+          className={`min-w-0 flex-1 text-ink ${expanded ? 'break-words' : 'line-clamp-2'}`}
+        >
+          {children}
+        </p>
+        {(clamped || expanded) && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={textId}
+            onClick={() => setExpanded(!expanded)}
+            className="shrink-0 text-xs text-link hover:underline"
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
       {actions !== undefined && <div className="flex items-center gap-2">{actions}</div>}
     </div>
   )
