@@ -299,6 +299,30 @@ describe('closing a shell', () => {
     expect(ptys[0]?.signals).toEqual(['SIGHUP'])
   })
 
+  it('waits until the shells have ended, at most until a stubborn one is killed', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    const stubborn = ptys[1]
+    if (!stubborn) {
+      throw new Error('No second shell was started.')
+    }
+    stubborn.stubborn = true
+    let ended = false
+
+    const closing = service.closeAndWait('T-0001').then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS - 1)
+    expect(ended).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await closing
+    expect(stubborn.killed).toBe(true)
+    expect(service.list('T-0001')).toEqual([])
+  })
+
   it('does not hand the output of a closed shell to anyone', () => {
     const { spawn, ptys } = fakeSpawner()
     const heard: string[] = []
