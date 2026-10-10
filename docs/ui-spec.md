@@ -406,8 +406,8 @@ Anatomy (44px, pad 6/8, radius 6):
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (row keeps 44px, line 2 stays), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
-- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove project (not for the default project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
-- "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32.
+- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (not for the default project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
+- "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32. Hover `FolderMinus` button (24) "Remove finished workspaces in <project>": asks first, listing the task ids; removes the workspaces one after the other, skips any with changes that are not committed, and ends with one toast. Pinned workspaces are not part of it.
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
 - Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
 
@@ -677,7 +677,7 @@ Rules:
 | Start a task (dialog) or Create workspace (details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
-| Destructive actions (remove workspace, cancel task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
+| Destructive actions (remove workspace, remove finished workspaces, cancel task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
 
 ### 5.5 Deep links (WS-22)
 Routes (history API, no router package, `lib/route.ts`): `/` all tasks, `/board`, `/agents`, `/t/T-0018` (details open), `/w/T-0018/terminal|changes|history`, `/w/T-0018/changes?file=src/a.ts`. Back/forward work; reload restores the view; the daemon serves `index.html` for these paths.
