@@ -256,7 +256,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | 32 | empty-state hero |
 
 - Color: `currentColor`. Idle icon-button icon `--muted`, hover `--ink`. Menu item icon `--ink-2`.
-- Action icon map (one icon per meaning everywhere): new `Plus`, add repo `FolderPlus`, filter `ListFilter`, search `Search`, toggle sidebar `PanelLeft`, toggle details `PanelRight`, all tasks `ListTodo`, agents `LayoutGrid`, terminal `SquareTerminal`, changes `FileDiff`, history `History`, push `ArrowUpFromLine`, pull request `GitPullRequest`, branch `GitBranch`, copy `Copy`, more `Ellipsis`, close `X`, maximize `Maximize2` / restore `Minimize2`, new shell `SquareSplitHorizontal`, refresh `RefreshCw`, theme `SunMoon`, keyboard `Keyboard`, notifications `Bell` / `BellOff`, account `CircleUser`, pin `Pin` / `PinOff`, rename `Pencil`, remove workspace `FolderMinus`, external link `ExternalLink`, wrap `WrapText`.
+- Action icon map (one icon per meaning everywhere): new `Plus`, add repo `FolderPlus`, filter `ListFilter`, search `Search`, toggle sidebar `PanelLeft`, toggle details `PanelRight`, all tasks `ListTodo`, agents `LayoutGrid`, terminal `SquareTerminal`, changes `FileDiff`, history `History`, push `ArrowUpFromLine`, pull request `GitPullRequest`, branch `GitBranch`, copy `Copy`, more `Ellipsis`, settings `Settings`, close `X`, maximize `Maximize2` / restore `Minimize2`, new shell `SquareSplitHorizontal`, refresh `RefreshCw`, theme `SunMoon`, keyboard `Keyboard`, notifications `Bell` / `BellOff`, account `CircleUser`, pin `Pin` / `PinOff`, rename `Pencil`, remove workspace and remove repository `FolderMinus`, external link `ExternalLink`, wrap `WrapText`.
 
 ### 2.8 Motion
 
@@ -406,7 +406,7 @@ Anatomy (44px, pad 6/8, radius 6):
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (row keeps 44px, line 2 stays), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
-- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24). Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
+- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): New workspace, Settings, separator, Remove repository (not for the default repository; disabled with the line "Remove its workspaces first" while the repository has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
 - "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32.
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
 - Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
@@ -844,7 +844,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | K-04 | P1 | WS-22 | new `lib/route.ts`, `lib/view-store.ts`, `main.tsx`, `packages/daemon/src/server.ts` (SPA fallback) | Routes per 5.5 with history API; store <-> URL sync; back/forward; daemon serves `index.html` for unknown GET paths that accept HTML. |
 | K-05 | P1 | NAV-18 | `components/IssueImport.tsx` | Error state per 4.19 (danger icon, friendly sentence "GitHub CLI is not signed in. Run `gh auth login` in a terminal, then try again.", [Retry], "Show details" with the raw text); button label "Import" disabled with reason until something is picked, then "Import 3 issues". |
 | K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `components/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (current + last used), "Branches", "Task branches" (natamux/* collapsed by default); type to filter. Create button `aria-disabled` with reason "Enter a name". Dialog per Orca-like short flow: Repository, Name, Branch from, Agent, Advanced disclosure; Mod+Enter. |
-| K-07 | P2 | NAV-29 (part) | `components/RepoPanel.tsx` | Folder field with validation message; dialog fixes come from F-05. Repo remove/rename actions dropped until the daemon has the API. |
+| K-07 | P2 | NAV-29 (part) | `components/RepoPanel.tsx` | Folder field with validation message; dialog fixes come from F-05. Repo remove is in the sidebar group menu (`DELETE /repos/:id`); rename and Repos panel actions come later. |
 | K-08 | P2 | NAV-33 | `components/SignIn.tsx` | Show/hide token toggle (`Eye`/`EyeOff` icon button), helper "It is `NATAMUX_TOKEN` of the daemon. Without it, the daemon makes one and prints it when it starts.", busy state on Connect, inline error with `aria-describedby`. No logo work (no brand asset yet). |
 | K-09 | P2 | RA-29, NAV-32 | `index.html`, `public/favicon.svg` (new), `TerminalView.tsx`, `Dashboard.tsx` | Favicon (simple SVG, theme-safe); skeletons on first load (table, sidebar); guard xterm dispose before `open` finished (`dimensions` error); close WebSocket only after it opened (no "closed before established" warning). |
 | K-10 | P2 | WS-29 | — | Dropped for now: split direction for new shells waits for real pane splitting (drag-to-edge) in a later feature. |
@@ -858,7 +858,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
   - RA-18 (P1) partial: body stays 13px by default (density matches VS Code and keeps 2-line rows on a 900px screen); a Large UI size (14px) is one click away in the account menu.
   - WS-31 (P2) dropped: needs a CJK mono font package.
   - WS-29 (P2) split-direction part dropped until pane splitting exists; the hint part is done (W-13).
-  - NAV-29 (P2) repo row actions dropped until the daemon has remove/rename repo endpoints.
+  - NAV-29 (P2) repo rename, and remove in the Repos panel, wait for a rename endpoint. Remove is in the sidebar group menu.
   - NAV-33 (P2) logo part dropped: no brand asset yet.
   - W-16 (terminal find and links) waits for the owner's OK on two packages.
 

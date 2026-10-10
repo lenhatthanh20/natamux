@@ -41,6 +41,7 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `POST /workspaces` | Make a task with a worktree and optionally start an agent |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Repositories Natamux manages |
+| `DELETE /repos/:id` | Forget a repository. Answers 409 while it has workspaces |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
 

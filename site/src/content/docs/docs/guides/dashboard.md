@@ -35,6 +35,7 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 In the workspace list:
 
 - Click a repository to fold or unfold it. Click **+** next to it for **New workspace in** that repository. **Add a repository** and **Add a workspace** are in the section header.
+- Right-click a repository, press `Shift+F10`, or click **...** next to it for **New workspace**, **Settings** and **Remove repository**.
 - Finished workspaces (done or cancelled) are folded under "N finished".
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path** and **Remove workspace**. Pinned workspaces move to a **Pinned** section at the top.
@@ -143,6 +144,8 @@ Click **Repos** in the status bar, or **Add a repository** in the sidebar, to se
 3. Click **Add repository**.
 
 Each repository has a **Settings** button for its stages, context sources and issue tracker.
+
+To remove a repository, choose **Remove repository** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. The repository the daemon was started for cannot be removed.
 
 ## Import issues
 
