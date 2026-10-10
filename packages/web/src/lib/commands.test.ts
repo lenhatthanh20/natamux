@@ -162,9 +162,27 @@ describe('running a command', () => {
     commandById('stage.report')?.run?.(ctx)
     expect(actions.stageAction).toHaveBeenCalledWith('report')
     commandById('stage.send-back')?.run?.(ctx)
-    expect(actions.showTab).toHaveBeenCalledWith('progress')
+    expect(actions.showProgress).toHaveBeenCalledTimes(1)
     commandById('task.review.approved')?.run?.(ctx)
     expect(actions.taskEvent).toHaveBeenCalledWith('review.approved')
+  })
+
+  it('shows the progress in the details, not in a workspace tab', () => {
+    expect(commandById('tab.progress')).toBeUndefined()
+    expect(commandById('tab.docs')?.shortcuts).toEqual(['4'])
+    const { context: ctx, actions } = context({ workspaceOpen: true, hasSelection: true })
+    const command = commandById('progress.show')
+    expect(command && runnable(command, ctx)).toBe(true)
+    command?.run?.(ctx)
+    expect(actions.showProgress).toHaveBeenCalledTimes(1)
+    const empty = context().context
+    expect(command && runnable(command, empty)).toBe(false)
+    expect(command?.category).toBe('Workspace')
+    expect(command?.shortcuts).toBeUndefined()
+  })
+
+  it('binds no command to the 5 key, which showed the Docs tab before', () => {
+    expect(COMMANDS.filter((command) => command.shortcuts?.includes('5'))).toEqual([])
   })
 
   it('writes the palette title with its category', () => {

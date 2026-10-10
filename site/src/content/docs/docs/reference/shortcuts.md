@@ -60,8 +60,7 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 | Show the Terminal tab | `1` | A workspace is open |
 | Show the Changes tab | `2` | A workspace is open |
 | Show the History tab | `3` | A workspace is open |
-| Show the Progress tab | `4` | A workspace is open |
-| Show the Docs tab | `5` | A workspace is open |
+| Show the Docs tab | `4` | A workspace is open |
 | Read the changes and the history again | `Shift+R` | A workspace is open |
 
 `n` closes the open workspace and puts the cursor in the **Add a task to the backlog (n)** field.

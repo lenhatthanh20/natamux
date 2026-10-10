@@ -32,7 +32,7 @@ import {
 import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
-import { useViewStore } from '../lib/view-store'
+import { detailsViewFor, useViewStore } from '../lib/view-store'
 import { rowText, tabToOpen, waitReason } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
@@ -44,6 +44,7 @@ import { NeedsMeStrip } from './NeedsMeStrip'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
 import { ProgressBoard } from './ProgressBoard'
+import { ProgressTab } from './ProgressTab'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { RepoPanel } from './RepoPanel'
 import { ShortcutSheet } from './ShortcutSheet'
@@ -85,6 +86,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     search,
     selectedId,
     detailOpenByTask,
+    detailsView,
     sidebarOpen,
     drawerOpen,
     changesTaskId,
@@ -106,6 +108,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setSearch,
     select,
     setDetailOpen,
+    setDetailsView,
+    showProgress,
     setSidebarOpen,
     setDrawerOpen,
     openChanges,
@@ -375,6 +379,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
   // The open workspace's task, or else the task chosen in the list.
   const detailTask = changesTask ?? selectedTask
+  // Beside a workspace the user watches the agent, so the details show its progress first.
+  const besideWorkspace = changesTask !== null && changesTask.workspace !== null
   const detailGroup = detailTask === null ? null : tryGroup(detailTask)
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
@@ -453,6 +459,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     if (detailTask !== null) {
       setDetailOpen(detailTask.id, !detailOpen)
     }
+  }
+
+  // A stage file opens in the Docs tab of the task's workspace, which may have to open first.
+  const openStageFile = (task: Task, name: string) => {
+    if (changesTask?.id === task.id) {
+      fireAppEvent('open-doc', name)
+      return
+    }
+    openChanges(task.id, 'docs')
+    // The workspace is drawn first, then it hears the request.
+    setTimeout(() => fireAppEvent('open-doc', name), 80)
   }
 
   // Shows the sidebar if it is hidden, then runs `then` once it is on screen.
@@ -552,6 +569,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       }
     },
     showTab: (tab) => fireAppEvent('workspace-tab', tab),
+    showProgress: () => {
+      if (detailTask) {
+        showProgress(detailTask.id)
+      }
+    },
     back: () => {
       const focused = document.activeElement
       if (focused instanceof HTMLElement && focusKind(focused) === 'field') {
@@ -820,6 +842,35 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       fanOutMutation.mutate({ task: detailTask, count, start })
                     }
                     onClose={() => setDetailOpen(detailTask.id, false)}
+                    view={detailsViewFor(detailsView, besideWorkspace)}
+                    onViewChange={setDetailsView}
+                    progress={
+                      <ProgressTab
+                        task={detailTask}
+                        now={now}
+                        loadSettings={() => api.getSettings(detailTask.repo ?? 'default')}
+                        loadEvents={() => api.listEvents(detailTask.id)}
+                        // A task without a workspace has no stage files yet.
+                        loadFiles={async () =>
+                          detailTask.workspace === null ? [] : api.listStageFiles(detailTask.id)
+                        }
+                        act={async (action, input) => {
+                          const updated = await api.stageAction(detailTask.id, action, input)
+                          mergeTask(updated)
+                          return updated
+                        }}
+                        startAgent={(agent) =>
+                          agentMutation.mutateAsync({ task: detailTask, agent })
+                        }
+                        createIssue={async () => {
+                          const updated = await api.createIssue(detailTask.id)
+                          mergeTask(updated)
+                          return updated
+                        }}
+                        activity={activityQuery.data?.byTask[detailTask.id]}
+                        onOpenFile={(name) => openStageFile(detailTask, name)}
+                      />
+                    }
                   />
                 ),
               }
@@ -853,7 +904,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
             onFileChange={setChangesFile}
-            activity={activityQuery.data?.byTask[changesTask.id]}
             terminalActivity={activityQuery.data?.byTerminal[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
@@ -906,21 +956,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadTerminals={() => api.listTerminals(changesTask.id)}
             loadAgentTerminals={() => api.listAgentTerminals(changesTask.id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
-            loadSettings={() => api.getSettings(changesTask.repo ?? 'default')}
             loadStageFiles={() => api.listStageFiles(changesTask.id)}
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
             startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
-            stageAction={async (action, input) => {
-              const updated = await api.stageAction(changesTask.id, action, input)
-              mergeTask(updated)
-              return updated
-            }}
-            createIssue={async () => {
-              const updated = await api.createIssue(changesTask.id)
-              mergeTask(updated)
-              return updated
-            }}
           />
         ) : agentsOpen ? (
           <AgentPanes
@@ -1096,7 +1135,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   now={now}
                   activity={activityQuery.data?.byTask}
                   loadSettings={(repo) => api.getSettings(repo)}
-                  onOpenTask={(id) => openChanges(id, 'progress')}
+                  onOpenTask={(id) => {
+                    select(id)
+                    openChanges(id, 'terminal')
+                    showProgress(id)
+                  }}
                 />
               ) : layout === 'board' ? (
                 <TaskBoard

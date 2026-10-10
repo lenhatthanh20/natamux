@@ -1404,6 +1404,8 @@ describe('agent activity', () => {
       headers: authorization,
       payload: { title: 'Fix the bug' },
     })
+    // Hooks from a terminal count only while the task has its workspace.
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
     await app.inject({
       method: 'POST',
       url: '/hooks/claude-code',
