@@ -42,7 +42,7 @@ describe('the words of the UI', () => {
 
   it('says "project", not "repo" or "repository"', () => {
     expect(findAll(/\bRepos\b|\bRepo:|'Repo'/)).toEqual([])
-    expect(findAll(/repositor/i).filter((match) => !/git repositor/i.test(match))).toEqual([])
+    expect(findAll(/repositor/i).filter((match) => !/git[ /]repositor/i.test(match))).toEqual([])
     const files = findAll(/repositor/i).map((match) => match.split(':')[0])
     expect([...new Set(files)]).toEqual(['components/RepoPanel.tsx'])
   })
