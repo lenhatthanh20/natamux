@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   initialViewData,
   isUnseen,
@@ -152,5 +152,26 @@ describe('the shown tab', () => {
     useViewStore.getState().setChangesFile('src/a.ts')
     useViewStore.getState().openChanges('T-0002')
     expect(useViewStore.getState().changesFile).toBeNull()
+  })
+})
+
+describe('the details on a new visit', () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear()
+  })
+
+  it('starts with the details closed, whatever was stored', async () => {
+    globalThis.localStorage.setItem('natamux.detail-open', '{"T-0001":true}')
+    // The store reads storage when its module loads.
+    vi.resetModules()
+    const fresh = await import('./view-store')
+    expect(fresh.useViewStore.getState().detailOpenByTask).toEqual({})
+  })
+
+  it('does not store the details flags', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().setDetailOpen('T-0001', true)
+    expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0001': true })
+    expect(globalThis.localStorage.getItem('natamux.detail-open')).toBeNull()
   })
 })

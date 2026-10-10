@@ -10,7 +10,6 @@ export type Layout = 'table' | 'board' | 'progress'
 const LAYOUT_KEY = 'natamux.layout'
 const PINNED_KEY = 'natamux.pinned'
 const SIDEBAR_OPEN_KEY = 'natamux.sidebar-open'
-const DETAIL_OPEN_KEY = 'natamux.detail-open'
 const TAB_KEY = 'natamux.tab-by-task'
 const PANE_LAYOUT_KEY = 'natamux.pane-layout'
 const SHOW_FINISHED_KEY = 'natamux.show-finished'
@@ -70,26 +69,6 @@ function saveSidebarOpen(open: boolean): void {
     globalThis.localStorage?.setItem(SIDEBAR_OPEN_KEY, String(open))
   } catch {
     // Not kept; the next visit shows the sidebar.
-  }
-}
-
-function savedDetailOpen(): Record<string, boolean> {
-  try {
-    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(DETAIL_OPEN_KEY) ?? '{}')
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return {}
-    }
-    return Object.fromEntries(Object.entries(value).filter(([, open]) => typeof open === 'boolean'))
-  } catch {
-    return {}
-  }
-}
-
-function saveDetailOpen(open: Record<string, boolean>): void {
-  try {
-    globalThis.localStorage?.setItem(DETAIL_OPEN_KEY, JSON.stringify(open))
-  } catch {
-    // Not kept; the next visit starts with the details closed.
   }
 }
 
@@ -347,7 +326,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   recent: savedRecent(),
   pinned: savedPinned(),
   sidebarOpen: savedSidebarOpen(),
-  detailOpenByTask: savedDetailOpen(),
   tabByTask: savedTabs(),
   paneLayout: savedPaneLayout(),
   toggleStateFilter: (state) =>
@@ -374,7 +352,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   setDetailOpen: (taskId, open) =>
     set((current) => {
       const detailOpenByTask = withDetailOpen(current.detailOpenByTask, taskId, open)
-      saveDetailOpen(detailOpenByTask)
       return { detailOpenByTask }
     }),
   setSidebarOpen: (open) => {
@@ -416,7 +393,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
       }
       if (route.kind === 'task') {
         const detailOpenByTask = withDetailOpen(current.detailOpenByTask, route.id, true)
-        saveDetailOpen(detailOpenByTask)
         return { changesTaskId: null, agentsOpen: false, selectedId: route.id, detailOpenByTask }
       }
       // A list address shows no details: the address of the details is /t/<id>.
@@ -428,7 +404,6 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
         current.selectedId !== null && open
           ? withDetailOpen(current.detailOpenByTask, current.selectedId, false)
           : current.detailOpenByTask
-      saveDetailOpen(detailOpenByTask)
       return { layout, changesTaskId: null, agentsOpen: false, detailOpenByTask }
     }),
   rememberTab: (taskId, tab) =>

@@ -1033,6 +1033,80 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
+  it('opens the changes from the sidebar without the details', async () => {
+    installDaemon([
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Actions for T-0002' }))
+    await user.click(screen.getByRole('menuitem', { name: 'View changes' }))
+    expect(await screen.findByRole('region', { name: 'Changes of T-0002' })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Hide details' }))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+  })
+
+  it('keeps the details of a task open after a visit to another workspace', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0002' })).toBeNull()
+
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
+  it('edits a selected task with closed details', async () => {
+    installDaemon([makeTask({ id: 'T-0001', title: 'Fix timezone bug' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('j')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    await user.keyboard('e')
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    expect(await within(details).findByRole('form', { name: 'Edit T-0001' })).toBeTruthy()
+  })
+
   it('shows the running agents side by side and closes a pane', async () => {
     installDaemon([
       reviewTask,
@@ -1079,6 +1153,8 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0098' })
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
     const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
     expect(within(sidebar).getByRole('button', { name: /Fix the login/ })).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/workspaces')).toBe(

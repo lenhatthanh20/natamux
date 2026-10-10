@@ -714,7 +714,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       afterPick()
                     }}
                     onViewChanges={(id) => {
-                      chooseTask(id)
+                      select(id)
                       openChanges(id, 'changes')
                       afterPick()
                     }}
@@ -1107,7 +1107,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)
-            chooseTask(task.id)
+            select(task.id)
             openChanges(task.id, 'terminal')
             toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
           }}
