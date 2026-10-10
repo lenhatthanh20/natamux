@@ -69,7 +69,25 @@ describe('TerminalService', () => {
     expect(ptys[0]?.options.env).toMatchObject({
       NO_PROXY: '127.0.0.1,localhost,::1',
       no_proxy: '127.0.0.1,localhost,::1',
+      NATAMUX_TASK_ID: 'T-0001',
       NATAMUX_TERMINAL: '1',
+      PORT: '20010',
+    })
+  })
+
+  it('keeps the hosts the user already has in NO_PROXY', () => {
+    const { spawn, ptys } = fakeSpawner()
+    const service = new TerminalService({
+      spawn,
+      workspaceOf: (taskId) => `/work/${taskId}`,
+      env: { PATH: '/bin', NO_PROXY: '.corp.example.com' },
+    })
+
+    service.attach('T-0001', client(), size)
+
+    expect(ptys[0]?.options.env).toMatchObject({
+      NO_PROXY: '.corp.example.com,127.0.0.1,localhost,::1',
+      no_proxy: '.corp.example.com,127.0.0.1,localhost,::1',
     })
   })
 
