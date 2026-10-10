@@ -95,7 +95,8 @@ export class GenericSignals {
       })
       return
     }
-    this.tasks.recordActivity(taskId)
+    // Output also comes from a redraw or the user's typing, so only a hook ends a background wait.
+    this.tasks.recordActivity(taskId, { endsWait: false })
   }
 
   // A shell that cannot find the agent prints so at once. The stage would wait for an agent that
