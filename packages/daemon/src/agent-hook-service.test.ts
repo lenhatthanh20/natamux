@@ -62,6 +62,8 @@ describe('AgentHookService', () => {
 
   it('keeps what the agent of each terminal does apart', () => {
     const task = tasks.createTask({ title: 'Fix it' })
+    // Hooks from a terminal count only while the task has its workspace.
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
     const edit = (path: string) =>
       hook('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: path } })
 
