@@ -27,7 +27,7 @@ describe('ReviewBanner', () => {
     expect(onSendBack).toHaveBeenCalledTimes(1)
   })
 
-  it('has one Approve per stage in review of a group', async () => {
+  it('approves the one stage of a group that is in review', async () => {
     const onApprove = vi.fn()
     render(
       <ReviewBanner
@@ -39,9 +39,27 @@ describe('ReviewBanner', () => {
     )
 
     expect(screen.getByRole('status').textContent).toContain('Ready for review: Test spec')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Approve Test spec' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^Approve/ }))
     expect(onApprove).toHaveBeenCalledWith('test-spec')
-    expect(screen.queryByRole('button', { name: 'Approve Implement' })).toBeNull()
+  })
+
+  it('has one Approve per stage when several stages of a group are in review', async () => {
+    const onApprove = vi.fn()
+    render(
+      <ReviewBanner
+        task={{ stage: 'build', lanes: { 'test-spec': 'review', implement: 'review' } }}
+        approving={null}
+        onApprove={onApprove}
+        onSendBack={() => {}}
+      />,
+    )
+
+    expect(screen.getByRole('status').textContent).toContain(
+      'Ready for review: Test spec and Implement',
+    )
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Approve Implement' }))
+    expect(onApprove).toHaveBeenCalledWith('implement')
+    expect(screen.getByRole('button', { name: 'Approve Test spec' })).toBeTruthy()
   })
 
   it('stops a second approval while the first is on its way', () => {
