@@ -452,6 +452,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/agent', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const { agent, prompt, base } = startAgentBodySchema.parse(request.body)
+    // Checked before a workspace is made for nothing.
+    if (!(LAUNCHABLE_AGENTS as readonly string[]).includes(agent)) {
+      throw new UnknownAgentError(agent)
+    }
     const makeWorkspace = () => options.workspaces.create(id, base)
     return { task: await options.stages.startByHand(id, agent, prompt, makeWorkspace) }
   })
