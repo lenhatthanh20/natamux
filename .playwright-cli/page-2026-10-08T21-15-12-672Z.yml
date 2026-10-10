@@ -1,8 +1,0 @@
-- main [ref=e3]:
-  - heading "Helmsman" [level=1] [ref=e4]
-  - paragraph [ref=e5]: Paste the token the daemon printed when it started. It stays in this browser.
-  - generic [ref=e6]:
-    - generic [ref=e7]:
-      - generic [ref=e8]: Daemon token
-      - textbox "Daemon token" [ref=e9]
-    - button "Connect" [ref=e10] [cursor=pointer]
