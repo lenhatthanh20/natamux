@@ -46,9 +46,10 @@ describe('loadConfig', () => {
     expect(config.dataDir).toBe(join('/work/repo', '.natamux'))
   })
 
-  it('uses the working directory as the repository and keeps worktrees in the data directory', () => {
+  it('has no repository unless one is set, and keeps worktrees in the data directory', () => {
     const config = loadConfig({}, '/work/repo')
-    expect(config.repoDir).toBe('/work/repo')
+    expect(config.repoDir).toBeUndefined()
+    expect(loadConfig({ NATAMUX_REPO_DIR: '  ' }, '/work/repo').repoDir).toBeUndefined()
     expect(config.worktreesDir).toBe(join('/work/repo', '.natamux', 'worktrees'))
   })
 

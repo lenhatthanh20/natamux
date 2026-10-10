@@ -14,11 +14,11 @@ import {
   utilityProcess,
 } from 'electron'
 import { writeCliShim } from './cli-shim.js'
-import { loadOrCreateDaemonToken } from './daemon-access.js'
+import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
-import { isGitRepository, loadSettings, saveSettings } from './settings.js'
+import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { Updater } from './updater.js'
 
@@ -53,13 +53,13 @@ function log(text: string): void {
   }
 }
 
-// Asks for the repository until a git repository is picked. Undefined: the user gave up.
-async function pickRepository(message: string): Promise<string | undefined> {
+// Asks for a folder until a git repository is picked. Undefined: the user gave up.
+async function pickRepository(): Promise<string | undefined> {
   for (;;) {
     const answer = await dialog.showOpenDialog({
-      title: 'Open a repository',
-      message,
-      buttonLabel: 'Open',
+      title: 'Add a project',
+      message: 'Pick the top folder of a git repository.',
+      buttonLabel: 'Add',
       properties: ['openDirectory'],
     })
     const dir = answer.filePaths[0]
@@ -77,7 +77,7 @@ async function pickRepository(message: string): Promise<string | undefined> {
   }
 }
 
-async function startDaemon(repoDir: string): Promise<void> {
+async function startDaemon(repoDir: string | undefined): Promise<void> {
   // The packaged app keeps the built dashboard in its resources (electron-builder.yml).
   const parts = findParts({
     ...process.env,
@@ -112,7 +112,8 @@ async function startDaemon(repoDir: string): Promise<void> {
       binDir,
       loginPath,
     }),
-    cwd: repoDir,
+    // Not a project folder: the daemon may run with none.
+    cwd: app.getPath('home'),
     stdio: 'pipe',
     serviceName: 'Natamux daemon',
   })
@@ -227,15 +228,23 @@ async function confirmStop(action: string): Promise<boolean> {
   return answer.response === 0
 }
 
-async function openRepository(): Promise<void> {
-  const dir = await pickRepository('The daemon starts again with this repository.')
-  if (dir === undefined || !(await confirmStop('Restart'))) {
+// The daemon tells the open dashboards, so the project shows up without a restart.
+async function addProjectFromMenu(): Promise<void> {
+  if (dashboardUrl === '' || daemonExited) {
     return
   }
-  saveSettings(settingsFile, { ...loadSettings(settingsFile), repoDir: dir })
-  quitConfirmed = true
-  app.relaunch()
-  app.quit()
+  const dir = await pickRepository()
+  if (dir === undefined) {
+    return
+  }
+  const problem = await addProject(dashboardUrl, daemonToken, dir)
+  if (problem !== undefined) {
+    await dialog.showMessageBox({
+      type: 'warning',
+      message: `Natamux could not add ${dir}`,
+      detail: problem,
+    })
+  }
 }
 
 function buildMenu(): void {
@@ -264,7 +273,7 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'Open Repository…', accelerator: 'CmdOrCtrl+Shift+O', click: openRepository },
+        { label: 'Add Project…', accelerator: 'CmdOrCtrl+Shift+O', click: addProjectFromMenu },
         { label: 'Show Daemon Log', click: () => void shell.openPath(logFile) },
         { type: 'separator' },
         mac ? { role: 'close' } : { role: 'quit' },
@@ -349,18 +358,8 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(async () => {
     updater = makeUpdater()
     buildMenu()
-    let repoDir = loadSettings(settingsFile).repoDir
-    if (repoDir === undefined || !isGitRepository(repoDir)) {
-      repoDir = await pickRepository('Pick the repository whose tasks Natamux runs.')
-      if (repoDir === undefined) {
-        quitConfirmed = true
-        app.quit()
-        return
-      }
-      saveSettings(settingsFile, { ...loadSettings(settingsFile), repoDir })
-    }
     try {
-      await startDaemon(repoDir)
+      await startDaemon(startingRepoDir(loadSettings(settingsFile)))
     } catch (error) {
       quitConfirmed = true
       await dialog.showMessageBox({

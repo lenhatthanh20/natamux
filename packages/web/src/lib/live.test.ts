@@ -1,6 +1,6 @@
 import type { Task } from '@natamux/core'
 import { describe, expect, it, vi } from 'vitest'
-import { closeSocket, liveSocketUrl, parseLiveMessage } from './live'
+import { closeSocket, isReposChanged, liveSocketUrl, parseLiveMessage } from './live'
 
 const task: Task = {
   id: 'T-0001',
@@ -61,6 +61,20 @@ describe('parseLiveMessage', () => {
     ['a task that is not valid', JSON.stringify({ task: { id: 'nope' } })],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
+  })
+})
+
+describe('isReposChanged', () => {
+  it('knows the message that the projects changed', () => {
+    expect(isReposChanged(JSON.stringify({ kind: 'repos.changed' }))).toBe(true)
+  })
+
+  it.each([
+    ['text that is not JSON', 'not json'],
+    ['JSON that is not an object', 'null'],
+    ['a task message', JSON.stringify({ kind: 'task.created', task })],
+  ])('is false for %s', (_name, text) => {
+    expect(isReposChanged(text)).toBe(false)
   })
 })
 

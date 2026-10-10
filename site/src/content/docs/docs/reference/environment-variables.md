@@ -15,7 +15,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `NATAMUX_TOKEN` | A random token for each run, printed at start | The token every request needs |
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
-| `NATAMUX_REPO_DIR` | The current folder | The git repository tasks get worktrees from |
+| `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |
 | `NATAMUX_WEB_DIR` | none | The built dashboard. With it, the daemon serves the dashboard and the API under `/api` on its own port |
 | `NATAMUX_WEB_INDEX` | `<web dir>/index.html` when `NATAMUX_WEB_DIR` is set | The dashboard's `index.html`, for deep links |
@@ -61,7 +61,7 @@ The desktop app starts the daemon and sets these for it. It passes your other `N
 | `NATAMUX_PORT` | 4317 when free, else a free port |
 | `NATAMUX_TOKEN` | A token kept in the app's user data folder |
 | `NATAMUX_DATA_DIR` | `<user data>/data` |
-| `NATAMUX_REPO_DIR` | The repository you picked |
+| `NATAMUX_REPO_DIR` | The repository an older version asked for, if any. Not set on a new install |
 | `NATAMUX_WEB_DIR` | The dashboard in the app's resources, unless you set it |
 
 The desktop app also reads `NATAMUX_DESKTOP_SMOKE` and `NATAMUX_DESKTOP_SMOKE_SHOT`. They are for testing the app.

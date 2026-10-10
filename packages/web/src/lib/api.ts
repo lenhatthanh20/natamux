@@ -338,10 +338,9 @@ export function createApi(
       return taskTemplateSchema.parse(body.template)
     },
 
-    async createTaskFromTemplate(templateId: string, title: string): Promise<Task> {
-      const body = asRecord(
-        await request('POST', `/templates/${encodeURIComponent(templateId)}/tasks`, { title }),
-      )
+    async createTaskFromTemplate(templateId: string, title: string, repo?: string): Promise<Task> {
+      const path = `/templates/${encodeURIComponent(templateId)}/tasks`
+      const body = asRecord(await request('POST', path, { title, repo }))
       return taskSchema.parse(body.task)
     },
 

@@ -225,7 +225,9 @@ function installDaemon(
       const entry = { text: 'Bash: pnpm test', at: '2026-10-08T09:00:00Z' }
       return json({ activity: { 'T-0002': entry } })
     }
-    if (path === '/api/git/branches' && method === 'GET') {
+    // The dashboard names the project in a query.
+    const route = path.split('?')[0]
+    if (route === '/api/git/branches' && method === 'GET') {
       return json({ branches: ['main', 'release'], current: 'main' })
     }
     if (path === '/api/repos' && method === 'GET') {
@@ -255,7 +257,7 @@ function installDaemon(
       const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
       return json({ terminals: ['1'], agents: task?.agent ? ['1'] : [] })
     }
-    if (path === '/api/github/issues' && method === 'GET') {
+    if (route === '/api/github/issues' && method === 'GET') {
       return json({
         issues: [
           {
@@ -343,7 +345,10 @@ function installDaemon(
   const setTasks = (next: Task[]) => {
     tasks = next
   }
-  return { calls, setTasks }
+  const setRepos = (next: (typeof defaultRepo)[]) => {
+    repos = next
+  }
+  return { calls, setTasks, setRepos }
 }
 
 // Full texts live in data-tip attributes, which the tooltip layer shows on hover.
@@ -1082,7 +1087,7 @@ describe('App', () => {
     await user.click(await within(sidebar).findByRole('button', { name: 'Actions for natamux' }))
     expect(screen.getByRole('menuitem', { name: 'Start a task' })).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: 'Remove project' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Remove project' })).toBeTruthy()
     await user.keyboard('{Escape}')
 
     await user.click(within(sidebar).getByRole('button', { name: 'Actions for Web app' }))
@@ -1211,7 +1216,95 @@ describe('App', () => {
       expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(true),
     )
     const created = calls.find((call) => call.method === 'POST' && call.path === '/api/tasks')
-    expect(JSON.parse(created?.body ?? '{}').repo).toBeUndefined()
+    expect(JSON.parse(created?.body ?? '{}').repo).toBe('default')
+  })
+
+  it.each([
+    ['the default project', defaultRepo],
+    ['another project', webRepo],
+  ])('removes %s when it is the last one, and then offers to add one', async (_name, last) => {
+    const { calls } = installDaemon([], [], [last])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await user.type(screen.getByLabelText('New task title'), 'Later')
+    expect(byTip(document.body, 'Add a project first')).toBeNull()
+
+    const actions = `Actions for ${last.name}`
+    await user.click(await within(sidebar).findByRole('button', { name: actions }))
+    await user.click(screen.getByRole('menuitem', { name: 'Remove project' }))
+    const confirm = screen.getByRole('dialog', { name: `Remove ${last.name} from Natamux?` })
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await within(sidebar).findByText('No projects yet')).toBeTruthy()
+    expect(within(sidebar).getByRole('button', { name: 'Add project' })).toBeTruthy()
+    expect(byTip(document.body, 'Add a project first')).toBeTruthy()
+    expect(
+      calls.filter((call) => call.method === 'DELETE' && call.path === `/api/repos/${last.id}`),
+    ).toHaveLength(1)
+  })
+
+  it('starts with no projects: the sidebar offers one, and new tasks wait for it', async () => {
+    const { calls } = installDaemon([], [], [])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    expect(await within(sidebar).findByText('No projects yet')).toBeTruthy()
+
+    await user.type(screen.getByLabelText('New task title'), 'Too early{Enter}')
+    expect(byTip(document.body, 'Add a project first')).toBeTruthy()
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/tasks')).toBe(false)
+
+    const titleBar = screen.getByRole('banner')
+    await user.click(within(titleBar).getByRole('button', { name: /^Start a task/ }))
+    expect(await screen.findByText('Add a project first.')).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Start a task' })).toBeNull()
+    const panel = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(panel.isConnected).toBe(false))
+
+    await user.keyboard('c')
+    expect(screen.queryByRole('dialog', { name: 'Start a task' })).toBeNull()
+    const byKey = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(byKey.isConnected).toBe(false))
+
+    await user.click(within(sidebar).getByRole('button', { name: 'Add project' }))
+    const again = await screen.findByRole('dialog', { name: 'Projects' })
+    await user.type(within(again).getByLabelText('Project folder'), '/work/web')
+    await user.click(within(again).getByRole('button', { name: 'Add project' }))
+
+    expect(await within(sidebar).findByRole('button', { name: 'Actions for web' })).toBeTruthy()
+    expect(within(sidebar).queryByText('No projects yet')).toBeNull()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(byTip(document.body, 'Add a project first')).toBeNull())
+    expect(
+      calls.filter((call) => call.method === 'POST' && call.path === '/api/repos'),
+    ).toHaveLength(1)
+
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: /^Start/ }))
+    expect(await screen.findByRole('dialog', { name: 'Start a task' })).toBeTruthy()
+  })
+
+  it('loads the projects again when the daemon says they changed', async () => {
+    const { setRepos } = installDaemon([runningTask], [], [defaultRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await within(sidebar).findByRole('button', { name: 'Actions for natamux' })
+
+    setRepos([defaultRepo, webRepo])
+    act(() => {
+      for (const socket of FakeSocket.instances) {
+        socket.onmessage?.({ data: JSON.stringify({ kind: 'repos.changed' }) })
+      }
+    })
+
+    expect(await within(sidebar).findByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
   })
 
   it('shows why the daemon did not remove a project and keeps its group', async () => {

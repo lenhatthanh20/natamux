@@ -4,7 +4,7 @@ The desktop app: an Electron shell for macOS and Windows. It holds no logic of i
 
 ## What it does
 
-- **First run:** asks for the repository whose tasks Natamux runs. **File → Open Repository…** changes it later; the daemon starts again.
+- **First run:** opens the dashboard with no project. Add one in the dashboard, or with **File → Add Project…**, which adds it without a restart.
 - **Starts the daemon** in an Electron utility process, with:
   - `NATAMUX_WEB_DIR` set, so the daemon serves the built dashboard and the API (`/api/...`) on one port;
   - port 4317 when free, else any free port;

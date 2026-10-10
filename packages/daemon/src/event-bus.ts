@@ -6,6 +6,8 @@ export type DaemonMessage =
   | { kind: 'task.updated'; task: Task; event: TaskEvent; accepted: boolean; moved?: boolean }
   // A change that is not worth a line in the log, such as checks that started to run.
   | { kind: 'task.changed'; task: Task }
+  // A repository was added or removed. The dashboards load the list again.
+  | { kind: 'repos.changed' }
 
 export type MessageListener = (message: DaemonMessage) => void
 

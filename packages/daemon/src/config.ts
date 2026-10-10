@@ -8,7 +8,8 @@ export type DaemonConfig = {
   host: string
   port: number
   dataDir: string
-  repoDir: string
+  // The repository to add once as the first project. Undefined: start with none.
+  repoDir: string | undefined
   worktreesDir: string
   // The built dashboard's index.html, for deep links. Undefined: the daemon serves no page.
   webIndexPath: string | undefined
@@ -34,7 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
     host: env.NATAMUX_HOST?.trim() || LOOPBACK_HOST,
     port,
     dataDir,
-    repoDir: env.NATAMUX_REPO_DIR?.trim() || cwd,
+    repoDir: env.NATAMUX_REPO_DIR?.trim() || undefined,
     worktreesDir: env.NATAMUX_WORKTREES_DIR?.trim() || join(dataDir, 'worktrees'),
     webIndexPath:
       env.NATAMUX_WEB_INDEX?.trim() ||

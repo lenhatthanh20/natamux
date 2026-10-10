@@ -37,9 +37,10 @@ export class FileNotChangedError extends Error {
 
 type WorkspaceServiceOptions = {
   tasks: TaskService
-  repoDir: string
+  // The repository of every task, when there is no `repos`.
+  repoDir?: string
   worktreesDir: string
-  // Other repositories; a task names its own in `repo`. Without it, every task uses repoDir.
+  // The repositories; a task names its own in `repo`.
   repos?: RepoService
   gh?: RunGh
   // Called after a workspace is made, for example to run its setup script.
@@ -73,7 +74,7 @@ export function branchNameFor(task: Pick<Task, 'id' | 'title'>): string {
 
 export class WorkspaceService {
   private readonly tasks: TaskService
-  private readonly repoDir: string
+  private readonly repoDir: string | undefined
   private readonly worktreesDir: string
   private readonly repos: RepoService | undefined
   private readonly gh: RunGh
@@ -102,7 +103,13 @@ export class WorkspaceService {
 
   // The repository folder of a task, or of a repository id (null: the default one).
   repoDirOf(repo: string | null): string {
-    return this.repos ? this.repos.pathOf(repo) : this.repoDir
+    if (this.repos !== undefined) {
+      return this.repos.pathOf(repo)
+    }
+    if (this.repoDir === undefined) {
+      throw new Error('WorkspaceService needs repos or repoDir')
+    }
+    return this.repoDir
   }
 
   // The branches a workspace in that repository can start from.

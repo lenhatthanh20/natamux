@@ -33,4 +33,8 @@ describe('boardSections', () => {
     expect(section?.title).toBe(DEFAULT_REPO_ID)
     expect(section?.steps.map((step) => step.id)).toEqual(['context', 'spec'])
   })
+
+  it('shows nothing when there are no projects and no tasks', () => {
+    expect(boardSections([], [], new Map(), NOW)).toEqual([])
+  })
 })

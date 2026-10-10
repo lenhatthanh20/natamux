@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
@@ -26,10 +26,133 @@ function gitFolder(name: string): string {
 }
 
 describe('RepoService', () => {
-  it('always has the default repository', () => {
+  it('adds the repository it starts with as "default", and keeps it', () => {
     expect(repos.list()).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
     expect(repos.pathOf(null)).toBe(repo.dir)
     expect(repos.pathOf('default')).toBe(repo.dir)
+    const saved = JSON.parse(readFileSync(join(repo.root, 'data', 'repos.json'), 'utf8'))
+    expect(saved).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
+    expect(existsSync(join(repo.root, 'data', 'repos-default-added'))).toBe(true)
+  })
+
+  it('adds the repository it starts with only once over restarts', () => {
+    const file = join(repo.root, 'data', 'repos.json')
+    const before = readFileSync(file, 'utf8')
+
+    const restarted = new RepoService({ dataDir: join(repo.root, 'data'), defaultPath: repo.dir })
+
+    expect(restarted.list()).toHaveLength(1)
+    expect(readFileSync(file, 'utf8')).toBe(before)
+  })
+
+  it('names the repository after its folder when the path ends with a slash', () => {
+    const dataDir = join(repo.root, 'slash-data')
+
+    const slashed = new RepoService({ dataDir, defaultPath: `${repo.dir}/` })
+
+    expect(slashed.list()[0]).toMatchObject({ id: 'default', name: 'repo' })
+  })
+
+  it('does not stop when the repository it starts with is gone', () => {
+    const dataDir = join(repo.root, 'gone-data')
+    const gone = join(repo.root, 'gone')
+
+    const started = new RepoService({ dataDir, defaultPath: gone })
+
+    expect(started.list()).toEqual([{ id: 'default', name: 'gone', path: gone }])
+  })
+
+  it('adds nothing when the marker is there but repos.json is not', () => {
+    const dataDir = join(repo.root, 'marked-data')
+    mkdirSync(dataDir)
+    writeFileSync(join(dataDir, 'repos-default-added'), `${repo.dir}\n`)
+
+    expect(new RepoService({ dataDir, defaultPath: repo.dir }).list()).toEqual([])
+  })
+
+  it('starts with no repositories when it is given none', () => {
+    const dataDir = join(repo.root, 'empty-data')
+    const empty = new RepoService({ dataDir })
+
+    expect(empty.list()).toEqual([])
+    expect(() => empty.get(null)).toThrow(RepoNotFoundError)
+    expect(() => empty.get(null)).toThrow('Add a project first')
+    expect(existsSync(join(dataDir, 'repos.json'))).toBe(false)
+    expect(existsSync(join(dataDir, 'repos-default-added'))).toBe(false)
+  })
+
+  it('adds the repository it starts with at a later start that names one', () => {
+    const dataDir = join(repo.root, 'later-data')
+    expect(new RepoService({ dataDir }).list()).toEqual([])
+
+    const later = new RepoService({ dataDir, defaultPath: repo.dir })
+
+    expect(later.list().map((entry) => entry.id)).toEqual(['default'])
+  })
+
+  it('gives a new project an id from its name, not "default"', async () => {
+    const empty = new RepoService({ dataDir: join(repo.root, 'empty-data') })
+
+    const added = await empty.add({ path: gitFolder('Mon dépôt avec espaces') })
+
+    expect(added).toMatchObject({ id: 'mon-d-p-t-avec-espaces', name: 'Mon dépôt avec espaces' })
+    expect(empty.pathOf('mon-d-p-t-avec-espaces')).toBe(added.path)
+  })
+
+  it('refuses a folder that is gone, and keeps the list as it was', async () => {
+    const file = join(repo.root, 'data', 'repos.json')
+    const before = readFileSync(file, 'utf8')
+
+    await expect(repos.add({ path: join(repo.root, 'deleted') })).rejects.toThrow(RepoInputError)
+
+    expect(readFileSync(file, 'utf8')).toBe(before)
+  })
+
+  it('adds the repository it starts with before the ones added in an older version', () => {
+    const dataDir = join(repo.root, 'old-data')
+    mkdirSync(dataDir)
+    const web = gitFolder('web')
+    writeFileSync(
+      join(dataDir, 'repos.json'),
+      JSON.stringify([{ id: 'web', name: 'web', path: web }]),
+    )
+
+    const upgraded = new RepoService({ dataDir, defaultPath: repo.dir })
+
+    expect(upgraded.list().map((entry) => entry.id)).toEqual(['default', 'web'])
+    expect(upgraded.list()[1]).toEqual({ id: 'web', name: 'web', path: web })
+    expect(existsSync(join(dataDir, 'repos-default-added'))).toBe(true)
+  })
+
+  it('does not add the repository it starts with again once it is removed', () => {
+    repos.remove('default')
+    expect(repos.list()).toEqual([])
+
+    const restarted = new RepoService({ dataDir: join(repo.root, 'data'), defaultPath: repo.dir })
+    expect(restarted.list()).toEqual([])
+    expect(() => restarted.pathOf(null)).toThrow('Add a project first')
+  })
+
+  it('gives "default" back to its folder when it is added again', async () => {
+    repos.remove('default')
+
+    const again = await repos.add({ path: repo.dir })
+
+    expect(again.id).toBe('default')
+    expect(repos.pathOf(null)).toBe(again.path)
+  })
+
+  it('does not add the repository it starts with when its folder is added already', () => {
+    const dataDir = join(repo.root, 'known-data')
+    mkdirSync(dataDir)
+    writeFileSync(
+      join(dataDir, 'repos.json'),
+      JSON.stringify([{ id: 'mine', name: 'Mine', path: repo.dir }]),
+    )
+
+    const known = new RepoService({ dataDir, defaultPath: repo.dir })
+
+    expect(known.list().map((entry) => entry.id)).toEqual(['mine'])
   })
 
   it('adds a repository, keeps it, and makes the id unique', async () => {
@@ -64,7 +187,7 @@ describe('RepoService', () => {
 
     expect(repos.list().map((entry) => entry.id)).toEqual(['default', 'a', 'c'])
     const saved = JSON.parse(readFileSync(join(repo.root, 'data', 'repos.json'), 'utf8'))
-    expect(saved.map((entry: { id: string }) => entry.id)).toEqual(['a', 'c'])
+    expect(saved.map((entry: { id: string }) => entry.id)).toEqual(['default', 'a', 'c'])
     const reloaded = new RepoService({ dataDir: join(repo.root, 'data'), defaultPath: repo.dir })
     expect(reloaded.list().map((entry) => entry.id)).toEqual(['default', 'a', 'c'])
     expect(existsSync(b.path)).toBe(true)
@@ -78,10 +201,14 @@ describe('RepoService', () => {
     expect((await repos.add({ path: folder, name: 'Web' })).id).toBe(first.id)
   })
 
-  it('refuses to remove the default repository and an unknown one', () => {
-    expect(() => repos.remove('default')).toThrow(RepoInputError)
+  it('removes the default repository like any other, and refuses an unknown one', () => {
     expect(() => repos.remove('nope')).toThrow(RepoNotFoundError)
-    expect(repos.list().map((entry) => entry.id)).toEqual(['default'])
+
+    repos.remove('default')
+
+    expect(repos.list()).toEqual([])
+    expect(() => repos.remove('default')).toThrow(RepoNotFoundError)
+    expect(existsSync(repo.dir)).toBe(true)
   })
 
   it('refuses to remove a repository that still has workspaces', async () => {
@@ -105,5 +232,17 @@ describe('RepoService', () => {
     tasks.splice(0, 2)
     withTasks.remove('web')
     expect(withTasks.list().map((entry) => entry.id)).toEqual(['default', 'api'])
+  })
+
+  it('counts workspaces of tasks without a repository for the default one', () => {
+    const tasks = [{ repo: null, workspace: '/w/T-0001' }]
+    const dataDir = join(repo.root, 'data')
+    const withTasks = new RepoService({ dataDir, defaultPath: repo.dir, tasks: () => tasks })
+
+    expect(() => withTasks.remove('default')).toThrow('Remove the 1 workspace of default first')
+
+    tasks.pop()
+    withTasks.remove('default')
+    expect(withTasks.list()).toEqual([])
   })
 })

@@ -16,7 +16,7 @@ import { useState } from 'react'
 import type { LoadedSettings } from '../lib/api'
 import { formatDuration, stepsKey } from '../lib/stage-view'
 import { isQuiet, STATE_LABEL } from '../lib/tasks'
-import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
+import { DEFAULT_REPO_ID, knownRepos } from '../lib/workspace-groups'
 import { linkKind, StageLink, StageMarker } from './StageMarker'
 import { Button } from './ui/Button'
 import { SkeletonList } from './ui/Skeleton'
@@ -70,8 +70,7 @@ export function boardSections(
   now: Date,
 ): Section[] {
   const sections: Section[] = []
-  const known = repos.length > 0 ? repos : [{ id: DEFAULT_REPO_ID, name: DEFAULT_REPO_ID }]
-  for (const repo of known) {
+  for (const repo of knownRepos(repos, tasks)) {
     const own = tasks.filter(
       (task) => (task.repo ?? DEFAULT_REPO_ID) === repo.id && task.state !== 'cancelled',
     )
@@ -123,21 +122,20 @@ export function ProgressBoard({
   loadSettings,
   onOpenTask,
 }: ProgressBoardProps) {
-  const known = repos.length > 0 ? repos : [{ id: DEFAULT_REPO_ID, name: DEFAULT_REPO_ID }]
   const settings = useQueries({
-    queries: known.map((repo) => ({
+    queries: repos.map((repo) => ({
       queryKey: ['settings', repo.id],
       queryFn: () => loadSettings(repo.id),
     })),
   })
   const pipelines = new Map<string, Step[]>()
-  known.forEach((repo, index) => {
+  repos.forEach((repo, index) => {
     const data = settings[index]?.data
     if (data !== undefined) {
       pipelines.set(repo.id, data.settings.stages)
     }
   })
-  const sections = boardSections(tasks, known, pipelines, now)
+  const sections = boardSections(tasks, repos, pipelines, now)
   const [showDone, setShowDone] = useState<Record<string, boolean>>({})
   const failed = settings.find((query) => query.isError)
   const loading = settings.some((query) => query.isPending)

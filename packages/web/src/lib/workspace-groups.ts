@@ -21,6 +21,21 @@ function newestFirst(a: Task, b: Task): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
 }
 
+// The repositories, then the ones only tasks still name (removed ones). Their id is their name.
+export function knownRepos(
+  repos: readonly Pick<Repo, 'id' | 'name'>[],
+  tasks: readonly Pick<Task, 'repo'>[],
+): Pick<Repo, 'id' | 'name'>[] {
+  const known = [...repos]
+  for (const task of tasks) {
+    const id = task.repo ?? DEFAULT_REPO_ID
+    if (!known.some((repo) => repo.id === id)) {
+      known.push({ id, name: id })
+    }
+  }
+  return known
+}
+
 // The sidebar's workspaces: the pinned ones, then one group per repository. Every repository has a
 // group, an empty one too, so a workspace can be made in it.
 export function workspaceGroups(
@@ -34,15 +49,7 @@ export function workspaceGroups(
     .filter((task): task is Task => task !== undefined)
   const rest = withWorkspace.filter((task) => !pinnedIds.includes(task.id)).sort(newestFirst)
 
-  const known = repos.length > 0 ? [...repos] : [{ id: DEFAULT_REPO_ID, name: DEFAULT_REPO_ID }]
-  for (const task of rest) {
-    const id = task.repo ?? DEFAULT_REPO_ID
-    if (!known.some((repo) => repo.id === id)) {
-      known.push({ id, name: id })
-    }
-  }
-
-  const groups = known.map((repo) => {
+  const groups = knownRepos(repos, rest).map((repo) => {
     const own = rest.filter((task) => (task.repo ?? DEFAULT_REPO_ID) === repo.id)
     const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
     return {

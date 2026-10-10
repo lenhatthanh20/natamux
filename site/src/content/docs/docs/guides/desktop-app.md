@@ -9,11 +9,10 @@ The desktop app is a window around the dashboard. It holds no task logic of its 
 
 ## What the app does at start
 
-1. Asks for a repository the first time (the dialog **Open a repository**). It remembers the choice.
-2. Starts the daemon on port 4317, or on another free port when 4317 is taken. The daemon listens on `127.0.0.1` only.
-3. Passes the daemon the PATH of your login shell, so agents installed with Homebrew, nvm and similar tools are found even when you start the app from the Dock.
-4. Puts the `natamux` and `nmx` commands first on that PATH, for the terminals of your tasks.
-5. Opens the dashboard at `http://127.0.0.1:<port>/`, already signed in.
+1. Starts the daemon on port 4317, or on another free port when 4317 is taken. The daemon listens on `127.0.0.1` only.
+2. Passes the daemon the PATH of your login shell, so agents installed with Homebrew, nvm and similar tools are found even when you start the app from the Dock.
+3. Puts the `natamux` and `nmx` commands first on that PATH, for the terminals of your tasks.
+4. Opens the dashboard at `http://127.0.0.1:<port>/`, already signed in. On the first launch it has no project; add one from the menu or the sidebar.
 
 Only one copy of the app runs at a time. Opening it again focuses the existing window.
 
@@ -21,7 +20,7 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 
 | Item | What it does |
 |---|---|
-| **File → Open Repository…** (`Cmd/Ctrl+Shift+O`) | Pick another repository. The daemon starts again with it |
+| **File → Add Project…** (`Cmd/Ctrl+Shift+O`) | Pick a git repository and add it as a project. No restart |
 | **File → Show Daemon Log** | Opens the daemon log file |
 
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Linux |

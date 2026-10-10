@@ -11,7 +11,7 @@ Run in a codespace: `pnpm --filter @natamux/daemon dev`. Build `@natamux/core` f
 | `NATAMUX_PORT` | `4317` | Port, bound to `127.0.0.1` only |
 | `NATAMUX_TOKEN` | random per run, printed at start | Required on every request |
 | `NATAMUX_DATA_DIR` | `<cwd>/.natamux` | Task files and the SQLite index |
-| `NATAMUX_REPO_DIR` | `<cwd>` | The git repository tasks get worktrees from |
+| `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees are created, one folder per task id |
 | `NATAMUX_<AGENT>_COMMAND` | `claude`, `codex`, `gemini`, `copilot`, `cursor-agent` | The program that starts each agent; `<AGENT>` is `CLAUDE`, `CODEX`, `GEMINI`, `COPILOT` or `CURSOR` (`scripts/dev.sh seed` sets a fake Claude) |
 | `NATAMUX_<AGENT>_ARGS` | none | Words added to the agent's command line, such as `--model sonnet` for Claude Code |
@@ -47,7 +47,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `PUT /repos/:id/settings` | Body: the settings (the stage pipeline, checks). Saves them to `.natamux.json`: `{ settings }` |
 | `GET /tasks/:id/events` | Event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
-| `GET /repos` | Repositories whose tasks Natamux manages: `{ repos: [{ id, name, path }] }`. The first is always `default`, the repository the daemon was started for |
+| `GET /repos` | Repositories whose tasks Natamux manages: `{ repos: [{ id, name, path }] }`. Any of them can be removed. Tasks without a repository belong to the one with the id `default` |
 | `POST /repos` | Body `{ path, name? }`. Adds the repository whose top folder is `path` (absolute, on the daemon's machine). Its id comes from the name or the folder name. Answers 201; 400 for a path that is not absolute, inside a repository but not its top, or added already; 409 when git finds no repository there. Kept in `<data dir>/repos.json` |
 | `DELETE /repos/:id` | Natamux forgets the repository; its folder, branches and tasks stay. Answers 204; 400 for `default`; 404 for an unknown id; 409 while tasks of the repository have workspaces |
 | `GET /git/branches?repo=` | Local branches of a repository (the default one when `repo` is left out) and the one its checkout is on: `{ branches, current }` |

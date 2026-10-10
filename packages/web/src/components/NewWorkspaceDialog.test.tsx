@@ -161,6 +161,16 @@ describe('the Start a task dialog', () => {
     expect(input?.agent).toBeUndefined()
   })
 
+  it('names the project it starts in, the default one too', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.repo).toBe('default')
+  })
+
   it('keeps the line breaks inside the notes', async () => {
     const { create } = dialog()
     const user = userEvent.setup()

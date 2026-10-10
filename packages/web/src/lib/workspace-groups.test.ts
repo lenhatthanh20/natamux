@@ -1,6 +1,6 @@
 import { type Task, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { collapsedHint, shortBranch, workspaceGroups } from './workspace-groups'
+import { collapsedHint, knownRepos, shortBranch, workspaceGroups } from './workspace-groups'
 
 function makeTask(overrides: Partial<Task>): Task {
   return taskSchema.parse({
@@ -70,6 +70,25 @@ describe('workspaceGroups', () => {
       ['web', 0],
       ['api', 1],
     ])
+  })
+
+  it('has no groups when there are no repositories and no workspaces', () => {
+    const backlog = makeTask({ id: 'T-0001', workspace: null })
+
+    expect(workspaceGroups([], [backlog], []).groups).toEqual([])
+  })
+})
+
+describe('knownRepos', () => {
+  it('adds the repositories that only tasks name, "default" for tasks without one', () => {
+    const tasks = [makeTask({ id: 'T-0001' }), makeTask({ id: 'T-0002', repo: 'api' })]
+
+    expect(knownRepos([{ id: 'web', name: 'Web app' }], tasks)).toEqual([
+      { id: 'web', name: 'Web app' },
+      { id: 'default', name: 'default' },
+      { id: 'api', name: 'api' },
+    ])
+    expect(knownRepos([], [])).toEqual([])
   })
 })
 

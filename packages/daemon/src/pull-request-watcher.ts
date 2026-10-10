@@ -1,16 +1,35 @@
 import type { Task } from '@natamux/core'
 import { GitHubError, type RunGh, readPullRequestStatus, runGh } from './git.js'
+import { RepoNotFoundError } from './repo-service.js'
 import type { TaskService } from './task-service.js'
 
 export const WATCH_INTERVAL_MS = 60_000
 
 type PullRequestWatcherOptions = {
   tasks: TaskService
-  // Where gh runs. A full pull request address works from any folder of a repository.
-  cwd: string
+  // Where gh runs for the tasks of a repository. A full pull request address works from any folder.
+  cwdOf: (repo: string | null) => string
   gh?: RunGh
   intervalMs?: number
   log?: (message: string) => void
+}
+
+// The folder of a task's repository for gh. A removed repository has none; the fallback (the data
+// folder) does, and a full pull request address works from there too.
+export function repoFolderOr(
+  repos: { pathOf: (repo: string | null) => string },
+  fallback: string,
+): (repo: string | null) => string {
+  return (repo) => {
+    try {
+      return repos.pathOf(repo)
+    } catch (error) {
+      if (error instanceof RepoNotFoundError) {
+        return fallback
+      }
+      throw error
+    }
+  }
 }
 
 // A task is watched while it has an open pull request and is not cancelled.
@@ -25,7 +44,7 @@ export function isWatched(task: Task): boolean {
 // done when its pull request is merged.
 export class PullRequestWatcher {
   private readonly tasks: TaskService
-  private readonly cwd: string
+  private readonly cwdOf: (repo: string | null) => string
   private readonly gh: RunGh
   private readonly intervalMs: number
   private readonly log: (message: string) => void
@@ -35,7 +54,7 @@ export class PullRequestWatcher {
 
   constructor(options: PullRequestWatcherOptions) {
     this.tasks = options.tasks
-    this.cwd = options.cwd
+    this.cwdOf = options.cwdOf
     this.gh = options.gh ?? runGh
     this.intervalMs = options.intervalMs ?? WATCH_INTERVAL_MS
     this.log = options.log ?? ((message) => console.warn(message))
@@ -73,7 +92,7 @@ export class PullRequestWatcher {
     if (task.pr === null) {
       return task
     }
-    const status = await readPullRequestStatus(this.cwd, task.pr, this.gh)
+    const status = await readPullRequestStatus(this.cwdOf(task.repo), task.pr, this.gh)
     return this.tasks.recordPullRequestStatus(taskId, status)
   }
 

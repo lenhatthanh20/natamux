@@ -75,6 +75,13 @@ describe('TemplateService', () => {
       priority: 'normal',
       state: 'draft',
     })
+    expect(task.repo).toBeNull()
+  })
+
+  it('puts a task from a template in the repository it is given', () => {
+    templates.save({ name: 'Bug fix', title: 'Fix' })
+
+    expect(templates.createTask('bug-fix', { title: 'Fix it', repo: 'web' }).repo).toBe('web')
   })
 
   it('refuses an unknown template and an empty title', () => {

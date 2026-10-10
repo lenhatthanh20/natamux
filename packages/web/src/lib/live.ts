@@ -23,6 +23,18 @@ export function parseLiveMessage(text: string): Task | undefined {
   return parsed.success ? parsed.data : undefined
 }
 
+// True for the message that a project was added or removed.
+export function isReposChanged(text: string): boolean {
+  try {
+    const message: unknown = JSON.parse(text)
+    return typeof message === 'object' && message !== null && 'kind' in message
+      ? message.kind === 'repos.changed'
+      : false
+  } catch {
+    return false
+  }
+}
+
 // WebSocket.CONNECTING. The number, so a stand-in socket in a test works too.
 const CONNECTING = 0
 
