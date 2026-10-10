@@ -13,6 +13,7 @@ import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
+import { worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
@@ -521,7 +522,7 @@ describe('workspaces', () => {
 
     expect(removed.statusCode).toBe(200)
     expect(removed.json()).toMatchObject({ task: { workspace: null, branch } })
-    expect(runGit(repo.dir, 'worktree', 'list', '--porcelain')).not.toContain(workspace)
+    expect(await worktreeState(repo.dir, workspace)).toBe('missing')
   })
 
   it('answers 409 with the path for a folder that is not a git worktree', async () => {

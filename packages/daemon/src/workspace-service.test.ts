@@ -10,7 +10,7 @@ import {
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
-import { GitError, NothingToCommitError, type RunGh } from './git.js'
+import { GitError, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
@@ -223,15 +223,6 @@ describe('remove', () => {
     }
   }
 
-  function listedWorktrees(): string {
-    return runGit(repo.dir, 'worktree', 'list', '--porcelain')
-  }
-
-  function timesListed(path: string): number {
-    const lines = listedWorktrees().split('\n')
-    return lines.filter((line) => line === `worktree ${path}`).length
-  }
-
   function eventTypes(taskId: string): string[] {
     return tasks.listEvents(taskId).map((stored) => stored.event.type)
   }
@@ -321,13 +312,13 @@ describe('remove', () => {
     const created = await workspaces.create(task.id)
     const path = created.workspace ?? ''
     deleteFolder(path, false)
-    expect(listedWorktrees()).toContain(path)
+    expect(await worktreeState(repo.dir, path)).toBe('stale')
 
     const result = await workspaces.remove(task.id, { deleteBranch: false })
 
     expect(result.task.workspace).toBeNull()
     expect(result.task.branch).toBe('natamux/t-0001-fix-the-bug')
-    expect(listedWorktrees()).not.toContain(path)
+    expect(await worktreeState(repo.dir, path)).toBe('missing')
     expect(tasks.listEvents(task.id).at(-1)?.event.type).toBe('workspace.removed')
   })
 
@@ -337,12 +328,12 @@ describe('remove', () => {
     const created = await service.create(task.id)
     const path = created.workspace ?? ''
     deleteFolder(path, false)
-    expect(listedWorktrees()).toContain(path)
+    expect(await worktreeState(repo.dir, path)).toBe('stale')
 
     const result = await service.remove(task.id, { deleteBranch: false })
 
     expect(result.task.workspace).toBeNull()
-    expect(listedWorktrees()).not.toContain(path)
+    expect(await worktreeState(repo.dir, path)).toBe('missing')
   })
 
   it.each(deletedCases)(
@@ -357,7 +348,7 @@ describe('remove', () => {
 
       await workspaces.remove(task.id, { deleteBranch: false })
 
-      expect(timesListed(otherPath)).toBe(1)
+      expect(await worktreeState(repo.dir, otherPath)).toBe('present')
       expect(existsSync(join(otherPath, 'notes.txt'))).toBe(true)
       expect(tasks.getTask(other.id).workspace).toBe(otherPath)
     },
@@ -374,7 +365,7 @@ describe('remove', () => {
 
     expect(tasks.getTask(task.id).workspace).toBe(path)
     expect(eventTypes(task.id)).not.toContain('workspace.removed')
-    expect(timesListed(path)).toBe(1)
+    expect(await worktreeState(repo.dir, path)).toBe('stale')
     expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
   })
 
@@ -443,7 +434,7 @@ describe('remove', () => {
       expect(again.workspace).toBe(created.workspace)
       expect(again.branch).toBe('natamux/t-0001-fix-the-bug')
       expect(runGit(again.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('work')
-      expect(timesListed(again.workspace ?? '')).toBe(1)
+      expect(await worktreeState(repo.dir, again.workspace ?? '')).toBe('present')
     },
   )
 
@@ -460,7 +451,7 @@ describe('remove', () => {
       expect(again.workspace).toBe(created.workspace)
       expect(again.branch).toBe('natamux/t-0001-fix-the-bug')
       expect(existsSync(again.workspace ?? '')).toBe(true)
-      expect(timesListed(again.workspace ?? '')).toBe(1)
+      expect(await worktreeState(repo.dir, again.workspace ?? '')).toBe('present')
     },
   )
 
@@ -477,7 +468,7 @@ describe('remove', () => {
       expect(again.workspace).toBe(created.workspace)
       expect(again.branch).toBe('natamux/t-0001-fix-the-bug')
       expect(runGit(again.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('init')
-      expect(timesListed(again.workspace ?? '')).toBe(1)
+      expect(await worktreeState(repo.dir, again.workspace ?? '')).toBe('present')
     },
   )
 
@@ -587,7 +578,7 @@ describe('remove', () => {
 
     expect(closed).toEqual([task.id])
     expect(existsSync(path)).toBe(false)
-    expect(timesListed(path)).toBe(0)
+    expect(await worktreeState(repo.dir, path)).toBe('missing')
     expect(result.task.workspace).toBeNull()
     expect(eventTypes(task.id).at(-1)).toBe('workspace.removed')
   })

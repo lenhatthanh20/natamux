@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChangeEntry, ChangeStatus, ImageSide } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -58,6 +58,11 @@ function branchExists(branch: string): boolean {
   return runGit(repo.dir, 'branch', '--list', branch).trim() !== ''
 }
 
+// git prints paths its own way (forward slashes and long names on Windows): compare real paths.
+function realPaths(paths: readonly string[]): string[] {
+  return paths.map((path) => realpathSync.native(path))
+}
+
 describe('addWorktree', () => {
   it('creates the folder and the branch', async () => {
     await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
@@ -102,7 +107,8 @@ describe('removeWorktree', () => {
 
     await removeWorktree(repo.dir, worktreePath)
 
-    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir])
+    const listed = realPaths(await listWorktreePaths(repo.dir))
+    expect(listed).toEqual(realPaths([repo.dir]))
   })
 
   it('leaves another worktree and its folder alone when it clears a stale entry', async () => {
@@ -114,7 +120,8 @@ describe('removeWorktree', () => {
 
     await removeWorktree(repo.dir, worktreePath)
 
-    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir, otherPath])
+    const listed = realPaths(await listWorktreePaths(repo.dir))
+    expect(listed).toEqual(realPaths([repo.dir, otherPath]))
     expect(existsSync(join(otherPath, 'notes.txt'))).toBe(true)
   })
 })
@@ -149,7 +156,8 @@ describe('listWorktreePaths', () => {
   it('lists the main checkout and each worktree', async () => {
     await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
 
-    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir, worktreePath])
+    const listed = realPaths(await listWorktreePaths(repo.dir))
+    expect(listed).toEqual(realPaths([repo.dir, worktreePath]))
   })
 })
 
