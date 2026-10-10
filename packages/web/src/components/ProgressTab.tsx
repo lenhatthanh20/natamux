@@ -109,9 +109,9 @@ export function ProgressTab({
       act(name, input),
     onError: (error, { name }) => toast(FAILED_ACTION[name], 'error', { detail: error.message }),
   })
+  // The dashboard reports a failed start already.
   const starting = useMutation({
     mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
-    onError: (error) => toast('Could not start the agent.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
