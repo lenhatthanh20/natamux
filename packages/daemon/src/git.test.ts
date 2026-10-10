@@ -14,6 +14,7 @@ import {
   ImageSideMissingError,
   ImageTooLargeError,
   listChanges,
+  listWorktreePaths,
   MAX_IMAGE_BYTES,
   NotAnImageError,
   NothingToCommitError,
@@ -24,6 +25,7 @@ import {
   parsePullRequestView,
   parseRefs,
   parseStatus,
+  parseWorktreeList,
   pullRequestUrl,
   pushBranch,
   type RunGh,
@@ -36,6 +38,7 @@ import {
   statusFromCodes,
   summarizeChecks,
   withGitConfig,
+  worktreeState,
 } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 
@@ -91,6 +94,135 @@ describe('removeWorktree', () => {
 
     await expect(removeWorktree(repo.dir, worktreePath)).rejects.toThrow(GitError)
     expect(existsSync(join(worktreePath, 'notes.txt'))).toBe(true)
+  })
+
+  it('clears the entry of a worktree whose folder was deleted', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    rmSync(worktreePath, { recursive: true, force: true })
+
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir])
+  })
+
+  it('leaves another worktree and its folder alone when it clears a stale entry', async () => {
+    const otherPath = join(repo.root, 'worktrees', 'T-0002')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    await addWorktree(repo.dir, otherPath, 'natamux/t-0002-example')
+    writeFileSync(join(otherPath, 'notes.txt'), 'work in progress')
+    rmSync(worktreePath, { recursive: true, force: true })
+
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir, otherPath])
+    expect(existsSync(join(otherPath, 'notes.txt'))).toBe(true)
+  })
+})
+
+describe('parseWorktreeList', () => {
+  it('reads the path of each worktree', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD 1111111111111111111111111111111111111111',
+      'branch refs/heads/main',
+      '',
+      'worktree /data/Application Support/worktrees/T-0001',
+      'HEAD 2222222222222222222222222222222222222222',
+      'detached',
+      '',
+      'worktree /data/worktrees/T-0002',
+      'HEAD 3333333333333333333333333333333333333333',
+      'branch refs/heads/natamux/t-0002-example',
+      'prunable gitdir file points to non-existent location',
+      '',
+    ].join('\n')
+
+    expect(parseWorktreeList(output)).toEqual([
+      '/repo',
+      '/data/Application Support/worktrees/T-0001',
+      '/data/worktrees/T-0002',
+    ])
+  })
+})
+
+describe('listWorktreePaths', () => {
+  it('lists the main checkout and each worktree', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+
+    expect(await listWorktreePaths(repo.dir)).toEqual([repo.dir, worktreePath])
+  })
+})
+
+describe('worktreeState', () => {
+  it('is present for a worktree', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+
+    expect(await worktreeState(repo.dir, worktreePath)).toBe('present')
+  })
+
+  it('is present for a worktree in a folder with a space in its name', async () => {
+    const spaced = join(repo.root, 'Application Support', 'T-0001')
+    await addWorktree(repo.dir, spaced, 'natamux/t-0001-example')
+
+    expect(await worktreeState(repo.dir, spaced)).toBe('present')
+  })
+
+  it('is present for a worktree reached through a symlink', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    const link = join(repo.root, 'link')
+    symlinkSync(join(repo.root, 'worktrees'), link)
+
+    expect(await worktreeState(repo.dir, join(link, 'T-0001'))).toBe('present')
+  })
+
+  it('is stale when the folder was deleted but git still lists it', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    rmSync(worktreePath, { recursive: true, force: true })
+
+    expect(await worktreeState(repo.dir, worktreePath)).toBe('stale')
+  })
+
+  it('is stale through a symlink when the folder was deleted', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    rmSync(worktreePath, { recursive: true, force: true })
+    const link = join(repo.root, 'link')
+    symlinkSync(join(repo.root, 'worktrees'), link)
+
+    expect(await worktreeState(repo.dir, join(link, 'T-0001'))).toBe('stale')
+  })
+
+  it('is stale for a deleted folder whose path has a space', async () => {
+    const spaced = join(repo.root, 'Application Support', 'T-0001')
+    await addWorktree(repo.dir, spaced, 'natamux/t-0001-example')
+    rmSync(spaced, { recursive: true, force: true })
+
+    expect(await worktreeState(repo.dir, spaced)).toBe('stale')
+  })
+
+  it('matches a path with a trailing slash', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    expect(await worktreeState(repo.dir, `${worktreePath}/`)).toBe('present')
+
+    rmSync(worktreePath, { recursive: true, force: true })
+    expect(await worktreeState(repo.dir, `${worktreePath}/`)).toBe('stale')
+  })
+
+  it('is missing when the folder was deleted and pruned', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    rmSync(worktreePath, { recursive: true, force: true })
+    runGit(repo.dir, 'worktree', 'prune')
+
+    expect(await worktreeState(repo.dir, worktreePath)).toBe('missing')
+  })
+
+  it('is missing when the parent folder is gone too', async () => {
+    expect(await worktreeState(repo.dir, join(repo.root, 'nowhere', 'T-0001'))).toBe('missing')
+  })
+
+  it('is not-a-worktree for a folder git does not know', async () => {
+    mkdirSync(worktreePath, { recursive: true })
+
+    expect(await worktreeState(repo.dir, worktreePath)).toBe('not-a-worktree')
   })
 })
 

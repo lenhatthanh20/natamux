@@ -68,7 +68,8 @@ export function stagePrompt(
 ): string {
   const template = stage.prompt ?? DEFAULT_PROMPTS[stage.id] ?? generic(stage)
   // Only the default prompts get {commit}, so a prompt of your own is never changed.
-  const commit = stage.prompt === undefined ? { commit: commitRule(stage) } : {}
+  const commit: Record<string, string> =
+    stage.prompt === undefined ? { commit: commitRule(stage) } : {}
   return `${fill(template, { ...values(task), ...commit })}\n${DONE}`
 }
 
