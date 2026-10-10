@@ -36,6 +36,59 @@ function Harness() {
   )
 }
 
+function SheetHarness() {
+  const [open, setOpen] = useState(true)
+  return (
+    <AppShell
+      layout={{ sidebar: 'docked', details: 'sheet', coarse: false, compact: false }}
+      titleBar={null}
+      statusBar={null}
+      sidebar={{
+        sizing: SIZING,
+        open: false,
+        drawerOpen: false,
+        onCollapse: () => {},
+        onCloseDrawer: () => {},
+        content: null,
+      }}
+      details={
+        open
+          ? { sizing: SIZING, onClose: () => setOpen(false), render: () => <p>Task details</p> }
+          : null
+      }
+    >
+      <div className="xterm">
+        <textarea aria-label="Terminal input" />
+      </div>
+      <button type="button">Main button</button>
+    </AppShell>
+  )
+}
+
+describe('the details sheet with no scrim', () => {
+  it('leaves Escape to the terminal beside it', async () => {
+    const user = userEvent.setup()
+    render(<SheetHarness />)
+    const terminal = screen.getByLabelText('Terminal input')
+    const keys: string[] = []
+    terminal.addEventListener('keydown', (event) => keys.push(event.key))
+
+    await user.click(terminal)
+    await user.keyboard('{Escape}')
+    expect(keys).toEqual(['Escape'])
+    expect(screen.getByText('Task details')).toBeTruthy()
+  })
+
+  it('still closes on Escape from a control outside it', async () => {
+    const user = userEvent.setup()
+    render(<SheetHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Main button' }))
+    await user.keyboard('{Escape}')
+    expect(screen.queryByText('Task details')).toBeNull()
+  })
+})
+
 describe('the drawer', () => {
   it('is a modal dialog, covers the main area, and gives the focus back on Escape', async () => {
     const user = userEvent.setup()
