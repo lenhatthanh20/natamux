@@ -11,3 +11,4 @@ coverage/
 .natamux/
 .pnpm-store/
 release/
+.playwright-cli/
