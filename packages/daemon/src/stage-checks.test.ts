@@ -59,6 +59,24 @@ describe('runStageChecks', () => {
     ])
   })
 
+  it('passes an output whose time reads a little before the stage started', async () => {
+    const stage: Stage = { id: 'context', kind: 'context', gate: 'manual', output: 'context.md' }
+    const startedAt = '2026-06-01T00:00:00.000Z'
+    const path = join(folder, 'context.md')
+    writeFileSync(path, '# Export\n')
+
+    // The file clock of Linux is coarse: a file written right after the start can read 10 ms early.
+    const justBefore = new Date('2026-05-31T23:59:59.990Z')
+    utimesSync(path, justBefore, justBefore)
+    expect((await runStageChecks(input(stage, startedAt))).passed).toBe(true)
+
+    const longBefore = new Date('2026-05-31T23:59:58.000Z')
+    utimesSync(path, longBefore, longBefore)
+    expect((await runStageChecks(input(stage, startedAt))).reasons).toEqual([
+      'context.md was not changed after the stage started',
+    ])
+  })
+
   it('counts the cases of a test spec', async () => {
     const stage: Stage = {
       id: 'test-spec',
