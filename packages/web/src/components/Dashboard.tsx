@@ -867,7 +867,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           mergeTask(updated)
                           return updated
                         }}
-                        activity={activityQuery.data?.[detailTask.id]}
+                        activity={activityQuery.data?.byTask[detailTask.id]}
                         onOpenFile={(name) => openStageFile(detailTask, name)}
                       />
                     }

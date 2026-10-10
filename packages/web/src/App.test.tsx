@@ -2129,7 +2129,7 @@ describe('App', () => {
 
     await openStageFile(user, details)
 
-    expect(await within(view).findByText('# The spec')).toBeTruthy()
+    expect(await within(view).findByRole('heading', { name: 'The spec' })).toBeTruthy()
     const docsTab = within(view).getByRole('tab', { name: 'Docs' })
     expect(docsTab.getAttribute('aria-selected')).toBe('true')
     const progressTab = within(details).getByRole('tab', { name: 'Progress' })
@@ -2152,7 +2152,7 @@ describe('App', () => {
     await openStageFile(user, details)
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    expect(await within(view).findByText('# The spec')).toBeTruthy()
+    expect(await within(view).findByRole('heading', { name: 'The spec' })).toBeTruthy()
     expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
   })
 
