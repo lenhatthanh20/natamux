@@ -1,4 +1,4 @@
-import type { Task, TerminalSize } from '@natamux/core'
+import type { Task, TerminalLane, TerminalSize } from '@natamux/core'
 import { LayoutGrid } from 'lucide-react'
 import { useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
@@ -7,9 +7,11 @@ import {
   columnsFor,
   MAX_PANES,
   maxColumns,
+  otherTerminalHint,
   type PaneLayout,
   paneSpan,
   paneStateText,
+  terminalState,
 } from '../lib/panes'
 import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
@@ -26,8 +28,10 @@ type AgentPanesProps = {
   onChange: (ids: string[]) => void
   layout: PaneLayout
   onLayout: (layout: PaneLayout) => void
-  // What each agent does now, by task id.
-  activity?: Readonly<Record<string, string>>
+  // What each agent does now, by task id, then shell name.
+  activity?: Readonly<Record<string, Readonly<Record<string, string>>>>
+  // The shells of each task where an agent runs, with the stage each one works on.
+  terminals?: Readonly<Record<string, Readonly<Record<string, TerminalLane>>>>
   connect: (taskId: string, size: TerminalSize) => Promise<WebSocket>
   onOpenTask: (id: string) => void
 }
@@ -47,6 +51,7 @@ export function AgentPanes({
   layout,
   onLayout,
   activity,
+  terminals,
   connect,
   onOpenTask,
 }: AgentPanesProps) {
@@ -123,6 +128,9 @@ export function AgentPanes({
         >
           {shown.map((task) => {
             const index = visible.findIndex((item) => item.id === task.id)
+            // The pane is Shell 1, so it shows the stage of Shell 1, not the whole task.
+            const lane = terminals?.[task.id]?.['1']
+            const state = (lane === undefined ? null : terminalState(task, lane)) ?? task.state
             return (
               <TerminalPane
                 key={task.id}
@@ -133,7 +141,7 @@ export function AgentPanes({
                     : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
                 }
                 label={`Agent of ${task.id}`}
-                icon={<StatusGlyph state={task.state} />}
+                icon={<StatusGlyph state={state} />}
                 title={
                   <>
                     <span className="shrink-0 font-mono font-normal">{task.id}</span>
@@ -148,8 +156,9 @@ export function AgentPanes({
                   </>
                 }
                 agent={task.agent || undefined}
-                stateText={paneStateText(task.state, activity?.[task.id])}
-                needsInput={task.state === 'needs-input'}
+                stateText={paneStateText(state, activity?.[task.id]?.['1'])}
+                hint={otherTerminalHint(task, terminals?.[task.id])}
+                needsInput={state === 'needs-input'}
                 connect={(size) => connect(task.id, size)}
                 maximized={focused === task.id}
                 onToggleMaximize={() => setMaximized(focused === task.id ? null : task.id)}

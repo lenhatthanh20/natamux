@@ -1,7 +1,7 @@
 import type { DiffStat, Task } from '@natamux/core'
 import { Copy, FileDiff, FolderMinus, GitBranch, Pencil, Pin, PinOff } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useRef, useState } from 'react'
-import { formatAge, formatExact, isQuiet, rowLabel } from '../lib/tasks'
+import { formatAge, formatExact, isQuiet, laneSummary, rowLabel } from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { shortBranch } from '../lib/workspace-groups'
 import { DiffSize } from './DiffSize'
@@ -142,7 +142,7 @@ export function WorkspaceRow({
   const body = (titleLine: ReactNode): ReactNode => (
     <>
       <span className="flex h-4 w-full items-center gap-2">
-        <StatusGlyph state={task.state} quiet={quiet} />
+        <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
         {titleLine}
         {!renaming && (
           <span

@@ -22,6 +22,8 @@ type TerminalPaneProps = {
   stateText?: string
   // The agent waits for the user: the pane shows a bar and a tint.
   needsInput?: boolean
+  // Another agent of the task needs the user, such as "Shell 2 needs your input".
+  hint?: string
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
   maximized: boolean
@@ -45,6 +47,7 @@ export function TerminalPane({
   agent,
   stateText,
   needsInput = false,
+  hint,
   connect,
   focusToken,
   maximized,
@@ -93,6 +96,9 @@ export function TerminalPane({
           </span>
         )}
         {stateText === undefined && <span className="flex-1" />}
+        {hint !== undefined && (
+          <span data-tip-overflow className="min-w-0 truncate text-signal">{hint}</span>
+        )}
         <IconButton
           label={maximized ? `Restore ${label}` : `Maximize ${label}`}
           icon={maximized ? Minimize2 : Maximize2}
