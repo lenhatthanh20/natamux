@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UnknownAgentError } from './agent-hook-service.js'
 import { AgentRunner, firstPrompt, quoteArgument, TaskWaitingError } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
+import { ProjectSettingsService } from './project-settings.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
@@ -175,6 +176,35 @@ describe('AgentRunner', () => {
     asking.start(task.id, 'claude-code', 'Only this')
     expect(readFileSync(script(task.id), 'utf8')).toBe(
       "claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n",
+    )
+  })
+
+  it('starts the next agent with the mode saved in .natamux.json', () => {
+    // Wired as in main.ts: the tasks read the settings of the repository's file.
+    const settings = new ProjectSettingsService({ repos: { pathOf: () => dataDir } })
+    const project = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      settingsOf: (repo) => settings.get(repo),
+    })
+    const saved = new AgentRunner({
+      tasks: project,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+    })
+    const task = taskWithWorkspace()
+
+    saved.start(task.id, 'claude-code', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n",
+    )
+    settings.save(null, { agents: { permissionMode: 'ask' } })
+    saved.start(task.id, 'claude-code', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "claude --settings '/data/claude code.json' 'Only this'\n",
     )
   })
 

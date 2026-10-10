@@ -61,6 +61,18 @@ describe('launchCommand', () => {
     ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini --approval-mode yolo")
   })
 
+  it.each([
+    ['claude-code', '--permission-mode auto'],
+    ['codex', '--full-auto'],
+    ['gemini', '--approval-mode yolo'],
+    ['copilot', '--allow-all-tools'],
+    ['cursor', '--force'],
+  ] as const)('quotes the prompt of %s for PowerShell next to its flag', (agent, flag) => {
+    const command = launchCommand(agent, { ...auto, platform: 'win32', prompt: "it's" })
+    expect(command).toContain(` ${flag} `)
+    expect(command.endsWith(" 'it''s'")).toBe(true)
+  })
+
   it('starts each agent interactive, with its first prompt and its hooks', () => {
     expect(launchCommand('claude-code', { ...base, program: 'claude' })).toBe(
       "claude --settings '/data/claude.json' 'Fix it'",
