@@ -5,9 +5,9 @@ copyright: Copyright © 2026 lenhatthanh20 and the Natamux contributors
 # Plain files: node-pty's helper program and the daemon's entry must be real files to run.
 asar: false
 npmRebuild: true
-executableName: natamux
-# Each architecture gets its own file name, so the files of all builds fit in one release.
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+# Each architecture gets its own file name, so the files of all builds fit in one release. No
+# version in the name: links to releases/latest/download/<file> keep working.
+artifactName: ${productName}-${os}-${arch}.${ext}
 files:
   - dist/**
   - package.json
