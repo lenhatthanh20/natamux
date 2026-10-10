@@ -341,24 +341,24 @@ nmx done</code></pre>
       const scripts: Line[][] = [
         [
           ['● Read src/components/CommandPalette.tsx'],
-          ['● Edit src/lib/commands.ts', 'add'],
-          ['  +42 −3', 'add'],
+          ['● Edit src/lib/commands.ts', 'k-add'],
+          ['  +42 −3', 'k-add'],
           ['● Bash pnpm test'],
-          ['  ✓ 128 passed', 'ok'],
-          ['$ natamux done', 'cmd'],
+          ['  ✓ 128 passed', 'k-ok'],
+          ['$ natamux done', 'k-cmd'],
         ],
         [
           ['› apply_patch src/components/Board.tsx'],
-          ['  +88 −12', 'add'],
+          ['  +88 −12', 'k-add'],
           ['› run pnpm --filter web test'],
-          ['  ✓ 61 passed', 'ok'],
+          ['  ✓ 61 passed', 'k-ok'],
           ['› apply_patch src/lib/drag.ts'],
         ],
         [
           ['✦ ReadFile src/auth/refresh.ts'],
           ['✦ Two requests refresh at once.'],
-          ['? Keep the old ticket format', 'ask'],
-          ['  for one release? (y/n)', 'ask'],
+          ['? Keep the old ticket format', 'k-ask'],
+          ['  for one release? (y/n)', 'k-ask'],
         ],
       ]
 
@@ -441,11 +441,11 @@ nmx done</code></pre>
           const codex = runLane(1, 900, 760)
           await Promise.all([gemini, claude, codex])
           await sleep(2600)
-          await type(2, ['y', 'cmd'])
+          await type(2, ['y', 'k-cmd'])
           setState(2, 'Running', 'running')
           setNeeds(0)
           if (ask) ask.hidden = true
-          await type(2, ['✦ Edit src/auth/refresh.ts', 'add'])
+          await type(2, ['✦ Edit src/auth/refresh.ts', 'k-add'])
           await sleep(3200)
         }
       }
@@ -569,10 +569,10 @@ nmx done</code></pre>
         display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
       }
       .pane .l { white-space: pre; flex: none; height: 1.25em; overflow: hidden; }
-      .pane .l.add { color: var(--mint); }
-      .pane .l.ok { color: var(--mint); }
-      .pane .l.ask { color: var(--amber); }
-      .pane .l.cmd { color: var(--snow); }
+      .pane .l.k-add { color: var(--mint); }
+      .pane .l.k-ok { color: var(--mint); }
+      .pane .l.k-ask { color: var(--amber); }
+      .pane .l.k-cmd { color: var(--snow); }
 
       .lanes { width: 100%; height: 100%; min-height: 300px; overflow: visible; }
       .lane, .pulse { fill: none; stroke-width: 7; stroke-linecap: round; vector-effect: non-scaling-stroke; }
