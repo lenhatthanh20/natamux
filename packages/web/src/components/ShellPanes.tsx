@@ -13,6 +13,7 @@ import { useViewStore } from '../lib/view-store'
 import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
 import { Button } from './ui/Button'
+import { IconButton } from './ui/IconButton'
 
 type ShellPanesProps = {
   // `agent` is set when an agent was started in this workspace. Shell 1 is the agent's.
@@ -152,15 +153,25 @@ export function ShellPanes({
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {actionsSlot !== null &&
         createPortal(
-          <Button
-            variant="ghost"
-            icon={SquareSplitHorizontal}
-            onClick={addShell}
-            disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
-            data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
-          >
-            New shell
-          </Button>,
+          // On a phone the label would take the room of a tab, so the button is an icon.
+          phone ? (
+            <IconButton
+              label="New shell"
+              icon={SquareSplitHorizontal}
+              onClick={addShell}
+              disabled={full}
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              icon={SquareSplitHorizontal}
+              onClick={addShell}
+              disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
+              data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
+            >
+              New shell
+            </Button>
+          ),
           actionsSlot,
         )}
       {phone && names.length > 1 && (
