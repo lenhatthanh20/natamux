@@ -61,6 +61,18 @@ describe('TerminalService', () => {
     expect(service.isOpen('T-0001')).toBe(true)
   })
 
+  it('lets the shell reach the daemon on loopback past a proxy', () => {
+    const { service, ptys } = setup()
+
+    service.attach('T-0001', client(), size)
+
+    expect(ptys[0]?.options.env).toMatchObject({
+      NO_PROXY: '127.0.0.1,localhost,::1',
+      no_proxy: '127.0.0.1,localhost,::1',
+      NATAMUX_TERMINAL: '1',
+    })
+  })
+
   it('passes input and size to the shell, and output to every client', () => {
     const { service, ptys } = setup()
     const first = client()
