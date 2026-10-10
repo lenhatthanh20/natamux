@@ -84,18 +84,19 @@ So there are three real approaches: hooks (Orca, Superset, Emdash), reading the 
 
 ## Built (2026-10-10)
 
-Each agent starts from the dashboard (**New workspace**, or **Start agent** on a stage or a failed task) with hooks for that session only. Nothing in the user's own settings changes.
+Each agent starts from the dashboard (**Start a task**, or **Start agent** on a stage or a failed task) with hooks for that session only. Nothing in the user's own settings changes.
 
 | Agent | Command | How its hooks are passed | Prompt sent | Waits for the user | Turn ended | Failed | Checked |
 |---|---|---|---|---|---|---|---|
-| Claude Code | `claude --settings <file> '<prompt>'` | the settings file | `UserPromptSubmit` | `PermissionRequest`, `Notification` | `Stop` | `StopFailure` | real sessions |
-| Codex | `codex --dangerously-bypass-hook-trust -c 'hooks.<Event>=[…]' '<prompt>'` | `-c` overrides | `UserPromptSubmit` | `PermissionRequest` | `Stop`, `Interrupt` | none | its source, not run |
-| Gemini CLI | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini -i '<prompt>'` | its system settings file, in the data folder | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterAgent` | none | its docs, not run |
-| GitHub Copilot CLI | `copilot -i '<prompt>'` | `.github/hooks/natamux.json` in the worktree, kept out of git | `userPromptSubmitted` | `permissionRequest` | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
-| Cursor CLI | `cursor-agent '<prompt>'` | `.cursor/hooks.json` in the worktree, kept out of git | `beforeSubmitPrompt` | none (the bell instead) | `stop` | `stop` with `status: error` | its docs, not run |
+| Claude Code | `claude --settings <file> --permission-mode auto '<prompt>'` | the settings file | `UserPromptSubmit` | `PermissionRequest`, `Notification` | `Stop` | `StopFailure` | real sessions |
+| Codex | `codex --dangerously-bypass-hook-trust --full-auto -c 'hooks.<Event>=[…]' '<prompt>'` | `-c` overrides | `UserPromptSubmit` | `PermissionRequest` | `Stop`, `Interrupt` | none | its source, not run |
+| Gemini CLI | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo -i '<prompt>'` | its system settings file, in the data folder | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterAgent` | none | its docs, not run |
+| GitHub Copilot CLI | `copilot --allow-all-tools -i '<prompt>'` | `.github/hooks/natamux.json` in the worktree, kept out of git | `userPromptSubmitted` | `permissionRequest` | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
+| Cursor CLI | `cursor-agent --force '<prompt>'` | `.cursor/hooks.json` in the worktree, kept out of git | `beforeSubmitPrompt` | none (the bell instead) | `stop` | `stop` with `status: error` | its docs, not run |
 
 Notes:
 
+- **Permission flags.** The flag after the program is the `auto` permission mode, the default of `agents.permissionMode` in `.natamux.json`. With `ask` it is left out. Only Claude Code's auto mode checks each action.
 - **Codex hook trust.** Codex runs a hook only after the user trusted it, and asks at start for every hook it has not seen. Natamux's hooks change with the daemon's address, so it passes `--dangerously-bypass-hook-trust`. The flag skips that review for the session's other hooks too: hooks of a project the user already trusts run without the review. To work without the flag, start Codex by hand in the task's terminal; its hooks then come from its own settings.
 - **Copilot names no event.** Its hook gets the same JSON shape for several events, so each hook command names its event: `natamux hook copilot agentStop`. In the real session the hooks ran in a new, untrusted folder, and got Natamux's environment variables.
 - **JSON answers.** Cursor blocks a shell command when a hook's answer is not JSON, and Gemini reads the answer as JSON, so `natamux hook cursor` and `natamux hook gemini` print `{}`, even outside a Natamux terminal.

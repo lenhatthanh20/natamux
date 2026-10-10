@@ -79,6 +79,17 @@ describe('projectSettingsSchema', () => {
       createIssue: 'on-spec-approved',
       linkInPr: true,
     })
+    expect(DEFAULT_PROJECT_SETTINGS.agents).toEqual({ permissionMode: 'auto' })
+  })
+
+  it('takes auto or ask as the permission mode of the agents', () => {
+    expect(projectSettingsSchema.parse({ agents: {} }).agents.permissionMode).toBe('auto')
+    expect(
+      projectSettingsSchema.parse({ agents: { permissionMode: 'ask' } }).agents.permissionMode,
+    ).toBe('ask')
+    const wrong = projectSettingsSchema.safeParse({ agents: { permissionMode: 'yolo' } })
+    expect(wrong.success).toBe(false)
+    expect(wrong.error?.issues[0]?.path).toEqual(['agents', 'permissionMode'])
   })
 
   it('reads context sources by type', () => {

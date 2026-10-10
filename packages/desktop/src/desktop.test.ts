@@ -9,9 +9,9 @@ import { loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
-import { freePort, loginShellPath, waitForHealth } from './startup.js'
+import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 
-type Done = (error: Error | null, stdout: string) => void
+type Done = (error: Error | null, stdout: string, stderr: string) => void
 
 let dir: string
 
@@ -86,6 +86,7 @@ describe('daemonEnv', () => {
       NATAMUX_DATA_DIR: '/data',
       NATAMUX_REPO_DIR: '/repo',
       NATAMUX_WEB_DIR: '/web',
+      NATAMUX_BIN_DIR: '/app/bin',
       PATH: ['/app/bin', '/opt/homebrew/bin', '/usr/bin'].join(delimiter),
     })
   })
@@ -150,17 +151,105 @@ describe('startup', () => {
     ).rejects.toThrow(/did not answer/)
   })
 
-  it('reads the PATH of the login shell between its marks', async () => {
-    const run = ((_file: string, args: string[], _options: unknown, done: Done) => {
-      expect(args[0]).toBe('-ilc')
-      done(null, 'Welcome!\n__NATAMUX_PATH__/opt/homebrew/bin:/usr/bin__NATAMUX_PATH__')
-    }) as unknown as typeof execFile
-    expect(await loginShellPath('/bin/zsh', run)).toBe('/opt/homebrew/bin:/usr/bin')
-    expect(await loginShellPath(undefined, run)).toBeUndefined()
+  const PATH_OUT = 'Welcome!\n__NATAMUX_PATH__/opt/homebrew/bin:/usr/bin__NATAMUX_PATH__'
 
-    const failing = ((_file: string, _args: string[], _options: unknown, done: Done) =>
-      done(new Error('timeout'), '')) as unknown as typeof execFile
-    expect(await loginShellPath('/bin/zsh', failing)).toBeUndefined()
+  function runner(error: Error | null, stdout: string, stderr = '') {
+    const calls: string[][] = []
+    const run = ((_file: string, args: string[], _options: unknown, done: Done) => {
+      calls.push(args)
+      done(error, stdout, stderr)
+    }) as unknown as typeof execFile
+    return { run, calls }
+  }
+
+  function failure(fields: { killed?: boolean; code?: number | string; signal?: string }): Error {
+    return Object.assign(new Error('Command failed'), fields)
+  }
+
+  it('reads the PATH of the login shell between its marks', async () => {
+    const { run, calls } = runner(null, PATH_OUT)
+    expect(await loginShellPath('/bin/zsh', run)).toEqual({ path: '/opt/homebrew/bin:/usr/bin' })
+    expect(calls[0]?.[0]).toBe('-ilc')
+  })
+
+  it('keeps the PATH when a startup file fails and the shell exits with an error', async () => {
+    const { run } = runner(failure({ code: 1 }), PATH_OUT, 'zshrc:112: command not found: mise')
+    expect(await loginShellPath('/bin/zsh', run)).toEqual({ path: '/opt/homebrew/bin:/usr/bin' })
+  })
+
+  it('keeps the PATH when the shell is killed after printing it', async () => {
+    const timedOut = runner(failure({ killed: true, signal: 'SIGTERM' }), PATH_OUT)
+    expect(await loginShellPath('/bin/zsh', timedOut.run)).toEqual({
+      path: '/opt/homebrew/bin:/usr/bin',
+    })
+  })
+
+  it('takes only the PATH between the marks, trimmed', async () => {
+    const noisy = runner(
+      null,
+      '\u001b[32mhello\u001b[0m\n__NATAMUX_PATH__ /opt/homebrew/bin:/usr/bin \n__NATAMUX_PATH__\u001b[0m bye',
+    )
+    expect(await loginShellPath('/bin/zsh', noisy.run)).toEqual({
+      path: '/opt/homebrew/bin:/usr/bin',
+    })
+  })
+
+  it('gives no PATH when a mark is missing or nothing is between the marks', async () => {
+    const cut = runner(failure({ killed: true }), 'Welcome!\n__NATAMUX_PATH__/opt/homebrew/bin')
+    expect(await loginShellPath('/bin/zsh', cut.run)).toEqual({
+      problem: 'it took longer than 10 s',
+    })
+    for (const stdout of [
+      '__NATAMUX_PATH____NATAMUX_PATH__',
+      '__NATAMUX_PATH__  __NATAMUX_PATH__',
+    ]) {
+      const empty = runner(null, stdout)
+      expect(await loginShellPath('/bin/zsh', empty.run)).toEqual({
+        problem: 'it printed no PATH',
+      })
+    }
+  })
+
+  it('tells why it could not read the PATH', async () => {
+    const timedOut = runner(failure({ killed: true }), '')
+    expect(await loginShellPath('/bin/zsh', timedOut.run)).toEqual({
+      problem: 'it took longer than 10 s',
+    })
+
+    const exited = runner(failure({ code: 2 }), 'Welcome!', '\nzshrc:3: parse error\nmore\n')
+    expect(await loginShellPath('/bin/zsh', exited.run)).toEqual({
+      problem: 'it exited with code 2: zshrc:3: parse error',
+    })
+
+    const missing = runner(failure({ code: 'ENOENT' }), '')
+    expect(await loginShellPath('/bin/zsh', missing.run)).toEqual({
+      problem: 'Command failed',
+    })
+
+    const silent = runner(null, 'Welcome!')
+    expect(await loginShellPath('/bin/zsh', silent.run)).toEqual({
+      problem: 'it printed no PATH',
+    })
+  })
+
+  it('does not run anything when there is no login shell', async () => {
+    const { run, calls } = runner(null, PATH_OUT)
+    expect(await loginShellPath(undefined, run)).toEqual({ problem: '$SHELL is not set' })
+    expect(await loginShellPath('', run)).toEqual({ problem: '$SHELL is not set' })
+    expect(await loginShellPath('   ', run)).toEqual({ problem: '$SHELL is not set' })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('logs one line with the reason and the PATH used instead, only when the read failed', () => {
+    expect(loginPathLogLine({ path: '/opt/homebrew/bin:/usr/bin' }, '/usr/bin')).toBeUndefined()
+    const line = loginPathLogLine({ problem: 'it took longer than 10 s' }, '/usr/bin:/bin')
+    expect(line).toBe(
+      'Could not read the login shell PATH (it took longer than 10 s); using /usr/bin:/bin\n',
+    )
+    expect(line?.trimEnd().split('\n')).toHaveLength(1)
+    expect(loginPathLogLine({ problem: '$SHELL is not set' }, undefined)).toBe(
+      'Could not read the login shell PATH ($SHELL is not set); using (none)\n',
+    )
   })
 })
 

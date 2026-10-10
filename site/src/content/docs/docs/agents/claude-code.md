@@ -16,7 +16,8 @@ Install Claude Code and log in. Follow the [Claude Code documentation](https://c
 | | |
 |---|---|
 | Program | `claude` |
-| Command line | `claude --settings <file> [extra args] '<prompt>'` |
+| Command line | `claude --settings <file> --permission-mode auto [extra args] '<prompt>'` |
+| Permission flag | `--permission-mode auto`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_CLAUDE_COMMAND` |
 | Add arguments | `NATAMUX_CLAUDE_ARGS` |
 
@@ -34,6 +35,12 @@ natamux agent start T-42 --agent claude-code
 ```
 
 `claude-code` is the default value of `--agent`.
+
+## Auto mode
+
+Natamux starts Claude Code in auto mode, so it does not stop to ask "Do you want to proceed?" for each command. Claude Code still checks each action and asks when one looks risky. If your account or version has no auto mode, Claude Code says so in the task's terminal.
+
+To get the prompts back, set `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents). Claude Code then uses your own `permissions.defaultMode`. To use auto mode in every Claude Code session, also outside Natamux, set `"permissions": { "defaultMode": "auto" }` in `~/.claude/settings.json`.
 
 ## How hooks are added
 

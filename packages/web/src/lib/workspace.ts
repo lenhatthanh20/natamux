@@ -58,7 +58,7 @@ export function latestQuestion(events: readonly StoredEvent[]): string | null {
   return null
 }
 
-// Why Create is off in the New workspace dialog. A source other than manual needs its reference,
+// Why Start task is off in the Start a task dialog. A source other than manual needs its reference,
 // or the task would start with no context.
 export function createBlockedReason(
   title: string,
@@ -66,7 +66,7 @@ export function createBlockedReason(
   ref: string,
 ): string | undefined {
   if (title.trim() === '') {
-    return 'Enter a name'
+    return 'Enter a title'
   }
   return source !== 'manual' && ref.trim() === '' ? 'Enter the reference of the context' : undefined
 }

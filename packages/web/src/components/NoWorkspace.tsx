@@ -46,7 +46,7 @@ export function NoWorkspace({
         <EmptyState icon={FolderGit2} title="No workspace">
           {finished
             ? `${task.id} is ${task.state === 'done' ? 'done' : 'cancelled'} and has no workspace.`
-            : `${task.id} has no workspace yet. Make one to work on it, or start an agent in a new one.`}
+            : `${task.id} has no workspace yet. Create one to work on it, or start an agent in a new one.`}
           {!finished && (
             <span className="mt-4 flex flex-col items-center gap-3">
               {branches !== undefined && branches.branches.length > 1 && (
