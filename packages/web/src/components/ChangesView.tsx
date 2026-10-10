@@ -287,7 +287,13 @@ export function ChangesView({
         actions={tab === 'terminal' ? <div ref={setTabActions} className="flex" /> : undefined}
         tabs={[
           { id: 'terminal', label: 'Terminal', icon: Terminal },
-          { id: 'changes', label: 'Changes', icon: FileDiffIcon },
+          // The files the tab lists, so the user sees from any tab that the agent changed some.
+          {
+            id: 'changes',
+            label: 'Changes',
+            icon: FileDiffIcon,
+            count: uncommitted !== null && uncommitted > 0 ? uncommitted : undefined,
+          },
           { id: 'history', label: 'History', icon: History },
           { id: 'docs', label: 'Docs', icon: FileText },
         ]}

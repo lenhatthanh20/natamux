@@ -114,6 +114,20 @@ describe('ChangesView', () => {
     await waitFor(() => expect(openPullRequest).toHaveBeenCalledTimes(1))
   })
 
+  it('counts the files that are not committed on the Changes tab', async () => {
+    view({ changes: [CHANGE, { ...CHANGE, path: 'src/b.ts' }] })
+
+    const tab = screen.getByRole('tab', { name: /Changes/ })
+    await waitFor(() => expect(tab.textContent).toBe('Changes2'))
+  })
+
+  it('shows no count on the Changes tab when every file is committed', async () => {
+    view()
+
+    await screen.findByRole('button', { name: 'Push ↑1' })
+    expect(screen.getByRole('tab', { name: /Changes/ }).textContent).toBe('Changes')
+  })
+
   it('approves the stage of a task in review from the banner', async () => {
     const approveStage = vi.fn(async () => TASK)
     const onSendBack = vi.fn()
