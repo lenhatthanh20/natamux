@@ -65,7 +65,7 @@ Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2
 | #90 loopback past a proxy | Read: fine. To run with `HTTP_PROXY` set |
 | #91 auto permission mode | Read: fine. To run with a real agent |
 | #92 login shells | Read: fine (zsh, bash, fish, nu; Windows unchanged). To run from Finder |
-| #93 macOS Apple silicon only | Bug: the dry run started no app and checked no update, since both steps ran on Linux only. Fixed: both run on macOS too |
+| #93 macOS Apple silicon only | Bug: the dry run started no app and checked no update, since both steps ran on Linux only. Fixed: both run on macOS too. Dry run passed: the app starts signed in; acting as 0.0.0 it downloads v0.1.2, the checksum matches, and the unpacked app is 0.1.2 ([run](https://github.com/lenhatthanh20/natamux/actions/runs/38066833212)) |
 | #89 wording, notes | Read: fine |
 | #94 details hidden | Read: fine |
 | #95 no commit by default | Bug: the fake agent still committed, and in Testing it wrote over `test-spec.md`. Fixed, with `scripts/fake-agent.test.sh` in CI. `docs/e2e-stages-test.md` updated |
@@ -76,4 +76,4 @@ Base: main at fa9333e (v0.1.2 plus #89–#99). First pass: the diff since v0.1.2
 
 Left for later:
 - v0.1.2 on an Intel Mac or Linux finds a newer release with no file for it. Timed checks fail quietly; **Check for Updates…** says "SHA256SUMS.txt has no line for …". No change in the app can reach those copies; the release notes should say the builds are paused.
-- Still to run: MVP checks 1–4, check 2.1 with a real agent (`agents.permissionMode` set to `default`), the cases of `docs/e2e-stages-test.md`, and the release dry run.
+- Still to run: MVP checks 1–4, check 2.1 with a real agent (`agents.permissionMode` set to `default`), the cases of `docs/e2e-stages-test.md`, and the swap on **Restart Now** (the dry run stops before it).
