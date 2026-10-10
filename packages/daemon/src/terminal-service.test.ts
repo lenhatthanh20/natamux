@@ -19,6 +19,8 @@ import {
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
+// Tests that put thousands of lines on a screen, slower with coverage on.
+const LONG_TEST_MS = 30_000
 
 function setup(options: { now?: () => number } = {}) {
   const { spawn, ptys } = fakeSpawner()
@@ -181,7 +183,7 @@ describe('TerminalService', () => {
     expect(rows).toContain(`line ${count - TERMINAL_SCROLLBACK_LINES}`)
     expect(rows).not.toContain('line 1')
     expect(rows.at(-1)).toBe(`line ${count}`)
-  })
+  }, LONG_TEST_MS)
 
   it('tells the clients when the shell ends, and starts a new one next time', () => {
     const { service, ptys } = setup()
@@ -379,7 +381,7 @@ describe('attaching to a running shell', () => {
     await service.settled('T-0001')
 
     expect(await screenOf(later.messages)).toEqual(numberedLines(8000))
-  })
+  }, LONG_TEST_MS)
 
   it.each([5000, 5001, size.rows + 1000, size.rows + 1001])(
     'replays all of %i lines, past the old limits',
@@ -414,7 +416,7 @@ describe('attaching to a running shell', () => {
 
     expect(await screenOf(later.messages, wide)).toEqual(lines)
     expect(outputOf(later.messages)).toContain('\u001b[32m00001')
-  })
+  }, LONG_TEST_MS)
 
   it('replays the last line even without a line break', async () => {
     const { service, ptys } = setup()
