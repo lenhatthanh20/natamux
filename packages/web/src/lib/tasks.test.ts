@@ -13,6 +13,7 @@ import {
   filterTasks,
   formatAge,
   isQuiet,
+  laneSummary,
   needsMeReason,
   needsMeTasks,
   nextSort,
@@ -135,6 +136,21 @@ describe('stage labels', () => {
       expect(stageLabel(task)).toBeNull()
       expect(stageStateLabel(task)).toBe(STATE_LABEL[state])
     }
+  })
+})
+
+describe('laneSummary', () => {
+  it('lists each stage of a group with its state', () => {
+    const task = makeTask({
+      stage: 'build',
+      state: 'review',
+      lanes: { 'test-spec': 'review', implement: 'running' },
+    })
+    expect(laneSummary(task)).toBe('Test spec: In review · Implement: Running')
+  })
+
+  it('is empty outside a group', () => {
+    expect(laneSummary(makeTask({ state: 'running' }))).toBeUndefined()
   })
 })
 

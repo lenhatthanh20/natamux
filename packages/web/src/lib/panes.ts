@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@natamux/core'
+import type { Task, TaskState, TerminalLane } from '@natamux/core'
 import { STATE_LABEL } from './tasks'
 
 // More panes than this make each terminal too small to read.
@@ -65,4 +65,32 @@ export function paneStateText(state: TaskState, activity: string | null | undefi
   }
   const label = STATE_LABEL[state]
   return state === 'running' && activity ? `${label} · ${activity}` : label
+}
+
+// The state an agent terminal shows, or null for one that works on no stage. The daemon names the
+// stage of each terminal; the state comes from the task, which live updates keep fresh.
+export function terminalState(
+  task: Pick<Task, 'stage' | 'state' | 'lanes'>,
+  lane: TerminalLane,
+): TaskState | null {
+  if (lane.stage === null) {
+    return null
+  }
+  return task.lanes[lane.stage] ?? (lane.stage === task.stage ? task.state : lane.state)
+}
+
+// The agents grid shows only Shell 1. This names another agent terminal that needs the user.
+export function otherTerminalHint(
+  task: Pick<Task, 'stage' | 'state' | 'lanes'>,
+  lanes: Readonly<Record<string, TerminalLane>> | undefined,
+): string | undefined {
+  const states = Object.entries(lanes ?? {})
+    .filter(([name]) => name !== '1')
+    .map(([name, lane]) => ({ name, state: terminalState(task, lane) }))
+  const waiting = states.find((entry) => entry.state === 'needs-input')
+  if (waiting !== undefined) {
+    return `Shell ${waiting.name} needs your input`
+  }
+  const failed = states.find((entry) => entry.state === 'failed')
+  return failed === undefined ? undefined : `Shell ${failed.name} failed`
 }

@@ -3,6 +3,7 @@ import { ArrowUpFromLine, ExternalLink, GitBranch, GitPullRequest } from 'lucide
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { copyText } from '../lib/clipboard'
+import { laneSummary } from '../lib/tasks'
 import { pullRequestButton, pushButton } from '../lib/workspace'
 import { StateBadge } from './StateBadge'
 import { Button } from './ui/Button'
@@ -71,7 +72,7 @@ export function WorkspaceHeader({
       >
         {task.title}
       </h2>
-      <StateBadge state={task.state} />
+      <StateBadge state={task.state} lanes={laneSummary(task)} />
       {task.branch !== null && (
         <button
           type="button"

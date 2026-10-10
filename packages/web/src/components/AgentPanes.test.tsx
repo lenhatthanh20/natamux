@@ -1,7 +1,7 @@
 import type { Task, TaskState } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createElement } from 'react'
+import { type ComponentProps, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentPanes } from './AgentPanes'
 
@@ -42,8 +42,15 @@ function makeTask(id: string, overrides: Partial<Task> = {}): Task {
   }
 }
 
-function grid(tasks: Task[], on: { onChange?: () => void; onOpenTask?: () => void } = {}) {
+type GridExtras = Pick<ComponentProps<typeof AgentPanes>, 'terminals' | 'activity'>
+
+function grid(
+  tasks: Task[],
+  on: { onChange?: () => void; onOpenTask?: () => void } = {},
+  extras: GridExtras = {},
+) {
   const props = {
+    ...extras,
     chosen: null,
     onChange: on.onChange ?? vi.fn(),
     layout: '4' as const,
@@ -170,5 +177,39 @@ describe('AgentPanes header around the badge', () => {
       within(header('T-0001')).getByRole('button', { name: 'Close Agent of T-0001' }),
     )
     expect(onChange).toHaveBeenCalledWith([])
+  })
+})
+
+describe('AgentPanes in a group', () => {
+  const build = (lanes: Task['lanes'], state: TaskState) =>
+    makeTask('T-0001', { stage: 'build', state, lanes })
+  const terminals = {
+    'T-0001': {
+      '1': { stage: 'implement', state: 'running' as const },
+      '2': { stage: 'test-spec', state: 'running' as const },
+    },
+  }
+  const stateLine = () => header('T-0001').querySelector('[data-tip-overflow]')?.textContent
+
+  it('shows the state of Shell 1, and says that Shell 2 waits for the user', () => {
+    const task = build({ implement: 'running', 'test-spec': 'needs-input' }, 'needs-input')
+    grid([task], {}, { terminals, activity: { 'T-0001': { '1': 'Edit src/a.ts' } } })
+    expect(stateLine()).toBe('Running · Edit src/a.ts')
+    const glyph = header('T-0001').querySelector('[data-state]')
+    expect(glyph?.getAttribute('data-state')).toBe('running')
+    expect(within(header('T-0001')).getByText('Shell 2 needs your input')).toBeTruthy()
+    expect(header('T-0001').className).not.toMatch(/bg-signal-soft/)
+  })
+
+  it('does not take the activity of Shell 2 for Shell 1', () => {
+    const task = build({ implement: 'running', 'test-spec': 'running' }, 'running')
+    grid([task], {}, { terminals, activity: { 'T-0001': { '2': 'Edit test-spec.md' } } })
+    expect(stateLine()).toBe('Running')
+    expect(within(header('T-0001')).queryByText(/Shell 2/)).toBeNull()
+  })
+
+  it('shows the task state when the terminals are not known yet', () => {
+    grid([build({ implement: 'running', 'test-spec': 'needs-input' }, 'needs-input')])
+    expect(stateLine()).toBe('Needs your input')
   })
 })

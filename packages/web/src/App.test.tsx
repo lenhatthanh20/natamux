@@ -223,7 +223,7 @@ function installDaemon(
     }
     if (path === '/api/activity' && method === 'GET') {
       const entry = { text: 'Bash: pnpm test', at: '2026-10-08T09:00:00Z' }
-      return json({ activity: { 'T-0002': entry } })
+      return json({ activity: { 'T-0002': { '1': entry } } })
     }
     if (path === '/api/git/branches' && method === 'GET') {
       return json({ branches: ['main', 'release'], current: 'main' })
@@ -253,7 +253,11 @@ function installDaemon(
     }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
       const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
-      return json({ terminals: ['1'], agents: task?.agent ? ['1'] : [] })
+      if (!task?.agent) {
+        return json({ terminals: ['1'], agents: [], lanes: {} })
+      }
+      const lanes = { '1': { stage: task.stage, state: task.state } }
+      return json({ terminals: ['1'], agents: ['1'], lanes })
     }
     if (path === '/api/github/issues' && method === 'GET') {
       return json({
