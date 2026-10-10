@@ -154,6 +154,7 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 
 - `natamux done` sends `stage.reported`. It reads the task from `NATAMUX_TASK_ID` and the terminal from `NATAMUX_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
 - **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `natamux done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
+- **A paused turn is not a stop.** When the `Stop` lists background work that will wake the agent again (a background shell, a monitor, a scheduled prompt), the stage stays `running` with "Waiting for …" as its summary (`agent.waiting`, see `docs/claude-code-adapter.md`).
 
 **Step 2: the checks.** After the report the daemon checks the result itself:
 
@@ -422,7 +423,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 - **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
 - **Mock-up:** the canvas "Natamux stage progress" shows both views, with a light and dark switch.
 
-**Task progress page** (the Progress tab of a task). It shows what each stage did and the evidence that it is finished.
+**Task progress page** (the Progress view of the details panel, beside the workspace). It shows what each stage did and the evidence that it is finished. The panel is narrow (320-560), so everything is one column.
 
 - **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. A bar with one segment per stage, as wide as the time spent; a parallel step is two thin bars on top of each other; a running segment has moving stripes.
 - **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
@@ -440,7 +441,9 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 | `testing` | The command, passed and failed counts, the log of a failed run |
 | `release` | The pull request, its checks, the merge, the issue it closes |
 
-- **Side panel:** time per stage, task details (repository, branch, base, context source, agents and terminals, ports, pull request), and the latest events with "All events".
+- **One column:** the overview figures in a 2 × 2 grid and the time bar, then the stages. A done or skipped stage is one line until it is opened; the current stage is always open and scrolls into view; a parallel group stacks its cards. Approve is the first button of the current stage and spans the card.
+- **Below the stages:** "Context and issue" (open), "Time per stage" and "Latest events" (closed), as sections that fold.
+- **Stage files** open in the Docs tab of the workspace; the panel stays open.
 - **Data:** the evidence of each stage entry (`checks`, `files`, `commits`, `rounds`) is built in the web app from the task's events and stage files (`GET /tasks/:id/events`, `GET /tasks/:id/files`).
 
 **Custom pipelines in the progress views.** Both views are drawn from the pipeline; no stage is fixed in the web code.

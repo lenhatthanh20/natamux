@@ -13,6 +13,7 @@ import {
   filterTasks,
   formatAge,
   isQuiet,
+  laneSummary,
   needsMeReason,
   needsMeTasks,
   nextSort,
@@ -41,6 +42,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     stages: ['implement', 'review', 'release'],
     lanes: {},
     stageSince: null,
+    backgroundSince: null,
     context: null,
     issue: null,
     parentId: null,
@@ -138,6 +140,21 @@ describe('stage labels', () => {
   })
 })
 
+describe('laneSummary', () => {
+  it('lists each stage of a group with its state', () => {
+    const task = makeTask({
+      stage: 'build',
+      state: 'review',
+      lanes: { 'test-spec': 'review', implement: 'running' },
+    })
+    expect(laneSummary(task)).toBe('Test spec: In review · Implement: Running')
+  })
+
+  it('is empty outside a group', () => {
+    expect(laneSummary(makeTask({ state: 'running' }))).toBeUndefined()
+  })
+})
+
 describe('isQuiet', () => {
   const task = makeTask({ state: 'running', updatedAt: '2026-10-08T09:00:00.000Z' })
 
@@ -156,6 +173,16 @@ describe('isQuiet', () => {
       expect(isQuiet({ ...task, state }, new Date('2026-10-09T09:00:00.000Z'))).toBe(false)
     },
   )
+
+  it.each([
+    '2026-10-08T09:01:00.000Z',
+    '2026-10-08T09:10:00.000Z',
+    '2026-10-08T09:11:00.000Z',
+    '2026-10-08T15:00:00.000Z',
+  ])('is never true while the agent waits for its background work, at %s', (now) => {
+    const waiting = { ...task, backgroundSince: task.updatedAt }
+    expect(isQuiet(waiting, new Date(now))).toBe(false)
+  })
 })
 
 describe('needsMeTasks', () => {
@@ -178,6 +205,57 @@ describe('needsMeTasks', () => {
       makeTask({ id: 'T-0003', state: 'review', updatedAt: '2026-10-08T09:00:00.000Z' }),
     ]
     expect(needsMeTasks(tasks, now).map((task) => task.id)).toEqual(['T-0001', 'T-0003'])
+  })
+
+  it('leaves out a running task that waits for background work, however long it waits', () => {
+    const tasks = [
+      makeTask({
+        id: 'T-0001',
+        state: 'running',
+        updatedAt: '2026-10-08T07:00:00.000Z',
+        backgroundSince: '2026-10-08T07:00:00.000Z',
+      }),
+    ]
+    expect(needsMeTasks(tasks, now)).toEqual([])
+    expect(needsMeReason(tasks[0] as Task, now)).not.toBe('quiet')
+  })
+
+  // The daemon moves the stage of an agent it ends with the workspace back to ready.
+  describe('after a workspace is removed', () => {
+    const removedAt = '2026-10-08T09:00:00.000Z'
+    const removed = makeTask({ id: 'T-0001', state: 'ready', updatedAt: removedAt })
+    const quiet = makeTask({
+      id: 'T-0002',
+      state: 'running',
+      workspace: '/work/T-0002',
+      updatedAt: '2026-10-08T08:00:00.000Z',
+    })
+
+    it.each([
+      '2026-10-08T09:10:00.000Z',
+      '2026-10-08T09:10:00.001Z',
+      '2026-10-08T09:15:00.000Z',
+      '2026-10-09T09:00:00.000Z',
+    ])('leaves the task out at %s', (time) => {
+      expect(needsMeTasks([removed], new Date(time))).toEqual([])
+    })
+
+    it('still lists another workspace that is quiet', () => {
+      const listed = needsMeTasks([removed, quiet], new Date('2026-10-08T09:15:00.000Z'))
+      expect(listed.map((task) => task.id)).toEqual(['T-0002'])
+    })
+  })
+
+  it.each<TaskState>(['needs-input', 'failed', 'blocked'])(
+    'lists a task with no workspace that is %s',
+    (state) => {
+      expect(needsMeTasks([makeTask({ state })], now)).toHaveLength(1)
+    },
+  )
+
+  it('lists a running task with no workspace that has been quiet for a long time', () => {
+    const task = makeTask({ state: 'running', updatedAt: '2026-10-08T08:00:00.000Z' })
+    expect(needsMeTasks([task], now)).toHaveLength(1)
   })
 
   it('does not change the list it is given', () => {

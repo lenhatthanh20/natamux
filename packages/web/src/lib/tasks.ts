@@ -20,6 +20,16 @@ export const STATE_LABEL: Record<TaskState, string> = {
   cancelled: 'Cancelled',
 }
 
+// Each stage of a group with its own state, for the tooltip of the task state. The task state is
+// the most urgent of these, so this shows what the other stages do.
+export function laneSummary(task: Pick<Task, 'lanes'>): string | undefined {
+  const lanes = Object.entries(task.lanes)
+  if (lanes.length === 0) {
+    return undefined
+  }
+  return lanes.map(([id, state]) => `${stageName({ id })}: ${STATE_LABEL[state]}`).join(' · ')
+}
+
 export type TaskAction = {
   label: string
   type: EventType
@@ -69,8 +79,14 @@ export function upsertTask(tasks: readonly Task[], task: Task): Task[] {
 // closed. Ten minutes: a long command can keep an agent silent for a while without a problem.
 export const QUIET_AFTER_MS = 10 * 60 * 1000
 
+// An agent that waits for its background work, such as a CI watch, is woken by it, so it is not
+// stuck however long the work takes.
 export function isQuiet(task: Task, now: Date): boolean {
-  return task.state === 'running' && now.getTime() - Date.parse(task.updatedAt) >= QUIET_AFTER_MS
+  return (
+    task.state === 'running' &&
+    task.backgroundSince === null &&
+    now.getTime() - Date.parse(task.updatedAt) >= QUIET_AFTER_MS
+  )
 }
 
 // What the agent button of a task does. While the agent works or waits there is nothing to start.

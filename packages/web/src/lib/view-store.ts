@@ -4,8 +4,9 @@ import { type PaneLayout, parsePaneLayout } from './panes'
 import type { Route } from './route'
 import type { TaskSort } from './tasks'
 
-export type WorkspaceTab = 'changes' | 'history' | 'terminal' | 'progress' | 'docs'
+export type WorkspaceTab = 'changes' | 'history' | 'terminal' | 'docs'
 export type Layout = 'table' | 'board' | 'progress'
+export type DetailsView = 'progress' | 'details'
 
 const LAYOUT_KEY = 'natamux.layout'
 const PINNED_KEY = 'natamux.pinned'
@@ -15,6 +16,7 @@ const PANE_LAYOUT_KEY = 'natamux.pane-layout'
 const SHOW_FINISHED_KEY = 'natamux.show-finished'
 const SEEN_KEY = 'natamux.seen-state'
 const RECENT_KEY = 'natamux.recent'
+const DETAILS_VIEW_KEY = 'natamux.details-view'
 // Old tasks do not need a remembered answer forever.
 const MAX_REMEMBERED_DETAILS = 200
 const MAX_REMEMBERED_SEEN = 1000
@@ -70,6 +72,29 @@ function saveSidebarOpen(open: boolean): void {
   } catch {
     // Not kept; the next visit shows the sidebar.
   }
+}
+
+function savedDetailsView(): DetailsView | null {
+  try {
+    const saved = globalThis.localStorage?.getItem(DETAILS_VIEW_KEY)
+    return saved === 'progress' || saved === 'details' ? saved : null
+  } catch {
+    return null
+  }
+}
+
+function saveDetailsView(view: DetailsView): void {
+  try {
+    globalThis.localStorage?.setItem(DETAILS_VIEW_KEY, view)
+  } catch {
+    // Not kept; the next visit picks the view by where the details are.
+  }
+}
+
+// Until the user picks a view, the details show the progress beside a workspace, where the user
+// watches the agent, and the task itself beside the list.
+export function detailsViewFor(picked: DetailsView | null, inWorkspace: boolean): DetailsView {
+  return picked ?? (inWorkspace ? 'progress' : 'details')
 }
 
 function isWorkspaceTab(value: unknown): value is WorkspaceTab {
@@ -240,6 +265,8 @@ type ViewData = {
   selectedId: string | null
   // Whether the details of each task are open. A task without an entry has them closed.
   detailOpenByTask: Record<string, boolean>
+  // The view of the details that the user picked last. Null: never picked.
+  detailsView: DetailsView | null
   // The docked sidebar. Collapsed by the toggle or by dragging it narrow.
   sidebarOpen: boolean
   // The sidebar as a drawer on small screens. Never remembered.
@@ -278,6 +305,9 @@ type ViewActions = {
   setSearch: (search: string) => void
   select: (id: string | null) => void
   setDetailOpen: (taskId: string, open: boolean) => void
+  setDetailsView: (view: DetailsView) => void
+  // Opens the details of a task on its progress.
+  showProgress: (taskId: string) => void
   setSidebarOpen: (open: boolean) => void
   setDrawerOpen: (open: boolean) => void
   openChanges: (taskId: string, tab?: WorkspaceTab) => void
@@ -303,6 +333,7 @@ export const initialViewData: ViewData = {
   search: '',
   selectedId: null,
   detailOpenByTask: {},
+  detailsView: null,
   sidebarOpen: true,
   drawerOpen: false,
   changesTaskId: null,
@@ -327,6 +358,7 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   pinned: savedPinned(),
   sidebarOpen: savedSidebarOpen(),
   tabByTask: savedTabs(),
+  detailsView: savedDetailsView(),
   paneLayout: savedPaneLayout(),
   toggleStateFilter: (state) =>
     set((current) => ({ stateFilter: current.stateFilter === state ? null : state })),
@@ -354,6 +386,16 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
       const detailOpenByTask = withDetailOpen(current.detailOpenByTask, taskId, open)
       return { detailOpenByTask }
     }),
+  setDetailsView: (detailsView) => {
+    saveDetailsView(detailsView)
+    set({ detailsView })
+  },
+  showProgress: (taskId) =>
+    set((current) => {
+      saveDetailsView('progress')
+      const detailOpenByTask = withDetailOpen(current.detailOpenByTask, taskId, true)
+      return { detailOpenByTask, detailsView: 'progress' }
+    }),
   setSidebarOpen: (open) => {
     saveSidebarOpen(open)
     set({ sidebarOpen: open })
@@ -379,6 +421,13 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
       if (route.kind === 'workspace') {
         const recent = withRecent(current.recent, route.id)
         saveRecent(recent)
+        // The address of the old Progress tab shows the progress in the details.
+        const progress = route.showProgress
+          ? {
+              detailOpenByTask: withDetailOpen(current.detailOpenByTask, route.id, true),
+              detailsView: 'progress' as const,
+            }
+          : {}
         return {
           changesTaskId: route.id,
           changesTab: route.tab,
@@ -386,6 +435,7 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
           agentsOpen: false,
           selectedId: route.id,
           recent,
+          ...progress,
         }
       }
       if (route.kind === 'agents') {

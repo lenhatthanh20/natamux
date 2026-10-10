@@ -65,7 +65,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 | Embedded terminal per workspace (multiple tabs). Done: several shells per task, as tabs; each keeps running when the dashboard closes, with recent output on reconnect. The agent runs in shell 1 | MVP |
 | Setup script per repo (install deps, copy env files) when a workspace is created. Done: `.natamux-setup` (or `.natamux-setup.ps1` on Windows) in the repository runs in the task's first terminal | v1 |
 | Port allocation per workspace so dev servers do not clash. Done: each task has 10 ports from 20000 + 10 × its number; its terminals get `PORT` and `NATAMUX_PORT` | v1 |
-| Clean up a workspace: confirm first, then remove worktree and branch | MVP |
+| Clean up a workspace: confirm first, then remove worktree and branch. Done: also all finished (done or cancelled) workspaces of a project at once, from its sidebar group | MVP |
 | Fan-out: one prompt to several agents, compare results, keep the winner. Done: **Fan out** copies a task 1 to 5 times, each with its own workspace and Claude Code; the copies share a `tries-…` label and are compared side by side in the details (state, diff size, pull request); **Keep this one** cancels the other tries | v1 |
 | SSH and remote workspaces | Later |
 | Container isolation | Later |
@@ -113,7 +113,7 @@ Goals:
 | Task table: title, state badge, agent, last activity ("2m ago"), elapsed time, branch, diff size (+/−), PR and CI status. Done; elapsed time is the age of the task | MVP |
 | Counts per state in a header bar; click to filter | MVP |
 | Board view (columns by state), toggle with the table. Done; the choice is kept per browser | v1 |
-| Progress view: every task against the stages of its pipeline, with turning, breathing and done markers; a Progress tab per task with the time and evidence of each stage. Done | v1 |
+| Progress view: every task against the stages of its pipeline, with turning, breathing and done markers; a Progress view in each task's details panel, beside the terminal, with the time and evidence of each stage. Done | v1 |
 | One-line live summary per running task (what the agent is doing now). Done for Claude Code: the tool it is about to run (`PreToolUse`), such as "Edit src/a.ts", under the title of a running task | v1 |
 | Keyboard: `j/k` move, `enter` open, `a` approve, `r` request changes, `/` search | MVP |
 | Desktop and system notifications when a task needs me or finishes. Done in the browser: a notification when a task starts to wait while the tab is in the background, and the count in the tab title | MVP |

@@ -19,6 +19,7 @@ import { focusKind } from '../lib/dispatch'
 import { effectiveSidebarWidth } from '../lib/layout-mode'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
+import { removeEach, removeSummary } from '../lib/remove-finished'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import {
   filterTasks,
@@ -32,7 +33,7 @@ import {
 import { terminalSocketUrl } from '../lib/terminal'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
-import { useViewStore } from '../lib/view-store'
+import { detailsViewFor, useViewStore } from '../lib/view-store'
 import { rowText, tabToOpen, waitReason } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
@@ -44,6 +45,7 @@ import { NeedsMeStrip } from './NeedsMeStrip'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
 import { ProgressBoard } from './ProgressBoard'
+import { ProgressTab } from './ProgressTab'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { RepoPanel } from './RepoPanel'
 import { ShortcutSheet } from './ShortcutSheet'
@@ -85,6 +87,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     search,
     selectedId,
     detailOpenByTask,
+    detailsView,
     sidebarOpen,
     drawerOpen,
     changesTaskId,
@@ -106,6 +109,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setSearch,
     select,
     setDetailOpen,
+    setDetailsView,
+    showProgress,
     setSidebarOpen,
     setDrawerOpen,
     openChanges,
@@ -269,6 +274,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => toast(error.message, 'error'),
   })
 
+  const removeFinishedMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      removeEach(
+        ids,
+        (id) => api.removeWorkspace(id),
+        ({ task }) => mergeTask(task),
+      ),
+    onSuccess: (outcomes) => {
+      const { text, tone, detail } = removeSummary(outcomes)
+      toast(text, tone, { detail })
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
   const templateMutation = useMutation({
     mutationFn: (task: Task) =>
       api.saveTemplate({
@@ -394,6 +413,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const changesTask = tasks.find((task) => task.id === changesTaskId) ?? null
   // The open workspace's task, or else the task chosen in the list.
   const detailTask = changesTask ?? selectedTask
+  // Beside a workspace the user watches the agent, so the details show its progress first.
+  const besideWorkspace = changesTask !== null && changesTask.workspace !== null
   const detailGroup = detailTask === null ? null : tryGroup(detailTask)
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
@@ -417,6 +438,22 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   })
   const questions = Object.fromEntries(
     asking.map((task, index) => [task.id, rowText(waitReason(askQueries[index]?.data))]),
+  )
+  // The stage of each agent shell in the agents grid, so each pane shows its own state. An agent
+  // starts and ends in its shell without a task event, so this is read again often.
+  const paneTasks = agentsOpen ? agentPaneTasks(agentPanes, tasks) : []
+  const paneQueries = useQueries({
+    queries: paneTasks.map((task) => ({
+      queryKey: ['agent-terminals', task.id],
+      queryFn: () => api.listAgentTerminals(task.id),
+      refetchInterval: 5000,
+    })),
+  })
+  const paneTerminals = Object.fromEntries(
+    paneTasks.flatMap((task, index) => {
+      const lanes = paneQueries[index]?.data
+      return lanes === undefined ? [] : [[task.id, lanes]]
+    }),
   )
   const detailOpen = detailTask !== null && !agentsOpen && detailOpenByTask[detailTask.id] === true
   const busy =
@@ -456,6 +493,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     if (detailTask !== null) {
       setDetailOpen(detailTask.id, !detailOpen)
     }
+  }
+
+  // A stage file opens in the Docs tab of the task's workspace, which may have to open first.
+  const openStageFile = (task: Task, name: string) => {
+    if (changesTask?.id === task.id) {
+      fireAppEvent('open-doc', name)
+      return
+    }
+    openChanges(task.id, 'docs')
+    // The workspace is drawn first, then it hears the request.
+    setTimeout(() => fireAppEvent('open-doc', name), 80)
   }
 
   // Shows the sidebar if it is hidden, then runs `then` once it is on screen.
@@ -555,6 +603,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       }
     },
     showTab: (tab) => fireAppEvent('workspace-tab', tab),
+    showProgress: () => {
+      if (detailTask) {
+        showProgress(detailTask.id)
+      }
+    },
     back: () => {
       const focused = document.activeElement
       if (focused instanceof HTMLElement && focusKind(focused) === 'field') {
@@ -739,7 +792,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     currentId={changesTaskId}
                     pinnedIds={pinned}
                     diffStats={diffStatsQuery.data}
-                    activity={activityQuery.data}
+                    activity={activityQuery.data?.byTask}
                     onOpen={(id) => {
                       openTask(id)
                       afterPick()
@@ -754,6 +807,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     }
                     onTogglePin={togglePin}
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+                    onRemoveFinished={(ids) => removeFinishedMutation.mutate(ids)}
+                    removingFinished={removeFinishedMutation.isPending}
                     onNewWorkspace={(repo) => openNewWorkspace({ repo })}
                     onAddRepo={() => setReposOpen(true)}
                     noProjects={noProjects}
@@ -824,6 +879,35 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       fanOutMutation.mutate({ task: detailTask, count, start })
                     }
                     onClose={() => setDetailOpen(detailTask.id, false)}
+                    view={detailsViewFor(detailsView, besideWorkspace)}
+                    onViewChange={setDetailsView}
+                    progress={
+                      <ProgressTab
+                        task={detailTask}
+                        now={now}
+                        loadSettings={() => api.getSettings(detailTask.repo ?? 'default')}
+                        loadEvents={() => api.listEvents(detailTask.id)}
+                        // A task without a workspace has no stage files yet.
+                        loadFiles={async () =>
+                          detailTask.workspace === null ? [] : api.listStageFiles(detailTask.id)
+                        }
+                        act={async (action, input) => {
+                          const updated = await api.stageAction(detailTask.id, action, input)
+                          mergeTask(updated)
+                          return updated
+                        }}
+                        startAgent={(agent) =>
+                          agentMutation.mutateAsync({ task: detailTask, agent })
+                        }
+                        createIssue={async () => {
+                          const updated = await api.createIssue(detailTask.id)
+                          mergeTask(updated)
+                          return updated
+                        }}
+                        activity={activityQuery.data?.byTask[detailTask.id]}
+                        onOpenFile={(name) => openStageFile(detailTask, name)}
+                      />
+                    }
                   />
                 ),
               }
@@ -857,7 +941,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
             onFileChange={setChangesFile}
-            activity={activityQuery.data?.[changesTask.id]}
+            terminalActivity={activityQuery.data?.byTerminal[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
               const main =
@@ -909,21 +993,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadTerminals={() => api.listTerminals(changesTask.id)}
             loadAgentTerminals={() => api.listAgentTerminals(changesTask.id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
-            loadSettings={() => api.getSettings(changesTask.repo ?? 'default')}
             loadStageFiles={() => api.listStageFiles(changesTask.id)}
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
             startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
-            stageAction={async (action, input) => {
-              const updated = await api.stageAction(changesTask.id, action, input)
-              mergeTask(updated)
-              return updated
-            }}
-            createIssue={async () => {
-              const updated = await api.createIssue(changesTask.id)
-              mergeTask(updated)
-              return updated
-            }}
           />
         ) : agentsOpen ? (
           <AgentPanes
@@ -932,7 +1005,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onChange={setAgentPanes}
             layout={paneLayout}
             onLayout={setPaneLayout}
-            activity={activityQuery.data}
+            activity={activityQuery.data?.byTerminal}
+            terminals={paneTerminals}
             connect={async (taskId, size) => {
               const ticket = await api.terminalTicket(taskId)
               return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))
@@ -1102,9 +1176,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   tasks={orderedTasks}
                   repos={repos}
                   now={now}
-                  activity={activityQuery.data}
+                  activity={activityQuery.data?.byTask}
                   loadSettings={(repo) => api.getSettings(repo)}
-                  onOpenTask={(id) => openChanges(id, 'progress')}
+                  onOpenTask={(id) => {
+                    select(id)
+                    openChanges(id, 'terminal')
+                    showProgress(id)
+                  }}
                 />
               ) : layout === 'board' ? (
                 <TaskBoard
@@ -1126,7 +1204,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
-                  activity={activityQuery.data}
+                  activity={activityQuery.data?.byTask}
                   showRepo={repos.length > 1}
                   sort={sort}
                   onSort={(key) => setSort(nextSort(sort, key))}

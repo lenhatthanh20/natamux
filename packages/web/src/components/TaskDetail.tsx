@@ -13,7 +13,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
@@ -29,6 +29,7 @@ import {
   isQuiet,
   type TaskAction,
 } from '../lib/tasks'
+import type { DetailsView } from '../lib/view-store'
 import { CompareTries } from './CompareTries'
 import { DetailSection, Field } from './DetailSection'
 import { FanOutDialog } from './FanOutForm'
@@ -44,6 +45,7 @@ import { ConfirmDialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
 import { Menu, type MenuItem } from './ui/Menu'
 import { ICON } from './ui/styles'
+import { Tabs, tabPanelProps } from './ui/Tabs'
 
 type TaskDetailProps = {
   task: Task
@@ -73,6 +75,10 @@ type TaskDetailProps = {
   diffStats?: Readonly<Record<string, DiffStat>>
   onKeepTry?: (task: Task) => void
   onClose: () => void
+  // The progress of the task. When it is set, a row of tabs switches between it and the details.
+  progress?: ReactNode
+  view?: DetailsView
+  onViewChange?: (view: DetailsView) => void
 }
 
 // "tries-t-0002" is how the daemon groups tries. People read it as "Tries of T-0002".
@@ -105,6 +111,9 @@ export function TaskDetail({
   diffStats,
   onKeepTry,
   onClose,
+  progress,
+  view = 'details',
+  onViewChange,
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
@@ -118,6 +127,8 @@ export function TaskDetail({
   // Copies of a task that works now would run beside its own agent.
   const canFanOut = onFanOut !== undefined && !isFinished && agentButton !== null
   const page = mode === 'page'
+  // The edit form is part of the details, so it shows them while it is open.
+  const shown: DetailsView = progress === undefined || editing ? 'details' : view
 
   // The E key is a command, see lib/commands.ts.
   useAppEvent('edit-task', () => setEditing(true))
@@ -164,7 +175,33 @@ export function TaskDetail({
         {!page && <IconButton label="Close details" icon={X} shortcut="Esc" onClick={onClose} />}
       </header>
 
-      {editing ? (
+      {progress !== undefined && (
+        <Tabs
+          label="View of the details"
+          idPrefix="details"
+          value={shown}
+          onChange={(next) => {
+            if (next !== shown) {
+              setEditing(false)
+              onViewChange?.(next)
+            }
+          }}
+          className="px-2"
+          tabs={[
+            { id: 'progress', label: 'Progress' },
+            { id: 'details', label: 'Details' },
+          ]}
+        />
+      )}
+
+      {shown === 'progress' ? (
+        <div
+          {...tabPanelProps('details', 'progress', 'Progress')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {progress}
+        </div>
+      ) : editing ? (
         <TaskEditForm
           task={task}
           busy={busy}
@@ -175,7 +212,10 @@ export function TaskDetail({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div
+          {...(progress === undefined ? {} : tabPanelProps('details', 'details', 'Details'))}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
           <div className="flex flex-col gap-2 p-4">
             <h2 className="text-lg font-semibold tracking-tight break-words">{task.title}</h2>
             <div className="flex flex-wrap items-center gap-1.5">

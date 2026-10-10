@@ -43,6 +43,10 @@ type WorkspaceListProps = {
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string) => void
   onRemove: (id: string) => void
+  // Removes the workspaces of these tasks, one after the other.
+  onRemoveFinished: (ids: string[]) => void
+  // A removal of finished workspaces runs.
+  removingFinished?: boolean
   // Opens the dialog for a new workspace, in that repository when one is given.
   onNewWorkspace: (repo?: string) => void
   onAddRepo: () => void
@@ -73,6 +77,8 @@ export function WorkspaceList({
   onRename,
   onTogglePin,
   onRemove,
+  onRemoveFinished,
+  removingFinished = false,
   onNewWorkspace,
   onAddRepo,
   noProjects = false,
@@ -82,7 +88,10 @@ export function WorkspaceList({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [removing, setRemoving] = useState<Pick<Repo, 'id' | 'name' | 'path'> | null>(null)
   const [finishedOpen, setFinishedOpen] = useState<ReadonlySet<string>>(new Set())
+  // The repository whose finished workspaces the user asked to remove.
+  const [clearing, setClearing] = useState<string | null>(null)
   const { pinned, groups } = workspaceGroups(repos, tasks, pinnedIds)
+  const finishedIn = (id: string) => groups.find((group) => group.repo.id === id)?.finished ?? []
   const repoName = (task: Task) =>
     repos.find((repo) => repo.id === (task.repo ?? 'default'))?.name ?? task.repo ?? undefined
 
@@ -91,15 +100,31 @@ export function WorkspaceList({
     allTasks.filter((task) => task.workspace !== null && (task.repo ?? DEFAULT_REPO_ID) === repoId)
       .length
 
-  // A group of a repository that is gone (its tasks are still there) has no actions of its own.
+  const clearItems = (id: string): MenuItem[] =>
+    finishedIn(id).length === 0
+      ? []
+      : [
+          { type: 'separator' },
+          {
+            label: 'Remove finished workspaces',
+            icon: FolderMinus,
+            danger: true,
+            disabled: removingFinished,
+            onSelect: () => setClearing(id),
+          },
+        ]
+
+  // A group of a repository that is gone (its tasks are still there) has only the actions on its
+  // workspaces.
   const repoItems = (id: string): MenuItem[] => {
     const known = repos.find((repo) => repo.id === id)
     if (known === undefined) {
-      return []
+      return clearItems(id).slice(1)
     }
     const items: MenuItem[] = [
       { label: 'Start a task', icon: Plus, onSelect: () => onNewWorkspace(id) },
       { label: 'Settings', icon: Settings, onSelect: () => onRepoSettings(id) },
+      ...clearItems(id),
     ]
     // Every workspace counts, also the ones the filter hides: the daemon refuses them all.
     const busy = totalIn(id) > 0
@@ -343,20 +368,30 @@ export function WorkspaceList({
                 )}
                 {finished.length > 0 && (
                   <li>
-                    <button
-                      type="button"
-                      {...roving.item(`finished:${repo.id}`)}
-                      aria-expanded={shownFinished}
-                      onClick={() => setFinishedOpen(flip(finishedOpen, repo.id))}
-                      className="focus-inset flex h-6 w-full items-center gap-1 rounded-md pl-6 text-left text-xs text-muted hover:text-ink"
-                    >
-                      <ChevronRight
-                        size={ICON.xs}
-                        aria-hidden="true"
-                        className={`transition-transform ${shownFinished ? 'rotate-90' : ''}`}
+                    <div className="group flex items-center pr-0.5">
+                      <button
+                        type="button"
+                        {...roving.item(`finished:${repo.id}`)}
+                        aria-expanded={shownFinished}
+                        onClick={() => setFinishedOpen(flip(finishedOpen, repo.id))}
+                        className="focus-inset flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md pl-6 text-left text-xs text-muted hover:text-ink"
+                      >
+                        <ChevronRight
+                          size={ICON.xs}
+                          aria-hidden="true"
+                          className={`transition-transform ${shownFinished ? 'rotate-90' : ''}`}
+                        />
+                        {finished.length} finished
+                      </button>
+                      <IconButton
+                        label={`Remove finished workspaces in ${repo.name}`}
+                        icon={FolderMinus}
+                        size="xs"
+                        disabled={removingFinished}
+                        onClick={() => setClearing(repo.id)}
+                        className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
                       />
-                      {finished.length} finished
-                    </button>
+                    </div>
                     {shownFinished && (
                       <ul className="flex flex-col">{finished.map((task) => row(task))}</ul>
                     )}
@@ -381,6 +416,15 @@ export function WorkspaceList({
         </div>
       )}
 
+      {clearing !== null && (
+        <ClearFinishedDialog
+          repoName={groups.find((group) => group.repo.id === clearing)?.repo.name ?? clearing}
+          tasks={finishedIn(clearing)}
+          onConfirm={onRemoveFinished}
+          onClose={() => setClearing(null)}
+        />
+      )}
+
       {removing !== null && (
         <ConfirmDialog
           title={`Remove ${removing.name} from Natamux?`}
@@ -391,5 +435,34 @@ export function WorkspaceList({
         />
       )}
     </section>
+  )
+}
+
+type ClearFinishedDialogProps = {
+  repoName: string
+  tasks: readonly Task[]
+  onConfirm: (ids: string[]) => void
+  onClose: () => void
+}
+
+function ClearFinishedDialog({ repoName, tasks, onConfirm, onClose }: ClearFinishedDialogProps) {
+  const count = tasks.length === 1 ? '1 finished workspace' : `${tasks.length} finished workspaces`
+  return (
+    <ConfirmDialog
+      title={`Remove ${count}?`}
+      description={`This deletes the worktree folders of these tasks in ${repoName}. A branch stays when it has commits that are not merged. The tasks stay too. A workspace with changes that are not committed is skipped.`}
+      confirmLabel="Remove"
+      onConfirm={() => onConfirm(tasks.map((task) => task.id))}
+      onClose={onClose}
+    >
+      <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs">
+        {tasks.map((task) => (
+          <li key={task.id} className="flex min-w-0 gap-2">
+            <span className="shrink-0 font-mono text-muted">{task.id}</span>
+            <span className="min-w-0 truncate">{task.title}</span>
+          </li>
+        ))}
+      </ul>
+    </ConfirmDialog>
   )
 }

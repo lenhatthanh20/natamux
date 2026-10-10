@@ -96,6 +96,53 @@ describe('applyEvent', () => {
     expect(result.task.state).toBe('review')
   })
 
+  describe('the wait for background work', () => {
+    function waitingTask() {
+      const task = service.createTask({ title: 'First' })
+      service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+      service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+      return service.applyEvent(task.id, { source: 'agent', type: 'agent.waiting' }).task
+    }
+
+    it('starts with agent.waiting, which keeps the state', () => {
+      const task = waitingTask()
+
+      expect(task.state).toBe('running')
+      expect(task.backgroundSince).toBe(task.updatedAt)
+      expect(readTaskFile(dataDir, task.id)?.backgroundSince).toBe(task.backgroundSince)
+    })
+
+    it('goes on through events of the daemon, such as checks that pass', () => {
+      const task = waitingTask()
+
+      service.recordPullRequestStatus(task.id, { state: 'open', checks: 'passing' })
+
+      expect(service.listEvents(task.id).at(-1)?.event.type).toBe('ci.passed')
+      expect(service.getTask(task.id).backgroundSince).toBe(task.backgroundSince)
+    })
+
+    it('ends with the next event of the agent', () => {
+      const task = waitingTask()
+
+      const result = service.applyEvent(task.id, { source: 'agent', type: 'agent.finished' })
+
+      expect(result.task.state).toBe('needs-input')
+      expect(result.task.backgroundSince).toBeNull()
+    })
+
+    it('ends when a person moves the task', () => {
+      const task = waitingTask()
+
+      const result = service.applyEvent(task.id, {
+        source: 'human',
+        type: 'state.overridden',
+        payload: { to: 'review' },
+      })
+
+      expect(result.task.backgroundSince).toBeNull()
+    })
+  })
+
   it('does not let a client send task.created', () => {
     const task = service.createTask({ title: 'First' })
     expect(() => service.applyEvent(task.id, { source: 'human', type: 'task.created' })).toThrow()
@@ -158,6 +205,55 @@ describe('applyEvent inside a group', () => {
     })
     expect(fromTerminal.task.lanes).toEqual({ 'test-spec': 'needs-input', implement: 'running' })
     expect(staged.listEvents(id).at(-1)?.event.payload).toMatchObject({ stage: 'test-spec' })
+  })
+
+  it('stops every stage whose agent runs or waits, and leaves the others', () => {
+    const id = atBuild()
+    staged.applyEvent(id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'test-spec' },
+    })
+    staged.applyEvent(id, { source: 'agent', type: 'agent.asked', payload: { stage: 'implement' } })
+
+    const task = staged.stopAgents(id)
+
+    expect(task.lanes).toEqual({ 'test-spec': 'review', implement: 'ready' })
+    expect(staged.listEvents(id).at(-1)?.event).toMatchObject({
+      type: 'agent.stopped',
+      source: 'system',
+      payload: { stage: 'implement' },
+    })
+  })
+})
+
+describe('stopAgents', () => {
+  it('makes a running stage wait to start again', () => {
+    const task = service.createTask({ title: 'First' })
+    service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+
+    expect(service.stopAgents(task.id).state).toBe('ready')
+    expect(service.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'agent.stopped',
+      payload: { stage: 'implement' },
+    })
+  })
+
+  it('makes a stage whose agent waited for you wait to start again', () => {
+    const task = service.createTask({ title: 'First' })
+    service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    service.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+    service.applyEvent(task.id, { source: 'agent', type: 'agent.asked' })
+
+    expect(service.stopAgents(task.id).state).toBe('ready')
+  })
+
+  it('records nothing for a task with no agent at work', () => {
+    const task = service.createTask({ title: 'First' })
+
+    expect(service.stopAgents(task.id)).toEqual(task)
+    expect(service.listEvents(task.id)).toHaveLength(1)
   })
 })
 

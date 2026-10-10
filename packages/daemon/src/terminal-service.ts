@@ -1,5 +1,10 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { portRange, type TerminalServerMessage, type TerminalSize } from '@natamux/core'
+import {
+  portRange,
+  TERMINAL_HISTORY_CHARS,
+  type TerminalServerMessage,
+  type TerminalSize,
+} from '@natamux/core'
 import { withLoopbackNoProxy } from './no-proxy.js'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
@@ -37,12 +42,12 @@ export class TerminalLimitError extends Error {
   }
 }
 
-// What a dashboard that connects later sees first, so the screen is not empty.
-export const SCROLLBACK_CHARS = 200_000
 export const MAX_SESSIONS = 20
 export const TICKET_TTL_MS = 30_000
-// A new dashboard gets the last screen and this many lines before it, not the whole history.
-export const REPLAY_SCROLLBACK_LINES = 1000
+// The history goes to a new dashboard in messages of this size, so no frame is megabytes long.
+export const REPLAY_CHUNK_CHARS = 64 * 1024
+// How far past the cut the history looks for a line break or an escape to start at.
+const CUT_SEARCH_CHARS = 10_000
 // A shell gets this long to end after SIGHUP, then it is killed.
 export const KILL_GRACE_MS = 2000
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
@@ -51,21 +56,85 @@ const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 // A task can have several terminals, named "1", "2" and so on. The agent runs in the first.
 export const MAIN_TERMINAL = '1'
 
-// The last `count` lines of a text, line breaks kept.
-export function lastLines(text: string, count: number): string {
-  // A text that ends with a line break has an empty last line, which is not counted.
-  let start = text.endsWith('\n') ? text.length - 1 : text.length
-  for (let seen = 0; seen < count; seen += 1) {
-    if (start <= 0) {
-      return text
-    }
-    const found = text.lastIndexOf('\n', start - 1)
-    if (found === -1) {
-      return text
-    }
-    start = found
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
+}
+
+// Where to cut the start of `text` to drop at least `from` chars. A replay that starts with half a
+// line or half an escape sequence shows garbage, so the cut moves to the next line, or else to the
+// next escape, or else off the second half of a surrogate pair.
+function cutPoint(text: string, from: number): number {
+  if (from === 0 || text[from - 1] === '\n') {
+    return from
   }
-  return text.slice(start + 1)
+  const line = text.indexOf('\n', from)
+  if (line !== -1 && line - from < CUT_SEARCH_CHARS) {
+    return line + 1
+  }
+  const sequence = text.indexOf('\u001b', from)
+  if (sequence !== -1 && sequence - from < CUT_SEARCH_CHARS) {
+    return sequence
+  }
+  return isLowSurrogate(text.charCodeAt(from)) ? from + 1 : from
+}
+
+// The output of a shell: the newest output, never more than `limit` chars.
+export class OutputHistory {
+  private chunks: string[] = []
+  private chars = 0
+
+  constructor(private readonly limit = TERMINAL_HISTORY_CHARS) {}
+
+  get size(): number {
+    return this.chars
+  }
+
+  append(data: string): void {
+    this.chunks.push(data)
+    this.chars += data.length
+    if (this.chars > this.limit) {
+      // A trim copies the whole history, so it frees an eighth of the limit, not just one chunk.
+      this.keepLast(this.limit - Math.floor(this.limit / 8))
+    }
+  }
+
+  text(): string {
+    if (this.chunks.length > 1) {
+      this.chunks = [this.chunks.join('')]
+    }
+    return this.chunks[0] ?? ''
+  }
+
+  clear(): void {
+    this.chunks = []
+    this.chars = 0
+  }
+
+  private keepLast(count: number): void {
+    const text = this.chunks.join('')
+    const kept = text.slice(cutPoint(text, text.length - count))
+    this.chunks = kept === '' ? [] : [kept]
+    this.chars = kept.length
+  }
+}
+
+// `text` in pieces of at most `size` chars, none of them ending inside a surrogate pair.
+export function replayChunks(text: string, size = REPLAY_CHUNK_CHARS): string[] {
+  const chunks: string[] = []
+  let start = 0
+  while (start < text.length) {
+    let end = Math.min(start + size, text.length)
+    if (end < text.length && end - 1 > start && isHighSurrogate(text.charCodeAt(end - 1))) {
+      end -= 1
+    }
+    chunks.push(text.slice(start, end))
+    start = end
+  }
+  return chunks
 }
 
 function sessionKey(taskId: string, terminal: string): string {
@@ -76,7 +145,7 @@ type Session = {
   taskId: string
   terminal: string
   pty: PtyProcess
-  scrollback: string
+  history: OutputHistory
   clients: Set<TerminalClient>
   size: TerminalSize
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
@@ -96,7 +165,7 @@ type TerminalServiceOptions = {
 type Ticket = { taskId: string; expiresAt: number }
 
 // Shells in the workspace of a task. A shell keeps running when the dashboard closes, so an agent
-// started in it goes on; the next dashboard that connects gets the recent output first.
+// started in it goes on; the next dashboard that connects gets the output so far first.
 export class TerminalService {
   private readonly spawn: SpawnPty
   private readonly workspaceOf: (taskId: string) => string
@@ -160,11 +229,8 @@ export class TerminalService {
       // The screen is drawn for this size, so the shell must know it before the replay.
       this.setSize(session, size)
     }
-    if (session.scrollback !== '') {
-      client.send({
-        type: 'output',
-        data: lastLines(session.scrollback, size.rows + REPLAY_SCROLLBACK_LINES),
-      })
+    for (const data of replayChunks(session.history.text())) {
+      client.send({ type: 'output', data })
     }
     session.clients.add(client)
     return () => {
@@ -221,7 +287,7 @@ export class TerminalService {
       return
     }
     this.sessions.delete(key)
-    session.scrollback = ''
+    session.history.clear()
     for (const client of session.clients) {
       client.send({ type: 'exit', code: null })
     }
@@ -272,7 +338,14 @@ export class TerminalService {
       },
     })
     const key = sessionKey(taskId, terminal)
-    const session: Session = { taskId, terminal, pty, size, scrollback: '', clients: new Set() }
+    const session: Session = {
+      taskId,
+      terminal,
+      pty,
+      size,
+      history: new OutputHistory(),
+      clients: new Set(),
+    }
     this.sessions.set(key, session)
 
     pty.onData((data) => {
@@ -280,7 +353,7 @@ export class TerminalService {
         // A closed shell may still print while it ends. Nobody looks at it any more.
         return
       }
-      session.scrollback = (session.scrollback + data).slice(-SCROLLBACK_CHARS)
+      session.history.append(data)
       for (const client of session.clients) {
         client.send({ type: 'output', data })
       }

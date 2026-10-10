@@ -676,6 +676,50 @@ describe('Claude Code hooks', () => {
     expect(await stateOf('T-0001')).toBe('needs-input')
   })
 
+  it('keeps the task running when the agent stops with background work', async () => {
+    await createTask()
+    const header = { 'x-natamux-task': 'T-0001' }
+    await post({ hook_event_name: 'UserPromptSubmit' }, header)
+
+    const response = await post(
+      {
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm test' }],
+        session_crons: [],
+      },
+      header,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(await stateOf('T-0001')).toBe('running')
+  })
+
+  it.each<[unknown, unknown]>([
+    [null, null],
+    ['x', 'x'],
+    [42, 42],
+    [{}, {}],
+    [
+      [null, 7, { status: 'running' }],
+      [null, 'daily'],
+    ],
+  ])(
+    'answers 200 and ends the turn as before for the background work %j and crons %j',
+    async (backgroundTasks, sessionCrons) => {
+      await createTask()
+      const header = { 'x-natamux-task': 'T-0001' }
+      await post({ hook_event_name: 'UserPromptSubmit' }, header)
+
+      const response = await post(
+        { hook_event_name: 'Stop', background_tasks: backgroundTasks, session_crons: sessionCrons },
+        header,
+      )
+
+      expect(response.statusCode).toBe(200)
+      expect(await stateOf('T-0001')).toBe('needs-input')
+    },
+  )
+
   it('finds the task by the workspace of the working directory', async () => {
     await createTask()
     const created = await app.inject({
@@ -996,7 +1040,7 @@ describe('terminal', () => {
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [] })
+    expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [], lanes: {} })
     // A program that is not a shell runs in the first one: an agent, as far as Natamux can tell.
     ;(ptys[0] as FakePty).program = 'node'
     const withAgent = await app.inject({
@@ -1004,7 +1048,22 @@ describe('terminal', () => {
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(withAgent.json()).toEqual({ terminals: ['1', '2'], agents: ['1'] })
+    const read = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    const task = read.json().task
+    // The first terminal has the task's stage and state; the second has no agent, so no lane.
+    expect(withAgent.json()).toEqual({
+      terminals: ['1', '2'],
+      agents: ['1'],
+      lanes: { '1': { stage: task.stage, state: task.state } },
+    })
+    // An agent in an extra shell outside a group works on no stage.
+    ;(ptys[1] as FakePty).program = 'node'
+    const twoAgents = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null })
 
     const closed = closeCode(second)
     const removed = await app.inject({
@@ -1399,6 +1458,8 @@ describe('agent activity', () => {
       headers: authorization,
       payload: { title: 'Fix the bug' },
     })
+    // Hooks from a terminal count only while the task has its workspace.
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
     await app.inject({
       method: 'POST',
       url: '/hooks/claude-code',
@@ -1410,9 +1471,22 @@ describe('agent activity', () => {
       },
     })
 
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001', 'x-natamux-terminal': '2' },
+      payload: {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: 'test-spec.md' },
+      },
+    })
+
     const response = await app.inject({ method: 'GET', url: '/activity', headers: authorization })
 
-    expect(response.json().activity['T-0001'].text).toBe('Edit a.ts')
+    const activity = response.json().activity['T-0001']
+    expect(activity['1'].text).toBe('Edit a.ts')
+    expect(activity['2'].text).toBe('Edit test-spec.md')
   })
 })
 

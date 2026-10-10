@@ -10,6 +10,7 @@ import {
   formatAge,
   formatExact,
   isQuiet,
+  laneSummary,
   rowLabel,
   type SortKey,
   stageLabel,
@@ -185,7 +186,7 @@ export function TaskTable({
                 aria-current={task.id === selectedId ? 'true' : undefined}
                 className="focus-inset flex h-full w-full items-center gap-2 px-3 text-left"
               >
-                <StatusGlyph state={task.state} quiet={quiet} />
+                <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{task.title}</span>
                   <span className="flex items-center gap-1.5 text-xs text-muted">
@@ -234,7 +235,7 @@ export function TaskTable({
           </div>
         )
       case 'state':
-        return <StateBadge state={task.state} stage={stageLabel(task)} />
+        return <StateBadge state={task.state} stage={stageLabel(task)} lanes={laneSummary(task)} />
       case 'agent':
         return note !== undefined ? (
           <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">

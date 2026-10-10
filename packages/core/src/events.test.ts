@@ -248,6 +248,22 @@ describe('applyTaskEvent with the default pipeline', () => {
     })
   })
 
+  it('makes a stage whose agent was stopped wait to start again', () => {
+    expect(run(at('spec', 'running'), event('agent.stopped')).position).toEqual(at('spec', 'ready'))
+    expect(run(at('spec', 'needs-input'), event('agent.stopped')).position).toEqual(
+      at('spec', 'ready'),
+    )
+    expect(run(at('spec', 'review'), event('agent.stopped')).accepted).toEqual([false])
+    expect(run(at('spec', 'failed'), event('agent.stopped')).accepted).toEqual([false])
+  })
+
+  it('stops only the named stage of a group', () => {
+    const group = at('build', 'needs-input', { 'test-spec': 'review', implement: 'needs-input' })
+    expect(run(group, event('agent.stopped', { stage: 'implement' })).position).toEqual(
+      at('build', 'review', { 'test-spec': 'review', implement: 'ready' }),
+    )
+  })
+
   it('does not send a task forward with reopen', () => {
     expect(run(at('spec', 'review'), event('stage.reopened', { to: 'release' })).accepted).toEqual([
       false,
@@ -276,6 +292,14 @@ describe('applyTaskEvent with the default pipeline', () => {
     expect(run(at('plan', 'running'), event('agent.finished')).position).toEqual(
       at('plan', 'needs-input'),
     )
+  })
+
+  it('keeps a stage running while the agent waits for its background work', () => {
+    expect(run(at('plan', 'running'), event('agent.waiting'))).toEqual({
+      position: at('plan', 'running'),
+      accepted: [true],
+    })
+    expect(run(at('plan', 'needs-input'), event('agent.waiting')).accepted).toEqual([false])
   })
 
   it('fails a stage whose command failed', () => {

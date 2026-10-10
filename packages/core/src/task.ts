@@ -61,6 +61,9 @@ export const taskSchema = z.object({
   lanes: lanesSchema.default({}),
   // When the current step started.
   stageSince: z.iso.datetime().nullable().default(null),
+  // When the running agent ended its turn to wait for its background work, which wakes it again.
+  // Null when it does not wait. A waiting task is not "quiet".
+  backgroundSince: z.iso.datetime().nullable().default(null),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

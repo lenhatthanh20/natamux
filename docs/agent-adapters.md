@@ -52,12 +52,14 @@ All tiers end in the same task events (`agent.started`, `agent.asked`, `agent.fi
 
 - **`natamux hook <agent>`**: a command that reads a hook's JSON from stdin and forwards it to the daemon. Most agents (Codex, Gemini CLI, Cursor, Copilot CLI) can only run a command, not call a URL. A command also keeps working on a machine with a proxy: in the first real test of the Claude Code `http` hook, the proxy of the machine refused the request to the daemon until `NO_PROXY` was set. It reads the token and the task id from the environment, and it must never make the agent fail: if the daemon is down it exits 0 quietly. Claude Code can keep using its `http` hook, which needs no process.
 - **`POST /hooks/:agent`** on the daemon, where the agent name picks the adapter.
-- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of five signals: `prompt`, `activity`, `asking`, `turn-ended`, `failed` (plus the working directory and some details). The code that decides which task events follow from a signal (`agent-signals.ts`), and which task a hook belongs to (`agent-hook-service.ts`), is shared by all agents. An adapter is one file in `packages/daemon/src`, listed in `agent-adapters.ts`; `claude-code-hooks.ts` is the example.
+- **An adapter interface** (done): for each agent, a function that turns the raw hook input into one of six signals: `prompt`, `activity`, `asking`, `turn-ended`, `turn-paused`, `failed` (plus the working directory and some details). The code that decides which task events follow from a signal (`agent-signals.ts`), and which task a hook belongs to (`agent-hook-service.ts`), is shared by all agents. An adapter is one file in `packages/daemon/src`, listed in `agent-adapters.ts`; `claude-code-hooks.ts` is the example.
 - **A config generator per agent**: `natamux hooks <agent>` prints the settings for that agent's own file format (Claude Code settings JSON, Codex `hooks`, Gemini `settings.json`, Cursor `hooks.json`, Copilot `.github/hooks/*.json`).
 
 ### How a hook finds its task
 
 Same for every agent: the `NATAMUX_TASK_ID` environment variable first, then the workspace that holds the agent's working directory (`cwd`, or one of Cursor's `workspace_roots`).
+
+A hook from a Natamux terminal (it has `NATAMUX_TERMINAL`) for a task with no workspace is ignored. Terminals run only in a workspace, so the hook comes from an agent that ended when its workspace was removed. Removing a workspace also sends `agent.stopped`, which moves a running or waiting stage back to ready.
 
 ## How other ADEs do it
 

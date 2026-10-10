@@ -13,6 +13,7 @@ export type AppEventName =
   | 'pane-maximize'
   | 'new-shell'
   | 'edit-task'
+  | 'open-doc'
 
 export function fireAppEvent(name: AppEventName, detail?: unknown): void {
   window.dispatchEvent(new CustomEvent(`natamux:${name}`, { detail }))
