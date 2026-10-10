@@ -43,6 +43,11 @@ export async function newWorkspace(
     ...(input.agent === undefined ? {} : { agent: input.agent }),
     ...(input.context === undefined ? {} : { context: input.context }),
   })
+  if (input.agent === undefined) {
+    // A first stage that passes by itself, such as a manual context, would start the next
+    // stage's agent in the new workspace.
+    parts.stages.leaveToPerson(created.id)
+  }
   const task = await parts.workspaces.create(created.id, input.base)
   if (input.agent === undefined) {
     return task

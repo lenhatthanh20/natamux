@@ -208,6 +208,8 @@ export class StageRunner {
   private readonly launched = new Map<string, number>()
   // The agent a person picked, while the stage it starts is starting.
   private readonly chosenAgents = new Map<string, string>()
+  // Tasks made for a plain shell. Their agent stages wait for a person to start an agent.
+  private readonly withoutAgent = new Set<string>()
   // The terminal where each task runs its stage command.
   private readonly commandTerminals = new Map<string, string>()
   // The stages each task is starting now, so an action can answer with the task after them.
@@ -334,6 +336,13 @@ export class StageRunner {
     this.commandTerminals.delete(taskId)
     this.waitingForWorkspace.delete(taskId)
     this.waitingForTasks.delete(taskId)
+    this.withoutAgent.delete(taskId)
+  }
+
+  // A task made with no agent: its stages that need one stay ready, and no agent starts in its
+  // shell until a person starts one.
+  leaveToPerson(taskId: string): void {
+    this.withoutAgent.add(taskId)
   }
 
   // Starts the stages that waited for other tasks, once those are done.
@@ -441,6 +450,9 @@ export class StageRunner {
       this.waitingForTasks.add(task.id)
       return
     }
+    if (this.withoutAgent.has(task.id) && !this.chosenAgents.has(task.id)) {
+      return
+    }
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
     if (!this.markStarted(task, step, stage, { head }) || prompt === undefined) {
@@ -470,6 +482,7 @@ export class StageRunner {
     prompt?: string,
     makeWorkspace?: () => Promise<unknown>,
   ): Promise<Task> {
+    this.withoutAgent.delete(taskId)
     if (makeWorkspace !== undefined && this.tasks.getTask(taskId).workspace === null) {
       // The new workspace starts the stage that waits for it. It must start the agent picked
       // here, not the task's own.
@@ -687,6 +700,7 @@ export class StageRunner {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     if (action === 'start') {
+      this.withoutAgent.delete(taskId)
       await this.startLanes(taskId, ['draft', 'ready'])
       return this.tasks.getTask(taskId)
     }
