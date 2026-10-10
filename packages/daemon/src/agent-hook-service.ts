@@ -99,6 +99,12 @@ export class AgentHookService {
     if (!task) {
       return { taskId: null, applied: [] }
     }
+    // Natamux terminals run in the task's workspace only. Without one, the hook comes from an agent
+    // that the removal of the workspace ended.
+    if (task.workspace === null && terminal !== undefined) {
+      this.activities.delete(task.id)
+      return { taskId: null, applied: [] }
+    }
 
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
 
