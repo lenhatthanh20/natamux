@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { useEffect, useRef, useState } from 'react'
 import { closeSocket, liveSocketUrl, parseLiveMessage } from '../lib/live'
 

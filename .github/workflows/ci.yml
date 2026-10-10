@@ -72,10 +72,10 @@ jobs:
       - name: Desktop app, start and load the dashboard
         shell: bash
         env:
-          HELMSMAN_DESKTOP_SMOKE: "1"
-          HELMSMAN_DESKTOP_SMOKE_SHOT: ${{ runner.temp }}/desktop.png
+          NATAMUX_DESKTOP_SMOKE: "1"
+          NATAMUX_DESKTOP_SMOKE_SHOT: ${{ runner.temp }}/desktop.png
         run: |
-          pnpm --filter @helmsman/desktop rebuild-native
+          pnpm --filter @natamux/desktop rebuild-native
           node -e "require('fs').mkdirSync(process.argv[1], { recursive: true }); require('fs').writeFileSync(process.argv[1] + '/settings.json', JSON.stringify({ repoDir: process.argv[2] }))" \
             "$RUNNER_TEMP/desktop-user" "$GITHUB_WORKSPACE"
           cd packages/desktop
@@ -123,8 +123,8 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     env:
-      HELMSMAN_TOKEN: ci-token
-      HELMSMAN_REPO: ${{ github.workspace }}
+      NATAMUX_TOKEN: ci-token
+      NATAMUX_REPO: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v7
       - name: Check the compose files

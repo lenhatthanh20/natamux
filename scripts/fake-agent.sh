@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # A stand-in for Claude Code in the development setup, where claude is not installed.
 # scripts/dev.sh seed starts the daemon with it. It prints steps, edits a notes file in the
-# workspace, and reports to Helmsman through the same hooks that Claude Code calls.
+# workspace, and reports to Natamux through the same hooks that Claude Code calls.
 #
-# A stage prompt (it ends with "run `helmsman done`") is done for real, roughly: the files the
+# A stage prompt (it ends with "run `natamux done`") is done for real, roughly: the files the
 # prompt names are written with the sections it names, code stages commit, and failed checks that
 # come back are fixed. Then it waits for the next prompt, as Claude Code does. Marks in the task
 # title make it go wrong on purpose, for tests:
 #   [miss-section]  leaves out the last section the first time
 #   [no-commit]     changes code but does not commit, the first time
-#   [no-done]       ends its turn without `helmsman done`
+#   [no-done]       ends its turn without `natamux done`
 #   [ask]           asks a question and waits for the answer first
 #
 # Any other prompt picks what it does: it starts with "loop:", "ask:", "fail:" or nothing.
@@ -19,7 +19,7 @@
 #   none  works, then ends its turn
 set -u
 
-# Helmsman starts it as: <this file> --settings <file> [prompt]
+# Natamux starts it as: <this file> --settings <file> [prompt]
 prompt=""
 if [ "$#" -ge 3 ]; then
   prompt="${*: -1}"
@@ -32,7 +32,7 @@ loop:* | ask:* | fail:*)
   prompt="${prompt# }"
   ;;
 esac
-notes="notes/${HELMSMAN_TASK_ID:-task}.md"
+notes="notes/${NATAMUX_TASK_ID:-task}.md"
 
 json() {
   local text=${1//\\/\\\\}
@@ -41,7 +41,7 @@ json() {
 
 hook() {
   printf '{"hook_event_name":%s,"cwd":%s%s}' "$(json "$1")" "$(json "$PWD")" "${2:-}" |
-    helmsman hook claude-code >/dev/null 2>&1 || true
+    natamux hook claude-code >/dev/null 2>&1 || true
 }
 
 tool() {
@@ -72,7 +72,7 @@ work() {
   tool Edit file_path "$PWD/$notes"
   printf '  \e[32m+1 line\e[0m\n'
   pause
-  tool Bash command "pnpm --filter @helmsman/web test"
+  tool Bash command "pnpm --filter @natamux/web test"
   pause
   printf '  \e[32m✓ %s passed\e[0m\n\n' "$((120 + round))"
 }
@@ -137,10 +137,10 @@ fix_checks() {
   local text=$1 line file section
   while IFS= read -r line; do
     case "$line" in
-    *"has no case under Cases"*) file=".helmsman-task/${line#- }" && file=${file%% has*} &&
+    *"has no case under Cases"*) file=".natamux-task/${line#- }" && file=${file%% has*} &&
       printf '## Cases\n\n### One more case\n\n' >>"$file" ;;
     *" has no "*" section"*)
-      file=".helmsman-task/${line#- }" && file=${file%% has no*}
+      file=".natamux-task/${line#- }" && file=${file%% has no*}
       section=${line#* has no } && section=${section% section}
       local IFS=','
       for name in $section; do printf '## %s\n\n- Added.\n\n' "${name# }" >>"$file"; done
@@ -159,8 +159,8 @@ do_stage() {
   printf '\e[1m>\e[0m %s\n\n' "${text//$'\n'/$'\n'  }"
   hook UserPromptSubmit
   pause
-  if [[ $title == *"[ask]"* ]] && [ ! -e ".helmsman-task/.asked" ]; then
-    mkdir -p .helmsman-task && : >.helmsman-task/.asked
+  if [[ $title == *"[ask]"* ]] && [ ! -e ".natamux-task/.asked" ]; then
+    mkdir -p .natamux-task && : >.natamux-task/.asked
     local question="Should empty values be left out or written as blanks?"
     printf '\e[33m?\e[0m %s\n' "$question"
     hook Notification ",\"notification_type\":\"permission_prompt\",\"message\":$(json "$question")"
@@ -173,15 +173,15 @@ do_stage() {
     fix_checks "$text"
   else
     local first=yes
-    [ -e ".helmsman-task/.tried-${HELMSMAN_TERMINAL:-1}-$(printf '%s' "$text" | cksum | cut -d' ' -f1)" ] && first=no
-    mkdir -p .helmsman-task && : >".helmsman-task/.tried-${HELMSMAN_TERMINAL:-1}-$(printf '%s' "$text" | cksum | cut -d' ' -f1)"
+    [ -e ".natamux-task/.tried-${NATAMUX_TERMINAL:-1}-$(printf '%s' "$text" | cksum | cut -d' ' -f1)" ] && first=no
+    mkdir -p .natamux-task && : >".natamux-task/.tried-${NATAMUX_TERMINAL:-1}-$(printf '%s' "$text" | cksum | cut -d' ' -f1)"
     local skip=no
     [[ $title == *"[miss-section]"* ]] && [ "$first" = yes ] && skip=yes
-    if [[ $text =~ Write\ (\.helmsman-task/[a-z.-]+\.md)\ with\ these\ sections:\ ([^.]+)\. ]]; then
+    if [[ $text =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ these\ sections:\ ([^.]+)\. ]]; then
       write_file "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "$skip"
-    elif [[ $text =~ Write\ (\.helmsman-task/[a-z.-]+\.md)\ with\ a\ Cases\ section ]]; then
+    elif [[ $text =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ a\ Cases\ section ]]; then
       write_file "${BASH_REMATCH[1]}" "Cases" no
-    elif [[ $text =~ (\.helmsman-task/[a-z.-]+\.md) ]] && [[ $text != *"Write the tests first"* ]] && [[ $text != *"Commit your work"* ]]; then
+    elif [[ $text =~ (\.natamux-task/[a-z.-]+\.md) ]] && [[ $text != *"Write the tests first"* ]] && [[ $text != *"Commit your work"* ]]; then
       write_file "${BASH_REMATCH[1]}" "Summary" no
     fi
     if [[ $text == *"Write the tests first"* ]] || [[ $text == *"Commit your work"* ]]; then
@@ -192,13 +192,13 @@ do_stage() {
   fi
   say "Done with this stage."
   if [[ $title != *"[no-done]"* ]]; then
-    tool Bash command "helmsman done"
-    helmsman done >/dev/null 2>&1 || true
+    tool Bash command "natamux done"
+    natamux done >/dev/null 2>&1 || true
   fi
   hook Stop
 }
 
-if [[ $prompt == *"helmsman done"* ]]; then
+if [[ $prompt == *"natamux done"* ]]; then
   printf '\e[2m╭──────────────────────────────────────────────╮\e[0m\n'
   printf '\e[2m│\e[0m \e[1mFake agent\e[0m, a stand-in for Claude Code in dev \e[2m│\e[0m\n'
   printf '\e[2m╰──────────────────────────────────────────────╯\e[0m\n\n'
@@ -242,12 +242,12 @@ ask)
   say "Got it: $answer"
   work 3
   say "Done. The change is ready for review."
-  helmsman done >/dev/null 2>&1 || true
+  natamux done >/dev/null 2>&1 || true
   hook Stop
   ;;
 fail)
   work 1
-  tool Bash command "pnpm --filter @helmsman/daemon test"
+  tool Bash command "pnpm --filter @natamux/daemon test"
   printf '  \e[31m✗ 2 failed: git.test.ts › retries a push after a network error\e[0m\n\n'
   say "The tests fail and I cannot fix them without more context. Stopping."
   hook StopFailure
@@ -257,7 +257,7 @@ fail)
   work 1
   work 2
   say "Done. The change is ready for review."
-  helmsman done >/dev/null 2>&1 || true
+  natamux done >/dev/null 2>&1 || true
   hook Stop
   ;;
 esac

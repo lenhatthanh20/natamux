@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import type { WorkspaceService } from './workspace-service.js'

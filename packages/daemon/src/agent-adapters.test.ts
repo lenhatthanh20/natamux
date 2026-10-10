@@ -5,7 +5,7 @@ import { COPILOT_EVENT_FIELD } from './copilot-hooks.js'
 const normalize = (agent: string, raw: unknown) => findAdapter(agent)?.normalize(raw)
 
 describe('the adapters', () => {
-  it('cover every agent Helmsman starts', () => {
+  it('cover every agent Natamux starts', () => {
     expect(knownAgentIds()).toEqual(['claude-code', 'codex', 'gemini', 'copilot', 'cursor'])
   })
 })
@@ -22,7 +22,7 @@ describe('Codex', () => {
     expect(normalize('codex', { hook_event_name: event, cwd: '/w' })?.signal).toBe(signal)
   })
 
-  it('ignores the events Helmsman does not use, and shows the shell command it runs', () => {
+  it('ignores the events Natamux does not use, and shows the shell command it runs', () => {
     expect(normalize('codex', { hook_event_name: 'SessionStart' })).toBeUndefined()
     const hook = normalize('codex', {
       hook_event_name: 'PreToolUse',

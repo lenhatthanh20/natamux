@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE } from '@helmsman/core'
+import { DEFAULT_PIPELINE } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { boardSections } from './ProgressBoard'

@@ -26,7 +26,7 @@ let calls: (readonly string[])[]
 let importer: IssueImporter
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-issues-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-issues-'))
   index = new TaskIndex(':memory:')
   tasks = new TaskService({ dataDir, index, bus: new EventBus() })
   calls = []

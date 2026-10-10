@@ -6,7 +6,7 @@ import {
   TASK_STATES,
   type Task,
   type TaskState,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 export const STATE_LABEL: Record<TaskState, string> = {
   draft: 'Draft',

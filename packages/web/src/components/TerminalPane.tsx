@@ -1,4 +1,4 @@
-import type { TerminalSize } from '@helmsman/core'
+import type { TerminalSize } from '@natamux/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
 import { type CSSProperties, lazy, type ReactNode, Suspense, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'

@@ -1,5 +1,5 @@
 {
-  "name": "@helmsman/cli",
+  "name": "@natamux/cli",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,8 @@
     "dist"
   ],
   "bin": {
-    "helmsman": "./dist/main.js"
+    "natamux": "./dist/main.js",
+    "nmx": "./dist/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -16,7 +17,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@helmsman/core": "workspace:*"
+    "@natamux/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

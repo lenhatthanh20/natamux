@@ -1,4 +1,4 @@
-import type { ChangeStatus, ImageSide } from '@helmsman/core'
+import type { ChangeStatus, ImageSide } from '@natamux/core'
 import { useQuery } from '@tanstack/react-query'
 import { Fragment, useEffect, useState } from 'react'
 import { ApiError } from '../lib/api'

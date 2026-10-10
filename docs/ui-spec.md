@@ -1,4 +1,4 @@
-# Helmsman UI spec v1
+# Natamux UI spec v1
 
 Status: draft for the owner. Date: 2026-10-09.
 Inputs: `orca.md`, `vscode-guidelines.md`, `vscode-live.md`, `audit-navigation.md` (NAV-*), `audit-workspace.md` (WS-*), `audit-responsive.md` (RA-*), and the current code in `packages/web/src`.
@@ -60,7 +60,7 @@ Defined in `@theme` so Tailwind classes map 1:1. Each size has exactly one line 
 
 Rules: nothing below 11px. 11px only for caps labels, badges and kbd. Hierarchy comes from weight and color, not more sizes.
 
-**UI size setting** (answers RA-18 without making every screen less dense): `html { font-size: calc(16px * var(--ui-zoom)) }`, `--ui-zoom` = 0.92 (Compact, 12px body), 1 (Default, 13px), 1.077 (Large, 14px). All sizes are rem, so the whole UI scales. xterm and Monaco font sizes read `13 * zoom` and `12 * zoom`. Stored in localStorage `helmsman.ui-size`.
+**UI size setting** (answers RA-18 without making every screen less dense): `html { font-size: calc(16px * var(--ui-zoom)) }`, `--ui-zoom` = 0.92 (Compact, 12px body), 1 (Default, 13px), 1.077 (Large, 14px). All sizes are rem, so the whole UI scales. xterm and Monaco font sizes read `13 * zoom` and `12 * zoom`. Stored in localStorage `natamux.ui-size`.
 
 ### 2.3 Color tokens
 
@@ -195,8 +195,8 @@ The terminal follows the app theme (RA-17). A setting "Terminal: always dark" is
 
 #### Monaco themes (`lib/monaco-setup.ts`)
 
-Dark `helmsman-dark` (base `vs-dark`): `editor.background #111214`, `editorGutter.background #111214`, `editorLineNumber.foreground #6b6f78`, `editorLineNumber.activeForeground #b4b7be`, `editor.lineHighlightBackground #00000000`, `diffEditor.insertedLineBackground #2ea04329`, `diffEditor.removedLineBackground #f8514929`, `diffEditor.insertedTextBackground #2ea04352`, `diffEditor.removedTextBackground #f8514952`, `diffEditorGutter.insertedLineBackground #2ea0434d`, `diffEditorGutter.removedLineBackground #f851494d`, `diffEditor.diagonalFill #ffffff0d`, `diffEditor.unchangedRegionBackground #16171a`, `scrollbarSlider.background #ffffff24`, `scrollbarSlider.hoverBackground #ffffff42`, `editorWidget.background #1c1d21`, `editorWidget.border #363940`, `focusBorder #7aa2ff`.
-Light `helmsman-light` (base `vs`): `editor.background #ffffff`, gutter `#ffffff`, line numbers `#8a9099` / active `#3f444c`, inserted line `#2ea0431f`, removed line `#f851491f`, inserted text `#2ea04347`, removed text `#f8514947`, gutters `#2ea04333` / `#f8514933`, unchanged region `#f6f7f9`, sliders `#14181f33` / `#14181f5c`, focus `#2f5fe0`.
+Dark `natamux-dark` (base `vs-dark`): `editor.background #111214`, `editorGutter.background #111214`, `editorLineNumber.foreground #6b6f78`, `editorLineNumber.activeForeground #b4b7be`, `editor.lineHighlightBackground #00000000`, `diffEditor.insertedLineBackground #2ea04329`, `diffEditor.removedLineBackground #f8514929`, `diffEditor.insertedTextBackground #2ea04352`, `diffEditor.removedTextBackground #f8514952`, `diffEditorGutter.insertedLineBackground #2ea0434d`, `diffEditorGutter.removedLineBackground #f851494d`, `diffEditor.diagonalFill #ffffff0d`, `diffEditor.unchangedRegionBackground #16171a`, `scrollbarSlider.background #ffffff24`, `scrollbarSlider.hoverBackground #ffffff42`, `editorWidget.background #1c1d21`, `editorWidget.border #363940`, `focusBorder #7aa2ff`.
+Light `natamux-light` (base `vs`): `editor.background #ffffff`, gutter `#ffffff`, line numbers `#8a9099` / active `#3f444c`, inserted line `#2ea0431f`, removed line `#f851491f`, inserted text `#2ea04347`, removed text `#f8514947`, gutters `#2ea04333` / `#f8514933`, unchanged region `#f6f7f9`, sliders `#14181f33` / `#14181f5c`, focus `#2f5fe0`.
 The current dark theme background `#101e2d` (blue) is replaced.
 
 ### 2.4 Spacing
@@ -299,11 +299,11 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 
 **Title bar** (new, `components/TitleBar.tsx`), 36px, `bg-shell`, bottom border `--line`:
 - Left: in Electron on macOS a 76px empty gutter for the traffic lights (`:root[data-shell="electron"][data-platform="mac"]`); on Windows Electron a 140px right gutter for `titleBarOverlay` window controls. In the browser no gutter.
-- Left group: sidebar toggle (`PanelLeft`, icon button 28), wordmark "Helmsman" 13/600 (hidden < 1024), breadcrumb of the current view: `repo / T-0018 title` (13, ink-2, truncate, max 40%).
+- Left group: sidebar toggle (`PanelLeft`, icon button 28), wordmark "Natamux" 13/600 (hidden < 1024), breadcrumb of the current view: `repo / T-0018 title` (13, ink-2, truncate, max 40%).
 - Center: command center button, 28px high, width `clamp(200px, 36vw, 520px)`, `bg-input`, 1px `--control`, radius 6, `Search` 14 + "Search or run a command" muted + `Mod K` kbd at right. Opens the command palette.
 - Right group: needs-you pill (hidden when 0): amber chip "3 need you" (`bg-signal-soft`, 1px `--signal-line`, text `--signal`, 12/500, 24px high); click opens the jump palette filtered to needs-you. Then "New workspace" (`Plus`, icon button with tooltip "New workspace  C"), details toggle (`PanelRight`).
 - Electron: whole bar is `-webkit-app-region: drag`; every control `no-drag`. Window inactive (`:root[data-window="inactive"]`): title bar text and icons use `--muted`.
-- Moves out of the sidebar header: "Helmsman" title and the "New workspace" button (the sidebar keeps the filter field and lists).
+- Moves out of the sidebar header: "Natamux" title and the "New workspace" button (the sidebar keeps the filter field and lists).
 
 **Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 272, min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
@@ -494,7 +494,7 @@ Shared shell:
 - Centered in its container, max width 360, gap 8. Icon 32 muted (stroke 1.5) in a 56px circle bg raised; title 15/600; body 13 muted (1-2 sentences); one primary action (`md`) + optional link; optional Kbd hint.
 - Variants with exact copy:
   - No tasks: "No tasks yet" / "Add a task to the backlog, or start a workspace to work right away." / [Add task `N`] [New workspace `C`].
-  - Filter miss: `No tasks match “zzzz”` / "Check the spelling or clear the filter." / [Clear filter]. Sidebar group under a filter: "No matches in helmsman (8 hidden)" (fixes NAV-15, WS-24, RA-30).
+  - Filter miss: `No tasks match “zzzz”` / "Check the spelling or clear the filter." / [Clear filter]. Sidebar group under a filter: "No matches in natamux (8 hidden)" (fixes NAV-15, WS-24, RA-30).
   - No changes: "No changes" / "The workspace matches its last commit."
   - No agents: "No agent is working" / "Start an agent on a task, or add a pane." / [Add a pane].
   - Error: icon `CircleAlert` danger-text, title "Could not load tasks", friendly sentence, [Retry], "Show details" disclosure with the raw message in mono 12 (NAV-18 pattern).
@@ -527,7 +527,7 @@ Shared shell:
 
 ### 4.24 Diff view chrome (`components/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
 - Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.
-- File panel (`ChangedFiles`): header 32 ("4 changed files" 12/500 muted, then `+340 −88` mono 12 summed over the files with counts; right: in tree view "Collapse all folders" / "Expand all folders", the "View as tree" toggle (aria-pressed, remembered in `helmsman.changes-view`), Refresh). Below it, one `role="tree"` with rows of `--row-h`.
+- File panel (`ChangedFiles`): header 32 ("4 changed files" 12/500 muted, then `+340 −88` mono 12 summed over the files with counts; right: in tree view "Collapse all folders" / "Expand all folders", the "View as tree" toggle (aria-pressed, remembered in `natamux.changes-view`), Refresh). Below it, one `role="tree"` with rows of `--row-h`.
   - List view: status colour on the file name, folder 12 muted truncated at the start, `+12 −3` when the panel is at least 15rem wide, status letter in a 16px mono box with tooltip.
   - Tree view: folders first, natural sort, single-child folders compacted ("web/src"), 12px indent a level, indent guides on hover or focus, chevrons on folders. A collapsed folder shows its summed counts. Collapsed folders are kept per task while the page is open. Arrow keys, Home, End and type-ahead work as in VS Code.
   - Per-file counts come from `git diff --numstat`, and a line count for untracked text files. Binary files, files that are too big, and untracked files after the first 300 have no counts.
@@ -535,7 +535,7 @@ Shared shell:
 - Diff toolbar (`DiffToolbar`, min 36, wraps):
   - Left: the path (mono 12, folder muted / name ink; a rename shows `old → new`, tooltip "Renamed from x to y"), Copy path, badge "New file · N lines" / "Deleted · N lines".
   - Right: `+12 −3` (text diffs); change navigator (Previous change `Shift+Alt+F5`, "2 of 7" or "7 changes", Next change `Alt+F5`; wraps at the ends); Segmented [Side by side | Inline] (icons only under 960; [Side by side | Stacked] for images); Collapse unchanged lines (aria-pressed); Wrap long lines (aria-pressed); Show image preview (SVG only); Diff options menu (Ignore leading and trailing whitespace, Show moved code); prev/next file (`[` `]`, in the order of the file panel).
-- Remembered per browser: `helmsman.diff-side-by-side` (on), `helmsman.diff-collapse-unchanged` (on), `helmsman.diff-ignore-whitespace` (on), `helmsman.diff-show-moves` (off), `helmsman.diff-wrap-prose` (on), `helmsman.diff-wrap-code` (off).
+- Remembered per browser: `natamux.diff-side-by-side` (on), `natamux.diff-collapse-unchanged` (on), `natamux.diff-ignore-whitespace` (on), `natamux.diff-show-moves` (off), `natamux.diff-wrap-prose` (on), `natamux.diff-wrap-code` (off).
 - Side by side is offered only when the diff column >= 720. Below it the control shows Inline selected and Side by side disabled with tooltip "Needs a wider window" (WS-03). The stored choice is kept and comes back on a wider window. Monaco's own switch (`useInlineViewWhenSpaceIsLimited`) is off, so only one rule decides.
 - Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = mono stack, `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
 - The editor is built again only for a new file or a new UI size. Every other option, and new text from the 10 s refresh, updates it in place, so the scroll position stays.
@@ -585,7 +585,7 @@ Shared shell:
 ### 4.28 Status bar items (`components/StatusBar.tsx`)
 - Item: height 24, pad 0 6, radius 6, gap 6, icon 14, text 12/16 muted; hover bg-hover + ink; clickable items are buttons with tooltips. Bar pad 0 6, gap 2.
 - Left (workspace-wide, high priority): Live dot (6px add / signal) + "Live"/"Reconnecting" (tooltip explains); "3 running" (click: filter Running); "2 need you" in signal (click: jump palette scoped to needs-you).
-- Right (lower priority, drop labels first): Repos (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, separator, Sign out (confirm dialog "Sign out of Helmsman? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
+- Right (lower priority, drop labels first): Repos (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, separator, Sign out (confirm dialog "Sign out of Natamux? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
 - No shortcut hint text in the bar.
 
 ### 4.29 View header and workspace header
@@ -674,7 +674,7 @@ Rules:
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Shell 1 to the Agents grid. |
 | Agents pane title | Opens that workspace (Terminal tab). |
-| Create workspace (dialog or details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in helmsman/t-0021-..." with [Open] when the user has moved on (WS-23). |
+| Create workspace (dialog or details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
 | Destructive actions (remove workspace, cancel task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
@@ -715,9 +715,9 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 
 ## 7. Gap analysis
 
-### 7.1 Where Helmsman will be better
+### 7.1 Where Natamux will be better
 
-| Area | Orca | VS Code | Helmsman target |
+| Area | Orca | VS Code | Natamux target |
 |---|---|---|---|
 | Who needs me | `?` glyph on the row, jump palette ranks needs-you first | not a concept | Needs-you count in title bar + sidebar section + document title + notifications, AND the agent's question as text in a banner with Answer / Resume (WS-08) |
 | Task model | worktrees with optional linked issues | none | tasks are first class: 9 states, table and board, dependencies, subtasks, tries; workspace is one view of a task |
@@ -728,7 +728,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 | Light theme | supported (source only) | first class | first class; terminal and diff follow it |
 | Plain words | good STYLEGUIDE | good | written copy rules and fixed copy for every empty/error state (4.19) |
 
-### 7.2 What Helmsman must still match
+### 7.2 What Natamux must still match
 
 | Area | Reference behavior | Where in this spec |
 |---|---|---|
@@ -761,7 +761,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 |---|---|---|---|---|
 | F-01 | P0 | RA-10, RA-11, RA-12, RA-14, RA-15, RA-16, NAV-30 | `styles.css` | Replace `:root` and `[data-theme="dark"]` values with section 2.3 (surfaces, text, lines, states, signal, diff, tooltip, scroll, scrim, skeleton). Add new variables (`--shell`, `--popover`, `--input`, `--ink-2`, `--placeholder`, `--faint`, `--link`, `--control`, `--control-hover`, `--contrast-border`, `--active`, `--selection-active`, `--focus`, `--accent-hover`, `--accent-fg`, `--danger-text`, `--signal-line`, `--add-bg`, `--remove-bg`, `--add-word`, `--remove-word`, `--modified`, `--badge`, `--tooltip-bg`, `--tooltip-fg`, `--skeleton`, `--scrim`, `--shadow-1`, `--shadow-2`, `--z-*`, `--dur-*`, `--ease-*`) and their `--color-*` mappings in `@theme inline`. Replace all 9 state chip pairs per theme. Add `@media (prefers-contrast: more)` block. |
 | F-02 | P1 | RA-19, RA-20, RA-22, RA-18 (part) | `styles.css`, components using `gap-[0.4rem]`/`0.4rem` (`.state-chip`) | Add the type scale (`--text-2xs` ... `--text-xl` with line heights) and `--breakpoint-2xl: 90rem`; body uses `--text-sm`; `.state-chip` gap 6px; `.lucide { stroke-width: 1.75 }`; `html { font-size: calc(16px * var(--ui-zoom, 1)) }`. Delete the `running-pulse` keyframes and their uses (chips and dots stop pulsing; the sidebar glyph spinner is the only running motion). |
-| F-03 | P0 | WS-01, RA-17 | `lib/theme.ts`, `lib/monaco-setup.ts`, `components/MonacoDiff.tsx`, `main.tsx` | Theme becomes `'system' \| 'light' \| 'dark'`; `resolvedTheme()` uses `prefers-color-scheme` only for `system`; first visit = system. Export `useResolvedTheme()` (zustand or `useSyncExternalStore` on a `MutationObserver` of `data-theme`). MonacoDiff picks `helmsman-dark/light` from the resolved APP theme and re-themes on change (today it reads the OS scheme, which is why the diff is white in a dark app). Define both Monaco themes with the colors in 2.3. |
+| F-03 | P0 | WS-01, RA-17 | `lib/theme.ts`, `lib/monaco-setup.ts`, `components/MonacoDiff.tsx`, `main.tsx` | Theme becomes `'system' \| 'light' \| 'dark'`; `resolvedTheme()` uses `prefers-color-scheme` only for `system`; first visit = system. Export `useResolvedTheme()` (zustand or `useSyncExternalStore` on a `MutationObserver` of `data-theme`). MonacoDiff picks `natamux-dark/light` from the resolved APP theme and re-themes on change (today it reads the OS scheme, which is why the diff is white in a dark app). Define both Monaco themes with the colors in 2.3. |
 | F-04 | P1 | WS-11, RA-17 | `components/TerminalView.tsx`, new `lib/terminal-theme.ts` | Full ANSI `ITheme` per theme from 2.3, `minimumContrastRatio: 4.5`, `lineHeight: 1.3`, font size `13 * zoom`; re-apply `terminal.options.theme` when the resolved theme changes. |
 | F-05 | P0 | NAV-01, RA-25, NAV-29 (close button) | `components/ui/Dialog.tsx` | Focus trap (Tab/Shift+Tab wrap over focusable elements), `inert` on `#root` while open (dialog portals to `body`), sizes `sm/md/lg` (400/520/640), radius 12, `--shadow-2`, scrim token, close button 28 with 16 icon, footer kbd on primary, Mod+Enter submits (`onSubmit` prop), destructive `ConfirmDialog` focuses Cancel, bottom sheet under 768. |
 | F-06 | P1 | RA-24, WS-26, NAV-22 | `styles.css`, `components/Dashboard.tsx` (search label), `ui/styles.ts` | One focus style: `:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px }`; `.focus-inset` utility (`outline-offset: -2px`); remove the `input:focus-visible` box-shadow rule; field wrappers use `:focus-within` border+outline; inner inputs `outline: none`. Table/Board toggle gets names "Table" / "Board" (moved to Segmented in F-10). |
@@ -782,12 +782,12 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | S-01 | P0 | NAV-02, RA-01, WS-07 | new `hooks/useLayoutMode.ts`, `components/Dashboard.tsx` (split into new `components/AppShell.tsx`), `lib/view-store.ts` | Shell per 3.1. `useLayoutMode` with 768/1024/1280 and the "details dock only if main >= 640" rule. Sidebar modes docked / drawer (300, scrim, focus trap while open, closes on navigation). View store gets `sidebarOpen` (persisted) and `drawerOpen`. |
 | S-02 | P0 | RA-02, WS-16 | `components/TaskDetail.tsx`, `AppShell.tsx`, `lib/view-store.ts` | Details modes docked / sheet / page (3.2). Sheet: fixed right, `--shadow-2`, slide 200ms, Esc closes, focus moves in and back. Page (< 768): replaces main with Back. Open state per task id: `detailOpenByTask: Record<string, boolean>` persisted; default closed for workspaces, open for table selection. Auto-close when the Changes tab opens and main < 900. |
 | S-03 | P0 | RA-03 | `components/AgentPanes.tsx`, `components/ShellPanes.tsx`, `lib/panes.ts` | Grid `repeat(auto-fill, minmax(320px, 1fr))` when layout is Auto; < 768 one column with `min-height: 60vh` per pane (agents) or a pane switcher (shells). |
-| S-04 | P1 | (enables principle 1), NAV-19 | new `components/TitleBar.tsx`, `AppShell.tsx` | Title bar per 3.1: sidebar toggle, wordmark, breadcrumb, command center button (until PR 5 it focuses the filter field), needs-you pill, new workspace, details toggle; Electron gutters via `data-shell`/`data-platform` attributes (set nothing in the browser); `data-window` inactive dimming hook. Move "Helmsman" and "New workspace" out of the sidebar header. |
+| S-04 | P1 | (enables principle 1), NAV-19 | new `components/TitleBar.tsx`, `AppShell.tsx` | Title bar per 3.1: sidebar toggle, wordmark, breadcrumb, command center button (until PR 5 it focuses the filter field), needs-you pill, new workspace, details toggle; Electron gutters via `data-shell`/`data-platform` attributes (set nothing in the browser); `data-window` inactive dimming hook. Move "Natamux" and "New workspace" out of the sidebar header. |
 | S-05 | P1 | NAV-19, RA-04, WS-34 | new `components/StatusBar.tsx`, `Dashboard.tsx` (remove footer) | Status bar per 4.28: 28px, priority-based condensation (ResizeObserver) with "..." overflow menu, never wraps; remove the hint text; Keyboard button; account menu with Theme (System/Light/Dark), UI size, Sign out with confirm; blocked notifications tooltip. Hidden < 768 (items go to the drawer footer). |
 | S-06 | P1 | NAV-16 | `Dashboard.tsx` / new `components/Sidebar.tsx`, `WorkspaceList.tsx` | Sidebar structure per 3.1: only the tree scrolls; "Workspaces" header sticky; 12px bottom padding. Filter field uses `SearchField`. |
 | S-07 | P1 | RA-09 | `styles.css`, `ui/styles.ts` | `@media (pointer: coarse)`: `--control-h: 40px`, rows 48, workspace row 56, icon hit 40; hover-only controls visible; resize handles hidden. Control classes read `--control-h`. |
 | S-08 | P1 | RA-23 | `AppShell.tsx`, `styles.css` | "Skip to main content" link; landmarks (`header`, `nav`, `main#main`, `aside`, `footer`); F6 / Shift+F6 part cycling (also from xterm via custom key handler). |
-| S-09 | P1 | RA-18 | `lib/theme.ts` (or new `lib/ui-size.ts`), account menu | UI size setting Compact/Default/Large -> `--ui-zoom` 0.92/1/1.077 on `html`, stored `helmsman.ui-size`; xterm and Monaco font sizes follow. |
+| S-09 | P1 | RA-18 | `lib/theme.ts` (or new `lib/ui-size.ts`), account menu | UI size setting Compact/Default/Large -> `--ui-zoom` 0.92/1/1.077 on `html`, stored `natamux.ui-size`; xterm and Monaco font sizes follow. |
 | S-10 | P2 | RA-08 | `TaskTable.tsx` | At >= 1920 the Task column absorbs extra width (`width: 100%` on that column only). |
 
 ### PR 3 — Workspace: header, terminal, diff, agents
@@ -795,7 +795,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | Id | Pri | Fixes | Files | Change |
 |---|---|---|---|---|
 | W-01 | P0 | WS-02 | `components/ChangesView.tsx`, `MonacoDiff.tsx` | For status A/U/D: render a read-only single editor with whole-file add/remove decorations and a "New file"/"Deleted" badge, not a diff against an empty string. `lightbulb` off. Trim the trailing empty line artifact. |
-| W-02 | P0 | WS-03, WS-04, WS-15, WS-25 (diff part) | `ChangesView.tsx`, `MonacoDiff.tsx` | Diff chrome per 4.24: resizable file panel (`useStoredWidth('helmsman.files-width', 260, 200, 420)`), file picker under 720, diff toolbar with Segmented [Side by side \| Inline] (labels are options; Side by side disabled under 720 with reason), Wrap toggle, prev/next file; Monaco `flex-1 min-h-0` (drop `h-[70vh]`), options per 4.24; comment box docked at the bottom; commit box docked at the bottom of the file panel. |
+| W-02 | P0 | WS-03, WS-04, WS-15, WS-25 (diff part) | `ChangesView.tsx`, `MonacoDiff.tsx` | Diff chrome per 4.24: resizable file panel (`useStoredWidth('natamux.files-width', 260, 200, 420)`), file picker under 720, diff toolbar with Segmented [Side by side \| Inline] (labels are options; Side by side disabled under 720 with reason), Wrap toggle, prev/next file; Monaco `flex-1 min-h-0` (drop `h-[70vh]`), options per 4.24; comment box docked at the bottom; commit box docked at the bottom of the file panel. |
 | W-03 | P0 | WS-05, RA-07, WS-27 | `ChangesView.tsx`, `lib/api.ts` (if ahead count is not on `Task`), `packages/daemon/src/git.ts` + `server.ts` (only if needed) | Workspace header per 4.29: 44px single row, branch chip with middle truncation + copy + tooltip; Push shows ahead count and is `aria-disabled` with reason when 0 ahead / no branch; Create PR `aria-disabled` with "Push first" when nothing is pushed, nowrap, "Open PR" under 900 main, "..." menu under 768. If the ahead count is not available, add `ahead` to the diff-stats or changes API (daemon `git rev-list --count base..branch`). |
 | W-04 | P0 | WS-06 | `packages/daemon/src/terminal-service.ts`, `packages/daemon/src/terminal-service.test.ts`, `components/ShellPanes.tsx` | `closeOne` removes the session from the map at once and kills the PTY (SIGHUP, then SIGKILL after 2s if still alive); scrollback dropped; the next "New shell" always starts a fresh process (verify the reuse path with a test: close "2", open new -> new pid, empty scrollback). UI: confirm when a foreground process runs (P2 if the daemon cannot tell). |
 | W-05 | P0 | WS-08 | new `components/NeedsInputBanner.tsx`, `ChangesView.tsx`, `lib/events.ts` | Banner per 4.29 under the workspace header for needs-input tasks; question text from the latest needs-input event (if the payload has none, the fallback sentence); [Answer in terminal] switches to Terminal and focuses Shell 1; [Resume] sends `agent.resumed`. |
@@ -824,7 +824,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | L-06 | P1 | NAV-09, NAV-11, NAV-14 | `components/TaskDetail.tsx`, `TaskEditForm.tsx`, `CompareTries.tsx`, `FanOutForm.tsx` | Details per 4.27: 40px header, action row, banners, collapsible remembered sections in the new order, Notes section with empty state, edit mode replaces title/notes with focus in Title and sticky Save/Cancel footer, new copy for ports/tries/keep. |
 | L-07 | P1 | NAV-12, WS-32 | `components/Timeline.tsx`, `lib/tasks.ts`, `lib/events.ts`, all `formatAge` callers | One `formatAge(date, now, 'short' \| 'long')` per 5.7 with exact-time tooltip; Activity uses relative times, groups consecutive identical events ("×4"), actor "You"/"Agent"/"Daemon". |
 | L-08 | P1 | NAV-13 (details menu) | `TaskDetail.tsx` | "..." menu: Save as template, Run more tries..., separator, Cancel task (danger, confirm). Anchored under the button. |
-| L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in helmsman (8 hidden)"); state counts follow the search; needs-you shows "Not filtered" note. |
+| L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in natamux (8 hidden)"); state counts follow the search; needs-you shows "Not filtered" note. |
 | L-10 | P1 | NAV-17, RA-23 | `WorkspaceList.tsx`, `WorkspaceRow.tsx`, new `hooks/useRovingFocus.ts` | Tree is one tab stop; keys per 4.9 (arrows, Home/End, Left/Right groups, Enter, F2, Shift+F10, Delete, type-ahead). Row "..." button gets `tabIndex={-1}`. |
 | L-11 | P1 | NAV-23, NAV-27 (anatomy) | `WorkspaceRow.tsx` | Row anatomy per 4.9: age on line 1 swapping with "..." on hover/focus; slug gets full line 2; rename field replaces only the title line (24px), select-all in both entry paths, focus returns to the row; finished rows use `--muted` color, no opacity. |
 | L-12 | P1 | NAV-24 | `components/NeedsMeStrip.tsx`, `components/SidebarTaskRow.tsx` | Section per 4.12: caps header + count, left signal bar instead of amber block, single-line 28px rows with reason chip, cap 3 + "Show all N". |
@@ -843,9 +843,9 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | K-03 | P1 | NAV-19 | new `components/ShortcutSheet.tsx` | `?` sheet per 4.18, generated from `lib/commands.ts`. |
 | K-04 | P1 | WS-22 | new `lib/route.ts`, `lib/view-store.ts`, `main.tsx`, `packages/daemon/src/server.ts` (SPA fallback) | Routes per 5.5 with history API; store <-> URL sync; back/forward; daemon serves `index.html` for unknown GET paths that accept HTML. |
 | K-05 | P1 | NAV-18 | `components/IssueImport.tsx` | Error state per 4.19 (danger icon, friendly sentence "GitHub CLI is not signed in. Run `gh auth login` in a terminal, then try again.", [Retry], "Show details" with the raw text); button label "Import" disabled with reason until something is picked, then "Import 3 issues". |
-| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `components/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (current + last used), "Branches", "Task branches" (helmsman/* collapsed by default); type to filter. Create button `aria-disabled` with reason "Enter a name". Dialog per Orca-like short flow: Repository, Name, Branch from, Agent, Advanced disclosure; Mod+Enter. |
+| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `components/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (current + last used), "Branches", "Task branches" (natamux/* collapsed by default); type to filter. Create button `aria-disabled` with reason "Enter a name". Dialog per Orca-like short flow: Repository, Name, Branch from, Agent, Advanced disclosure; Mod+Enter. |
 | K-07 | P2 | NAV-29 (part) | `components/RepoPanel.tsx` | Folder field with validation message; dialog fixes come from F-05. Repo remove/rename actions dropped until the daemon has the API. |
-| K-08 | P2 | NAV-33 | `components/SignIn.tsx` | Show/hide token toggle (`Eye`/`EyeOff` icon button), helper "The token is printed by `helmsman daemon` at start", busy state on Connect, inline error with `aria-describedby`. No logo work (no brand asset yet). |
+| K-08 | P2 | NAV-33 | `components/SignIn.tsx` | Show/hide token toggle (`Eye`/`EyeOff` icon button), helper "The token is printed by `natamux daemon` at start", busy state on Connect, inline error with `aria-describedby`. No logo work (no brand asset yet). |
 | K-09 | P2 | RA-29, NAV-32 | `index.html`, `public/favicon.svg` (new), `TerminalView.tsx`, `Dashboard.tsx` | Favicon (simple SVG, theme-safe); skeletons on first load (table, sidebar); guard xterm dispose before `open` finished (`dimensions` error); close WebSocket only after it opened (no "closed before established" warning). |
 | K-10 | P2 | WS-29 | — | Dropped for now: split direction for new shells waits for real pane splitting (drag-to-edge) in a later feature. |
 

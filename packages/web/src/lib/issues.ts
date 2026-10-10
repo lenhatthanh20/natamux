@@ -7,7 +7,7 @@ export function issueProblem(message: string): string {
   if (/auth|log ?in|token|credential|403|401/i.test(message)) {
     return 'GitHub CLI is not signed in. Run `gh auth login` in a terminal, then try again.'
   }
-  return 'Helmsman could not read the issues from GitHub. Check the connection and try again.'
+  return 'Natamux could not read the issues from GitHub. Check the connection and try again.'
 }
 
 export function importLabel(count: number): string {

@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { notificationFor, statesById, tasksThatStartedWaiting } from './notify'
 

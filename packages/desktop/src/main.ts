@@ -22,7 +22,7 @@ import { isGitRepository, loadSettings, saveSettings } from './settings.js'
 import { freePort, loginShellPath, waitForHealth } from './startup.js'
 
 // Before the paths are read: the user data folder is named after the app.
-app.setName('Helmsman')
+app.setName('Natamux')
 const here = dirname(fileURLToPath(import.meta.url))
 const userData = app.getPath('userData')
 const settingsFile = join(userData, 'settings.json')
@@ -79,8 +79,8 @@ async function startDaemon(repoDir: string): Promise<void> {
   // The packaged app keeps the built dashboard in its resources (electron-builder.yml).
   const parts = findParts({
     ...process.env,
-    HELMSMAN_WEB_DIR:
-      process.env.HELMSMAN_WEB_DIR ??
+    NATAMUX_WEB_DIR:
+      process.env.NATAMUX_WEB_DIR ??
       (app.isPackaged ? join(process.resourcesPath, 'web') : undefined),
   })
   const binDir = join(userData, 'bin')
@@ -105,7 +105,7 @@ async function startDaemon(repoDir: string): Promise<void> {
     }),
     cwd: repoDir,
     stdio: 'pipe',
-    serviceName: 'Helmsman daemon',
+    serviceName: 'Natamux daemon',
   })
   daemon.stdout?.on('data', (chunk: Buffer) => log(chunk.toString()))
   daemon.stderr?.on('data', (chunk: Buffer) => log(chunk.toString()))
@@ -116,7 +116,7 @@ async function startDaemon(repoDir: string): Promise<void> {
       void dialog
         .showMessageBox({
           type: 'error',
-          message: 'The Helmsman daemon stopped',
+          message: 'The Natamux daemon stopped',
           detail: `${lastLines.slice(-12).join('\n')}\n\nThe full log: ${logFile}`,
           buttons: ['Quit'],
         })
@@ -137,7 +137,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 560,
     show: false,
-    title: 'Helmsman',
+    title: 'Natamux',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#18181b' : '#ffffff',
     webPreferences: {
       preload: join(here, 'preload.cjs'),
@@ -168,7 +168,7 @@ function createWindow(): void {
       }
     }
   })
-  if (process.env.HELMSMAN_DESKTOP_SMOKE === '1') {
+  if (process.env.NATAMUX_DESKTOP_SMOKE === '1') {
     // A check for CI and the codespace: the dashboard loads signed in, then the app quits. The
     // exit code tells: on Windows the app's output may not reach the console.
     created.webContents.once('did-finish-load', async () => {
@@ -177,9 +177,9 @@ function createWindow(): void {
         `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
       )
       console.log(
-        `helmsman-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`,
+        `natamux-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`,
       )
-      const shot = process.env.HELMSMAN_DESKTOP_SMOKE_SHOT
+      const shot = process.env.NATAMUX_DESKTOP_SMOKE_SHOT
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
       }
@@ -252,7 +252,7 @@ function buildMenu(): void {
 }
 
 // The page reads the token once, as it loads. Only the dashboard may ask.
-ipcMain.on('helmsman:daemon-token', (event) => {
+ipcMain.on('natamux:daemon-token', (event) => {
   const from = event.senderFrame?.url ?? ''
   event.returnValue =
     dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
@@ -302,7 +302,7 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu()
     let repoDir = loadSettings(settingsFile).repoDir
     if (repoDir === undefined || !isGitRepository(repoDir)) {
-      repoDir = await pickRepository('Pick the repository whose tasks Helmsman runs.')
+      repoDir = await pickRepository('Pick the repository whose tasks Natamux runs.')
       if (repoDir === undefined) {
         quitConfirmed = true
         app.quit()
@@ -316,7 +316,7 @@ if (!app.requestSingleInstanceLock()) {
       quitConfirmed = true
       await dialog.showMessageBox({
         type: 'error',
-        message: 'Helmsman could not start its daemon',
+        message: 'Natamux could not start its daemon',
         detail: `${error instanceof Error ? error.message : String(error)}\n\n${lastLines.slice(-12).join('\n')}`,
       })
       app.quit()

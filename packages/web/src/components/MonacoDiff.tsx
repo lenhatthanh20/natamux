@@ -237,7 +237,7 @@ export default function MonacoDiff({
     const actions = [editor.getOriginalEditor(), modifiedEditor].flatMap((inner) =>
       keys.map(({ id, by, key }) =>
         inner.addAction({
-          id: `helmsman.diff.${id}Change`,
+          id: `natamux.diff.${id}Change`,
           label: by === 1 ? 'Next change in the file' : 'Previous change in the file',
           keybindings: [key],
           run: () => stepRef.current(by),

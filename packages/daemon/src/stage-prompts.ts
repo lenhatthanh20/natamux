@@ -1,7 +1,7 @@
-import { type ContextSource, type Stage, stageName, type Task } from '@helmsman/core'
+import { type ContextSource, type Stage, stageName, type Task } from '@natamux/core'
 import { STAGE_DIR } from './stage-files.js'
 
-const DONE = 'When you are done, run `helmsman done`.'
+const DONE = 'When you are done, run `natamux done`.'
 
 // The default prompt of each stage of the default pipeline. `{dir}` is the stage file folder.
 const DEFAULT_PROMPTS: Record<string, string> = {

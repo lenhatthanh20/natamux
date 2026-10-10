@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, isAbsolute, join } from 'node:path'
-import { DEFAULT_REPO, type Repo, repoSchema } from '@helmsman/core'
+import { DEFAULT_REPO, type Repo, repoSchema } from '@natamux/core'
 import { z } from 'zod'
 import { repositoryRoot } from './git.js'
 import { slugify } from './workspace-service.js'
@@ -38,7 +38,7 @@ export class RepoInputError extends Error {
   }
 }
 
-// The repositories whose tasks Helmsman manages. The daemon's own repository is always the first,
+// The repositories whose tasks Natamux manages. The daemon's own repository is always the first,
 // as "default"; the others are kept in <data dir>/repos.json.
 export class RepoService {
   private readonly file: string

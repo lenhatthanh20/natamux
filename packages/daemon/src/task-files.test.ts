@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   listTaskFiles,
@@ -21,7 +21,7 @@ const task: Task = {
   priority: 'high',
   labels: ['bug'],
   agent: 'claude-code',
-  branch: 'helmsman/t-0042-fix-timezone',
+  branch: 'natamux/t-0042-fix-timezone',
   workspace: null,
   pr: null,
   prStatus: null,
@@ -41,7 +41,7 @@ const task: Task = {
 let dataDir: string
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-files-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-files-'))
 })
 
 afterEach(() => {

@@ -25,7 +25,7 @@ export type TestRepo = {
 
 // A real git repository with one empty commit on main, in a temporary folder.
 export function createTestRepo(): TestRepo {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'helmsman-git-')))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'natamux-git-')))
   const dir = join(root, 'repo')
   mkdirSync(dir)
   runGit(dir, 'init', '-b', 'main')

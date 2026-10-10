@@ -1,4 +1,4 @@
-import { TASK_PRIORITIES, type Task } from '@helmsman/core'
+import { TASK_PRIORITIES, type Task } from '@natamux/core'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import type { TaskChanges } from '../lib/api'
 import { Button } from './ui/Button'

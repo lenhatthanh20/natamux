@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { ApiError, createApi, type FetchFunction, isUnauthorized } from './api'
 
@@ -114,7 +114,7 @@ describe('createApi', () => {
   })
 
   it('creates a workspace for a task', async () => {
-    const withWorkspace = { ...task, workspace: '/work/T-0001', branch: 'helmsman/t-0001-example' }
+    const withWorkspace = { ...task, workspace: '/work/T-0001', branch: 'natamux/t-0001-example' }
     const { calls, fetchFunction } = fakeFetch(() => json({ task: withWorkspace }, 201))
 
     const created = await createApi('secret', fetchFunction).createWorkspace('T-0001')
@@ -210,7 +210,7 @@ describe('createApi', () => {
 
   it('reads the git graph of a task', async () => {
     const graph = {
-      branch: 'helmsman/t-0001',
+      branch: 'natamux/t-0001',
       head: 'b2',
       base: 'main',
       ahead: 1,

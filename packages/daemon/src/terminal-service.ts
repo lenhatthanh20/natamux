@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { portRange, type TerminalServerMessage, type TerminalSize } from '@helmsman/core'
+import { portRange, type TerminalServerMessage, type TerminalSize } from '@natamux/core'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
 // a fake, so they do not need the native module.
@@ -258,15 +258,15 @@ export class TerminalService {
     const pty = this.spawn({
       ...size,
       cwd,
-      // The task id lets `helmsman hook` name the task even when the agent changes folders, and the
+      // The task id lets `natamux hook` name the task even when the agent changes folders, and the
       // terminal name tells which stage of a group the agent works on.
       // PORT is the first port of the task's own block, for a dev server.
       env: {
         ...this.env,
         TERM: 'xterm-256color',
-        HELMSMAN_TASK_ID: taskId,
-        HELMSMAN_TERMINAL: terminal,
-        HELMSMAN_PORT: String(portRange(taskId).first),
+        NATAMUX_TASK_ID: taskId,
+        NATAMUX_TERMINAL: terminal,
+        NATAMUX_PORT: String(portRange(taskId).first),
         PORT: String(portRange(taskId).first),
       },
     })

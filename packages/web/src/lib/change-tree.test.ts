@@ -1,4 +1,4 @@
-import type { ChangeEntry, ChangeStatus } from '@helmsman/core'
+import type { ChangeEntry, ChangeStatus } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import {
   allFolderKeys,

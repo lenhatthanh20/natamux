@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ChangeEntry, DiffStat, FileDiff, GitGraph, ImageSide, Task } from '@helmsman/core'
+import type { ChangeEntry, DiffStat, FileDiff, GitGraph, ImageSide, Task } from '@natamux/core'
 import {
   addWorktree,
   commitAll,
@@ -67,7 +67,7 @@ export function slugify(text: string): string {
 }
 
 export function branchNameFor(task: Pick<Task, 'id' | 'title'>): string {
-  return `helmsman/${task.id.toLowerCase()}-${slugify(task.title)}`
+  return `natamux/${task.id.toLowerCase()}-${slugify(task.title)}`
 }
 
 export class WorkspaceService {
@@ -90,7 +90,7 @@ export class WorkspaceService {
     this.onCreated = options.onCreated ?? (() => undefined)
     this.pullRequestBody =
       options.pullRequestBody ??
-      (async (task) => task.description.trim() || `Task ${task.id} in Helmsman.`)
+      (async (task) => task.description.trim() || `Task ${task.id} in Natamux.`)
     this.closeTerminals = options.closeTerminals ?? (() => undefined)
   }
 

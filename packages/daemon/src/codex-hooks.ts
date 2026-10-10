@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { AgentAdapter, AgentSignal } from './agent-signals.js'
 import { toolSummary } from './claude-code-hooks.js'
 
-// The part of the JSON that Codex sends to a hook which Helmsman reads. Its events and fields are
+// The part of the JSON that Codex sends to a hook which Natamux reads. Its events and fields are
 // named as Claude Code's (codex-rs/hooks/schema/generated in openai/codex).
 export const codexInputSchema = z.object({
   hook_event_name: z.string().min(1),

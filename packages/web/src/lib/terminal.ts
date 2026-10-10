@@ -2,7 +2,7 @@ import {
   type TerminalServerMessage,
   type TerminalSize,
   terminalServerMessageSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 export function terminalSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,

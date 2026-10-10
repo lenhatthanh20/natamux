@@ -1,4 +1,4 @@
-# @helmsman/web
+# @natamux/web
 
 The dashboard. It shows every task, and the tasks that need you come first.
 
@@ -8,10 +8,10 @@ Two terminals, after `pnpm build`:
 
 ```sh
 # 1: the daemon. It prints a token.
-pnpm --filter @helmsman/daemon dev
+pnpm --filter @natamux/daemon dev
 
 # 2: the dashboard
-pnpm --filter @helmsman/web dev
+pnpm --filter @natamux/web dev
 ```
 
 Open the forwarded port 5173 and paste the token. The dev server sends `/api` to the daemon at `127.0.0.1:4317` (set in `vite.config.ts`), so the browser never needs the daemon's address. The token is kept in the browser's local storage.
@@ -40,7 +40,7 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 
 ## Not done yet
 
-- The daemon serves the dashboard itself only with `HELMSMAN_WEB_DIR` (the desktop app); otherwise Vite or nginx serves it.
+- The daemon serves the dashboard itself only with `NATAMUX_WEB_DIR` (the desktop app); otherwise Vite or nginx serves it.
 
 ## Look
 

@@ -12,7 +12,7 @@ export const UI_SIZE_LABEL: Record<UiSize, string> = {
 // The body text is 12, 13 or 14px. Every size is in rem, so the whole UI follows.
 const ZOOM: Record<UiSize, number> = { compact: 0.92, default: 1, large: 1.077 }
 
-const UI_SIZE_KEY = 'helmsman.ui-size'
+const UI_SIZE_KEY = 'natamux.ui-size'
 const listeners = new Set<() => void>()
 
 export function uiSizeZoom(size: UiSize): number {

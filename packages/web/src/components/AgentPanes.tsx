@@ -1,4 +1,4 @@
-import type { Task, TerminalSize } from '@helmsman/core'
+import type { Task, TerminalSize } from '@natamux/core'
 import { LayoutGrid } from 'lucide-react'
 import { useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'

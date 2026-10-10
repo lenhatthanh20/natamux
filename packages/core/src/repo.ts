@@ -8,7 +8,7 @@ export const repoIdSchema = z
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'A repository id is lower case words joined by "-"')
   .max(60)
 
-// A git repository whose tasks Helmsman manages. Its worktrees go to the daemon's worktree folder.
+// A git repository whose tasks Natamux manages. Its worktrees go to the daemon's worktree folder.
 export const repoSchema = z.object({
   id: repoIdSchema,
   name: z.string().trim().min(1).max(100),

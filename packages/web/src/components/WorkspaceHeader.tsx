@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { ArrowUpFromLine, ExternalLink, GitBranch, GitPullRequest } from 'lucide-react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'

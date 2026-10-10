@@ -103,7 +103,7 @@ const MOVES: Partial<Record<EventType, Move>> = {
   'agent.asked': { from: ['running'], to: 'needs-input' },
   // A prompt typed to an agent whose stage waits for approval takes the stage up again.
   'agent.resumed': { from: ['needs-input', 'review'], to: 'running' },
-  // The agent ended its turn without saying the stage is done (`helmsman done`), for example to
+  // The agent ended its turn without saying the stage is done (`natamux done`), for example to
   // ask something in plain text. The daemon drops the turn end that follows a report.
   'agent.finished': { from: ['running'], to: 'needs-input' },
   'agent.failed': { from: ['running', 'needs-input'], to: 'failed' },
@@ -254,7 +254,7 @@ function laneOf(
 }
 
 // The event as it is logged: the stage it is about, and for a send back the stage it goes back
-// to, filled in when the sender left them out (a button, `helmsman ask`, a terminal bell). The
+// to, filled in when the sender left them out (a button, `natamux ask`, a terminal bell). The
 // progress views read both from the log.
 export function completeEvent(
   position: StagePosition,

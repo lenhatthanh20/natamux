@@ -1,4 +1,4 @@
-import type { GraphCommit } from '@helmsman/core'
+import type { GraphCommit } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { layoutGraph } from './graph-layout'
 

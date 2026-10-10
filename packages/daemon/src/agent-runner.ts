@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { type Task, waitingOn } from '@helmsman/core'
+import { type Task, waitingOn } from '@natamux/core'
 import { UnknownAgentError } from './agent-hook-service.js'
 import {
   DEFAULT_PROGRAMS,
@@ -38,8 +38,8 @@ type AgentRunnerOptions = {
   claudeSettingsPath: string
   // Gemini CLI settings with its hooks (see geminiHookSettings). Default: next to Claude's.
   geminiSettingsPath?: string
-  // The command of each agent (HELMSMAN_<AGENT>_COMMAND), and words to add to its command line
-  // (HELMSMAN_<AGENT>_ARGS), such as --allow-all-tools for Copilot.
+  // The command of each agent (NATAMUX_<AGENT>_COMMAND), and words to add to its command line
+  // (NATAMUX_<AGENT>_ARGS), such as --allow-all-tools for Copilot.
   programs?: Partial<Record<LaunchableAgent, string | undefined>>
   extraArgs?: Partial<Record<LaunchableAgent, string | undefined>>
   claudeCommand?: string

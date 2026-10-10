@@ -23,7 +23,7 @@ const ESCAPES = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
 
 // The variable that sets an agent's command, as the daemon reads it.
 function commandVariable(agent: string): string {
-  return `HELMSMAN_${agent === 'claude-code' ? 'CLAUDE' : agent.toUpperCase()}_COMMAND`
+  return `NATAMUX_${agent === 'claude-code' ? 'CLAUDE' : agent.toUpperCase()}_COMMAND`
 }
 
 // The shell's line that says it could not find the program, if the text holds one.

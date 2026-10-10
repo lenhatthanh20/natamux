@@ -29,16 +29,16 @@ function asked(seq: number, payload: Record<string, unknown>): StoredEvent {
 
 describe('pushButton', () => {
   it('shows the number of commits ahead on the label', () => {
-    expect(pushButton('helmsman/t-1', 2, 'main')).toEqual({ label: 'Push ↑2' })
-    expect(pushButton('helmsman/t-1', null, null)).toEqual({ label: 'Push' })
+    expect(pushButton('natamux/t-1', 2, 'main')).toEqual({ label: 'Push ↑2' })
+    expect(pushButton('natamux/t-1', null, null)).toEqual({ label: 'Push' })
   })
 
   it('says why there is nothing to push', () => {
     expect(pushButton(null, null, null).reason).toBe('This task has no branch to push')
-    expect(pushButton('helmsman/t-1', 0, 'main').reason).toBe(
+    expect(pushButton('natamux/t-1', 0, 'main').reason).toBe(
       'Nothing to push: 0 commits ahead of main',
     )
-    expect(pushButton('helmsman/t-1', 0, null).reason).toBe('Nothing to push: 0 commits ahead')
+    expect(pushButton('natamux/t-1', 0, null).reason).toBe('Nothing to push: 0 commits ahead')
   })
 })
 

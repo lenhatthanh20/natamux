@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { AgentAdapter, AgentSignal } from './agent-signals.js'
 import { toolSummary } from './claude-code-hooks.js'
 
-// The part of the JSON that Gemini CLI sends to a hook which Helmsman reads
+// The part of the JSON that Gemini CLI sends to a hook which Natamux reads
 // (geminicli.com/docs/hooks/reference).
 export const geminiInputSchema = z.object({
   hook_event_name: z.string().min(1),

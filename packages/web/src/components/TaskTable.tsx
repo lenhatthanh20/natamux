@@ -1,4 +1,4 @@
-import type { DiffStat, Task } from '@helmsman/core'
+import type { DiffStat, Task } from '@natamux/core'
 import { ArrowDown, ArrowUp, Copy, ExternalLink, FileDiff, PanelRight } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'

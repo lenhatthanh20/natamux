@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from './branches'
 
 describe('branchOptions', () => {
-  const branches = ['main', 'dev', 'helmsman/t-0001-a', 'helmsman/t-0002-b', 'feature/x']
+  const branches = ['main', 'dev', 'natamux/t-0001-a', 'natamux/t-0002-b', 'feature/x']
 
   it('puts the current and the last used branch first, then branches, then task branches', () => {
     const options = branchOptions(branches, 'main', 'feature/x')
@@ -10,8 +10,8 @@ describe('branchOptions', () => {
       ['Recent', 'main'],
       ['Recent', 'feature/x'],
       ['Branches', 'dev'],
-      [TASK_BRANCH_GROUP, 'helmsman/t-0001-a'],
-      [TASK_BRANCH_GROUP, 'helmsman/t-0002-b'],
+      [TASK_BRANCH_GROUP, 'natamux/t-0001-a'],
+      [TASK_BRANCH_GROUP, 'natamux/t-0002-b'],
     ])
     expect(options[0]?.label).toBe('main (current)')
   })

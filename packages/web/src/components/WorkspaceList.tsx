@@ -1,4 +1,4 @@
-import type { DiffStat, Repo, Task, TaskState } from '@helmsman/core'
+import type { DiffStat, Repo, Task, TaskState } from '@natamux/core'
 import { ChevronRight, FolderGit2, FolderPlus, Pin, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useRovingFocus } from '../hooks/useRovingFocus'

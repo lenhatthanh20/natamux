@@ -9,7 +9,7 @@ import {
   stagesOf,
   stepIndex,
   type Task,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'

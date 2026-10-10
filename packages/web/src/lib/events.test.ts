@@ -1,4 +1,4 @@
-import { EVENT_TYPES, type EventType, type TaskEvent } from '@helmsman/core'
+import { EVENT_TYPES, type EventType, type TaskEvent } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from './api'
 import { actorOf, describeEvent, describeLine, formatClock, groupEvents } from './events'

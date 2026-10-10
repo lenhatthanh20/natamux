@@ -1,4 +1,4 @@
-import type { EventType, TaskEvent } from '@helmsman/core'
+import type { EventType, TaskEvent } from '@natamux/core'
 import type { StoredEvent } from './api'
 
 // One short sentence for every kind of event. `Record<EventType, …>` makes the compiler ask for a

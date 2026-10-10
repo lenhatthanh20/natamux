@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { COMMANDS, type Command, type CommandContext, paletteTitle, runnable } from './commands'
 import { type FuzzyMatch, fuzzyMatch, type Range } from './fuzzy'
 import { isQuiet, needsMeTasks, STATE_ORDER, taskNumber } from './tasks'

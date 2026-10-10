@@ -1,4 +1,4 @@
-import type { Repo } from '@helmsman/core'
+import type { Repo } from '@natamux/core'
 import { CircleAlert, FolderGit2 } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
 import { repoPathProblem } from '../lib/issues'

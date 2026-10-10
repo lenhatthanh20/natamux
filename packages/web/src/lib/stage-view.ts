@@ -5,7 +5,7 @@ import {
   stagesOf,
   type Task,
   type TaskEvent,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 // "<1m", "4m", "1h 5m", "2d 3h": the time between two moments.
 export function formatDuration(from: string, to: Date | string): string {

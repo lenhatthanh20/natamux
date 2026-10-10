@@ -66,7 +66,7 @@ describe('newWorkspace', () => {
 
     expect(task).toMatchObject({ title: 'Fix the login page', state: 'draft' })
     expect(task.workspace).not.toBeNull()
-    expect(task.branch).toBe('helmsman/t-0001-fix-the-login-page')
+    expect(task.branch).toBe('natamux/t-0001-fix-the-login-page')
     expect(ptys).toHaveLength(0)
   })
 

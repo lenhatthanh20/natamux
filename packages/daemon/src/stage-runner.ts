@@ -16,7 +16,7 @@ import {
   type TaskState,
   terminalOfStage,
   waitingOn,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { type AgentRunner, quoteArgument } from './agent-runner.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { type RunGh, runGh } from './git.js'
@@ -62,7 +62,7 @@ export type StageAction = (typeof STAGE_ACTIONS)[number]
 export type StageActionInput = {
   // The stage the action is about. Needed inside a group when more than one stage could be meant.
   stage?: string
-  // The terminal the action came from (`helmsman done` in an agent's terminal).
+  // The terminal the action came from (`natamux done` in an agent's terminal).
   terminal?: string
   // reopen: the stage to go back to.
   to?: string
@@ -533,8 +533,8 @@ export class StageRunner {
   // `stage pass` does not run `stage fail` too. PowerShell 5.1 has no && or ||, so on Windows the
   // line asks $? instead.
   private commandLine(taskId: string, stageId: string, command: string): string {
-    const pass = `helmsman stage pass ${taskId} --stage ${stageId}`
-    const fail = `helmsman stage fail ${taskId} --stage ${stageId}`
+    const pass = `natamux stage pass ${taskId} --stage ${stageId}`
+    const fail = `natamux stage fail ${taskId} --stage ${stageId}`
     if (this.platform === 'win32') {
       return `${command}; if ($?) { ${pass} } else { ${fail} }`
     }
@@ -820,7 +820,7 @@ export class StageRunner {
       const text = [
         'The checks of this stage failed:',
         ...result.reasons.map((reason) => `- ${reason}`),
-        'Fix them, then run `helmsman done` again.',
+        'Fix them, then run `natamux done` again.',
       ].join('\n')
       try {
         this.terminals.paste(taskId, text, terminal)

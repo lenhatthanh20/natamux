@@ -1,4 +1,4 @@
-import type { Task, TaskEvent } from '@helmsman/core'
+import type { Task, TaskEvent } from '@natamux/core'
 
 export type DaemonMessage =
   | { kind: 'task.created'; task: Task }

@@ -1,4 +1,4 @@
-import { needsMe, type Task, type TaskState } from '@helmsman/core'
+import { needsMe, type Task, type TaskState } from '@natamux/core'
 import { STATE_LABEL } from './tasks'
 
 // Tasks that moved into a state that needs the user since the last look. A task seen for the first

@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { type FormEvent, useState } from 'react'
 import { DetailSection } from './DetailSection'
 import { StateBadge } from './StateBadge'

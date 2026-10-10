@@ -1,4 +1,4 @@
-import { type Task, taskSchema } from '@helmsman/core'
+import { type Task, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { sidebarGroups } from './sidebar-groups'
 

@@ -1,4 +1,4 @@
-import type { TerminalServerMessage } from '@helmsman/core'
+import type { TerminalServerMessage } from '@natamux/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
@@ -26,7 +26,7 @@ function setup(options: { now?: () => number } = {}) {
       }
       return `/work/${taskId}`
     },
-    env: { PATH: '/bin', HELMSMAN_TOKEN: 'secret' },
+    env: { PATH: '/bin', NATAMUX_TOKEN: 'secret' },
     now: options.now,
   })
   return { service, ptys }
@@ -51,9 +51,9 @@ describe('TerminalService', () => {
       rows: 24,
       env: {
         PATH: '/bin',
-        HELMSMAN_TOKEN: 'secret',
-        HELMSMAN_TASK_ID: 'T-0001',
-        HELMSMAN_PORT: '20010',
+        NATAMUX_TOKEN: 'secret',
+        NATAMUX_TASK_ID: 'T-0001',
+        NATAMUX_PORT: '20010',
         PORT: '20010',
         TERM: 'xterm-256color',
       },

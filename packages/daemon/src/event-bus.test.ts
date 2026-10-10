@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 

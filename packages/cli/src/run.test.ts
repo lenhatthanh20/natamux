@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { FetchFunction } from './client.js'
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, runCli } from './run.js'
@@ -66,7 +66,7 @@ async function run(
   let stdout = ''
   let stderr = ''
   const code = await runCli(argv, {
-    env: options.env ?? { HELMSMAN_TOKEN: 'secret' },
+    env: options.env ?? { NATAMUX_TOKEN: 'secret' },
     io: {
       stdout: (text) => {
         stdout += text
@@ -93,7 +93,7 @@ describe('runCli', () => {
     it('prints help without a token and without calling the daemon', async () => {
       const result = await run(['help'], { env: {} })
       expect(result.code).toBe(EXIT_OK)
-      expect(result.stdout).toContain('Usage: helmsman')
+      expect(result.stdout).toContain('Usage: natamux')
       expect(result.stdout).toContain('agent.started')
       expect(result.calls).toEqual([])
     })
@@ -102,14 +102,14 @@ describe('runCli', () => {
       const result = await run(['task', 'create'])
       expect(result.code).toBe(EXIT_USAGE)
       expect(result.stderr).toContain('A title is required')
-      expect(result.stderr).toContain('helmsman help')
+      expect(result.stderr).toContain('natamux help')
       expect(result.calls).toEqual([])
     })
 
     it('exits with 2 when the token is missing', async () => {
       const result = await run(['task', 'list'], { env: {} })
       expect(result.code).toBe(EXIT_USAGE)
-      expect(result.stderr).toContain('HELMSMAN_TOKEN')
+      expect(result.stderr).toContain('NATAMUX_TOKEN')
       expect(result.calls).toEqual([])
     })
   })
@@ -126,9 +126,9 @@ describe('runCli', () => {
       })
     })
 
-    it('uses HELMSMAN_URL and drops a trailing slash', async () => {
+    it('uses NATAMUX_URL and drops a trailing slash', async () => {
       const result = await run(['task', 'list'], {
-        env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_URL: 'http://example.test:9000/' },
+        env: { NATAMUX_TOKEN: 'secret', NATAMUX_URL: 'http://example.test:9000/' },
         handler: () => jsonResponse({ tasks: [] }),
       })
       expect(result.calls[0]?.url).toBe('http://example.test:9000/tasks')
@@ -291,8 +291,8 @@ describe('runCli', () => {
 
   describe('workspace', () => {
     const withWorkspace = makeTask({
-      workspace: '/work/.helmsman/worktrees/T-0001',
-      branch: 'helmsman/t-0001-fix-the-dashboard',
+      workspace: '/work/.natamux/worktrees/T-0001',
+      branch: 'natamux/t-0001-fix-the-dashboard',
     })
 
     it('creates a workspace and prints its folder and branch', async () => {
@@ -307,8 +307,8 @@ describe('runCli', () => {
       // No body, so no JSON content type: the daemon answers 400 to that.
       expect(result.calls[0]?.headers['content-type']).toBeUndefined()
       expect(result.stdout).toContain('Created the workspace of T-0001')
-      expect(result.stdout).toContain('helmsman/t-0001-fix-the-dashboard')
-      expect(result.stdout).toContain('/work/.helmsman/worktrees/T-0001')
+      expect(result.stdout).toContain('natamux/t-0001-fix-the-dashboard')
+      expect(result.stdout).toContain('/work/.natamux/worktrees/T-0001')
     })
 
     it('removes a workspace and says whether the branch was deleted', async () => {
@@ -329,13 +329,13 @@ describe('runCli', () => {
       const result = await run(['workspace', 'remove', 'T-0001', '--yes'], {
         handler: () =>
           jsonResponse({
-            task: makeTask({ workspace: null, branch: 'helmsman/t-0001-fix' }),
+            task: makeTask({ workspace: null, branch: 'natamux/t-0001-fix' }),
             branchDeleted: false,
           }),
       })
 
       expect(result.calls[0]?.url).toContain('deleteBranch=false')
-      expect(result.stdout).toContain('The branch helmsman/t-0001-fix is kept.')
+      expect(result.stdout).toContain('The branch natamux/t-0001-fix is kept.')
     })
 
     it('does not call the daemon without --yes', async () => {
@@ -387,7 +387,7 @@ describe('runCli', () => {
         handler: () => jsonResponse({ error: 'unauthorized' }, 401),
       })
       expect(result.code).toBe(EXIT_FAILED)
-      expect(result.stderr).toContain('Check HELMSMAN_TOKEN')
+      expect(result.stderr).toContain('Check NATAMUX_TOKEN')
     })
 
     it('says when the daemon cannot be reached', async () => {
@@ -436,9 +436,9 @@ describe('more commands', () => {
     expect(result.stdout).toBe('Started claude-code in the terminal of T-1\n')
   })
 
-  it('asks for the task of the terminal, from HELMSMAN_TASK_ID', async () => {
+  it('asks for the task of the terminal, from NATAMUX_TASK_ID', async () => {
     const result = await run(['ask', 'Which database?'], {
-      env: { HELMSMAN_TOKEN: 'secret', HELMSMAN_TASK_ID: 'T-7' },
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'T-7' },
       handler: () => jsonResponse({ task: makeTask({ id: 'T-7' }), accepted: true }),
     })
 
@@ -451,7 +451,7 @@ describe('more commands', () => {
   })
 
   it('names the terminal it runs in, so the daemon knows the stage inside a group', async () => {
-    const env = { HELMSMAN_TOKEN: 'secret', HELMSMAN_TASK_ID: 'T-7', HELMSMAN_TERMINAL: '2' }
+    const env = { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'T-7', NATAMUX_TERMINAL: '2' }
     const handler = () => jsonResponse({ task: makeTask({ id: 'T-7' }), accepted: true })
 
     const ask = await run(['ask', 'Which file?'], { env, handler })
@@ -515,7 +515,7 @@ describe('more commands', () => {
   it('needs a task for ask and done', async () => {
     const result = await run(['done'])
     expect(result.code).toBe(2)
-    expect(result.stderr).toContain('HELMSMAN_TASK_ID')
+    expect(result.stderr).toContain('NATAMUX_TASK_ID')
     expect(result.calls).toEqual([])
   })
 })

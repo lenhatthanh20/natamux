@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { FolderGit2, Play } from 'lucide-react'
 import { useState } from 'react'
 import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'

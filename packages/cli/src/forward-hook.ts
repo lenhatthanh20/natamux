@@ -1,4 +1,4 @@
-import { TASK_ID_HEADER, TERMINAL_HEADER } from '@helmsman/core'
+import { TASK_ID_HEADER, TERMINAL_HEADER } from '@natamux/core'
 import type { FetchFunction } from './client.js'
 import { DEFAULT_URL } from './format.js'
 
@@ -15,12 +15,12 @@ type ForwardOptions = {
 }
 
 // Sends the JSON of an agent's hook to the daemon. It runs inside the agent, so it must never
-// make the agent fail or print anything: any problem ends silently (HELMSMAN_DEBUG shows it).
-// Without HELMSMAN_TOKEN the session is not one of Helmsman's, so it does nothing at all.
+// make the agent fail or print anything: any problem ends silently (NATAMUX_DEBUG shows it).
+// Without NATAMUX_TOKEN the session is not one of Natamux's, so it does nothing at all.
 // Node's fetch does not use the proxy variables, so a proxy on the machine cannot block it.
 export async function forwardHook(options: ForwardOptions): Promise<void> {
   const { agent, env } = options
-  const token = env.HELMSMAN_TOKEN?.trim()
+  const token = env.NATAMUX_TOKEN?.trim()
   if (!token) {
     return
   }
@@ -36,16 +36,16 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
       authorization: `Bearer ${token}`,
       'content-type': 'application/json',
     }
-    const taskId = env.HELMSMAN_TASK_ID?.trim()
+    const taskId = env.NATAMUX_TASK_ID?.trim()
     if (taskId) {
       headers[TASK_ID_HEADER] = taskId
     }
-    const terminal = env.HELMSMAN_TERMINAL?.trim()
+    const terminal = env.NATAMUX_TERMINAL?.trim()
     if (terminal) {
       headers[TERMINAL_HEADER] = terminal
     }
 
-    const baseUrl = (env.HELMSMAN_URL?.trim() || DEFAULT_URL).replace(/\/+$/, '')
+    const baseUrl = (env.NATAMUX_URL?.trim() || DEFAULT_URL).replace(/\/+$/, '')
     const query = options.event === undefined ? '' : `?event=${encodeURIComponent(options.event)}`
     const response = await options.fetch(`${baseUrl}/hooks/${encodeURIComponent(agent)}${query}`, {
       method: 'POST',
@@ -53,13 +53,13 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
       body,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
-    if (!response.ok && env.HELMSMAN_DEBUG) {
-      options.debug(`helmsman hook ${agent}: the daemon answered ${response.status}\n`)
+    if (!response.ok && env.NATAMUX_DEBUG) {
+      options.debug(`natamux hook ${agent}: the daemon answered ${response.status}\n`)
     }
   } catch (error) {
-    if (env.HELMSMAN_DEBUG) {
+    if (env.NATAMUX_DEBUG) {
       const reason = error instanceof Error ? error.message : String(error)
-      options.debug(`helmsman hook ${agent}: ${reason}\n`)
+      options.debug(`natamux hook ${agent}: ${reason}\n`)
     }
   }
 }

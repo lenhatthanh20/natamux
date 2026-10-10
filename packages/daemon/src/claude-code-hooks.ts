@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentAdapter, AgentSignal } from './agent-signals.js'
 
-// The part of the JSON that Claude Code sends to a hook which Helmsman reads.
+// The part of the JSON that Claude Code sends to a hook which Natamux reads.
 export const claudeCodeInputSchema = z.object({
   hook_event_name: z.string().min(1),
   cwd: z.string().optional(),

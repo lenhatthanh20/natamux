@@ -28,7 +28,7 @@ export function SignIn({ message, onSubmit }: SignInProps) {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4">
-      <h1 className="text-xl font-semibold tracking-tight">Helmsman</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Natamux</h1>
       <p className="text-muted">
         Paste the token the daemon printed when it started. It stays in this browser.
       </p>
@@ -60,7 +60,7 @@ export function SignIn({ message, onSubmit }: SignInProps) {
             />
           </div>
           <p id={helpId} className="text-xs text-muted">
-            The token is printed by <code className="font-mono">helmsman daemon</code> at start.
+            The token is printed by <code className="font-mono">natamux daemon</code> at start.
           </p>
         </div>
         {message !== null && (

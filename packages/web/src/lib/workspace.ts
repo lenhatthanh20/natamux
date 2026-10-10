@@ -1,4 +1,4 @@
-import type { TaskState } from '@helmsman/core'
+import type { TaskState } from '@natamux/core'
 import type { StoredEvent } from './api'
 import type { WorkspaceTab } from './view-store'
 

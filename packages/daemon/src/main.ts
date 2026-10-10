@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { claudeCodeHookSettings } from '@helmsman/core'
+import { claudeCodeHookSettings } from '@natamux/core'
 import { geminiHookSettings, LAUNCHABLE_AGENTS } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
@@ -58,13 +58,13 @@ const workspaces = new WorkspaceService({
 })
 
 // Shells run on the same machine as the daemon, so they reach it on loopback. They get the token
-// and the address for `helmsman` and for the hooks of the agents they start.
+// and the address for `natamux` and for the hooks of the agents they start.
 const daemonUrl = `http://127.0.0.1:${config.port}`
 const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
   spawn: spawnShell,
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
-  env: { ...process.env, HELMSMAN_TOKEN: config.token, HELMSMAN_URL: daemonUrl },
+  env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
   onOutput: (taskId, terminal, data) => genericSignals.onOutput(taskId, terminal, data),
 })
 
@@ -72,12 +72,12 @@ const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
 writeFileSync(claudeSettingsPath, `${JSON.stringify(claudeCodeHookSettings(daemonUrl), null, 2)}\n`)
 const geminiSettingsPath = join(config.dataDir, 'gemini-settings.json')
 writeFileSync(geminiSettingsPath, `${JSON.stringify(geminiHookSettings(), null, 2)}\n`)
-// HELMSMAN_CLAUDE_COMMAND, HELMSMAN_CODEX_ARGS and so on: the agent id in capitals.
+// NATAMUX_CLAUDE_COMMAND, NATAMUX_CODEX_ARGS and so on: the agent id in capitals.
 const perAgent = (suffix: string) =>
   Object.fromEntries(
     LAUNCHABLE_AGENTS.map((agent) => [
       agent,
-      process.env[`HELMSMAN_${agent === 'claude-code' ? 'CLAUDE' : agent.toUpperCase()}_${suffix}`],
+      process.env[`NATAMUX_${agent === 'claude-code' ? 'CLAUDE' : agent.toUpperCase()}_${suffix}`],
     ]),
   )
 const agents = new AgentRunner({
@@ -123,7 +123,7 @@ const app = await buildServer({
 })
 await app.listen({ host: config.host, port: config.port })
 
-console.log(`Helmsman daemon listening on http://${config.host}:${config.port}`)
+console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)
 console.log(`Repository: ${config.repoDir}`)
 if (config.tokenWasGenerated) {

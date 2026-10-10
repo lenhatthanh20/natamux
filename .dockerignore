@@ -2,7 +2,7 @@
 .github
 .devcontainer
 .claude
-.helmsman
+.natamux
 node_modules
 **/node_modules
 dist

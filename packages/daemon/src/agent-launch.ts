@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 
-// Agents that Helmsman can start. Each one also has an adapter that reads its hooks.
+// Agents that Natamux can start. Each one also has an adapter that reads its hooks.
 export const LAUNCHABLE_AGENTS = ['claude-code', 'codex', 'gemini', 'copilot', 'cursor'] as const
 
 export type LaunchableAgent = (typeof LAUNCHABLE_AGENTS)[number]
@@ -20,8 +20,8 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
   cursor: 'cursor-agent',
 }
 
-// What the hooks run. `helmsman hook` does nothing outside a Helmsman terminal (no token).
-const HOOK = 'helmsman hook'
+// What the hooks run. `natamux hook` does nothing outside a Natamux terminal (no token).
+const HOOK = 'natamux hook'
 
 // Quotes one argument for the shell of the terminal: PowerShell on Windows, a POSIX shell elsewhere.
 export function quoteArgument(value: string, platform: NodeJS.Platform = process.platform): string {
@@ -53,7 +53,7 @@ export function codexHookArgs(): string[] {
 // Gemini CLI reads these as its system settings when GEMINI_CLI_SYSTEM_SETTINGS_PATH names the
 // file, so the user's own settings stay as they are. Its timeouts are in milliseconds.
 export function geminiHookSettings() {
-  const hook = { type: 'command', name: 'helmsman', command: `${HOOK} gemini`, timeout: 5000 }
+  const hook = { type: 'command', name: 'natamux', command: `${HOOK} gemini`, timeout: 5000 }
   const events = ['BeforeAgent', 'BeforeTool', 'AfterTool', 'Notification', 'AfterAgent']
   return {
     hooks: Object.fromEntries(
@@ -114,7 +114,7 @@ export type WorkspaceFile = { path: string; content: string }
 
 const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
   copilot: () => ({
-    path: '.github/hooks/helmsman.json',
+    path: '.github/hooks/natamux.json',
     content: `${JSON.stringify(copilotHookFile(), null, 2)}\n`,
   }),
   cursor: () => ({
@@ -125,7 +125,7 @@ const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
 
 export type LaunchOptions = {
   program: string
-  // Words added to the command line, from HELMSMAN_<AGENT>_ARGS.
+  // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
   platform: NodeJS.Platform
@@ -171,8 +171,8 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
 }
 
 // Writes the agent's hook file into the workspace and keeps it out of git. A file of the user's
-// own at that place is left alone: the agent then runs without Helmsman's hooks, and its terminal
-// still shows that it works. Returns whether Helmsman's hooks are in place.
+// own at that place is left alone: the agent then runs without Natamux's hooks, and its terminal
+// still shows that it works. Returns whether Natamux's hooks are in place.
 export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boolean {
   const file = WORKSPACE_FILES[agent]?.()
   if (file === undefined) {

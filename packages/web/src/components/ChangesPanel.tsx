@@ -1,4 +1,4 @@
-import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@helmsman/core'
+import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@natamux/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, RefreshCw } from 'lucide-react'
 import { type KeyboardEvent, lazy, Suspense, useEffect, useMemo, useState } from 'react'
@@ -217,18 +217,18 @@ export function ChangesPanel({
   onFileChange,
 }: ChangesPanelProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(requestedFile)
-  const [sideBySide, setSideBySide] = useStoredFlag('helmsman.diff-side-by-side', true)
+  const [sideBySide, setSideBySide] = useStoredFlag('natamux.diff-side-by-side', true)
   const [collapseUnchanged, setCollapseUnchanged] = useStoredFlag(
-    'helmsman.diff-collapse-unchanged',
+    'natamux.diff-collapse-unchanged',
     true,
   )
   const [ignoreWhitespace, setIgnoreWhitespace] = useStoredFlag(
-    'helmsman.diff-ignore-whitespace',
+    'natamux.diff-ignore-whitespace',
     true,
   )
-  const [showMoves, setShowMoves] = useStoredFlag('helmsman.diff-show-moves', false)
-  const [wrapProse, setWrapProse] = useStoredFlag('helmsman.diff-wrap-prose', true)
-  const [wrapCode, setWrapCode] = useStoredFlag('helmsman.diff-wrap-code', false)
+  const [showMoves, setShowMoves] = useStoredFlag('natamux.diff-show-moves', false)
+  const [wrapProse, setWrapProse] = useStoredFlag('natamux.diff-wrap-prose', true)
+  const [wrapCode, setWrapCode] = useStoredFlag('natamux.diff-wrap-code', false)
   // The SVG file whose image shows instead of its text.
   const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [message, setMessage] = useState('')
@@ -237,7 +237,7 @@ export function ChangesPanel({
   const [changeInfo, setChangeInfo] = useState<({ path: string } & ChangeInfo) | null>(null)
   const [viewMode, setViewMode] = useFileViewMode()
   const [rootRef, rootWidth] = useElementWidth<HTMLDivElement>()
-  const files = useStoredWidth('helmsman.files-width', 260, 200, 420)
+  const files = useStoredWidth('natamux.files-width', 260, 200, 420)
   const queryClient = useQueryClient()
 
   const changes = useQuery({

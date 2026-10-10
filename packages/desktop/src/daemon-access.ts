@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-// The daemon's token, kept between runs so the `helmsman` command and open pages keep working.
+// The daemon's token, kept between runs so the `natamux` command and open pages keep working.
 // Only the user may read the file.
 export function loadOrCreateDaemonToken(file: string): string {
   try {

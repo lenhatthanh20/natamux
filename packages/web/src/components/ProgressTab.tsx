@@ -7,7 +7,7 @@ import {
   stageProgress,
   stagesOf,
   type Task,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useState } from 'react'

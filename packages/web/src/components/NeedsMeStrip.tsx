@@ -1,4 +1,4 @@
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { useState } from 'react'
 import { formatAge, isQuiet, needsMeReason, rowLabel, stageLabel } from '../lib/tasks'
 import { StatusGlyph } from './StatusGlyph'

@@ -1,4 +1,4 @@
-// The agents Helmsman can start, in the order the pickers show them. The ids are the daemon's.
+// The agents Natamux can start, in the order the pickers show them. The ids are the daemon's.
 export const AGENT_CHOICES = [
   { id: 'claude-code', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },

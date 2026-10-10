@@ -5,7 +5,7 @@ import {
   type EventType,
   type ProjectSettings,
   type Task,
-} from '@helmsman/core'
+} from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
@@ -202,7 +202,7 @@ describe('agent stages', () => {
     expect(task).toMatchObject({ stage: 'spec', state: 'running' })
     expect(ptys).toHaveLength(1)
     expect(launchScript(task.id)).toContain('spec.md')
-    expect(launchScript(task.id)).toContain('helmsman done')
+    expect(launchScript(task.id)).toContain('natamux done')
     expect(readFileSync(join(task.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')).toContain(
       'Export tasks',
     )
@@ -575,9 +575,9 @@ describe('a pipeline of its own', () => {
         'if (',
         'make test; make lint',
         '); then',
-        `  helmsman stage pass ${task.id} --stage testing`,
+        `  natamux stage pass ${task.id} --stage testing`,
         'else',
-        `  helmsman stage fail ${task.id} --stage testing`,
+        `  natamux stage fail ${task.id} --stage testing`,
         'fi',
         '',
       ].join('\n'),

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ChangeEntry, ChangeStatus, ImageSide } from '@helmsman/core'
+import type { ChangeEntry, ChangeStatus, ImageSide } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
@@ -57,28 +57,28 @@ function branchExists(branch: string): boolean {
 
 describe('addWorktree', () => {
   it('creates the folder and the branch', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
 
     expect(existsSync(join(worktreePath, '.git'))).toBe(true)
-    expect(branchExists('helmsman/t-0001-example')).toBe(true)
+    expect(branchExists('natamux/t-0001-example')).toBe(true)
   })
 
   it('fails with a GitError when the branch already exists', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
 
     await expect(
-      addWorktree(repo.dir, join(repo.root, 'worktrees', 'T-0002'), 'helmsman/t-0001-example'),
+      addWorktree(repo.dir, join(repo.root, 'worktrees', 'T-0002'), 'natamux/t-0001-example'),
     ).rejects.toThrow(GitError)
   })
 
   it('fails with a GitError when the folder is not a repository', async () => {
-    await expect(addWorktree(repo.root, worktreePath, 'helmsman/x')).rejects.toThrow(GitError)
+    await expect(addWorktree(repo.root, worktreePath, 'natamux/x')).rejects.toThrow(GitError)
   })
 })
 
 describe('removeWorktree', () => {
   it('removes the folder', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
 
     await removeWorktree(repo.dir, worktreePath)
 
@@ -86,7 +86,7 @@ describe('removeWorktree', () => {
   })
 
   it('refuses to remove a worktree with files that are not committed', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'notes.txt'), 'work in progress')
 
     await expect(removeWorktree(repo.dir, worktreePath)).rejects.toThrow(GitError)
@@ -96,24 +96,24 @@ describe('removeWorktree', () => {
 
 describe('deleteMergedBranch', () => {
   it('deletes a branch that is merged', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     await removeWorktree(repo.dir, worktreePath)
 
-    expect(await deleteMergedBranch(repo.dir, 'helmsman/t-0001-example')).toBe(true)
-    expect(branchExists('helmsman/t-0001-example')).toBe(false)
+    expect(await deleteMergedBranch(repo.dir, 'natamux/t-0001-example')).toBe(true)
+    expect(branchExists('natamux/t-0001-example')).toBe(false)
   })
 
   it('keeps a branch that has commits that are not merged', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     runGit(worktreePath, 'commit', '--allow-empty', '-m', 'work')
     await removeWorktree(repo.dir, worktreePath)
 
-    expect(await deleteMergedBranch(repo.dir, 'helmsman/t-0001-example')).toBe(false)
-    expect(branchExists('helmsman/t-0001-example')).toBe(true)
+    expect(await deleteMergedBranch(repo.dir, 'natamux/t-0001-example')).toBe(false)
+    expect(branchExists('natamux/t-0001-example')).toBe(true)
   })
 
   it('returns false for a branch that does not exist', async () => {
-    expect(await deleteMergedBranch(repo.dir, 'helmsman/nope')).toBe(false)
+    expect(await deleteMergedBranch(repo.dir, 'natamux/nope')).toBe(false)
   })
 })
 
@@ -161,7 +161,7 @@ describe('parseStatus', () => {
 
 describe('changes of a worktree', () => {
   async function worktreeWithTrackedFile(): Promise<string> {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'tracked.txt'), 'one\n')
     runGit(worktreePath, 'add', 'tracked.txt')
     runGit(worktreePath, 'commit', '-m', 'add tracked')
@@ -208,7 +208,7 @@ describe('changes of a worktree', () => {
 
 describe('readFileDiff', () => {
   async function prepare(): Promise<void> {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'tracked.txt'), 'one\n')
     runGit(worktreePath, 'add', 'tracked.txt')
     runGit(worktreePath, 'commit', '-m', 'add tracked')
@@ -324,7 +324,7 @@ describe('countTextLines', () => {
 
 describe('listChanges with counts', () => {
   it('counts the lines of modified, deleted, untracked and binary files', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'tracked.txt'), 'one\n')
     writeFileSync(join(worktreePath, 'gone.txt'), 'a\nb\n')
     writeFileSync(join(worktreePath, 'data.bin'), Buffer.from([1, 0, 2]))
@@ -347,7 +347,7 @@ describe('listChanges with counts', () => {
   })
 
   it('still lists the changes when a new folder is a nested repository', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'new.txt'), 'a\n')
     const nestedPath = join(worktreePath, 'sub')
     mkdirSync(nestedPath)
@@ -371,7 +371,7 @@ describe('listChanges with counts', () => {
   })
 
   it('leaves the counts out by default', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'new.txt'), 'a\n')
 
     const [entry] = await listChanges(worktreePath)
@@ -386,7 +386,7 @@ describe('readFileImage', () => {
     readFileImage(worktreePath, { path, status, originalPath: null }, side)
 
   async function prepare(): Promise<void> {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'logo.png'), Buffer.from([...PNG_HEAD, 1]))
     runGit(worktreePath, 'add', 'logo.png')
     runGit(worktreePath, 'commit', '-m', 'add logo')
@@ -441,7 +441,7 @@ describe('parseRefs', () => {
   it.each([
     ['', []],
     ['HEAD', []],
-    ['HEAD -> helmsman/t-0001', ['helmsman/t-0001']],
+    ['HEAD -> natamux/t-0001', ['natamux/t-0001']],
     ['HEAD -> main, tag: v1, origin/main', ['main', 'tag: v1', 'origin/main']],
     ['origin/main, origin/HEAD', ['origin/main']],
   ])('reads %j', (decoration, refs) => {
@@ -492,7 +492,7 @@ describe('currentBranch', () => {
 })
 
 describe('readGitGraph', () => {
-  const branch = 'helmsman/t-0001-example'
+  const branch = 'natamux/t-0001-example'
 
   // main: init, then "main moved" after the branch started. The branch: "one", then "two".
   async function divergedWorktree(): Promise<void> {
@@ -553,7 +553,7 @@ describe('readGitGraph', () => {
 
 describe('commitAll', () => {
   it('commits every change, new files included, and gives the hash and the subject', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'new.txt'), 'new\n')
 
     const result = await commitAll(worktreePath, 'Add a file\n\nWith a body.')
@@ -567,12 +567,12 @@ describe('commitAll', () => {
   })
 
   it('refuses when there is nothing to commit', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     await expect(commitAll(worktreePath, 'Nothing')).rejects.toThrow(NothingToCommitError)
   })
 
   it('takes a message that starts with a dash as the message', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'a.txt'), 'a\n')
 
     expect((await commitAll(worktreePath, '--amend')).subject).toBe('--amend')
@@ -605,27 +605,27 @@ describe('withGitConfig', () => {
 describe('pushBranch', () => {
   it('pushes the branch to origin and sets its upstream', async () => {
     const remote = addBareOrigin(repo)
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     runGit(worktreePath, 'commit', '--allow-empty', '-m', 'work')
 
-    await pushBranch(worktreePath, 'helmsman/t-0001-example')
+    await pushBranch(worktreePath, 'natamux/t-0001-example')
 
-    expect(runGit(remote, 'rev-parse', 'helmsman/t-0001-example').trim()).toBe(
+    expect(runGit(remote, 'rev-parse', 'natamux/t-0001-example').trim()).toBe(
       runGit(worktreePath, 'rev-parse', 'HEAD').trim(),
     )
     expect(runGit(worktreePath, 'rev-parse', '--abbrev-ref', '@{upstream}').trim()).toBe(
-      'origin/helmsman/t-0001-example',
+      'origin/natamux/t-0001-example',
     )
   })
 
   it('fails with a GitError without an origin', async () => {
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
-    await expect(pushBranch(worktreePath, 'helmsman/t-0001-example')).rejects.toThrow(GitError)
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    await expect(pushBranch(worktreePath, 'natamux/t-0001-example')).rejects.toThrow(GitError)
   })
 })
 
 describe('pull requests', () => {
-  const request = { branch: 'helmsman/t-0001', title: 'Fix it', body: 'Body' }
+  const request = { branch: 'natamux/t-0001', title: 'Fix it', body: 'Body' }
 
   it.each([
     ['https://github.com/o/r/pull/12\n', 'https://github.com/o/r/pull/12'],
@@ -647,14 +647,14 @@ describe('pull requests', () => {
 
     expect(await createPullRequest('/w', request, gh)).toBe('https://github.com/o/r/pull/12')
     expect(calls).toEqual([
-      ['pr', 'create', '--head', 'helmsman/t-0001', '--title', 'Fix it', '--body', 'Body'],
+      ['pr', 'create', '--head', 'natamux/t-0001', '--title', 'Fix it', '--body', 'Body'],
     ])
   })
 
   it('gives the address of the pull request that exists already', async () => {
     const gh: RunGh = async () => {
       throw new GitHubError(
-        'a pull request for branch "helmsman/t-0001" into branch "main" already exists:\n' +
+        'a pull request for branch "natamux/t-0001" into branch "main" already exists:\n' +
           'https://github.com/o/r/pull/9',
       )
     }
@@ -747,7 +747,7 @@ describe('diff size', () => {
     writeFileSync(join(repo.dir, 'base.txt'), 'one\ntwo\n')
     runGit(repo.dir, 'add', 'base.txt')
     runGit(repo.dir, 'commit', '-m', 'base')
-    await addWorktree(repo.dir, worktreePath, 'helmsman/t-0001-example')
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     writeFileSync(join(worktreePath, 'base.txt'), 'one\nthree\nfour\n')
     runGit(worktreePath, 'commit', '-am', 'change')
     writeFileSync(join(worktreePath, 'base.txt'), 'one\nthree\nfour\nfive\n')

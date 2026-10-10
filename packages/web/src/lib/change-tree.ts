@@ -1,4 +1,4 @@
-import type { ChangeEntry, ChangeStatus } from '@helmsman/core'
+import type { ChangeEntry, ChangeStatus } from '@natamux/core'
 import type { FileViewMode } from '../hooks/useFileViewMode'
 
 // Older daemons send no line counts, and null means the daemon could not count (binary, too big).

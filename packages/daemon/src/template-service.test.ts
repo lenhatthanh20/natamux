@@ -13,7 +13,7 @@ let tasks: TaskService
 let templates: TemplateService
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-templates-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-templates-'))
   index = new TaskIndex(':memory:')
   tasks = new TaskService({ dataDir, index, bus: new EventBus() })
   templates = new TemplateService({ dataDir, tasks })

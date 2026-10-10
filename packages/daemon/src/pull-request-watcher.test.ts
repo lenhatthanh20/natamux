@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Task } from '@helmsman/core'
+import type { Task } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { GitHubError, type RunGh } from './git.js'
@@ -14,7 +14,7 @@ let index: TaskIndex
 let tasks: TaskService
 
 beforeEach(() => {
-  dataDir = mkdtempSync(join(tmpdir(), 'helmsman-watch-'))
+  dataDir = mkdtempSync(join(tmpdir(), 'natamux-watch-'))
   index = new TaskIndex(':memory:')
   tasks = new TaskService({ dataDir, index, bus: new EventBus() })
 })

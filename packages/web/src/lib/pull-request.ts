@@ -1,4 +1,4 @@
-import type { PullRequestStatus, Task } from '@helmsman/core'
+import type { PullRequestStatus, Task } from '@natamux/core'
 
 // "https://github.com/o/r/pull/12" becomes "#12".
 export function pullRequestNumber(url: string): string {

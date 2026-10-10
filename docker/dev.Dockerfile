@@ -21,9 +21,10 @@ RUN apt-get update \
 ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
-# `docker compose exec daemon helmsman task list`
-RUN printf '#!/bin/sh\nexec node /workspaces/helmsman/packages/cli/dist/main.js "$@"\n' \
-    > /usr/local/bin/helmsman \
-  && chmod +x /usr/local/bin/helmsman
+# `docker compose exec daemon natamux task list`
+RUN printf '#!/bin/sh\nexec node /workspaces/natamux/packages/cli/dist/main.js "$@"\n' \
+    > /usr/local/bin/natamux \
+  && chmod +x /usr/local/bin/natamux \
+  && ln -s natamux /usr/local/bin/nmx
 
-WORKDIR /workspaces/helmsman
+WORKDIR /workspaces/natamux

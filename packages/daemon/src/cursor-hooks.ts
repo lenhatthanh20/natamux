@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { AgentAdapter, AgentSignal } from './agent-signals.js'
 import { toolSummary } from './claude-code-hooks.js'
 
-// The part of the JSON that the Cursor CLI sends to a hook which Helmsman reads
+// The part of the JSON that the Cursor CLI sends to a hook which Natamux reads
 // (cursor.com/docs/agent/hooks). The folder is in `workspace_roots`; only tool events have `cwd`.
 export const cursorInputSchema = z.object({
   hook_event_name: z.string().min(1),

@@ -3,8 +3,8 @@ import { join } from 'node:path'
 
 // A repository can hold a script that prepares a new workspace: install packages, copy env files.
 // It runs in the first terminal of the task, so its output can be read there.
-export const SETUP_SCRIPT = '.helmsman-setup'
-export const SETUP_SCRIPT_WINDOWS = '.helmsman-setup.ps1'
+export const SETUP_SCRIPT = '.natamux-setup'
+export const SETUP_SCRIPT_WINDOWS = '.natamux-setup.ps1'
 
 // The command line that runs the setup script of a worktree, or null when it has none.
 export function setupCommand(

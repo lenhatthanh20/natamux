@@ -1,6 +1,6 @@
-import type { EventType, TaskState } from '@helmsman/core'
+import type { EventType, TaskState } from '@natamux/core'
 
-// What an agent tells Helmsman, whatever the agent calls it.
+// What an agent tells Natamux, whatever the agent calls it.
 export const AGENT_SIGNALS = ['prompt', 'activity', 'asking', 'turn-ended', 'failed'] as const
 
 export type AgentSignal = (typeof AGENT_SIGNALS)[number]
@@ -15,7 +15,7 @@ export type NormalizedHook = {
 }
 
 // One adapter per agent. `normalize` throws a ZodError for input that is not a hook of this agent,
-// and returns undefined for a hook that Helmsman does not use.
+// and returns undefined for a hook that Natamux does not use.
 export type AgentAdapter = {
   id: string
   normalize: (raw: unknown) => NormalizedHook | undefined

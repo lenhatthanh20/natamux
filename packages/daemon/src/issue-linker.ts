@@ -1,4 +1,4 @@
-import { type IssueLink, stagesOf, type Task } from '@helmsman/core'
+import { type IssueLink, stagesOf, type Task } from '@natamux/core'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { GitHubError, type RunGh, runGh } from './git.js'
 import { readStageFile } from './stage-files.js'
@@ -120,14 +120,14 @@ export class IssueLinker {
     }
     if (this.tracker(task).type !== 'github') {
       throw new IssueLinkError(
-        'This project has no issue tracker. Set tracker.type in .helmsman.json',
+        'This project has no issue tracker. Set tracker.type in .natamux.json',
       )
     }
     const spec = readStageFile(this.dataDir, task, 'spec.md')
     const body = [
       (spec ?? task.description).trim() || task.title,
       '',
-      `Made by Helmsman for ${task.id}.`,
+      `Made by Natamux for ${task.id}.`,
     ].join('\n')
     const output = await this.gh(this.repoPath(task.repo), [
       'issue',
@@ -168,7 +168,7 @@ export class IssueLinker {
       (tracker.createIssue === 'on-pr' ||
         (tracker.createIssue === 'on-spec-approved' && !this.hasSpecStage(task)))
     const current = wantsIssue && task.issue === null ? await this.create(task.id) : task
-    const body = current.description.trim() || `Task ${current.id} in Helmsman.`
+    const body = current.description.trim() || `Task ${current.id} in Natamux.`
     return tracker.linkInPr && current.issue !== null
       ? `${body}\n\n${closingLine(current.issue)}`
       : body

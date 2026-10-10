@@ -1,4 +1,4 @@
-import type { EventType, TaskState } from '@helmsman/core'
+import type { EventType, TaskState } from '@natamux/core'
 import { fireAppEvent } from './app-events'
 import { actionsFor } from './tasks'
 import { applyTheme, type Theme } from './theme'

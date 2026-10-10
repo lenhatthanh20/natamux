@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@helmsman/core'
+import type { Task, TaskState } from '@natamux/core'
 import { describe, expect, it, vi } from 'vitest'
 import type { CommandActions, CommandContext } from './commands'
 import {
@@ -137,7 +137,7 @@ describe('the command palette with nothing typed', () => {
 
 describe('the command palette with a query', () => {
   const tasks = [
-    task('T-0007', 'running', { title: 'Fix token refresh race', branch: 'helmsman/t-0007-fix' }),
+    task('T-0007', 'running', { title: 'Fix token refresh race', branch: 'natamux/t-0007-fix' }),
     task('T-0008', 'ready', { title: 'Write docs' }),
   ]
 

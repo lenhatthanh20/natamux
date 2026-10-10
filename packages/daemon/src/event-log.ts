@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type TaskEvent, taskEventSchema } from '@helmsman/core'
+import { type TaskEvent, taskEventSchema } from '@natamux/core'
 import { tasksDir } from './task-files.js'
 
 // One JSON line per event of a task, next to its task file. The index keeps the events too, for

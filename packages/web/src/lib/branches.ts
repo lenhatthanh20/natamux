@@ -1,8 +1,8 @@
 import type { ComboboxOption } from '../components/ui/Combobox'
 
-// The branches that Helmsman made for tasks. They fill the list, so they are folded away.
+// The branches that Natamux made for tasks. They fill the list, so they are folded away.
 export const TASK_BRANCH_GROUP = 'Task branches'
-const TASK_BRANCH_PREFIX = 'helmsman/'
+const TASK_BRANCH_PREFIX = 'natamux/'
 
 // The list of the "Branch from" picker: the branch of the checkout and the one used last come
 // first, then the other branches, then the task branches.
@@ -30,7 +30,7 @@ export function branchOptions(
   ]
 }
 
-const LAST_BASE_KEY = 'helmsman.last-base'
+const LAST_BASE_KEY = 'natamux.last-base'
 
 function savedBases(): Record<string, string> {
   try {

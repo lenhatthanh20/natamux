@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE, type Stage } from '@helmsman/core'
+import { DEFAULT_PIPELINE, type Stage } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
 import { finishedWhen, formatDuration, stageCount, stepTime } from './stage-view'

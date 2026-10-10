@@ -1,4 +1,4 @@
-import type { ChangeStatus } from '@helmsman/core'
+import type { ChangeStatus } from '@natamux/core'
 
 export const CHANGE_LABEL: Record<ChangeStatus, string> = {
   M: 'Modified',

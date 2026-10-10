@@ -27,7 +27,7 @@ let index: TaskIndex
 let app: FastifyInstance
 let ptys: FakePty[]
 let webIndexPath: string
-const PAGE = '<!doctype html><title>Helmsman</title><div id="root"></div>'
+const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
 beforeEach(async () => {
   repo = createTestRepo()
@@ -428,7 +428,7 @@ describe('workspaces', () => {
     })
     expect(created.statusCode).toBe(201)
     const { workspace, branch } = created.json().task
-    expect(branch).toBe('helmsman/t-0001-fix-the-bug')
+    expect(branch).toBe('natamux/t-0001-fix-the-bug')
     expect(existsSync(workspace)).toBe(true)
 
     const removed = await app.inject({
@@ -535,13 +535,13 @@ describe('Claude Code hooks', () => {
 
     const started = await post(
       { hook_event_name: 'UserPromptSubmit' },
-      { 'x-helmsman-task': 'T-0001' },
+      { 'x-natamux-task': 'T-0001' },
     )
     expect(started.statusCode).toBe(200)
     expect(started.json()).toEqual({})
     expect(await stateOf('T-0001')).toBe('running')
 
-    await post({ hook_event_name: 'Stop' }, { 'x-helmsman-task': 'T-0001' })
+    await post({ hook_event_name: 'Stop' }, { 'x-natamux-task': 'T-0001' })
     expect(await stateOf('T-0001')).toBe('needs-input')
   })
 
@@ -587,7 +587,7 @@ describe('Claude Code hooks', () => {
 
   it('answers 200 and changes nothing for a hook the adapter does not use', async () => {
     await createTask()
-    const response = await post({ hook_event_name: 'SessionEnd' }, { 'x-helmsman-task': 'T-0001' })
+    const response = await post({ hook_event_name: 'SessionEnd' }, { 'x-natamux-task': 'T-0001' })
     expect(response.statusCode).toBe(200)
     expect(await stateOf('T-0001')).toBe('draft')
   })
@@ -866,7 +866,7 @@ describe('terminal', () => {
       headers: authorization,
     })
     expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [] })
-    // A program that is not a shell runs in the first one: an agent, as far as Helmsman can tell.
+    // A program that is not a shell runs in the first one: an agent, as far as Natamux can tell.
     ;(ptys[0] as FakePty).program = 'node'
     const withAgent = await app.inject({
       method: 'GET',
@@ -1258,7 +1258,7 @@ describe('agent activity', () => {
     await app.inject({
       method: 'POST',
       url: '/hooks/claude-code',
-      headers: { ...authorization, 'x-helmsman-task': 'T-0001' },
+      headers: { ...authorization, 'x-natamux-task': 'T-0001' },
       payload: {
         hook_event_name: 'PreToolUse',
         tool_name: 'Edit',

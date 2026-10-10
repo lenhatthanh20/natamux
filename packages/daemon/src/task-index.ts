@@ -5,7 +5,7 @@ import {
   type TaskState,
   taskEventSchema,
   taskSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 const SCHEMA = `
 create table if not exists tasks_index (

@@ -1,4 +1,4 @@
-import { type EventType, type Repo, type Task, waitingOn } from '@helmsman/core'
+import { type EventType, type Repo, type Task, waitingOn } from '@natamux/core'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Columns3, ListChecks, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -366,8 +366,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
   const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
-  const sidebar = useStoredWidth('helmsman.sidebar-width', 272, 220, 440)
-  const details = useStoredWidth('helmsman.details-width', 360, 320, 560)
+  const sidebar = useStoredWidth('natamux.sidebar-width', 272, 220, 440)
+  const details = useStoredWidth('natamux.details-width', 360, 320, 560)
   const viewportWidth = useViewportWidth()
   const sidebarWidth = effectiveSidebarWidth(sidebar.width, viewportWidth)
   const shellLayout = useLayoutMode({
@@ -561,7 +561,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const waitingCount = needsMeTasks(tasks, now).length
   const notifications = useTaskNotifications(tasks)
   useEffect(() => {
-    document.title = waitingCount > 0 ? `(${waitingCount}) Helmsman` : 'Helmsman'
+    document.title = waitingCount > 0 ? `(${waitingCount}) Natamux` : 'Natamux'
   }, [waitingCount])
 
   // The first time a workspace is seen, its state is the baseline: nothing starts out unseen.

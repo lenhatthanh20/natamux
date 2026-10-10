@@ -1,4 +1,4 @@
-import { DEFAULT_PROJECT_SETTINGS, type Repo } from '@helmsman/core'
+import { DEFAULT_PROJECT_SETTINGS, type Repo } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlert } from 'lucide-react'
 import { useState } from 'react'
@@ -17,7 +17,7 @@ type ProjectSettingsDialogProps = {
 
 const format = (value: unknown) => JSON.stringify(value, null, 2)
 
-// `.helmsman.json` of a repository: its stages, context sources and issue tracker. Saved in the
+// `.natamux.json` of a repository: its stages, context sources and issue tracker. Saved in the
 // repository's main folder; you commit it.
 export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSettingsDialogProps) {
   const queryClient = useQueryClient()
@@ -58,7 +58,7 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
       return save(raw)
     },
     onSuccess: () => {
-      toast(`Saved .helmsman.json of ${repo.name}. Commit it to share it.`, 'success')
+      toast(`Saved .natamux.json of ${repo.name}. Commit it to share it.`, 'success')
       queryClient.invalidateQueries({ queryKey: ['settings', repo.id] })
       onClose()
     },
@@ -126,7 +126,7 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
           }}
           rows={22}
           spellCheck={false}
-          aria-label=".helmsman.json"
+          aria-label=".natamux.json"
           data-autofocus
           className={`${textarea} w-full resize-y font-mono text-xs leading-5`}
         />

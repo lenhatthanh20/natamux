@@ -1,4 +1,4 @@
-import { type Task, type TaskState, taskSchema } from '@helmsman/core'
+import { type Task, type TaskState, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { triesOf, triesToCancel, tryGroup } from './tries'
 

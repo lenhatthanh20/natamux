@@ -31,7 +31,7 @@ export const trackerSettingsSchema = z.object({
   linkInPr: z.boolean().default(true),
 })
 
-// `.helmsman.json` at the root of a repository. Every field may be left out.
+// `.natamux.json` at the root of a repository. Every field may be left out.
 export const projectSettingsSchema = z.object({
   stages: pipelineSchema.default(DEFAULT_PIPELINE),
   context: z

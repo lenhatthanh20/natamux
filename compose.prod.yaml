@@ -1,8 +1,8 @@
-# Production: HELMSMAN_TOKEN=<long random value> HELMSMAN_REPO=/path/to/repo \
+# Production: NATAMUX_TOKEN=<long random value> NATAMUX_REPO=/path/to/repo \
 #   docker compose -f compose.prod.yaml up -d --build
 # One address serves the dashboard and the API (/api): http://localhost:8080
 # Read docs/docker.md first.
-name: helmsman
+name: natamux
 
 x-hardened: &hardened
   restart: unless-stopped
@@ -21,16 +21,16 @@ services:
       context: .
       dockerfile: docker/prod.Dockerfile
       target: daemon
-    image: helmsman-daemon:local
+    image: natamux-daemon:local
     environment:
-      HELMSMAN_TOKEN: ${HELMSMAN_TOKEN:?Set HELMSMAN_TOKEN to a long random value}
+      NATAMUX_TOKEN: ${NATAMUX_TOKEN:?Set NATAMUX_TOKEN to a long random value}
       # git refuses a folder that another user owns, unless it is listed.
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: /repo
     volumes:
-      - ${HELMSMAN_REPO:?Set HELMSMAN_REPO to the git repository}:/repo
-      - helmsman-data:/data
+      - ${NATAMUX_REPO:?Set NATAMUX_REPO to the git repository}:/repo
+      - natamux-data:/data
     # Not published: only the web container reaches it.
     expose:
       - "4317"
@@ -51,9 +51,9 @@ services:
       context: .
       dockerfile: docker/prod.Dockerfile
       target: web
-    image: helmsman-web:local
+    image: natamux-web:local
     ports:
-      - "${HELMSMAN_BIND:-127.0.0.1}:${HELMSMAN_PORT:-8080}:8080"
+      - "${NATAMUX_BIND:-127.0.0.1}:${NATAMUX_PORT:-8080}:8080"
     # `up --wait` returns only when nginx answers.
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
@@ -66,4 +66,4 @@ services:
         condition: service_healthy
 
 volumes:
-  helmsman-data:
+  natamux-data:

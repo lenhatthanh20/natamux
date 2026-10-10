@@ -1,4 +1,4 @@
-import type { GitHubIssue, Task } from '@helmsman/core'
+import type { GitHubIssue, Task } from '@natamux/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { CircleAlert } from 'lucide-react'
 import { useState } from 'react'

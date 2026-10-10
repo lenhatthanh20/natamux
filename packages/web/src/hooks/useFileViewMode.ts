@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 export type FileViewMode = 'list' | 'tree'
 
-const KEY = 'helmsman.changes-view'
+const KEY = 'natamux.changes-view'
 
 function read(): FileViewMode {
   try {

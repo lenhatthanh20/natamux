@@ -1,4 +1,4 @@
-import type { TaskState, TerminalSize } from '@helmsman/core'
+import type { TaskState, TerminalSize } from '@natamux/core'
 import { useQuery } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
 import { useEffect, useState } from 'react'

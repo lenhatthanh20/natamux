@@ -10,7 +10,7 @@ import {
   TASK_STATES,
   type TaskState,
   taskIdSchema,
-} from '@helmsman/core'
+} from '@natamux/core'
 
 // The daemon records some events itself, so a client cannot send them.
 export const SENDABLE_EVENT_TYPES = EVENT_TYPES.filter(
@@ -51,7 +51,7 @@ export type Command =
   | { name: 'task.edit'; id: string; changes: TaskChanges; json: boolean }
   | { name: 'agent.start'; id: string; agent: string; prompt?: string; json: boolean }
   // For an agent without hooks: say it waits for the user, or that its turn is over. Without
-  // --task, the task comes from HELMSMAN_TASK_ID.
+  // --task, the task comes from NATAMUX_TASK_ID.
   | { name: 'agent.ask'; id?: string; question: string; stage?: string; json: boolean }
   // Says the stage this terminal works on is done; the daemon then checks it.
   | { name: 'agent.done'; id?: string; stage?: string; json: boolean }
@@ -183,7 +183,7 @@ export function parseCommand(argv: readonly string[]): Command {
     if (second === 'create') {
       const title = rest.join(' ').trim()
       if (title === '') {
-        throw new UsageError('A title is required: helmsman task create "Fix the bug"')
+        throw new UsageError('A title is required: natamux task create "Fix the bug"')
       }
       return {
         name: 'task.create',
@@ -204,7 +204,7 @@ export function parseCommand(argv: readonly string[]): Command {
       noExtraArguments(rest.slice(1))
       if (values.issue === undefined || values.url === undefined) {
         throw new UsageError(
-          'Give the issue and its address: helmsman task link T-42 --issue ABC-123 --url https://…',
+          'Give the issue and its address: natamux task link T-42 --issue ABC-123 --url https://…',
         )
       }
       return {
@@ -257,7 +257,7 @@ export function parseCommand(argv: readonly string[]): Command {
     const id = taskId(second)
     const type = rest[0]
     if (type === undefined) {
-      throw new UsageError('An event type is required: helmsman event T-42 agent.started')
+      throw new UsageError('An event type is required: natamux event T-42 agent.started')
     }
     noExtraArguments(rest.slice(1))
     return {
@@ -290,7 +290,7 @@ export function parseCommand(argv: readonly string[]): Command {
       .join(' ')
       .trim()
     if (question === '') {
-      throw new UsageError('A question is required: helmsman ask "Which database should I use?"')
+      throw new UsageError('A question is required: natamux ask "Which database should I use?"')
     }
     return {
       name: 'agent.ask',
@@ -339,7 +339,7 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'hook') {
     if (second === undefined || !AGENT_NAME.test(second)) {
       throw new UsageError(
-        'An agent name is required, in lower case letters, digits and "-": helmsman hook claude-code',
+        'An agent name is required, in lower case letters, digits and "-": natamux hook claude-code',
       )
     }
     // Copilot CLI does not say which event a hook is for, so its hook command names it.
