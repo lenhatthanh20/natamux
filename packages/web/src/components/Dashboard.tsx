@@ -1075,13 +1075,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onSubmit={submitNewTask}
               className="flex shrink-0 flex-wrap items-center gap-2 px-4 pt-4 pb-3"
             >
+              {/* A phone has no keys to hint at, and little room: the buttons are icons there. */}
               <input
                 ref={newTaskRef}
                 value={newTitle}
                 onChange={(event) => setNewTitle(event.target.value)}
-                placeholder="Add a task to the backlog (n)"
+                placeholder={phone ? 'Add a task to the backlog' : 'Add a task to the backlog (n)'}
                 aria-label="New task title"
-                className={`${input} min-w-64 flex-1`}
+                className={`${input} flex-1 ${phone ? 'min-w-40' : 'min-w-64'}`}
               />
               {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
                 <div className="flex gap-2">
@@ -1119,6 +1120,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               <Button
                 type="submit"
                 icon={Plus}
+                aria-label={phone ? 'Add task' : undefined}
                 // Not busy while a task is added: a disabled submit button stops Enter, and the
                 // next title is often typed before the daemon answers.
                 disabledReason={
@@ -1129,8 +1131,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       : undefined
                 }
               >
-                Add task
+                {phone ? null : 'Add task'}
               </Button>
+              {/* Starting an agent is the main daily action. The empty state offers it already. */}
+              {tasks.length > 0 && (
+                <Button
+                  variant="primary"
+                  icon={SquareTerminal}
+                  aria-label={phone ? 'Start a task' : undefined}
+                  shortcut={phone ? undefined : shortcutOf('workspace.new')}
+                  onClick={() => openNewWorkspace({ title: newTitle.trim() || undefined })}
+                  data-tip={newTitle.trim() === '' ? undefined : 'Start a task with this title'}
+                >
+                  {phone ? null : 'Start a task'}
+                </Button>
+              )}
             </form>
             <div
               {...frozen.handlers}
@@ -1254,6 +1269,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             select(task.id)
             openChanges(task.id, 'terminal')
             toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
+            // The title came from the task field, so it is used up.
+            if (newWorkspace.title !== undefined && newWorkspace.title === newTitle.trim()) {
+              setNewTitle('')
+            }
           }}
           onClose={() => setNewWorkspace(null)}
         />

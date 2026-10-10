@@ -1190,6 +1190,23 @@ describe('App', () => {
     expect(await screen.findByRole('dialog', { name: 'Start a task' })).toBeTruthy()
   })
 
+  it('starts a task with the typed title from the button next to Add task', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.type(screen.getByLabelText('New task title'), 'Fix the login')
+    const main = screen.getByRole('main')
+    await user.click(within(main).getByRole('button', { name: /^Start a task/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start a task' })
+    expect((within(dialog).getByLabelText('Task title') as HTMLInputElement).value).toBe(
+      'Fix the login',
+    )
+  })
+
   it('removes a project from its sidebar group after asking', async () => {
     const { calls } = installDaemon([runningTask], [], [defaultRepo, webRepo])
     const user = userEvent.setup()
