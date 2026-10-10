@@ -58,9 +58,7 @@ describe('slugify and branchNameFor', () => {
   })
 
   it('builds a branch name from the task id and title', () => {
-    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe(
-      'natamux/t-0042-fix-the-bug',
-    )
+    expect(branchNameFor({ id: 'T-0042', title: 'Fix the bug' })).toBe('natamux/t-0042-fix-the-bug')
   })
 })
 

@@ -177,9 +177,7 @@ describe('the natamux command', () => {
   it('is a .cmd file on Windows', () => {
     const file = writeCliShim(dir, 'C:\\Natamux\\Natamux.exe', 'C:\\cli\\main.js', 'win32')
     expect(file.endsWith('natamux.cmd')).toBe(true)
-    expect(readFileSync(file, 'utf8')).toContain(
-      '"C:\\Natamux\\Natamux.exe" "C:\\cli\\main.js" %*',
-    )
+    expect(readFileSync(file, 'utf8')).toContain('"C:\\Natamux\\Natamux.exe" "C:\\cli\\main.js" %*')
     expect(readFileSync(join(dir, 'nmx.cmd'), 'utf8')).toBe(readFileSync(file, 'utf8'))
   })
 })

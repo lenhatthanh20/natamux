@@ -26,11 +26,7 @@ describe('claudeCodeHookSettings', () => {
       'X-Natamux-Task': '$NATAMUX_TASK_ID',
       'X-Natamux-Terminal': '$NATAMUX_TERMINAL',
     })
-    expect(hook?.allowedEnvVars).toEqual([
-      'NATAMUX_TOKEN',
-      'NATAMUX_TASK_ID',
-      'NATAMUX_TERMINAL',
-    ])
+    expect(hook?.allowedEnvVars).toEqual(['NATAMUX_TOKEN', 'NATAMUX_TASK_ID', 'NATAMUX_TERMINAL'])
   })
 
   it('stops waiting for the daemon after a few seconds', () => {

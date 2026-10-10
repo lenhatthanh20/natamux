@@ -176,9 +176,7 @@ function createWindow(): void {
       const signedIn: unknown = await created.webContents.executeJavaScript(
         `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
       )
-      console.log(
-        `natamux-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`,
-      )
+      console.log(`natamux-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`)
       const shot = process.env.NATAMUX_DESKTOP_SMOKE_SHOT
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
