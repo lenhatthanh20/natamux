@@ -1,6 +1,6 @@
 {
   "name": "@natamux/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "files": [
@@ -27,6 +27,8 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },
-  "description": "Natamux desktop app",
-  "author": "Natamux"
+  "description": "Run many coding agents in parallel, one dashboard for every task",
+  "author": "lenhatthanh20",
+  "homepage": "https://lenhatthanh20.github.io/natamux/",
+  "license": "MIT"
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the desktop app for this machine: a .dmg on macOS, an installer on Windows (Git Bash),
-# a folder on Linux. Not signed or notarized yet (build order step 11).
+# an AppImage, a .deb and a .tar.gz on Linux. Not signed or notarized yet (build order step 11).
 # Needs Node.js 22+, pnpm (corepack enable), and a C++ toolchain for node-pty
 # (on macOS: xcode-select --install).
 #
@@ -20,6 +20,9 @@ pnpm --filter "@natamux/desktop..." build
 # files go in next to it and become the app's resources (electron-builder.yml).
 pnpm --filter @natamux/desktop deploy --prod --legacy --config.node-linker=hoisted "$STAGE/app"
 cp -R packages/web/dist "$STAGE/app/web-dist"
+# electron-builder takes the app icon from build/icon.png and makes the .icns from it.
+mkdir -p "$STAGE/app/build"
+cp packages/desktop/build/icon.png "$STAGE/app/build/icon.png"
 
 electron_version="$(cd packages/desktop && node -p "require('electron/package.json').version")"
 (

@@ -1,0 +1,82 @@
+name: Release
+
+# Pushing a tag such as v0.1.0 builds the desktop app for macOS (Apple silicon and Intel) and
+# Linux, then publishes one GitHub release with every file. The notes come from
+# docs/releases/<tag>.md. Not signed with a certificate yet (build order step 11).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish, such as v0.1.0
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mac-arm64, os: macos-26, args: --mac --arm64 }
+          - { name: mac-x64, os: macos-26-intel, args: --mac --x64 }
+          - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Package
+        run: scripts/package-desktop.sh ${{ matrix.args }} --publish never
+      - name: Start the packaged app (Linux)
+        if: runner.os == 'Linux'
+        env:
+          NATAMUX_DESKTOP_SMOKE: "1"
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          user_dir="$RUNNER_TEMP/desktop-user"
+          mkdir -p "$user_dir"
+          printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
+          xvfb-run -a packages/desktop/release/linux-unpacked/natamux --no-sandbox --user-data-dir="$user_dir"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: natamux-${{ matrix.name }}
+          path: |
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.AppImage
+            packages/desktop/release/*.deb
+            packages/desktop/release/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        run: cd artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Natamux ${{ env.TAG }}
+          body_path: docs/releases/${{ env.TAG }}.md
+          files: artifacts/*

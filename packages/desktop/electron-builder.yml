@@ -1,10 +1,13 @@
 # Used by scripts/package-desktop.sh, which builds the app from a `pnpm deploy` copy of this package.
 appId: dev.natamux.desktop
 productName: Natamux
+copyright: Copyright © 2026 lenhatthanh20 and the Natamux contributors
 # Plain files: node-pty's helper program and the daemon's entry must be real files to run.
 asar: false
 npmRebuild: true
 executableName: natamux
+# Each architecture gets its own file name, so the files of all builds fit in one release.
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 files:
   - dist/**
   - package.json
@@ -21,4 +24,11 @@ mac:
 win:
   target: nsis
 linux:
-  target: dir
+  target:
+    - AppImage
+    - deb
+    - tar.gz
+  category: Development
+  synopsis: Run many coding agents in parallel
+  maintainer: lenhatthanh20 <lenhatthanh20@users.noreply.github.com>
+  vendor: Natamux
