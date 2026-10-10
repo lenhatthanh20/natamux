@@ -201,6 +201,25 @@ describe('RepoService', () => {
     expect((await repos.add({ path: folder, name: 'Web' })).id).toBe(first.id)
   })
 
+  it('does not give the id of a removed project with tasks to another folder', async () => {
+    const tasks = [{ repo: 'app', workspace: null }]
+    const dataDir = join(repo.root, 'data')
+    const withTasks = new RepoService({ dataDir, defaultPath: repo.dir, tasks: () => tasks })
+    const first = gitFolder('app')
+    expect((await withTasks.add({ path: first })).id).toBe('app')
+    withTasks.remove('app')
+    mkdirSync(join(repo.root, 'other'))
+
+    expect((await withTasks.add({ path: gitFolder(join('other', 'app')) })).id).toBe('app-2')
+    expect((await withTasks.add({ path: first })).id).toBe('app')
+  })
+
+  it('gives "default" only to the folder first added as "default"', async () => {
+    const empty = new RepoService({ dataDir: join(repo.root, 'empty-data') })
+
+    expect((await empty.add({ path: gitFolder('Default') })).id).toBe('default-2')
+  })
+
   it('removes the default repository like any other, and refuses an unknown one', () => {
     expect(() => repos.remove('nope')).toThrow(RepoNotFoundError)
 
