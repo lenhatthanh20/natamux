@@ -79,4 +79,13 @@ describe('WorkspaceHeader', () => {
     expect(onPush).toHaveBeenCalledTimes(1)
     expect(pullRequest().getAttribute('aria-disabled')).toBeNull()
   })
+
+  it('draws the pull request button as primary only when it can be used', () => {
+    header({})
+    expect(pullRequest().dataset.variant).toBe('secondary')
+    cleanup()
+
+    header({ ahead: 1 })
+    expect(pullRequest().dataset.variant).toBe('primary')
+  })
 })

@@ -133,7 +133,9 @@ export function WorkspaceHeader({
           )}
           {task.pr === null ? (
             <Button
-              variant="primary"
+              // Primary only when it works: a blocked primary would draw the eye to a control
+              // that does nothing, and the switch marks the moment the task is ready to ship.
+              variant={pullRequest.reason === undefined ? 'primary' : 'secondary'}
               icon={GitPullRequest}
               busy={pending === 'pull-request'}
               disabled={busy && pending !== 'pull-request'}
