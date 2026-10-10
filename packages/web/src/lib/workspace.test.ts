@@ -6,6 +6,7 @@ import {
   latestQuestion,
   pullRequestButton,
   pushButton,
+  reviewStages,
   rowText,
   tabToOpen,
   waitReason,
@@ -125,6 +126,18 @@ describe('tabToOpen', () => {
     expect(tabToOpen('review', 'changes')).toBe('changes')
     expect(tabToOpen('ready', 'history')).toBe('history')
     expect(tabToOpen('ready', undefined)).toBe('terminal')
+  })
+})
+
+describe('reviewStages', () => {
+  it('names the stages of a group that are in review, else the task stage', () => {
+    expect(reviewStages({ stage: 'plan', lanes: {} })).toEqual(['plan'])
+    expect(
+      reviewStages({ stage: 'build', lanes: { 'test-spec': 'review', implement: 'running' } }),
+    ).toEqual(['test-spec'])
+    expect(reviewStages({ stage: 'build', lanes: { a: 'running', b: 'running' } })).toEqual([
+      'build',
+    ])
   })
 })
 

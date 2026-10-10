@@ -12,6 +12,7 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
+import { useAppEvent } from '../lib/app-events'
 import type {
   LoadedSettings,
   StageAction,
@@ -102,6 +103,9 @@ export function ProgressTab({
     placeholderData: keepPreviousData,
   })
   const [sendingBack, setSendingBack] = useState<StageProgress | null>(null)
+  // Send back from the review banner. The form opens once the stages are read.
+  const [sendBackAsked, setSendBackAsked] = useState(false)
+  useAppEvent('send-back', () => setSendBackAsked(true))
   const stageList = useRef<HTMLOListElement>(null)
 
   const action = useMutation({
@@ -154,6 +158,14 @@ export function ProgressTab({
   const count = stageCount(progress)
   const open = task.state !== 'done' && task.state !== 'cancelled'
   const run = (name: StageAction, input?: StageActionInput) => action.mutate({ name, input })
+  const reviewed =
+    progress.find((entry) => entry.status === 'current' && entry.state === 'review') ??
+    progress.find((entry) => entry.status === 'current')
+  const sendBackFrom = sendingBack ?? (sendBackAsked && open ? (reviewed ?? null) : null)
+  const closeSendBack = () => {
+    setSendingBack(null)
+    setSendBackAsked(false)
+  }
   const latest = loadedEvents
     // "Agent is working" lines only keep the clock fresh; they would fill the list.
     .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
@@ -347,20 +359,20 @@ export function ProgressTab({
         </ul>
       </DetailSection>
 
-      {sendingBack !== null && (
+      {sendBackFrom !== null && (
         <SendBackDialog
-          stage={sendingBack}
+          stage={sendBackFrom}
           earlier={progress.filter(
             (entry) =>
               entry.status !== 'upcoming' &&
               (entry.kind === 'agent' || entry.kind === 'context' || entry.kind === 'testing'),
           )}
           busy={action.isPending}
-          onClose={() => setSendingBack(null)}
+          onClose={closeSendBack}
           onSend={(to, reason) => {
             action.mutate(
               { name: 'reopen', input: { to, ...(reason === '' ? {} : { reason }) } },
-              { onSuccess: () => setSendingBack(null) },
+              { onSuccess: closeSendBack },
             )
           }}
         />

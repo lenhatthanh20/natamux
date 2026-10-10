@@ -1,6 +1,6 @@
 import { DEFAULT_PROJECT_SETTINGS, type Task, type TaskEvent } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act as actOn, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentId } from '../lib/agents'
@@ -11,6 +11,7 @@ import type {
   StageFile,
   StoredEvent,
 } from '../lib/api'
+import { fireAppEvent } from '../lib/app-events'
 import { useToasts } from '../lib/toasts'
 import { ProgressTab } from './ProgressTab'
 
@@ -457,6 +458,18 @@ describe('the actions of the current stage', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Send the task back' })).toBeNull()
     expect(act).not.toHaveBeenCalled()
+  })
+
+  it('opens the send back dialog when the review banner asks for it', async () => {
+    progress()
+    const user = userEvent.setup()
+    await screen.findByRole('article', { name: 'Spec' })
+
+    actOn(() => fireAppEvent('send-back'))
+    const dialog = await screen.findByRole('dialog', { name: 'Send the task back' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Send the task back' })).toBeNull()
   })
 
   it('creates the issue of the task', async () => {

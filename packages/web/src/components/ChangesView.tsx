@@ -20,6 +20,7 @@ import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
 import { NeedsInputBanner } from './NeedsInputBanner'
+import { ReviewBanner } from './ReviewBanner'
 import { ShellPanes } from './ShellPanes'
 import { SkeletonList } from './ui/Skeleton'
 import { Tabs, tabPanelProps } from './ui/Tabs'
@@ -61,6 +62,9 @@ type ChangesViewProps = {
   writeStageFile: (name: string, text: string) => Promise<void>
   // Starts an agent in the task's terminal, for an agent that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
+  // For a task in review: approve a stage, or open the form that sends the task back.
+  approveStage?: (stage: string) => Promise<Task>
+  onSendBack?: () => void
 }
 
 type GitAction = {
@@ -100,6 +104,8 @@ export function ChangesView({
   resume,
   resuming,
   startAgent,
+  approveStage,
+  onSendBack,
   loadStageFiles,
   readStageFile,
   writeStageFile,
@@ -183,6 +189,11 @@ export function ChangesView({
   })
   const pending = gitAction.isPending ? (gitAction.variables?.action ?? null) : null
 
+  const approval = useMutation({
+    mutationFn: (stage: string) => approveStage?.(stage) ?? Promise.resolve(task),
+    onError: (error) => toast('Could not approve the stage.', 'error', { detail: error.message }),
+  })
+
   const commitFiles = async (message: string, fileCount: number) => {
     try {
       await gitAction.mutateAsync({ action: 'commit', message, fileCount })
@@ -218,6 +229,14 @@ export function ChangesView({
               : undefined
           }
           agent={task.agent}
+        />
+      )}
+      {task.state === 'review' && approveStage !== undefined && onSendBack !== undefined && (
+        <ReviewBanner
+          task={task}
+          approving={approval.isPending ? (approval.variables ?? null) : null}
+          onApprove={(stage) => approval.mutate(stage)}
+          onSendBack={onSendBack}
         />
       )}
       <Tabs

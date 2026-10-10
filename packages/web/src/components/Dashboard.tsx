@@ -1002,6 +1002,16 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
             startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
+            approveStage={async (stage) => {
+              const updated = await api.stageAction(changesTask.id, 'approve', { stage })
+              mergeTask(updated)
+              return updated
+            }}
+            onSendBack={() => {
+              // The form is in the progress of the details, which may have to open first.
+              showProgress(changesTask.id)
+              setTimeout(() => fireAppEvent('send-back'), 80)
+            }}
           />
         ) : agentsOpen ? (
           <AgentPanes

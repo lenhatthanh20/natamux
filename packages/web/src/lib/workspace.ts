@@ -1,4 +1,4 @@
-import type { TaskState } from '@natamux/core'
+import type { Task, TaskState } from '@natamux/core'
 import type { StoredEvent } from './api'
 import type { WorkspaceTab } from './view-store'
 
@@ -135,6 +135,15 @@ export function rowText(reason: WaitReason): string {
   return reason.kind === 'asked' && reason.question === null
     ? 'Waiting for your answer'
     : bannerText(reason)
+}
+
+// The stages that wait for the user's review. In a group of stages that run side by side, only
+// the ones in review; else the task's own stage.
+export function reviewStages(task: Pick<Task, 'stage' | 'lanes'>): string[] {
+  const lanes = Object.entries(task.lanes)
+    .filter(([, state]) => state === 'review')
+    .map(([id]) => id)
+  return lanes.length > 0 ? lanes : [task.stage]
 }
 
 // A task whose agent works or waits opens on its terminal. Another task opens on the tab that
