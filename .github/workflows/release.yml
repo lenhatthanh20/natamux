@@ -9,8 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to build and publish, such as v0.1.0
+        description: Existing tag to build and publish, such as v0.1.0, or a branch for a dry run
         required: true
+      publish:
+        description: Publish a release. Off for a dry run that only builds and tests.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -49,6 +53,24 @@ jobs:
           mkdir -p "$user_dir"
           printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
           xvfb-run -a packages/desktop/release/linux-unpacked/natamux-desktop --no-sandbox --user-data-dir="$user_dir"
+      # Acting as version 0.0.0, the new app must download the AppImage of the latest release,
+      # check it and put it in its own place.
+      - name: Update to the latest release (dry run)
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && !inputs.publish
+        env:
+          NATAMUX_UPDATE_AS_VERSION: 0.0.0
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          user_dir="$RUNNER_TEMP/update-user"
+          mkdir -p "$user_dir"
+          printf '{"repoDir":"%s"}' "$GITHUB_WORKSPACE" > "$user_dir/settings.json"
+          app="$RUNNER_TEMP/Natamux.AppImage"
+          cp packages/desktop/release/Natamux-linux-x86_64.AppImage "$app"
+          timeout 240 xvfb-run -a "$app" --no-sandbox --user-data-dir="$user_dir" || true
+          cat "$user_dir/logs/update.log"
+          gh release download --pattern SHA256SUMS.txt --output - \
+            | grep ' Natamux-linux-x86_64.AppImage$' | sed "s| .*|  $app|" | sha256sum -c
       - uses: actions/upload-artifact@v7
         with:
           name: natamux-${{ matrix.name }}
@@ -60,6 +82,7 @@ jobs:
           if-no-files-found: error
 
   release:
+    if: github.event_name == 'push' || inputs.publish
     needs: package
     runs-on: ubuntu-latest
     permissions:
