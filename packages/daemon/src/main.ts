@@ -87,6 +87,7 @@ const agents = new AgentRunner({
   geminiSettingsPath,
   programs: perAgent('COMMAND'),
   extraArgs: perAgent('ARGS'),
+  binDir: process.env.NATAMUX_BIN_DIR,
   onLaunch: (launch) => genericSignals.watchLaunch(launch),
 })
 

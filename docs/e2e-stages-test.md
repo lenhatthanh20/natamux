@@ -29,7 +29,7 @@ How to test stages, context, issues and pull requests on a real repository. Run 
 
 | # | Case | Expected |
 |---|---|---|
-| E1 | New workspace with an agent and a prompt | `context.md` from the notes; Context passes by itself, Spec starts |
+| E1 | Start a task with an agent and notes | `context.md` from the notes; Context passes by itself, Spec starts |
 | E2 | Send back the spec with a reason | Spec runs; after send back it runs again (×2, reason on the card) |
 | E3 | Approve Spec and Plan | Test spec in terminal 2 and Implement in terminal 1 at once; Implement commits and passes |
 | E4 | Approve Test spec and Review | Testing runs and passes; Release is ready |
@@ -39,7 +39,7 @@ How to test stages, context, issues and pull requests on a real repository. Run 
 | E8 | Project settings: a pipeline without spec and plan, a `security` stage, `node --test` for testing | New tasks follow it; earlier tasks show as "earlier pipeline" |
 | E9 | Restart the daemon; start one on a copy of the data without `index.sqlite` | Same tasks and events |
 | E10 | Edit `spec.md` in the Docs tab | The file changes |
-| G1 | New workspace, context from issue #1, agent Copilot | `context.md` has the issue and its comment; the task links the issue |
+| G1 | Start a task, context from issue #1, agent Copilot | `context.md` has the issue and its comment; the task links the issue |
 | G2 | Approve the spec of a task with typed context | A GitHub issue opens with the spec as its body |
 | G3 | Open the pull request from the page; merge it on GitHub | The body ends with `Closes #N`; the issue closes; the task is done within a minute |
 | C1 | Copilot through every stage | It writes each file, commits, runs `natamux done`; two Copilot sessions run side by side |

@@ -19,7 +19,7 @@ import { daemonEnv } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings } from './settings.js'
-import { freePort, loginShellPath, waitForHealth } from './startup.js'
+import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { Updater } from './updater.js'
 
 // Before the paths are read: the user data folder is named after the app.
@@ -88,13 +88,20 @@ async function startDaemon(repoDir: string): Promise<void> {
   const binDir = join(userData, 'bin')
   writeCliShim(binDir, process.execPath, parts.cliMain, process.platform)
   const port = await freePort(PREFERRED_PORT)
-  const loginPath =
-    process.platform === 'win32' ? undefined : await loginShellPath(process.env.SHELL)
   daemonToken = loadOrCreateDaemonToken(join(userData, 'daemon-token'))
   dashboardUrl = `http://127.0.0.1:${port}`
 
   mkdirSync(dirname(logFile), { recursive: true })
   log(`\n--- ${new Date().toISOString()} starting the daemon on port ${port}\n`)
+  let loginPath: string | undefined
+  if (process.platform !== 'win32') {
+    const login = await loginShellPath(process.env.SHELL)
+    loginPath = 'path' in login ? login.path : undefined
+    const problem = loginPathLogLine(login, process.env.PATH)
+    if (problem !== undefined) {
+      log(problem)
+    }
+  }
   daemonExited = false
   daemon = utilityProcess.fork(parts.daemonMain, [], {
     env: daemonEnv(process.env, daemonToken, {

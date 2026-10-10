@@ -49,8 +49,8 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
 
   return (
     <Dialog
-      title="Repositories"
-      description="Folders on the daemon's machine. Each workspace is a git worktree of one of them."
+      title="Projects"
+      description="Git repositories on the daemon's machine. The workspace of each task is a git worktree of one of them."
       size="md"
       onClose={onClose}
     >
@@ -80,8 +80,8 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
               setError(null)
             }}
             onBlur={() => setTouched(true)}
-            placeholder="/path/to/the/repository"
-            aria-label="Repository folder"
+            placeholder="/path/to/the/git/repository"
+            aria-label="Project folder"
             aria-invalid={problem !== null}
             aria-describedby={problem === null ? undefined : problemId}
             className={`${inputLg} font-mono ${problem === null ? '' : 'border-danger-text!'}`}
@@ -103,7 +103,7 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Optional. The folder name is used without one."
-            aria-label="Repository name"
+            aria-label="Project name"
             className={inputLg}
           />
         </label>
@@ -116,7 +116,7 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
             busy={adding}
             disabledReason={path.trim() === '' ? 'Enter the folder first' : undefined}
           >
-            Add repository
+            Add project
           </Button>
         </div>
       </form>

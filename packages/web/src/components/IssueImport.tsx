@@ -49,7 +49,7 @@ export function IssueImport({
   return (
     <Dialog
       title="Import GitHub issues"
-      description="Open issues of the repository. Each one you pick becomes a task."
+      description="Open GitHub issues of this project. Each one you pick becomes a task."
       size="md"
       onClose={onClose}
       footer={

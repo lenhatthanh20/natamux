@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { portRange, type TerminalServerMessage, type TerminalSize } from '@natamux/core'
+import { withLoopbackNoProxy } from './no-proxy.js'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
 // a fake, so they do not need the native module.
@@ -108,7 +109,7 @@ export class TerminalService {
   constructor(options: TerminalServiceOptions) {
     this.spawn = options.spawn
     this.workspaceOf = options.workspaceOf
-    this.env = options.env ?? process.env
+    this.env = withLoopbackNoProxy(options.env ?? process.env)
     this.now = options.now ?? Date.now
     this.onOutput = options.onOutput ?? (() => undefined)
   }

@@ -15,7 +15,7 @@ Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts ea
 
 ## Does it run on Windows?
 
-Not yet. The current release has macOS (Apple silicon and Intel) and Linux builds only.
+Not yet. The current release has a macOS build for Apple silicon only. The Intel Mac and Linux builds are paused; v0.1.2 has them.
 
 ## What does it cost?
 

@@ -73,6 +73,17 @@ describe('newWorkspace', () => {
     expect(ptys).toHaveLength(0)
   })
 
+  it('keeps the notes of a task with no agent', async () => {
+    const task = await newWorkspace(parts, {
+      title: 'Fix the login page',
+      prompt: 'Keep the old URL.\nAsk before a redirect.',
+    })
+
+    expect(task.description).toBe('Keep the old URL.\nAsk before a redirect.')
+    expect(tasks.getTask(task.id).description).toBe('Keep the old URL.\nAsk before a redirect.')
+    expect(ptys).toHaveLength(0)
+  })
+
   it('starts the first stage with an agent, and the prompt becomes the notes', async () => {
     const task = await newWorkspace(parts, {
       title: 'Speed up search',
