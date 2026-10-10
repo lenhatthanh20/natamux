@@ -50,9 +50,8 @@ describe('readRelease', () => {
   ]
 
   it('keeps the version, the page and the files of a stable release', () => {
-    expect(
-      readRelease({ tag_name: 'v0.1.2', html_url: 'https://example.test/r', assets }),
-    ).toEqual({
+    const release = readRelease({ tag_name: 'v0.1.2', html_url: 'https://example.test/r', assets })
+    expect(release).toEqual({
       version: '0.1.2',
       page: 'https://example.test/r',
       assets: [
@@ -116,9 +115,8 @@ describe('installKind', () => {
       }),
     ).toBe('manual')
     expect(installKind({ ...linux, execPath: '/opt/Natamux/natamux-desktop', env: {} })).toBe('deb')
-    expect(
-      installKind({ ...linux, execPath: '/home/me/natamux/natamux-desktop', env: {} }),
-    ).toBe('manual')
+    const tarball = '/home/me/natamux/natamux-desktop'
+    expect(installKind({ ...linux, execPath: tarball, env: {} })).toBe('manual')
   })
 
   it('only opens the release page on Windows', () => {
