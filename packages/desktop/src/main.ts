@@ -88,13 +88,20 @@ async function startDaemon(repoDir: string): Promise<void> {
   const binDir = join(userData, 'bin')
   writeCliShim(binDir, process.execPath, parts.cliMain, process.platform)
   const port = await freePort(PREFERRED_PORT)
-  const loginPath =
-    process.platform === 'win32' ? undefined : await loginShellPath(process.env.SHELL)
   daemonToken = loadOrCreateDaemonToken(join(userData, 'daemon-token'))
   dashboardUrl = `http://127.0.0.1:${port}`
 
   mkdirSync(dirname(logFile), { recursive: true })
   log(`\n--- ${new Date().toISOString()} starting the daemon on port ${port}\n`)
+  let loginPath: string | undefined
+  if (process.platform !== 'win32') {
+    const login = await loginShellPath(process.env.SHELL)
+    if ('path' in login) {
+      loginPath = login.path
+    } else {
+      log(`Could not read the login shell PATH (${login.problem}); using ${process.env.PATH}\n`)
+    }
+  }
   daemonExited = false
   daemon = utilityProcess.fork(parts.daemonMain, [], {
     env: daemonEnv(process.env, daemonToken, {

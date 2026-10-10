@@ -145,6 +145,44 @@ describe('AgentRunner', () => {
     ])
   })
 
+  it('puts the natamux command first on the PATH of the agent', () => {
+    const withBin = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'darwin',
+      launchDir: dataDir,
+      binDir: "/Apps/Nata'mux/bin",
+    })
+    const task = taskWithWorkspace()
+
+    withBin.start(task.id, 'claude-code', 'Only this')
+
+    expect(ptys[0]?.written).toEqual([`. '${script(task.id)}'\r`])
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      `PATH='/Apps/Nata'\\''mux/bin':"$PATH" claude --settings '/data/claude code.json' 'Only this'\n`,
+    )
+  })
+
+  it('leaves the PATH alone on Windows, even with a bin folder', () => {
+    const spawner = fakeSpawner()
+    const windows = new AgentRunner({
+      tasks,
+      terminals: new TerminalService({ spawn: spawner.spawn, workspaceOf: () => '/work/T-0001' }),
+      claudeSettingsPath: 'C:\\data\\settings.json',
+      platform: 'win32',
+      launchDir: dataDir,
+      binDir: 'C:\\Natamux\\bin',
+    })
+    const task = taskWithWorkspace()
+
+    windows.start(task.id, 'claude-code', 'Only this')
+
+    expect(spawner.ptys[0]?.written).toEqual([
+      "claude --settings 'C:\\data\\settings.json' 'Only this'\r",
+    ])
+  })
+
   it('refuses a task that waits for another one', () => {
     const before = tasks.createTask({ title: 'First things first' })
     const task = taskWithWorkspace()

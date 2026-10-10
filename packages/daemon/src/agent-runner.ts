@@ -48,6 +48,8 @@ type AgentRunnerOptions = {
   platform?: NodeJS.Platform
   // Where the launch scripts go. Default: the folder of the settings file.
   launchDir?: string
+  // The folder of the app's `natamux` command (NATAMUX_BIN_DIR), put first on the agent's PATH.
+  binDir?: string
   // Told of each start, to watch the terminal for a shell that cannot find the agent.
   onLaunch?: (launch: AgentLaunch) => void
 }
@@ -70,6 +72,7 @@ export class AgentRunner {
   private readonly extraArgs: Partial<Record<LaunchableAgent, string>>
   private readonly platform: NodeJS.Platform
   private readonly launchDir: string
+  private readonly binDir: string | undefined
   private readonly onLaunch: ((launch: AgentLaunch) => void) | undefined
 
   constructor(options: AgentRunnerOptions) {
@@ -96,6 +99,7 @@ export class AgentRunner {
     }
     this.platform = options.platform ?? process.platform
     this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
+    this.binDir = options.binDir?.trim() || undefined
     this.onLaunch = options.onLaunch
   }
 
@@ -137,6 +141,8 @@ export class AgentRunner {
   // prompt) goes into a small script and only a short line to run it is typed. The script is
   // sourced, not run by `sh`, so the user's own shell (aliases, PATH) still starts the agent.
   // PowerShell may refuse scripts by policy, so Windows types the command itself.
+  // A login shell's profile (path_helper, brew shellenv) can push the app's bin folder behind an
+  // older global `natamux`. The PATH prefix puts it first again, for the agent and its hooks only.
   private launchLine(taskId: string, command: string, terminal?: string): string {
     if (this.platform === 'win32') {
       return command
@@ -144,7 +150,9 @@ export class AgentRunner {
     mkdirSync(this.launchDir, { recursive: true })
     const suffix = terminal === undefined || terminal === '1' ? '' : `-${terminal}`
     const script = join(this.launchDir, `agent-launch-${taskId}${suffix}.sh`)
-    writeFileSync(script, `${command}\n`, { mode: 0o600 })
+    const path =
+      this.binDir === undefined ? '' : `PATH=${quoteArgument(this.binDir, this.platform)}:"$PATH" `
+    writeFileSync(script, `${path}${command}\n`, { mode: 0o600 })
     return `. ${quoteArgument(script, this.platform)}`
   }
 }

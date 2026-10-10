@@ -30,6 +30,7 @@ export function daemonEnv(
     NATAMUX_DATA_DIR: place.dataDir,
     NATAMUX_REPO_DIR: place.repoDir,
     NATAMUX_WEB_DIR: place.webDir,
+    NATAMUX_BIN_DIR: place.binDir,
   }
   // Left set, it would make every Electron app the agents start run as plain Node.js.
   delete env.ELECTRON_RUN_AS_NODE

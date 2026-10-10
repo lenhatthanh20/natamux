@@ -42,25 +42,55 @@ export async function waitForHealth(
 }
 
 const PATH_MARK = '__NATAMUX_PATH__'
+// It runs once at app start. Heavy startup files on a cold disk right after login can pass 5 s.
+const LOGIN_SHELL_TIMEOUT_MS = 10_000
 
-// The PATH that the user's login shell sets up. Undefined when it cannot be read in time.
+export type LoginShellPath = { path: string } | { problem: string }
+
+// The PATH that the user's login shell sets up, or why it could not be read.
 export function loginShellPath(
   shell: string | undefined,
   run: typeof execFile = execFile,
-): Promise<string | undefined> {
+): Promise<LoginShellPath> {
   if (shell === undefined || shell === '') {
-    return Promise.resolve(undefined)
+    return Promise.resolve({ problem: '$SHELL is not set' })
   }
   return new Promise((resolve) => {
     // The marks keep what the shell's startup files print out of the answer.
     run(
       shell,
       ['-ilc', `printf '${PATH_MARK}%s${PATH_MARK}' "$PATH"`],
-      { timeout: 5000, encoding: 'utf8' },
-      (error, stdout) => {
+      { timeout: LOGIN_SHELL_TIMEOUT_MS, encoding: 'utf8' },
+      (error, stdout, stderr) => {
         const match = String(stdout ?? '').match(new RegExp(`${PATH_MARK}(.*?)${PATH_MARK}`, 's'))
-        resolve(error === null && match?.[1] ? match[1] : undefined)
+        // A failing line in a startup file makes the shell exit with an error after it printed
+        // a good PATH.
+        if (match?.[1]) {
+          resolve({ path: match[1] })
+          return
+        }
+        resolve({ problem: loginShellProblem(error, String(stderr ?? '')) })
       },
     )
   })
+}
+
+function loginShellProblem(
+  error: (Error & { killed?: boolean; code?: unknown }) | null,
+  stderr: string,
+): string {
+  if (error === null) {
+    return 'it printed no PATH'
+  }
+  if (error.killed) {
+    return `it took longer than ${LOGIN_SHELL_TIMEOUT_MS / 1000} s`
+  }
+  if (typeof error.code !== 'number') {
+    return error.message
+  }
+  const firstLine = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line !== '')
+  return `it exited with code ${error.code}${firstLine === undefined ? '' : `: ${firstLine}`}`
 }
