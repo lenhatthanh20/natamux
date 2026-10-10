@@ -25,8 +25,10 @@ vi.mock('./components/MonacoFile', () => ({
     createElement('pre', { 'aria-label': `New file ${path}` }, `${kind}: ${text}`),
 }))
 
+// It shows the focus token it gets, which makes the real terminal take the keyboard.
 vi.mock('./components/TerminalView', () => ({
-  default: () => createElement('p', null, 'Terminal stand-in'),
+  default: ({ focusToken }: { focusToken?: number }) =>
+    createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in'),
 }))
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -796,6 +798,41 @@ describe('App', () => {
         calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
       ).toBe(true),
     )
+  })
+
+  it('does not take the keyboard again when the Terminal tab opens later', async () => {
+    installDaemon(
+      [workspaceTask({ state: 'needs-input', stage: 'implement' })],
+      [
+        {
+          taskId: 'T-0001',
+          source: 'agent',
+          type: 'agent.asked',
+          at: '2026-10-08T10:00:00.000Z',
+          payload: { message: 'Which test runner?' },
+        },
+      ],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    openWorkspace('T-0001')
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const tokenOfShell = async () => {
+      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
+    }
+
+    await user.click(await within(view).findByRole('button', { name: 'Answer in terminal' }))
+    await waitFor(async () => expect(await tokenOfShell()).not.toBe(''))
+
+    await user.click(within(view).getByRole('tab', { name: 'Changes' }))
+    await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
+    expect(await tokenOfShell()).toBe('')
+    // Give the shells time to be read, after which an old request would be used.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(await tokenOfShell()).toBe('')
   })
 
   it('shows the commits ahead on Push, and says why Push is off when there is no branch', async () => {
