@@ -17,8 +17,8 @@ type ProjectSettingsDialogProps = {
 
 const format = (value: unknown) => JSON.stringify(value, null, 2)
 
-// `.natamux.json` of a repository: its stages, context sources and issue tracker. Saved in the
-// repository's main folder; you commit it.
+// `.natamux.json` of a repository: its stages, context sources, issue tracker and the permission
+// mode of its agents. Saved in the repository's main folder; you commit it.
 export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSettingsDialogProps) {
   const queryClient = useQueryClient()
   const loaded = useQuery({ queryKey: ['settings', repo.id], queryFn: load })
@@ -70,7 +70,7 @@ export function ProjectSettingsDialog({ repo, load, save, onClose }: ProjectSett
       title={`Project settings of ${repo.name}`}
       description={
         loaded.data?.path === undefined
-          ? 'Stages, context sources and the issue tracker of this project.'
+          ? 'Stages, context sources, the issue tracker and the permission mode of the agents of this project.'
           : `Saved in ${loaded.data.path}. New tasks take these stages; tasks on their way keep theirs.`
       }
       size="lg"

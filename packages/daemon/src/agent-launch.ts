@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
+import type { PermissionMode } from '@natamux/core'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
 export const LAUNCHABLE_AGENTS = ['claude-code', 'codex', 'gemini', 'copilot', 'cursor'] as const
@@ -18,6 +19,16 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
   gemini: 'gemini',
   copilot: 'copilot',
   cursor: 'cursor-agent',
+}
+
+// The flags of the `auto` permission mode. Only Claude Code checks each action in its auto mode;
+// the others have no such check, so their closest flag lets them run (almost) anything.
+export const AUTO_FLAGS: Record<LaunchableAgent, string[]> = {
+  'claude-code': ['--permission-mode', 'auto'],
+  codex: ['--full-auto'],
+  gemini: ['--approval-mode', 'yolo'],
+  copilot: ['--allow-all-tools'],
+  cursor: ['--force'],
 }
 
 // What the hooks run. `natamux hook` does nothing outside a Natamux terminal (no token).
@@ -131,12 +142,15 @@ export type LaunchOptions = {
   platform: NodeJS.Platform
   claudeSettingsPath: string
   geminiSettingsPath: string
+  permissionMode: PermissionMode
 }
 
 // The command line that starts an agent in its interactive mode, with its first prompt and the
 // hooks that report to the daemon. Each stays open for the prompts of the next stages.
 export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): string {
   const quote = (value: string) => quoteArgument(value, options.platform)
+  // The mode comes before the extra words, so words of the user's own can still change it.
+  const mode = options.permissionMode === 'auto' ? AUTO_FLAGS[agent] : []
   const extra = options.extraArgs === '' ? [] : [options.extraArgs]
   const prompt = options.prompt === '' ? [] : [quote(options.prompt)]
   switch (agent) {
@@ -145,6 +159,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         options.program,
         '--settings',
         quote(options.claudeSettingsPath),
+        ...mode,
         ...extra,
         ...prompt,
       ].join(' ')
@@ -152,21 +167,32 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
       return [
         options.program,
         '--dangerously-bypass-hook-trust',
+        ...mode,
         ...codexHookArgs().map((arg) => (arg === '-c' ? arg : quote(arg))),
         ...extra,
         ...prompt,
       ].join(' ')
     case 'gemini': {
-      const command = [options.program, ...extra, ...(prompt.length > 0 ? ['-i', ...prompt] : [])]
+      const command = [
+        options.program,
+        ...mode,
+        ...extra,
+        ...(prompt.length > 0 ? ['-i', ...prompt] : []),
+      ]
       const settings = quote(options.geminiSettingsPath)
       return options.platform === 'win32'
         ? `$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings}; ${command.join(' ')}`
         : `GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings} ${command.join(' ')}`
     }
     case 'copilot':
-      return [options.program, ...extra, ...(prompt.length > 0 ? ['-i', ...prompt] : [])].join(' ')
+      return [
+        options.program,
+        ...mode,
+        ...extra,
+        ...(prompt.length > 0 ? ['-i', ...prompt] : []),
+      ].join(' ')
     case 'cursor':
-      return [options.program, ...extra, ...prompt].join(' ')
+      return [options.program, ...mode, ...extra, ...prompt].join(' ')
   }
 }
 

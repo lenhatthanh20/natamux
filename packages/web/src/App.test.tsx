@@ -960,7 +960,7 @@ describe('App', () => {
 
     const settings = await screen.findByRole('dialog', { name: 'Project settings of natamux' })
     expect(settings.textContent).toContain(
-      'Stages, context sources and the issue tracker of this project.',
+      'Stages, context sources, the issue tracker and the permission mode of the agents of this project.',
     )
   })
 
