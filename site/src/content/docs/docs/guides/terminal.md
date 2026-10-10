@@ -7,7 +7,7 @@ sidebar:
 
 Every task with a workspace has a **Terminal** tab. It holds real shells that run in the task's worktree folder. An agent runs in one of them.
 
-![The terminal tab with the agent in Shell 1](/natamux/screens/terminal.png)
+![The terminal tab with the agent in Shell 1](/screens/terminal.png)
 
 ## Open the terminal
 
@@ -15,7 +15,7 @@ Every task with a workspace has a **Terminal** tab. It holds real shells that ru
 2. Double-click it, or press `Enter`. The workspace opens on the terminal while an agent works.
 3. From another tab of the workspace, click **Terminal** or press `1`.
 
-A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/natamux/docs/concepts/workspaces/).
+A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/docs/concepts/workspaces/).
 
 ## Shells
 
@@ -52,11 +52,11 @@ When you scroll up, **Jump to latest** brings you back to the end. Links to web 
 
 ### Keys that belong to the shell
 
-Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natamux still work. On Windows and Linux only the function keys and Ctrl+Shift shortcuts reach Natamux. `Ctrl+K`, `Ctrl+B` and `Ctrl+J` stay with the shell. See [Keyboard shortcuts](/natamux/docs/reference/shortcuts/).
+Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natamux still work. On Windows and Linux only the function keys and Ctrl+Shift shortcuts reach Natamux. `Ctrl+K`, `Ctrl+B` and `Ctrl+J` stay with the shell. See [Keyboard shortcuts](/docs/reference/shortcuts/).
 
 ## The agent in Shell 1
 
-**Start agent** types the agent's command into Shell 1. You see it start like any program. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+**Start agent** types the agent's command into Shell 1. You see it start like any program. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ### Type to the agent
 
@@ -66,13 +66,13 @@ When an agent asks something, the task goes to Needs input and a banner shows wh
 
 ### Send a message to the agent
 
-You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send to agent**. Natamux pastes it into Shell 1 as the agent's next prompt and presses Enter. See [Changes and history](/natamux/docs/guides/changes-and-history/).
+You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send to agent**. Natamux pastes it into Shell 1 as the agent's next prompt and presses Enter. See [Changes and history](/docs/guides/changes-and-history/).
 
 This works only while an agent runs in Shell 1. Otherwise Natamux answers `No agent runs in the terminal of T-0001. Start the agent first`. That check keeps a comment from running as shell commands.
 
 ### Needs input or failed
 
-A failed task shows a banner with the reason. Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/natamux/docs/concepts/tasks/).
+A failed task shows a banner with the reason. Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/docs/concepts/tasks/).
 
 ## A shell after a daemon restart
 
@@ -106,4 +106,4 @@ In a shell, `NATAMUX_PORT` is the task's first dev port, not the daemon's port. 
 
 `NATAMUX_URL` and `NATAMUX_TOKEN` let the `natamux` command and agent hooks work in the shell without setup. The shell starts in your login shell (`$SHELL`, else `/bin/bash`, else `/bin/sh`). On Windows it is PowerShell.
 
-Because the shell gets the token, treat what you run in it as trusted. See [Security and privacy](/natamux/docs/help/security-and-privacy/).
+Because the shell gets the token, treat what you run in it as trusted. See [Security and privacy](/docs/help/security-and-privacy/).

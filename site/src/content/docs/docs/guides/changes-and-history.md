@@ -7,7 +7,7 @@ sidebar:
 
 Each workspace has a **Changes** tab and a **History** tab. Use them to review the agent's work and ship it, without leaving the dashboard.
 
-![The Changes tab with the file tree and a side by side diff](/natamux/screens/changes.png)
+![The Changes tab with the file tree and a side by side diff](/screens/changes.png)
 
 Open them from a workspace, or press `2` for **Changes** and `3` for **History**.
 
@@ -87,7 +87,7 @@ Review comment on src/app.ts, line 12:
 Handle the empty list here.
 ```
 
-The box then says **Sent to the agent.** This needs an agent that runs in Shell 1. Without one you get an error and the comment is not sent. See [Terminal](/natamux/docs/guides/terminal/).
+The box then says **Sent to the agent.** This needs an agent that runs in Shell 1. Without one you get an error and the comment is not sent. See [Terminal](/docs/guides/terminal/).
 
 ### Commit
 
@@ -107,7 +107,7 @@ The header of the workspace has two buttons.
 
 Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. Commit first.
 
-The pull request gets the task title as its title and the task notes as its body. When the task has a linked GitHub issue, the body ends with `Closes #N`. See [GitHub](/natamux/docs/guides/github/).
+The pull request gets the task title as its title and the task notes as its body. When the task has a linked GitHub issue, the body ends with `Closes #N`. See [GitHub](/docs/guides/github/).
 
 After a pull request exists, **Create pull request** becomes **Open pull request** (**Open PR** in a narrow window). It opens the pull request in a new tab.
 

@@ -26,7 +26,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_CURSOR_COMMAND` | `cursor-agent` | Program that starts the Cursor CLI |
 | `NATAMUX_CLAUDE_ARGS`, `NATAMUX_CODEX_ARGS`, `NATAMUX_GEMINI_ARGS`, `NATAMUX_COPILOT_ARGS`, `NATAMUX_CURSOR_ARGS` | none | Words added to that agent's command line |
 
-See [Agents](/natamux/docs/agents/claude-code/) for how each agent is started.
+See [Agents](/docs/agents/claude-code/) for how each agent is started.
 
 ## CLI
 
@@ -75,6 +75,6 @@ The desktop app also reads `NATAMUX_DESKTOP_SMOKE` and `NATAMUX_DESKTOP_SMOKE_SH
 | `NATAMUX_BIND` | `compose.prod.yaml` | Address the dashboard port is published on. Default `127.0.0.1` |
 | `NATAMUX_PORT` | `compose.prod.yaml` | Published dashboard port. Default `8080` |
 
-The production image sets `NATAMUX_HOST=0.0.0.0`, `NATAMUX_DATA_DIR=/data`, `NATAMUX_REPO_DIR=/repo` and `NATAMUX_WORKTREES_DIR=/data/worktrees` inside the container. See [Self-host with Docker](/natamux/docs/guides/self-host-docker/).
+The production image sets `NATAMUX_HOST=0.0.0.0`, `NATAMUX_DATA_DIR=/data`, `NATAMUX_REPO_DIR=/repo` and `NATAMUX_WORKTREES_DIR=/data/worktrees` inside the container. See [Self-host with Docker](/docs/guides/self-host-docker/).
 
 The development setup (`compose.yaml`) is for working on Natamux itself. It reads `NATAMUX_TOKEN` (default `devtoken`), `NATAMUX_CLAUDE_COMMAND`, `NATAMUX_UID`, `NATAMUX_GID`, `NATAMUX_GIT_NAME` and `NATAMUX_GIT_EMAIL`.

@@ -1,10 +1,9 @@
 import starlight from '@astrojs/starlight'
 import { defineConfig } from 'astro/config'
 
-// A GitHub Pages project site: https://lenhatthanh20.github.io/natamux/
+// The GitHub Pages site of the natamux organization: https://natamux.github.io/
 export default defineConfig({
-  site: 'https://lenhatthanh20.github.io',
-  base: '/natamux',
+  site: 'https://natamux.github.io',
   trailingSlash: 'always',
   integrations: [
     starlight({

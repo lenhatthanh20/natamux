@@ -91,7 +91,7 @@ These keys work in the sidebar tree, the task table and the changed files list.
 
 `Mod+F` and `Mod+Shift+F` work when the focus is in a terminal. In the find bar, `Enter` goes to the next match, `Shift+Enter` to the previous one and `Esc` closes the bar. On Windows and Linux use `Ctrl+Shift+F` in a terminal.
 
-See [Terminal](/natamux/docs/guides/terminal/).
+See [Terminal](/docs/guides/terminal/).
 
 ## Diff
 
@@ -106,7 +106,7 @@ These work when a workspace is open.
 | Comment on the file for the agent | `Mod+Shift+A` |
 | Accessible diff view | `F7` or `Shift+F7` |
 
-`Mod+Shift+A` puts the cursor in the comment box. In that box, `Mod+Enter` sends the comment. `F7` is handled by the diff editor, so it works while the focus is in the diff. See [Changes and history](/natamux/docs/guides/changes-and-history/).
+`Mod+Shift+A` puts the cursor in the comment box. In that box, `Mod+Enter` sends the comment. `F7` is handled by the diff editor, so it works while the focus is in the diff. See [Changes and history](/docs/guides/changes-and-history/).
 
 ## Command palette
 
@@ -118,7 +118,7 @@ These work when a workspace is open.
 | Change the scope | `Tab` |
 | Close | `Esc` |
 
-In the palette, type `>` to search commands only and `#` to search tasks by id. See [Dashboard](/natamux/docs/guides/dashboard/#command-palette).
+In the palette, type `>` to search commands only and `#` to search tasks by id. See [Dashboard](/docs/guides/dashboard/#command-palette).
 
 ## Commands without a shortcut
 

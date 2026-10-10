@@ -53,7 +53,7 @@ The release is not signed with an Apple certificate.
 
 - **Ubuntu 24.04 and later, AppImage:** the system can block Chromium's sandbox. Install the `.deb`, or start the AppImage with `--no-sandbox`.
 
-You need at least one agent installed and logged in, and `git`. See [Install](/natamux/docs/getting-started/install/).
+You need at least one agent installed and logged in, and `git`. See [Install](/docs/getting-started/install/).
 
 ### Known limits
 

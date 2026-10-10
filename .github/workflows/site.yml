@@ -1,7 +1,8 @@
 name: Site
 
-# Builds the landing page and the docs in site/ and publishes them on GitHub Pages:
-# https://lenhatthanh20.github.io/natamux/
+# Builds the landing page and the docs in site/ and publishes them to the
+# natamux/natamux.github.io repository: https://natamux.github.io/
+# The Pages site of this repository only redirects the old address there.
 on:
   push:
     branches: [main]
@@ -33,11 +34,32 @@ jobs:
         working-directory: site
       - run: pnpm build
         working-directory: site
+      # Pages actions deploy only to their own repository, so push the build
+      # with a deploy key that can write to natamux.github.io.
+      - name: Push to natamux.github.io
+        if: github.event_name != 'pull_request'
+        working-directory: site/dist
+        env:
+          DEPLOY_SSH: ${{ secrets.PAGES_DEPLOY_SSH }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH" > ~/.ssh/pages
+          chmod 600 ~/.ssh/pages
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > ~/.ssh/known_hosts
+          touch .nojekyll
+          git init -q -b main
+          git add -A
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -qm "Site from lenhatthanh20/natamux@${GITHUB_SHA}"
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/pages -o IdentitiesOnly=yes' \
+            git push -f git@github.com:natamux/natamux.github.io.git main
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site/dist
+          path: site/old-address
 
-  deploy:
+  redirect:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest

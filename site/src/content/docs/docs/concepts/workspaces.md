@@ -16,7 +16,7 @@ A workspace has four parts:
 
 ## Create a workspace
 
-Use the dashboard (see [Dashboard](/natamux/docs/guides/dashboard/)) or the CLI:
+Use the dashboard (see [Dashboard](/docs/guides/dashboard/)) or the CLI:
 
 ```bash
 natamux workspace create T-0001
@@ -47,7 +47,7 @@ If a task already has a branch from an earlier workspace, and the branch still e
 
 ### Worktrees folder
 
-By default, worktrees go in `worktrees/` inside the data folder (`.natamux/worktrees`). To use another folder, set `NATAMUX_WORKTREES_DIR` when you start the daemon. There is one subfolder per task id. See [Environment variables](/natamux/docs/reference/environment-variables/).
+By default, worktrees go in `worktrees/` inside the data folder (`.natamux/worktrees`). To use another folder, set `NATAMUX_WORKTREES_DIR` when you start the daemon. There is one subfolder per task id. See [Environment variables](/docs/reference/environment-variables/).
 
 ## Setup script
 
@@ -105,11 +105,11 @@ Each task has its own shells, started in the worktree. The first shell is called
 - Natamux allows at most 20 shells at once, across all tasks.
 - When a task is `done` or `cancelled`, Natamux closes its shells.
 
-See [Terminal](/natamux/docs/guides/terminal/).
+See [Terminal](/docs/guides/terminal/).
 
 ## Stage files
 
-Agents read and write stage files, such as `spec.md`, in a `.natamux-task/` folder in the worktree. Natamux adds this folder to the ignore list of your repository, so the files never reach a commit. Natamux copies them to its data folder when a stage ends and puts them back in a new worktree. See [Stages](/natamux/docs/concepts/stages/).
+Agents read and write stage files, such as `spec.md`, in a `.natamux-task/` folder in the worktree. Natamux adds this folder to the ignore list of your repository, so the files never reach a commit. Natamux copies them to its data folder when a stage ends and puts them back in a new worktree. See [Stages](/docs/concepts/stages/).
 
 ## Remove a workspace
 

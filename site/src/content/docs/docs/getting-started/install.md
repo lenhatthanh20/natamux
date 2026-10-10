@@ -10,7 +10,7 @@ Natamux is a desktop app for macOS and Linux. There is no Windows build yet, and
 ## Requirements
 
 - **git.** Natamux makes a git worktree for each task.
-- **At least one coding agent**, installed and logged in: `claude`, `codex`, `gemini`, `copilot` or `cursor-agent`. See [Agents](/natamux/docs/agents/claude-code/).
+- **At least one coding agent**, installed and logged in: `claude`, `codex`, `gemini`, `copilot` or `cursor-agent`. See [Agents](/docs/agents/claude-code/).
 - **`gh` (GitHub CLI)**, optional. Needed for opening pull requests, importing issues and CI status. Run `gh auth login` once.
 
 ## Download
@@ -99,7 +99,7 @@ The development containers have no real coding agent. Use the desktop app to wor
 
 ## Run with Docker
 
-The production compose file runs the dashboard and the daemon in two hardened containers. It keeps tasks, stages and the dashboard, but its images contain no coding agents. See [Self-host with Docker](/natamux/docs/guides/self-host-docker/).
+The production compose file runs the dashboard and the daemon in two hardened containers. It keeps tasks, stages and the dashboard, but its images contain no coding agents. See [Self-host with Docker](/docs/guides/self-host-docker/).
 
 ## Use the natamux command in your own shell
 
@@ -134,8 +134,8 @@ export NATAMUX_URL=http://127.0.0.1:4317
 natamux task list
 ```
 
-The app uses port 4317 when it is free, and another free port when it is not. Check the address in the dashboard's browser URL or in the daemon log. See [Desktop app](/natamux/docs/guides/desktop-app/) and the [CLI reference](/natamux/docs/reference/cli/).
+The app uses port 4317 when it is free, and another free port when it is not. Check the address in the dashboard's browser URL or in the daemon log. See [Desktop app](/docs/guides/desktop-app/) and the [CLI reference](/docs/reference/cli/).
 
 ## Next
 
-[Quick start](/natamux/docs/getting-started/quick-start/).
+[Quick start](/docs/getting-started/quick-start/).

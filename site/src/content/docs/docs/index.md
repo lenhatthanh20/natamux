@@ -7,7 +7,7 @@ sidebar:
 
 Natamux is an open-source Agent Development Environment (ADE). You give each piece of work its own task, and Natamux gives each task its own git worktree and terminal. Coding agents run in those terminals in parallel, and one dashboard shows what every task is doing.
 
-![The Natamux dashboard: a table of tasks, a "Needs you" strip at the top and the workspace list in the sidebar](/natamux/screens/dashboard.png)
+![The Natamux dashboard: a table of tasks, a "Needs you" strip at the top and the workspace list in the sidebar](/screens/dashboard.png)
 
 ## The problem
 
@@ -22,13 +22,13 @@ Coding agents are good at one job at a time. When you run several, you start to 
 
 - **Tasks.** Each piece of work is a task with notes, a priority and a state: draft, ready, running, needs input, review or done.
 - **A worktree and a terminal per task.** A task gets its own branch and folder, so agents never step on each other. The shell keeps running when you close the dashboard.
-- **Stages.** A task moves through stages: Context, Spec, Plan, Test spec and Implement side by side, Review, Testing, Release. Each stage checks its result, and you approve where a stage asks for it. You can change the stages per repository. See [Stages](/natamux/docs/concepts/stages/).
+- **Stages.** A task moves through stages: Context, Spec, Plan, Test spec and Implement side by side, Review, Testing, Release. Each stage checks its result, and you approve where a stage asks for it. You can change the stages per repository. See [Stages](/docs/concepts/stages/).
 - **Needs you.** A strip at the top of the dashboard lists the tasks that wait for you: an agent asked a question, a stage is ready for review, a task is blocked or failed.
-- **Five agents.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux adds hooks to each session, so the dashboard knows when an agent works, asks or finishes. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+- **Five agents.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux adds hooks to each session, so the dashboard knows when an agent works, asks or finishes. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 - **Changes and history.** A file tree with side-by-side or inline diffs, commit, push, open a pull request, and a branch graph.
-- **A command line.** `natamux`, short name `nmx`, for you and for agents (`natamux done`, `natamux ask`). See the [CLI reference](/natamux/docs/reference/cli/).
+- **A command line.** `natamux`, short name `nmx`, for you and for agents (`natamux done`, `natamux ask`). See the [CLI reference](/docs/reference/cli/).
 - **Browser or desktop app.** Use the desktop app, or run the dashboard in a browser tab.
-- **No account and no telemetry.** Natamux runs on your machine and sends nothing anywhere. See [Security and privacy](/natamux/docs/help/security-and-privacy/).
+- **No account and no telemetry.** Natamux runs on your machine and sends nothing anywhere. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## How the parts fit
 
@@ -58,8 +58,8 @@ Tasks are plain Markdown files with a small header, so they are easy to read and
 
 ## Where to go next
 
-1. [Install Natamux](/natamux/docs/getting-started/install/): download the app or run it from source.
-2. [Quick start](/natamux/docs/getting-started/quick-start/): from first launch to a merged change.
-3. [Tasks](/natamux/docs/concepts/tasks/) and [Workspaces](/natamux/docs/concepts/workspaces/): the core ideas.
-4. [Desktop app](/natamux/docs/guides/desktop-app/) or [self-host with Docker](/natamux/docs/guides/self-host-docker/).
-5. [Troubleshooting](/natamux/docs/help/troubleshooting/) and the [FAQ](/natamux/docs/help/faq/).
+1. [Install Natamux](/docs/getting-started/install/): download the app or run it from source.
+2. [Quick start](/docs/getting-started/quick-start/): from first launch to a merged change.
+3. [Tasks](/docs/concepts/tasks/) and [Workspaces](/docs/concepts/workspaces/): the core ideas.
+4. [Desktop app](/docs/guides/desktop-app/) or [self-host with Docker](/docs/guides/self-host-docker/).
+5. [Troubleshooting](/docs/help/troubleshooting/) and the [FAQ](/docs/help/faq/).

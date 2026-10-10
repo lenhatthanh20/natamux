@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-The desktop app is a window around the dashboard. It holds no task logic of its own. It starts the daemon, signs in for you and shows the dashboard. For installation, see [Install Natamux](/natamux/docs/getting-started/install/).
+The desktop app is a window around the dashboard. It holds no task logic of its own. It starts the daemon, signs in for you and shows the dashboard. For installation, see [Install Natamux](/docs/getting-started/install/).
 
 ## What the app does at start
 
@@ -45,7 +45,7 @@ The app keeps its files in the user data folder.
 | `logs/daemon.log` | The daemon's output |
 | `bin/` | The `natamux` and `nmx` commands |
 
-To use the commands in your own shell, see [Use the natamux command in your own shell](/natamux/docs/getting-started/install/#use-the-natamux-command-in-your-own-shell).
+To use the commands in your own shell, see [Use the natamux command in your own shell](/docs/getting-started/install/#use-the-natamux-command-in-your-own-shell).
 
 ## Logs
 
@@ -63,9 +63,9 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 |---|---|
 | `NATAMUX_DESKTOP_SMOKE=1` | Loads the dashboard and quits. Exit code 0 means the page started signed in. For checks, not daily use |
 | `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` | With the smoke check, also saves a picture of the window |
-| `NATAMUX_<AGENT>_COMMAND` | The program that starts an agent, for example `NATAMUX_CLAUDE_COMMAND`. Set it in the environment the app starts from. See [Environment variables](/natamux/docs/reference/environment-variables/) |
+| `NATAMUX_<AGENT>_COMMAND` | The program that starts an agent, for example `NATAMUX_CLAUDE_COMMAND`. Set it in the environment the app starts from. See [Environment variables](/docs/reference/environment-variables/) |
 
 ## Limits
 
-- The apps are not signed or notarized yet. See [Install Natamux](/natamux/docs/getting-started/install/).
+- The apps are not signed or notarized yet. See [Install Natamux](/docs/getting-started/install/).
 - No automatic updates. Watch the releases page for new versions.

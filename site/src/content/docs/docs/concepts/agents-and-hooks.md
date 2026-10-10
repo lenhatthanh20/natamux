@@ -23,13 +23,13 @@ The default program for each agent:
 
 | Agent | Id | Program | Command variable | Extra arguments variable |
 |---|---|---|---|---|
-| [Claude Code](/natamux/docs/agents/claude-code/) | `claude-code` | `claude` | `NATAMUX_CLAUDE_COMMAND` | `NATAMUX_CLAUDE_ARGS` |
-| [Codex](/natamux/docs/agents/codex/) | `codex` | `codex` | `NATAMUX_CODEX_COMMAND` | `NATAMUX_CODEX_ARGS` |
-| [Gemini CLI](/natamux/docs/agents/gemini/) | `gemini` | `gemini` | `NATAMUX_GEMINI_COMMAND` | `NATAMUX_GEMINI_ARGS` |
-| [Copilot CLI](/natamux/docs/agents/copilot/) | `copilot` | `copilot` | `NATAMUX_COPILOT_COMMAND` | `NATAMUX_COPILOT_ARGS` |
-| [Cursor CLI](/natamux/docs/agents/cursor/) | `cursor` | `cursor-agent` | `NATAMUX_CURSOR_COMMAND` | `NATAMUX_CURSOR_ARGS` |
+| [Claude Code](/docs/agents/claude-code/) | `claude-code` | `claude` | `NATAMUX_CLAUDE_COMMAND` | `NATAMUX_CLAUDE_ARGS` |
+| [Codex](/docs/agents/codex/) | `codex` | `codex` | `NATAMUX_CODEX_COMMAND` | `NATAMUX_CODEX_ARGS` |
+| [Gemini CLI](/docs/agents/gemini/) | `gemini` | `gemini` | `NATAMUX_GEMINI_COMMAND` | `NATAMUX_GEMINI_ARGS` |
+| [Copilot CLI](/docs/agents/copilot/) | `copilot` | `copilot` | `NATAMUX_COPILOT_COMMAND` | `NATAMUX_COPILOT_ARGS` |
+| [Cursor CLI](/docs/agents/cursor/) | `cursor` | `cursor-agent` | `NATAMUX_CURSOR_COMMAND` | `NATAMUX_CURSOR_ARGS` |
 
-Set these variables when you start the daemon. See [Environment variables](/natamux/docs/reference/environment-variables/). For any other agent, see [Other agents](/natamux/docs/agents/other-agents/).
+Set these variables when you start the daemon. See [Environment variables](/docs/reference/environment-variables/). For any other agent, see [Other agents](/docs/agents/other-agents/).
 
 The agent that starts is, in this order: the one you choose when you start it, the `agent` of the task, or `claude-code`.
 
@@ -45,7 +45,7 @@ Every agent has its own hook names. Natamux turns them into five common signals:
 | `turn-ended` | The agent finished its turn. | A `running` task becomes `needs-input`, unless the agent ran `natamux done` first. |
 | `failed` | The agent stopped with an error. | A `running` or `needs-input` task becomes `failed`. |
 
-A turn that ends without `natamux done` means the agent stopped early, for example to ask something in plain text. The stage is done only when the agent runs `natamux done`. Then the checks run. See [Stages](/natamux/docs/concepts/stages/).
+A turn that ends without `natamux done` means the agent stopped early, for example to ask something in plain text. The stage is done only when the agent runs `natamux done`. Then the checks run. See [Stages](/docs/concepts/stages/).
 
 Hooks also send a one-line summary of what the agent does now, such as `Edit src/a.ts`. The dashboard shows it.
 
@@ -109,6 +109,6 @@ Natamux also treats terminal output as a sign of life, so a running task is not 
 
 ## Related
 
-- [Tasks](/natamux/docs/concepts/tasks/): the states that hooks move
-- [Stages](/natamux/docs/concepts/stages/): `natamux done` and the checks
-- [Agents](/natamux/docs/agents/claude-code/): one page for each agent
+- [Tasks](/docs/concepts/tasks/): the states that hooks move
+- [Stages](/docs/concepts/stages/): `natamux done` and the checks
+- [Agents](/docs/agents/claude-code/): one page for each agent
