@@ -904,7 +904,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
             onFileChange={setChangesFile}
-            activity={activityQuery.data?.byTask[changesTask.id]}
             terminalActivity={activityQuery.data?.byTerminal[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.

@@ -38,8 +38,7 @@ type ChangesViewProps = {
   // The file of the address bar, and where to report the one that shows.
   file?: string | null
   onFileChange?: (path: string | null) => void
-  // What the agent does now: the latest line of the task, and the line of each shell.
-  activity?: string
+  // What the agent of each shell does now.
   terminalActivity?: Readonly<Record<string, string>>
   loadChanges: () => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
@@ -84,7 +83,6 @@ export function ChangesView({
   onTabPicked,
   file,
   onFileChange,
-  activity,
   terminalActivity,
   loadChanges,
   loadFile,

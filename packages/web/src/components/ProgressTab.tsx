@@ -217,8 +217,7 @@ export function ProgressTab({
             const groupState =
               isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
             const next = steps[index + 1]
-            const nextFirst =
-              next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
+            const nextFirst = next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
             return (
               <li key={step.id} className="grid grid-cols-[20px_minmax(0,1fr)] gap-x-2">
                 <div className="flex flex-col items-center pt-3">
