@@ -147,11 +147,12 @@ export class RepoService {
     if (id === DEFAULT_REPO) {
       return this.wasDefault(root)
     }
-    if (!this.tasks().some((task) => task.repo === id)) {
+    // With no removed folder on record, tasks that name the id are waiting for this repository.
+    const path = this.removed()[id]
+    if (path === undefined || canonical(path) === canonical(root)) {
       return true
     }
-    const path = this.removed()[id]
-    return path !== undefined && canonical(path) === canonical(root)
+    return !this.tasks().some((task) => task.repo === id)
   }
 
   // The marker file keeps a removed repository from coming back at the next start.

@@ -206,6 +206,7 @@ describe('RepoService', () => {
     const dataDir = join(repo.root, 'data')
     const withTasks = new RepoService({ dataDir, defaultPath: repo.dir, tasks: () => tasks })
     const first = gitFolder('app')
+    // With no removed folder on record, the tasks that name the id get the new project.
     expect((await withTasks.add({ path: first })).id).toBe('app')
     withTasks.remove('app')
     mkdirSync(join(repo.root, 'other'))
