@@ -57,6 +57,17 @@ describe('parseCommand', () => {
       expect(() => parseCommand(['task', 'create'])).toThrow(UsageError)
     })
 
+    it('reads the project from --repo and checks it is an id', () => {
+      expect(parseCommand(['task', 'create', 'x', '--repo', 'my-app'])).toMatchObject({
+        name: 'task.create',
+        repo: 'my-app',
+      })
+      expect(parseCommand(['task', 'create', 'x'])).not.toHaveProperty('repo')
+      expect(() => parseCommand(['task', 'create', 'x', '--repo', 'My App'])).toThrow(
+        /not a project id/,
+      )
+    })
+
     it('rejects an unknown priority', () => {
       expect(() => parseCommand(['task', 'create', 'x', '--priority', 'asap'])).toThrow(
         /--priority must be one of/,
