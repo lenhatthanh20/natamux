@@ -147,6 +147,19 @@ export function ChangesView({
   })
   const ahead = graph.data?.ahead ?? null
   const base = graph.data?.base ?? null
+  // The files that are not committed, under the key the Changes tab reads too. They tell whether
+  // the next step is a commit or a push.
+  const changes = useQuery({
+    queryKey: ['changes', task.id],
+    queryFn: loadChanges,
+    refetchInterval: REFRESH_MS,
+  })
+  const uncommitted = changes.data?.length ?? null
+  const openCommit = () => {
+    pickTab('changes')
+    // The commit box is drawn with the tab.
+    requestAnimationFrame(() => document.getElementById('commit-message')?.focus())
+  }
 
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
@@ -210,9 +223,11 @@ export function ChangesView({
         task={task}
         ahead={ahead}
         base={base}
+        uncommitted={uncommitted}
         pending={pending}
         onPush={() => gitAction.mutate({ action: 'push' })}
         onPullRequest={() => gitAction.mutate({ action: 'pull-request' })}
+        onCommit={openCommit}
       />
       {waiting && (
         <NeedsInputBanner
@@ -280,7 +295,13 @@ export function ChangesView({
           {graph.isPending && <SkeletonList rows={8} rowHeight={28} label="Reading the history" />}
           {graph.isError && <p role="alert">{graph.error.message}</p>}
           {graph.data && (
-            <GitGraph graph={graph.data} now={now} onRefresh={() => graph.refetch()} />
+            <GitGraph
+              graph={graph.data}
+              now={now}
+              uncommitted={uncommitted}
+              onShowChanges={() => pickTab('changes')}
+              onRefresh={() => graph.refetch()}
+            />
           )}
         </div>
       )}

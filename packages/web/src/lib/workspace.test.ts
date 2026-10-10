@@ -4,6 +4,7 @@ import {
   bannerText,
   createBlockedReason,
   latestQuestion,
+  needsCommit,
   pullRequestButton,
   pushButton,
   reviewStages,
@@ -41,6 +42,16 @@ describe('pushButton', () => {
     )
     expect(pushButton('natamux/t-1', 0, null).reason).toBe('Nothing to push: 0 commits ahead')
   })
+
+  it('asks for a commit first when files are not committed and nothing is ahead', () => {
+    expect(pushButton('b', 0, 'main', 2).reason).toBe('Commit your 2 changed files first')
+    expect(pushButton('b', 0, 'main', 1).reason).toBe('Commit your changed file first')
+    expect(pushButton('b', 1, 'main', 3)).toEqual({ label: 'Push ↑1' })
+    expect(needsCommit(0, 2)).toBe(true)
+    expect(needsCommit(0, 0)).toBe(false)
+    expect(needsCommit(1, 2)).toBe(false)
+    expect(needsCommit(0, null)).toBe(false)
+  })
 })
 
 describe('pullRequestButton', () => {
@@ -55,6 +66,9 @@ describe('pullRequestButton', () => {
     )
     expect(pullRequestButton(null, null, null, false).reason).toBe('This task has no branch yet')
     expect(pullRequestButton('b', null, null, false).reason).toBeUndefined()
+    expect(pullRequestButton('b', 0, 'main', false, 4).reason).toBe(
+      'Commit your 4 changed files first',
+    )
   })
 })
 

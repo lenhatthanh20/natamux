@@ -45,10 +45,19 @@ const MAX_REFS = 2
 type GitGraphProps = {
   graph: GitGraphData
   now: Date
+  // Files that are not committed, which no commit below shows yet. Null while unknown.
+  uncommitted?: number | null
+  onShowChanges?: () => void
   onRefresh: () => void
 }
 
-export function GitGraph({ graph, now, onRefresh }: GitGraphProps) {
+export function GitGraph({
+  graph,
+  now,
+  uncommitted = null,
+  onShowChanges,
+  onRefresh,
+}: GitGraphProps) {
   const { rows, width } = layoutGraph(graph.commits)
   const svgWidth = Math.max(1, width) * LANE_WIDTH
 
@@ -57,6 +66,14 @@ export function GitGraph({ graph, now, onRefresh }: GitGraphProps) {
       <div className="flex items-center gap-2">
         <p className="min-w-0 flex-1 text-muted">
           {aheadLabel(graph)}
+          {uncommitted !== null && uncommitted > 0 && (
+            <>
+              {' '}
+              <button type="button" onClick={onShowChanges} className="text-link hover:underline">
+                {uncommitted === 1 ? '1 file' : `${uncommitted} files`} not committed.
+              </button>
+            </>
+          )}
           {graph.truncated && ` Only the newest ${graph.commits.length} commits are shown.`}
         </p>
         <IconButton
