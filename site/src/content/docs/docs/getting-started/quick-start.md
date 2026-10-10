@@ -24,22 +24,24 @@ Running the dashboard in a browser instead? Open it and paste the token into the
 You have two ways to start.
 
 - **Add a task** puts an idea in the backlog. Type a title in the field "Add a task to the backlog" (press `n`) and press Enter.
-- **New workspace** starts work right away. Click the **+** button in the title bar, or press `c`.
+- **Start a task** starts work right away. Click the **+** button in the title bar, or press `c`.
 
-For this guide, use **New workspace**. In the dialog:
+For this guide, use **Start a task**. In the dialog:
 
 | Field | What to enter |
 |---|---|
-| Name | A short title, for example `Fix the login redirect` |
+| Project | The project to work in. It shows when you have more than one |
+| Title | A short title, for example `Fix the login redirect` |
+| Notes | Optional. What to do and why. The agent reads this as the task's context |
 | Branch from | The branch to start from. It defaults to the current branch |
+| Context from | Where the context comes from. It shows when the project offers more than one source |
 | Agent | Pick an agent, or "No agent, a plain shell" |
-| What should the agent do? | Optional. The agent starts with this prompt, and it becomes the task's notes |
 
-Click **Create workspace**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
+Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
 
-![The New workspace dialog with a name, a branch, an agent and a prompt](/screens/new-workspace.png)
+![The Start a task dialog with a title, notes, a branch and an agent](/screens/new-workspace.png)
 
-If you added a task to the backlog first, open it and click **Start agent** (or **Create workspace** if you only want a shell).
+If you added a task to the backlog first, open it and click **Start agent** (or **Start task** with no agent if you only want a shell).
 
 ## 3. Watch the agent work
 
