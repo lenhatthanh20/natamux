@@ -390,7 +390,7 @@ export function TaskDetail({
 
           <DetailSection id="details" title="Details" defaultOpen={false}>
             <dl className="flex flex-col gap-0.5">
-              {task.repo !== null && <Field label="Repository">{task.repo}</Field>}
+              {task.repo !== null && <Field label="Project">{task.repo}</Field>}
               <Field label="Depends on">
                 {task.dependsOn.length > 0 ? task.dependsOn.join(', ') : '-'}
               </Field>

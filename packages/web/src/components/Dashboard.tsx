@@ -976,7 +976,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     <Select
                       value={newRepo}
                       onChange={(event) => setNewRepo(event.target.value)}
-                      aria-label="Repository"
+                      aria-label="Project"
                       className="w-40"
                     >
                       {repos.map((repo) => (
@@ -1040,12 +1040,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         shortcut={shortcutOf('workspace.new')}
                         onClick={() => setNewWorkspace({})}
                       >
-                        New workspace
+                        Start a task
                       </Button>
                     </>
                   }
                 >
-                  Add a task to the backlog, or start a workspace to work right away.
+                  Add a task to the backlog, or start one now in its own workspace.
                 </EmptyState>
               ) : visibleTasks.length === 0 ? (
                 <EmptyState

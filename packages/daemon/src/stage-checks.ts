@@ -11,6 +11,9 @@ const execFileAsync = promisify(execFile)
 // A `check` command gets this long before it counts as failed.
 export const CHECK_TIMEOUT_MS = 10 * 60 * 1000
 const OUTPUT_TAIL_CHARS = 2000
+// File times come from a coarser clock than Date.now (on Linux, up to a few ms behind), so a
+// file written right after the stage started can look older than the start.
+const FILE_TIME_SLACK_MS = 1000
 
 export type CheckResult = {
   passed: boolean
@@ -133,7 +136,7 @@ async function checkOutput(input: CheckInput, result: CheckResult): Promise<void
     result.reasons.push(`${stage.output} is empty`)
     return
   }
-  if (input.startedAt !== null && modified < Date.parse(input.startedAt)) {
+  if (input.startedAt !== null && modified < Date.parse(input.startedAt) - FILE_TIME_SLACK_MS) {
     result.reasons.push(`${stage.output} was not changed after the stage started`)
     return
   }

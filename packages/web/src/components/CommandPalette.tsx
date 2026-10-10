@@ -132,7 +132,7 @@ function RowBody({ row, now }: { row: PaletteRow; now: Date }) {
           <span className="min-w-0 flex-1 truncate">
             <Highlighted text={row.repo.name} ranges={row.ranges} />
           </span>
-          <span className="shrink-0 text-xs text-muted">New workspace here</span>
+          <span className="shrink-0 text-xs text-muted">Start a task here</span>
         </>
       )
     case 'create-task':
@@ -143,7 +143,7 @@ function RowBody({ row, now }: { row: PaletteRow; now: Date }) {
             <Plus size={ICON.sm} aria-hidden="true" />
           </RowIcon>
           <span className="min-w-0 flex-1 truncate">
-            {row.kind === 'create-task' ? 'Create task' : 'New workspace'}{' '}
+            {row.kind === 'create-task' ? 'Add task' : 'Start task'}{' '}
             <span className="text-ink">“{row.title}”</span>
           </span>
         </>

@@ -58,7 +58,7 @@ Tags: **MVP** = first usable release. **v1** = first public release. **Later** =
 
 | Feature | Tag |
 |---|---|
-| Add a git repo; list its branches. Done: the daemon's own repository plus any added in **Repos** (kept in `<data dir>/repos.json`); each task belongs to one, and its workspace, branches and issues come from there. An added repository is removed from the menu of its sidebar group, once it has no workspaces; nothing on disk changes | MVP |
+| Add a git repo; list its branches. Done: the daemon's own repository plus any added in **Projects** (kept in `<data dir>/repos.json`); each task belongs to one, and its workspace, branches and issues come from there. An added project is removed from the menu of its sidebar group, once it has no workspaces; nothing on disk changes | MVP |
 | Create a workspace for a task (git worktree, branch named from the task) | MVP |
 | Option: run a task in the main checkout, no worktree | v1 |
 | Start an agent in a workspace terminal (Claude Code first; Codex, others via adapters). Done: Claude Code, with its hooks given through `--settings` | MVP |

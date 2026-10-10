@@ -256,7 +256,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | 32 | empty-state hero |
 
 - Color: `currentColor`. Idle icon-button icon `--muted`, hover `--ink`. Menu item icon `--ink-2`.
-- Action icon map (one icon per meaning everywhere): new `Plus`, add repo `FolderPlus`, filter `ListFilter`, search `Search`, toggle sidebar `PanelLeft`, toggle details `PanelRight`, all tasks `ListTodo`, agents `LayoutGrid`, terminal `SquareTerminal`, changes `FileDiff`, history `History`, push `ArrowUpFromLine`, pull request `GitPullRequest`, branch `GitBranch`, copy `Copy`, more `Ellipsis`, settings `Settings`, close `X`, maximize `Maximize2` / restore `Minimize2`, new shell `SquareSplitHorizontal`, refresh `RefreshCw`, theme `SunMoon`, keyboard `Keyboard`, notifications `Bell` / `BellOff`, account `CircleUser`, pin `Pin` / `PinOff`, rename `Pencil`, remove workspace and remove repository `FolderMinus`, external link `ExternalLink`, wrap `WrapText`.
+- Action icon map (one icon per meaning everywhere): new `Plus`, add repo `FolderPlus`, filter `ListFilter`, search `Search`, toggle sidebar `PanelLeft`, toggle details `PanelRight`, all tasks `ListTodo`, agents `LayoutGrid`, terminal `SquareTerminal`, changes `FileDiff`, history `History`, push `ArrowUpFromLine`, pull request `GitPullRequest`, branch `GitBranch`, copy `Copy`, more `Ellipsis`, settings `Settings`, close `X`, maximize `Maximize2` / restore `Minimize2`, new shell `SquareSplitHorizontal`, refresh `RefreshCw`, theme `SunMoon`, keyboard `Keyboard`, notifications `Bell` / `BellOff`, account `CircleUser`, pin `Pin` / `PinOff`, rename `Pencil`, remove workspace and remove project `FolderMinus`, external link `ExternalLink`, wrap `WrapText`.
 
 ### 2.8 Motion
 
@@ -301,15 +301,15 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 - Left: in Electron on macOS a 76px empty gutter for the traffic lights (`:root[data-shell="electron"][data-platform="mac"]`); on Windows Electron a 140px right gutter for `titleBarOverlay` window controls. In the browser no gutter.
 - Left group: sidebar toggle (`PanelLeft`, icon button 28), wordmark "Natamux" 13/600 (hidden < 1024), breadcrumb of the current view: `repo / T-0018 title` (13, ink-2, truncate, max 40%).
 - Center: command center button, 28px high, width `clamp(200px, 36vw, 520px)`, `bg-input`, 1px `--control`, radius 6, `Search` 14 + "Search or run a command" muted + `Mod K` kbd at right. Opens the command palette.
-- Right group: needs-you pill (hidden when 0): amber chip "3 need you" (`bg-signal-soft`, 1px `--signal-line`, text `--signal`, 12/500, 24px high); click opens the jump palette filtered to needs-you. Then "New workspace" (`Plus`, icon button with tooltip "New workspace  C"), details toggle (`PanelRight`).
+- Right group: needs-you pill (hidden when 0): amber chip "3 need you" (`bg-signal-soft`, 1px `--signal-line`, text `--signal`, 12/500, 24px high); click opens the jump palette filtered to needs-you. Then "Start a task" (`Plus`, icon button with tooltip "Start a task  C"), details toggle (`PanelRight`).
 - Electron: whole bar is `-webkit-app-region: drag`; every control `no-drag`. Window inactive (`:root[data-window="inactive"]`): title bar text and icons use `--muted`.
-- Moves out of the sidebar header: "Natamux" title and the "New workspace" button (the sidebar keeps the filter field and lists).
+- Moves out of the sidebar header: "Natamux" title and the "Start a task" button (the sidebar keeps the filter field and lists).
 
 **Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 272, min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
 2. Nav rows (28px): All tasks + count, Agents + count.
 3. Needs you section (compact, see 4.12).
-4. "Workspaces" header 28px, sticky (`position: sticky; top: 0`), with add-repo and new-workspace icon buttons (24).
+4. "Workspaces" header 28px, sticky (`position: sticky; top: 0`), with "Add a project" and "Start a task" icon buttons (24).
 5. Scrolling tree of repo groups and workspace rows. 12px bottom padding.
 Only part 5 scrolls (fixes NAV-16).
 
@@ -333,7 +333,7 @@ Extra rule at every width: details dock only if main stays >= 640 after docking;
 |---|---|---|---|---|---|
 | >= 1440 | docked 272 | docked 360 when open | table all columns; diff side by side; agents auto-fill | full | full |
 | 1280-1439 | docked 272 | docked if main >= 640, else sheet | table drops Branch | full | full |
-| 1024-1279 | docked, default 248, max 30vw | sheet: slides over main from the right, 360, `--shadow-2`, no scrim, stays until Esc / close / toggle | table drops Branch + PR; diff inline if diff width < 720; agents max 2 columns | wordmark hidden | Repos / Import become icon-only with tooltips |
+| 1024-1279 | docked, default 248, max 30vw | sheet: slides over main from the right, 360, `--shadow-2`, no scrim, stays until Esc / close / toggle | table drops Branch + PR; diff inline if diff width < 720; agents max 2 columns | wordmark hidden | Projects / Import become icon-only with tooltips |
 | 768-1023 | drawer: 300 (max 85vw), slides from left over a scrim, opened by the title bar toggle or Mod+B, closes on pick / Esc / scrim click | sheet with scrim, 360 (max 90vw) | table: Id, Task, State, Last activity; diff inline only, file list collapses to a file picker above the diff; terminal panes stack when < 320 each; workspace header actions: Push stays, PR becomes icon+"PR" | breadcrumb shortened to task id | only Live dot, running, needs-you, `?`, account |
 | < 768 (design at 390) | drawer full height, width min(360, 100vw) | full page with a Back button (`ArrowLeft`), replaces main | table becomes a card list; board shows one column at a time with a state segmented control on top; workspace: title wraps to 2 lines, Push/PR go into a "..." menu, tabs scroll, ONE terminal at a time with a pane switcher (Shell 1 / Shell 2 chips); agents: 1 column, each pane `min-height: 60vh`, scroll; diff inline + wrap on; dialogs become bottom sheets; toasts full width | 44px: menu, view title, needs-you pill, `+`; command center becomes a `Search` icon button | hidden; Live state is a 6px dot on the title bar menu button; status items move to the drawer footer |
 
@@ -406,7 +406,7 @@ Anatomy (44px, pad 6/8, radius 6):
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (row keeps 44px, line 2 stays), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
-- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): New workspace, Settings, separator, Remove repository (not for the default repository; disabled with the line "Remove its workspaces first" while the repository has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
+- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove project (not for the default project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
 - "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32.
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
 - Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
@@ -483,7 +483,7 @@ Shared shell:
 - List: max height `min(440px, 60vh)`, rows 32 (one line) or 44 (two lines: title + 12 muted id/branch/repo), radius 6, inset 6. Group headers caps 24px. Matched characters in ink 600 + accent underline-free. Selected row: bg selection-active + `inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent)` (visible on white too). Right side: Kbd for commands, state glyph + age for tasks.
 - Footer 28: hints in 12 muted: `↑↓ move`, `↵ open`, `⇧↵ add to Agents`, `⌥1-9 jump`, `Esc close`.
 - Keys: Up/Down (wraps), PageUp/PageDown, Enter, Shift+Enter, Alt+1..9 picks row N (Cmd/Ctrl+digits belong to the browser), Tab cycles scope chips, Esc closes and restores focus. Order is frozen while open (live updates do not move rows).
-- Mod+K (everything): empty query shows "Needs you" (max 5), "Recent" (workspaces opened, max 5), "Suggested" commands. Typing searches commands (with category prefix: "Task:", "Workspace:", "View:", "Theme:", "Repo:"), tasks (id, title, branch), workspaces and repos. `>` prefix = commands only; `#` prefix = tasks by id. No match: rows "Create task “query”" and "New workspace “query”".
+- Mod+K (everything): empty query shows "Needs you" (max 5), "Recent" (workspaces opened, max 5), "Suggested" commands. Typing searches commands (with category prefix: "Task:", "Workspace:", "View:", "Theme:", "Project:"), tasks (id, title, branch), workspaces and projects. `>` prefix = commands only; `#` prefix = tasks by id. No match: rows "Add task “query”" and "Start task “query”".
 - Mod+J (jump): only workspaces and their terminals (Shell 1 agent, Shell 2...). Empty query: needs-you first (needs-input > review > failed > blocked), then running, then recent. Enter opens the workspace on that terminal; Shift+Enter adds it to the Agents grid.
 - `lib/commands.ts` is the single registry: `{ id, title, category, shortcut?, when?(ctx), run(ctx) }`. The palette, menus (shortcut column), tooltips and the shortcut sheet all read it, so a shortcut is defined once.
 
@@ -493,7 +493,7 @@ Shared shell:
 ### 4.19 Empty state (`ui/EmptyState.tsx`)
 - Centered in its container, max width 360, gap 8. Icon 32 muted (stroke 1.5) in a 56px circle bg raised; title 15/600; body 13 muted (1-2 sentences); one primary action (`md`) + optional link; optional Kbd hint.
 - Variants with exact copy:
-  - No tasks: "No tasks yet" / "Add a task to the backlog, or start a workspace to work right away." / [Add task `N`] [New workspace `C`].
+  - No tasks: "No tasks yet" / "Add a task to the backlog, or start one now in its own workspace." / [Add task `N`] [Start a task `C`].
   - Filter miss: `No tasks match “zzzz”` / "Check the spelling or clear the filter." / [Clear filter]. Sidebar group under a filter: "No matches in natamux (8 hidden)" (fixes NAV-15, WS-24, RA-30).
   - No changes: "No changes" / "The workspace matches its last commit."
   - No agents: "No agent is working" / "Start an agent on a task, or add a pane." / [Add a pane].
@@ -585,7 +585,7 @@ Shared shell:
 ### 4.28 Status bar items (`components/StatusBar.tsx`)
 - Item: height 24, pad 0 6, radius 6, gap 6, icon 14, text 12/16 muted; hover bg-hover + ink; clickable items are buttons with tooltips. Bar pad 0 6, gap 2.
 - Left (workspace-wide, high priority): Live dot (6px add / signal) + "Live"/"Reconnecting" (tooltip explains); "3 running" (click: filter Running); "2 need you" in signal (click: jump palette scoped to needs-you).
-- Right (lower priority, drop labels first): Repos (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, separator, Sign out (confirm dialog "Sign out of Natamux? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
+- Right (lower priority, drop labels first): Projects (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, separator, Sign out (confirm dialog "Sign out of Natamux? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
 - No shortcut hint text in the bar.
 
 ### 4.29 View header and workspace header
@@ -622,7 +622,7 @@ Rules:
 | | Esc | Close the top layer: tooltip > menu > palette > dialog > sheet/drawer. Else in a field: clear, then blur. Else in a workspace: back to All tasks |
 | Single keys | `?` | Shortcut sheet |
 | | `/` | Focus the sidebar filter |
-| | `c` | New workspace |
+| | `c` | Start a task |
 | | `n` | New task (focus the backlog field) |
 | | `j` / `k`, Down / Up | Move selection in the focused list |
 | | Enter | Open the selected task (workspace, or the no-workspace view) |
@@ -654,7 +654,7 @@ Rules:
 - Tab order follows the visual order: title bar, sidebar (filter, nav, needs-you, tree as one stop), main, details, status bar. A "Skip to main content" link is the first tab stop (visible on focus, top-left, `bg-popover`, `--shadow-1`) (RA-23).
 - Each toolbar, tab list, segmented control, list and tree is ONE tab stop; arrows move inside (roving tabindex).
 - Opening a layer moves focus into it (first field, first menu item, palette input). Closing returns focus to the opener. If the opener is gone (row removed), focus goes to the list container.
-- After create: focus goes where the new thing is (new workspace: Shell 1 terminal; new task: its row; subtask: stays in the subtask field).
+- After create: focus goes where the new thing is (started task: Shell 1 terminal; added task: its row; subtask: stays in the subtask field).
 - Selection in a list follows focus. The workspace open in main is "current" (aria-current) and is separate from selection.
 - Terminal keeps all keys except those in 5.1; F6 always gets out.
 
@@ -674,7 +674,7 @@ Rules:
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Shell 1 to the Agents grid. |
 | Agents pane title | Opens that workspace (Terminal tab). |
-| Create workspace (dialog or details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
+| Start a task (dialog) or Create workspace (details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
 | Destructive actions (remove workspace, cancel task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
@@ -782,7 +782,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | S-01 | P0 | NAV-02, RA-01, WS-07 | new `hooks/useLayoutMode.ts`, `components/Dashboard.tsx` (split into new `components/AppShell.tsx`), `lib/view-store.ts` | Shell per 3.1. `useLayoutMode` with 768/1024/1280 and the "details dock only if main >= 640" rule. Sidebar modes docked / drawer (300, scrim, focus trap while open, closes on navigation). View store gets `sidebarOpen` (persisted) and `drawerOpen`. |
 | S-02 | P0 | RA-02, WS-16 | `components/TaskDetail.tsx`, `AppShell.tsx`, `lib/view-store.ts` | Details modes docked / sheet / page (3.2). Sheet: fixed right, `--shadow-2`, slide 200ms, Esc closes, focus moves in and back. Page (< 768): replaces main with Back. Open state per task id: `detailOpenByTask: Record<string, boolean>` persisted; default closed for workspaces, open for table selection. Auto-close when the Changes tab opens and main < 900. |
 | S-03 | P0 | RA-03 | `components/AgentPanes.tsx`, `components/ShellPanes.tsx`, `lib/panes.ts` | Grid `repeat(auto-fill, minmax(320px, 1fr))` when layout is Auto; < 768 one column with `min-height: 60vh` per pane (agents) or a pane switcher (shells). |
-| S-04 | P1 | (enables principle 1), NAV-19 | new `components/TitleBar.tsx`, `AppShell.tsx` | Title bar per 3.1: sidebar toggle, wordmark, breadcrumb, command center button (until PR 5 it focuses the filter field), needs-you pill, new workspace, details toggle; Electron gutters via `data-shell`/`data-platform` attributes (set nothing in the browser); `data-window` inactive dimming hook. Move "Natamux" and "New workspace" out of the sidebar header. |
+| S-04 | P1 | (enables principle 1), NAV-19 | new `components/TitleBar.tsx`, `AppShell.tsx` | Title bar per 3.1: sidebar toggle, wordmark, breadcrumb, command center button (until PR 5 it focuses the filter field), needs-you pill, Start a task, details toggle; Electron gutters via `data-shell`/`data-platform` attributes (set nothing in the browser); `data-window` inactive dimming hook. Move "Natamux" and "Start a task" out of the sidebar header. |
 | S-05 | P1 | NAV-19, RA-04, WS-34 | new `components/StatusBar.tsx`, `Dashboard.tsx` (remove footer) | Status bar per 4.28: 28px, priority-based condensation (ResizeObserver) with "..." overflow menu, never wraps; remove the hint text; Keyboard button; account menu with Theme (System/Light/Dark), UI size, Sign out with confirm; blocked notifications tooltip. Hidden < 768 (items go to the drawer footer). |
 | S-06 | P1 | NAV-16 | `Dashboard.tsx` / new `components/Sidebar.tsx`, `WorkspaceList.tsx` | Sidebar structure per 3.1: only the tree scrolls; "Workspaces" header sticky; 12px bottom padding. Filter field uses `SearchField`. |
 | S-07 | P1 | RA-09 | `styles.css`, `ui/styles.ts` | `@media (pointer: coarse)`: `--control-h: 40px`, rows 48, workspace row 56, icon hit 40; hover-only controls visible; resize handles hidden. Control classes read `--control-h`. |
@@ -843,8 +843,8 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | K-03 | P1 | NAV-19 | new `components/ShortcutSheet.tsx` | `?` sheet per 4.18, generated from `lib/commands.ts`. |
 | K-04 | P1 | WS-22 | new `lib/route.ts`, `lib/view-store.ts`, `main.tsx`, `packages/daemon/src/server.ts` (SPA fallback) | Routes per 5.5 with history API; store <-> URL sync; back/forward; daemon serves `index.html` for unknown GET paths that accept HTML. |
 | K-05 | P1 | NAV-18 | `components/IssueImport.tsx` | Error state per 4.19 (danger icon, friendly sentence "GitHub CLI is not signed in. Run `gh auth login` in a terminal, then try again.", [Retry], "Show details" with the raw text); button label "Import" disabled with reason until something is picked, then "Import 3 issues". |
-| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `components/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (current + last used), "Branches", "Task branches" (natamux/* collapsed by default); type to filter. Create button `aria-disabled` with reason "Enter a name". Dialog per Orca-like short flow: Repository, Name, Branch from, Agent, Advanced disclosure; Mod+Enter. |
-| K-07 | P2 | NAV-29 (part) | `components/RepoPanel.tsx` | Folder field with validation message; dialog fixes come from F-05. Repo remove is in the sidebar group menu (`DELETE /repos/:id`); rename and Repos panel actions come later. |
+| K-06 | P1 | NAV-28, WS-28 | new `ui/Combobox.tsx`, `components/NewWorkspaceDialog.tsx`, `TaskDetail.tsx` | Branch picker Combobox: groups "Recent" (current + last used), "Branches", "Task branches" (natamux/* collapsed by default); type to filter. Start task button `aria-disabled` with reason "Enter a title". Dialog "Start a task", short flow: Project, Title, Notes (only with the "My notes" source), Branch from, Agent; Mod+Enter. |
+| K-07 | P2 | NAV-29 (part) | `components/RepoPanel.tsx` | Folder field with validation message; dialog fixes come from F-05. Project remove is in the sidebar group menu (`DELETE /repos/:id`); rename and Projects panel actions come later. |
 | K-08 | P2 | NAV-33 | `components/SignIn.tsx` | Show/hide token toggle (`Eye`/`EyeOff` icon button), helper "It is `NATAMUX_TOKEN` of the daemon. Without it, the daemon makes one and prints it when it starts.", busy state on Connect, inline error with `aria-describedby`. No logo work (no brand asset yet). |
 | K-09 | P2 | RA-29, NAV-32 | `index.html`, `public/favicon.svg` (new), `TerminalView.tsx`, `Dashboard.tsx` | Favicon (simple SVG, theme-safe); skeletons on first load (table, sidebar); guard xterm dispose before `open` finished (`dimensions` error); close WebSocket only after it opened (no "closed before established" warning). |
 | K-10 | P2 | WS-29 | — | Dropped for now: split direction for new shells waits for real pane splitting (drag-to-edge) in a later feature. |

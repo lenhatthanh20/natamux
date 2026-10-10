@@ -19,11 +19,17 @@
 #   none  works, then ends its turn
 set -u
 
-# Natamux starts it as: <this file> --settings <file> [prompt]
+# Natamux starts it as: <this file> --settings <file> [--permission-mode <mode>] [prompt]
 prompt=""
-if [ "$#" -ge 3 ]; then
-  prompt="${*: -1}"
-fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+  --settings | --permission-mode) shift 2 || shift ;;
+  *)
+    prompt="$1"
+    shift
+    ;;
+  esac
+done
 mode=finish
 case "$prompt" in
 loop:* | ask:* | fail:*)

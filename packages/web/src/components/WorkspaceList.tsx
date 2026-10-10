@@ -95,7 +95,7 @@ export function WorkspaceList({
       return []
     }
     const items: MenuItem[] = [
-      { label: 'New workspace', icon: Plus, onSelect: () => onNewWorkspace(id) },
+      { label: 'Start a task', icon: Plus, onSelect: () => onNewWorkspace(id) },
       { label: 'Settings', icon: Settings, onSelect: () => onRepoSettings(id) },
     ]
     if (id === DEFAULT_REPO_ID) {
@@ -107,7 +107,7 @@ export function WorkspaceList({
       ...items,
       { type: 'separator' },
       {
-        label: 'Remove repository',
+        label: 'Remove project',
         icon: FolderMinus,
         danger: true,
         disabled: busy,
@@ -234,9 +234,9 @@ export function WorkspaceList({
         <h2 id="workspaces-heading" className={`flex-1 ${sectionTitle}`}>
           Workspaces
         </h2>
-        <IconButton label="Add a repository" icon={FolderPlus} size="xs" onClick={onAddRepo} />
+        <IconButton label="Add a project" icon={FolderPlus} size="xs" onClick={onAddRepo} />
         <IconButton
-          label="Add a workspace"
+          label="Start a task"
           icon={Plus}
           size="xs"
           shortcut={shortcutOf('workspace.new')}
@@ -313,7 +313,7 @@ export function WorkspaceList({
                 )}
               </button>
               <IconButton
-                label={`New workspace in ${repo.name}`}
+                label={`Start a task in ${repo.name}`}
                 icon={Plus}
                 size="xs"
                 onClick={() => onNewWorkspace(repo.id)}
@@ -332,7 +332,7 @@ export function WorkspaceList({
                       onClick={() => onNewWorkspace(repo.id)}
                       className="text-ink underline-offset-2 hover:underline"
                     >
-                      Make one
+                      Start a task
                     </button>
                   </li>
                 )}
@@ -371,7 +371,7 @@ export function WorkspaceList({
       {removing !== null && (
         <ConfirmDialog
           title={`Remove ${removing.name} from Natamux?`}
-          description={`Natamux forgets this repository. The folder ${removing.path} and its branches stay on disk. Tasks without a workspace keep their link and come back if you add the folder again.`}
+          description={`Natamux forgets this project. The folder ${removing.path} and its branches stay on disk. Tasks without a workspace keep their link and come back if you add the folder again.`}
           confirmLabel="Remove"
           onConfirm={() => onRemoveRepo(removing.id)}
           onClose={() => setRemoving(null)}
