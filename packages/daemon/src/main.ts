@@ -68,7 +68,10 @@ const terminals = new TerminalService({
   spawn: spawnShell,
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
-  onOutput: (taskId, terminal, data) => genericSignals.onOutput(taskId, terminal, data),
+  onOutput: (taskId, terminal, data) => {
+    stages.onOutput(taskId, terminal, data)
+    genericSignals.onOutput(taskId, terminal, data)
+  },
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')

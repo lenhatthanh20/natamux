@@ -22,6 +22,12 @@ export class TaskWaitingError extends Error {
 
 export { LAUNCHABLE_AGENTS, quoteArgument } from './agent-launch.js'
 
+// On Windows the program of a terminal is always the shell, so the end of an agent cannot be seen
+// there. Its launch line sets these window titles, which reach the terminal as escape sequences:
+// the first as the agent starts, the second once it has ended (see StageRunner.onOutput).
+export const AGENT_TITLE = 'natamux-agent'
+export const AGENT_EXITED_TITLE = 'natamux-agent-exited'
+
 // The first prompt: the task title, then its description. On one line, because the shell runs
 // the command at the first line end.
 export function firstPrompt(task: Pick<Task, 'title' | 'description'>): string {
@@ -142,12 +148,14 @@ export class AgentRunner {
   // What is typed into the terminal. The terminal echoes it, so the long command (settings path,
   // prompt) goes into a small script and only a short line to run it is typed. The script is
   // sourced, not run by `sh`, so the user's own shell (aliases, PATH) still starts the agent.
-  // PowerShell may refuse scripts by policy, so Windows types the command itself.
+  // PowerShell may refuse scripts by policy, so Windows types the command itself, between the
+  // window titles that tell when the agent starts and ends.
   // A login shell's profile (path_helper, brew shellenv) can push the app's bin folder behind an
   // older global `natamux`. The PATH prefix puts it first again, for the agent and its hooks only.
   private launchLine(taskId: string, command: string, terminal?: string): string {
     if (this.platform === 'win32') {
-      return command
+      const title = (text: string) => `$Host.UI.RawUI.WindowTitle = '${text}'`
+      return `${title(AGENT_TITLE)}; ${command}; ${title(AGENT_EXITED_TITLE)}`
     }
     mkdirSync(this.launchDir, { recursive: true })
     const suffix = terminal === undefined || terminal === '1' ? '' : `-${terminal}`
