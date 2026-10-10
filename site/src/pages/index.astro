@@ -1,3 +1,698 @@
 ---
+// The landing page. The docs live under /docs/ (Starlight).
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const version = '0.1.0'
+const repo = 'https://github.com/lenhatthanh20/natamux'
+const download = (file: string) => `${repo}/releases/download/v${version}/${file}`
+const files = {
+  macArm: download(`Natamux-${version}-mac-arm64.dmg`),
+  macIntel: download(`Natamux-${version}-mac-x64.dmg`),
+  appImage: download(`Natamux-${version}-linux-x86_64.AppImage`),
+  deb: download(`Natamux-${version}-linux-amd64.deb`),
+  tar: download(`Natamux-${version}-linux-x64.tar.gz`),
+}
+const docs = `${base}docs/`
+const stages = [
+  { name: 'Context', does: 'Reads the issue or your notes into context.md' },
+  { name: 'Spec', does: 'The agent writes spec.md; you approve it' },
+  { name: 'Plan', does: 'The agent writes plan.md' },
+  { name: 'Test spec', does: 'Tests are written beside the code', side: true },
+  { name: 'Implement', does: 'Code, commits, a clean worktree', side: true },
+  { name: 'Review', does: 'You read the diff and approve' },
+  { name: 'Testing', does: 'Your test command must pass' },
+  { name: 'Release', does: 'Push, pull request, done' },
+]
 ---
-<html><body>Landing placeholder</body></html>
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Natamux</title>
+    <meta
+      name="description"
+      content="Run many coding agents in parallel. Every task gets its own git worktree, terminal and stages, and one dashboard tells you which task needs you."
+    />
+    <meta property="og:title" content="Natamux" />
+    <meta
+      property="og:description"
+      content="Run many coding agents in parallel, on one dashboard."
+    />
+    <meta property="og:image" content={`https://lenhatthanh20.github.io${base}media/demo-poster.jpg`} />
+    <meta name="theme-color" content="#0d1526" />
+    <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Martian+Mono:wdth,wght@75..100,400..600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav">
+      <a class="brand" href={base}>
+        <img src={`${base}icon.svg`} alt="" width="28" height="28" />
+        <span>Natamux</span>
+      </a>
+      <nav aria-label="Main">
+        <a href={docs}>Docs</a>
+        <a href={`${docs}getting-started/install/`}>Install</a>
+        <a href={repo}>GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Five agents at work.<br />One place to see them.</h1>
+          <p class="lede">
+            Natamux gives every task its own git worktree, terminal and stages. Claude Code, Codex,
+            Gemini, Copilot and Cursor work side by side, and the dashboard tells you the one task
+            that needs you.
+          </p>
+          <div class="ctas">
+            <a class="btn primary" id="download" href={files.macArm} data-mac={files.macArm} data-linux={files.appImage}>
+              Download for macOS
+            </a>
+            <a class="btn" href={docs}>Read the docs</a>
+          </div>
+          <p class="fine">
+            Version {version} for <a href={files.macArm}>Apple silicon</a>, <a href={files.macIntel}>Intel Macs</a> and
+            <a href={`${docs}getting-started/install/`}>Linux</a>. Free and open source under MIT.
+          </p>
+        </div>
+
+        <div class="stage" aria-label="Three agents work in three terminals; the dashboard shows their state" role="img">
+          <div class="panes">
+            <figure class="pane" data-lane="amber">
+              <figcaption><span class="dot"></span>T-0001 <b>claude</b><span class="state" data-state="running">running</span></figcaption>
+              <pre data-term="0"></pre>
+            </figure>
+            <figure class="pane" data-lane="mint">
+              <figcaption><span class="dot"></span>T-0002 <b>codex</b><span class="state" data-state="running">running</span></figcaption>
+              <pre data-term="1"></pre>
+            </figure>
+            <figure class="pane" data-lane="sky">
+              <figcaption><span class="dot"></span>T-0004 <b>gemini</b><span class="state" data-state="running">running</span></figcaption>
+              <pre data-term="2"></pre>
+            </figure>
+          </div>
+
+          <svg class="lanes" viewBox="0 0 200 420" preserveAspectRatio="none" aria-hidden="true">
+            <path class="lane amber" d="M0 70 C 90 70, 100 210, 200 210" />
+            <path class="lane mint" d="M0 210 L 200 210" />
+            <path class="lane sky" d="M0 350 C 90 350, 100 210, 200 210" />
+            <path class="pulse amber" d="M0 70 C 90 70, 100 210, 200 210" />
+            <path class="pulse mint" d="M0 210 L 200 210" />
+            <path class="pulse sky" d="M0 350 C 90 350, 100 210, 200 210" />
+          </svg>
+
+          <div class="board">
+            <div class="board-head">
+              <span>All tasks</span>
+              <span class="needs" data-needs>0 need you</span>
+            </div>
+            <ol class="rows">
+              <li data-row="0"><code>T-0001</code><span class="t">Command palette with ⌘K</span><span class="chip" data-chip>Running</span></li>
+              <li data-row="1"><code>T-0002</code><span class="t">Drag tasks between columns</span><span class="chip" data-chip>Running</span></li>
+              <li data-row="2"><code>T-0004</code><span class="t">Fix the token refresh race</span><span class="chip" data-chip>Running</span></li>
+              <li class="quiet"><code>T-0005</code><span class="t">CSV export for the table</span><span class="chip review">In review</span></li>
+            </ol>
+            <p class="ask" data-ask hidden>
+              <b>T-0004 asks:</b> Keep the old ticket format for one release?
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="demo" aria-labelledby="demo-title">
+        <div class="section-head">
+          <h2 id="demo-title">See a real session</h2>
+          <p>
+            Agents running, one asking a question, the stage view, a diff, the command palette. Recorded
+            in the Natamux dashboard, not mocked.
+          </p>
+        </div>
+        <div class="window">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Natamux</span></div>
+          <video
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster={`${base}media/demo-poster.jpg`}
+            aria-label="Demo of the Natamux dashboard"
+          >
+            <source src={`${base}media/demo.webm`} type="video/webm" />
+            <source src={`${base}media/demo.mp4`} type="video/mp4" />
+          </video>
+        </div>
+      </section>
+
+      <section class="pipeline" aria-labelledby="pipeline-title">
+        <div class="section-head">
+          <h2 id="pipeline-title">Every task moves through stages</h2>
+          <p>
+            Each stage checks its own result before the task moves on, and waits for you where you
+            want a say. Drop, reorder or add stages per repository in <code>.natamux.json</code>.
+          </p>
+        </div>
+        <ol class="track" data-track>
+          {
+            stages.map((stage) => (
+              <li class:list={['step', { side: stage.side }]}>
+                <span class="node" aria-hidden="true" />
+                <strong>{stage.name}</strong>
+                <span>{stage.does}</span>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="track-note">Test spec and Implement run side by side, each with its own agent.</p>
+      </section>
+
+      <section class="facts" aria-label="What you get">
+        <article data-lane="amber">
+          <h3>A worktree per task</h3>
+          <p>
+            Each task gets its own branch and folder, its own shells and its own ports. Agents never
+            edit the same checkout, and your main branch stays clean.
+          </p>
+          <pre><code>natamux/t-0004-fix-the-token-refresh-race
+.natamux/worktrees/T-0004</code></pre>
+        </article>
+        <article data-lane="mint">
+          <h3>It knows what each agent is doing</h3>
+          <p>
+            Natamux adds hooks to every agent session it starts. Working, asking, waiting for a
+            permission, done: the state is on the dashboard within a second.
+          </p>
+          <pre><code>Claude Code  Codex  Gemini CLI
+Copilot CLI  Cursor</code></pre>
+        </article>
+        <article data-lane="sky">
+          <h3>One command for you and your agents</h3>
+          <p>
+            <code>natamux</code>, or <code>nmx</code> for short. Create tasks from your shell; agents report
+            back with <code>done</code> and <code>ask</code>.
+          </p>
+          <pre><code>nmx task create "Fix the login page"
+nmx agent start T-0007 --agent codex
+nmx done</code></pre>
+        </article>
+      </section>
+
+      <section class="install" id="install" aria-labelledby="install-title">
+        <div class="section-head">
+          <h2 id="install-title">Install</h2>
+          <p>You need git and at least one agent installed and logged in, such as <code>claude</code>.</p>
+        </div>
+        <div class="tabs" data-tabs>
+          <div class="tablist" role="tablist" aria-label="Platform">
+            <button role="tab" aria-selected="true" aria-controls="tab-mac" id="t-mac">macOS</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-linux" id="t-linux" tabindex="-1">Linux</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-source" id="t-source" tabindex="-1">From source</button>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tab-mac" aria-labelledby="t-mac">
+            <p>
+              Download <a href={files.macArm}>Apple silicon</a> or <a href={files.macIntel}>Intel</a>, drag
+              Natamux to Applications and open it once. This first release is not signed yet, so macOS
+              blocks it: open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.
+              Or clear the download mark:
+            </p>
+            <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tab-linux" aria-labelledby="t-linux" hidden>
+            <p>
+              Debian and Ubuntu: install the <a href={files.deb}>.deb</a>, then start <code>natamux-desktop</code>
+              from the menu. Other distributions: the <a href={files.appImage}>AppImage</a> or the
+              <a href={files.tar}>.tar.gz</a>.
+            </p>
+            <div class="cmd"><code>sudo apt install ./Natamux-{version}-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
+          </div>
+          <div class="tabpanel" role="tabpanel" id="tab-source" aria-labelledby="t-source" hidden>
+            <p>
+              Run the daemon and the dashboard from the repository, in a codespace or with Docker. The
+              dashboard opens on port 5173.
+            </p>
+            <div class="cmd"><code>git clone {repo} &amp;&amp; cd natamux &amp;&amp; scripts/dev.sh up</code><button type="button" data-copy>Copy</button></div>
+          </div>
+        </div>
+        <p class="more">
+          Checksums, the AppImage sandbox note and the command line in your own shell:
+          <a href={`${docs}getting-started/install/`}>the install guide</a>.
+        </p>
+      </section>
+
+      <section class="privacy" aria-labelledby="privacy-title">
+        <h2 id="privacy-title">Your code stays on your machine</h2>
+        <p>
+          No account, no server, no telemetry. The daemon listens on 127.0.0.1 and asks for a token on
+          every request. Your code goes only where your agents send it.
+        </p>
+        <p class="links">
+          <a href={`${repo}/blob/main/SECURITY.md`}>Security</a>
+          <a href={`${repo}/blob/main/PRIVACY.md`}>Privacy</a>
+          <a href={`${docs}help/security-and-privacy/`}>How it works</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="brand small"><img src={`${base}icon.svg`} alt="" width="20" height="20" /><span>Natamux</span></div>
+      <p>MIT licensed. Made for people who run more than one agent.</p>
+      <nav aria-label="Footer">
+        <a href={docs}>Docs</a>
+        <a href={`${repo}/releases`}>Releases</a>
+        <a href={`${docs}help/changelog/`}>Changelog</a>
+        <a href={repo}>GitHub</a>
+      </nav>
+    </footer>
+
+    <script>
+      // The download button offers the Linux AppImage on Linux.
+      const button = document.getElementById('download')
+      if (button && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
+        button.setAttribute('href', button.dataset.linux ?? '')
+        button.textContent = 'Download for Linux'
+      }
+
+      // Install tabs, with arrow keys between them.
+      for (const tabs of document.querySelectorAll<HTMLElement>('[data-tabs]')) {
+        const list = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        const pick = (tab: HTMLButtonElement) => {
+          for (const other of list) {
+            const chosen = other === tab
+            other.setAttribute('aria-selected', String(chosen))
+            other.tabIndex = chosen ? 0 : -1
+            const panel = document.getElementById(other.getAttribute('aria-controls') ?? '')
+            if (panel) panel.hidden = !chosen
+          }
+          tab.focus()
+        }
+        list.forEach((tab, index) => {
+          tab.addEventListener('click', () => pick(tab))
+          tab.addEventListener('keydown', (event) => {
+            const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+            if (step) pick(list[(index + step + list.length) % list.length] as HTMLButtonElement)
+          })
+        })
+      }
+
+      for (const copy of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+        copy.addEventListener('click', async () => {
+          const text = copy.previousElementSibling?.textContent ?? ''
+          try {
+            await navigator.clipboard.writeText(text)
+            copy.textContent = 'Copied'
+          } catch {
+            copy.textContent = 'Select and copy'
+          }
+          setTimeout(() => (copy.textContent = 'Copy'), 1600)
+        })
+      }
+
+      // The stage track lights up once, when it comes into view.
+      const track = document.querySelector('[data-track]')
+      if (track) {
+        const seen = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            track.classList.add('run')
+            seen.disconnect()
+          }
+        }, { threshold: 0.4 })
+        seen.observe(track)
+      }
+
+      // The hero: three agents type in their terminals; the board follows their state.
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+      const terms = [...document.querySelectorAll<HTMLElement>('[data-term]')]
+      const panes = [...document.querySelectorAll<HTMLElement>('.pane')]
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-row]')]
+      const needs = document.querySelector<HTMLElement>('[data-needs]')
+      const ask = document.querySelector<HTMLElement>('[data-ask]')
+      const stage = document.querySelector<HTMLElement>('.stage')
+
+      type Line = [string, string?]
+      const scripts: Line[][] = [
+        [
+          ['● Read src/components/CommandPalette.tsx'],
+          ['● Edit src/lib/commands.ts', 'add'],
+          ['  +42 −3', 'add'],
+          ['● Bash pnpm test'],
+          ['  ✓ 128 passed', 'ok'],
+          ['$ natamux done', 'cmd'],
+        ],
+        [
+          ['› apply_patch src/components/Board.tsx'],
+          ['  +88 −12', 'add'],
+          ['› run pnpm --filter web test'],
+          ['  ✓ 61 passed', 'ok'],
+          ['› apply_patch src/lib/drag.ts'],
+        ],
+        [
+          ['✦ ReadFile src/auth/refresh.ts'],
+          ['✦ Two requests refresh at once.'],
+          ['? Keep the old ticket format', 'ask'],
+          ['  for one release? (y/n)', 'ask'],
+        ],
+      ]
+
+      const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms))
+      const setState = (index: number, label: string, kind: string) => {
+        const pane = panes[index]
+        const chip = rows[index]?.querySelector<HTMLElement>('[data-chip]')
+        const state = pane?.querySelector<HTMLElement>('.state')
+        if (state) {
+          state.textContent = label.toLowerCase()
+          state.dataset.state = kind
+        }
+        if (chip) {
+          chip.textContent = label
+          chip.className = `chip ${kind}`
+        }
+        rows[index]?.classList.toggle('flag', kind === 'needs')
+        pane?.classList.toggle('flag', kind === 'needs')
+      }
+      const setNeeds = (count: number) => {
+        if (!needs) return
+        needs.textContent = `${count} need you`
+        needs.classList.toggle('on', count > 0)
+      }
+      const print = (index: number, [text, kind]: Line) => {
+        const term = terms[index]
+        if (!term) return null
+        const line = document.createElement('span')
+        line.className = `l ${kind ?? ''}`
+        term.append(line)
+        while (term.children.length > 6) term.firstElementChild?.remove()
+        return { line, text }
+      }
+      const type = async (index: number, entry: Line) => {
+        const made = print(index, entry)
+        if (!made) return
+        const lane = stage?.querySelector<SVGPathElement>(`.pulse.${panes[index]?.dataset.lane}`)
+        lane?.classList.remove('go')
+        void lane?.getBoundingClientRect()
+        lane?.classList.add('go')
+        for (let i = 1; i <= made.text.length; i += 2) {
+          made.line.textContent = made.text.slice(0, i)
+          await sleep(14)
+        }
+        made.line.textContent = made.text
+      }
+      const runLane = async (index: number, delay: number, gap: number) => {
+        await sleep(delay)
+        for (const entry of scripts[index] ?? []) {
+          await type(index, entry)
+          await sleep(gap)
+        }
+      }
+
+      const finalState = () => {
+        scripts.forEach((script, index) => script.forEach((entry) => {
+          const made = print(index, entry)
+          if (made) made.line.textContent = made.text
+        }))
+        setState(0, 'In review', 'review')
+        setState(2, 'Needs input', 'needs')
+        setNeeds(1)
+        if (ask) ask.hidden = false
+      }
+
+      const loop = async () => {
+        for (;;) {
+          for (const term of terms) term.replaceChildren()
+          setState(0, 'Running', 'running')
+          setState(1, 'Running', 'running')
+          setState(2, 'Running', 'running')
+          setNeeds(0)
+          if (ask) ask.hidden = true
+          const gemini = runLane(2, 600, 520).then(async () => {
+            setState(2, 'Needs input', 'needs')
+            setNeeds(1)
+            if (ask) ask.hidden = false
+          })
+          const claude = runLane(0, 200, 640).then(() => setState(0, 'In review', 'review'))
+          const codex = runLane(1, 900, 760)
+          await Promise.all([gemini, claude, codex])
+          await sleep(2600)
+          await type(2, ['y', 'cmd'])
+          setState(2, 'Running', 'running')
+          setNeeds(0)
+          if (ask) ask.hidden = true
+          await type(2, ['✦ Edit src/auth/refresh.ts', 'add'])
+          await sleep(3200)
+        }
+      }
+
+      if (reduce) finalState()
+      else void loop()
+    </script>
+
+    <style is:global>
+      :root {
+        --ink: #0d1526;
+        --deep: #1b2a4a;
+        --amber: #f2b544;
+        --mint: #58d3a6;
+        --sky: #7fa8ff;
+        --snow: #f4f7fb;
+        --bg: #f3f5f9;
+        --surface: #ffffff;
+        --text: #0d1526;
+        --muted: #4f5d78;
+        --line: #d5dce8;
+        --term-bg: #0f1a30;
+        --term-line: #22345a;
+        --sky-strong: #2f5fd0;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1222;
+          --surface: #111c33;
+          --text: #e9eef7;
+          --muted: #9aa7bf;
+          --line: #22345a;
+          --term-bg: #0d1628;
+          --term-line: #22345a;
+          --sky-strong: #7fa8ff;
+          color-scheme: dark;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 400 1.0625rem/1.6 'Instrument Sans', system-ui, sans-serif;
+        overflow-x: hidden;
+      }
+      a { color: inherit; text-underline-offset: 0.18em; }
+      a:focus-visible, button:focus-visible { outline: 2px solid var(--sky-strong); outline-offset: 3px; border-radius: 6px; }
+      code, pre { font-family: 'Martian Mono', ui-monospace, monospace; font-stretch: 87.5%; }
+      p code, .fine code { font-size: 0.86em; padding: 0.1em 0.35em; border-radius: 5px; background: color-mix(in srgb, var(--sky) 16%, transparent); }
+
+      .skip { position: absolute; left: -999px; top: 8px; background: var(--surface); padding: 8px 12px; border-radius: 8px; }
+      .skip:focus { left: 16px; z-index: 10; }
+
+      .nav, main > section, .foot { width: min(1180px, 100% - 32px); margin-inline: auto; }
+      .nav { display: flex; align-items: center; justify-content: space-between; padding-block: 18px; }
+      .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; font-size: 1.125rem; text-decoration: none; }
+      .brand.small { font-size: 1rem; }
+      .nav nav { display: flex; gap: 22px; }
+      .nav nav a { text-decoration: none; color: var(--muted); font-weight: 500; }
+      .nav nav a:hover { color: var(--text); }
+
+      /* Hero */
+      .hero { padding-block: 56px 72px; }
+      .hero-copy { max-width: 60ch; }
+      h1 {
+        font-stretch: 75%;
+        font-weight: 680;
+        font-size: clamp(2.6rem, 6.4vw, 5.2rem);
+        line-height: 0.98;
+        letter-spacing: -0.02em;
+        margin: 0 0 24px;
+      }
+      .lede { font-size: 1.1875rem; color: var(--muted); max-width: 56ch; margin: 0 0 28px; }
+      .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+      .btn {
+        display: inline-flex; align-items: center; min-height: 46px; padding: 0 20px; border-radius: 12px;
+        font-weight: 600; text-decoration: none; border: 1px solid var(--line); background: var(--surface);
+      }
+      .btn.primary { background: var(--ink); color: var(--snow); border-color: var(--ink); }
+      @media (prefers-color-scheme: dark) { .btn.primary { background: var(--snow); color: var(--ink); border-color: var(--snow); } }
+      .btn:hover { transform: translateY(-1px); }
+      .fine { color: var(--muted); font-size: 0.9375rem; margin: 0; }
+
+      .stage {
+        margin-top: 56px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(60px, 0.28fr) minmax(0, 1fr);
+        align-items: center;
+        border-radius: 28px;
+        padding: 28px;
+        background:
+          radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--deep) 75%, transparent), transparent 60%),
+          linear-gradient(180deg, #13213d, #0b1222);
+        box-shadow: 0 40px 80px -40px rgba(13, 21, 38, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        color: var(--snow);
+      }
+      .panes { display: grid; gap: 14px; }
+      .pane {
+        margin: 0; border-radius: 14px; background: var(--term-bg); border: 1px solid var(--term-line);
+        overflow: hidden; transition: box-shadow 0.4s, border-color 0.4s;
+      }
+      .pane figcaption {
+        display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 0.8125rem; color: #9aa7bf;
+        border-bottom: 1px solid var(--term-line); font-family: 'Martian Mono', monospace; font-stretch: 80%;
+      }
+      .pane figcaption b { color: var(--snow); font-weight: 500; }
+      .pane .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lane); }
+      .pane[data-lane='amber'] { --lane: var(--amber); }
+      .pane[data-lane='mint'] { --lane: var(--mint); }
+      .pane[data-lane='sky'] { --lane: var(--sky); }
+      .pane .state { margin-left: auto; font-size: 0.75rem; color: var(--lane); }
+      .pane .state[data-state='needs'] { color: var(--amber); }
+      .pane .state[data-state='review'] { color: #b9a6ff; }
+      .pane.flag { border-color: color-mix(in srgb, var(--amber) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
+      .pane pre {
+        margin: 0; padding: 10px 12px; height: 7.6em; font-size: 0.78rem; line-height: 1.25; color: #c9d3e6;
+        display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
+      }
+      .pane .l { white-space: pre; min-height: 1.25em; }
+      .pane .l.add { color: var(--mint); }
+      .pane .l.ok { color: var(--mint); }
+      .pane .l.ask { color: var(--amber); }
+      .pane .l.cmd { color: var(--snow); }
+
+      .lanes { width: 100%; height: 100%; min-height: 300px; overflow: visible; }
+      .lane, .pulse { fill: none; stroke-width: 7; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+      .lane { opacity: 0.32; }
+      .lane.amber, .pulse.amber { stroke: var(--amber); }
+      .lane.mint, .pulse.mint { stroke: var(--mint); }
+      .lane.sky, .pulse.sky { stroke: var(--sky); }
+      .pulse { stroke-dasharray: 18 400; stroke-dashoffset: 18; opacity: 0; }
+      .pulse.go { animation: travel 0.9s ease-in forwards; }
+      @keyframes travel {
+        0% { stroke-dashoffset: 18; opacity: 1; }
+        90% { opacity: 1; }
+        100% { stroke-dashoffset: -330; opacity: 0; }
+      }
+
+      .board { border-radius: 16px; background: #f4f7fb; color: var(--ink); padding: 14px; box-shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.6); }
+      .board-head { display: flex; justify-content: space-between; align-items: center; font-weight: 650; padding: 2px 4px 10px; }
+      .needs { font-size: 0.8125rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #e3e8f1; color: #4f5d78; transition: background 0.3s; }
+      .needs.on { background: #fde9c0; color: #7a5200; animation: nudge 1.6s ease-in-out 2; }
+      @keyframes nudge { 50% { box-shadow: 0 0 0 6px rgba(242, 181, 68, 0.28); } }
+      .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+      .rows li {
+        display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+        padding: 8px 8px; border-radius: 9px; font-size: 0.875rem; transition: background 0.3s;
+      }
+      .rows li code { font-size: 0.75rem; color: #4f5d78; }
+      .rows li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .rows li.flag { background: #fff3d6; }
+      .rows li.quiet { opacity: 0.7; }
+      .chip { font-size: 0.75rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #e0e9ff; color: #2448a8; white-space: nowrap; }
+      .chip.review { background: #ece6ff; color: #5434b8; }
+      .chip.needs { background: #fde9c0; color: #7a5200; }
+      .ask { margin: 10px 4px 2px; font-size: 0.875rem; color: #5c4100; }
+      .ask[hidden] { display: none; }
+
+      /* Sections */
+      main > section:not(.hero) { padding-block: 72px; }
+      .section-head { max-width: 62ch; margin-bottom: 32px; }
+      h2 { font-stretch: 80%; font-weight: 650; font-size: clamp(1.9rem, 3.6vw, 2.75rem); line-height: 1.05; letter-spacing: -0.015em; margin: 0 0 12px; }
+      .section-head p { color: var(--muted); margin: 0; }
+
+      .window { border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0b1222; box-shadow: 0 50px 90px -50px rgba(13, 21, 38, 0.7); }
+      .window-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #121d35; color: #9aa7bf; font-size: 0.8125rem; }
+      .window-bar i { width: 11px; height: 11px; border-radius: 50%; background: #2a3856; }
+      .window-bar span { margin-left: 10px; }
+      .window video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; background: #0b1222; }
+
+      .track { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; position: relative; }
+      .track::before { content: ''; position: absolute; left: 6px; right: 6px; top: 7px; height: 2px; background: var(--line); }
+      .track::after {
+        content: ''; position: absolute; left: 6px; top: 7px; height: 2px; width: 0;
+        background: linear-gradient(90deg, var(--amber), var(--mint) 50%, var(--sky));
+      }
+      .track.run::after { width: calc(100% - 12px); transition: width 2.4s cubic-bezier(0.6, 0, 0.2, 1); }
+      .step { position: relative; display: grid; gap: 6px; padding-top: 28px; font-size: 0.9375rem; }
+      .step .node { position: absolute; top: 0; left: 0; width: 16px; height: 16px; border-radius: 50%; background: var(--bg); border: 2px solid var(--line); z-index: 1; }
+      .track.run .step .node { border-color: var(--sky-strong); background: var(--sky-strong); transition: background 0.3s, border-color 0.3s; }
+      .track.run .step:nth-child(1) .node { transition-delay: 0.1s; }
+      .track.run .step:nth-child(2) .node { transition-delay: 0.4s; }
+      .track.run .step:nth-child(3) .node { transition-delay: 0.7s; }
+      .track.run .step:nth-child(4) .node, .track.run .step:nth-child(5) .node { transition-delay: 1s; }
+      .track.run .step:nth-child(6) .node { transition-delay: 1.5s; }
+      .track.run .step:nth-child(7) .node { transition-delay: 1.9s; }
+      .track.run .step:nth-child(8) .node { transition-delay: 2.3s; }
+      .step strong { font-weight: 650; }
+      .step span { color: var(--muted); font-size: 0.875rem; line-height: 1.4; }
+      .step.side strong::after { content: ' ‖'; color: var(--muted); font-weight: 400; }
+      .track-note { color: var(--muted); font-size: 0.9375rem; margin: 22px 0 0; }
+
+      .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+      .facts article { border-top: 3px solid var(--lane); padding-top: 20px; }
+      .facts article[data-lane='amber'] { --lane: var(--amber); }
+      .facts article[data-lane='mint'] { --lane: var(--mint); }
+      .facts article[data-lane='sky'] { --lane: var(--sky); }
+      h3 { font-size: 1.3125rem; font-weight: 650; line-height: 1.2; margin: 0 0 10px; }
+      .facts p { color: var(--muted); margin: 0 0 16px; }
+      .facts pre { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--term-bg); color: #c9d3e6; font-size: 0.78rem; line-height: 1.5; overflow-x: auto; }
+
+      .tabs { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+      .tablist { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); }
+      .tablist button {
+        font: inherit; font-weight: 600; font-size: 0.9375rem; padding: 8px 14px; border-radius: 10px; border: 0;
+        background: transparent; color: var(--muted); cursor: pointer;
+      }
+      .tablist button[aria-selected='true'] { background: color-mix(in srgb, var(--sky) 18%, transparent); color: var(--text); }
+      .tabpanel { padding: 20px 22px 24px; }
+      .tabpanel p { margin: 0 0 16px; max-width: 70ch; }
+      .cmd { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--term-bg); color: #e9eef7; }
+      .cmd code { flex: 1; font-size: 0.82rem; overflow-x: auto; white-space: nowrap; }
+      .cmd button { font: inherit; font-size: 0.8125rem; font-weight: 600; border: 1px solid #2a3856; background: #16264a; color: #e9eef7; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+      .more { color: var(--muted); font-size: 0.9375rem; margin: 16px 0 0; }
+
+      .privacy { text-align: left; }
+      .privacy p { color: var(--muted); max-width: 62ch; margin: 0 0 14px; }
+      .privacy .links { display: flex; gap: 20px; font-weight: 600; color: var(--text); }
+
+      .foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-block: 36px 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9375rem; }
+      .foot p { margin: 0; }
+      .foot nav { display: flex; gap: 18px; }
+      .foot a { text-decoration: none; }
+      .foot a:hover { color: var(--text); }
+
+      @media (max-width: 920px) {
+        .stage { grid-template-columns: 1fr; gap: 18px; padding: 18px; }
+        .lanes { display: none; }
+        .track { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 26px; }
+        .track::before, .track::after { display: none; }
+        .facts { grid-template-columns: 1fr; gap: 32px; }
+      }
+      @media (max-width: 560px) {
+        .nav nav { gap: 14px; font-size: 0.9375rem; }
+        .nav nav a:nth-child(2) { display: none; }
+        .hero { padding-top: 28px; }
+        .pane pre { font-size: 0.72rem; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+        .track::after { width: calc(100% - 12px); }
+        .track .step .node { border-color: var(--sky-strong); background: var(--sky-strong); }
+      }
+    </style>
+  </body>
+</html>

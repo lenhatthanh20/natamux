@@ -1,0 +1,54 @@
+---
+title: Security and privacy
+description: What Natamux protects, what it collects, and how to report a vulnerability.
+sidebar:
+  order: 3
+---
+
+This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md) and [PRIVACY.md](https://github.com/lenhatthanh20/natamux/blob/main/PRIVACY.md). The files on GitHub are the full text.
+
+## Privacy
+
+- Natamux has no account, no server of its own and no telemetry. It sends no usage data, crash reports or analytics.
+- Your data stays on your machine:
+  - Tasks, history and stage files: `.natamux/` in each repository.
+  - Worktrees: `.natamux/worktrees/`, or the folder you set.
+  - Desktop app token, chosen repository and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux).
+  - Dashboard preferences and the token: your browser's `localStorage`.
+- Data leaves your machine only when you or an agent you start makes it happen:
+  - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
+  - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
+
+## Agents run with your rights
+
+An agent can read and change files and run commands as your user. Natamux does not sandbox agents. Treat an agent like a person typing in your terminal, and use each agent's own permission settings.
+
+Each task works in its own git worktree. Natamux never pushes, merges or deletes a branch unless you click the button or run the command.
+
+## The daemon
+
+- It listens on `127.0.0.1` (loopback) by default. Only the Docker setup listens on all interfaces inside its container, and `compose.prod.yaml` publishes the port to loopback only.
+- Every API request needs the token in an `Authorization: Bearer` header. `/health` and the static dashboard files are the only exceptions.
+- Without `NATAMUX_TOKEN`, the daemon makes a random token for each run and prints it once.
+- The token travels in a header, never a cookie or a URL, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds.
+- Do not run the daemon on a network address without TLS. Put a reverse proxy with TLS in front of it.
+
+## Secrets on disk
+
+- The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
+- The scripts that start agents are written with mode `0600`.
+- Sign out in the dashboard's account menu to remove the token from the browser.
+
+## Hooks
+
+For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For Copilot and Cursor, the hook file goes into the task's worktree and is kept out of git. For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/natamux/docs/concepts/agents-and-hooks/).
+
+## The desktop app is unsigned
+
+The first releases are not signed with an Apple or Windows certificate. The macOS app has an ad hoc signature only. Download it only from the repository's Releases page.
+
+## Report a vulnerability
+
+Do not open a public issue. Use [private vulnerability reporting](https://github.com/lenhatthanh20/natamux/security/advisories/new) on GitHub (**Security → Report a vulnerability**). Include the version, your platform, the steps to reproduce and what an attacker gains.
+
+You get an answer within 7 days. Only the latest release gets security fixes.
