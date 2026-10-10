@@ -1107,6 +1107,185 @@ describe('App', () => {
     expect(await within(details).findByRole('form', { name: 'Edit T-0001' })).toBeTruthy()
   })
 
+  it('shows no details on start, even for a selected task', async () => {
+    window.localStorage.setItem('natamux.detail-open', '{"T-0001":true}')
+    useViewStore.setState({ selectedId: 'T-0001' })
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
+  })
+
+  it('keeps the details of another task as they were when a workspace is made', async () => {
+    installDaemon([runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Add export/ }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'New workspace' }))
+    const dialog = screen.getByRole('dialog', { name: 'New workspace' })
+    await user.type(within(dialog).getByLabelText('Workspace name'), 'Fix the login')
+    await user.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+
+    await screen.findByRole('region', { name: 'Changes of T-0098' })
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0098' })).toBeNull()
+    expect(useViewStore.getState().selectedId).toBe('T-0098')
+    expect(useViewStore.getState().detailOpenByTask).toEqual({ 'T-0002': true })
+  })
+
+  it('opens a subtask from the details and leaves its details as they were', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Release 1.0', state: 'review', stage: 'review' }),
+      makeTask({ id: 'T-0003', title: 'Write the notes', parentId: 'T-0001' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: /Release 1\.0/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    await user.click(screen.getByRole('button', { name: 'Show details' }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const subtasks = within(details).getByRole('region', { name: 'Subtasks' })
+    await user.click(within(subtasks).getByRole('button', { name: /Write the notes/ }))
+
+    expect(await screen.findByRole('region', { name: 'Workspace of T-0003' })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0003' })).toBeNull()
+    expect(useViewStore.getState().detailOpenByTask['T-0001']).toBe(true)
+  })
+
+  it('shows and hides the details with Mod+Alt+B', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    // No task is selected yet: nothing to show.
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.keyboard('j')
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy()
+    await user.keyboard('{Control>}{Alt>}b{/Alt}{/Control}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show details' })).toBeTruthy()
+  })
+
+  it('shows and hides the details of the selected task with i', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('i')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.keyboard('j')
+    await user.keyboard('i')
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.keyboard('i')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+  })
+
+  it('shows the details of a task address, and none for an unknown task', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    act(() => useViewStore.getState().applyRoute({ kind: 'task', id: 'T-0002' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
+
+    act(() => useViewStore.getState().applyRoute({ kind: 'task', id: 'T-9999' }))
+    expect(screen.queryByRole('complementary', { name: /Details of/ })).toBeNull()
+    expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('closes the details with their close button and with Escape', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const row = () =>
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ })
+
+    await user.click(row())
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    await user.click(row())
+    await user.click(row())
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+  })
+
+  it('shows no details sheet in a narrow window until asked', async () => {
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }))
+    vi.stubGlobal('innerWidth', 900)
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.keyboard('j')
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+
+    vi.stubGlobal('innerWidth', 1400)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
+    vi.stubGlobal('innerWidth', 900)
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull()
+
+    await user.keyboard('i')
+    expect(screen.getByRole('dialog', { name: 'Details' })).toBeTruthy()
+  })
+
+  it('leaves the details as they were when the sidebar is hidden and shown', async () => {
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(
+      within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
+  })
+
   it('shows the running agents side by side and closes a pane', async () => {
     installDaemon([
       reviewTask,
