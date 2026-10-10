@@ -492,6 +492,13 @@ describe('the actions of the current stage', () => {
     expect(screen.queryByRole('dialog', { name: 'Send the task back' })).toBeNull()
   })
 
+  it('names the source of the context when it has a name', async () => {
+    progress({ task: { ...TASK, context: { source: 'skill', name: 'linear', ref: 'LIN-7' } } })
+
+    const facts = await screen.findByRole('region', { name: 'Context and issue' })
+    expect(within(facts).getByText('linear (skill) LIN-7')).toBeTruthy()
+  })
+
   it('creates the issue of the task', async () => {
     const { createIssue } = progress()
     const user = userEvent.setup()

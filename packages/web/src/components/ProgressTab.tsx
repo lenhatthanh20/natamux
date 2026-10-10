@@ -28,7 +28,7 @@ import {
   stageCount,
   stageTime,
 } from '../lib/stage-view'
-import { formatAge, STATE_LABEL } from '../lib/tasks'
+import { contextText, formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { STATE_TONE } from './Banner'
 import { DetailSection } from './DetailSection'
@@ -296,10 +296,8 @@ export function ProgressTab({
       <DetailSection id="progress-context" title="Context and issue">
         <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted">Context</dt>
-          <dd className="m-0 truncate">
-            {task.context === null
-              ? 'The task notes'
-              : `${task.context.source}${task.context.ref === '' ? '' : ` ${task.context.ref}`}`}
+          <dd className="m-0 truncate" data-tip-overflow>
+            {task.context === null ? 'The task notes' : contextText(task.context)}
           </dd>
           <dt className="text-muted">Issue</dt>
           <dd className="m-0 truncate">

@@ -5,6 +5,7 @@ import {
   stageName,
   TASK_STATES,
   type Task,
+  type TaskContext,
   type TaskState,
 } from '@natamux/core'
 
@@ -302,4 +303,19 @@ export function stageStateLabel(task: Pick<Task, 'stage' | 'state'>): string {
 
 export function rowLabel(task: Task, now: Date): string {
   return `${task.title}, ${STATE_LABEL[task.state]}, ${task.id}, ${formatAge(task.updatedAt, now, 'long')}`
+}
+
+const SOURCE_KIND: Record<TaskContext['source'], string> = {
+  manual: 'My notes',
+  'github-issue': 'GitHub issue',
+  skill: 'skill',
+  mcp: 'MCP server',
+}
+
+// "linear (skill) LIN-7": the source by its name when it has one, as the Start a task dialog
+// lists it, then the reference.
+export function contextText(context: TaskContext): string {
+  const kind = SOURCE_KIND[context.source]
+  const source = context.name === undefined ? kind : `${context.name} (${kind})`
+  return context.ref === '' ? source : `${source} ${context.ref}`
 }

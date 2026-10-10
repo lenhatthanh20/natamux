@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
   agentAction,
+  contextText,
   countByState,
   filterTasks,
   formatAge,
@@ -449,5 +450,16 @@ describe('agentAction', () => {
   it('restarts an agent that ended or failed', () => {
     expect(agentAction({ state: 'failed', agent: 'claude-code' })).toBe('restart')
     expect(agentAction({ state: 'review', agent: 'claude-code' })).toBe('restart')
+  })
+})
+
+describe('contextText', () => {
+  it('names the source when it has a name, then the reference', () => {
+    expect(contextText({ source: 'skill', name: 'linear', ref: 'LIN-7' })).toBe(
+      'linear (skill) LIN-7',
+    )
+    expect(contextText({ source: 'mcp', name: 'jira', ref: '' })).toBe('jira (MCP server)')
+    expect(contextText({ source: 'skill', ref: 'LIN-7' })).toBe('skill LIN-7')
+    expect(contextText({ source: 'github-issue', ref: '#42' })).toBe('GitHub issue #42')
   })
 })
