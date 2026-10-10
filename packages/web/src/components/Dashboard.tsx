@@ -152,9 +152,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     queryClient.invalidateQueries({ queryKey: ['repos'] }),
   )
 
+  // Messages sent while the socket was down are lost, so load again what they would have changed.
   useEffect(() => {
     if (liveStatus === 'live') {
       queryClient.invalidateQueries({ queryKey: TASKS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['repos'] })
     }
   }, [liveStatus, queryClient])
 

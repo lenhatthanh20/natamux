@@ -1502,6 +1502,25 @@ describe('App', () => {
     expect(await within(sidebar).findByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
   })
 
+  it('loads the projects again after the live connection comes back', async () => {
+    const { setRepos } = installDaemon([runningTask], [], [defaultRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await within(sidebar).findByRole('button', { name: 'Actions for natamux' })
+    const socket = FakeSocket.instances[0]
+    act(() => socket?.onopen?.())
+
+    // A project added while the socket was down: its repos.changed message never arrives.
+    act(() => socket?.onclose?.())
+    setRepos([defaultRepo, webRepo])
+    act(() => socket?.onopen?.())
+
+    expect(await within(sidebar).findByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
+  })
+
   it('shows why the daemon did not remove a project and keeps its group', async () => {
     const { setTasks } = installDaemon([runningTask], [], [defaultRepo, webRepo])
     const user = userEvent.setup()
