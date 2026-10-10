@@ -19,6 +19,7 @@ import { focusKind } from '../lib/dispatch'
 import { effectiveSidebarWidth } from '../lib/layout-mode'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
+import { removeEach, removeSummary } from '../lib/remove-finished'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import {
   filterTasks,
@@ -250,6 +251,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         select(task.id)
         openChanges(task.id, 'terminal')
       }
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
+  const removeFinishedMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      removeEach(
+        ids,
+        (id) => api.removeWorkspace(id),
+        ({ task }) => mergeTask(task),
+      ),
+    onSuccess: (outcomes) => {
+      const { text, tone, detail } = removeSummary(outcomes)
+      toast(text, tone, { detail })
     },
     onError: (error) => toast(error.message, 'error'),
   })
@@ -773,6 +788,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     }
                     onTogglePin={togglePin}
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+                    onRemoveFinished={(ids) => removeFinishedMutation.mutate(ids)}
+                    removingFinished={removeFinishedMutation.isPending}
                     onNewWorkspace={(repo) => setNewWorkspace({ repo })}
                     onAddRepo={() => setReposOpen(true)}
                     onRepoSettings={(id) =>

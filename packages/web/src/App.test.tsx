@@ -1220,6 +1220,126 @@ describe('App', () => {
     expect((remove as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('removes the finished workspaces of a project after asking, and leaves the rest', async () => {
+    const { calls } = installDaemon(
+      [
+        makeTask({ id: 'T-0006', title: 'Shipped', state: 'done', workspace: '/work/T-0006' }),
+        makeTask({ id: 'T-0007', title: 'Dropped', state: 'cancelled', workspace: '/work/T-0007' }),
+        makeTask({
+          id: 'T-0008',
+          title: 'Still going',
+          state: 'running',
+          workspace: '/work/T-0008',
+        }),
+      ],
+      [],
+      [defaultRepo],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const deletes = () =>
+      calls.filter((call) => call.method === 'DELETE').map((call) => call.path.split('?')[0])
+
+    await user.click(
+      await within(sidebar).findByRole('button', { name: 'Remove finished workspaces in natamux' }),
+    )
+    const confirm = screen.getByRole('dialog', { name: 'Remove 2 finished workspaces?' })
+    expect(within(confirm).getByText('T-0006')).toBeTruthy()
+    expect(within(confirm).getByText('T-0007')).toBeTruthy()
+    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+
+    expect(await screen.findByText('Removed 2 workspaces.')).toBeTruthy()
+    // The sidebar order: the newest first, then the higher id.
+    expect(deletes()).toEqual(['/api/tasks/T-0007/workspace', '/api/tasks/T-0006/workspace'])
+    await waitFor(() => expect(within(sidebar).queryByText('2 finished')).toBeNull())
+    expect(within(sidebar).getAllByText('Still going').length).toBeGreaterThan(0)
+    expect(useToasts.getState().toasts.map((item) => item.text)).toEqual(['Removed 2 workspaces.'])
+  })
+
+  it('removes finished workspaces one by one, skips a failure, and reports once', async () => {
+    const { calls } = installDaemon([
+      makeTask({
+        id: 'T-0006',
+        title: 'Shipped',
+        state: 'done',
+        workspace: '/work/T-0006',
+        createdAt: '2026-10-08T12:00:00.000Z',
+      }),
+      makeTask({
+        id: 'T-0007',
+        title: 'Dirty',
+        state: 'done',
+        workspace: '/work/T-0007',
+        createdAt: '2026-10-08T11:00:00.000Z',
+      }),
+      makeTask({
+        id: 'T-0008',
+        title: 'Dropped',
+        state: 'cancelled',
+        workspace: '/work/T-0008',
+        createdAt: '2026-10-08T10:00:00.000Z',
+      }),
+    ])
+    const dirty = 'T-0007 has 2 changes that are not committed. Commit or discard them first'
+    // Each removal waits until the test lets it answer.
+    const daemon = globalThis.fetch
+    const waiting = new Map<string, () => void>()
+    vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+      const id = /^\/api\/tasks\/(T-\d+)\/workspace/.exec(path)?.[1]
+      if (init?.method === 'DELETE' && id !== undefined) {
+        await new Promise<void>((resolve) => waiting.set(id, resolve))
+        waiting.delete(id)
+        if (id === 'T-0007') {
+          return json({ error: 'conflict', message: dirty }, 409)
+        }
+      }
+      return daemon(path, init)
+    })
+    const answer = async (id: string) => {
+      await waitFor(() => expect(waiting.has(id)).toBe(true))
+      // Only one removal waits at a time.
+      expect([...waiting.keys()]).toEqual([id])
+      act(() => waiting.get(id)?.())
+    }
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const button = () =>
+      within(sidebar).getByRole('button', {
+        name: 'Remove finished workspaces in natamux',
+      }) as HTMLButtonElement
+
+    await user.click(await within(sidebar).findByText('3 finished'))
+    await user.click(button())
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    await waitFor(() => expect(button().disabled).toBe(true))
+    await answer('T-0006')
+    await waitFor(() => expect(within(sidebar).queryByText('Shipped')).toBeNull())
+    expect(within(sidebar).getByText('2 finished')).toBeTruthy()
+    expect(within(sidebar).getByText('Dropped')).toBeTruthy()
+
+    await answer('T-0007')
+    await answer('T-0008')
+    await waitFor(() => expect(within(sidebar).queryByText('Dropped')).toBeNull())
+
+    expect(await screen.findByText('Removed 2 of 3 workspaces.')).toBeTruthy()
+    expect(screen.getByText(`Not removed: ${dirty}`)).toBeTruthy()
+    expect(useToasts.getState().toasts).toHaveLength(1)
+    expect(within(sidebar).getByText('1 finished')).toBeTruthy()
+    expect(within(sidebar).getByText('Dirty')).toBeTruthy()
+    expect(button().disabled).toBe(false)
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual([
+      '/api/tasks/T-0006/workspace?deleteBranch=true',
+      '/api/tasks/T-0008/workspace?deleteBranch=true',
+    ])
+  })
+
   it('forgets a removed project everywhere and keeps its tasks', async () => {
     const { calls } = installDaemon(
       [makeTask({ id: 'T-0005', title: 'Draft for web', repo: 'web' })],

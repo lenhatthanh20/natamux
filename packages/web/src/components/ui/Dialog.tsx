@@ -200,6 +200,8 @@ type ConfirmDialogProps = {
   confirmLabel: string
   onConfirm: () => void
   onClose: () => void
+  // Shown under the description, such as a list of what is removed.
+  children?: ReactNode
 }
 
 // Asks before something that cannot be undone. Cancel has the focus, so Enter is the safe answer.
@@ -209,6 +211,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   onClose,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Dialog
@@ -231,6 +234,8 @@ export function ConfirmDialog({
           </Button>
         </>
       }
-    />
+    >
+      {children}
+    </Dialog>
   )
 }
