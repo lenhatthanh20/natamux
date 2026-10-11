@@ -162,8 +162,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     if (view.pinned.includes(id)) {
       view.togglePin(id)
     }
-    const panes = view.agentPanes
-    if (panes !== null && panes.includes(id)) {
+    const panes = view.agentPanes ?? []
+    if (panes.includes(id)) {
       view.setAgentPanes(panes.filter((pane) => pane !== id))
     }
     queryClient.setQueryData<Task[]>(TASKS_KEY, (current) =>

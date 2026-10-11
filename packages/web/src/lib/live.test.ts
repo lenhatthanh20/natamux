@@ -1,12 +1,6 @@
 import type { Task } from '@natamux/core'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  closeSocket,
-  deletedTaskId,
-  isReposChanged,
-  liveSocketUrl,
-  parseLiveMessage,
-} from './live'
+import { closeSocket, deletedTaskId, isReposChanged, liveSocketUrl, parseLiveMessage } from './live'
 
 const task: Task = {
   id: 'T-0001',
