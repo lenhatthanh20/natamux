@@ -50,7 +50,7 @@ export function pushButton(
     return { label: 'Push', tip: `Push ${branch} to origin` }
   }
   if (push.remote === 'none') {
-    return { label: 'Push', reason: 'This repository has no remote named origin' }
+    return { label: 'Push', reason: 'This project has no remote named origin' }
   }
   // Like VS Code and GitHub Desktop: the first push of a branch is a publish.
   if (push.remote === 'new') {

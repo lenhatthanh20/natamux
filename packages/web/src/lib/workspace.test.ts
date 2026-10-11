@@ -73,7 +73,7 @@ describe('pushButton', () => {
     expect(pushButton(null, tracked(1, 2)).reason).toBe('This task has no branch to push')
     expect(pushButton('b', { remote: 'none' })).toEqual({
       label: 'Push',
-      reason: 'This repository has no remote named origin',
+      reason: 'This project has no remote named origin',
     })
     expect(pushButton('b', tracked(0))).toEqual({
       label: 'Push',
@@ -105,7 +105,7 @@ describe('pushButton', () => {
     // With no origin, Commit does not take Push's place: there is no count to compare.
     expect(pushButton('b', { remote: 'none' }, 2)).toEqual({
       label: 'Push',
-      reason: 'This repository has no remote named origin',
+      reason: 'This project has no remote named origin',
     })
     // Nothing to push and files to commit: committing comes before a pull or rebase.
     expect(pushButton('b', tracked(0, 2), 1)).toEqual({
