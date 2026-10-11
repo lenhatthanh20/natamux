@@ -34,7 +34,7 @@ test('the command palette finds a task and opens it', async ({ page }) => {
   const option = page.getByRole('option', { name: /Demo: changes and history/ }).first()
   await expect(option).toBeVisible()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('tablist', { name: 'View' })).toBeVisible()
+  await expect(page.getByRole('tablist', { name: 'View', exact: true })).toBeVisible()
 })
 
 test('switches between the dark and the light theme', async ({ page }) => {

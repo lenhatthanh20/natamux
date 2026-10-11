@@ -36,8 +36,10 @@ export function taskTable(page: Page): Locator {
 // Opens the task's workspace, as a double click on its row does.
 export async function openTask(page: Page, title: string): Promise<Locator> {
   await page.getByRole('radio', { name: 'Table' }).click()
-  await taskTable(page).getByRole('button', { name: taskNamed(title) }).dblclick()
-  const tabs = page.getByRole('tablist', { name: 'View' })
+  await taskTable(page)
+    .getByRole('button', { name: taskNamed(title) })
+    .dblclick()
+  const tabs = page.getByRole('tablist', { name: 'View', exact: true })
   await expect(tabs).toBeVisible()
   return tabs
 }
