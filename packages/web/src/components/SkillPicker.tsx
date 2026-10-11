@@ -91,9 +91,7 @@ export function SkillPicker({ list, onPick, onClose }: SkillPickerProps) {
             </section>
           )
         })}
-        {shown.length === 0 && (
-          <p className="m-0 px-1.5 text-muted">No skill matches “{query}”.</p>
-        )}
+        {shown.length === 0 && <p className="m-0 px-1.5 text-muted">No skill matches “{query}”.</p>}
       </div>
     </fieldset>
   )

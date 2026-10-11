@@ -170,6 +170,9 @@ describe('context', () => {
   })
 
   it('runs the skill that was picked, of two', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'linear-issue')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: linear-issue\n---\n')
     settings = {
       ...DEFAULT_PROJECT_SETTINGS,
       context: {

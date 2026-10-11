@@ -1610,7 +1610,9 @@ describe('App', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Settings' }))
 
     const settings = await screen.findByRole('dialog', { name: 'Project settings of Web app' })
-    expect(await within(settings).findByRole('tab', { name: 'Stages', selected: true })).toBeTruthy()
+    expect(
+      await within(settings).findByRole('tab', { name: 'Stages', selected: true }),
+    ).toBeTruthy()
     expect(within(settings).getAllByRole('switch')).toHaveLength(8)
   })
 

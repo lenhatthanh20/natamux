@@ -286,8 +286,8 @@ export function ProjectSettingsDialog({
           className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm"
         >
           <span className="min-w-0 flex-1">
-            The file changed on disk since you opened it. Reload drops your changes here;
-            Overwrite replaces the file with them.
+            The file changed on disk since you opened it. Reload drops your changes here; Overwrite
+            replaces the file with them.
           </span>
           <Button size="xs" onClick={reload}>
             Reload
