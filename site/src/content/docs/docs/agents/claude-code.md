@@ -92,6 +92,25 @@ Install it in Claude Code:
 
 The skill matters only in a session that Natamux started, because it needs `NATAMUX_TASK_ID`. The `natamux` command must be on the `PATH`, with `NATAMUX_TOKEN` and `NATAMUX_URL` set. Natamux terminals set them.
 
+## Skills
+
+Natamux looks for skills in the worktree of the task and on your machine:
+
+| Where | Folder | Shown as |
+|---|---|---|
+| Project | `.claude/skills/<name>/SKILL.md` | **Project** |
+| You | `~/.claude/skills/<name>/SKILL.md` | **Only on this machine** |
+| Plugin, on in the repository's `.claude/settings.json` or `.claude/settings.local.json` | `<install path>/skills/<name>/SKILL.md` | **Plugins** |
+| Plugin, on in `~/.claude/settings.json` only | the same | **Only on this machine** |
+
+- A plugin is on when `enabledPlugins` has `"<plugin>@<marketplace>": true`. Natamux finds its install path in `~/.claude/plugins/installed_plugins.json`.
+- A plugin skill is called `/<plugin>:<skill>`. A plugin that is on but not installed on this machine gives no skills, and the picker says so.
+- `{skill:<name>}` becomes `/<name>` when Claude Code has the skill. Otherwise it becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+
+Sources: [skills](https://code.claude.com/docs/en/skills) and [plugins reference](https://code.claude.com/docs/en/plugins-reference), checked 2026-10-11.
+
+For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
+
 ## Tested
 
 Real Claude Code sessions. The permission path (`PermissionRequest` and the permission `Notification`) was tested with made-up input only.

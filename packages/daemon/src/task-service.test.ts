@@ -181,6 +181,27 @@ describe('applyEvent', () => {
   })
 })
 
+describe('createTask with stages that are off', () => {
+  it('gives a new task only the stages that are on', () => {
+    const settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'context' || step.id === 'plan' ? { ...step, enabled: false } : step,
+      ),
+    }
+    const off = new TaskService({ dataDir, index, bus: new EventBus(), settingsOf: () => settings })
+    const task = off.createTask({ title: 'Export' })
+    expect(task.stages).toEqual([
+      'spec',
+      { id: 'build', parallel: ['test-spec', 'implement'] },
+      'review',
+      'testing',
+      'release',
+    ])
+    expect(task.stage).toBe('spec')
+  })
+})
+
 describe('applyEvent inside a group', () => {
   let staged: TaskService
 

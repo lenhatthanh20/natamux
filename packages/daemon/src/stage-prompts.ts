@@ -1,60 +1,17 @@
 import {
   type Attachment,
   type ContextSource,
+  commitRule,
+  defaultPrompt,
   formatBytes,
   type Stage,
-  stageName,
   type Task,
 } from '@natamux/core'
+import type { SkillResolution } from './agent-skills.js'
 import { attachmentPath } from './attachments.js'
 import { STAGE_DIR } from './stage-files.js'
 
 const DONE = 'When you are done, run `natamux done`.'
-
-// The default prompt of each stage of the default pipeline. `{dir}` is the stage file folder.
-const DEFAULT_PROMPTS: Record<string, string> = {
-  spec: [
-    'Task: {title}',
-    'Read {dir}/context.md. Write {dir}/spec.md with these sections: Goal, Scope, Out of scope, Acceptance criteria.',
-    'Do not change any code.',
-  ].join('\n'),
-  plan: [
-    'Task: {title}',
-    'Read {dir}/context.md and {dir}/spec.md. Write {dir}/plan.md with these sections: Steps, Files, Tests.',
-    'Do not change any code.',
-  ].join('\n'),
-  'test-spec': [
-    'Task: {title}',
-    'Read {dir}/context.md and {dir}/spec.md. Do not read the code.',
-    'Write {dir}/test-spec.md with a Cases section: one case per item, each with its input, the expected result and the edge cases.',
-    'Do not change any code.',
-  ].join('\n'),
-  implement: [
-    'Task: {title}',
-    'Read {dir}/spec.md and {dir}/plan.md when they are there.',
-    'Write the tests first, then the code that makes them pass. {commit}',
-  ].join('\n'),
-  testing: [
-    'Task: {title}',
-    'For each case in {dir}/test-spec.md that has no test yet, add one. Then run all the tests and fix what fails. {commit}',
-  ].join('\n'),
-}
-
-// By default you read the changes before they are committed. A stage that checks for a commit
-// has to ask for one, or the agent can never pass it.
-function commitRule(stage: Stage): string {
-  return stage.requireCommit === true
-    ? 'Commit your work when it is done.'
-    : 'Do not commit. Leave the changes for review.'
-}
-
-function generic(stage: Stage): string {
-  return [
-    'Task: {title}',
-    `Do the ${stageName(stage)} stage of this task.`,
-    ...(stage.output === undefined ? [] : [`Write {dir}/${stage.output}.`]),
-  ].join('\n')
-}
 
 function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) => values[key] ?? whole)
@@ -69,29 +26,44 @@ function values(task: Pick<Task, 'title' | 'description' | 'context'>): Record<s
   }
 }
 
-// The prompt an agent gets when its stage starts.
+// The prompt an agent gets when its stage starts. `{skill:<name>}` is left for `fillSkills`, which
+// knows the agent.
 export function stagePrompt(
   stage: Stage,
   task: Pick<Task, 'title' | 'description' | 'context'>,
 ): string {
-  const template = stage.prompt ?? DEFAULT_PROMPTS[stage.id] ?? generic(stage)
+  const template = stage.prompt ?? defaultPrompt(stage)
   // Only the default prompts get {commit}, so a prompt of your own is never changed.
   const commit: Record<string, string> =
     stage.prompt === undefined ? { commit: commitRule(stage) } : {}
   return `${fill(template, { ...values(task), ...commit })}\n${DONE}`
 }
 
-// The prompt for a context source that an agent reads: a skill or an MCP server.
+// The prompt for a context source that an agent reads: a skill or an MCP server. `skill` says how
+// the task's agent gets the skill (see `resolveSkill`).
 export function contextPrompt(
   source: Extract<ContextSource, { type: 'skill' | 'mcp' }>,
   task: Pick<Task, 'title' | 'description' | 'context'>,
   attachments: readonly Attachment[] = [],
+  skill?: SkillResolution,
 ): string {
   const ask =
     source.type === 'skill'
-      ? `/${source.skill} {ref}\nWrite what you found to {dir}/context.md.`
+      ? `${useSkill(source.skill, skill)}\nWrite what you found to {dir}/context.md.`
       : source.prompt
   return [fill(ask, values(task)), ...attachmentLines(attachments), DONE].join('\n')
+}
+
+// Without a resolution the skill is called the way Claude Code calls it.
+function useSkill(name: string, skill: SkillResolution = { kind: 'call', text: `/${name}` }) {
+  switch (skill.kind) {
+    case 'call':
+      return `${skill.text} {ref}`
+    case 'file':
+      return `Read ${skill.path} and follow it for {ref}.`
+    case 'missing':
+      return `Use the ${name} skill for {ref}.`
+  }
 }
 
 // The later stages find the attachments only through the context, so its agent must list them.

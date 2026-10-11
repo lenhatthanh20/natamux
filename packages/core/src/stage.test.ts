@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-settings.js'
 import {
+  activeSteps,
   combinedState,
   DEFAULT_PIPELINE,
+  defaultPrompt,
   enterStep,
   firstPosition,
   LEGACY_STEP_REFS,
   pipelineSchema,
   resolveSteps,
+  type Step,
   stageName,
   stageOfTerminal,
   stepIndex,
@@ -68,6 +71,93 @@ describe('pipelineSchema', () => {
   })
 })
 
+describe('stages that are off', () => {
+  const stage = (id: string, kind: string, enabled?: boolean) => ({
+    id,
+    kind,
+    gate: 'manual',
+    ...(enabled === undefined ? {} : { enabled }),
+  })
+  const valid = (steps: unknown[]) => pipelineSchema.safeParse(steps).success
+
+  it('leaves them out of the rules for the context and the release', () => {
+    expect(valid([stage('check', 'manual', false), stage('context', 'context')])).toBe(true)
+    expect(valid([stage('ship', 'release'), stage('check', 'manual', false)])).toBe(true)
+    expect(valid([stage('context', 'context'), stage('more', 'context', false)])).toBe(true)
+  })
+
+  it('still needs unique ids, and one stage that is on', () => {
+    expect(valid([stage('check', 'manual'), stage('check', 'manual', false)])).toBe(false)
+    expect(valid([stage('check', 'manual', false)])).toBe(false)
+  })
+
+  it('needs two stages that are on in a group', () => {
+    const group = (parallel: unknown[]) => [stage('first', 'manual'), { id: 'build', parallel }]
+    expect(valid(group([stage('a', 'agent'), stage('b', 'agent', false)]))).toBe(false)
+    expect(valid(group([stage('a', 'agent', false), stage('b', 'agent', false)]))).toBe(true)
+    expect(
+      valid(group([stage('a', 'agent'), stage('b', 'agent'), stage('c', 'agent', false)])),
+    ).toBe(true)
+  })
+
+  it('leaves them out of the steps of a new task', () => {
+    const steps = pipelineSchema.parse([
+      stage('context', 'context'),
+      stage('plan', 'agent', false),
+      { id: 'build', parallel: [stage('a', 'agent', false), stage('b', 'agent', false)] },
+      {
+        id: 'checks',
+        parallel: [stage('c', 'agent'), stage('d', 'agent'), stage('e', 'agent', false)],
+      },
+    ])
+    expect(stepRefsOf(activeSteps(steps))).toEqual([
+      'context',
+      { id: 'checks', parallel: ['c', 'd'] },
+    ])
+  })
+})
+
+describe('the default pipeline', () => {
+  it('is the same as before the catalog', () => {
+    expect(stepRefsOf(DEFAULT_PIPELINE)).toEqual([
+      'context',
+      'spec',
+      'plan',
+      { id: 'build', parallel: ['test-spec', 'implement'] },
+      'review',
+      'testing',
+      'release',
+    ])
+    expect(DEFAULT_PIPELINE[1]).toEqual({
+      id: 'spec',
+      kind: 'agent',
+      gate: 'manual',
+      output: 'spec.md',
+      sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria'],
+    })
+    expect(activeSteps(DEFAULT_PIPELINE)).toEqual(DEFAULT_PIPELINE)
+  })
+})
+
+describe('defaultPrompt', () => {
+  it('takes the prompt of the catalog', () => {
+    expect(defaultPrompt({ id: 'plan', kind: 'agent' })).toContain('Write {dir}/plan.md')
+    expect(defaultPrompt({ id: 'security', kind: 'agent' })).toContain('{dir}/security.md')
+  })
+
+  it('makes one for a stage of its own', () => {
+    expect(defaultPrompt({ id: 'sign-off', kind: 'agent', output: 'sign-off.md' })).toBe(
+      'Task: {title}\nDo the Sign off stage of this task.\nWrite {dir}/sign-off.md.',
+    )
+  })
+
+  it('gives an older stage with a catalog id its own prompt when it does other work', () => {
+    expect(defaultPrompt({ id: 'docs', kind: 'agent', output: 'docs.md' })).toBe(
+      'Task: {title}\nDo the Documentation stage of this task.\nWrite {dir}/docs.md.',
+    )
+  })
+})
+
 describe('projectSettingsSchema', () => {
   it('needs at least one context source', () => {
     expect(projectSettingsSchema.safeParse({ context: { sources: [] } }).success).toBe(false)
@@ -122,9 +212,20 @@ describe('resolveSteps', () => {
   })
 
   it('makes a stage of its own that is gone from the settings a manual one', () => {
-    expect(resolveSteps(['security'], DEFAULT_PIPELINE)).toEqual([
-      { id: 'security', kind: 'manual', gate: 'manual' },
+    expect(resolveSteps(['sign-off'], DEFAULT_PIPELINE)).toEqual([
+      { id: 'sign-off', kind: 'manual', gate: 'manual' },
     ])
+  })
+
+  it('keeps the catalog settings of a catalog stage that is gone from the settings', () => {
+    const [security] = resolveSteps(['security'], DEFAULT_PIPELINE)
+    expect(security).toMatchObject({ id: 'security', kind: 'agent', output: 'security.md' })
+  })
+
+  it('still runs a stage that is off for a task that has it', () => {
+    const pipeline: Step[] = [{ id: 'plan', kind: 'agent', gate: 'auto', enabled: false }]
+    const [plan] = resolveSteps(['plan'], pipeline)
+    expect(plan).toMatchObject({ id: 'plan', gate: 'auto', enabled: false })
   })
 
   it('keeps the default settings of a default stage that is gone from the settings', () => {
@@ -167,6 +268,11 @@ describe('positions', () => {
 })
 
 describe('stageName', () => {
+  it('uses the name of the catalog for a catalog stage', () => {
+    expect(stageName({ id: 'clarify' })).toBe('Open questions')
+    expect(stageName({ id: 'clarify', name: 'Questions' })).toBe('Questions')
+  })
+
   it('uses the name, else the id in words', () => {
     expect(stageName({ id: 'test-spec' })).toBe('Test spec')
     expect(stageName({ id: 'build', name: 'Test spec and Implement' })).toBe(

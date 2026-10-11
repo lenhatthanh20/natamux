@@ -93,6 +93,8 @@ beforeEach(() => {
     runCommand: (command, cwd) => runCommand(command, cwd),
     now: () => clock,
     platform: 'linux',
+    // The skills of the machine that runs the tests must not count.
+    home: join(repo.root, 'home'),
   })
   runner.start()
 })
@@ -320,6 +322,49 @@ describe('attachments', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
 
     expect(readFileSync(join(task.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')).toBe(written)
+  })
+})
+
+describe('skills in stage prompts', () => {
+  it("calls a skill the agent's way, and names a skill that is missing on the stage", async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'review-pr')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: review-pr\ndescription: Reviews\n---\n')
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec'
+          ? { ...step, prompt: 'Use {skill:review-pr}, then {skill:gone}.' }
+          : step,
+      ),
+    }
+    const waiting = await created({ title: 'Export tasks', agent: 'claude-code' })
+    const task = await withWorkspace(waiting.id)
+
+    expect(launchScript(task.id)).toContain('Use /review-pr, then the gone skill.')
+    const started = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === 'spec')
+    expect(started.at(-1)?.payload).toMatchObject({ missingSkills: ['gone'], agent: 'claude-code' })
+  })
+
+  it('gives an agent without the skill its file to read', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'review-pr')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: review-pr\n---\n')
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec' ? { ...step, prompt: 'Use {skill:review-pr}.' } : step,
+      ),
+    }
+    const waiting = await created({ title: 'Export tasks', agent: 'codex' })
+    const task = await withWorkspace(waiting.id)
+
+    expect(launchScript(task.id)).toContain(
+      `Use the skill in ${join(skill, 'SKILL.md')} (read that file and follow it).`,
+    )
   })
 })
 

@@ -1,6 +1,6 @@
 import { DEFAULT_PIPELINE, type Stage, stagesOf } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { manualContext, stagePrompt } from './stage-prompts.js'
+import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 
 const task = { title: 'Export tasks', description: '', context: null }
 
@@ -40,6 +40,40 @@ describe('stagePrompt', () => {
     const prompt = stagePrompt(defaultStage('spec'), task)
     expect(prompt).toContain('Do not change any code.')
     expect(prompt.toLowerCase()).not.toContain('commit')
+  })
+})
+
+describe('stagePrompt of the catalog', () => {
+  it('takes the prompt of a catalog stage that is not in the default pipeline', () => {
+    const prompt = stagePrompt({ id: 'security', kind: 'agent', gate: 'manual' }, task)
+    expect(prompt).toContain('.natamux-task/security.md')
+  })
+
+  it('leaves skill placeholders for the agent to fill', () => {
+    const stage: Stage = { id: 'plan', kind: 'agent', gate: 'manual', prompt: 'Use {skill:plan}' }
+    expect(stagePrompt(stage, task)).toContain('Use {skill:plan}')
+  })
+})
+
+describe('contextPrompt', () => {
+  const source = { type: 'skill', name: 'Ticket', skill: 'fetch-ticket' } as const
+  const withRef = { ...task, context: { source: 'skill' as const, ref: 'ABC-1' } }
+
+  it('calls the skill with the reference', () => {
+    expect(contextPrompt(source, withRef).startsWith('/fetch-ticket ABC-1\n')).toBe(true)
+    expect(
+      contextPrompt(source, withRef, [], { kind: 'call', text: '$fetch-ticket' }).split('\n')[0],
+    ).toBe('$fetch-ticket ABC-1')
+  })
+
+  it('gives the skill file to an agent that cannot call it, and names a missing skill', () => {
+    const file = { kind: 'file', path: '.claude/skills/fetch-ticket/SKILL.md' } as const
+    expect(contextPrompt(source, withRef, [], file).split('\n')[0]).toBe(
+      'Read .claude/skills/fetch-ticket/SKILL.md and follow it for ABC-1.',
+    )
+    expect(contextPrompt(source, withRef, [], { kind: 'missing' }).split('\n')[0]).toBe(
+      'Use the fetch-ticket skill for ABC-1.',
+    )
   })
 })
 

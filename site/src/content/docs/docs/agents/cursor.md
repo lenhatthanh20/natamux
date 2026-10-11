@@ -44,6 +44,19 @@ If a file of your own with that name exists, Natamux leaves it alone, and the da
 
 The Cursor CLI has no hook for waiting on your approval. The terminal bell moves a running task to needs input instead.
 
+## Skills
+
+| Where | Folder | Shown as |
+|---|---|---|
+| Project | `.agents/skills`, `.cursor/skills`, `.claude/skills` or `.codex/skills`, then `<name>/SKILL.md` | **Project** |
+| You | the same four folders under `~` | **Only on this machine** |
+
+- The Cursor docs do not say that the CLI calls skills by name, and a forum thread says the CLI misses some. So `{skill:<name>}` never becomes a call. It becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+
+Source: [Cursor skills](https://cursor.com/docs/context/skills), checked 2026-10-11.
+
+For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
+
 ## Tested
 
 Not run against a real Cursor CLI session. The hooks follow its documentation and are tested with made-up input. The Cursor CLI may not send every event the editor sends.

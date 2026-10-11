@@ -51,6 +51,20 @@ If a file of your own with that name exists, Natamux leaves it alone. The agent 
 
 A recoverable error is ignored.
 
+## Skills
+
+| Where | Folder | Shown as |
+|---|---|---|
+| Project | `.github/skills`, `.claude/skills` or `.agents/skills`, then `<name>/SKILL.md` | **Project** |
+| You | `~/.copilot/skills` or `~/.agents/skills`, then `<name>/SKILL.md` | **Only on this machine** |
+
+- Natamux does not read Copilot plugin folders.
+- `{skill:<name>}` becomes `/<name>` when Copilot CLI has the skill. Otherwise it becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+
+Source: [Add skills to Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills), checked 2026-10-11.
+
+For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
+
 ## Tested
 
 A real Copilot CLI 1.0.94 session.

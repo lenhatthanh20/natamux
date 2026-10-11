@@ -17,7 +17,10 @@ Every field is optional. A repository without the file uses the defaults on this
 - Unknown fields are ignored.
 - Each repository that Natamux manages has its own file.
 
-To edit the file in the dashboard, open the project settings of the repository. Save writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default settings in the editor.
+To edit the file in the dashboard, open **Settings** in the menu of the project. The **Stages** tab edits the stages without JSON, and the **JSON** tab edits the whole file. **Save** writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default pipeline in the editor. See [Project settings](/docs/guides/dashboard/#project-settings).
+
+- The editor changes only `stages`. Other fields and keys it does not know stay in the file as they are.
+- When the stages equal the default pipeline, the editor leaves `stages` out of the file, so the project follows later changes of the default.
 
 ## Top-level fields
 
@@ -48,12 +51,15 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 | `check` | string | no | none | A shell command that must exit with 0. |
 | `command` | string | no | none | For `testing`: the command to run. Its exit code decides the stage. |
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
+| `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
 
 Details:
 
 - `kind` and `gate` are explained in [Stages](/docs/concepts/stages/).
 - `output` is a file name in `.natamux-task/`. It has letters, digits, `_`, `-` and `.`, and ends in `.md`. It has no folder.
-- `prompt` can use `{title}`, `{description}`, `{dir}` and `{ref}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done.` after your text.
+- `prompt` can use `{title}`, `{description}`, `{dir}`, `{ref}` and `{skill:<name>}`. `{dir}` is the stage file folder (`.natamux-task`). `{ref}` is the context reference of the task. Natamux adds the line `When you are done, run natamux done.` after your text.
+- `{skill:<name>}` names a skill. A plugin skill is `<plugin>:<skill>`. Natamux fills it when the stage starts, for the agent of the task. See [Skill placeholder](#skill-placeholder).
+- A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
 
@@ -72,6 +78,58 @@ Details:
 - A `context` stage must be the first step. There is at most one.
 - A `release` stage must be the last step. There is at most one.
 - A `context` or `release` stage cannot be inside a group.
+- These rules count only stages that are on. A group needs 2 stages that are on. At least one stage must be on.
+- When a task starts, a group with one stage on runs that stage on its own, and a group with none is left out.
+
+### Skill placeholder
+
+`{skill:<name>}` becomes text for the agent of the task:
+
+| Case | Text |
+|---|---|
+| The agent has the skill and a sure call: Claude Code and Copilot CLI (`/name`), Codex (`$name`) | The call, such as `/review-pr` |
+| A `SKILL.md` with that name exists for any agent (Gemini CLI and Cursor CLI always get this) | `the skill in <path> (read that file and follow it)` |
+| No such skill | `the <name> skill`. The stage card says "The skill <name> was not found for <agent>." |
+
+The stage starts in every case. Each agent page says where it finds skills, for example [Codex](/docs/agents/codex/#skills).
+
+### Stage catalog
+
+**Add stage** in the dashboard picks from this catalog. A stage has the kind, gate and checks below when you add it. Gate `manual` is **Wait for my approval**. The stages marked "default" make up the [default pipeline](#default-pipeline).
+
+| Phase | Id | Name | Kind | Gate | Output | What it does |
+|---|---|---|---|---|---|---|
+| Understand | `context` | Context | `context` | manual | `context.md` | Default. Reads the context sources of the task. |
+| Understand | `research` | Research | `agent` | manual | `research.md` | Reads the code and docs the task touches. |
+| Understand | `clarify` | Open questions | `agent` | manual | `questions.md` | Lists what is unclear, with a suggested answer for each. |
+| Design | `spec` | Spec | `agent` | manual | `spec.md` | Default. Goal, scope and acceptance criteria. |
+| Design | `ux-design` | UX design | `agent` | manual | `ux.md` | Screens, states, flows, accessibility. |
+| Design | `architecture` | Architecture | `agent` | manual | `architecture.md` | Components, data flow, interfaces, trade-offs. |
+| Design | `threat-model` | Threat model | `agent` | manual | `threat-model.md` | What an attacker could reach, and how each threat is handled. |
+| Design | `plan` | Plan | `agent` | manual | `plan.md` | Default. Steps, files and tests. |
+| Build | `test-spec` | Test spec | `agent` | manual | `test-spec.md` | Default. Test cases from the spec, without reading the code. |
+| Build | `implement` | Implement | `agent` | auto | none | Default. Tests first, then the code. |
+| Build | `migration` | Data migration | `agent` | manual | none | A data or schema migration, with a way to roll it back. |
+| Build | `refactor` | Refactor | `agent` | auto | none | Cleans up the changed code without changing what it does. |
+| Build | `docs` | Documentation | `agent` | auto | none | Updates the user and developer docs. |
+| Build | `i18n` | Translations | `agent` | auto | none | Adds or updates the translations of new UI text. |
+| Check | `lint` | Lint and types | `testing` | auto | none | Runs your lint and type check command. Needs a `command`. |
+| Check | `self-review` | Agent self-review | `agent` | auto | `self-review.md` | Reads the diff against the spec, lists problems and fixes them. |
+| Check | `security` | Security review | `agent` | manual | `security.md` | Checks the diff for security problems. |
+| Check | `performance` | Performance check | `agent` | manual | `performance.md` | Looks for slow paths in the diff. |
+| Check | `accessibility` | Accessibility check | `agent` | manual | `accessibility.md` | Checks UI changes for keyboard, screen reader and contrast problems. |
+| Check | `review` | Review | `review` | manual | none | Default. You read the diff and approve it or send it back. |
+| Check | `testing` | Testing | `testing` | auto | none | Default. Adds a test for each case of the test spec, then runs all tests. |
+| Check | `e2e` | End-to-end tests | `testing` | auto | none | Adds end-to-end tests, then runs them. Needs a `command`. |
+| Check | `qa` | Manual QA | `manual` | manual | none | You try the change yourself. |
+| Check | `design-review` | Design review | `manual` | manual | none | A designer checks the UI. |
+| Ship | `changelog` | Release notes | `agent` | auto | none | Adds a changelog entry. |
+| Ship | `staging` | Staging check | `manual` | manual | none | You check the change on a staging server. |
+| Ship | `release` | Release | `release` | manual | none | Default. Pushes the branch and opens a pull request. |
+
+- The stages with an output have `sections` for the checks. The `review`, `manual` and `release` stages always wait for a person or an outside event, whatever the gate says.
+- `lint` and `e2e` run your own command, so the screen asks for a **Command**. Without one, an agent does the work.
+- A catalog stage that is gone from the file keeps its catalog settings for a task on its way.
 
 ### Default pipeline
 
@@ -104,13 +162,7 @@ Details:
           "output": "test-spec.md",
           "sections": ["Cases"]
         },
-        {
-          "id": "implement",
-          "kind": "agent",
-          "gate": "auto",
-          "requireCommit": true,
-          "requireClean": true
-        }
+        { "id": "implement", "kind": "agent", "gate": "auto" }
       ]
     },
     { "id": "review", "kind": "review", "gate": "manual" },
@@ -134,11 +186,12 @@ When you create a task, you pick one source with its type, for example `--contex
 |---|---|---|
 | `manual` | `type` | The title, notes and reference of the task become the context. |
 | `github-issue` | `type` | Natamux reads a GitHub issue with `gh`. |
-| `skill` | `type`, `name`, `skill`, `agent` (optional) | An agent runs the skill `/<skill> <ref>` and writes the context. |
+| `skill` | `type`, `name`, `skill`, `agent` (optional) | An agent runs the skill and writes the context. Natamux names the skill the way the agent of the task needs. |
 | `mcp` | `type`, `name`, `prompt`, `agent` (optional) | An agent runs your `prompt`, for example to read a ticket through an MCP server. |
 
 - `name` is 1 to 60 characters.
-- `skill` is the name of the skill, without the slash.
+- `skill` is the name of the skill, without the slash or the dollar sign.
+- A `skill` source follows the three rules of the [skill placeholder](#skill-placeholder), as a whole line. For the skill `fetch-ticket` and the reference `ABC-1`, an agent with the skill gets `/fetch-ticket ABC-1` (a call). Otherwise it gets `Read <path> and follow it for ABC-1.` (the file), or `Use the fetch-ticket skill for ABC-1.` (not found). The file format does not change.
 - `prompt` can use `{title}`, `{description}`, `{dir}` and `{ref}`.
 - The `agent` field is accepted, but Natamux does not use it yet. The task's own agent runs a `skill` or `mcp` source, or `claude-code` when the task has none.
 
@@ -292,4 +345,5 @@ A `manual` stage waits for your approval. Use `doneWhen` to tell people what it 
 ## Related
 
 - [Stages](/docs/concepts/stages/): how kinds, gates and checks work
+- [Dashboard](/docs/guides/dashboard/#project-settings): edit the settings on a screen
 - [HTTP API](/docs/reference/http-api/): read and write the settings from a script

@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ProjectSettingsService, SETTINGS_FILE, SettingsInputError } from './project-settings.js'
+import {
+  ProjectSettingsService,
+  SETTINGS_FILE,
+  SettingsChangedError,
+  SettingsInputError,
+} from './project-settings.js'
 import { RepoNotFoundError } from './repo-service.js'
 
 let folder: string
@@ -26,6 +31,8 @@ describe('ProjectSettingsService', () => {
       settings: DEFAULT_PROJECT_SETTINGS,
       error: null,
       found: false,
+      text: null,
+      version: 'none',
     })
   })
 
@@ -68,6 +75,45 @@ describe('ProjectSettingsService', () => {
     expect(() => service.save(null, { agents: { permissionMode: 'yolo' } })).toThrow(
       'agents.permissionMode',
     )
+  })
+
+  it('gives the text of the file and a version that changes with it', () => {
+    const text = '{ "tracker": { "createIssue": "never" }, "team": "web" }\n'
+    writeFileSync(file(), text)
+    const first = service.load(null)
+    expect(first.text).toBe(text)
+    expect(first.version).not.toBe('none')
+
+    writeFileSync(file(), '{}\n')
+    utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    expect(service.load(null).version).not.toBe(first.version)
+  })
+
+  it('refuses a save over a file that changed since its version was read', () => {
+    writeFileSync(file(), '{}\n')
+    const { version } = service.load(null)
+    writeFileSync(file(), '{ "tracker": { "createIssue": "never" } }\n')
+
+    expect(() => service.save(null, { agents: { permissionMode: 'ask' } }, version)).toThrow(
+      SettingsChangedError,
+    )
+    expect(readFileSync(file(), 'utf8')).toContain('never')
+    // Without a version the save replaces the file, as "Overwrite" does.
+    service.save(null, { agents: { permissionMode: 'ask' } })
+    expect(readFileSync(file(), 'utf8')).toContain('ask')
+  })
+
+  it('takes the version of a missing file, and refuses it once the file is there', () => {
+    service.save(null, {}, 'none')
+    expect(() => service.save(null, {}, 'none')).toThrow(SettingsChangedError)
+  })
+
+  it('keeps fields it does not know', () => {
+    service.save(null, { team: 'web', tracker: { createIssue: 'never' } })
+    expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual({
+      team: 'web',
+      tracker: { createIssue: 'never' },
+    })
   })
 
   it('starts agents in auto mode when the file has a bad mode', () => {

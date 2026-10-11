@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -16,12 +17,29 @@ export type LoadedSettings = {
   error: string | null
   // The file was there.
   found: boolean
+  // The text of the file, so an editor can keep what it does not know.
+  text: string | null
+  // Changes when the file changes. A save that names an older version is refused.
+  version: string
+}
+
+const NO_FILE = 'none'
+
+function versionOf(text: string | null): string {
+  return text === null ? NO_FILE : createHash('sha256').update(text).digest('hex').slice(0, 16)
 }
 
 export class SettingsInputError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SettingsInputError'
+  }
+}
+
+export class SettingsChangedError extends Error {
+  constructor(path: string) {
+    super(`${path} changed since you opened it. Reload it, or overwrite it.`)
+    this.name = 'SettingsChangedError'
   }
 }
 
@@ -49,6 +67,14 @@ export function parseSettings(text: string): ProjectSettings {
   return parsed.data
 }
 
+function readText(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
+
 type Cached = { mtimeMs: number; loaded: LoadedSettings }
 
 // `.natamux.json` of each repository. Read again when the file changes, so an edit in the
@@ -71,17 +97,25 @@ export class ProjectSettingsService {
     try {
       mtimeMs = statSync(path).mtimeMs
     } catch {
-      return { settings: DEFAULT_PROJECT_SETTINGS, error: null, found: false }
+      return {
+        settings: DEFAULT_PROJECT_SETTINGS,
+        error: null,
+        found: false,
+        text: null,
+        version: NO_FILE,
+      }
     }
     const cached = this.cache.get(path)
     if (cached !== undefined && cached.mtimeMs === mtimeMs) {
       return cached.loaded
     }
+    const text = readText(path)
+    const file = { found: true, text, version: versionOf(text) }
     let loaded: LoadedSettings
     try {
-      loaded = { settings: parseSettings(readFileSync(path, 'utf8')), error: null, found: true }
+      loaded = { settings: parseSettings(text ?? ''), error: null, ...file }
     } catch (error) {
-      loaded = { settings: DEFAULT_PROJECT_SETTINGS, error: describe(error), found: true }
+      loaded = { settings: DEFAULT_PROJECT_SETTINGS, error: describe(error), ...file }
     }
     this.cache.set(path, { mtimeMs, loaded })
     return loaded
@@ -100,13 +134,17 @@ export class ProjectSettingsService {
     }
   }
 
-  // Writes the file in the repository's main folder. The person commits it.
-  save(repo: string | null, raw: unknown): ProjectSettings {
+  // Writes the file in the repository's main folder. The person commits it. With `version`, the
+  // file must not have changed since that version was read, so no one's edit is lost unseen.
+  save(repo: string | null, raw: unknown, version?: string): ProjectSettings {
     const parsed = projectSettingsSchema.safeParse(raw)
     if (!parsed.success) {
       throw new SettingsInputError(describe(parsed.error))
     }
     const path = this.pathOf(repo)
+    if (version !== undefined && versionOf(readText(path)) !== version) {
+      throw new SettingsChangedError(path)
+    }
     const temporary = `${path}.tmp`
     writeFileSync(temporary, `${JSON.stringify(raw, null, 2)}\n`)
     renameSync(temporary, path)

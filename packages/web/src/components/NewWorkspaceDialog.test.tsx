@@ -41,6 +41,8 @@ const WITH_ISSUES: LoadedSettings = {
   error: null,
   found: true,
   path: '/work/natamux/.natamux.json',
+  text: null,
+  version: null,
 }
 
 // Settings that offer only the user's own notes.

@@ -1,6 +1,7 @@
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  activeSteps,
   applyTaskEvent,
   completeEvent,
   DEFAULT_PROJECT_SETTINGS,
@@ -199,7 +200,8 @@ export class TaskService {
       this.checkParent(input.parentId)
     }
     const at = this.timestamp()
-    const steps = this.settingsOf(input.repo ?? null).stages
+    // Stages that are off stay in the settings, but a new task does not get them.
+    const steps = activeSteps(this.settingsOf(input.repo ?? null).stages)
     const start = firstPosition(steps)
     const task = taskSchema.parse({
       ...input,

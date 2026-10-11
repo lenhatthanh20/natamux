@@ -456,6 +456,7 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 
 ### 4.14 Dialog (`ui/Dialog.tsx`)
 - Sizes: `sm` 400, `md` 520, `lg` 640. Max height 80vh, body scrolls. Top 14vh.
+- `xl` 1120 is a screen of its own (Project settings): height 88vh, top 6vh, body fills the rest and scrolls. Below 768 it takes the whole screen (100dvh, no radius).
 - Panel: radius 12, bg popover, 1px line-strong, `--shadow-2`. Scrim `--scrim` (no blur), covers everything except the toast layer.
 - Header pad 20 20 8: title 15/600, optional description 13 muted. Close icon button 28 (icon 16) at top right (NAV-29: was 28 with 12 icon).
 - Body pad 12 20, fields stack gap 16, label 12/500 ink-2 above the control, helper 12 muted below.
@@ -604,6 +605,28 @@ Shared shell:
 - Main < 900: one "State" button (`ListFilter` + current value, e.g. "Running · 3") opening the same checkbox menu.
 - The filter drives both table and board (NAV-21). Counts follow the active search (NAV-15).
 
+### 4.31 Project settings (`components/ProjectSettingsDialog.tsx`, `StageList.tsx`, `StageDetails.tsx`, `StagePicker.tsx`, `SkillPicker.tsx`)
+- Dialog `xl`, title "Project settings of <project>". Tabs **Stages** (default) and **JSON** (sticky under the header). Both edit one draft: the text of `.natamux.json`. JSON that does not parse, or settings outside `stages` that break the rules, keep the JSON tab open with the error.
+- Stages tab, top to bottom: pipeline preview (4.32); stage list (left, 352) and details (right) side by side from 1024; one column below. Below 640 the details (or the stage picker) take the place of the list, with **Back**.
+- Footer: the line "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals." (12 muted), then **Reset to default** (ghost, asks, only changes the draft), the problem count (`role="status"`: errors `--danger-text`, warnings `--signal`), **Cancel**, **Save** (`Mod Enter`; `aria-disabled` with the reason while there are errors).
+- Stage row (`--row-h`): drag handle `GripVertical` 14 `--faint` (drag only), native checkbox with `role="switch"` named "<stage> on", a button with the kind icon 14 + name + marks (`UserRound` 12 waits for approval, `Pencil` 12 custom prompt; the name says them, for example "Spec, waits for approval, custom prompt, off"), and a "..." menu: Move up (`Alt+Up`), Move down (`Alt+Down`), Run alongside the stage above (agent and manual stages; disabled with the reason as hint) or Run on its own, separator, Remove (danger; a stage of your own asks first). A stage that is off is `--muted` with a line through. Selected: `bg-selected`. Problems of a stage sit under its row, 12, with `CircleAlert`.
+- A group is one block (radius 8, 1px line, `bg-raised`, pad 4) with a caps header (its name, "side by side", drag handle for the whole group), then its rows.
+- Drag and drop: native HTML5 drag events. A 2px `--accent` line shows where the row lands. Dropped on a row of a group, an agent or manual stage joins the group when it has room.
+- Kind icons: context `BookOpen`, agent `Bot`, review `Eye`, testing `FlaskConical`, release `Rocket`, manual `Hand`.
+- Details: header (kind icon 16, name 15/600, kind, id in mono, catalog sentence), then fields as fieldsets with label 12/500: Name; Wait for my approval (checkbox; "Open the pull request when I click" for release; checked and disabled with "This stage is a check by a person." for review and manual); Prompt (agent, testing; monospace textarea; chips `{title}` `{description}` `{dir}` `{ref}` and **Insert skill** above; the fixed line "When you are done, run `natamux done`." below); Command (testing); Output file (agent; read-only for catalog stages); Required sections (one per line); Finished when. A value that can differ from its default shows a "Default" badge (`bg-badge`, muted), or "Changed" (`bg-signal-soft`, `--signal`) and **Use default** (ghost xs).
+- Stage picker (Add stage): replaces the details. Search field "Search stages", catalog stages not in the pipeline by phase (caps titles), each a row with name, sentence, kind and default approval; **Custom stage** opens a form (Name, Id from the name, Kind, Output file for agent) with errors under the fields.
+- Skill picker (Insert skill): a box under the chips (`bg-popover`, `--shadow-1`). Search, the daemon's notices, groups **Project**, **Plugins**, **Only on this machine**; each skill: name in mono, description, the agents that have it, warnings in `--signal`. Escape closes it first, then the screen.
+- Closing with changes asks "Discard your changes?". A file that changed on disk shows an alert with **Reload** and **Overwrite** (danger).
+
+### 4.32 Pipeline preview (`components/PipelinePreview.tsx`, `.pipeline*` in `styles.css`)
+- The pipeline of the draft, not the saved one. Stages that are off are not drawn. Box: radius 8, 1px line, `bg-raised`, pad 12 16; scrolls sideways when wide.
+- Node (104 wide, radius 8): the "not reached" marker of `StageMarker` (24, `.stage-node[data-status="upcoming"]`) with the kind icon inside, the name under it (12, one line, ellipsis). Marks at the marker's right corners on a 14 circle (`--popover`, 1px `--line-strong`): `UserRound` top (waits for a person), `Pencil` bottom (custom prompt). Hover `--hover`, selected `--selected`. The tooltip says kind, approval, output file and command.
+- Lines: 2px dashed `--muted`, from marker to marker. A group forks into one lane per stage (lanes 4 apart) and joins before the next step.
+- A step with an error: the marker gets a `--danger-text` ring, the name turns `--danger-text`; a group with an error gets red fork lines.
+- Below 640: top to bottom. Nodes are rows (marker, then name); a group branches off the main line, one row per stage.
+- Still: no motion, so it reads the same with reduced motion. Light and dark through tokens only.
+- Accessible: an `ol` named "Pipeline: Context, then Spec, …, then Test spec and Implement side by side, …"; a group is a nested list "<names>, side by side"; each node is a button named like the stage row, and a click selects the stage.
+
 ---------------------------------------------------------------------
 
 ## 5. Interaction
@@ -642,6 +665,7 @@ Rules:
 | | F2 | Rename workspace |
 | | Shift+F10, ContextMenu | Row menu |
 | | Delete | Remove workspace (asks) |
+| | Alt+Up / Alt+Down | Move the focused stage in the stage list of Project settings |
 | | type letters | Jump to a row by title |
 | Panes | Mod+Shift+Enter | Maximize / restore the focused pane |
 | | Ctrl+Shift+` | New shell (works inside a terminal on both OSes) |

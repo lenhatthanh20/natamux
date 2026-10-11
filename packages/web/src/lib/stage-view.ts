@@ -123,3 +123,28 @@ export function sentBackCount(events: readonly TaskEvent[]): number {
 export function stepsKey(task: Pick<Task, 'stages'>): string {
   return JSON.stringify(task.stages)
 }
+
+export type MissingSkills = {
+  names: string[]
+  // The agent the stage started with, which can differ from the task's agent.
+  agent: string | null
+}
+
+// The skills that each stage's prompt named and its agent did not have, from the latest start of
+// the stage. The daemon still started the stage, with the skill's name in the prompt.
+export function missingSkills(events: readonly TaskEvent[]): Map<string, MissingSkills> {
+  const missing = new Map<string, MissingSkills>()
+  for (const event of events) {
+    const { stage, missingSkills: names, agent } = event.payload
+    if (event.type !== 'stage.started' || typeof stage !== 'string') {
+      continue
+    }
+    missing.set(stage, {
+      names: Array.isArray(names)
+        ? names.filter((name): name is string => typeof name === 'string')
+        : [],
+      agent: typeof agent === 'string' ? agent : null,
+    })
+  }
+  return missing
+}

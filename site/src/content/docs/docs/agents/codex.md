@@ -46,6 +46,20 @@ Codex runs a hook only after you trust it. The hooks change with the daemon's ad
 
 Codex has no failure hook, so a failed turn does not move the task to failed.
 
+## Skills
+
+| Where | Folder | Shown as |
+|---|---|---|
+| Project | `.agents/skills/<name>/SKILL.md` | **Project** |
+| You | `~/.agents/skills/<name>/SKILL.md` | **Only on this machine** |
+
+- Natamux does not read Codex plugins: their install path is not documented.
+- `{skill:<name>}` becomes `$<name>` when Codex has the skill. Otherwise it becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+
+Source: [Codex skills](https://learn.chatgpt.com/docs/build-skills), checked 2026-10-11.
+
+For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
+
 ## Tested
 
 Not run against a real Codex session. The hooks follow Codex's source code and are tested with made-up input.

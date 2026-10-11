@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { catalogEntry, STAGE_CATALOG } from './stage-catalog.js'
 import { type TaskState, taskStateSchema } from './task-state.js'
 
 // See docs/design-task-stages.md for the model: stages, groups (parallel steps) and lanes.
@@ -34,9 +35,15 @@ export const stageSchema = z.object({
   check: z.string().trim().min(1).optional(),
   command: z.string().trim().min(1).optional(),
   doneWhen: z.string().trim().min(1).optional(),
+  // A stage that is off stays in the file with its settings, but new tasks do not get it.
+  enabled: z.boolean().optional(),
 })
 
 export type Stage = z.infer<typeof stageSchema>
+
+export function isOn(stage: Pick<Stage, 'enabled'>): boolean {
+  return stage.enabled !== false
+}
 
 export const stageGroupSchema = z.object({
   id: stageIdSchema,
@@ -67,69 +74,108 @@ export function stagesOf(step: Step): Stage[] {
   return isGroup(step) ? step.parallel : [step]
 }
 
+// The steps that new tasks get: stages that are off are left out, and so is a group with none on.
+export function activeSteps(steps: readonly Step[]): Step[] {
+  return steps.flatMap((step): Step[] => {
+    if (!isGroup(step)) {
+      return isOn(step) ? [step] : []
+    }
+    const on = step.parallel.filter(isOn)
+    if (on.length === 0) {
+      return []
+    }
+    // The rules ask for two stages that are on; one left over runs on its own.
+    return on.length === 1 ? on : [{ ...step, parallel: on }]
+  })
+}
+
 export const pipelineSchema = z
   .array(stepSchema)
   .min(1, 'A pipeline has at least one stage')
   .superRefine((steps, context) => {
     const seen = new Set<string>()
-    for (const id of steps.flatMap((step) => [
-      step.id,
-      ...(isGroup(step) ? step.parallel.map((stage) => stage.id) : []),
-    ])) {
-      if (seen.has(id)) {
-        context.addIssue({ code: 'custom', message: `The stage id "${id}" is used twice` })
+    steps.forEach((step, index) => {
+      const ids = isGroup(step) ? [step.id, ...step.parallel.map((stage) => stage.id)] : [step.id]
+      for (const id of ids) {
+        if (seen.has(id)) {
+          context.addIssue({
+            code: 'custom',
+            message: `The stage id "${id}" is used twice`,
+            path: [index],
+          })
+        }
+        seen.add(id)
       }
-      seen.add(id)
+      if (isGroup(step) && step.parallel.filter(isOn).length === 1) {
+        context.addIssue({
+          code: 'custom',
+          message: 'A group needs 2 stages that are on. Turn on another, or run it on its own',
+          path: [index],
+        })
+      }
+    })
+    // Only stages that are on count from here: the others are not in new tasks.
+    const on = steps
+      .map((step, index) => ({ step, index }))
+      .filter(({ step }) => (isGroup(step) ? step.parallel.some(isOn) : isOn(step)))
+    if (on.length === 0) {
+      context.addIssue({ code: 'custom', message: 'Turn on at least one stage' })
+      return
     }
     // The context is read when a task is made, so only the first step can be one. A release
     // ends the task, so nothing can come after it.
-    const kinds = steps.map((step) => (isGroup(step) ? undefined : step.kind))
-    if (kinds.filter((kind) => kind === 'context').length > 1) {
-      context.addIssue({ code: 'custom', message: 'A pipeline has at most one context stage' })
-    } else if (kinds.indexOf('context') > 0) {
-      context.addIssue({ code: 'custom', message: 'The context stage must come first' })
+    const kindAt = ({ step }: (typeof on)[number]) => (isGroup(step) ? undefined : step.kind)
+    const contexts = on.filter((entry) => kindAt(entry) === 'context')
+    const releases = on.filter((entry) => kindAt(entry) === 'release')
+    if (contexts.length > 1) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A pipeline has at most one context stage',
+        path: [contexts[1]?.index ?? 0],
+      })
+    } else if (contexts[0] !== undefined && contexts[0] !== on[0]) {
+      context.addIssue({
+        code: 'custom',
+        message: 'The context stage must come first',
+        path: [contexts[0].index],
+      })
     }
-    if (kinds.filter((kind) => kind === 'release').length > 1) {
-      context.addIssue({ code: 'custom', message: 'A pipeline has at most one release stage' })
-    } else if (kinds.includes('release') && kinds.at(-1) !== 'release') {
-      context.addIssue({ code: 'custom', message: 'The release stage must come last' })
+    if (releases.length > 1) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A pipeline has at most one release stage',
+        path: [releases[1]?.index ?? 0],
+      })
+    } else if (releases[0] !== undefined && releases[0] !== on.at(-1)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'The release stage must come last',
+        path: [releases[0].index],
+      })
     }
   })
 
+// A stage of the catalog, as a pipeline holds it.
+function catalogStage(id: string): Stage {
+  const entry = catalogEntry(id)
+  if (entry === undefined) {
+    throw new Error(`The stage catalog has no stage "${id}"`)
+  }
+  return entry.stage
+}
+
 export const DEFAULT_PIPELINE: Step[] = [
-  { id: 'context', kind: 'context', gate: 'manual', output: 'context.md' },
-  {
-    id: 'spec',
-    kind: 'agent',
-    gate: 'manual',
-    output: 'spec.md',
-    sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria'],
-  },
-  {
-    id: 'plan',
-    kind: 'agent',
-    gate: 'manual',
-    output: 'plan.md',
-    sections: ['Steps', 'Files', 'Tests'],
-  },
+  catalogStage('context'),
+  catalogStage('spec'),
+  catalogStage('plan'),
   {
     id: 'build',
     name: 'Test spec and Implement',
-    parallel: [
-      {
-        id: 'test-spec',
-        kind: 'agent',
-        gate: 'manual',
-        output: 'test-spec.md',
-        sections: ['Cases'],
-      },
-      // No commit check: the agent leaves its changes for you to read before you commit them.
-      { id: 'implement', kind: 'agent', gate: 'auto' },
-    ],
+    parallel: [catalogStage('test-spec'), catalogStage('implement')],
   },
-  { id: 'review', kind: 'review', gate: 'manual' },
-  { id: 'testing', kind: 'testing', gate: 'auto' },
-  { id: 'release', kind: 'release', gate: 'manual' },
+  catalogStage('review'),
+  catalogStage('testing'),
+  catalogStage('release'),
 ]
 
 // What a task made before stages existed goes through: the work it had then.
@@ -157,14 +203,14 @@ export function stepRefsOf(steps: readonly Step[]): StepRef[] {
 export const LEGACY_STEP_REFS: StepRef[] = stepRefsOf(LEGACY_PIPELINE)
 
 // Turns a task's step ids back into steps, with each stage's settings from `pipeline`. A stage
-// that is gone from the settings keeps the default settings of its id, so a task on its way still
-// runs it; a stage of its own that is gone becomes a manual stage, so the task can go on.
+// that is gone from the settings keeps the catalog settings of its id, so a task on its way still
+// runs it; a stage of its own that is gone becomes a manual stage, so the task can go on. A stage
+// that is off still runs for a task that has it.
 export function resolveSteps(refs: readonly StepRef[], pipeline: readonly Step[]): Step[] {
   const known = new Map<string, Stage>()
-  for (const step of [...DEFAULT_PIPELINE, ...pipeline]) {
-    for (const stage of stagesOf(step)) {
-      known.set(stage.id, stage)
-    }
+  const stages = [...STAGE_CATALOG.map((entry) => entry.stage), ...pipeline.flatMap(stagesOf)]
+  for (const stage of stages) {
+    known.set(stage.id, stage)
   }
   const stage = (id: string): Stage => known.get(id) ?? { id, kind: 'manual', gate: 'manual' }
   return refs.map((ref) => {
@@ -184,8 +230,50 @@ export function stageName(stage: Pick<Stage, 'id' | 'name'>): string {
   if (stage.name !== undefined) {
     return stage.name
   }
+  const named = catalogEntry(stage.id)?.stage.name
+  if (named !== undefined) {
+    return named
+  }
   const words = stage.id.replaceAll('-', ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+// What a prompt may hold. The daemon fills them when the stage starts.
+export const PROMPT_PLACEHOLDERS = ['title', 'description', 'dir', 'ref'] as const
+
+// `{skill:<name>}` in a prompt: a skill, called the way the task's agent calls it. A plugin skill
+// is named `<plugin>:<skill>`.
+export const SKILL_PLACEHOLDER = /\{skill:([\w.-]+(?::[\w.-]+)?)\}/g
+
+export function skillPlaceholder(name: string): string {
+  return `{skill:${name}}`
+}
+
+// By default you read the changes before they are committed. A stage that checks for a commit
+// has to ask for one, or the agent can never pass it.
+export function commitRule(stage: Pick<Stage, 'requireCommit'>): string {
+  return stage.requireCommit === true
+    ? 'Commit your work when it is done.'
+    : 'Do not commit. Leave the changes for review.'
+}
+
+// The prompt of an agent or testing stage when the settings give none. The daemon turns
+// `{commit}` into `commitRule` of the stage.
+export function defaultPrompt(stage: Pick<Stage, 'id' | 'kind' | 'name' | 'output'>): string {
+  // A stage of a project's own may have the id of a catalog stage that came later; it keeps the
+  // catalog prompt only when the prompt fits it.
+  const entry = catalogEntry(stage.id)
+  const fits =
+    entry?.stage.kind === stage.kind &&
+    (stage.output === undefined || stage.output === entry.stage.output)
+  if (fits && entry?.prompt !== undefined) {
+    return entry.prompt
+  }
+  return [
+    'Task: {title}',
+    `Do the ${stageName(stage)} stage of this task.`,
+    ...(stage.output === undefined ? [] : [`Write {dir}/${stage.output}.`]),
+  ].join('\n')
 }
 
 // Where a task is: its step, the state of that step, and for a group the state of each stage.

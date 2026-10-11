@@ -1609,7 +1609,9 @@ describe('App', () => {
     await user.click(await within(sidebar).findByRole('button', { name: 'Actions for Web app' }))
     await user.click(screen.getByRole('menuitem', { name: 'Settings' }))
 
-    expect(await screen.findByRole('dialog', { name: 'Project settings of Web app' })).toBeTruthy()
+    const settings = await screen.findByRole('dialog', { name: 'Project settings of Web app' })
+    expect(await within(settings).findByRole('tab', { name: 'Stages', selected: true })).toBeTruthy()
+    expect(within(settings).getAllByRole('switch')).toHaveLength(8)
   })
 
   it('compares tries and keeps one, cancelling the others', async () => {

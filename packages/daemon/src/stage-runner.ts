@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import {
   type ContextSource,
@@ -20,6 +21,7 @@ import {
   waitingOn,
 } from '@natamux/core'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
+import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { type RunGh, runGh } from './git.js'
@@ -175,7 +177,12 @@ type StageRunnerOptions = {
   now?: () => number
   // The platform of the terminals' shells.
   platform?: NodeJS.Platform
+  // The home folder, where agents keep the user's skills.
+  home?: string
 }
+
+// A stage prompt for the agent that will get it, and the skills it names that were not found.
+type PromptFor = (agent: string) => { text: string; missing: string[] }
 
 // Moves tasks through their stages: starts each stage when the task reaches it, takes the report
 // that a stage is done, checks the result and lets the gate decide (docs/design-task-stages.md).
@@ -190,6 +197,7 @@ export class StageRunner {
   private readonly runCommand: RunCommand
   private readonly now: () => number
   private readonly platform: NodeJS.Platform
+  private readonly home: string
   // Terminals whose agent reported a stage done, with that stage: the turn end that follows the
   // report is not a "stopped early". Kept by terminal, since the task may be at the next stage
   // when the turn ends.
@@ -225,6 +233,7 @@ export class StageRunner {
     this.runCommand = options.runCommand ?? runShellCommand
     this.now = options.now ?? Date.now
     this.platform = options.platform ?? process.platform
+    this.home = options.home ?? homedir()
   }
 
   start(): void {
@@ -389,20 +398,21 @@ export class StageRunner {
           await this.startContext(task, step, stage)
           return
         case 'agent': {
-          const prompt = stagePrompt(stage, task)
-          const withReason = reason ? `${prompt}\nWhat to change: ${reason}` : prompt
+          const prompt: PromptFor = (agent) => {
+            const filled = this.withSkills(stagePrompt(stage, task), task, agent)
+            const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
+            return { ...filled, text }
+          }
           // A prompt typed to the agent took the stage up again: the agent has its prompt.
-          await this.startAgent(
-            task,
-            step,
-            stage,
-            cause?.type === 'agent.resumed' ? undefined : withReason,
-          )
+          const resumed = cause?.type === 'agent.resumed'
+          await this.startAgent(task, step, stage, resumed ? undefined : prompt)
           return
         }
         case 'testing':
           if (stage.command === undefined) {
-            await this.startAgent(task, step, stage, stagePrompt(stage, task))
+            await this.startAgent(task, step, stage, (agent) =>
+              this.withSkills(stagePrompt(stage, task), task, agent),
+            )
           } else {
             await this.startCommand(task, step, stage, stage.command)
           }
@@ -436,11 +446,19 @@ export class StageRunner {
     return started
   }
 
+  private skillContext(task: Task, agent: string): SkillContext {
+    return { agent, workspace: task.workspace ?? this.repoPath(task.repo), home: this.home }
+  }
+
+  private withSkills(text: string, task: Task, agent: string): { text: string; missing: string[] } {
+    return fillSkills(text, this.skillContext(task, agent))
+  }
+
   private async startAgent(
     task: Task,
     step: Step,
     stage: Stage,
-    prompt: string | undefined,
+    promptFor: PromptFor | undefined,
   ): Promise<void> {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
@@ -457,16 +475,19 @@ export class StageRunner {
     }
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
-    if (!this.markStarted(task, step, stage, { head }) || prompt === undefined) {
+    const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
+    const prompt = promptFor?.(agent)
+    // The stage card says which skills of the prompt the agent did not get.
+    const missing = prompt?.missing.length ? { missingSkills: prompt.missing, agent } : {}
+    if (!this.markStarted(task, step, stage, { head, ...missing }) || prompt === undefined) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)
     try {
       if (this.agentRuns(task.id, terminal)) {
-        this.terminals.paste(task.id, prompt, terminal)
+        this.terminals.paste(task.id, prompt.text, terminal)
       } else {
-        const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
-        this.agents.start(task.id, agent, prompt, terminal)
+        this.agents.start(task.id, agent, prompt.text, terminal)
         this.launched.set(`${task.id}/${terminal}`, this.now())
       }
     } catch (error) {
@@ -625,7 +646,16 @@ export class StageRunner {
     const source = this.sourceOf(task)
     if (source.type === 'skill' || source.type === 'mcp') {
       const attachments = listAttachments(this.dataDir, task.id)
-      await this.startAgent(task, step, stage, contextPrompt(source, task, attachments))
+      await this.startAgent(task, step, stage, (agent) => {
+        const skill =
+          source.type === 'skill'
+            ? resolveSkill(source.skill, this.skillContext(task, agent))
+            : undefined
+        return {
+          text: contextPrompt(source, task, attachments, skill),
+          missing: source.type === 'skill' && skill?.kind === 'missing' ? [source.skill] : [],
+        }
+      })
       return
     }
     if (!this.markStarted(task, step, stage, { source: source.type })) {
