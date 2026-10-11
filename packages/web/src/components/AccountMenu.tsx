@@ -1,8 +1,9 @@
-import { CircleUser, Keyboard, LogOut } from 'lucide-react'
+import { CircleUser, Keyboard, LogOut, Type } from 'lucide-react'
 import { useState } from 'react'
 import { shortcutOf } from '../lib/commands'
 import { applyTheme, type Theme, useThemeChoice } from '../lib/theme'
 import { applyUiSize, UI_SIZE_LABEL, UI_SIZES, useUiSize } from '../lib/ui-size'
+import { TerminalFontDialog } from './TerminalFontDialog'
 import { ConfirmDialog } from './ui/Dialog'
 import { Menu } from './ui/Menu'
 
@@ -17,11 +18,12 @@ type AccountMenuProps = {
   onShortcuts: () => void
 }
 
-// Theme, UI size, shortcuts and sign out in one menu. Signing out asks first.
+// Theme, UI size, terminal font, shortcuts and sign out in one menu. Signing out asks first.
 export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
   const theme = useThemeChoice()
   const size = useUiSize()
   const [asking, setAsking] = useState(false)
+  const [pickingFont, setPickingFont] = useState(false)
 
   return (
     <>
@@ -43,6 +45,7 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
             checked: size === value,
             onSelect: () => applyUiSize(value),
           })),
+          { label: 'Terminal font…', icon: Type, onSelect: () => setPickingFont(true) },
           { type: 'separator' },
           {
             label: 'Keyboard shortcuts',
@@ -54,6 +57,7 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
           { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => setAsking(true) },
         ]}
       />
+      {pickingFont && <TerminalFontDialog onClose={() => setPickingFont(false)} />}
       {asking && (
         <ConfirmDialog
           title="Sign out of Natamux?"

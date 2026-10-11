@@ -6,6 +6,7 @@ import {
   type TerminalSize,
 } from '@natamux/core'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 // The package is CommonJS without named exports for Node.js.
 import xtermHeadless from '@xterm/headless'
 import { withLoopbackNoProxy } from './no-proxy.js'
@@ -70,6 +71,8 @@ function isHighSurrogate(code: number): boolean {
 export class ScreenState {
   private readonly terminal: InstanceType<typeof xtermHeadless.Terminal>
   private readonly serializer = new SerializeAddon()
+  // Output parses later; what comes after the shell is gone must not touch the screen.
+  private disposed = false
 
   constructor(size: TerminalSize) {
     this.terminal = new xtermHeadless.Terminal({
@@ -78,17 +81,22 @@ export class ScreenState {
       allowProposedApi: true,
     })
     this.terminal.loadAddon(this.serializer)
+    // The same widths as the dashboard (TerminalView.tsx), so an emoji takes two cells in both.
+    this.terminal.loadAddon(new Unicode11Addon())
+    this.terminal.unicode.activeVersion = '11'
   }
 
   write(data: string): void {
-    this.terminal.write(data)
+    if (!this.disposed) {
+      this.terminal.write(data)
+    }
   }
 
   // Output is parsed later, in order. A resize waits for the output before it, which was drawn
   // for the old size.
   // The history keeps the same memory at the new width, as the dashboard's does.
   resize(size: TerminalSize): void {
-    this.terminal.write('', () => {
+    this.whenParsed(() => {
       this.terminal.resize(size.cols, size.rows)
       this.terminal.options.scrollback = scrollbackLines(size.cols)
     })
@@ -96,16 +104,27 @@ export class ScreenState {
 
   // Calls back with the screen, and the lines above it, once all output so far is on it.
   snapshot(done: (text: string) => void): void {
-    this.terminal.write('', () => done(this.serializer.serialize()))
+    this.whenParsed(() => done(this.serializer.serialize()))
   }
 
   // Resolves once all output so far is on the screen.
   settled(): Promise<void> {
-    return new Promise((resolve) => this.terminal.write('', resolve))
+    return new Promise((resolve) => (this.disposed ? resolve() : this.whenParsed(resolve)))
   }
 
   dispose(): void {
+    this.disposed = true
     this.terminal.dispose()
+  }
+
+  private whenParsed(run: () => void): void {
+    if (!this.disposed) {
+      this.terminal.write('', () => {
+        if (!this.disposed) {
+          run()
+        }
+      })
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -16,6 +17,7 @@ import {
 import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
+import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
@@ -312,6 +314,13 @@ ipcMain.on('natamux:daemon-token', (event) => {
   const from = event.senderFrame?.url ?? ''
   event.returnValue =
     dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
+})
+
+// The terminals of the dashboard use Ghostty's font when the user has one and picked none.
+// Read again at each load, so a change in Ghostty shows after a reload.
+ipcMain.on('natamux:ghostty-font', (event) => {
+  const font = readGhosttyFont(process.env, homedir(), process.platform)
+  event.returnValue = font === undefined ? '' : JSON.stringify(font)
 })
 
 if (!app.requestSingleInstanceLock()) {

@@ -61,6 +61,14 @@ Like Ghostty, the history is limited by memory, about 10 MB for each shell, not 
 
 A pane keeps at most 10,000 lines and at least 1,000. When a pane gets wider, its oldest lines go first. The output is gone when the shell ends, or when Natamux restarts or updates.
 
+### Font and drawing
+
+Terminals draw with the GPU (WebGL), as native terminals do, and fall back to the browser's own drawing when WebGL is off. Programs that draw a whole screen at once, such as Claude Code, do not flicker: Natamux waits for the end of each screen update (synchronized output). Emoji and other wide signs take two columns.
+
+To change the font, open the **Account** menu at the bottom right and click **Terminal font…**. Type a font family that is installed on your machine and a size in pixels. Leave a field empty to use the default.
+
+In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Natamux reads `font-family` and `font-size` from Ghostty's config file each time the dashboard loads. Without a Ghostty config, the default is Geist Mono at 13px.
+
 ### Keys that belong to the shell
 
 Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natamux still work. On Windows and Linux only the function keys and Ctrl+Shift shortcuts reach Natamux. `Ctrl+K`, `Ctrl+B` and `Ctrl+J` stay with the shell. See [Keyboard shortcuts](/docs/reference/shortcuts/).

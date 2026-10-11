@@ -1,22 +1,19 @@
 import { scrollbackLines, type TerminalSize } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { keyBelongsToShell } from '../lib/dispatch'
-import { MONO_FONT } from '../lib/fonts'
 import { closeSocket } from '../lib/live'
 import { parseTerminalMessage, takesFocusOnOpen } from '../lib/terminal'
-import {
-  MIN_CONTRAST_RATIO,
-  TERMINAL_FONT_SIZE,
-  TERMINAL_LINE_HEIGHT,
-  terminalTheme,
-} from '../lib/terminal-theme'
+import { terminalFont, useTerminalFont } from '../lib/terminal-font'
+import { MIN_CONTRAST_RATIO, TERMINAL_LINE_HEIGHT, terminalTheme } from '../lib/terminal-theme'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
 import { TerminalFind } from './TerminalFind'
@@ -44,6 +41,18 @@ function safeFit(fit: FitAddon | null): void {
   }
 }
 
+// Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
+// drops the context, the terminal keeps or goes back to drawing with the DOM.
+function drawWithGpu(terminal: Terminal): void {
+  try {
+    const webgl = new WebglAddon()
+    webgl.onContextLoss(() => webgl.dispose())
+    terminal.loadAddon(webgl)
+  } catch {
+    // The DOM renderer stays.
+  }
+}
+
 const STATUS_TEXT: Record<Status, string> = {
   connecting: 'Connecting.',
   open: 'Connected.',
@@ -68,6 +77,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const uiSize = useUiSize()
+  const font = useTerminalFont()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
   useEffect(() => {
@@ -75,12 +85,14 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     if (!element) {
       return
     }
+    const start = terminalFont()
     const terminal = new Terminal({
-      // The search addon marks its matches with decorations, which are a proposed API.
+      // The search addon marks its matches with decorations, and Unicode 11 widths are set
+      // through terminal.unicode: both are proposed APIs.
       allowProposedApi: true,
       cursorBlink: true,
-      fontFamily: MONO_FONT,
-      fontSize: TERMINAL_FONT_SIZE * uiZoom(),
+      fontFamily: start.stack,
+      fontSize: start.size * uiZoom(),
       lineHeight: TERMINAL_LINE_HEIGHT,
       minimumContrastRatio: MIN_CONTRAST_RATIO,
       scrollback: scrollbackLines(80),
@@ -103,7 +115,11 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     // The keys of the app (F6, Cmd chords on a Mac, Ctrl+Shift chords elsewhere) are not for the
     // shell. Returning false lets the key event go on to the page, see lib/dispatch.ts.
     terminal.attachCustomKeyEventHandler((event) => keyBelongsToShell(event))
+    // Emoji and wide signs take two cells, as in the daemon's screen (terminal-service.ts).
+    terminal.loadAddon(new Unicode11Addon())
+    terminal.unicode.activeVersion = '11'
     terminal.open(element)
+    drawWithGpu(terminal)
     safeFit(fit)
     terminal.options.scrollback = scrollbackLines(terminal.cols)
 
@@ -203,11 +219,11 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     // The web font may still be loading when the terminal measures its cells. Setting the font
     // again makes it measure with the loaded one.
     document.fonts
-      ?.load('13px "Geist Mono Variable"')
+      ?.load(`${Math.round(start.size)}px ${start.stack}`)
       .then(() => {
         if (!disposed) {
           terminal.options.fontFamily = 'monospace'
-          terminal.options.fontFamily = MONO_FONT
+          terminal.options.fontFamily = terminalFont().stack
           safeFit(fit)
         }
       })
@@ -242,14 +258,20 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     }
   }, [theme])
 
-  // The UI size setting changes the font, and then the number of columns.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: uiSize is the trigger; uiZoom() reads the page.
+  // The UI size and the terminal font change the cells, and then the number of columns.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: uiSize is a trigger; uiZoom() reads the page.
   useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.options.fontSize = TERMINAL_FONT_SIZE * uiZoom()
+    const terminal = terminalRef.current
+    if (terminal) {
+      terminal.options.fontFamily = font.stack
+      terminal.options.fontSize = font.size * uiZoom()
       safeFit(fitRef.current)
+      document.fonts
+        ?.load(`${Math.round(font.size)}px ${font.stack}`)
+        .then(() => safeFit(fitRef.current))
+        .catch(() => undefined)
     }
-  }, [uiSize])
+  }, [uiSize, font.stack, font.size])
 
   // A new token is the trigger. Token 0 is "no request", so a terminal that only opens does not
   // take the focus from the tab that opened it.
