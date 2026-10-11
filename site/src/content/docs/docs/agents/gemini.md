@@ -44,6 +44,20 @@ The daemon writes `gemini-settings.json` into its data folder. Gemini CLI reads 
 | `Notification` with type `ToolPermission` | Gemini waits for permission | needs input |
 | `AfterAgent` | The turn ended | needs input |
 
+## Skills
+
+| Where | Folder | Shown as |
+|---|---|---|
+| Project | `.gemini/skills/<name>/SKILL.md` or `.agents/skills/<name>/SKILL.md` | **Project** |
+| You | `~/.gemini/skills/<name>/SKILL.md` or `~/.agents/skills/<name>/SKILL.md` | **Only on this machine** |
+| Extension | `~/.gemini/extensions/<extension>/skills/<name>/SKILL.md` | **Only on this machine** |
+
+- Gemini CLI has no explicit call: the model picks a skill by its description. So `{skill:<name>}` never becomes a call. It becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+
+Source: [Gemini CLI skills](https://geminicli.com/docs/cli/skills/), checked 2026-10-11.
+
+For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
+
 ## Tested
 
 Not run against a real Gemini CLI session. The hooks follow its documentation and are tested with made-up input.

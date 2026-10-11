@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
@@ -178,6 +178,63 @@ describe('applyEvent', () => {
     expect(() => service.applyEvent('T-0099', { source: 'human', type: 'task.readied' })).toThrow(
       TaskNotFoundError,
     )
+  })
+})
+
+describe('createTask with stages that are off', () => {
+  it('gives a new task only the stages that are on', () => {
+    const settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'context' || step.id === 'plan' ? { ...step, enabled: false } : step,
+      ),
+    }
+    const off = new TaskService({ dataDir, index, bus: new EventBus(), settingsOf: () => settings })
+    const task = off.createTask({ title: 'Export' })
+    expect(task.stages).toEqual([
+      'spec',
+      { id: 'build', parallel: ['test-spec', 'implement'] },
+      'review',
+      'testing',
+      'release',
+    ])
+    expect(task.stage).toBe('spec')
+  })
+})
+
+describe('a task on its way when the settings change', () => {
+  it('keeps its stages, with catalog settings for a stage that is gone, and live prompts', () => {
+    let settings: ProjectSettings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        ...DEFAULT_PROJECT_SETTINGS.stages.slice(0, 2),
+        { id: 'research', kind: 'agent', gate: 'auto' },
+        { id: 'sign-off', kind: 'agent', gate: 'auto' },
+        ...DEFAULT_PROJECT_SETTINGS.stages.slice(2),
+      ],
+    }
+    const live = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      settingsOf: () => settings,
+    })
+    const a = live.createTask({ title: 'A' })
+
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'plan' ? { ...step, prompt: 'New plan prompt' } : step,
+      ),
+    }
+    const steps = live.stepsOf(live.getTask(a.id))
+    const find = (id: string) => steps.find((step) => step.id === id)
+    expect(find('research')).toMatchObject({ kind: 'agent', gate: 'manual', output: 'research.md' })
+    expect(find('sign-off')).toEqual({ id: 'sign-off', kind: 'manual', gate: 'manual' })
+    expect(find('plan')).toMatchObject({ prompt: 'New plan prompt' })
+
+    const b = live.createTask({ title: 'B' })
+    expect(b.stages).not.toContain('research')
   })
 })
 

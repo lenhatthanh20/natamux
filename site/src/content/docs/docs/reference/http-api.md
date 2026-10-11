@@ -44,6 +44,9 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `GET /repos` | Projects Natamux manages |
 | `POST /repos` | Add a project `{ path, name? }` |
 | `DELETE /repos/:id` | Forget a project. Any project can be removed. Answers 409 while it has workspaces |
+| `GET /repos/:id/settings` | The settings of a project: `settings`, `error`, `path`, `text` (the text of `.natamux.json`, or `null` without a file) and `version` (`none` without a file) |
+| `PUT /repos/:id/settings` | Save the settings to `.natamux.json`. Send the version you read in the header `If-Match: <version>`. Answers `{ settings, version }`. Answers 409 `conflict` when the file changed since that version. Keys of the file that Natamux does not know are kept |
+| `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
 

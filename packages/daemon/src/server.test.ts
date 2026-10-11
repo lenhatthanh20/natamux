@@ -108,6 +108,7 @@ beforeEach(async () => {
       bus,
       dataDir,
       repoPath: () => repo.dir,
+      home: join(repo.root, 'home'),
     }),
     settings: new ProjectSettingsService({ repos }),
     issueLinker: new IssueLinker({ tasks: service, bus, dataDir, repoPath: () => repo.dir }),
@@ -115,6 +116,7 @@ beforeEach(async () => {
     token: TOKEN,
     webIndexPath,
     webDir: join(repo.root, 'web'),
+    skillsHome: join(repo.root, 'home'),
   })
 })
 
@@ -2006,5 +2008,51 @@ describe('project settings', () => {
     })
     expect(wrong.statusCode).toBe(400)
     expect(wrong.json().message).toContain('agents.permissionMode')
+  })
+
+  it('refuses a save over a file that changed since the editor read it', async () => {
+    const before = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(before.json()).toMatchObject({ found: false, text: null, version: 'none' })
+
+    const saved = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: { ...authorization, 'if-match': 'none' },
+      payload: { team: 'web' },
+    })
+    expect(saved.statusCode).toBe(200)
+    const after = await app.inject({ method: 'GET', url: settingsUrl, headers: authorization })
+    expect(after.json().text).toContain('"team": "web"')
+    expect(saved.json().version).toBe(after.json().version)
+
+    const stale = await app.inject({
+      method: 'PUT',
+      url: settingsUrl,
+      headers: { ...authorization, 'if-match': 'none' },
+      payload: {},
+    })
+    expect(stale.statusCode).toBe(409)
+    expect(stale.json().message).toContain('changed since you opened it')
+  })
+
+  it('lists the skills of the agents for a repository', async () => {
+    const dir = join(repo.dir, '.claude', 'skills', 'review')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: review\ndescription: Reviews a diff\n---\n')
+    const response = await app.inject({
+      method: 'GET',
+      url: '/repos/default/skills',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json().skills).toEqual([
+      {
+        name: 'review',
+        description: 'Reviews a diff',
+        origin: 'project',
+        agents: ['claude-code', 'copilot', 'cursor'],
+        path: '.claude/skills/review/SKILL.md',
+      },
+    ])
   })
 })

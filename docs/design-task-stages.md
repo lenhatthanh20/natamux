@@ -323,7 +323,8 @@ The name is not `.natamux/project.json`, because `.natamux/` is the daemon's def
 Stage fields:
 - `id`, `kind`, `gate`: required in each stage entry. `id` is lower case words joined by "-".
 - `name`: shown in the app, default from the id.
-- `prompt`: replaces the default prompt. Placeholders: `{title}`, `{description}`, `{dir}` (the stage file folder), `{ref}` (the context reference).
+- `prompt`: replaces the default prompt. Placeholders: `{title}`, `{description}`, `{dir}` (the stage file folder), `{ref}` (the context reference), `{skill:<name>}` (a skill, called the way the task's agent calls it; see "Skills in a prompt" below).
+- `enabled`: `false` turns the stage off. It stays in the file with its prompt and gate, but new tasks do not get it. The rules (context first, release last, groups of 2 to 4) count only stages that are on.
 - `output`: the file the stage must write (`agent` kind).
 - `command`: the test command (`testing` kind).
 - `sections`, `requireCommit`, `requireClean`, `check`: the checks of 3.5.
@@ -333,7 +334,35 @@ Stage fields:
 Other rules:
 - **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt. It can also group stages, or take a stage out of a group so it runs on its own.
 - **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings keeps the default settings of that id (spec, plan, …); a custom stage that is gone acts as kind `manual`.
-- **Editing:** the app has a **Project settings** page that edits this file in the repository's main folder. You commit it yourself. "Reset to default" writes the default pipeline back.
+- **Editing:** **Settings** in the menu of a project opens **Project settings** with a **Stages** tab and a **JSON** tab. Save writes the file in the repository's main folder. You commit it yourself. **Reset to default** puts the default pipeline in the editor. See "The Stages tab" below.
+- **Stages left out:** when the pipeline equals the default, Save leaves `stages` out of the file, so the project follows later changes of the default. Save changes only `stages`; other fields and unknown keys stay.
+- **Concurrent edits:** `GET /repos/:id/settings` returns a `version` (a hash of the file text, `none` without a file). `PUT` sends it in `If-Match` and gets 409 `conflict` when the file changed. The screen then offers **Reload** or **Overwrite**.
+
+### The stage catalog
+
+The catalog lives in `packages/core/src/stage-catalog.ts`, so the daemon and the web app read the same list. Each entry has a stage (id, name, kind, gate, output, sections), a phase (Understand, Design, Build, Check, Ship), a sentence for the picker, and a default prompt for agent and testing kinds. The default pipeline is built from 8 of its entries: `context`, `spec`, `plan`, `test-spec`, `implement`, `review`, `testing` and `release`. The table of all 27 entries is in the user docs (`reference/configuration.md`, "Stage catalog").
+
+- A catalog stage that is gone from the settings keeps its catalog settings for a task on its way (`resolveSteps`).
+- `lint` and `e2e` are testing stages that need the project's own `command`.
+- Stages after the merge (deploy, monitoring, retrospective) are not in the catalog: a release ends the task.
+
+### The Stages tab
+
+- **Layout:** a pipeline preview (flow chart) on top, the stage list on the left, the details of the selected stage on the right, and a footer with **Reset to default**, **Cancel** and **Save** (`Mod+Enter`). Below 640 px it is one column; the details open in place of the list with **Back**.
+- **List:** a row has a drag handle, an on/off switch, the name, and marks for "waits for approval" and "custom prompt". The row menu has **Move up**, **Move down** (`Alt+ArrowUp`, `Alt+ArrowDown`), **Run alongside the stage above**, **Run on its own** and **Remove**.
+- **Details:** **Name**, **Wait for my approval** (with "Default" or "Changed" and **Use default**; always checked for `review` and `manual`), **Prompt**, **Command**, **Output file**, **Required sections**, **Finished when**. `requireCommit`, `requireClean` and `check` are edited in the **JSON** tab.
+- **Validation:** the browser runs the same schema as the daemon, counting only stages that are on. Save is off while there are problems.
+- **Unsaved edits:** closing asks "Discard your changes?".
+
+### Skills in a prompt
+
+`{skill:<name>}` (plugin skills `<plugin>:<skill>`) is filled by the daemon when a stage starts, for the task's agent (`agent-skills.ts`):
+
+1. The agent has the skill and a sure call: that call (`/name` for Claude Code and Copilot CLI, `$name` for Codex). Gemini CLI and Cursor CLI have no sure call.
+2. Otherwise a `SKILL.md` of that name exists for any agent: `the skill in <path> (read that file and follow it)`.
+3. Otherwise `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>."
+
+The `skill` context source follows the same rules as a whole line. The folders each agent reads are in `docs/agent-adapters.md`. `GET /repos/:id/skills` lists the skills of all agents for the **Insert skill** picker.
 - **Wrong settings:** a file that fails to parse shows an error on the page, and the daemon uses the defaults.
 
 ## 7. Changes per package
@@ -391,7 +420,7 @@ New commands:
 - **Table:** a "Stage" column. The state badge reads "Plan · Waiting for approval"; in a group, "Test spec · Waiting for approval, Implement · Running".
 - **Board:** columns by step, plus Done. A group is one column. A switch keeps the old "by state" columns.
 - **New task and New workspace dialogs:** a context source picker (from the project settings) and a reference field (`#42`, `ABC-123`).
-- **Project settings page:** the stage list (order, on or off, gate, prompt, "run alongside the stage above"), the context sources, and the tracker.
+- **Project settings:** the **Stages** tab (preview, stage list with order, on or off and "run alongside the stage above", details with approval and prompt, skill picker, see section 6) and the **JSON** tab for the whole file, including the context sources and the tracker.
 - **Issue:** a link on the task, and "Create issue" when there is none.
 - **Needs me:** keeps working on states. The text names the stage.
 
@@ -521,5 +550,4 @@ Where the code differs from the text above, or is not built yet:
   - The `url` context source, Jira and Linear issue creation, comments on the issue at each stage.
   - The Implement card does not list its commits yet; the History tab has them.
   - Stage files show as plain text, not rendered markdown.
-  - Project settings are edited as JSON, not with a stage list editor.
   - A mark for stages that wait for a person, in every view.

@@ -11,7 +11,7 @@ import {
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { AgentId } from '../lib/agents'
+import { type AgentId, agentLabel, DEFAULT_AGENT } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -24,6 +24,7 @@ import { describeEvent } from '../lib/events'
 import {
   finishedWhen,
   formatDuration,
+  missingSkills,
   sentBackCount,
   stageCount,
   stageTime,
@@ -158,6 +159,7 @@ export function ProgressTab({
       : entry,
   )
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
+  const missing = missingSkills(accepted)
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
@@ -195,6 +197,8 @@ export function ProgressTab({
         onSendBack={() => setSendingBack(entry)}
         onOpenFile={onOpenFile}
         agent={task.agent}
+        missingSkills={missing.get(stage.id)?.names ?? []}
+        skillsAgent={missing.get(stage.id)?.agent ?? task.agent}
         startInBanner={startInBanner}
         starting={starting.isPending}
         onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
@@ -553,12 +557,18 @@ function StageCard({
   onOpenFile,
   activity,
   agent,
+  missingSkills: missingNames,
+  skillsAgent,
   startInBanner,
   starting,
   onStartAgent,
 }: {
   activity?: string
   agent: string | null
+  // Skills the prompt named that the agent did not get at the latest start.
+  missingSkills: readonly string[]
+  // The agent that did not get them.
+  skillsAgent: string | null
   startInBanner: boolean
   starting: boolean
   onStartAgent?: (agent: AgentId) => void
@@ -737,6 +747,16 @@ function StageCard({
               {progress.reasons.map((reason) => (
                 <li key={reason} className="whitespace-pre-wrap break-words text-ink">
                   {reason}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {current && missingNames.length > 0 && (
+            <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm">
+              {missingNames.map((name) => (
+                <li key={name} className="break-words text-ink">
+                  The skill {name} was not found for {agentLabel(skillsAgent ?? DEFAULT_AGENT)}.
                 </li>
               ))}
             </ul>

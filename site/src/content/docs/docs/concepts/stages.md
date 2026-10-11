@@ -34,9 +34,32 @@ The group in the middle holds two stages:
 | Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
 | Implement | `agent` | auto | The agent writes tests and code. It does not commit: you read the changes in the **Changes** tab and commit them. |
 
-To change the pipeline, see the [configuration reference](/docs/reference/configuration/).
+To change the pipeline, use [Project settings](#change-the-pipeline) or see the [configuration reference](/docs/reference/configuration/).
 
-A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, checks), not the list of stages of existing tasks.
+A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
+
+## Change the pipeline
+
+Open the menu of a project and click **Settings**. The **Stages** tab edits the pipeline of the project. Save writes it to `.natamux.json` in the repository. Commit the file to share it. The **JSON** tab edits the whole file as text. See [Project settings](/docs/guides/dashboard/#project-settings).
+
+- **Pick stages.** **Add stage** opens the catalog: common work steps such as Research, Security review or Manual QA, grouped by phase. **Custom stage** makes a stage of your own. The [reference](/docs/reference/configuration/#stage-catalog) lists every catalog stage.
+- **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The switch of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
+- **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
+- **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
+- **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
+- **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
+
+New tasks use the new pipeline. Tasks on their way keep their stages, but use the new prompts and approvals.
+
+### Skills in a prompt
+
+A prompt can name a skill with `{skill:<name>}`. A skill of a plugin is `<plugin>:<skill>`. The task can run with any agent, and each agent calls skills its own way, so Natamux fills the placeholder when the stage starts:
+
+1. The agent has the skill and a sure way to call it: Natamux writes that call. It is `/name` for Claude Code and Copilot CLI, and `$name` for Codex. Gemini CLI and Cursor CLI have no sure call, so they always get rule 2.
+2. Otherwise, a `SKILL.md` of that name exists for any agent: Natamux writes `the skill in <path> (read that file and follow it)`.
+3. Otherwise Natamux writes `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>." The stage still starts.
+
+Each form reads well in a sentence such as "Use {skill:review-pr} on the diff". For where each agent keeps its skills, see the page of the agent, for example [Claude Code](/docs/agents/claude-code/#skills).
 
 ## Stage kinds
 
@@ -154,7 +177,7 @@ Skipping ends a stage without checks and moves the task on. If you skip the last
 
 ## Stages that run side by side
 
-A group holds 2 to 4 stages that work at the same time. Only `agent` and `manual` stages can be in a group.
+A group holds 2 to 4 stages that are on and work at the same time. Only `agent` and `manual` stages can be in a group.
 
 - The group finishes when every stage in it is done.
 - Each stage works in its own shell. The stage that changes code (an agent stage without an output file) keeps the first shell.
@@ -183,7 +206,7 @@ The first stage of the default pipeline reads the context of the task. The sourc
 |---|---|
 | `manual` | Writes the title, notes and reference of the task into `context.md`. The stage passes by itself, so a new task does not wait for you. |
 | `github-issue` | Reads the issue with the `gh` CLI (title, body, labels, comments) into `context.md`, and links the issue to the task. Needs a reference such as `#42`, `owner/name#42` or an issue address. |
-| `skill` | An agent runs a skill you configured and writes `context.md`. |
+| `skill` | An agent runs a skill you configured and writes `context.md`. Natamux names the skill the way the agent of the task needs, with the rules in [Skills in a prompt](#skills-in-a-prompt). |
 | `mcp` | An agent runs a prompt you configured and writes `context.md`. |
 
 For `github-issue`, `gh` must be installed and logged in. See [GitHub](/docs/guides/github/). Configure the sources in `context.sources`; see the [configuration reference](/docs/reference/configuration/).

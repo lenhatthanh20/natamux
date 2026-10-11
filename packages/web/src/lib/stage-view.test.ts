@@ -1,7 +1,7 @@
-import { DEFAULT_PIPELINE, type Stage, stagesOf } from '@natamux/core'
+import { DEFAULT_PIPELINE, type Stage, stagesOf, type TaskEvent } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
-import { finishedWhen, formatDuration, stageCount, stepTime } from './stage-view'
+import { finishedWhen, formatDuration, missingSkills, stageCount, stepTime } from './stage-view'
 
 describe('formatDuration', () => {
   it.each([
@@ -77,5 +77,25 @@ describe('stepTime', () => {
   it('is null before a start, or when a finished stage has no end', () => {
     expect(stepTime([lane(null, null, 'upcoming')], now)).toBeNull()
     expect(stepTime([lane('2026-10-09T09:00:00Z', null)], now)).toBeNull()
+  })
+})
+
+describe('missingSkills', () => {
+  const started = (stage: string, payload: Record<string, unknown> = {}): TaskEvent => ({
+    taskId: 'T-0001',
+    source: 'system',
+    type: 'stage.started',
+    at: '2026-10-10T08:00:00.000Z',
+    payload: { stage, ...payload },
+  })
+
+  it('keeps the skills of the latest start of each stage', () => {
+    const missing = missingSkills([
+      started('spec', { missingSkills: ['a', 'b'], agent: 'codex' }),
+      started('plan', { missingSkills: ['c'], agent: 'codex' }),
+      started('spec'),
+    ])
+    expect(missing.get('spec')).toEqual({ names: [], agent: null })
+    expect(missing.get('plan')).toEqual({ names: ['c'], agent: 'codex' })
   })
 })

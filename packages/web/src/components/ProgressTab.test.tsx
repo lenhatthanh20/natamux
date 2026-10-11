@@ -48,6 +48,8 @@ const SETTINGS: LoadedSettings = {
   error: null,
   found: false,
   path: '',
+  text: null,
+  version: 'none',
 }
 
 function stored(
@@ -177,6 +179,22 @@ describe('ProgressTab', () => {
     expect(within(context).getByRole('button', { expanded: true })).toBeTruthy()
     expect(within(context).getByText('1 check passed')).toBeTruthy()
     expect(within(context).getByText('Show evidence')).toBeTruthy()
+  })
+
+  it('says which skills of the prompt the agent did not get', async () => {
+    const events = [
+      ...EVENTS.slice(0, 3),
+      stored(4, 'stage.started', '2026-10-10T08:11:00.000Z', {
+        stage: 'spec',
+        missingSkills: ['write-spec'],
+      }),
+    ]
+    progress({ events })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    expect(
+      within(spec).getByText('The skill write-spec was not found for Claude Code.'),
+    ).toBeTruthy()
   })
 
   it('approves the current stage from its card', async () => {

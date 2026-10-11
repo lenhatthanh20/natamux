@@ -862,6 +862,232 @@
   animation: hm-stripes 1s linear infinite;
 }
 
+/* The pipeline preview of Project settings: left to right, top to bottom below 640px. It is still,
+   so it reads the same with reduced motion. Lines meet the middle of the markers. */
+.pipeline {
+  --dot: 24px;
+  --dot-middle: calc(4px + var(--dot) / 2 - 1px);
+  --lane: calc(var(--dot) + 14px + var(--text-xs--line-height));
+  --dash-x: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 8px);
+  --dash-y: repeating-linear-gradient(180deg, var(--muted) 0 4px, transparent 4px 8px);
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+.pipeline-step {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+}
+.pipeline-link {
+  flex: none;
+  width: 20px;
+  height: 2px;
+  margin-top: var(--dot-middle);
+  background-image: var(--dash-x);
+}
+.pipeline-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 12px;
+  list-style: none;
+}
+.pipeline-group::before,
+.pipeline-group::after {
+  content: "";
+  position: absolute;
+  top: var(--dot-middle);
+  bottom: calc(var(--lane) - var(--dot-middle) - 2px);
+  width: 2px;
+  background-image: var(--dash-y);
+}
+.pipeline-group::before {
+  left: 0;
+}
+.pipeline-group::after {
+  right: 0;
+}
+.pipeline-lane {
+  position: relative;
+  display: flex;
+  height: var(--lane);
+}
+.pipeline-lane::before,
+.pipeline-lane::after {
+  content: "";
+  position: absolute;
+  top: var(--dot-middle);
+  width: 10px;
+  height: 2px;
+  background-image: var(--dash-x);
+}
+.pipeline-lane::before {
+  left: -10px;
+}
+.pipeline-lane::after {
+  right: -10px;
+}
+.pipeline-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 6.5rem;
+  padding: 4px 4px 6px;
+  border-radius: 8px;
+  color: var(--ink-2);
+}
+/* The line runs on through the node to its marker, which covers it. */
+.pipeline-node::before,
+.pipeline-node::after {
+  content: "";
+  position: absolute;
+  top: var(--dot-middle);
+  width: calc(50% - var(--dot) / 2);
+  height: 2px;
+  background-image: var(--dash-x);
+}
+.pipeline-node::before {
+  left: 0;
+}
+.pipeline-node::after {
+  right: 0;
+}
+.pipeline-node[data-edge="first"]::before,
+.pipeline-node[data-edge="only"]::before,
+.pipeline-node[data-edge="last"]::after,
+.pipeline-node[data-edge="only"]::after {
+  display: none;
+}
+.pipeline-node:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.pipeline-node[aria-pressed="true"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+.pipeline-node .stage-node {
+  --node: var(--dot);
+  background: var(--surface);
+}
+.pipeline-dot {
+  position: relative;
+  display: inline-flex;
+}
+.pipeline-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+}
+.pipeline-mark {
+  position: absolute;
+  right: -9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--popover);
+  color: var(--ink-2);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.pipeline-mark[data-mark="approval"] {
+  top: -5px;
+}
+.pipeline-mark[data-mark="prompt"] {
+  bottom: -5px;
+}
+.pipeline-node[data-error] .stage-node {
+  border-color: var(--danger-text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+.pipeline-node[data-error] .pipeline-name {
+  color: var(--danger-text);
+}
+.pipeline-group[data-error]::before,
+.pipeline-group[data-error]::after {
+  background-image: none;
+  background-color: var(--danger-text);
+}
+
+@media (width < 40rem) {
+  .pipeline {
+    flex-direction: column;
+    width: auto;
+  }
+  .pipeline-step {
+    flex-direction: column;
+    max-width: 100%;
+  }
+  .pipeline-link {
+    width: 2px;
+    height: 12px;
+    margin: 0 0 0 var(--dot-middle);
+    background-image: var(--dash-y);
+  }
+  .pipeline-group {
+    max-width: 100%;
+    gap: 0;
+    padding: 0 0 0 24px;
+  }
+  .pipeline-group::before {
+    top: 0;
+    bottom: 0;
+    left: var(--dot-middle);
+  }
+  .pipeline-group::after {
+    display: none;
+  }
+  .pipeline-lane {
+    max-width: 100%;
+    height: calc(var(--dot) + 8px);
+  }
+  .pipeline-lane::before {
+    left: calc(var(--dot-middle) + 2px - 24px);
+    width: calc(26px - var(--dot-middle));
+  }
+  .pipeline-node {
+    flex-direction: row;
+    gap: 8px;
+    width: auto;
+    max-width: 100%;
+    padding: 4px 8px 4px 4px;
+  }
+  .pipeline-node::before,
+  .pipeline-node::after {
+    left: var(--dot-middle);
+    width: 2px;
+    height: 4px;
+    background: var(--muted);
+  }
+  .pipeline-node::before {
+    top: 0;
+  }
+  .pipeline-node::after {
+    top: auto;
+    right: auto;
+    bottom: 0;
+  }
+  .pipeline-lane::after,
+  .pipeline-lane .pipeline-node::before,
+  .pipeline-lane .pipeline-node::after {
+    display: none;
+  }
+}
+
 @keyframes hm-spin {
   to {
     transform: rotate(360deg);

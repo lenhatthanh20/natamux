@@ -1,6 +1,6 @@
 import type { Task } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { ApiError, createApi, type FetchFunction, isUnauthorized } from './api'
+import { ApiError, createApi, type FetchFunction, isConflict, isUnauthorized } from './api'
 
 const task: Task = {
   id: 'T-0001',
@@ -395,6 +395,104 @@ describe('attachments', () => {
 
     expect(calls[0]?.url).toBe('/api/workspaces')
     expect(calls[0]?.body).toMatchObject({ title: 'Fix it', attachments })
+  })
+})
+
+describe('project settings', () => {
+  it('reads the text and the version of the file', async () => {
+    const { calls, fetchFunction } = fakeFetch(() =>
+      json({
+        settings: {},
+        error: null,
+        found: true,
+        path: '/work/.natamux.json',
+        text: '{ "tracker": { "type": "none" }, "team": "web" }',
+        version: 'abc123',
+      }),
+    )
+
+    const loaded = await createApi('secret', fetchFunction).getSettings('web')
+
+    expect(calls[0]?.url).toBe('/api/repos/web/settings')
+    expect(loaded.text).toBe('{ "tracker": { "type": "none" }, "team": "web" }')
+    expect(loaded.version).toBe('abc123')
+    expect(loaded.found).toBe(true)
+  })
+
+  it('has no text and no version when the daemon sends none', async () => {
+    const { fetchFunction } = fakeFetch(() => json({ settings: {}, found: false, path: '/w' }))
+
+    const loaded = await createApi('secret', fetchFunction).getSettings('web')
+
+    expect(loaded.text).toBeNull()
+    expect(loaded.version).toBeNull()
+  })
+
+  it('sends the version it read with a save, and gives the new one', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ settings: {}, version: 'def456' }))
+    const raw = { tracker: { type: 'none' } }
+
+    const saved = await createApi('secret', fetchFunction).saveSettings('web', raw, 'abc123')
+
+    expect(calls[0]?.method).toBe('PUT')
+    expect(calls[0]?.url).toBe('/api/repos/web/settings')
+    expect(calls[0]?.headers.get('if-match')).toBe('abc123')
+    expect(calls[0]?.body).toEqual(raw)
+    expect(saved.version).toBe('def456')
+    expect(saved.settings.tracker.type).toBe('github')
+  })
+
+  it('saves without a version when none is given, to overwrite the file', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ settings: {}, version: 'def456' }))
+
+    await createApi('secret', fetchFunction).saveSettings('web', {})
+
+    expect(calls[0]?.headers.has('if-match')).toBe(false)
+  })
+
+  it('tells a file that changed on disk from other failures', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({ error: 'conflict', message: '/w/.natamux.json changed since you opened it.' }, 409),
+    )
+
+    const failure = await createApi('secret', fetchFunction)
+      .saveSettings('web', {}, 'abc123')
+      .catch((error: unknown) => error)
+
+    expect(isConflict(failure)).toBe(true)
+    expect(isConflict(new ApiError(400, 'bad'))).toBe(false)
+    expect(isConflict(new Error('boom'))).toBe(false)
+  })
+
+  it('lists the skills of the agents, with the notices', async () => {
+    const skill = {
+      name: 'fetch-ticket',
+      description: 'Reads a ticket',
+      origin: 'project',
+      agents: ['claude-code', 'codex'],
+      path: '.claude/skills/fetch-ticket/SKILL.md',
+    }
+    const { calls, fetchFunction } = fakeFetch(() =>
+      json({ skills: [skill], notices: ['The plugin tools is not installed on this machine.'] }),
+    )
+
+    const list = await createApi('secret', fetchFunction).getSkills('web')
+
+    expect(calls[0]?.url).toBe('/api/repos/web/skills')
+    expect(list).toEqual({
+      skills: [skill],
+      notices: ['The plugin tools is not installed on this machine.'],
+    })
+  })
+
+  it('refuses a skill of an unknown origin', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({ skills: [{ name: 'x', origin: 'elsewhere' }], notices: [] }),
+    )
+
+    await expect(createApi('secret', fetchFunction).getSkills('web')).rejects.toThrow(
+      'does not understand',
+    )
   })
 })
 

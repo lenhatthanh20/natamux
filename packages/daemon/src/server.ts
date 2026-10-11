@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
+import { homedir } from 'node:os'
 import websocket from '@fastify/websocket'
 import {
   attachmentUploadsSchema,
@@ -22,6 +23,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
+import { listSkills } from './agent-skills.js'
 import {
   AttachmentError,
   decodeAttachments,
@@ -43,7 +45,11 @@ import {
 import type { IssueImporter } from './issue-importer.js'
 import { IssueLinkError, type IssueLinker } from './issue-linker.js'
 import { newWorkspace } from './new-workspace.js'
-import { type ProjectSettingsService, SettingsInputError } from './project-settings.js'
+import {
+  type ProjectSettingsService,
+  SettingsChangedError,
+  SettingsInputError,
+} from './project-settings.js'
 import type { PullRequestWatcher } from './pull-request-watcher.js'
 import {
   RepoInputError,
@@ -100,6 +106,8 @@ type ServerOptions = {
   webIndexPath?: string
   // The built dashboard. Set: the daemon serves its files too, at the same address as the API.
   webDir?: string
+  // Where agents keep the user's skills. The home folder by default.
+  skillsHome?: string
 }
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
@@ -177,6 +185,10 @@ export function isAuthorized(provided: string | undefined, token: string): boole
   const providedBytes = Buffer.from(provided)
   const tokenBytes = Buffer.from(token)
   return providedBytes.length === tokenBytes.length && timingSafeEqual(providedBytes, tokenBytes)
+}
+
+function singleHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function bearerToken(header: string | undefined): string | undefined {
@@ -275,7 +287,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof TaskWaitingError ||
       error instanceof StageActionError ||
       error instanceof IssueLinkError ||
-      error instanceof RepoInUseError
+      error instanceof RepoInUseError ||
+      error instanceof SettingsChangedError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -477,9 +490,18 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { ...loaded, path: options.settings.pathOf(id) }
   })
 
+  // `If-Match` holds the version the editor read; a file that changed since is not replaced.
   app.put('/repos/:id/settings', async (request) => {
     const { id } = repoParamsSchema.parse(request.params)
-    return { settings: options.settings.save(id, request.body) }
+    const version = request.headers['if-match']
+    const settings = options.settings.save(id, request.body, singleHeader(version))
+    return { settings, version: options.settings.load(id).version }
+  })
+
+  // The skills of every agent for this repository, for the skill picker of the settings page.
+  app.get('/repos/:id/skills', async (request) => {
+    const { id } = repoParamsSchema.parse(request.params)
+    return listSkills(options.repos.pathOf(id), options.skillsHome ?? homedir())
   })
 
   app.post('/tasks/:id/workspace', async (request, reply) => {

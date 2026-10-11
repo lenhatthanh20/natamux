@@ -19,6 +19,9 @@ import {
   projectSettingsSchema,
   type Repo,
   repoSchema,
+  type SkillInfo,
+  type SkillList,
+  type SkillOrigin,
   type Task,
   type TaskEvent,
   type TaskTemplate,
@@ -50,6 +53,16 @@ export type LoadedSettings = {
   error: string | null
   found: boolean
   path: string
+  // The text of the file, so an editor keeps what it does not know. Null without a file.
+  text: string | null
+  // Sent back with a save, so a file that changed since is not replaced unseen. Null when the
+  // daemon gives none.
+  version: string | null
+}
+
+export type SavedSettings = {
+  settings: ProjectSettings
+  version: string | null
 }
 
 export type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>
@@ -95,6 +108,28 @@ export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
 }
 
+// The daemon refused a save because the file changed since it was read.
+export function isConflict(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409
+}
+
+const SKILL_ORIGINS: readonly SkillOrigin[] = ['project', 'plugin', 'user']
+
+function skillInfo(value: unknown): SkillInfo {
+  const skill = asRecord(value)
+  const origin = SKILL_ORIGINS.find((candidate) => candidate === skill.origin)
+  if (typeof skill.name !== 'string' || origin === undefined) {
+    throw new Error('The daemon sent an answer this dashboard does not understand.')
+  }
+  return {
+    name: skill.name,
+    description: typeof skill.description === 'string' ? skill.description : '',
+    origin,
+    agents: Array.isArray(skill.agents) ? stringList(skill.agents) : [],
+    path: typeof skill.path === 'string' ? skill.path : '',
+  }
+}
+
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
     throw new Error('The daemon sent an answer this dashboard does not understand.')
@@ -131,13 +166,19 @@ export function createApi(
   token: string,
   fetchFunction: FetchFunction = (input, init) => fetch(input, init),
 ) {
-  async function send(method: string, path: string, body?: unknown): Promise<Response> {
+  async function send(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers: Record<string, string> = {},
+  ): Promise<Response> {
     try {
       return await fetchFunction(`/api${path}`, {
         method,
         headers: {
           authorization: `Bearer ${token}`,
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...headers,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       })
@@ -152,8 +193,13 @@ export function createApi(
     return new ApiError(response.status, describeError(response.status, parsed))
   }
 
-  async function request(method: string, path: string, body?: unknown): Promise<unknown> {
-    const response = await send(method, path, body)
+  async function request(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<unknown> {
+    const response = await send(method, path, body, headers)
     if (!response.ok) {
       throw await failure(response)
     }
@@ -528,14 +574,34 @@ export function createApi(
         error: typeof body.error === 'string' ? body.error : null,
         found: body.found === true,
         path: String(body.path ?? ''),
+        text: typeof body.text === 'string' ? body.text : null,
+        version: typeof body.version === 'string' ? body.version : null,
       }
     },
 
-    async saveSettings(repo: string, raw: unknown): Promise<ProjectSettings> {
+    // With `version`, the daemon answers 409 (see isConflict) when the file changed since then.
+    async saveSettings(repo: string, raw: unknown, version?: string): Promise<SavedSettings> {
       const body = asRecord(
-        await request('PUT', `/repos/${encodeURIComponent(repo)}/settings`, raw),
+        await request(
+          'PUT',
+          `/repos/${encodeURIComponent(repo)}/settings`,
+          raw,
+          version === undefined ? {} : { 'if-match': version },
+        ),
       )
-      return projectSettingsSchema.parse(body.settings)
+      return {
+        settings: projectSettingsSchema.parse(body.settings),
+        version: typeof body.version === 'string' ? body.version : null,
+      }
+    },
+
+    // The skills of every agent for a repository, for the skill picker of the stage prompts.
+    async getSkills(repo: string): Promise<SkillList> {
+      const body = asRecord(await request('GET', `/repos/${encodeURIComponent(repo)}/skills`))
+      return {
+        skills: Array.isArray(body.skills) ? body.skills.map(skillInfo) : [],
+        notices: Array.isArray(body.notices) ? stringList(body.notices) : [],
+      }
     },
 
     async deleteTask(taskId: string): Promise<{ id: string; tasks: Task[] }> {

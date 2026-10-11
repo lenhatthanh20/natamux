@@ -1,4 +1,5 @@
 import {
+  activeSteps,
   isGroup,
   needsMe,
   type Repo,
@@ -8,6 +9,7 @@ import {
   stageProgress,
   stagesOf,
   stepIndex,
+  stepRefsOf,
   type Task,
 } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
@@ -81,11 +83,8 @@ export function boardSections(
       continue
     }
     const keys = [...new Set(own.map(stepsKey))]
-    const currentKey = JSON.stringify(
-      pipeline.map((step) =>
-        isGroup(step) ? { id: step.id, parallel: step.parallel.map((stage) => stage.id) } : step.id,
-      ),
-    )
+    // New tasks get the stages that are on, so tasks made since the last change carry these.
+    const currentKey = JSON.stringify(stepRefsOf(activeSteps(pipeline)))
     keys.sort((a, b) => Number(b === currentKey) - Number(a === currentKey))
     keys.forEach((key, index) => {
       const group = own.filter((task) => stepsKey(task) === key)

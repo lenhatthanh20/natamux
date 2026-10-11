@@ -1342,7 +1342,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         <ProjectSettingsDialog
           repo={settingsRepo}
           load={() => api.getSettings(settingsRepo.id)}
-          save={(raw) => api.saveSettings(settingsRepo.id, raw)}
+          save={(raw, version) => api.saveSettings(settingsRepo.id, raw, version)}
+          loadSkills={() => api.getSkills(settingsRepo.id)}
           onClose={() => setSettingsRepo(null)}
         />
       )}

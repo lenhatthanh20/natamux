@@ -149,9 +149,46 @@ Click **Projects** in the status bar, or **Add a project** in the sidebar, to se
 2. Optionally enter a **Name**. The folder name is used otherwise.
 3. Click **Add project**.
 
-Each project has a **Settings** button for its stages, context sources and issue tracker.
+Each project has a **Settings** item in its menu. See [Project settings](#project-settings).
 
 To remove a project, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. Any project can be removed. With no project left, the sidebar offers to add one.
+
+## Project settings
+
+Click **Settings** in the menu of a project to open **Project settings of <repo>**. It has two tabs: **Stages** (the default) and **JSON**. Settings are saved in `.natamux.json` in the repository, so commit the file to share them. For every field of the file, see the [configuration reference](/docs/reference/configuration/).
+
+### The Stages tab
+
+- **Pipeline preview.** A flow chart on top shows the stages as you edit them, with side-by-side stages in one column. A person icon marks a stage that waits for your approval. A pencil marks a prompt of your own. Click a node to select its stage.
+- **Stage list.** One row per stage, with a switch (on or off) and a drag handle. Drag a row, or focus it and press `Alt+ArrowUp` or `Alt+ArrowDown`. The row menu has **Move up**, **Move down**, **Run alongside the stage above**, **Run on its own** and **Remove**. A stage that is off stays in the file, but new tasks do not get it.
+- **Add stage** opens the catalog, grouped by phase. **Custom stage** makes a stage of your own. The [catalog](/docs/reference/configuration/#stage-catalog) lists every stage.
+- **Details.** Click a stage to edit it:
+
+| Field | Shown for | Meaning |
+|---|---|---|
+| **Name** | Every stage | The name in the dashboard. |
+| **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
+| **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. |
+| **Command** | Testing stages | The command to run. The Lint and types and End-to-end tests stages need one. |
+| **Output file** | Agent stages | The Markdown file the stage writes. Fixed for a catalog stage. |
+| **Required sections** | Agent stages with an output file | Headings the file must have. |
+| **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
+
+- **Problems.** Each problem shows next to its stage, and Save is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
+- **Footer.** **Reset to default** puts the default pipeline in the editor. **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
+- **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
+
+Save changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file.
+
+### The JSON tab
+
+The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show, such as `requireCommit`, `requireClean` and `check`, and for `context`, `tracker` and `agents`.
+
+### The file changed
+
+If the file changed on disk since you opened it (another editor, a pull), Natamux says "The file changed on disk since you opened it." **Reload** reads the file again and drops your edits. **Overwrite** saves your version over it. Closing the screen with edits asks "Discard your changes?".
+
+If the file is not valid, the screen shows the error and the default settings, and Save asks before it replaces the file.
 
 ## Import issues
 

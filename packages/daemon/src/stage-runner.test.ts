@@ -4,6 +4,7 @@ import {
   DEFAULT_PROJECT_SETTINGS,
   type EventType,
   type ProjectSettings,
+  type Stage,
   type Task,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -93,6 +94,8 @@ beforeEach(() => {
     runCommand: (command, cwd) => runCommand(command, cwd),
     now: () => clock,
     platform: 'linux',
+    // The skills of the machine that runs the tests must not count.
+    home: join(repo.root, 'home'),
   })
   runner.start()
 })
@@ -168,6 +171,9 @@ describe('context', () => {
   })
 
   it('runs the skill that was picked, of two', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'linear-issue')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: linear-issue\n---\n')
     settings = {
       ...DEFAULT_PROJECT_SETTINGS,
       context: {
@@ -320,6 +326,91 @@ describe('attachments', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
 
     expect(readFileSync(join(task.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')).toBe(written)
+  })
+})
+
+describe('skills in stage prompts', () => {
+  it("calls a skill the agent's way, and names a skill that is missing on the stage", async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'review-pr')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: review-pr\ndescription: Reviews\n---\n')
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec'
+          ? { ...step, prompt: 'Use {skill:review-pr}, then {skill:gone}.' }
+          : step,
+      ),
+    }
+    const waiting = await created({ title: 'Export tasks', agent: 'claude-code' })
+    const task = await withWorkspace(waiting.id)
+
+    expect(launchScript(task.id)).toContain('Use /review-pr, then the gone skill.')
+    const started = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === 'spec')
+    expect(started.at(-1)?.payload).toMatchObject({ missingSkills: ['gone'], agent: 'claude-code' })
+  })
+
+  it('gives an agent without the skill its file to read', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'review-pr')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: review-pr\n---\n')
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec' ? { ...step, prompt: 'Use {skill:review-pr}.' } : step,
+      ),
+    }
+    const waiting = await created({ title: 'Export tasks', agent: 'codex' })
+    const task = await withWorkspace(waiting.id)
+
+    expect(launchScript(task.id)).toContain(
+      `Use the skill in ${join(skill, 'SKILL.md')} (read that file and follow it).`,
+    )
+  })
+})
+
+describe('settings from the Stages screen', () => {
+  const withSpec = (change: Partial<Stage>) => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec' ? { ...step, ...change } : step,
+      ),
+    }
+  }
+
+  it('moves on from a stage that does not wait for approval', async () => {
+    withSpec({ gate: 'auto' })
+    const waiting = await created({ title: 'Export tasks', agent: 'claude-code' })
+    const task = await withWorkspace(waiting.id)
+    writeWorking(
+      task,
+      'spec.md',
+      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n',
+    )
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('plan')
+  })
+
+  it('fills the placeholders of a prompt of your own, and adds the done line once', async () => {
+    withSpec({ prompt: 'Spec {title} | {description} | {dir} | {ref}.' })
+    const waiting = await created({
+      title: 'Export tasks',
+      description: 'CSV please',
+      agent: 'claude-code',
+      context: { source: 'manual', ref: '#9' },
+    })
+    const task = await withWorkspace(waiting.id)
+
+    const script = launchScript(task.id)
+    expect(script).toContain('Spec Export tasks | CSV please | .natamux-task | #9.')
+    expect(script.split('natamux done').length - 1).toBe(1)
+    expect(script).not.toContain('Do not commit')
   })
 })
 

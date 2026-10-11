@@ -80,6 +80,18 @@ These keys work in the sidebar tree, the task table and the changed files list.
 
 `F2`, `Delete` and the row menu are for workspace rows in the sidebar. In the task table, `Enter` opens a task and `i` shows its details.
 
+## Project settings
+
+These work in the **Stages** tab of the project settings, with the focus on a stage in the list.
+
+| Action | Shortcut |
+|---|---|
+| Move the stage up | `Alt+ArrowUp` |
+| Move the stage down | `Alt+ArrowDown` |
+| Save the settings | `Mod+Enter` |
+
+The row menu has the same moves as **Move up** and **Move down**. See [Project settings](/docs/guides/dashboard/#project-settings).
+
 ## Panes and terminals
 
 | Action | Shortcut |

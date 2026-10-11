@@ -390,6 +390,15 @@ export const COMMANDS: readonly Command[] = [
     group: 'Lists and trees',
     hidden: true,
   },
+  {
+    // The stage list of Project settings moves its focused row.
+    id: 'stage.move',
+    title: 'Move a stage',
+    category: 'Project',
+    shortcuts: ['Alt+ArrowUp', 'Alt+ArrowDown'],
+    group: 'Lists and trees',
+    hidden: true,
+  },
 
   // Panes
   {

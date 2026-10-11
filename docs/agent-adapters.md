@@ -106,6 +106,36 @@ Notes:
 - **Gemini CLI** replaced its free tier with the Antigravity CLI on 2026-06-18 (its docs say so); paid accounts keep `gemini`.
 - **An agent that does not start.** If the shell answers "command not found" (or the same in zsh, sh, fish, PowerShell, cmd) for the agent's program in the first 15 seconds, the task fails with the shell's line and the variable that sets the command (`NATAMUX_<AGENT>_COMMAND`). The stage card and the banner offer **Start agent** with a choice of agent.
 
+## Skills
+
+Checked on 2026-10-11 by reading each vendor's docs. Agents change quickly: check again before relying on it. The code is `packages/daemon/src/agent-skills.ts` (`SKILL_SOURCES`).
+
+| Agent | Project folders | User folders | Other | How a prompt calls a skill | Label |
+|---|---|---|---|---|---|
+| Claude Code | `.claude/skills` | `~/.claude/skills` | Plugins: `<installPath>/skills/<name>/SKILL.md`, called `/<plugin>:<skill>`. `enabledPlugins` (`{ "name@marketplace": true }`) in the repo's `.claude/settings.json` and `.claude/settings.local.json` is shared; in `~/.claude/settings.json` it is this machine's. The install path is in `~/.claude/plugins/installed_plugins.json` | `/<name>` | docs |
+| Codex | `.agents/skills` | `~/.agents/skills` | Plugin install path not documented: not read | `$<name>` | docs |
+| Gemini CLI | `.gemini/skills`, `.agents/skills` | `~/.gemini/skills`, `~/.agents/skills` | Extensions: `~/.gemini/extensions/<ext>/skills/<name>/SKILL.md` | None: the model activates a skill by its description | docs |
+| Copilot CLI | `.github/skills`, `.claude/skills`, `.agents/skills` | `~/.copilot/skills`, `~/.agents/skills` | Plugin folders: not read | `/<name>` ("Use the /name skill") | docs |
+| Cursor | `.agents/skills`, `.cursor/skills`, `.claude/skills`, `.codex/skills` | The same four under `~` | | None: the docs do not say the CLI calls skills by name, and a forum thread says it misses some | docs and third party |
+
+Each skill is a folder with a `SKILL.md`. Its front matter has `name` and `description`. When the same name is in several folders of one agent, the closest wins: project, then plugin, then user.
+
+How `{skill:<name>}` in a stage prompt, and the `skill` context source, is filled for the task's agent:
+
+1. The agent has the skill and a sure call: that call.
+2. Otherwise, a `SKILL.md` of that name exists for any agent (in the worktree, or on this machine): `the skill in <path> (read that file and follow it)`. This works for any agent, also one Natamux does not know.
+3. Otherwise: `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>."
+
+The files of an agent that Natamux reads, such as `installed_plugins.json`, are Claude Code's own. A file that is missing or has an unknown shape gives no skills from that source, never an error. A plugin that is on but not installed gives a notice.
+
+Sources:
+
+- Claude Code: https://code.claude.com/docs/en/skills , https://code.claude.com/docs/en/plugins-reference
+- Codex: https://learn.chatgpt.com/docs/build-skills
+- Gemini CLI: https://geminicli.com/docs/cli/skills/
+- Copilot CLI: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
+- Cursor: https://cursor.com/docs/context/skills
+
 ## Order of work
 
 1. (Done) Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `natamux hook <agent>` (guarded: it does nothing without `NATAMUX_TOKEN`, always exits 0 and prints nothing) and `POST /hooks/:agent`. Claude Code keeps working.

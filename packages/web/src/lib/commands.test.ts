@@ -95,6 +95,13 @@ describe('the command registry', () => {
     }
   })
 
+  it('documents the keys that move a stage in Project settings', () => {
+    const move = commandById('stage.move')
+    expect(move?.shortcuts).toEqual(['Alt+ArrowUp', 'Alt+ArrowDown'])
+    expect(move?.group).toBe('Lists and trees')
+    expect(move?.run).toBeUndefined()
+  })
+
   it('keeps Cancel task out of the keys and the palette, because it asks first', () => {
     expect(commandById('task.task.cancelled')).toBeUndefined()
   })

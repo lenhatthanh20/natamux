@@ -16,15 +16,23 @@ type DialogProps = {
   onClose: () => void
   children?: ReactNode
   footer?: ReactNode
-  // 400, 520 and 640px. Wider for forms with several fields.
-  size?: 'sm' | 'md' | 'lg'
+  // 400, 520 and 640px. Wider for forms with several fields. `xl` (1120px) is a screen of its own:
+  // most of the window, and all of a phone's.
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   // Runs on Mod+Enter from any field. Without it, Mod+Enter presses the primary button of the footer.
   onSubmit?: () => void
   // While busy, Escape and a click outside do not close the dialog.
   busy?: boolean
 }
 
-const WIDTH = { sm: 'max-w-100', md: 'max-w-130', lg: 'max-w-160' } as const
+const SMALL_PANEL = 'max-h-[80vh] max-md:max-h-[90vh] max-md:rounded-b-none'
+const PANEL = {
+  sm: `max-w-100 ${SMALL_PANEL}`,
+  md: `max-w-130 ${SMALL_PANEL}`,
+  lg: `max-w-160 ${SMALL_PANEL}`,
+  xl: 'h-[88vh] max-h-[88vh] max-w-280 max-md:h-dvh max-md:max-h-dvh max-md:rounded-none',
+} as const
+const TOP = { sm: 'pt-[14vh]', md: 'pt-[14vh]', lg: 'pt-[14vh]', xl: 'pt-[6vh]' } as const
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
@@ -144,7 +152,9 @@ export function Dialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-(--z-dialog) flex items-start justify-center p-4 pt-[14vh] max-md:items-end max-md:p-0">
+    <div
+      className={`fixed inset-0 z-(--z-dialog) flex items-start justify-center p-4 ${TOP[size]} max-md:items-end max-md:p-0`}
+    >
       <button
         type="button"
         tabIndex={-1}
@@ -165,7 +175,7 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onPanelKeyDown}
-        className={`hm-dialog relative flex max-h-[80vh] w-full flex-col overflow-hidden rounded-xl border border-line-strong bg-popover shadow-modal ring-1 ring-contrast max-md:max-h-[90vh] max-md:max-w-none max-md:rounded-b-none ${WIDTH[size]}`}
+        className={`hm-dialog relative flex w-full flex-col overflow-hidden rounded-xl border border-line-strong bg-popover shadow-modal ring-1 ring-contrast max-md:max-w-none ${PANEL[size]}`}
       >
         <header className="flex items-start gap-3 px-5 pt-5 pb-2">
           <div className="min-w-0 flex-1">
@@ -182,7 +192,11 @@ export function Dialog({
             className="-mt-1 -mr-2"
           />
         </header>
-        {children !== undefined && <div className="overflow-y-auto px-5 py-3">{children}</div>}
+        {children !== undefined && (
+          <div className={`overflow-y-auto px-5 py-3 ${size === 'xl' ? 'min-h-0 flex-1' : ''}`}>
+            {children}
+          </div>
+        )}
         {footer !== undefined && (
           <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">
             {footer}
