@@ -105,6 +105,8 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     }
   }
   daemonExited = false
+  // While it starts, the caller reports a failure, so the exit handler stays quiet.
+  let starting = true
   daemon = utilityProcess.fork(parts.daemonMain, [], {
     env: daemonEnv(process.env, daemonToken, {
       port,
@@ -124,7 +126,7 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
   daemon.on('exit', (code) => {
     daemonExited = true
     log(`--- the daemon exited with code ${code}\n`)
-    if (!quitConfirmed) {
+    if (!quitConfirmed && !starting) {
       void dialog
         .showMessageBox({
           type: 'error',
@@ -136,10 +138,14 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     }
   })
 
-  await waitForHealth(`${dashboardUrl}/health`, {
-    timeoutMs: 30_000,
-    exited: () => daemonExited,
-  })
+  try {
+    await waitForHealth(`${dashboardUrl}/health`, {
+      timeoutMs: 30_000,
+      exited: () => daemonExited,
+    })
+  } finally {
+    starting = false
+  }
 }
 
 function createWindow(): void {
@@ -342,6 +348,9 @@ if (!app.requestSingleInstanceLock()) {
       if (yes) {
         quitConfirmed = true
         app.quit()
+      } else if (window === undefined && dashboardUrl !== '') {
+        // Closing the last window on Windows or Linux asked to quit. Cancel keeps the app usable.
+        createWindow()
       }
     })
   })
