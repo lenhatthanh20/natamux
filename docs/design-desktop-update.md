@@ -49,7 +49,7 @@ idle → checking → up-to-date
 
 - `available` with kind `manual`: the app shows a dialog with **Open the Release Page** and **Later**. It downloads nothing.
 - `available` with any other kind: the download starts at once.
-- `ready`: the app shows a dialog: "Natamux 0.1.4 is ready. Restart to update." with **Restart Now**, **Later** and **What's New** (opens the release page). The menu item becomes **Restart to Update to 0.1.4**.
+- `ready`: the app shows a dialog: "Natamux 0.1.5 is ready. Restart to update." with **Restart Now**, **Later** and **What's New** (opens the release page). The menu item becomes **Restart to Update to 0.1.5**.
 - A version the user answered with **Later** asks again only after the next start. The menu item stays.
 - A timed check that fails stays quiet; the next timed check tries again. A manual check shows the error.
 
