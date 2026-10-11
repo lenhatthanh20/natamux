@@ -110,7 +110,10 @@ describe('AgentRunner', () => {
 
     // The fake terminal echoes what is typed, like a real one. This is what a browser sees.
     const seen: string[] = []
-    terminals.attach(task.id, { send: (message) => seen.push(JSON.stringify(message)) }, size)
+    // Wide enough for the long temp path of macOS and Windows: on a resize, xterm keeps the line
+    // with the cursor as it is, so a narrower screen would cut it.
+    const wide = { cols: 200, rows: 40 }
+    terminals.attach(task.id, { send: (message) => seen.push(JSON.stringify(message)) }, wide)
     await terminals.settled(task.id)
 
     const text = seen.join('')
