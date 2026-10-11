@@ -8,14 +8,14 @@ import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
-import { TaskNotFoundError, TaskService } from './task-service.js'
+import { type SettingsOf, TaskEditError, TaskNotFoundError, TaskService } from './task-service.js'
 
 let dataDir: string
 let index: TaskIndex
 let messages: DaemonMessage[]
 let service: TaskService
 
-function makeService(existingIndex: TaskIndex): TaskService {
+function makeService(existingIndex: TaskIndex, settingsOf?: SettingsOf): TaskService {
   const bus = new EventBus()
   bus.subscribe((message) => messages.push(message))
   let minute = 0
@@ -24,6 +24,7 @@ function makeService(existingIndex: TaskIndex): TaskService {
     index: existingIndex,
     bus,
     now: () => new Date(Date.UTC(2026, 9, 8, 9, minute++, 0)),
+    ...(settingsOf === undefined ? {} : { settingsOf }),
   })
 }
 
@@ -698,5 +699,137 @@ describe('event log files', () => {
       type: 'issue.linked',
       payload: link,
     })
+  })
+})
+
+describe('setWorkflow', () => {
+  let settings: ProjectSettings
+
+  beforeEach(() => {
+    settings = DEFAULT_PROJECT_SETTINGS
+    service = makeService(index, () => settings)
+  })
+
+  it('turns the workflow on and off for a stage, and logs each change', () => {
+    const task = service.createTask({ title: 'Export', agent: 'claude-code' })
+    expect(task.workflowStages).toEqual([])
+
+    const on = service.setWorkflow(task.id, 'implement', true)
+    expect(on.workflowStages).toEqual(['implement'])
+    expect(readTaskFile(dataDir, task.id)?.workflowStages).toEqual(['implement'])
+    expect(messages.at(-1)).toMatchObject({
+      kind: 'task.updated',
+      task: { workflowStages: ['implement'] },
+      event: { type: 'stage.workflow-set', source: 'human' },
+    })
+
+    expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual([
+      'implement',
+      'plan',
+    ])
+    expect(service.setWorkflow(task.id, 'implement', false).workflowStages).toEqual(['plan'])
+    expect(
+      service
+        .listEvents(task.id)
+        .filter((entry) => entry.event.type === 'stage.workflow-set')
+        .map((entry) => entry.event.payload),
+    ).toEqual([
+      { stage: 'implement', on: true },
+      { stage: 'plan', on: true },
+      { stage: 'implement', on: false },
+    ])
+  })
+
+  it('logs nothing when the choice does not change', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.setWorkflow(task.id, 'implement', true)
+    const count = service.listEvents(task.id).length
+
+    service.setWorkflow(task.id, 'implement', true)
+    service.setWorkflow(task.id, 'plan', false)
+
+    expect(service.listEvents(task.id)).toHaveLength(count)
+  })
+
+  it('refuses a stage that does not offer a workflow, or that the task does not have', () => {
+    const task = service.createTask({ title: 'Export' })
+    expect(() => service.setWorkflow(task.id, 'review', true)).toThrow(TaskEditError)
+    expect(() => service.setWorkflow(task.id, 'spec', true)).toThrow(/project settings/)
+    expect(() => service.setWorkflow(task.id, 'nope', true)).toThrow(/"nope"/)
+  })
+
+  it('refuses a workflow for an agent other than Claude Code, but turns it off', () => {
+    const task = service.createTask({ title: 'Export', agent: 'claude-code' })
+    service.setWorkflow(task.id, 'implement', true)
+    service.recordAgentLaunch(task.id, 'codex')
+
+    expect(() => service.setWorkflow(task.id, 'plan', true)).toThrow(/Only Claude Code/)
+    expect(service.setWorkflow(task.id, 'implement', false).workflowStages).toEqual([])
+  })
+
+  it('turns off a stage that no longer offers a workflow', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.setWorkflow(task.id, 'implement', true)
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'context', kind: 'context', gate: 'manual' },
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+      ],
+    }
+
+    expect(() => service.setWorkflow(task.id, 'plan', true)).not.toThrow()
+    expect(service.setWorkflow(task.id, 'implement', false).workflowStages).toEqual(['plan'])
+    expect(() => service.setWorkflow(task.id, 'implement', true)).toThrow(/project settings/)
+  })
+
+  it('writes one event per change when the choice goes on, off and on', () => {
+    const task = service.createTask({ title: 'Export' })
+    for (const on of [true, false, true]) {
+      service.setWorkflow(task.id, 'implement', on)
+    }
+    const changes = service
+      .listEvents(task.id)
+      .filter((entry) => entry.event.type === 'stage.workflow-set')
+    expect(changes).toHaveLength(3)
+    expect(service.getTask(task.id).workflowStages).toEqual(['implement'])
+  })
+
+  // The choice only matters for a later start, such as a send back, so a finished stage takes it.
+  it('takes the choice for a stage that is done already', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'review' },
+    })
+    expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual(['plan'])
+  })
+
+  it('rebuilds the index when the log has a choice for a stage the task does not have', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.recordEvent(task.id, 'stage.workflow-set', { stage: 'nope', on: true }, 'human')
+
+    const freshIndex = new TaskIndex(':memory:')
+    const fresh = makeService(freshIndex, () => settings)
+    fresh.init()
+
+    expect(fresh.getTask(task.id).workflowStages).toEqual([])
+    expect(fresh.listEvents(task.id).at(-1)?.event.payload).toEqual({ stage: 'nope', on: true })
+    freshIndex.close()
+  })
+
+  it('keeps the choice when the index is built again from the files', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.setWorkflow(task.id, 'implement', true)
+
+    const freshIndex = new TaskIndex(':memory:')
+    const fresh = makeService(freshIndex, () => settings)
+    fresh.init()
+
+    expect(fresh.getTask(task.id).workflowStages).toEqual(['implement'])
+    expect(fresh.listTasks()[0]?.workflowStages).toEqual(['implement'])
+    expect(fresh.listEvents(task.id).at(-1)?.event.type).toBe('stage.workflow-set')
+    freshIndex.close()
   })
 })

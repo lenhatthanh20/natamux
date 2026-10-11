@@ -52,6 +52,7 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 | `command` | string | no | none | For `testing`: the command to run. Its exit code decides the stage. |
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
 | `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
+| `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 
 Details:
 
@@ -62,6 +63,7 @@ Details:
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
+- `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
 
@@ -80,6 +82,7 @@ Details:
 - A `context` or `release` stage cannot be inside a group.
 - These rules count only stages that are on. A group needs 2 stages that are on. At least one stage must be on.
 - When a task starts, a group with one stage on runs that stage on its own, and a group with none is left out.
+- `"workflow": true` is only allowed on an `agent` stage.
 
 ### Skill placeholder
 
@@ -106,9 +109,9 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Design | `ux-design` | UX design | `agent` | manual | `ux.md` | Screens, states, flows, accessibility. |
 | Design | `architecture` | Architecture | `agent` | manual | `architecture.md` | Components, data flow, interfaces, trade-offs. |
 | Design | `threat-model` | Threat model | `agent` | manual | `threat-model.md` | What an attacker could reach, and how each threat is handled. |
-| Design | `plan` | Plan | `agent` | manual | `plan.md` | Default. Steps, files and tests. |
+| Design | `plan` | Plan | `agent` | manual | `plan.md` | Default. Steps, files and tests. Offers a workflow. |
 | Build | `test-spec` | Test spec | `agent` | manual | `test-spec.md` | Default. Test cases from the spec, without reading the code. |
-| Build | `implement` | Implement | `agent` | auto | none | Default. Tests first, then the code. |
+| Build | `implement` | Implement | `agent` | auto | none | Default. Tests first, then the code. Offers a workflow. |
 | Build | `migration` | Data migration | `agent` | manual | none | A data or schema migration, with a way to roll it back. |
 | Build | `refactor` | Refactor | `agent` | auto | none | Cleans up the changed code without changing what it does. |
 | Build | `docs` | Documentation | `agent` | auto | none | Updates the user and developer docs. |
@@ -149,7 +152,8 @@ The stage starts in every case. Each agent page says where it finds skills, for 
       "kind": "agent",
       "gate": "manual",
       "output": "plan.md",
-      "sections": ["Steps", "Files", "Tests"]
+      "sections": ["Steps", "Files", "Tests"],
+      "workflow": true
     },
     {
       "id": "build",
@@ -162,7 +166,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
           "output": "test-spec.md",
           "sections": ["Cases"]
         },
-        { "id": "implement", "kind": "agent", "gate": "auto" }
+        { "id": "implement", "kind": "agent", "gate": "auto", "workflow": true }
       ]
     },
     { "id": "review", "kind": "review", "gate": "manual" },

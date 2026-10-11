@@ -345,4 +345,25 @@ describe('more commands', () => {
     })
     expect(() => parseCommand(['stage', 'back', 'T-1', '--stage', 'plan'])).toThrow(/--to/)
   })
+
+  it('reads stage workflow with its stage and on or off', () => {
+    expect(parseCommand(['stage', 'workflow', 'T-1', 'on', '--stage', 'implement'])).toEqual({
+      name: 'stage.workflow',
+      id: 'T-1',
+      stage: 'implement',
+      on: true,
+      json: false,
+    })
+    expect(
+      parseCommand(['stage', 'workflow', 'T-1', 'off', '--stage', 'plan', '--json']),
+    ).toMatchObject({ on: false, stage: 'plan', json: true })
+    expect(() => parseCommand(['stage', 'workflow', 'T-1', 'on'])).toThrow(/--stage/)
+    expect(() => parseCommand(['stage', 'workflow', 'T-1', '--stage', 'plan'])).toThrow(/on or off/)
+    expect(() => parseCommand(['stage', 'workflow', 'T-1', 'yes', '--stage', 'plan'])).toThrow(
+      /on or off/,
+    )
+    expect(() =>
+      parseCommand(['stage', 'workflow', 'T-1', 'on', 'more', '--stage', 'plan']),
+    ).toThrow(UsageError)
+  })
 })

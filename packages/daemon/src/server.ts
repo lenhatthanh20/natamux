@@ -162,6 +162,7 @@ const stageBodySchema = z.object({
   to: z.string().min(1).max(40).optional(),
   reason: z.string().trim().min(1).max(20_000).optional(),
 })
+const workflowBodySchema = z.object({ stage: z.string().min(1).max(40), on: z.boolean() })
 const stageFileParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(100) })
 const stageFileBodySchema = z.object({ text: z.string() })
 const attachmentParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(255) })
@@ -419,6 +420,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { action, ...input } = stageBodySchema.parse(request.body)
     return { task: await options.stages.act(id, action, input) }
+  })
+
+  // Whether a stage runs as a workflow the next time it starts.
+  app.put('/tasks/:id/workflow', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { stage, on } = workflowBodySchema.parse(request.body)
+    return { task: options.service.setWorkflow(id, stage, on) }
   })
 
   app.get('/tasks/:id/files', async (request) => {

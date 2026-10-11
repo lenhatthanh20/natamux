@@ -35,6 +35,7 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `GET /tasks/:id/events` | The event log of a task |
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Answers `{ task, accepted }` |
 | `POST /tasks/:id/stage` | A stage action `{ action, stage?, terminal?, to?, reason? }`. Actions: `approve`, `reopen`, `skip`, `pass`, `fail`, `report`, `start` |
+| `PUT /tasks/:id/workflow` | Whether a stage runs as a workflow the next time it starts `{ stage, on }`. Answers 400 when the stage does not offer it or the agent is not Claude Code |
 | `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base? }` |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree |
 | `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base? }` |

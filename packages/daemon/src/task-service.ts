@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   activeSteps,
   applyTaskEvent,
+  canRunWorkflow,
   completeEvent,
   DEFAULT_PROJECT_SETTINGS,
   type EventType,
@@ -11,12 +12,15 @@ import {
   issueLinkSchema,
   LEGACY_PIPELINE,
   makesCycle,
+  offersWorkflow,
   type ProjectSettings,
   type PullRequestStatus,
   RECORD_ONLY_EVENT_TYPES,
   resolveSteps,
   type StagePosition,
   type Step,
+  stageName,
+  stagesOf,
   stepRefsOf,
   TASK_PRIORITIES,
   type Task,
@@ -581,6 +585,46 @@ export class TaskService {
       payload: { ...issue },
     }
     const updated: Task = { ...task, issue, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.logEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
+  // Chooses whether a stage of the task runs as a workflow. The stage runner reads the choice the
+  // next time the stage starts, so a running stage keeps its prompt. Turning it off always works.
+  setWorkflow(taskId: string, stageId: string, on: boolean): Task {
+    const task = this.getTask(taskId)
+    const stages = this.stepsOf(task).flatMap(stagesOf)
+    const stage = stages.find((each) => each.id === stageId)
+    if (stage === undefined) {
+      throw new TaskEditError(`${taskId} has no stage "${stageId}"`)
+    }
+    if (on && !offersWorkflow(stage)) {
+      throw new TaskEditError(
+        `The ${stageName(stage)} stage cannot run with a workflow. Turn it on for the stage in the project settings first`,
+      )
+    }
+    if (on && !canRunWorkflow(task.agent)) {
+      throw new TaskEditError(`Only Claude Code can run a workflow; ${taskId} uses ${task.agent}`)
+    }
+    const workflowStages = on
+      ? [...new Set([...task.workflowStages, stageId])]
+      : task.workflowStages.filter((id) => id !== stageId)
+    if (workflowStages.length === task.workflowStages.length) {
+      return task
+    }
+
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'stage.workflow-set',
+      at: this.timestamp(),
+      payload: { stage: stageId, on },
+    }
+    const updated: Task = { ...task, workflowStages, updatedAt: event.at }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)

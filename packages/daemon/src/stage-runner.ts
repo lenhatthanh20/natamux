@@ -7,6 +7,7 @@ import {
   findStep,
   isGroup,
   RECORD_ONLY_EVENT_TYPES,
+  runsWorkflow,
   type Stage,
   type Step,
   stageOfTerminal,
@@ -182,7 +183,8 @@ type StageRunnerOptions = {
 }
 
 // A stage prompt for the agent that will get it, and the skills it names that were not found.
-type PromptFor = (agent: string) => { text: string; missing: string[] }
+// `workflow`: the prompt asks the agent for a workflow.
+type PromptFor = (agent: string) => { text: string; missing: string[]; workflow?: boolean }
 
 // Moves tasks through their stages: starts each stage when the task reaches it, takes the report
 // that a stage is done, checks the result and lets the gate decide (docs/design-task-stages.md).
@@ -399,9 +401,10 @@ export class StageRunner {
           return
         case 'agent': {
           const prompt: PromptFor = (agent) => {
-            const filled = this.withSkills(stagePrompt(stage, task), task, agent)
+            const workflow = runsWorkflow(stage, task.workflowStages, agent)
+            const filled = this.withSkills(stagePrompt(stage, task, { workflow }), task, agent)
             const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
-            return { ...filled, text }
+            return { ...filled, text, workflow }
           }
           // A prompt typed to the agent took the stage up again: the agent has its prompt.
           const resumed = cause?.type === 'agent.resumed'
@@ -477,9 +480,14 @@ export class StageRunner {
     const head = await currentHead(task.workspace)
     const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
     const prompt = promptFor?.(agent)
-    // The stage card says which skills of the prompt the agent did not get.
+    // The stage card says which skills of the prompt the agent did not get, and whether it asked
+    // for a workflow.
     const missing = prompt?.missing.length ? { missingSkills: prompt.missing, agent } : {}
-    if (!this.markStarted(task, step, stage, { head, ...missing }) || prompt === undefined) {
+    const workflow = prompt?.workflow === true ? { workflow: true } : {}
+    if (
+      !this.markStarted(task, step, stage, { head, ...missing, ...workflow }) ||
+      prompt === undefined
+    ) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)

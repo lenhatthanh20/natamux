@@ -20,6 +20,7 @@ function task(id: string, state: TaskState): Task {
     lanes: {},
     stageSince: null,
     backgroundSince: null,
+    workflowStages: [],
     context: null,
     issue: null,
     parentId: null,

@@ -212,7 +212,7 @@ All of it is in the daemon's data folder (`NATAMUX_DATA_DIR`, default `<repo>/.n
 
 | Where | What | Role |
 |---|---|---|
-| `tasks/T-0001.md` | The task fields, `state`, `stage`, `stages`, `lanes`, `stageSince` | The source of truth |
+| `tasks/T-0001.md` | The task fields, `state`, `stage`, `stages`, `lanes`, `stageSince`, `workflowStages` | The source of truth |
 | `tasks/T-0001.events.jsonl` (new) | Every event of the task, one JSON line each | The history; it survives a lost index |
 | `index.sqlite` | The tasks and the events again, for fast lists and filters | A cache; rebuilt from the two files above |
 | `tasks/T-0001/` | Copies of the stage files (section 3.4) | Kept after the workspace is gone |
@@ -221,6 +221,23 @@ All of it is in the daemon's data folder (`NATAMUX_DATA_DIR`, default `<repo>/.n
 - **Rebuild:** at start the daemon compares the event count of each task with SQLite and reloads the tasks that differ. A missing `index.sqlite` is rebuilt whole.
 - **Old tasks:** their history is only in SQLite. At the first start after this change the daemon writes their `.jsonl` files from it, once.
 - **`stageSince`:** the time the current step started. Lists use it for "time in this stage" without reading events.
+
+### 3.8 Workflow stages
+
+A hard stage can run as a Claude Code workflow: the agent splits the work across sub-agents and checks the result. More accurate, many more tokens.
+
+- **Offer:** the stage field `workflow: true` (section 6). Default: `plan` and `implement`. In Project settings, the details of an agent stage have **Tasks can run it as a workflow** (Default or Changed against the catalog).
+- **Choice:** per task, the field `workflowStages` (stage ids), default empty. Set with `PUT /tasks/:id/workflow` `{ stage, on }` or `natamux stage workflow <task> on|off --stage <id>`; each change logs `stage.workflow-set` (`payload.stage`, `payload.on`). The Progress view shows the checkbox on each upcoming or current stage that offers it.
+- **Refused:** turning it on for a stage that does not offer it, or for a task whose agent is not Claude Code. Turning it off always works.
+- **Prompt:** when an `agent` stage starts with the offer, the choice and Claude Code as its agent, `stagePrompt` adds one line with the keyword `ultracode` before the `natamux done` line. Claude Code runs a workflow only when the prompt asks for it in words. The line is added on every start (new agent, pasted prompt, send back), not to the failed-check prompt.
+- **Running stage:** a change does not reach the agent; it counts at the next start. `stage.started` carries `workflow: true` when the line was sent, and the progress view marks such a stage with a "Workflow" label.
+- **Waiting:** a workflow runs in the background, so the `Stop` hook lists it in `background_tasks` (type `workflow`). The stage stays `running` (`agent.waiting`), as for other background work.
+- **Rules chosen:**
+  - `workflow: false` on a stage of any kind parses and does nothing; only `true` needs an `agent` stage.
+  - A done or skipped stage takes the choice, since it only matters for a later start (send back). Choosing the same value again writes no event.
+  - The "Workflow" label follows how the stage last started (`stage.started` payload), not the current choice or settings.
+  - A `workflowStages` value that is not a list of stage ids reads as empty, so a hand-edited task file still loads.
+  - A default stage that is gone from the settings keeps its default settings (section 6), so `plan` and `implement` keep offering it there.
 
 ## 4. Task context
 
@@ -329,6 +346,7 @@ Stage fields:
 - `command`: the test command (`testing` kind).
 - `sections`, `requireCommit`, `requireClean`, `check`: the checks of 3.5.
 - `doneWhen`: the sentence the progress page shows before the stage is reached (7.5).
+- `workflow`: the stage offers its tasks a "Run with a workflow" checkbox (3.8). `agent` stages only.
 - A group is `{ "id", "name"?, "parallel": [stages] }` (section 3.6).
 
 Other rules:
@@ -350,7 +368,7 @@ The catalog lives in `packages/core/src/stage-catalog.ts`, so the daemon and the
 
 - **Layout:** a pipeline preview (flow chart) on top, the stage list on the left, the details of the selected stage on the right, and a footer with **Reset to default**, **Cancel** and **Save** (`Mod+Enter`). Below 640 px it is one column; the details open in place of the list with **Back**.
 - **List:** a row has a drag handle, an on/off switch, the name, and marks for "waits for approval" and "custom prompt". The row menu has **Move up**, **Move down** (`Alt+ArrowUp`, `Alt+ArrowDown`), **Run alongside the stage above**, **Run on its own** and **Remove**.
-- **Details:** **Name**, **Wait for my approval** (with "Default" or "Changed" and **Use default**; always checked for `review` and `manual`), **Prompt**, **Command**, **Output file**, **Required sections**, **Finished when**. `requireCommit`, `requireClean` and `check` are edited in the **JSON** tab.
+- **Details:** **Name**, **Wait for my approval** (with "Default" or "Changed" and **Use default**; always checked for `review` and `manual`), **Tasks can run it as a workflow** (agent stages, 3.8), **Prompt**, **Command**, **Output file**, **Required sections**, **Finished when**. `requireCommit`, `requireClean` and `check` are edited in the **JSON** tab.
 - **Validation:** the browser runs the same schema as the daemon, counting only stages that are on. Save is off while there are problems.
 - **Unsaved edits:** closing asks "Discard your changes?".
 

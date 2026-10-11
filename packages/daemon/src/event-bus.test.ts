@@ -19,6 +19,7 @@ const task: Task = {
   lanes: {},
   stageSince: null,
   backgroundSince: null,
+  workflowStages: [],
   context: null,
   issue: null,
   parentId: null,
