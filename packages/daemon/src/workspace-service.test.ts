@@ -992,6 +992,21 @@ describe('diffStats', () => {
       [task.id]: { files: 1, added: 2, removed: 0 },
     })
   })
+
+  it('shares one read between callers that ask at the same time', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+
+    const first = workspaces.diffStats()
+    expect(workspaces.diffStats()).toBe(first)
+    await first
+
+    writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'a\n')
+    runGit(created.workspace ?? '', 'add', 'notes.txt')
+    const next = workspaces.diffStats()
+    expect(next).not.toBe(first)
+    expect(await next).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+  })
 })
 
 describe('onCreated', () => {

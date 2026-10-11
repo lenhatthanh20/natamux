@@ -10,6 +10,7 @@ import { ArrowDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { keyBelongsToShell } from '../lib/dispatch'
+import { gpuRenderer, watchVisible } from '../lib/gpu-renderer'
 import { closeSocket } from '../lib/live'
 import { parseTerminalMessage, takesFocusOnOpen } from '../lib/terminal'
 import { terminalFont, useTerminalFont } from '../lib/terminal-font'
@@ -48,13 +49,14 @@ function safeFit(fit: FitAddon | null): void {
 
 // Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
 // drops the context, the terminal keeps or goes back to drawing with the DOM.
-function drawWithGpu(terminal: Terminal): void {
+function loadWebgl(terminal: Terminal, onLost: () => void): WebglAddon | null {
   try {
     const webgl = new WebglAddon()
-    webgl.onContextLoss(() => webgl.dispose())
+    webgl.onContextLoss(onLost)
     terminal.loadAddon(webgl)
+    return webgl
   } catch {
-    // The DOM renderer stays.
+    return null
   }
 }
 
@@ -125,7 +127,8 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     terminal.loadAddon(new Unicode11Addon())
     terminal.unicode.activeVersion = '11'
     terminal.open(element)
-    drawWithGpu(terminal)
+    const gpu = gpuRenderer((onLost) => loadWebgl(terminal, onLost))
+    const stopWatching = watchVisible(element, gpu.setVisible)
     safeFit(fit)
     terminal.options.scrollback = scrollbackLines(terminal.cols)
 
@@ -239,6 +242,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       disposed = true
       clearTimeout(fitTimer)
       observer.disconnect()
+      stopWatching()
       terminal.textarea?.removeEventListener('focus', claimSize)
       input.dispose()
       resized.dispose()
@@ -250,7 +254,10 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       // xterm still has a frame of work queued that reads its size ("reading 'dimensions'"), so it
       // is taken off the page now and disposed of a moment later.
       terminal.element?.remove()
-      setTimeout(() => terminal.dispose(), DISPOSE_DELAY_MS)
+      setTimeout(() => {
+        gpu.dispose()
+        terminal.dispose()
+      }, DISPOSE_DELAY_MS)
       terminalRef.current = null
       fitRef.current = null
       setSearch(null)

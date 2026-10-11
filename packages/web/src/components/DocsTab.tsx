@@ -1,14 +1,14 @@
 import { type Attachment, formatBytes } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileImage, FileText } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import type { StageFile } from '../lib/api'
 import { saveBlob } from '../lib/attachments'
 import { formatAge } from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { useObjectUrl } from './ImageDiff'
-import { Markdown } from './Markdown'
+import { Markdown, preloadMarkdown } from './Markdown'
 import { Button } from './ui/Button'
 import { Segmented } from './ui/Segmented'
 import { sectionTitle, textarea } from './ui/styles'
@@ -138,6 +138,7 @@ export function DocsTab({
   readAttachment,
 }: DocsTabProps) {
   const queryClient = useQueryClient()
+  useEffect(preloadMarkdown, [])
   const attachments = useQuery({
     queryKey: ['attachments', taskId],
     queryFn: () => loadAttachments?.() ?? Promise.resolve([]),

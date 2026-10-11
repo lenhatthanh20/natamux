@@ -19,6 +19,7 @@ import {
   runGh,
   worktreeState,
 } from './git.js'
+import { mapLimit } from './map-limit.js'
 import type { RepoService } from './repo-service.js'
 import type { TaskService } from './task-service.js'
 
@@ -59,6 +60,7 @@ export type RemoveWorkspaceResult = {
 }
 
 const MAX_SLUG_LENGTH = 40
+const DIFF_STAT_READS = 4
 
 export function slugify(text: string): string {
   const slug = text
@@ -84,6 +86,7 @@ export class WorkspaceService {
   private readonly pullRequestBody: (task: Task) => Promise<string>
   private readonly closeTerminals: (taskId: string) => unknown
   private readonly busy = new Set<string>()
+  private diffStatsRead: Promise<Record<string, DiffStat>> | undefined
 
   constructor(options: WorkspaceServiceOptions) {
     this.tasks = options.tasks
@@ -254,8 +257,16 @@ export class WorkspaceService {
     return change
   }
 
-  // The size of the work in each workspace. A workspace that git cannot read is left out.
-  async diffStats(): Promise<Record<string, DiffStat>> {
+  // The size of the work in each workspace. A workspace that git cannot read is left out. Every
+  // open dashboard asks for this on a timer, so callers that ask while a read runs share it.
+  diffStats(): Promise<Record<string, DiffStat>> {
+    this.diffStatsRead ??= this.readDiffStats().finally(() => {
+      this.diffStatsRead = undefined
+    })
+    return this.diffStatsRead
+  }
+
+  private async readDiffStats(): Promise<Record<string, DiffStat>> {
     const bases = new Map<string | null, Promise<string | null>>()
     const baseOf = (repo: string | null) => {
       const known = bases.get(repo) ?? currentBranch(this.repoDirOf(repo))
@@ -263,16 +274,15 @@ export class WorkspaceService {
       return known
     }
     const withWorkspace = this.tasks.listTasks().filter((task) => task.workspace !== null)
-    const entries = await Promise.all(
-      withWorkspace.map(async (task) => {
-        try {
-          const base = await baseOf(task.repo)
-          return [[task.id, await readDiffStat(task.workspace ?? '', base)] as const]
-        } catch {
-          return []
-        }
-      }),
-    )
+    // Two git commands per workspace: with many workspaces, all at once would load every core.
+    const entries = await mapLimit(withWorkspace, DIFF_STAT_READS, async (task) => {
+      try {
+        const base = await baseOf(task.repo)
+        return [[task.id, await readDiffStat(task.workspace ?? '', base)] as const]
+      } catch {
+        return []
+      }
+    })
     return Object.fromEntries(entries.flat())
   }
 

@@ -1,10 +1,11 @@
 import type { TerminalSize } from '@natamux/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
-import { type CSSProperties, lazy, type ReactNode, Suspense, useRef } from 'react'
+import { type CSSProperties, lazy, type ReactNode, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { shortcutOf } from '../lib/commands'
 import { AgentBadge } from './AgentBadge'
 import { IconButton } from './ui/IconButton'
+import { LazyView } from './ui/LazyView'
 import { Skeleton } from './ui/Skeleton'
 
 // xterm.js is loaded the first time a terminal is shown.
@@ -127,9 +128,9 @@ export function TerminalPane({
           />
         )}
       </header>
-      <Suspense fallback={<Skeleton className="m-3" width="30%" />}>
+      <LazyView label="terminal" fallback={<Skeleton className="m-3" width="30%" />}>
         <TerminalView connect={connect} focusToken={focusToken} />
-      </Suspense>
+      </LazyView>
     </section>
   )
 }
