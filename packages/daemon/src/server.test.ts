@@ -441,6 +441,35 @@ describe('task events', () => {
     }
   })
 
+  it('sets the workflow of a stage, and refuses a stage that does not offer one', async () => {
+    await createTask()
+    const set = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: '/tasks/T-0001/workflow',
+        headers: authorization,
+        payload,
+      })
+
+    // The pipeline of these tests offers no workflow on any stage.
+    const refused = await set({ stage: 'review', on: true })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().message).toContain('project settings')
+
+    const off = await set({ stage: 'implement', on: false })
+    expect(off.statusCode).toBe(200)
+    expect(off.json().task).toMatchObject({ id: 'T-0001', workflowStages: [] })
+
+    expect((await set({ stage: 'implement' })).statusCode).toBe(400)
+    const unknown = await app.inject({
+      method: 'PUT',
+      url: '/tasks/T-0099/workflow',
+      headers: authorization,
+      payload: { stage: 'implement', on: true },
+    })
+    expect(unknown.statusCode).toBe(404)
+  })
+
   it('refuses a new workspace for an agent the daemon cannot start', async () => {
     const response = await app.inject({
       method: 'POST',

@@ -37,6 +37,8 @@ export const stageSchema = z.object({
   doneWhen: z.string().trim().min(1).optional(),
   // A stage that is off stays in the file with its settings, but new tasks do not get it.
   enabled: z.boolean().optional(),
+  // The stage offers its tasks a checkbox to run it as a workflow (agent stages only).
+  workflow: z.boolean().optional(),
 })
 
 export type Stage = z.infer<typeof stageSchema>
@@ -105,6 +107,15 @@ export const pipelineSchema = z
           })
         }
         seen.add(id)
+      }
+      for (const stage of stagesOf(step)) {
+        if (stage.workflow === true && stage.kind !== 'agent') {
+          context.addIssue({
+            code: 'custom',
+            message: `Only agent stages can run with a workflow, and "${stage.id}" is a ${stage.kind} stage`,
+            path: [index],
+          })
+        }
       }
       if (isGroup(step) && step.parallel.filter(isOn).length === 1) {
         context.addIssue({
@@ -224,6 +235,29 @@ export function resolveSteps(refs: readonly StepRef[], pipeline: readonly Step[]
       parallel: ref.parallel.map(stage),
     }
   })
+}
+
+// Agents that split a stage across sub-agents when the prompt asks for a workflow.
+export const WORKFLOW_AGENTS: readonly string[] = ['claude-code']
+
+// A task with no agent named gets Claude Code.
+export function canRunWorkflow(agent: string | null): boolean {
+  return WORKFLOW_AGENTS.includes(agent ?? 'claude-code')
+}
+
+// The project settings let tasks run this stage as a workflow.
+export function offersWorkflow(stage: Pick<Stage, 'kind' | 'workflow'>): boolean {
+  return stage.kind === 'agent' && stage.workflow === true
+}
+
+// Whether the next start of the stage asks the agent for a workflow: the settings offer it, the
+// task chose it, and the agent can run one.
+export function runsWorkflow(
+  stage: Pick<Stage, 'id' | 'kind' | 'workflow'>,
+  chosen: readonly string[],
+  agent: string | null,
+): boolean {
+  return offersWorkflow(stage) && chosen.includes(stage.id) && canRunWorkflow(agent)
 }
 
 export function stageName(stage: Pick<Stage, 'id' | 'name'>): string {

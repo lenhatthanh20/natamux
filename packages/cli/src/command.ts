@@ -76,6 +76,8 @@ export type Command =
       reason?: string
       json: boolean
     }
+  // Whether a stage of the task runs as a workflow the next time it starts.
+  | { name: 'stage.workflow'; id: string; stage: string; on: boolean; json: boolean }
   | { name: 'task.link'; id: string; provider: string; key: string; url: string; json: boolean }
   // Without an id, the task of this terminal (NATAMUX_TASK_ID).
   | { name: 'task.show'; id?: string; json: boolean }
@@ -339,6 +341,23 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'stage') {
     if (second === undefined) {
       throw new UsageError(`A stage command is required: ${STAGE_COMMANDS.join(', ')}`)
+    }
+    if (second === 'workflow') {
+      const [id, choice, ...extra] = rest
+      noExtraArguments(extra)
+      if (values.stage === undefined) {
+        throw new UsageError('Name the stage with --stage, for example --stage implement')
+      }
+      if (choice !== 'on' && choice !== 'off') {
+        throw new UsageError('Say on or off: natamux stage workflow T-42 on --stage implement')
+      }
+      return {
+        name: 'stage.workflow',
+        id: taskId(id),
+        stage: values.stage,
+        on: choice === 'on',
+        json,
+      }
     }
     const action = oneOf(second, STAGE_COMMANDS, 'The stage command')
     noExtraArguments(rest.slice(1))

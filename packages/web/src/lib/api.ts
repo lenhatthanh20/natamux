@@ -513,6 +513,13 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
+    async setWorkflow(taskId: string, stage: string, on: boolean): Promise<Task> {
+      const body = asRecord(
+        await request('PUT', `/tasks/${encodeURIComponent(taskId)}/workflow`, { stage, on }),
+      )
+      return taskSchema.parse(body.task)
+    },
+
     async listStageFiles(taskId: string): Promise<StageFile[]> {
       const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/files`))
       if (!Array.isArray(body.files)) {

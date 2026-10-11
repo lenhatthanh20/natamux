@@ -32,6 +32,7 @@ function makeTask(id: string, overrides: Partial<Task> = {}): Task {
     lanes: {},
     stageSince: null,
     backgroundSince: null,
+    workflowStages: [],
     context: null,
     issue: null,
     parentId: null,

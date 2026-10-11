@@ -224,6 +224,19 @@ async function execute(
       return
     }
 
+    case 'stage.workflow': {
+      const task = await client.setWorkflow(command.id, command.stage, command.on)
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        const how = command.on ? 'with' : 'without'
+        io.stdout(
+          `${command.stage} runs ${how} a workflow the next time it starts.\n${formatTask(task)}\n`,
+        )
+      }
+      return
+    }
+
     case 'task.link': {
       const task = await client.linkIssue(command.id, {
         provider: command.provider,

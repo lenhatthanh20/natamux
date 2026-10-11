@@ -14,12 +14,14 @@ import { type ChangeEvent, type ReactNode, useEffect, useId, useRef, useState } 
 import {
   alwaysWaits,
   defaultGate,
+  defaultWorkflow,
   isCatalogStage,
   isDefaultGate,
   KIND_LABEL,
   setGate,
   setSections,
   setText,
+  setWorkflow,
   shownDefaultPrompt,
   type TextField,
   takesPrompt,
@@ -172,6 +174,8 @@ export function StageDetails({
 
       <Approval stage={stage} steps={steps} onChange={onChange} />
 
+      {stage.kind === 'agent' && <WorkflowOption stage={stage} steps={steps} onChange={onChange} />}
+
       {takesPrompt(stage) && (
         <PromptField
           stage={stage}
@@ -302,6 +306,44 @@ function Approval({
             : 'Unchecked, the pull request opens when the stage starts.'}
         </p>
       )}
+    </fieldset>
+  )
+}
+
+function WorkflowOption({
+  stage,
+  steps,
+  onChange,
+}: {
+  stage: Stage
+  steps: readonly Step[]
+  onChange: (steps: Step[]) => void
+}) {
+  const labelId = useId()
+  const noteId = useId()
+  const on = stage.workflow === true
+  return (
+    <fieldset aria-labelledby={labelId} className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-7 flex-wrap items-center gap-2">
+        <label className="flex h-7 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={on}
+            aria-describedby={noteId}
+            onChange={(event) => onChange(setWorkflow(steps, stage.id, event.target.checked))}
+            className="size-3.5 accent-accent"
+          />
+          <span id={labelId}>Tasks can run it as a workflow</span>
+        </label>
+        <DefaultMark
+          isDefault={on === defaultWorkflow(stage)}
+          onReset={() => onChange(setWorkflow(steps, stage.id, defaultWorkflow(stage)))}
+        />
+      </div>
+      <p id={noteId} className="m-0 text-xs text-muted">
+        Each task gets a Run with a workflow checkbox on this stage, off by default. Only Claude
+        Code runs workflows; they are more accurate and use many more tokens.
+      </p>
     </fieldset>
   )
 }

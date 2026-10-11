@@ -46,6 +46,7 @@ Open the menu of a project and click **Settings**. The **Stages** tab edits the 
 - **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The switch of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
+- **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
 - **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
 
@@ -174,6 +175,24 @@ Skipping ends a stage without checks and moves the task on. If you skip the last
 ### Pass and fail
 
 `natamux stage pass` and `natamux stage fail` set the result of a stage by hand. Natamux uses them itself for a testing stage with a command: when the command ends, the shell reports the result.
+
+## Run a stage as a workflow
+
+A stage can run as a **workflow**: Claude Code splits the work across several sub-agents and checks the result before it finishes. The result is more accurate, but the stage uses many more tokens. Use it for hard stages, such as **Plan** or **Implement**.
+
+- **Project settings** decide which stages offer it. Open the project settings, click an `agent` stage, and tick **Tasks can run it as a workflow**. This writes `"workflow": true` on the stage in `.natamux.json`. The default pipeline offers it on **Plan** and **Implement**.
+- On each task, the card of such a stage in the **Progress** view has a **Run with a workflow** checkbox. It is off by default. Tick it before the stage starts; Implement starts by itself once Plan is approved.
+- When the stage starts, Natamux adds a line to its prompt that asks the agent for a workflow (with the keyword `ultracode`). This happens each time the stage starts, also after **Send back**. The prompt with failed checks does not get the line.
+- A change while the stage runs does not reach the agent. It counts the next time the stage starts.
+- Only Claude Code runs workflows. For a task with another agent, the checkbox cannot be ticked.
+- While the workflow works in the background, the stage stays running, with "Waiting for workflow: …" as its summary.
+- A finished stage that ran as a workflow shows a **Workflow** label.
+
+From the CLI:
+
+```sh
+natamux stage workflow T-0001 on --stage implement
+```
 
 ## Stages that run side by side
 

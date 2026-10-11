@@ -8,6 +8,7 @@ import {
   catalogChoices,
   customStageProblems,
   defaultGate,
+  defaultWorkflow,
   dropStage,
   findStage,
   groupOf,
@@ -26,6 +27,7 @@ import {
   setGate,
   setSections,
   setText,
+  setWorkflow,
   shownDefaultPrompt,
   withSteps,
 } from './pipeline-editor'
@@ -293,6 +295,22 @@ describe('adding and removing', () => {
 })
 
 describe('stage fields', () => {
+  it('offers a workflow with true, and leaves the field out when it is off', () => {
+    const on = setWorkflow(DEFAULT_PIPELINE, 'spec', true)
+    expect(findStage(on, 'spec')?.workflow).toBe(true)
+    const off = setWorkflow(DEFAULT_PIPELINE, 'implement', false)
+    expect(findStage(off, 'implement')).not.toHaveProperty('workflow')
+    expect(findStage(off, 'plan')?.workflow).toBe(true)
+  })
+
+  it('takes the workflow of the catalog as the default, and none for a stage of your own', () => {
+    expect(defaultWorkflow({ id: 'plan', kind: 'agent' })).toBe(true)
+    expect(defaultWorkflow({ id: 'implement', kind: 'agent' })).toBe(true)
+    expect(defaultWorkflow({ id: 'spec', kind: 'agent' })).toBe(false)
+    expect(defaultWorkflow({ id: 'my-stage', kind: 'agent' })).toBe(false)
+    expect(defaultWorkflow({ id: 'plan', kind: 'manual' })).toBe(false)
+  })
+
   it('turns a stage off with enabled false, and on by removing it', () => {
     const off = setEnabled(DEFAULT_PIPELINE, 'plan', false)
     expect(findStage(off, 'plan')?.enabled).toBe(false)

@@ -13,6 +13,11 @@ import { STAGE_DIR } from './stage-files.js'
 
 const DONE = 'When you are done, run `natamux done`.'
 
+// Claude Code runs a workflow only when the prompt asks for one in words; "ultracode" is its
+// keyword for that.
+export const WORKFLOW_LINE =
+  'ultracode: run this stage as a workflow. Split the work across sub-agents, and check the result before you finish.'
+
 function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) => values[key] ?? whole)
 }
@@ -27,16 +32,22 @@ function values(task: Pick<Task, 'title' | 'description' | 'context'>): Record<s
 }
 
 // The prompt an agent gets when its stage starts. `{skill:<name>}` is left for `fillSkills`, which
-// knows the agent.
+// knows the agent. The workflow line goes outside the template, so a prompt of your own gets it
+// too.
 export function stagePrompt(
   stage: Stage,
   task: Pick<Task, 'title' | 'description' | 'context'>,
+  { workflow = false }: { workflow?: boolean } = {},
 ): string {
   const template = stage.prompt ?? defaultPrompt(stage)
   // Only the default prompts get {commit}, so a prompt of your own is never changed.
   const commit: Record<string, string> =
     stage.prompt === undefined ? { commit: commitRule(stage) } : {}
-  return `${fill(template, { ...values(task), ...commit })}\n${DONE}`
+  return [
+    fill(template, { ...values(task), ...commit }),
+    ...(workflow ? [WORKFLOW_LINE] : []),
+    DONE,
+  ].join('\n')
 }
 
 // The prompt for a context source that an agent reads: a skill or an MCP server. `skill` says how

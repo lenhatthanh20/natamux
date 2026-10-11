@@ -143,6 +143,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       gate: 'manual',
       output: 'plan.md',
       sections: ['Steps', 'Files', 'Tests'],
+      workflow: true,
     },
     description: 'Writes the steps, the files to change and the tests to add.',
     prompt: prompt(
@@ -169,7 +170,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
   {
     phase: 'build',
     // No commit check: the agent leaves its changes for you to read before you commit them.
-    stage: { id: 'implement', kind: 'agent', gate: 'auto' },
+    stage: { id: 'implement', kind: 'agent', gate: 'auto', workflow: true },
     description: 'Writes the tests first, then the code that makes them pass.',
     prompt: prompt(
       'Read {dir}/spec.md and {dir}/plan.md when they are there.',

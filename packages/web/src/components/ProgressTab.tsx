@@ -1,5 +1,7 @@
 import {
+  canRunWorkflow,
   isGroup,
+  offersWorkflow,
   resolveSteps,
   type Stage,
   type StageProgress,
@@ -25,6 +27,7 @@ import {
   finishedWhen,
   formatDuration,
   missingSkills,
+  ranWithWorkflow,
   sentBackCount,
   stageCount,
   stageTime,
@@ -56,6 +59,8 @@ type ProgressTabProps = {
   // The banner of the workspace beside the details offers Start agent for a failed task, so the
   // stage card does not offer it a second time.
   startInBanner?: boolean
+  // Chooses whether a stage runs as a workflow the next time it starts.
+  setWorkflow?: (stage: string, on: boolean) => Promise<Task>
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -92,6 +97,7 @@ export function ProgressTab({
   activity,
   startAgent,
   startInBanner = false,
+  setWorkflow,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -122,6 +128,12 @@ export function ProgressTab({
   // The dashboard reports a failed start already.
   const starting = useMutation({
     mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
+  })
+  const workflow = useMutation({
+    mutationFn: ({ stage, on }: { stage: string; on: boolean }) =>
+      setWorkflow?.(stage, on) ?? Promise.resolve(task),
+    onError: (error) =>
+      toast('Could not change the workflow of the stage.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -160,6 +172,7 @@ export function ProgressTab({
   )
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const missing = missingSkills(accepted)
+  const workflowRuns = ranWithWorkflow(accepted)
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
@@ -202,6 +215,17 @@ export function ProgressTab({
         startInBanner={startInBanner}
         starting={starting.isPending}
         onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
+        ranWorkflow={workflowRuns.has(stage.id)}
+        workflow={
+          setWorkflow === undefined || !offersWorkflow(stage)
+            ? undefined
+            : {
+                on: task.workflowStages.includes(stage.id),
+                allowed: canRunWorkflow(task.agent),
+                busy: workflow.isPending,
+                onChange: (on) => workflow.mutate({ stage: stage.id, on }),
+              }
+        }
         activity={
           entry.status === 'current' &&
           entry.state === 'running' &&
@@ -562,8 +586,14 @@ function StageCard({
   startInBanner,
   starting,
   onStartAgent,
+  ranWorkflow,
+  workflow,
 }: {
   activity?: string
+  // The last start of the stage asked the agent for a workflow.
+  ranWorkflow: boolean
+  // The workflow choice of a stage the settings offer it on.
+  workflow?: WorkflowChoice
   agent: string | null
   // Skills the prompt named that the agent did not get at the latest start.
   missingSkills: readonly string[]
@@ -623,7 +653,17 @@ function StageCard({
           ×{progress.rounds}
         </span>
       )}
+      {ranWorkflow && !upcoming && (
+        <span className="rounded-md bg-badge px-1.5 text-2xs font-semibold text-ink-2">
+          Workflow
+        </span>
+      )}
     </span>
+  )
+  // A stage that started already keeps its prompt; the choice is for its next start.
+  const started = current && state !== 'draft' && state !== 'ready'
+  const workflowBox = workflow !== undefined && !finished && canAct && (
+    <WorkflowBox choice={workflow} started={started} />
   )
   const factLine = facts.length > 0 && (
     <span className="block text-xs text-muted tabular-nums">{facts.join(' · ')}</span>
@@ -666,7 +706,10 @@ function StageCard({
       )}
 
       {upcoming ? (
-        <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
+        <>
+          <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
+          {workflowBox}
+        </>
       ) : finished && !opened ? null : (
         <>
           {activity !== undefined && (
@@ -782,6 +825,8 @@ function StageCard({
             </details>
           )}
 
+          {workflowBox}
+
           {current && canAct && (
             <div className="mt-3 flex flex-col gap-2">
               {/* First and wide: the user approves here while watching the terminal. */}
@@ -836,6 +881,38 @@ function StageCard({
         </>
       )}
     </article>
+  )
+}
+
+type WorkflowChoice = {
+  on: boolean
+  // The agent of the task can run a workflow.
+  allowed: boolean
+  busy: boolean
+  onChange: (on: boolean) => void
+}
+
+function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boolean }) {
+  const hint = !choice.allowed
+    ? 'Only Claude Code can run a workflow.'
+    : started
+      ? 'More accurate, uses many more tokens. Takes effect the next time this stage starts.'
+      : 'More accurate, uses many more tokens.'
+  return (
+    <div className="mt-2 flex flex-col gap-0.5">
+      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+        <input
+          type="checkbox"
+          checked={choice.on}
+          // An agent that cannot run one may still turn off a choice made for an earlier agent.
+          disabled={(!choice.allowed && !choice.on) || choice.busy}
+          onChange={(event) => choice.onChange(event.target.checked)}
+          className="size-3.5 accent-accent"
+        />
+        Run with a workflow
+      </label>
+      <span className="pl-5.5 text-xs text-muted">{hint}</span>
+    </div>
   )
 }
 

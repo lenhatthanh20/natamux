@@ -46,6 +46,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'agent.waiting': 'Agent waits for its background work',
   'agent.stopped': 'Agent stopped',
   'attachment.added': 'File attached',
+  'stage.workflow-set': 'Workflow choice changed',
 }
 
 export function describeEvent(type: EventType): string {

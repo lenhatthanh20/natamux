@@ -950,6 +950,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           agentMutation.mutateAsync({ task: detailTask, agent })
                         }
                         startInBanner={dockedBesideWorkspace}
+                        setWorkflow={async (stage, on) => {
+                          const updated = await api.setWorkflow(detailTask.id, stage, on)
+                          mergeTask(updated)
+                          return updated
+                        }}
                         createIssue={async () => {
                           const updated = await api.createIssue(detailTask.id)
                           mergeTask(updated)
