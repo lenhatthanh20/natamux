@@ -697,7 +697,7 @@ describe('the context area of the Start a task dialog', () => {
     await waitFor(() => expect(branch().disabled).toBe(false))
     screen.getByLabelText('Task title').focus()
 
-    const expected = [
+    const expected: Element[] = [
       screen.getByLabelText('Where the context comes from'),
       screen.getByLabelText('Task notes'),
       screen.getByRole('button', { name: 'Add files' }),
