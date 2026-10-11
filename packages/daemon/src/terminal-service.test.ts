@@ -9,6 +9,7 @@ import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
+  ENDED_IDLE_MS,
   KILL_GRACE_MS,
   MAX_SESSIONS,
   NoTerminalError,
@@ -24,7 +25,7 @@ const size = { cols: 80, rows: 24 }
 // Tests that put thousands of lines on a screen, slower with coverage on.
 const LONG_TEST_MS = 30_000
 
-function setup(options: { now?: () => number } = {}) {
+function setup(options: { now?: () => number; isEnded?: (taskId: string) => boolean } = {}) {
   const { spawn, ptys } = fakeSpawner()
   const service = new TerminalService({
     spawn,
@@ -36,6 +37,7 @@ function setup(options: { now?: () => number } = {}) {
     },
     env: { PATH: '/bin', NATAMUX_TOKEN: 'secret' },
     now: options.now,
+    isEnded: options.isEnded,
   })
   return { service, ptys }
 }
@@ -382,6 +384,72 @@ describe('closing a shell', () => {
     ptys[0]?.emit('late')
 
     expect(heard).toEqual([])
+  })
+})
+
+describe('shells of an ended task', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const ended = (taskId: string) => taskId === 'T-0002'
+
+  it('ends an idle shell a while after the last client leaves', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup({ isEnded: ended })
+    const detachOne = service.attach('T-0002', client(), size)
+    const detachTwo = service.attach('T-0002', client(), size)
+
+    detachOne()
+    vi.advanceTimersByTime(ENDED_IDLE_MS)
+    expect(service.isOpen('T-0002')).toBe(true)
+
+    detachTwo()
+    vi.advanceTimersByTime(ENDED_IDLE_MS - 1)
+    expect(service.isOpen('T-0002')).toBe(true)
+    vi.advanceTimersByTime(1)
+    expect(service.isOpen('T-0002')).toBe(false)
+    expect(ptys[0]?.signals).toEqual(['SIGHUP'])
+  })
+
+  it('keeps the shell for a client that comes back in time', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup({ isEnded: ended })
+    service.attach('T-0002', client(), size)()
+
+    vi.advanceTimersByTime(ENDED_IDLE_MS - 1)
+    service.attach('T-0002', client(), size)
+    vi.advanceTimersByTime(ENDED_IDLE_MS * 2)
+
+    expect(service.isOpen('T-0002')).toBe(true)
+    expect(ptys).toHaveLength(1)
+  })
+
+  it('keeps a shell that runs a program, and ends it once the program is done', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup({ isEnded: ended })
+    service.attach('T-0002', client(), size)()
+    const pty = ptys[0]
+    if (!pty) {
+      throw new Error('No shell was started.')
+    }
+    pty.program = 'node'
+
+    vi.advanceTimersByTime(ENDED_IDLE_MS * 3)
+    expect(service.isOpen('T-0002')).toBe(true)
+
+    pty.program = '/bin/zsh'
+    vi.advanceTimersByTime(ENDED_IDLE_MS)
+    expect(service.isOpen('T-0002')).toBe(false)
+  })
+
+  it('keeps the shells of a task that is still open', () => {
+    vi.useFakeTimers()
+    const { service } = setup({ isEnded: ended })
+    service.attach('T-0001', client(), size)()
+
+    vi.advanceTimersByTime(ENDED_IDLE_MS * 3)
+    expect(service.isOpen('T-0001')).toBe(true)
   })
 })
 

@@ -40,6 +40,7 @@ Things to know:
 - On a phone, one shell fills the screen. Chips named **Shell 1**, **Shell 2** switch between them.
 - Closing a shell ends its process and everything that runs in it.
 - A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again, drawn for the pane's size.
+- When a task is done or cancelled, its shells end, with the agent and everything else in them. You can still open a shell in its workspace. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
 - When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
 - Natamux runs at most 20 shells in all.
 

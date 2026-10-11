@@ -72,6 +72,15 @@ const terminals = new TerminalService({
     stages.onOutput(taskId, terminal, data)
     genericSignals.onOutput(taskId, terminal, data)
   },
+  isEnded: (taskId) => {
+    try {
+      const { state } = service.getTask(taskId)
+      return state === 'done' || state === 'cancelled'
+    } catch {
+      // A task that is gone needs its shells no more either.
+      return true
+    }
+  },
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
