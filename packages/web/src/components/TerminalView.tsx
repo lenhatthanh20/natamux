@@ -69,7 +69,7 @@ const STATUS_TEXT: Record<Status, string> = {
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
 export default function TerminalView({ connect, focusToken }: TerminalViewProps) {
-  const container = useRef<HTMLElement>(null)
+  const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
   const [status, setStatus] = useState<Status>('connecting')
