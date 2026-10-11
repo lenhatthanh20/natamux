@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.7 (2026-10-11)
+
+- **Project settings** has a **Stages** tab, so you change the pipeline without JSON. **Add stage** picks from a catalog of 27 common steps, such as Research, Security review or Manual QA, or makes a **Custom stage**. Turn a stage off with its switch (`"enabled": false` in the file), drag it or use `Alt+ArrowUp` and `Alt+ArrowDown`, and run it alongside the stage above. A flow chart shows the pipeline while you edit. See [Change the pipeline](/docs/concepts/stages/#change-the-pipeline) and [Project settings](/docs/guides/dashboard/#project-settings).
+- Each stage has **Wait for my approval**, with its default shown, and a **Prompt** you can change. **Insert skill** puts `{skill:<name>}` in the prompt. Natamux fills it for the agent of the task: `/name` for Claude Code and Copilot CLI, `$name` for Codex, and the path of the `SKILL.md` for the others. See [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt).
+- The `skill` context source works with every agent. It used to send `/<skill> <ref>`, which only Claude Code understands.
+- The **JSON** tab stays for the whole file. **Save** changes only `stages`, keeps the other fields, and leaves `stages` out when it equals the default. If the file changed on disk, **Reload** or **Overwrite**. The API has `GET /repos/:id/skills` and a version on the settings routes. See [HTTP API](/docs/reference/http-api/).
+- The default `implement` stage in the configuration reference no longer shows `requireCommit` and `requireClean`. The built-in pipeline never had them. See [Stage catalog](/docs/reference/configuration/#stage-catalog).
+- Fix: the bottom row of the terminal, such as the status line of Claude Code, was hidden under the edge of the pane, because the terminal took more rows and columns than the pane could show. The terminal now fits its pane.
+
 ## v0.1.6 (2026-10-11)
 
 - **Delete task** in the menu of a task row, of a workspace row and of the details panel. It deletes the task, its notes and its history, and the worktree when there is one. It asks first, and deletes nothing when the worktree has changes that are not committed. **Remove workspace** still keeps the task. See [Sidebar](/docs/guides/dashboard/#sidebar).

@@ -41,6 +41,7 @@ if [ "${1:-}" = "--published" ]; then
   sha=$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}" | sort -k 2 | tail -n 1 | cut -f 1)
   check "tag $tag is on origin" '[ -n "$sha" ]'
   [ -n "$sha" ] || finish
+  check "tag $tag is annotated" '[ -n "$(git ls-remote --tags origin "refs/tags/$tag^{}")" ]'
   check "tag $tag is on main" \
     '[[ "$(gh api "repos/{owner}/{repo}/compare/$sha...main" --jq .status)" =~ ^(ahead|identical)$ ]]'
   check "tag $tag has version $version" \
@@ -115,6 +116,12 @@ check "$notes exists" '[ -f "$notes" ]'
 [ -f "$notes" ] || finish
 check "$notes is the newest release notes" '[ "$(printf "%s\n" "$prev" "$tag" | sort -V | tail -n 1)" = "$tag" ]'
 check "$notes starts with an intro line" '[ -n "$(head -n 1 "$notes")" ] && ! head -n 1 "$notes" | grep -q "^#"'
+# v0.1.2 is the first version that updates itself, so the intro always names it.
+check "$notes intro says the app updates itself from v0.1.2" \
+  'head -n 1 "$notes" | grep -qF "If you have v0.1.2 or later, the app updates itself to this version."'
+check "$notes has the Guide: line as in $prev" \
+  '[ -z "$prev" ] || [ "$(grep "^Guide: " "$notes")" = "$(grep "^Guide: " "docs/releases/$prev.md")" ]'
+check "$notes ends with a newline" '[ -z "$(tail -c 1 "$notes")" ]'
 check "$notes has sections before ## Download" \
   '[ "$(sed "/^## Download$/,\$d" "$notes" | grep -c "^## ")" -gt 0 ]'
 check "$notes has ## Download" 'grep -qx "## Download" "$notes"'
@@ -134,6 +141,14 @@ check "changelog has one $tag heading" \
   '[ "$(grep -cE "^## ${tag//./\\.} \([0-9]{4}-[0-9]{2}-[0-9]{2}\)$" "$changelog")" = 1 ]'
 check "changelog starts with $tag" '[ "$(grep -m 1 "^## v" "$changelog" | cut -d " " -f 2)" = "$tag" ]'
 check "changelog $tag has items" '[ "$(grep -c "^- " <<<"$section")" -gt 0 ]'
+check "changelog $tag writes fixes as Fix:" '! grep -iE "^- fix(ed|es)?:" <<<"$section" | grep -qv "^- Fix:"'
+check "changelog has a blank line before each release" \
+  'awk "/^## v/ && last != \"\" { bad = 1 } { last = \$0 } END { exit bad }" "$changelog"'
+date_of() {
+  sed -n "s/^## $1 (\(.*\))\$/\1/p" "$changelog"
+}
+check "changelog $tag is not dated before $prev" \
+  '[ -z "$prev" ] || [ -z "$(date_of "$prev")" ] || ! [[ "$(date_of "$tag")" < "$(date_of "$prev")" ]]'
 for link in $(links_in <<<"$section"); do
   check "changelog $tag links to a page: $link" 'link_ok "$link"'
 done
@@ -141,16 +156,20 @@ if [ -n "$prev" ] && git rev-parse -q --verify "refs/tags/$prev" >/dev/null; the
   check "changelog before $tag is as in tag $prev" \
     'diff -q <(sed -n "/^## $prev /,\$p" "$changelog") \
       <(git show "$prev:$changelog" | sed -n "/^## $prev /,\$p") >/dev/null'
+  check "changelog above the releases is as in tag $prev" \
+    'diff -q <(sed "/^## v/,\$d" "$changelog") <(git show "$prev:$changelog" | sed "/^## v/,\$d") >/dev/null'
 else
   skip "changelog before $tag is as in tag $prev (no such tag here)"
+  skip "changelog above the releases is as in tag $prev (no such tag here)"
 fi
 
 # Case 5: only what users see, and no banned names.
+# "skill" is not on the list: since v0.1.7, skills in stage prompts are a feature users see.
 for text in notes section; do
   if [ "$text" = notes ]; then body=$(cat "$notes"); else body=$section; fi
   check "no banned names in the $text" '! grep -qiwE "orca|atlas" <<<"$body"'
   check "no developer-only changes in the $text" \
-    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI|[Ss]kills?" <<<"$body"'
+    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI" <<<"$body"'
 done
 
 finish
