@@ -1,0 +1,80 @@
+name: E2E
+
+# Builds the production images, starts them with demo data (scripts/e2e.sh) and runs the
+# Playwright tests in e2e/ against them. On main it then publishes the images to ghcr.io, so
+# scripts/e2e.sh can start them on any machine with Docker. See docs/e2e.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      E2E_BUILD: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and start the production images, with demo data
+        run: scripts/e2e.sh up
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # e2e/ is not part of the pnpm workspace, so the production images do not install it.
+      # Its only dependency is pinned to an exact version.
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Run the tests
+        working-directory: e2e
+        run: pnpm e2e
+
+      - name: Report, pictures and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
+
+      - name: Logs on failure
+        if: failure()
+        run: scripts/e2e.sh logs
+
+      - name: Publish the images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for name in daemon web; do
+            for tag in main "sha-${GITHUB_SHA::7}"; do
+              docker tag "natamux-$name:local" "ghcr.io/$OWNER/natamux-$name:$tag"
+              docker push --quiet "ghcr.io/$OWNER/natamux-$name:$tag"
+            done
+          done
+
+      - name: Stop
+        if: always()
+        run: scripts/e2e.sh down

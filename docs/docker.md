@@ -91,11 +91,13 @@ Things to know:
 - **The repository must be writable by user 1000** inside the container, or `workspace create` fails (reading tasks still works).
 - A worktree lives in the volume, in the container. Nothing on your machine can edit it until agents run inside the setup. That is why production is for tracking tasks for now.
 - Hooks of agents reach the daemon through the dashboard's address: set `NATAMUX_URL=http://host:8080/api` where `natamux hooks claude-code` runs.
-- The images are not pushed anywhere and carry the tag `local`. Base images are tags, not pinned digests.
+- A local build carries the tag `local`. The E2E workflow publishes the images of `main` to ghcr.io (see [e2e.md](e2e.md)). Base images are tags, not pinned digests.
 
 ## Checks
 
 CI runs a `docker` job on every pull request: it checks both compose files, builds and starts production and asks it for `/api/health`, the task list and the dashboard page, then does the same for development. The setups were written without running Docker on the author's machine, so this job is the first real test of a change.
+
+The E2E workflow starts the production images with demo data and tests the dashboard in a browser. See [e2e.md](e2e.md).
 
 ## Variables of the development setup
 

@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "lint": "biome check packages && pnpm -r --if-present run typecheck",
-    "format": "biome check --write packages",
+    "lint": "biome check packages e2e && pnpm -r --if-present run typecheck",
+    "format": "biome check --write packages e2e",
     "test": "pnpm -r --if-present run test",
     "test:coverage": "pnpm -r --if-present run test --coverage"
   },

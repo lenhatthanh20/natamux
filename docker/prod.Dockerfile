@@ -32,6 +32,8 @@ FROM manifests AS daemon-deps
 RUN pnpm install --frozen-lockfile --prod --filter "@natamux/daemon..."
 
 FROM node:22-bookworm-slim AS daemon
+# Links an image published to ghcr.io to the repository.
+LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"
 # git is how the daemon makes the worktree of a task.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates \
@@ -52,6 +54,7 @@ EXPOSE 4317
 CMD ["node", "packages/daemon/dist/main.js"]
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS web
+LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/packages/web/dist /usr/share/nginx/html
 EXPOSE 8080
