@@ -1,4 +1,7 @@
 import {
+  type Attachment,
+  type AttachmentUpload,
+  attachmentSchema,
   type ChangeEntry,
   type ContextSourceType,
   changeEntrySchema,
@@ -33,6 +36,7 @@ export type NewWorkspaceInput = {
   agent?: string
   prompt?: string
   context?: { source: ContextSourceType; name?: string; ref: string }
+  attachments?: AttachmentUpload[]
 }
 
 export type StageAction = 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start'
@@ -476,6 +480,20 @@ export function createApi(
           modifiedAt: String(file.modifiedAt),
         }
       })
+    },
+
+    async listAttachments(taskId: string): Promise<Attachment[]> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/attachments`
+      const body = asRecord(await request('GET', path))
+      if (!Array.isArray(body.attachments)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.attachments.map((entry) => attachmentSchema.parse(entry))
+    },
+
+    async readAttachment(taskId: string, name: string): Promise<Blob> {
+      const id = encodeURIComponent(taskId)
+      return requestBlob(`/tasks/${id}/attachments/${encodeURIComponent(name)}`)
     },
 
     async readStageFile(taskId: string, name: string): Promise<string> {

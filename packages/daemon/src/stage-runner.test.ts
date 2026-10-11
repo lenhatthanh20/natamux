@@ -8,6 +8,7 @@ import {
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
+import { decodeAttachments } from './attachments.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import type { RunCommand } from './stage-checks.js'
@@ -210,6 +211,103 @@ describe('context', () => {
   it('waits for you when the issue number is missing', async () => {
     const task = await created({ title: 'Export', context: { source: 'github-issue', ref: '' } })
     expect(task.state).toBe('needs-input')
+  })
+
+  it('writes no Attachments section for a task without attachments', async () => {
+    const task = await created({ title: 'Export tasks' })
+    const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
+    expect(context).toBe('# Export tasks\n\n(No notes.)\n')
+  })
+})
+
+describe('attachments', () => {
+  const files = () =>
+    decodeAttachments([
+      { name: 'login error.png', data: Buffer.from('image').toString('base64') },
+      { name: 'spec.docx', data: Buffer.from('word').toString('base64') },
+    ])
+  const listed = [
+    '- `.natamux-task/attachments/login-error.png` (5 B)',
+    '- `.natamux-task/attachments/spec.docx` (4 B)',
+  ]
+
+  async function createdWithFiles(input: Record<string, unknown>): Promise<Task> {
+    const task = tasks.createTask(input, files())
+    await runner.settle()
+    return tasks.getTask(task.id)
+  }
+
+  it('lists the attachments in the context of a typed task', async () => {
+    const task = await createdWithFiles({ title: 'Export tasks', description: 'As CSV.' })
+
+    expect(task).toMatchObject({ stage: 'spec', state: 'ready' })
+    const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
+    expect(context.startsWith('# Export tasks\n\nAs CSV.\n\n## Attachments\n')).toBe(true)
+    for (const line of listed) {
+      expect(context).toContain(line)
+    }
+  })
+
+  it('lists the attachments in the context read from a GitHub issue', async () => {
+    const task = await createdWithFiles({
+      title: 'Export',
+      context: { source: 'github-issue', ref: '#7' },
+    })
+
+    const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
+    expect(context).toContain('Dates in UTC, please.')
+    expect(context).toContain('## Attachments')
+    expect(context).toContain(listed[0])
+  })
+
+  it('puts the attachments into the worktree, where the agent finds them', async () => {
+    const task = await withWorkspace((await createdWithFiles({ title: 'Export' })).id)
+
+    const dir = join(task.workspace ?? '', STAGE_DIR, 'attachments')
+    expect(readFileSync(join(dir, 'login-error.png'), 'utf8')).toBe('image')
+    expect(readFileSync(join(dir, 'spec.docx'), 'utf8')).toBe('word')
+    expect(runGit(task.workspace ?? '', 'status', '--porcelain')).toBe('')
+  })
+
+  it('names the attachments to a context agent, and adds them when it leaves them out', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      context: { sources: [{ type: 'skill', name: 'Jira', skill: 'jira-ticket' }] },
+    }
+    const waiting = await createdWithFiles({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', name: 'Jira', ref: 'ABC-1' },
+    })
+    const task = await withWorkspace(waiting.id)
+    expect(launchScript(task.id)).toContain('.natamux-task/attachments/login-error.png (5 B)')
+    expect(launchScript(task.id)).toContain('list them under an Attachments heading')
+
+    writeWorking(task, 'context.md', '# ABC-1\n\nExport as CSV.\n')
+    await runner.act(task.id, 'report', { terminal: '1' })
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'context', state: 'review' })
+    const context = readFileSync(join(task.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')
+    expect(context.startsWith('# ABC-1\n\nExport as CSV.\n\n## Attachments\n')).toBe(true)
+    expect(context).toContain(listed[1])
+  })
+
+  it('keeps the Attachments section an agent wrote itself', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      context: { sources: [{ type: 'skill', name: 'Jira', skill: 'jira-ticket' }] },
+    }
+    const waiting = await createdWithFiles({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', name: 'Jira', ref: 'ABC-1' },
+    })
+    const task = await withWorkspace(waiting.id)
+    const written = '# ABC-1\n\n## Attachments\n\n- the screenshot and the spec\n'
+    writeWorking(task, 'context.md', written)
+    await runner.act(task.id, 'report', { terminal: '1' })
+
+    expect(readFileSync(join(task.workspace ?? '', STAGE_DIR, 'context.md'), 'utf8')).toBe(written)
   })
 })
 

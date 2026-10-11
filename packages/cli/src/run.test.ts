@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Task } from '@natamux/core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { FetchFunction } from './client.js'
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, runCli } from './run.js'
 
@@ -223,6 +226,64 @@ describe('runCli', () => {
       expect(result.code).toBe(EXIT_FAILED)
       expect(result.stderr).toBe('Error: Name the project with --repo. Projects: app, web\n')
       expect(result.calls.map((call) => call.method)).toEqual(['GET'])
+    })
+
+    describe('with --attach', () => {
+      let dir: string
+
+      beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'natamux-attach-'))
+      })
+
+      afterEach(() => {
+        rmSync(dir, { recursive: true, force: true })
+      })
+
+      it('sends each file by its name, as base64', async () => {
+        writeFileSync(join(dir, 'spec.pdf'), 'pdf')
+        writeFileSync(join(dir, 'shot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+        const files = ['--attach', join(dir, 'spec.pdf'), '--attach', join(dir, 'shot.png')]
+
+        const result = await run(['task', 'create', 'Fix it', '--repo', 'web', ...files], {
+          handler: () => jsonResponse({ task: makeTask() }, 201),
+        })
+
+        expect(result.code).toBe(EXIT_OK)
+        expect(result.calls[0]?.body).toMatchObject({
+          attachments: [
+            { name: 'spec.pdf', data: Buffer.from('pdf').toString('base64') },
+            { name: 'shot.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64') },
+          ],
+        })
+      })
+
+      it('sends no attachments without --attach', async () => {
+        const result = await run(['task', 'create', 'Fix it', '--repo', 'web'], {
+          handler: () => jsonResponse({ task: makeTask() }, 201),
+        })
+        expect(result.calls[0]?.body).not.toHaveProperty('attachments')
+      })
+
+      it('makes no task when a file is missing', async () => {
+        const missing = join(dir, 'missing.pdf')
+        const result = await run(['task', 'create', 'Fix it', '--repo', 'web', '--attach', missing])
+
+        expect(result.code).toBe(EXIT_FAILED)
+        expect(result.stderr).toBe(`Error: There is no file at ${missing}\n`)
+        expect(result.calls).toEqual([])
+      })
+
+      it('makes no task when a file is over the limit', async () => {
+        const big = join(dir, 'big.mov')
+        writeFileSync(big, '')
+        truncateSync(big, 20_000_001)
+
+        const result = await run(['task', 'create', 'Fix it', '--repo', 'web', '--attach', big])
+
+        expect(result.code).toBe(EXIT_FAILED)
+        expect(result.stderr).toContain('is larger than 20 MB, the most for one file')
+        expect(result.calls).toEqual([])
+      })
     })
   })
 

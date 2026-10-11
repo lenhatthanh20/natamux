@@ -1,3 +1,4 @@
+export * from './attachments.js'
 export * from './changes.js'
 export * from './claude-code-hooks.js'
 export * from './dependencies.js'

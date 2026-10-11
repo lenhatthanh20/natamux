@@ -1,4 +1,5 @@
 import type { Task, TaskContext } from '@natamux/core'
+import type { AttachmentFile } from './attachments.js'
 import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import { WorkspaceConflictError, type WorkspaceService } from './workspace-service.js'
@@ -21,6 +22,8 @@ export type NewWorkspaceInput = {
   prompt?: string
   // Where the context comes from, when not from the notes: a GitHub issue, a skill, an MCP server.
   context?: TaskContext
+  // Files for the agents to read, already checked by decodeAttachments.
+  attachments?: readonly AttachmentFile[]
 }
 
 // The quick way to start work: a task, its worktree, and its first stage started when an agent is
@@ -36,13 +39,16 @@ export async function newWorkspace(
     throw new WorkspaceConflictError(`There is no local branch named ${input.base}`)
   }
 
-  const created = parts.tasks.createTask({
-    title: input.title,
-    description: input.prompt ?? '',
-    ...(input.repo === undefined ? {} : { repo: input.repo }),
-    ...(input.agent === undefined ? {} : { agent: input.agent }),
-    ...(input.context === undefined ? {} : { context: input.context }),
-  })
+  const created = parts.tasks.createTask(
+    {
+      title: input.title,
+      description: input.prompt ?? '',
+      ...(input.repo === undefined ? {} : { repo: input.repo }),
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      ...(input.context === undefined ? {} : { context: input.context }),
+    },
+    input.attachments,
+  )
   if (input.agent === undefined) {
     // A first stage that passes by itself, such as a manual context, would start the next
     // stage's agent in the new workspace.

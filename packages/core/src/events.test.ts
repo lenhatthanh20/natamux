@@ -121,7 +121,14 @@ describe('deriveTaskState with the legacy pipeline', () => {
 
 describe('applyTaskEvent with the default pipeline', () => {
   it('accepts record-only events in any state without a change', () => {
-    for (const type of ['task.created', 'git.pushed', 'issue.linked', 'context.fetched'] as const) {
+    const types = [
+      'task.created',
+      'git.pushed',
+      'issue.linked',
+      'context.fetched',
+      'attachment.added',
+    ] as const
+    for (const type of types) {
       expect(run(at('plan', 'running'), event(type))).toEqual({
         position: at('plan', 'running'),
         accepted: [true],

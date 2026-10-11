@@ -49,6 +49,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--depends-on <id>` | `task create`, `task edit` | A task that must finish first. Repeat for more |
 | `--context <source>` | `task create` | Where the context comes from: `manual`, `github-issue`, `skill` or `mcp`, as `source` or `source:ref`, such as `github-issue:42` |
 | `--repo <id>` | `task create` | The project of the task. Default: the project of the `NATAMUX_TASK_ID` task, or the only project |
+| `--attach <path>` | `task create` | A file for the agents to read, such as a document or a screenshot. Repeat for more. At most 20 files, 20 MB each and 50 MB together |
 | `--prompt <text>` | `agent start` | First prompt. Default: the task title and notes |
 | `--task <id>` | `ask`, `done` | The task. Default: `NATAMUX_TASK_ID` |
 | `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side |

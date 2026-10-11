@@ -25,6 +25,7 @@ import {
   taskSchema,
 } from '@natamux/core'
 import { z } from 'zod'
+import { type AttachmentFile, saveAttachments } from './attachments.js'
 import type { EventBus } from './event-bus.js'
 import { appendEventLine, readEventLog, writeEventLog } from './event-log.js'
 import { listTaskFiles, listTaskIds, readTaskFile, writeTaskFile } from './task-files.js'
@@ -181,7 +182,9 @@ export class TaskService {
     this.index.appendEvent(event, accepted)
   }
 
-  createTask(rawInput: unknown): Task {
+  // The attachments are written before the task is published, so its context stage, which starts
+  // at once, finds them.
+  createTask(rawInput: unknown, attachments: readonly AttachmentFile[] = []): Task {
     const input = createTaskInputSchema.parse(rawInput)
     if (input.parentId) {
       this.checkParent(input.parentId)
@@ -207,6 +210,19 @@ export class TaskService {
       { taskId: task.id, source: 'system', type: 'task.created', at, payload: {} },
       true,
     )
+    saveAttachments(this.dataDir, task.id, attachments)
+    for (const { name, bytes } of attachments) {
+      this.logEvent(
+        {
+          taskId: task.id,
+          source: 'system',
+          type: 'attachment.added',
+          at,
+          payload: { name, size: bytes.length },
+        },
+        true,
+      )
+    }
     this.bus.publish({ kind: 'task.created', task })
     return task
   }

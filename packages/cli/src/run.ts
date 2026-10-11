@@ -1,3 +1,6 @@
+import { readFile, stat } from 'node:fs/promises'
+import { basename } from 'node:path'
+import { type AttachmentUpload, attachmentLimitError } from '@natamux/core'
 import { DaemonClient, type FetchFunction } from './client.js'
 import { type Command, parseCommand, UsageError } from './command.js'
 import {
@@ -67,6 +70,30 @@ async function projectOf(
   )
 }
 
+// Every file is checked before the first is read and before the task is made, so a missing file
+// or one over a limit makes no task.
+async function readAttachments(paths: readonly string[]): Promise<AttachmentUpload[]> {
+  const files = await Promise.all(
+    paths.map(async (path) => {
+      const info = await stat(path).catch(() => undefined)
+      if (info === undefined || !info.isFile()) {
+        throw new Error(`There is no file at ${path}`)
+      }
+      return { path, name: basename(path), size: info.size }
+    }),
+  )
+  const error = attachmentLimitError(files)
+  if (error !== undefined) {
+    throw new Error(error)
+  }
+  return Promise.all(
+    files.map(async ({ path, name }) => ({
+      name,
+      data: (await readFile(path)).toString('base64'),
+    })),
+  )
+}
+
 async function execute(
   command: Command,
   client: DaemonClient,
@@ -79,6 +106,7 @@ async function execute(
       return
 
     case 'task.create': {
+      const attachments = await readAttachments(command.attach ?? [])
       const repo = command.repo ?? (await projectOf(client, env))
       const task = await client.createTask({
         title: command.title,
@@ -88,6 +116,7 @@ async function execute(
         agent: command.agent,
         dependsOn: command.dependsOn,
         ...(command.context === undefined ? {} : { context: command.context }),
+        ...(attachments.length === 0 ? {} : { attachments }),
         repo,
       })
       if (command.json) {

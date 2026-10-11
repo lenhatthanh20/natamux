@@ -923,6 +923,128 @@ describe('changed images', () => {
   })
 })
 
+describe('attachments', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])
+  const file = (name: string, bytes: Buffer | string) => ({
+    name,
+    data: Buffer.from(bytes).toString('base64'),
+  })
+
+  const newWorkspace = (attachments: unknown[]) =>
+    app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Fix the login', attachments },
+    })
+
+  const attachment = (name: string) =>
+    app.inject({
+      method: 'GET',
+      url: `/tasks/T-0001/attachments/${encodeURIComponent(name)}`,
+      headers: authorization,
+    })
+
+  it('keeps the files sent with a new workspace and lists them', async () => {
+    const created = await newWorkspace([
+      file('login error.png', PNG),
+      file('spec.docx', 'word'),
+      file('spec.docx', 'word again'),
+    ])
+    expect(created.statusCode).toBe(201)
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/attachments',
+      headers: authorization,
+    })
+    expect(listed.json().attachments).toEqual([
+      { name: 'login-error.png', size: PNG.length, type: 'image/png' },
+      { name: 'spec-2.docx', size: 10, type: null },
+      { name: 'spec.docx', size: 4, type: null },
+    ])
+    const events = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/events',
+      headers: authorization,
+    })
+    const types = events.json().events.map((entry: { event: { type: string } }) => entry.event.type)
+    expect(types.filter((type: string) => type === 'attachment.added')).toHaveLength(3)
+  })
+
+  it('keeps the files sent with a new task', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the login', attachments: [file('notes.md', '# Notes')] },
+    })
+    expect(created.statusCode).toBe(201)
+
+    expect((await attachment('notes.md')).body).toBe('# Notes')
+  })
+
+  it('sends an image to show, with nosniff and a policy that runs nothing', async () => {
+    await newWorkspace([file('shot.png', PNG)])
+
+    const response = await attachment('shot.png')
+
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['content-type']).toBe('image/png')
+    expect(response.headers['content-disposition']).toBeUndefined()
+    expect(response.headers['x-content-type-options']).toBe('nosniff')
+    expect(response.headers['content-security-policy']).toContain('sandbox')
+    expect([...response.rawPayload]).toEqual([...PNG])
+  })
+
+  it.each(['page.html', 'logo.svg', 'report.pdf'])('sends %s only as a download', async (name) => {
+    await newWorkspace([file(name, '<script>alert(1)</script>')])
+
+    const response = await attachment(name)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.headers['content-type']).toBe('application/octet-stream')
+    expect(response.headers['content-disposition']).toBe(`attachment; filename="${name}"`)
+    expect(response.headers['x-content-type-options']).toBe('nosniff')
+  })
+
+  it('answers 404 for a file the task lacks, and 400 for a name that is not safe', async () => {
+    await newWorkspace([file('a.txt', 'a')])
+
+    expect((await attachment('b.txt')).statusCode).toBe(404)
+    expect((await attachment('.hidden')).statusCode).toBe(400)
+    expect((await attachment('a b.txt')).statusCode).toBe(400)
+    const unknown = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0042/attachments',
+      headers: authorization,
+    })
+    expect(unknown.statusCode).toBe(404)
+  })
+
+  it('keeps the files after the workspace is removed', async () => {
+    await newWorkspace([file('a.txt', 'a')])
+    await app.inject({ method: 'DELETE', url: '/tasks/T-0001/workspace', headers: authorization })
+
+    expect((await attachment('a.txt')).body).toBe('a')
+  })
+
+  it('refuses more than 20 files and makes no task', async () => {
+    const files = Array.from({ length: 21 }, (_, n) => file(`f${n}.txt`, 'x'))
+
+    expect((await newWorkspace(files)).statusCode).toBe(400)
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toEqual([])
+  })
+
+  it('takes a body larger than 1 MB when it brings files', async () => {
+    const response = await newWorkspace([file('big.bin', Buffer.alloc(2_000_000))])
+
+    expect(response.statusCode).toBe(201)
+    expect((await attachment('big.bin')).rawPayload.length).toBe(2_000_000)
+  })
+})
+
 describe('graph', () => {
   it('gives the history of the task branch', async () => {
     await app.inject({

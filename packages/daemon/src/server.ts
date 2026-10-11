@@ -1,8 +1,12 @@
 import { timingSafeEqual } from 'node:crypto'
 import websocket from '@fastify/websocket'
 import {
+  attachmentUploadsSchema,
+  base64Length,
   IMAGE_SIDES,
   issueLinkSchema,
+  MAX_TASK_ATTACHMENT_SIZE,
+  previewTypeOf,
   repoIdSchema,
   TASK_ID_HEADER,
   TERMINAL_HEADER,
@@ -18,6 +22,12 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
+import {
+  AttachmentError,
+  decodeAttachments,
+  listAttachments,
+  readAttachment,
+} from './attachments.js'
 import { COPILOT_EVENT_FIELD } from './copilot-hooks.js'
 import type { EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
@@ -113,7 +123,11 @@ const newWorkspaceBodySchema = z.object({
   agent: z.enum(LAUNCHABLE_AGENTS).optional(),
   prompt: z.string().trim().max(20_000).optional(),
   context: taskContextSchema.optional(),
+  attachments: attachmentUploadsSchema.optional(),
 })
+const attachmentsBodySchema = z.object({ attachments: attachmentUploadsSchema.optional() })
+// A new task may bring its attachments in its JSON body, as base64.
+const NEW_TASK_BODY_LIMIT = base64Length(MAX_TASK_ATTACHMENT_SIZE) + 1_000_000
 const startAgentBodySchema = z.object({
   agent: z.string().min(1).max(64),
   prompt: z.string().max(20_000).optional(),
@@ -142,6 +156,7 @@ const stageBodySchema = z.object({
 })
 const stageFileParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(100) })
 const stageFileBodySchema = z.object({ text: z.string() })
+const attachmentParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(255) })
 const repoParamsSchema = z.object({ id: repoIdSchema })
 const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is named by a number')
 const terminalQuerySchema = terminalSizeSchema.extend({
@@ -232,7 +247,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof RepoInputError ||
       error instanceof SettingsInputError ||
       error instanceof StageFileError ||
-      error instanceof StageInputError
+      error instanceof StageInputError ||
+      error instanceof AttachmentError
     ) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })
     }
@@ -279,10 +295,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { tasks: options.service.listTasks(query.state) }
   })
 
-  app.post('/tasks', async (request, reply) => {
+  app.post('/tasks', { bodyLimit: NEW_TASK_BODY_LIMIT }, async (request, reply) => {
     const { repo } = taskRepoBodySchema.parse(request.body ?? {})
+    const { attachments } = attachmentsBodySchema.parse(request.body ?? {})
     options.repos.get(repo ?? null)
-    const task = options.service.createTask(request.body)
+    const files = decodeAttachments(attachments ?? [])
+    const task = options.service.createTask(request.body, files)
     return reply.code(201).send({ task })
   })
 
@@ -393,6 +411,36 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { name, text }
   })
 
+  app.get('/tasks/:id/attachments', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    options.service.getTask(id)
+    return { attachments: listAttachments(options.dataDir, id) }
+  })
+
+  // An image the dashboard shows comes with its type. Any other file, SVG and HTML too, only
+  // downloads, so it never runs as a page of the dashboard.
+  app.get('/tasks/:id/attachments/:name', async (request, reply) => {
+    const { id, name } = attachmentParamsSchema.parse(request.params)
+    options.service.getTask(id)
+    const bytes = readAttachment(options.dataDir, id, name)
+    if (bytes === undefined) {
+      return reply.code(404).send({ error: 'not_found', message: `${id} has no ${name}` })
+    }
+    const type = previewTypeOf(name)
+    if (type === null) {
+      reply
+        .header('content-type', 'application/octet-stream')
+        .header('content-disposition', `attachment; filename="${name}"`)
+    } else {
+      reply.header('content-type', type)
+    }
+    return reply
+      .header('cache-control', 'no-store')
+      .header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+      .send(bytes)
+  })
+
   // An edit by hand, for example to fix the spec before approving it.
   app.put('/tasks/:id/files/:name', async (request) => {
     const { id, name } = stageFileParamsSchema.parse(request.params)
@@ -481,22 +529,29 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/fan-out', async (request, reply) => {
     const { id } = taskParamsSchema.parse(request.params)
     const { count, start } = fanOutBodySchema.parse(request.body)
-    const parts = { tasks: options.service, workspaces: options.workspaces, stages: options.stages }
+    const parts = {
+      tasks: options.service,
+      workspaces: options.workspaces,
+      stages: options.stages,
+      dataDir: options.dataDir,
+    }
     return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
   })
 
   // A task, its worktree and its agent in one step.
-  app.post('/workspaces', async (request, reply) => {
-    const input = newWorkspaceBodySchema.parse(request.body)
-    // Before the task is made, so a missing repository leaves no task behind.
+  app.post('/workspaces', { bodyLimit: NEW_TASK_BODY_LIMIT }, async (request, reply) => {
+    const { attachments, ...input } = newWorkspaceBodySchema.parse(request.body)
+    // Before the task is made, so a missing repository or a file over a limit leaves no task.
     options.repos.get(input.repo ?? null)
+    const files = decodeAttachments(attachments ?? [])
     const parts = {
       tasks: options.service,
       workspaces: options.workspaces,
       agents: options.agents,
       stages: options.stages,
     }
-    return reply.code(201).send({ task: await newWorkspace(parts, input) })
+    const task = await newWorkspace(parts, { ...input, attachments: files })
+    return reply.code(201).send({ task })
   })
 
   // A review comment for the agent: pasted into its terminal as the next prompt.

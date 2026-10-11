@@ -1,14 +1,17 @@
+import { type Attachment, formatBytes } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText } from 'lucide-react'
+import { Download, FileImage, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import type { StageFile } from '../lib/api'
+import { saveBlob } from '../lib/attachments'
 import { formatAge } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { useObjectUrl } from './ImageDiff'
 import { Markdown } from './Markdown'
 import { Button } from './ui/Button'
 import { Segmented } from './ui/Segmented'
-import { textarea } from './ui/styles'
+import { sectionTitle, textarea } from './ui/styles'
 
 type Draft = { text: string; original: string; base: string | null }
 
@@ -41,6 +44,84 @@ type DocsTabProps = {
   loadFiles: () => Promise<StageFile[]>
   readFile: (name: string) => Promise<string>
   writeFile: (name: string, text: string) => Promise<void>
+  // The files attached to the task when it started.
+  loadAttachments?: () => Promise<Attachment[]>
+  readAttachment?: (name: string) => Promise<Blob>
+}
+
+const NAV_ITEM =
+  'focus-inset flex shrink-0 flex-col items-start rounded-md px-2 py-1.5 text-left hover:bg-hover aria-[current=page]:bg-selected'
+
+// An image opens in the tab. Any other file downloads: the dashboard cannot show it.
+function AttachmentList({
+  attachments,
+  shown,
+  onOpen,
+}: {
+  attachments: readonly Attachment[]
+  shown: string | null
+  onOpen: (attachment: Attachment) => void
+}) {
+  if (attachments.length === 0) {
+    return null
+  }
+  return (
+    <>
+      <h3 className={`${sectionTitle} m-0 shrink-0 px-2 pt-3 pb-1`}>Attachments</h3>
+      {attachments.map((item) => (
+        <button
+          key={item.name}
+          type="button"
+          aria-current={item.name === shown ? 'page' : undefined}
+          onClick={() => onOpen(item)}
+          className={NAV_ITEM}
+        >
+          <span className="flex items-center gap-1.5 font-mono text-xs text-ink">
+            {item.type === null ? (
+              <Download size={13} aria-hidden="true" className="text-muted" />
+            ) : (
+              <FileImage size={13} aria-hidden="true" className="text-muted" />
+            )}
+            {item.name}
+          </span>
+          <span className="text-2xs text-muted">
+            {formatBytes(item.size)}
+            {item.type === null ? ' · download' : ''}
+          </span>
+        </button>
+      ))}
+    </>
+  )
+}
+
+function AttachmentPreview({
+  taskId,
+  name,
+  load,
+}: {
+  taskId: string
+  name: string
+  load: (name: string) => Promise<Blob>
+}) {
+  const image = useQuery({ queryKey: ['attachment', taskId, name], queryFn: () => load(name) })
+  const url = useObjectUrl(image.data)
+  return (
+    <section aria-label={name} className="flex min-w-0 flex-1 flex-col">
+      <div className="flex h-10 shrink-0 items-center border-b border-line px-3">
+        <span className="font-mono text-xs text-ink-2">{name}</span>
+      </div>
+      {image.isError && (
+        <p role="alert" className="p-4">
+          {image.error.message}
+        </p>
+      )}
+      {url !== null && (
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <img src={url} alt={name} className="max-w-full" />
+        </div>
+      )}
+    </section>
+  )
 }
 
 // The stage files of a task (context.md, spec.md, plan.md, test-spec.md), to read and to fix by
@@ -53,8 +134,40 @@ export function DocsTab({
   loadFiles,
   readFile,
   writeFile,
+  loadAttachments,
+  readAttachment,
 }: DocsTabProps) {
   const queryClient = useQueryClient()
+  const attachments = useQuery({
+    queryKey: ['attachments', taskId],
+    queryFn: () => loadAttachments?.() ?? Promise.resolve([]),
+    enabled: loadAttachments !== undefined,
+  })
+  // An attached image shown in place of a stage file.
+  const [shownImage, setShownImage] = useState<string | null>(null)
+  const download = useMutation({
+    mutationFn: async (name: string) => {
+      if (readAttachment !== undefined) {
+        saveBlob(await readAttachment(name), name)
+      }
+    },
+    onError: (error, name) =>
+      toast(`Could not download ${name}.`, 'error', { detail: error.message }),
+  })
+  const openAttachment = (attachment: Attachment) => {
+    if (attachment.type === null) {
+      download.mutate(attachment.name)
+    } else {
+      setShownImage(attachment.name)
+    }
+  }
+  const attachmentList = (
+    <AttachmentList
+      attachments={attachments.data ?? []}
+      shown={shownImage}
+      onOpen={openAttachment}
+    />
+  )
   const files = useQuery({
     queryKey: ['stage-files', taskId],
     queryFn: loadFiles,
@@ -150,6 +263,15 @@ export function DocsTab({
         <Button size="xs" variant="secondary" onClick={() => setStartNew(true)}>
           Write {FIRST_FILE}
         </Button>
+        {(attachments.data ?? []).length > 0 && (
+          <nav aria-label="Attachments" className="flex flex-col gap-0.5 self-stretch">
+            <AttachmentList
+              attachments={(attachments.data ?? []).map((item) => ({ ...item, type: null }))}
+              shown={null}
+              onOpen={openAttachment}
+            />
+          </nav>
+        )}
       </div>
     )
   }
@@ -165,9 +287,12 @@ export function DocsTab({
           <button
             key={item.name}
             type="button"
-            aria-current={item.name === current ? 'page' : undefined}
-            onClick={() => onFileChange(item.name)}
-            className="focus-inset flex shrink-0 flex-col items-start rounded-md px-2 py-1.5 text-left hover:bg-hover aria-[current=page]:bg-selected"
+            aria-current={item.name === current && shownImage === null ? 'page' : undefined}
+            onClick={() => {
+              setShownImage(null)
+              onFileChange(item.name)
+            }}
+            className={NAV_ITEM}
           >
             <span className="flex items-center gap-1.5 font-mono text-xs text-ink">
               <FileText size={13} aria-hidden="true" className="text-muted" />
@@ -177,79 +302,84 @@ export function DocsTab({
             <span className="text-2xs text-muted">changed {formatAge(item.modifiedAt, now)}</span>
           </button>
         ))}
+        {attachmentList}
       </nav>
-      <section aria-label={current ?? 'File'} className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
-          <span className="font-mono text-xs text-ink-2">{current}</span>
-          <span className="flex-1" />
-          {editing ? (
-            <>
-              <Button size="xs" variant="ghost" onClick={() => cancel(current)}>
-                Cancel
-              </Button>
-              <Button
-                size="xs"
-                variant="primary"
-                busy={save.isPending}
-                onClick={() => submit(current, draft)}
-              >
-                Save
-              </Button>
-            </>
-          ) : (
-            <>
-              {!text.isError && (
-                <Segmented
-                  label="Show the file"
-                  options={VIEW_MODES}
-                  value={mode}
-                  onChange={(next) => setSource(next === 'source')}
-                />
-              )}
-              <Button
-                size="xs"
-                variant="secondary"
-                disabled={text.data === undefined && entry !== undefined}
-                onClick={() =>
-                  setDraft(current, {
-                    text: text.data ?? '',
-                    original: text.data ?? '',
-                    base: modifiedAt,
-                  })
-                }
-              >
-                Edit
-              </Button>
-            </>
-          )}
-        </div>
-        {stale && (
-          <p role="status" className="m-0 border-b border-line px-3 py-1.5 text-xs text-signal">
-            This file changed after you began editing. Saving replaces the new text.
-          </p>
-        )}
-        {text.isError && (
-          <p role="alert" className="p-4">
-            {text.error.message}
-          </p>
-        )}
-        {editing ? (
-          <textarea
-            value={draft.text}
-            onChange={(event) => setDraft(current, { ...draft, text: event.target.value })}
-            aria-label={`Text of ${current}`}
-            className={`${textarea} m-3 min-h-0 flex-1 resize-none font-mono text-xs leading-5`}
-          />
-        ) : mode === 'source' ? (
-          <pre className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ink">
-            {text.data ?? ''}
-          </pre>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-auto p-4">
-            <Markdown text={text.data ?? ''} />
+      {shownImage !== null && readAttachment !== undefined ? (
+        <AttachmentPreview taskId={taskId} name={shownImage} load={readAttachment} />
+      ) : (
+        <section aria-label={current ?? 'File'} className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
+            <span className="font-mono text-xs text-ink-2">{current}</span>
+            <span className="flex-1" />
+            {editing ? (
+              <>
+                <Button size="xs" variant="ghost" onClick={() => cancel(current)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="xs"
+                  variant="primary"
+                  busy={save.isPending}
+                  onClick={() => submit(current, draft)}
+                >
+                  Save
+                </Button>
+              </>
+            ) : (
+              <>
+                {!text.isError && (
+                  <Segmented
+                    label="Show the file"
+                    options={VIEW_MODES}
+                    value={mode}
+                    onChange={(next) => setSource(next === 'source')}
+                  />
+                )}
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={text.data === undefined && entry !== undefined}
+                  onClick={() =>
+                    setDraft(current, {
+                      text: text.data ?? '',
+                      original: text.data ?? '',
+                      base: modifiedAt,
+                    })
+                  }
+                >
+                  Edit
+                </Button>
+              </>
+            )}
           </div>
-        )}
-      </section>
+          {stale && (
+            <p role="status" className="m-0 border-b border-line px-3 py-1.5 text-xs text-signal">
+              This file changed after you began editing. Saving replaces the new text.
+            </p>
+          )}
+          {text.isError && (
+            <p role="alert" className="p-4">
+              {text.error.message}
+            </p>
+          )}
+          {editing ? (
+            <textarea
+              value={draft.text}
+              onChange={(event) => setDraft(current, { ...draft, text: event.target.value })}
+              aria-label={`Text of ${current}`}
+              className={`${textarea} m-3 min-h-0 flex-1 resize-none font-mono text-xs leading-5`}
+            />
+          ) : mode === 'source' ? (
+            <pre className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ink">
+              {text.data ?? ''}
+            </pre>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <Markdown text={text.data ?? ''} />
+            </div>
+          )}
+        </section>
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import type { Task } from '@natamux/core'
+import { readAttachments } from './attachments.js'
 import type { StageRunner } from './stage-runner.js'
 import type { TaskService } from './task-service.js'
 import type { WorkspaceService } from './workspace-service.js'
@@ -14,6 +15,8 @@ type FanOutParts = {
   tasks: TaskService
   workspaces: WorkspaceService
   stages: Pick<StageRunner, 'startByHand'>
+  // Where the attachments of the task are, to copy them to its tries.
+  dataDir: string
 }
 
 // Makes `count` copies of a task, to let several agents try the same work. With `start`, each copy
@@ -26,20 +29,24 @@ export async function fanOut(
 ): Promise<Task[]> {
   const source = parts.tasks.getTask(taskId)
   const label = tryLabel(source.id)
+  const attachments = readAttachments(parts.dataDir, source.id)
   if (!source.labels.includes(label)) {
     parts.tasks.updateTask(source.id, { labels: [...source.labels, label] })
   }
 
   const created: Task[] = []
   for (let number = 2; number < options.count + 2; number += 1) {
-    let task = parts.tasks.createTask({
-      title: `${source.title} (try ${number})`.slice(0, 200),
-      description: source.description,
-      priority: source.priority,
-      labels: [...source.labels.filter((existing) => existing !== label), label],
-      dependsOn: source.dependsOn,
-      repo: source.repo,
-    })
+    let task = parts.tasks.createTask(
+      {
+        title: `${source.title} (try ${number})`.slice(0, 200),
+        description: source.description,
+        priority: source.priority,
+        labels: [...source.labels.filter((existing) => existing !== label), label],
+        dependsOn: source.dependsOn,
+        repo: source.repo,
+      },
+      attachments,
+    )
     if (options.start) {
       await parts.workspaces.create(task.id)
       task = await parts.stages.startByHand(task.id, 'claude-code')

@@ -1,4 +1,12 @@
-import { type ContextSource, type Stage, stageName, type Task } from '@natamux/core'
+import {
+  type Attachment,
+  type ContextSource,
+  formatBytes,
+  type Stage,
+  stageName,
+  type Task,
+} from '@natamux/core'
+import { attachmentPath } from './attachments.js'
 import { STAGE_DIR } from './stage-files.js'
 
 const DONE = 'When you are done, run `natamux done`.'
@@ -77,12 +85,24 @@ export function stagePrompt(
 export function contextPrompt(
   source: Extract<ContextSource, { type: 'skill' | 'mcp' }>,
   task: Pick<Task, 'title' | 'description' | 'context'>,
+  attachments: readonly Attachment[] = [],
 ): string {
   const ask =
     source.type === 'skill'
       ? `/${source.skill} {ref}\nWrite what you found to {dir}/context.md.`
       : source.prompt
-  return `${fill(ask, values(task))}\n${DONE}`
+  return [fill(ask, values(task)), ...attachmentLines(attachments), DONE].join('\n')
+}
+
+// The later stages find the attachments only through the context, so its agent must list them.
+function attachmentLines(attachments: readonly Attachment[]): string[] {
+  if (attachments.length === 0) {
+    return []
+  }
+  return [
+    `Files are attached to the task. Read them too, and list them under an Attachments heading in ${STAGE_DIR}/context.md:`,
+    ...attachments.map(({ name, size }) => `- ${attachmentPath(name)} (${formatBytes(size)})`),
+  ]
 }
 
 // The context of a task whose source is typed by hand: its title, notes and reference.

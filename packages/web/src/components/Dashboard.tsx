@@ -1005,6 +1005,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             loadStageFiles={() => api.listStageFiles(changesTask.id)}
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
+            loadAttachments={() => api.listAttachments(changesTask.id)}
+            readAttachment={(name) => api.readAttachment(changesTask.id, name)}
             startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
             approveStage={async (stage) => {
               const updated = await api.stageAction(changesTask.id, 'approve', { stage })

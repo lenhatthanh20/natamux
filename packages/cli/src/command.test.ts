@@ -68,6 +68,12 @@ describe('parseCommand', () => {
       )
     })
 
+    it('reads each --attach', () => {
+      const argv = ['task', 'create', 'x', '--attach', 'a.pdf', '--attach', 'b.png']
+      expect(parseCommand(argv)).toMatchObject({ name: 'task.create', attach: ['a.pdf', 'b.png'] })
+      expect(parseCommand(['task', 'create', 'x'])).not.toHaveProperty('attach')
+    })
+
     it('rejects an unknown priority', () => {
       expect(() => parseCommand(['task', 'create', 'x', '--priority', 'asap'])).toThrow(
         /--priority must be one of/,

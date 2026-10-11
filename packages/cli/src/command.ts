@@ -46,6 +46,8 @@ export type Command =
       agent?: string
       dependsOn: string[]
       context?: { source: ContextSourceType; ref: string }
+      // Paths of files for the agents to read.
+      attach?: string[]
       // Without it, the project of NATAMUX_TASK_ID's task, or the only project.
       repo?: string
       json: boolean
@@ -166,6 +168,7 @@ function parseOptions(argv: readonly string[]) {
         url: { type: 'string' },
         provider: { type: 'string' },
         repo: { type: 'string' },
+        attach: { type: 'string', multiple: true },
       },
     })
   } catch (error) {
@@ -217,6 +220,7 @@ export function parseCommand(argv: readonly string[]): Command {
         dependsOn: (values['depends-on'] ?? []).map((id) => taskId(id)),
         ...(values.context === undefined ? {} : { context: contextOption(values.context) }),
         ...(values.repo === undefined ? {} : { repo: repoId(values.repo) }),
+        ...(values.attach === undefined ? {} : { attach: values.attach }),
         json,
       }
     }
