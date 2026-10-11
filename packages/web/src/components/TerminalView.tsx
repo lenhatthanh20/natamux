@@ -325,11 +325,14 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
         </div>
       )}
       <div className="hm-terminal relative flex min-h-0 flex-1 flex-col">
+        {/* The fit addon reads the height of xterm's parent, padding included, so the padding is
+            on a wrapper. With it on the parent, the last row fell under the bottom edge. */}
         <section
-          ref={container}
           aria-label="Terminal screen"
-          className="min-h-0 flex-1 overflow-hidden py-2 pl-2.5"
-        />
+          className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-2.5"
+        >
+          <div ref={container} className="min-h-0 flex-1 overflow-hidden" />
+        </section>
         {findOpen && search !== null && <TerminalFind search={search} onClose={closeFind} />}
         {scrolledUp && (
           <Button
