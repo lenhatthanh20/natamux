@@ -108,6 +108,35 @@ describe('ProjectSettingsService', () => {
     expect(() => service.save(null, {}, 'none')).toThrow(SettingsChangedError)
   })
 
+  it('refuses a save over a file that was deleted, and allows one over a file only touched', () => {
+    writeFileSync(file(), '{}\n')
+    const { version } = service.load(null)
+    utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    expect(() => service.save(null, {}, version)).not.toThrow()
+
+    const saved = service.load(null).version
+    rmSync(file())
+    expect(() => service.save(null, {}, saved)).toThrow(SettingsChangedError)
+  })
+
+  it('says why an empty file or one that is not an object cannot be used', () => {
+    writeFileSync(file(), '')
+    expect(service.load(null).error).toContain('is not JSON')
+    writeFileSync(file(), '[]')
+    utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    expect(service.load(null).error).not.toBeNull()
+    expect(service.load(null).settings).toEqual(DEFAULT_PROJECT_SETTINGS)
+  })
+
+  it('keeps the fields of a stage that the screen does not show', () => {
+    const stages = [
+      { id: 'implement', kind: 'agent', gate: 'auto', requireCommit: true, check: 'make test' },
+      { id: 'qa', kind: 'manual', gate: 'manual', owner: 'sam' },
+    ]
+    service.save(null, { stages })
+    expect(JSON.parse(readFileSync(file(), 'utf8')).stages).toEqual(stages)
+  })
+
   it('keeps fields it does not know', () => {
     service.save(null, { team: 'web', tracker: { createIssue: 'never' } })
     expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual({

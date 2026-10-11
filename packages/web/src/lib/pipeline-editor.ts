@@ -156,6 +156,32 @@ export function withSteps(raw: RawSettings, steps: readonly Step[]): RawSettings
   return { stages: steps, ...raw }
 }
 
+// The settings to save over a file that changed on disk: the keys the person changed since
+// `start` (the file as it was loaded) take the draft's value; every other key keeps the value of
+// the file now.
+export function mergeChanges(
+  start: RawSettings,
+  draft: RawSettings,
+  now: RawSettings,
+): RawSettings {
+  const changed = new Set(
+    [...Object.keys(start), ...Object.keys(draft)].filter(
+      (key) => !sameJson(start[key], draft[key]),
+    ),
+  )
+  const merged: RawSettings = Object.fromEntries(
+    Object.entries(now)
+      .filter(([key]) => !changed.has(key) || key in draft)
+      .map(([key, value]) => [key, changed.has(key) ? draft[key] : value]),
+  )
+  for (const key of changed) {
+    if (key in draft && !(key in merged)) {
+      merged[key] = draft[key]
+    }
+  }
+  return merged
+}
+
 // Every id in the pipeline: stages and groups.
 export function usedIds(steps: readonly Step[]): Set<string> {
   return new Set(
@@ -336,11 +362,11 @@ function newGroupId(steps: readonly Step[], first: string): string {
 export function joinProblem(steps: readonly Step[], id: string): string | null {
   const place = findPlace(steps, id)
   const step = place === null ? undefined : steps[place.index]
+  if (place !== null && place.lane !== null) {
+    return 'It runs alongside other stages already'
+  }
   if (place === null || step === undefined || isGroup(step)) {
     return 'Only a stage can run alongside another'
-  }
-  if (place.lane !== null) {
-    return 'It runs alongside other stages already'
   }
   if (!GROUP_KINDS.includes(step.kind)) {
     return 'Only agent and manual stages run side by side'

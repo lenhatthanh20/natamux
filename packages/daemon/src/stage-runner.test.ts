@@ -4,6 +4,7 @@ import {
   DEFAULT_PROJECT_SETTINGS,
   type EventType,
   type ProjectSettings,
+  type Stage,
   type Task,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -368,6 +369,48 @@ describe('skills in stage prompts', () => {
     expect(launchScript(task.id)).toContain(
       `Use the skill in ${join(skill, 'SKILL.md')} (read that file and follow it).`,
     )
+  })
+})
+
+describe('settings from the Stages screen', () => {
+  const withSpec = (change: Partial<Stage>) => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec' ? { ...step, ...change } : step,
+      ),
+    }
+  }
+
+  it('moves on from a stage that does not wait for approval', async () => {
+    withSpec({ gate: 'auto' })
+    const waiting = await created({ title: 'Export tasks', agent: 'claude-code' })
+    const task = await withWorkspace(waiting.id)
+    writeWorking(
+      task,
+      'spec.md',
+      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n',
+    )
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('plan')
+  })
+
+  it('fills the placeholders of a prompt of your own, and adds the done line once', async () => {
+    withSpec({ prompt: 'Spec {title} | {description} | {dir} | {ref}.' })
+    const waiting = await created({
+      title: 'Export tasks',
+      description: 'CSV please',
+      agent: 'claude-code',
+      context: { source: 'manual', ref: '#9' },
+    })
+    const task = await withWorkspace(waiting.id)
+
+    const script = launchScript(task.id)
+    expect(script).toContain('Spec Export tasks | CSV please | .natamux-task | #9.')
+    expect(script.split('natamux done').length - 1).toBe(1)
+    expect(script).not.toContain('Do not commit')
   })
 })
 

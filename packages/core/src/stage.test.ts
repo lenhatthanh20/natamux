@@ -11,6 +11,7 @@ import {
   pipelineSchema,
   resolveSteps,
   type Step,
+  stageIdSchema,
   stageName,
   stageOfTerminal,
   stepIndex,
@@ -61,6 +62,36 @@ describe('pipelineSchema', () => {
     expect(valid([stage('context', 'context'), stage('more', 'context')])).toBe(false)
     expect(valid([stage('ship', 'release'), stage('check', 'manual')])).toBe(false)
     expect(valid([stage('ship', 'release'), stage('again', 'release')])).toBe(false)
+  })
+
+  it('takes ids of lower case words and digits joined by "-", up to 40 characters', () => {
+    const id = (value: string) => stageIdSchema.safeParse(value).success
+    expect(id('load-test')).toBe(true)
+    expect(id('e2e')).toBe(true)
+    expect(id('2fa-check')).toBe(true)
+    const wrong = ['Load', 'load test', '-load', 'load-', 'load--test', 'lo_ad', '', 'a'.repeat(41)]
+    for (const bad of wrong) {
+      expect(id(bad), bad).toBe(false)
+    }
+  })
+
+  it('takes only true or false for enabled', () => {
+    const stage = { id: 'plan', kind: 'agent', gate: 'manual' }
+    expect(pipelineSchema.safeParse([{ ...stage, enabled: true }]).success).toBe(true)
+    expect(pipelineSchema.safeParse([{ ...stage, enabled: 'no' }]).success).toBe(false)
+  })
+
+  it('lets a manual stage run beside an agent stage', () => {
+    const steps = [
+      {
+        id: 'build',
+        parallel: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'qa', kind: 'manual', gate: 'manual' },
+        ],
+      },
+    ]
+    expect(pipelineSchema.safeParse(steps).success).toBe(true)
   })
 
   it('rejects an empty pipeline and a bad stage id', () => {

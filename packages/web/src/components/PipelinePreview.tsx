@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import {
+  alwaysWaits,
   approvalLabel,
   groupName,
   hasCustomPrompt,
@@ -36,9 +37,10 @@ export const KIND_ICON: Record<StageKind, LucideIcon> = {
   manual: Hand,
 }
 
-// A stage waits for a person: its approval, or a click that opens the pull request.
-export function waitsForPerson(stage: Pick<Stage, 'gate'>): boolean {
-  return stage.gate === 'manual'
+// A stage waits for a person: its approval, or a click that opens the pull request. Review and
+// manual stages always do, whatever their gate says.
+export function waitsForPerson(stage: Pick<Stage, 'gate' | 'kind'>): boolean {
+  return stage.gate === 'manual' || alwaysWaits(stage)
 }
 
 // What a screen reader says for a stage, in the list and in the preview.

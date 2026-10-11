@@ -77,4 +77,64 @@ describe('PipelinePreview', () => {
     expect(review.hasAttribute('data-error')).toBe(true)
     expect(review.getAttribute('data-tip')).toBe('Code review · Always waits for you')
   })
+
+  it('C19: draws one stage as one node, without a fork', () => {
+    const { chart } = preview([{ id: 'implement', kind: 'agent', gate: 'auto' }])
+    expect(within(chart).getAllByRole('button')).toHaveLength(1)
+    expect(within(chart).queryByRole('list')).toBeNull()
+  })
+
+  it('C19: draws a group of four as four rows of one fork', () => {
+    const lanes = ['docs', 'refactor', 'i18n', 'changelog'].map(
+      (id): Step => ({ id, kind: 'agent', gate: 'auto' }),
+    )
+    const { chart } = preview([{ id: 'finish', parallel: lanes }])
+    const fork = within(chart).getByRole('list', {
+      name: 'Documentation, Refactor, Translations and Release notes, side by side',
+    })
+    expect(within(fork).getAllByRole('button')).toHaveLength(4)
+  })
+
+  it('C19: tells the output file and the command in the tooltip', () => {
+    const { chart } = preview([
+      { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
+      { id: 'lint', kind: 'testing', gate: 'auto', command: 'pnpm lint' },
+    ])
+    expect(within(chart).getByRole('button', { name: /^Spec/ }).getAttribute('data-tip')).toBe(
+      'Agent · Waits for your approval · Output: spec.md',
+    )
+    expect(within(chart).getByRole('button', { name: /^Lint/ }).getAttribute('data-tip')).toBe(
+      'Testing · Moves on by itself · Command: pnpm lint',
+    )
+  })
+
+  it('C5: draws no fork when every stage of a group is off', () => {
+    const off = setEnabled(setEnabled(DEFAULT_PIPELINE, 'test-spec', false), 'implement', false)
+    const { chart } = preview(off)
+    expect(within(chart).queryByRole('list')).toBeNull()
+    expect(chart.getAttribute('aria-label')).toBe(
+      'Pipeline: Context, then Spec, then Plan, then Review, then Testing, then Release',
+    )
+  })
+
+  it('C8: marks review and manual stages as waiting for a person, whatever the gate says', () => {
+    const { chart } = preview([
+      { id: 'review', kind: 'review', gate: 'auto' },
+      { id: 'qa', kind: 'manual', gate: 'auto' },
+    ])
+    for (const name of [/^Review/, /^Manual QA/]) {
+      const node = within(chart).getByRole('button', { name })
+      expect(within(node).getByRole('img', { name: 'Waits for approval' })).toBeTruthy()
+    }
+  })
+
+  it('C20: selects a stage with Enter on its node', async () => {
+    const { onSelect, chart } = preview(DEFAULT_PIPELINE)
+    const user = userEvent.setup()
+
+    within(chart).getByRole('button', { name: /^Plan/ }).focus()
+    await user.keyboard('{Enter}')
+
+    expect(onSelect).toHaveBeenCalledWith('plan')
+  })
 })

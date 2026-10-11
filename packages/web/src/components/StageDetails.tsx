@@ -266,6 +266,8 @@ function Approval({
 }) {
   const always = alwaysWaits(stage)
   const labelId = useId()
+  const noteId = useId()
+  const note = always || stage.kind === 'release'
   return (
     <fieldset aria-labelledby={labelId} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-h-7 flex-wrap items-center gap-2">
@@ -274,6 +276,7 @@ function Approval({
             type="checkbox"
             checked={always || stage.gate === 'manual'}
             disabled={always}
+            aria-describedby={note ? noteId : undefined}
             onChange={(event) =>
               onChange(setGate(steps, stage.id, event.target.checked ? 'manual' : 'auto'))
             }
@@ -292,10 +295,11 @@ function Approval({
           />
         )}
       </div>
-      {always && <p className="m-0 text-xs text-muted">This stage is a check by a person.</p>}
-      {stage.kind === 'release' && (
-        <p className="m-0 text-xs text-muted">
-          Unchecked, the pull request opens when the stage starts.
+      {note && (
+        <p id={noteId} className="m-0 text-xs text-muted">
+          {always
+            ? 'This stage is a check by a person.'
+            : 'Unchecked, the pull request opens when the stage starts.'}
         </p>
       )}
     </fieldset>

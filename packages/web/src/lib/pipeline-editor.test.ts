@@ -10,10 +10,12 @@ import {
   defaultGate,
   dropStage,
   findStage,
+  groupOf,
   idFromName,
   isDefaultGate,
   joinAbove,
   joinProblem,
+  mergeChanges,
   moveStage,
   parseDraft,
   pipelineLabel,
@@ -352,5 +354,118 @@ describe('shownDefaultPrompt', () => {
     expect(text).not.toContain('{commit}')
     const steps = setText(DEFAULT_PIPELINE, 'implement', 'prompt', text)
     expect(findStage(steps, 'implement')).not.toHaveProperty('prompt')
+  })
+})
+
+// Cases of .natamux-task/test-spec.md, one block per case.
+describe('test spec cases', () => {
+  it('C2: adds a stage before Release also when Release is off', () => {
+    const steps = addCatalogStage(setEnabled(DEFAULT_PIPELINE, 'release', false), 'research')
+    expect(ids(steps).slice(-2)).toEqual(['research', 'release'])
+  })
+
+  it('C2: does not offer a stage that is in the file but off', () => {
+    const off = setEnabled(DEFAULT_PIPELINE, 'spec', false)
+    expect(catalogChoices(off).map((entry) => entry.stage.id)).not.toContain('spec')
+  })
+
+  it('C3: refuses the id of a stage that is off, since ids are unique in the file', () => {
+    const off = setEnabled(DEFAULT_PIPELINE, 'plan', false)
+    const input = { name: 'Plan', id: 'plan', kind: 'agent' as const, output: '' }
+    expect(customStageProblems(off, input).id).toBe('Another stage uses this id')
+  })
+
+  it('C3: follows the stage id rule of core, where a leading digit is allowed', () => {
+    const problem = (id: string) =>
+      customStageProblems(DEFAULT_PIPELINE, { name: 'X', id, kind: 'agent', output: '' }).id
+    const rule = 'A stage id is lower case words joined by "-"'
+    expect(problem('-load')).toBe(rule)
+    expect(problem('load_test')).toBe(rule)
+    expect(problem('load!')).toBe(rule)
+    expect(problem('load test')).toBe(rule)
+    expect(problem('a'.repeat(41))).toBe('An id has 40 characters at most')
+    expect(problem('1st-check')).toBeUndefined()
+    expect(problem('a'.repeat(40))).toBeUndefined()
+  })
+
+  it('C3: makes a valid id from non-ASCII names, or none', () => {
+    expect(idFromName('Kiểm thử')).toBe('kiem-thu')
+    expect(idFromName('日本語')).toBe('')
+    const problems = customStageProblems(DEFAULT_PIPELINE, {
+      name: '日本語',
+      id: idFromName('日本語'),
+      kind: 'agent',
+      output: '',
+    })
+    expect(problems.id).toBe('Give the stage an id')
+  })
+
+  it('C3: takes only a markdown file name as output, never a path', () => {
+    const problem = (output: string) =>
+      customStageProblems(DEFAULT_PIPELINE, { name: 'X', id: 'x', kind: 'agent', output }).output
+    const rule = 'An output is a markdown file name, such as spec.md'
+    expect(problem('../x.md')).toBe(rule)
+    expect(problem('a/b.md')).toBe(rule)
+    expect(problem('notes.txt')).toBe(rule)
+    expect(problem('load-test.notes.md')).toBeUndefined()
+  })
+
+  it('C4: keeps a stage off when it moves', () => {
+    const moved = moveStage(setEnabled(DEFAULT_PIPELINE, 'plan', false), 'plan', -1)
+    expect(ids(moved).slice(0, 3)).toEqual(['context', 'plan', 'spec'])
+    expect(findStage(moved, 'plan')?.enabled).toBe(false)
+  })
+
+  it('C6: joins the stage above even when it is off', () => {
+    const steps = joinAbove(setEnabled(DEFAULT_PIPELINE, 'spec', false), 'plan')
+    expect(groupOf(steps, 'plan')?.parallel.map((stage) => stage.id)).toEqual(['spec', 'plan'])
+  })
+
+  it('C6: lets a manual stage run alongside an agent stage', () => {
+    const steps: Step[] = [
+      { id: 'docs', kind: 'agent', gate: 'auto' },
+      { id: 'qa', kind: 'manual', gate: 'manual' },
+    ]
+    expect(joinProblem(steps, 'qa')).toBeNull()
+    expect(ids(joinAbove(steps, 'qa'))).toEqual([{ id: 'docs-group', parallel: ['docs', 'qa'] }])
+  })
+
+  it('C6: dissolves a group of two when one of its stages is removed', () => {
+    expect(ids(removeStage(DEFAULT_PIPELINE, 'implement')).slice(2, 5)).toEqual([
+      'plan',
+      'test-spec',
+      'review',
+    ])
+  })
+
+  it('C6: offers nothing to the first stage', () => {
+    const steps: Step[] = [{ id: 'docs', kind: 'agent', gate: 'auto' }]
+    expect(joinProblem(steps, 'docs')).toBe('There is no stage above')
+  })
+
+  it('C12: treats a command of spaces as empty', () => {
+    const steps = setText(addCatalogStage(DEFAULT_PIPELINE, 'lint'), 'lint', 'command', '   ')
+    expect(findStage(steps, 'lint')).not.toHaveProperty('command')
+    const kept = setText(steps, 'lint', 'command', 'pnpm lint && echo "ok" | cat')
+    expect(findStage(kept, 'lint')?.command).toBe('pnpm lint && echo "ok" | cat')
+  })
+
+  it('C15: keeps the keys of the new file that the person did not change', () => {
+    const start = { tracker: { type: 'github' }, agents: { permissionMode: 'auto' } }
+    const draft = { ...start, stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }] }
+    const now = { tracker: { type: 'none' }, agents: { permissionMode: 'auto' }, team: 'web' }
+    expect(mergeChanges(start, draft, now)).toEqual({
+      tracker: { type: 'none' },
+      agents: { permissionMode: 'auto' },
+      team: 'web',
+      stages: draft.stages,
+    })
+  })
+
+  it('C15: removes a key the person removed, and takes the value of the draft on a clash', () => {
+    const start = { stages: [], tracker: { type: 'github' } }
+    const draft = { tracker: { type: 'none' } }
+    const now = { stages: [{ id: 'spec' }], tracker: { type: 'github', linkInPr: false } }
+    expect(mergeChanges(start, draft, now)).toEqual({ tracker: { type: 'none' } })
   })
 })

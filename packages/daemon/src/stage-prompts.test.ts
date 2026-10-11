@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE, type Stage, stagesOf } from '@natamux/core'
+import { DEFAULT_PIPELINE, defaultPrompt, type Stage, stagesOf } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 
@@ -47,6 +47,37 @@ describe('stagePrompt of the catalog', () => {
   it('takes the prompt of a catalog stage that is not in the default pipeline', () => {
     const prompt = stagePrompt({ id: 'security', kind: 'agent', gate: 'manual' }, task)
     expect(prompt).toContain('.natamux-task/security.md')
+  })
+
+  it('keeps unknown placeholders, long text and other languages as they are', () => {
+    const long = 'x'.repeat(12_000)
+    const stage: Stage = {
+      id: 'plan',
+      kind: 'agent',
+      gate: 'manual',
+      prompt: `Kiểm thử {foo} 🚀 ${long}`,
+    }
+    expect(stagePrompt(stage, task)).toBe(
+      `Kiểm thử {foo} 🚀 ${long}\nWhen you are done, run \`natamux done\`.`,
+    )
+  })
+
+  it('still adds the done line to a prompt that asks for it already', () => {
+    const stage: Stage = {
+      id: 'plan',
+      kind: 'agent',
+      gate: 'manual',
+      prompt: 'Plan it. Then run `natamux done`.',
+    }
+    expect(stagePrompt(stage, task).endsWith('\nWhen you are done, run `natamux done`.')).toBe(true)
+  })
+
+  it('gives the web app and the agent the same default prompt', () => {
+    const plan: Stage = { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' }
+    const expected = defaultPrompt(plan)
+      .replace('{title}', task.title)
+      .replaceAll('{dir}', '.natamux-task')
+    expect(stagePrompt(plan, task)).toBe(`${expected}\nWhen you are done, run \`natamux done\`.`)
   })
 
   it('leaves skill placeholders for the agent to fill', () => {

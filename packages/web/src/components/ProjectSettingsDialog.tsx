@@ -15,6 +15,7 @@ import {
   addCustomStage,
   findStage,
   formatSettings,
+  mergeChanges,
   parseDraft,
   type RawSettings,
   sameSettings,
@@ -142,15 +143,17 @@ export function ProjectSettingsDialog({
     },
   })
 
+  // A broken file can be replaced without an edit; otherwise there is nothing to save.
+  const unchanged = !dirty && current?.broken == null
+
   // Ignore a save while the settings load, a save runs, or the draft has problems.
-  const submit = (overwrite = false) => {
-    if (current === null || saving.isPending || !draft.ok || errors > 0) {
+  const submit = () => {
+    if (current === null || saving.isPending || !draft.ok || errors > 0 || unchanged) {
       return
     }
     // The screen holds the defaults when the file is broken, so a save replaces the file.
     if (
       current.broken !== null &&
-      !overwrite &&
       !window.confirm(
         `${current.path} has a problem, so this screen started from the defaults. Saving replaces your file. Save anyway?`,
       )
@@ -159,7 +162,23 @@ export function ProjectSettingsDialog({
     }
     setConflict(false)
     setProblem(null)
-    saving.mutate({ raw: draft.raw, version: overwrite ? undefined : current.version })
+    saving.mutate({ raw: draft.raw, version: current.version })
+  }
+
+  // Saves the edits over the file as it is on disk now: keys the person did not change keep the
+  // values of the new file, so its other edits are not lost.
+  const overwrite = async () => {
+    if (current === null || saving.isPending || !draft.ok) {
+      return
+    }
+    const fresh = (await loaded.refetch()).data
+    const start = parseDraft(current.text)
+    const now = fresh === undefined || fresh.error !== null ? null : parseDraft(baseOf(fresh).text)
+    const raw =
+      start.ok && now !== null && now.ok ? mergeChanges(start.raw, draft.raw, now.raw) : draft.raw
+    setConflict(false)
+    setProblem(null)
+    saving.mutate({ raw, version: fresh?.version ?? undefined })
   }
 
   const reload = async () => {
@@ -220,7 +239,9 @@ export function ProjectSettingsDialog({
     ? 'Fix the JSON first'
     : errors > 0
       ? 'Fix the problems first'
-      : undefined
+      : unchanged
+        ? 'Nothing changed yet'
+        : undefined
   const prefix = `settings-${repo.id}`
 
   return (
@@ -292,7 +313,7 @@ export function ProjectSettingsDialog({
           <Button size="xs" onClick={reload}>
             Reload
           </Button>
-          <Button size="xs" variant="danger" onClick={() => submit(true)}>
+          <Button size="xs" variant="danger" onClick={overwrite}>
             Overwrite
           </Button>
         </div>

@@ -1,7 +1,8 @@
-import { DEFAULT_PIPELINE, STAGE_CATALOG } from '@natamux/core'
+import { DEFAULT_PIPELINE, STAGE_CATALOG, type Step } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setEnabled } from '../lib/pipeline-editor'
 import { StagePicker } from './StagePicker'
 
 afterEach(() => {
@@ -9,13 +10,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function picker() {
+function picker(steps: readonly Step[] = DEFAULT_PIPELINE) {
   const onAddCatalog = vi.fn()
   const onAddCustom = vi.fn()
   const onClose = vi.fn()
   render(
     <StagePicker
-      steps={DEFAULT_PIPELINE}
+      steps={steps}
       onAddCatalog={onAddCatalog}
       onAddCustom={onAddCustom}
       onClose={onClose}
@@ -109,5 +110,100 @@ describe('StagePicker', () => {
 
     expect(screen.getByText('Give the stage a name')).toBeTruthy()
     expect(onAddCustom).not.toHaveBeenCalled()
+  })
+
+  it('C2: shows the phases in order, and hides a phase with nothing left', async () => {
+    const { user } = picker()
+    const list = screen.getByRole('region', { name: 'Add stage' })
+    const phases = within(list)
+      .getAllByRole('region')
+      .map((region) => region.getAttribute('aria-label'))
+    expect(phases).toEqual(['Understand', 'Design', 'Build', 'Check', 'Ship'])
+
+    await user.keyboard('  SEC ')
+
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(list).getByRole('button', { name: /^Security review/ })).toBeTruthy()
+    expect(within(list).queryByRole('region', { name: 'Understand' })).toBeNull()
+  })
+
+  it('C2: keeps Custom stage when nothing matches', async () => {
+    const { user } = picker()
+
+    await user.keyboard('nothing like this')
+
+    expect(screen.getByText('No stage of the list matches “nothing like this”.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Custom stage' })).toBeTruthy()
+  })
+
+  it('C2: says so when every catalog stage is in the pipeline', () => {
+    picker(STAGE_CATALOG.map((entry) => entry.stage))
+    expect(screen.getByText('Every stage of the list is in the pipeline.')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Custom stage' })).toBeTruthy()
+  })
+
+  it('C2: does not offer a stage that is in the pipeline but off', () => {
+    picker(setEnabled(DEFAULT_PIPELINE, 'spec', false))
+    expect(screen.queryByRole('button', { name: /^Spec/ })).toBeNull()
+  })
+
+  it('C3: shows the output file for agent stages only', async () => {
+    const { user } = picker()
+
+    await user.click(screen.getByRole('button', { name: 'Custom stage' }))
+    const form = screen.getByRole('form', { name: 'Custom stage' })
+    expect(within(form).getByRole('textbox', { name: 'Output file' })).toBeTruthy()
+    await user.selectOptions(within(form).getByRole('combobox', { name: 'Kind' }), 'manual')
+    expect(within(form).queryByRole('textbox', { name: 'Output file' })).toBeNull()
+  })
+
+  it('C3: refuses a name of spaces', async () => {
+    const { onAddCustom, user } = picker()
+
+    await user.click(screen.getByRole('button', { name: 'Custom stage' }))
+    const form = screen.getByRole('form', { name: 'Custom stage' })
+    await user.type(within(form).getByRole('textbox', { name: 'Name' }), '   ')
+    await user.click(within(form).getByRole('button', { name: 'Add custom stage' }))
+
+    expect(within(form).getByText('Give the stage a name')).toBeTruthy()
+    expect(onAddCustom).not.toHaveBeenCalled()
+  })
+
+  it('C3: keeps an id edited by hand when the name changes', async () => {
+    const { user } = picker()
+
+    await user.click(screen.getByRole('button', { name: 'Custom stage' }))
+    const form = screen.getByRole('form', { name: 'Custom stage' })
+    const name = within(form).getByRole('textbox', { name: 'Name' })
+    const id = within(form).getByRole('textbox', { name: 'Id' })
+    await user.type(name, 'Load')
+    await user.clear(id)
+    await user.type(id, 'perf')
+    await user.type(name, ' test')
+
+    expect(id).toHaveProperty('value', 'perf')
+  })
+
+  it('C3: refuses the id of a catalog stage, which belongs to the list', async () => {
+    const { onAddCustom, user } = picker()
+
+    await user.click(screen.getByRole('button', { name: 'Custom stage' }))
+    const form = screen.getByRole('form', { name: 'Custom stage' })
+    await user.type(within(form).getByRole('textbox', { name: 'Name' }), 'Research')
+    await user.click(within(form).getByRole('button', { name: 'Add custom stage' }))
+
+    expect(within(form).getByText(/^Research is a stage of the list/)).toBeTruthy()
+    expect(onAddCustom).not.toHaveBeenCalled()
+  })
+
+  it('C3: makes a valid id from a Vietnamese name', async () => {
+    const { user } = picker()
+
+    await user.click(screen.getByRole('button', { name: 'Custom stage' }))
+    const form = screen.getByRole('form', { name: 'Custom stage' })
+    await user.type(within(form).getByRole('textbox', { name: 'Name' }), 'Kiểm thử')
+
+    expect(within(form).getByRole('textbox', { name: 'Id' })).toHaveProperty('value', 'kiem-thu')
   })
 })

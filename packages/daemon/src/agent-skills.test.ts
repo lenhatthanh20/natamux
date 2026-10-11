@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -126,6 +126,41 @@ describe('agentSkills', () => {
     expect(agentSkills('claude-code', repo, home)).toEqual({ skills: [], notices: [] })
   })
 
+  it('names a skill without front matter by its folder, and skips a folder without SKILL.md', () => {
+    mkdirSync(join(repo, '.claude', 'skills', 'plain'), { recursive: true })
+    writeFileSync(join(repo, '.claude', 'skills', 'plain', 'SKILL.md'), '# Plain\n')
+    mkdirSync(join(repo, '.claude', 'skills', 'empty'), { recursive: true })
+    expect(agentSkills('claude-code', repo, home).skills).toEqual([
+      {
+        name: 'plain',
+        description: '',
+        origin: 'project',
+        path: join(repo, '.claude', 'skills', 'plain', 'SKILL.md'),
+      },
+    ])
+  })
+
+  it.skipIf(process.platform === 'win32')('skips a skill folder that is a broken link', () => {
+    mkdirSync(join(repo, '.claude', 'skills'), { recursive: true })
+    symlinkSync(join(root, 'nowhere'), join(repo, '.claude', 'skills', 'gone'))
+    skill(join(repo, '.claude', 'skills'), 'kept')
+    expect(agentSkills('claude-code', repo, home).skills.map((found) => found.name)).toEqual([
+      'kept',
+    ])
+  })
+
+  it('gives no plugin skills when the list of installed plugins is not JSON', () => {
+    json(join(repo, '.claude', 'settings.json'), { enabledPlugins: { 'design@m': true } })
+    mkdirSync(join(home, '.claude', 'plugins'), { recursive: true })
+    writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'nope')
+    skill(join(repo, '.claude', 'skills'), 'review')
+    const found = agentSkills('claude-code', repo, home)
+    expect(found.skills.map((each) => each.name)).toEqual(['review'])
+    expect(found.notices).toEqual([
+      'The Claude Code plugin design is on, but not installed on this machine',
+    ])
+  })
+
   it('reads the skills of Gemini CLI extensions', () => {
     skill(join(home, '.gemini', 'extensions', 'tools', 'skills'), 'lint-fix')
     expect(agentSkills('gemini', repo, home).skills.map((found) => found.name)).toEqual([
@@ -182,6 +217,45 @@ describe('resolveSkill and fillSkills', () => {
     expect(resolveSkill('review', context('cursor'))).toEqual(file)
     expect(resolveSkill('review', context('codex'))).toEqual(file)
     expect(resolveSkill('review', context('aider'))).toEqual(file)
+  })
+
+  it('calls a plugin skill by its plugin name', () => {
+    const install = join(home, '.claude', 'plugins', 'cache', 'm', 'acme', '1.0')
+    skill(join(install, 'skills'), 'lint-fix')
+    json(join(repo, '.claude', 'settings.json'), { enabledPlugins: { 'acme@m': true } })
+    json(join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+      plugins: { 'acme@m': [{ scope: 'user', installPath: install }] },
+    })
+    expect(resolveSkill('acme:lint-fix', context('claude-code'))).toEqual({
+      kind: 'call',
+      text: '/acme:lint-fix',
+    })
+  })
+
+  it('prefers the skill of the worktree to one of the same name in the home folder', () => {
+    skill(join(repo, '.claude', 'skills'), 'review')
+    skill(join(home, '.claude', 'skills'), 'review')
+    expect(resolveSkill('review', context('gemini'))).toEqual({
+      kind: 'file',
+      path: '.claude/skills/review/SKILL.md',
+    })
+  })
+
+  it('prints a path with spaces whole', () => {
+    const spaced = join(root, 'my home')
+    const path = skill(join(spaced, '.claude', 'skills'), 'review')
+    const other = { agent: 'codex', workspace: repo, home: spaced }
+    expect(fillSkills('Use {skill:review}.', other)).toEqual({
+      text: `Use the skill in ${path} (read that file and follow it).`,
+      missing: [],
+    })
+  })
+
+  it('leaves a placeholder with no name or other characters as it is', () => {
+    expect(fillSkills('{skill:} {skill:a b} {skill:ok?}', context('codex'))).toEqual({
+      text: '{skill:} {skill:a b} {skill:ok?}',
+      missing: [],
+    })
   })
 
   it('says when no agent has the skill', () => {
