@@ -35,7 +35,9 @@ scripts/e2e.sh logs
 scripts/e2e.sh down    # stop, and remove the demo data and the repository
 ```
 
-`E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
+Nothing is installed on your machine. `E2E_BUILD=1`, which builds the images and so installs packages, works only in CI or a codespace. The script refuses it elsewhere. The Playwright tests in `e2e/` run in CI only.
+
+`E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag runs exactly the build you checked. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
 
 Then try the dashboard by hand or with `playwright-cli`:
 

@@ -34,6 +34,12 @@ compose() {
 
 up() {
   if [ "${E2E_BUILD:-}" = 1 ]; then
+    # A build runs pnpm install. Packages are installed only in CI and in codespaces.
+    if [ -z "${CI:-}" ] && [ -z "${CODESPACES:-}" ]; then
+      echo "E2E_BUILD=1 installs packages to build the images. Run it in CI or a codespace." >&2
+      echo "Here, run scripts/e2e.sh up without it: it pulls the images that CI built." >&2
+      exit 1
+    fi
     compose build daemon web
   else
     # The images are built for Linux on x86. A Mac with Apple silicon runs them with Rosetta.
