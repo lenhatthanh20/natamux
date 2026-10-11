@@ -878,12 +878,7 @@ describe('paste', () => {
     service.paste('T-0001', 'Two')
     vi.advanceTimersByTime((ENTER_AFTER_PASTE_MS + INPUT_GAP_MS) * 2)
 
-    expect(pty.written).toEqual([
-      '\x1b[200~One\x1b[201~',
-      '\r',
-      '\x1b[200~Two\x1b[201~',
-      '\r',
-    ])
+    expect(pty.written).toEqual(['\x1b[200~One\x1b[201~', '\r', '\x1b[200~Two\x1b[201~', '\r'])
   })
 
   it('does not slow down the typed Enter of a command line', () => {
