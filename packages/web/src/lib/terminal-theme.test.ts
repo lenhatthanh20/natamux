@@ -12,6 +12,11 @@ describe('terminalTheme', () => {
     expect(terminalTheme('dark').background).not.toBe(terminalTheme('light').background)
   })
 
+  it('gives the scrollbar the same faint colors as the rest of the app', () => {
+    expect(terminalTheme('dark').scrollbarSliderBackground).toBe('#ffffff24')
+    expect(terminalTheme('light').scrollbarSliderBackground).toBe('#14181f33')
+  })
+
   it('returns a copy, so xterm cannot change the palette', () => {
     const first = terminalTheme('dark')
     first.background = '#000000'
