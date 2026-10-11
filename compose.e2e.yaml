@@ -1,0 +1,49 @@
+# End-to-end tests: the production images, on top of compose.prod.yaml, with a fake agent and a
+# throwaway repository in a volume. Use scripts/e2e.sh, not this file alone. See docs/e2e.md.
+services:
+  # Makes the repository once, before the daemon starts. scripts/e2e.sh runs it.
+  repo:
+    image: ${NATAMUX_DAEMON_IMAGE:-natamux-daemon:local}
+    profiles: [init]
+    user: "0:0"
+    restart: "no"
+    volumes:
+      - e2e-repo:/repo
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        [ -d /repo/.git ] && exit 0
+        cd /repo
+        git init -q -b main
+        git config user.name "Natamux e2e"
+        git config user.email e2e@example.invalid
+        printf '# Demo repository\n\nFor the end-to-end tests of Natamux.\n' > README.md
+        git add README.md
+        git commit -q -m "Start the demo repository"
+        mkdir -p src
+        printf 'export const answer = 42\n' > src/answer.js
+        git add src
+        git commit -q -m "Add the answer"
+        printf 'node_modules/\n' > .gitignore
+        git add .gitignore
+        git commit -q -m "Ignore node_modules"
+        chown -R 1000:1000 /repo
+
+  daemon:
+    image: ${NATAMUX_DAEMON_IMAGE:-natamux-daemon:local}
+    environment:
+      NATAMUX_CLAUDE_COMMAND: /opt/natamux/fake-agent.sh
+      GIT_AUTHOR_NAME: Natamux e2e
+      GIT_AUTHOR_EMAIL: e2e@example.invalid
+      GIT_COMMITTER_NAME: Natamux e2e
+      GIT_COMMITTER_EMAIL: e2e@example.invalid
+    volumes:
+      - ./scripts/fake-agent.sh:/opt/natamux/fake-agent.sh:ro
+
+  web:
+    image: ${NATAMUX_WEB_IMAGE:-natamux-web:local}
+
+volumes:
+  e2e-repo:
