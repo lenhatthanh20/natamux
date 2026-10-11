@@ -4,6 +4,7 @@ import {
   type TerminalServerMessage,
   type TerminalSize,
 } from '@natamux/core'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
@@ -70,6 +71,8 @@ async function screenOf(
     scrollback: TERMINAL_SCROLLBACK_MAX_LINES,
     allowProposedApi: true,
   })
+  terminal.loadAddon(new Unicode11Addon())
+  terminal.unicode.activeVersion = '11'
   await new Promise<void>((resolve) => terminal.write(outputOf(messages), resolve))
   const buffer = terminal.buffer.active
   const rows: string[] = []
@@ -557,6 +560,20 @@ describe('attaching to a running shell', () => {
       `${' '.repeat(19)}Nếu  anh`,
       'next',
     ])
+  })
+
+  // An agent counts an emoji as two cells, as the dashboard does. With the old Unicode 6 widths,
+  // text placed after it with a cursor move left a gap.
+  it('gives an emoji two cells, as the dashboard does', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit('a😀b\u001b[5Gx\r\n')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+
+    expect(await screenOf(later.messages)).toEqual(['a😀bx'])
   })
 
   it('keeps the modes a program turned on, such as bracketed paste', async () => {
