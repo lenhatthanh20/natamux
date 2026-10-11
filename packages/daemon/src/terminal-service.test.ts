@@ -1,11 +1,16 @@
-import { TERMINAL_HISTORY_CHARS, type TerminalServerMessage } from '@natamux/core'
+import {
+  scrollbackLines,
+  TERMINAL_SCROLLBACK_MAX_LINES,
+  type TerminalServerMessage,
+  type TerminalSize,
+} from '@natamux/core'
+import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   KILL_GRACE_MS,
   MAX_SESSIONS,
   NoTerminalError,
-  OutputHistory,
   REPLAY_CHUNK_CHARS,
   replayChunks,
   TerminalLimitError,
@@ -15,6 +20,8 @@ import {
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
+// Tests that put thousands of lines on a screen, slower with coverage on.
+const LONG_TEST_MS = 30_000
 
 function setup(options: { now?: () => number } = {}) {
   const { spawn, ptys } = fakeSpawner()
@@ -37,17 +44,43 @@ function client() {
   return { messages, send: (message: TerminalServerMessage) => messages.push(message) }
 }
 
-// A text with a lone half of a surrogate pair, which shows as a broken character.
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
-
 // The lines "line 1" to "line <count>", as a shell prints them.
 function numbered(count: number): string {
   return Array.from({ length: count }, (_, index) => `line ${index + 1}\r\n`).join('')
 }
 
+// The same lines as a screen shows them.
+function numberedLines(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `line ${index + 1}`)
+}
+
 // All the output a client got, as one text.
 function outputOf(messages: TerminalServerMessage[]): string {
   return messages.map((message) => (message.type === 'output' ? message.data : '')).join('')
+}
+
+// What a dashboard of this size shows after the output a client got: every row, history first,
+// without the empty rows at the end.
+async function screenOf(
+  messages: TerminalServerMessage[],
+  screen: TerminalSize = size,
+): Promise<string[]> {
+  const terminal = new xtermHeadless.Terminal({
+    ...screen,
+    scrollback: TERMINAL_SCROLLBACK_MAX_LINES,
+    allowProposedApi: true,
+  })
+  await new Promise<void>((resolve) => terminal.write(outputOf(messages), resolve))
+  const buffer = terminal.buffer.active
+  const rows: string[] = []
+  for (let index = 0; index < buffer.length; index += 1) {
+    rows.push(buffer.getLine(index)?.translateToString(true) ?? '')
+  }
+  terminal.dispose()
+  while (rows.at(-1) === '') {
+    rows.pop()
+  }
+  return rows
 }
 
 describe('TerminalService', () => {
@@ -104,7 +137,7 @@ describe('TerminalService', () => {
     })
   })
 
-  it('passes input and size to the shell, and output to every client', () => {
+  it('passes input and size to the shell, and output to every client', async () => {
     const { service, ptys } = setup()
     const first = client()
     const second = client()
@@ -113,6 +146,7 @@ describe('TerminalService', () => {
 
     service.input('T-0001', 'ls\r')
     service.resize('T-0001', { cols: 120, rows: 40 })
+    await service.settled('T-0001')
 
     expect(ptys[0]?.written).toEqual(['ls\r'])
     expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
@@ -120,7 +154,7 @@ describe('TerminalService', () => {
     expect(second.messages).toEqual([{ type: 'output', data: 'ls\r' }])
   })
 
-  it('gives a client that attaches later the recent output first', () => {
+  it('gives a client that attaches later the screen so far first', async () => {
     const { service, ptys } = setup()
     const detach = service.attach('T-0001', client(), size)
     ptys[0]?.emit('hello ')
@@ -129,27 +163,33 @@ describe('TerminalService', () => {
 
     const later = client()
     service.attach('T-0001', later, size)
+    await service.settled('T-0001')
 
-    expect(later.messages).toEqual([{ type: 'output', data: 'hello world' }])
+    expect(await screenOf(later.messages)).toEqual(['hello world'])
     expect(ptys).toHaveLength(1)
   })
 
-  it('keeps only the newest output, from the start of a line', () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-    const line = `${'x'.repeat(99)}\n`
-    ptys[0]?.emit(line.repeat(TERMINAL_HISTORY_CHARS / line.length))
-    ptys[0]?.emit('half a line')
-    ptys[0]?.emit('end\n')
+  it(
+    'keeps the newest lines, as many as the dashboard keeps above its screen',
+    async () => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      const kept = scrollbackLines(size.cols)
+      const count = kept + 500
+      ptys[0]?.emit(numbered(count))
 
-    const later = client()
-    service.attach('T-0001', later, size)
+      const later = client()
+      service.attach('T-0001', later, size)
+      await service.settled('T-0001')
 
-    const text = outputOf(later.messages)
-    expect(text.length).toBeLessThanOrEqual(TERMINAL_HISTORY_CHARS)
-    expect(text.startsWith(line)).toBe(true)
-    expect(text.endsWith('half a lineend\n')).toBe(true)
-  })
+      const rows = await screenOf(later.messages)
+      expect(rows.length).toBeLessThanOrEqual(kept + size.rows)
+      expect(rows).toContain(`line ${count - kept}`)
+      expect(rows).not.toContain('line 1')
+      expect(rows.at(-1)).toBe(`line ${count}`)
+    },
+    LONG_TEST_MS,
+  )
 
   it('tells the clients when the shell ends, and starts a new one next time', () => {
     const { service, ptys } = setup()
@@ -193,7 +233,7 @@ describe('TerminalService', () => {
 })
 
 describe('several terminals of a task', () => {
-  it('keeps one shell per terminal name, each in the workspace', () => {
+  it('keeps one shell per terminal name, each in the workspace', async () => {
     const { service, ptys } = setup()
     const first = client()
     const second = client()
@@ -201,6 +241,7 @@ describe('several terminals of a task', () => {
     service.attach('T-0001', second, size, '2')
 
     service.input('T-0001', 'a', '2')
+    await service.settled('T-0001', '2')
 
     expect(ptys).toHaveLength(2)
     expect(ptys[1]?.options.cwd).toBe('/work/T-0001')
@@ -250,7 +291,7 @@ describe('closing a shell', () => {
     vi.useRealTimers()
   })
 
-  it('forgets the shell at once, and a new shell with the same name is a new process', () => {
+  it('forgets the shell at once, and a new shell with the same name is a new process', async () => {
     const { service, ptys } = setup()
     const old = client()
     service.attach('T-0001', client(), size)
@@ -263,6 +304,7 @@ describe('closing a shell', () => {
 
     const fresh = client()
     service.attach('T-0001', fresh, size, '2')
+    await service.settled('T-0001', '2')
     expect(ptys).toHaveLength(3)
     expect(ptys[2]?.pid).not.toBe(ptys[1]?.pid)
     expect(fresh.messages).toEqual([])
@@ -357,76 +399,110 @@ describe('attaching to a running shell', () => {
     expect(ptys[0]?.sizes).toEqual([])
   })
 
-  it('replays the whole history, from the first line', () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-    for (let index = 1; index <= 8000; index += 1) {
-      ptys[0]?.emit(`line ${index}\r\n`)
-    }
+  it(
+    'replays the whole history, from the first line',
+    async () => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      for (let index = 1; index <= 7000; index += 1) {
+        ptys[0]?.emit(`line ${index}\r\n`)
+      }
 
-    const later = client()
-    service.attach('T-0001', later, size)
+      const later = client()
+      service.attach('T-0001', later, size)
+      await service.settled('T-0001')
 
-    const text = outputOf(later.messages)
-    expect(text.startsWith('line 1\r\n')).toBe(true)
-    expect(text.endsWith('line 8000\r\n')).toBe(true)
-    expect(text.split('\r\n').filter((line) => line !== '')).toHaveLength(8000)
-  })
+      expect(await screenOf(later.messages)).toEqual(numberedLines(7000))
+    },
+    LONG_TEST_MS,
+  )
 
   it.each([5000, 5001, size.rows + 1000, size.rows + 1001])(
     'replays all of %i lines, past the old limits',
-    (count) => {
+    async (count) => {
       const { service, ptys } = setup()
       service.attach('T-0001', client(), size)
       ptys[0]?.emit(numbered(count))
 
       const later = client()
       service.attach('T-0001', later, size)
+      await service.settled('T-0001')
 
-      expect(outputOf(later.messages)).toBe(numbered(count))
+      expect(await screenOf(later.messages)).toEqual(numberedLines(count))
     },
   )
 
-  it('keeps a long agent session: 10,000 colored lines of about 200 chars', () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-    const lines = Array.from(
-      { length: 10_000 },
-      (_, index) =>
-        `\u001b[32m${String(index + 1).padStart(5, '0')}\u001b[0m ${'z'.repeat(180)}\r\n`,
-    )
-    for (const line of lines) {
-      ptys[0]?.emit(line)
-    }
+  it(
+    'keeps a long agent session on a wide screen, as many rows as fit the memory limit',
+    async () => {
+      const wide = { cols: 200, rows: 40 }
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), wide)
+      const lines = Array.from(
+        { length: 10_000 },
+        (_, index) => `${String(index + 1).padStart(5, '0')} ${'z'.repeat(180)}`,
+      )
+      for (const line of lines) {
+        ptys[0]?.emit(`\u001b[32m${line.slice(0, 5)}\u001b[0m${line.slice(5)}\r\n`)
+      }
 
-    const later = client()
-    service.attach('T-0001', later, size)
+      const later = client()
+      service.attach('T-0001', later, wide)
+      await service.settled('T-0001')
 
-    expect(outputOf(later.messages)).toBe(lines.join(''))
-  })
+      // The last row is the empty one the cursor sits on.
+      const kept = scrollbackLines(wide.cols) + wide.rows - 1
+      expect(await screenOf(later.messages, wide)).toEqual(lines.slice(-kept))
+      expect(outputOf(later.messages)).toContain('\u001b[32m10000')
+    },
+    LONG_TEST_MS,
+  )
 
-  it('replays the last line even without a line break', () => {
+  it(
+    'keeps fewer rows once the shell is wider, the newest ones',
+    async () => {
+      const wide = { cols: 200, rows: 24 }
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      ptys[0]?.emit(numbered(7000))
+
+      service.resize('T-0001', wide)
+      const later = client()
+      service.attach('T-0001', later, wide)
+      await service.settled('T-0001')
+
+      const rows = await screenOf(later.messages, wide)
+      expect(rows.length).toBeLessThanOrEqual(scrollbackLines(wide.cols) + wide.rows)
+      expect(rows.at(-1)).toBe('line 7000')
+      expect(rows).not.toContain('line 1')
+    },
+    LONG_TEST_MS,
+  )
+
+  it('replays the last line even without a line break', async () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
     ptys[0]?.emit('line 1\r\n$ ')
 
     const later = client()
     service.attach('T-0001', later, size)
+    await service.settled('T-0001')
 
-    expect(outputOf(later.messages)).toBe('line 1\r\n$ ')
+    expect(await screenOf(later.messages)).toEqual(['line 1', '$ '])
   })
 
-  it('replays nothing for a shell without output', () => {
+  it('replays nothing for a shell without output', async () => {
     const { service } = setup()
     service.attach('T-0001', client(), size)
 
     const later = client()
     service.attach('T-0001', later, size)
+    await service.settled('T-0001')
 
     expect(later.messages).toEqual([])
   })
 
-  it('gives every client that attaches the whole history', () => {
+  it('gives every client that attaches the whole history', async () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
     ptys[0]?.emit(numbered(3000))
@@ -435,12 +511,13 @@ describe('attaching to a running shell', () => {
     const second = client()
     service.attach('T-0001', first, size)
     service.attach('T-0001', second, { cols: 100, rows: 30 })
+    await service.settled('T-0001')
 
-    expect(outputOf(first.messages)).toBe(numbered(3000))
-    expect(outputOf(second.messages)).toBe(numbered(3000))
+    expect(await screenOf(first.messages)).toEqual(numberedLines(3000))
+    expect(await screenOf(second.messages, { cols: 100, rows: 30 })).toEqual(numberedLines(3000))
   })
 
-  it('gives a returning client the output printed while it was away, after the old output', () => {
+  it('gives a returning client the output printed while it was away, after the old output', async () => {
     const { service, ptys } = setup()
     const detach = service.attach('T-0001', client(), size)
     ptys[0]?.emit('before\r\n')
@@ -449,11 +526,12 @@ describe('attaching to a running shell', () => {
 
     const back = client()
     service.attach('T-0001', back, size)
+    await service.settled('T-0001')
 
-    expect(outputOf(back.messages)).toBe('before\r\nwhile away\r\n')
+    expect(await screenOf(back.messages)).toEqual(['before', 'while away'])
   })
 
-  it('joins the replay and the live output with no line lost or shown twice', () => {
+  it('joins the replay and the live output with no line lost or shown twice', async () => {
     const { service, ptys } = setup()
     const watching = client()
     service.attach('T-0001', watching, size)
@@ -462,19 +540,21 @@ describe('attaching to a running shell', () => {
     const later = client()
     service.attach('T-0001', later, size)
     ptys[0]?.emit('live\r\n')
+    await service.settled('T-0001')
 
-    expect(outputOf(later.messages)).toBe(`${numbered(2000)}live\r\n`)
-    expect(outputOf(watching.messages)).toBe(`${numbered(2000)}live\r\n`)
+    const expected = [...numberedLines(2000), 'live']
+    expect(await screenOf(later.messages)).toEqual(expected)
+    expect(await screenOf(watching.messages)).toEqual(expected)
   })
 
-  it('replays a long history in pieces of a bounded size', () => {
+  it('replays a long history in pieces of a bounded size', async () => {
     const { service, ptys } = setup()
     service.attach('T-0001', client(), size)
-    const output = `${'y'.repeat(79)}\n`.repeat(5000)
-    ptys[0]?.emit(output)
+    ptys[0]?.emit(`${'y'.repeat(79)}\r\n`.repeat(5000))
 
     const later = client()
     service.attach('T-0001', later, size)
+    await service.settled('T-0001')
 
     expect(later.messages.length).toBeGreaterThan(1)
     for (const message of later.messages) {
@@ -482,101 +562,95 @@ describe('attaching to a running shell', () => {
         REPLAY_CHUNK_CHARS,
       )
     }
-    expect(outputOf(later.messages)).toBe(output)
+    expect(await screenOf(later.messages)).toEqual(Array(5000).fill('y'.repeat(79)))
+  })
+
+  // An agent places text with cursor moves for the width it had. The raw output on a narrower
+  // screen puts the first letter of each word at the right edge and the rest on the next row.
+  it('draws the screen again for the size of a client that attaches later', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), { cols: 120, rows: 24 })
+    ptys[0]?.emit('Spec mới: panel sẽ mở\u001b[100GNếu\u001b[105Ganh\r\nnext\r\n')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+
+    expect(await screenOf(later.messages)).toEqual([
+      'Spec mới: panel sẽ mở',
+      `${' '.repeat(19)}Nếu  anh`,
+      'next',
+    ])
+  })
+
+  it('keeps the modes a program turned on, such as bracketed paste', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit('\u001b[?2004h$ ')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+
+    expect(outputOf(later.messages)).toContain('\u001b[?2004h')
   })
 })
 
-describe('OutputHistory', () => {
-  it('keeps everything below the limit', () => {
-    const history = new OutputHistory(100)
-    history.append('a\n')
-    history.append('b')
-    expect(history.text()).toBe('a\nb')
+describe('the size of a shell shown in several places', () => {
+  const small = { cols: 80, rows: 24 }
+  const large = { cols: 120, rows: 40 }
+
+  it('follows the client that typed last', () => {
+    const { service, ptys } = setup()
+    const left = client()
+    const right = client()
+    service.attach('T-0001', left, small)
+    service.attach('T-0001', right, large)
+
+    service.input('T-0001', 'a', '1', left)
+    service.input('T-0001', 'b', '1', left)
+
+    expect(ptys[0]?.sizes).toEqual([large, small])
   })
 
-  it('drops the oldest lines first, and starts at a line', () => {
-    // The cut falls in the line "two", so all of that line goes.
-    const history = new OutputHistory(8)
-    history.append('one\ntwo\nthree\n')
-    expect(history.text()).toBe('three\n')
+  it('follows a client that sends its size again when it takes the focus', () => {
+    const { service, ptys } = setup()
+    const left = client()
+    const right = client()
+    service.attach('T-0001', left, small)
+    service.attach('T-0001', right, large)
+
+    service.resize('T-0001', small, '1', left)
+
+    expect(ptys[0]?.sizes).toEqual([large, small])
   })
 
-  it('keeps the newest whole lines within the limit, in one piece or many', () => {
-    const output = Array.from({ length: 500 }, (_, index) => `line ${index}\r\n`).join('')
-    const whole = new OutputHistory(1000)
-    whole.append(output)
-    const pieces = new OutputHistory(1000)
-    for (const char of output) {
-      pieces.append(char)
-      expect(pieces.size).toBeLessThanOrEqual(1000)
-    }
+  it('goes back to the client used before when the last one leaves', () => {
+    const { service, ptys } = setup()
+    const left = client()
+    const right = client()
+    service.attach('T-0001', left, small)
+    const detach = service.attach('T-0001', right, large)
 
-    for (const history of [whole, pieces]) {
-      const text = history.text()
-      expect(text.length).toBeLessThanOrEqual(1000)
-      expect(text.startsWith('line ')).toBe(true)
-      expect(output.endsWith(text)).toBe(true)
-    }
+    detach()
+    detach()
+
+    expect(ptys[0]?.sizes).toEqual([large, small])
   })
 
-  it('drops nothing up to the limit, and drops the oldest one char over it', () => {
-    const history = new OutputHistory(10)
-    history.append('aaaaaaaaa')
-    expect(history.text()).toBe('aaaaaaaaa')
-    history.append('\n')
-    expect(history.text()).toBe('aaaaaaaaa\n')
-    history.append('b')
-    expect(history.text()).toBe('b')
-  })
+  it('remembers the new size of each client', () => {
+    const { service, ptys } = setup()
+    const left = client()
+    const right = client()
+    service.attach('T-0001', left, small)
+    service.attach('T-0001', right, large)
+    const resized = { cols: 100, rows: 30 }
 
-  it('stays within the limit with a line longer than the limit', () => {
-    const history = new OutputHistory(100)
-    for (let index = 0; index < 50; index += 1) {
-      history.append('x'.repeat(7))
-      expect(history.size).toBeLessThanOrEqual(100)
-    }
-    expect(history.text()).toMatch(/^x+$/)
-  })
+    service.resize('T-0001', resized, '1', left)
+    service.input('T-0001', 'a', '1', right)
+    service.input('T-0001', 'b', '1', left)
 
-  it('stays within the limit with progress output that only uses carriage returns', () => {
-    const history = new OutputHistory(100)
-    for (let percent = 0; percent <= 100; percent += 1) {
-      history.append(`\rDownloading ${percent}%`)
-      expect(history.size).toBeLessThanOrEqual(100)
-    }
-    expect(history.text().endsWith('Downloading 100%')).toBe(true)
-  })
-
-  it('cuts before an escape sequence when there is no line break near the cut', () => {
-    const history = new OutputHistory(20)
-    history.append(`${'a'.repeat(30)}\u001b[31mred text`)
-    expect(history.text()).toBe('\u001b[31mred text')
-  })
-
-  it('does not start with the second half of a surrogate pair', () => {
-    const history = new OutputHistory(5)
-    // Without a line break or an escape, the cut falls inside the emoji.
-    history.append('ab😀cdef')
-    expect(history.text()).toBe('cdef')
-  })
-
-  it.each([3, 4, 5, 6, 7, 8, 9, 10])(
-    'never keeps half a character of mixed text, with a limit of %i',
-    (limit) => {
-      const text = 'Việt 日本 😀😀'
-      const history = new OutputHistory(limit)
-      history.append(text)
-      const kept = history.text()
-      expect(text.endsWith(kept)).toBe(true)
-      expect(kept).not.toMatch(LONE_SURROGATE)
-    },
-  )
-
-  it('is empty after clear', () => {
-    const history = new OutputHistory(100)
-    history.append('a')
-    history.clear()
-    expect(history.text()).toBe('')
+    expect(ptys[0]?.sizes).toEqual([large, resized, large, resized])
   })
 })
 
