@@ -55,6 +55,8 @@ export const REPLAY_CHUNK_CHARS = 64 * 1024
 export const KILL_GRACE_MS = 2000
 // How long a killed shell may take to end before closeAndWait stops waiting for it.
 const EXIT_WAIT_MS = 1000
+// Time between a DEL and other input that a program must read apart, see TerminalService.write.
+export const INPUT_GAP_MS = 25
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
 const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
@@ -185,6 +187,10 @@ type Session = {
   stopKillTimer?: () => void
   // Set while the shell of an ended task waits, with no client, to be closed.
   idleTimer?: NodeJS.Timeout
+  // Input that waits for its turn, see write().
+  pending: string[]
+  lastWrite?: { at: number; erases: boolean }
+  writeTimer?: NodeJS.Timeout
 }
 
 function exitOf(session: Session): Promise<void> {
@@ -334,7 +340,7 @@ export class TerminalService {
   // Types a command line into a shell of the task (the first by default), starting the shell
   // first when needed.
   run(taskId: string, line: string, terminal = MAIN_TERMINAL, size = DEFAULT_SIZE): void {
-    this.ensure(taskId, terminal, size).pty.write(`${line}\r`)
+    this.write(this.ensure(taskId, terminal, size), `${line}\r`)
   }
 
   // Pastes text into a shell (the first by default) and presses Enter, so the agent there takes it
@@ -344,7 +350,7 @@ export class TerminalService {
     if (!session) {
       throw new NoTerminalError(taskId)
     }
-    session.pty.write(`\x1b[200~${text}\x1b[201~\r`)
+    this.write(session, `\x1b[200~${text}\x1b[201~\r`)
   }
 
   // The program in the foreground of a shell, when the platform tells.
@@ -362,7 +368,37 @@ export class TerminalService {
     if (state) {
       this.setSize(session, state.size)
     }
-    session.pty.write(data)
+    this.write(session, data)
+  }
+
+  // A Vietnamese input method types "a", then erases it with DEL and types "á". Claude Code drops
+  // the text that it reads in one piece with a DEL, and pieces sent at the same moment are read
+  // together. So DEL and other input go to the shell apart, INPUT_GAP_MS from each other. Typing
+  // without DEL, or holding Backspace, is not slowed down.
+  private write(session: Session, data: string): void {
+    session.pending.push(...(data.match(/\x7f+|[^\x7f]+/g) ?? []))
+    this.flush(session)
+  }
+
+  private flush(session: Session): void {
+    if (session.writeTimer !== undefined) {
+      return
+    }
+    for (let part = session.pending[0]; part !== undefined; part = session.pending[0]) {
+      const erases = part.startsWith('\x7f')
+      const last = session.lastWrite
+      const wait = last && last.erases !== erases ? last.at + INPUT_GAP_MS - this.now() : 0
+      if (wait > 0) {
+        session.writeTimer = setTimeout(() => {
+          session.writeTimer = undefined
+          this.flush(session)
+        }, wait)
+        return
+      }
+      session.pending.shift()
+      session.pty.write(part)
+      session.lastWrite = { at: this.now(), erases }
+    }
   }
 
   // A client sends its size when it changes and when it takes the focus.
@@ -412,6 +448,7 @@ export class TerminalService {
     }
     this.sessions.delete(key)
     clearTimeout(session.idleTimer)
+    clearTimeout(session.writeTimer)
     session.screen.dispose()
     for (const client of session.clients.keys()) {
       client.send({ type: 'exit', code: null })
@@ -487,6 +524,7 @@ export class TerminalService {
       size,
       screen: new ScreenState(size),
       clients: new Map(),
+      pending: [],
     }
     this.sessions.set(key, session)
 
@@ -512,6 +550,7 @@ export class TerminalService {
     pty.onExit((code) => {
       session.stopKillTimer?.()
       clearTimeout(session.idleTimer)
+      clearTimeout(session.writeTimer)
       if (this.sessions.get(key) === session) {
         this.sessions.delete(key)
         session.screen.dispose()
