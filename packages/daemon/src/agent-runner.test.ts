@@ -280,6 +280,30 @@ describe('AgentRunner', () => {
     )
   })
 
+  it('starts Codex in its sandbox without asking when the project sets no mode', () => {
+    const task = taskWithWorkspace()
+    runner.start(task.id, 'codex', 'Only this')
+    expect(
+      readFileSync(script(task.id), 'utf8').startsWith(
+        'codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c ',
+      ),
+    ).toBe(true)
+  })
+
+  it.each(['', ' ', '  \t '])('adds no extra word for NATAMUX_CODEX_ARGS of %j', (words) => {
+    const spaced = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+      extraArgs: { codex: words },
+    })
+    const task = taskWithWorkspace()
+    spaced.start(task.id, 'codex', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toMatch(/[^ ] 'Only this'\n$/)
+  })
+
   it('starts the next agent with the mode saved in .natamux.json', () => {
     // Wired as in main.ts: the tasks read the settings of the repository's file.
     const settings = new ProjectSettingsService({ repos: { pathOf: () => dataDir } })

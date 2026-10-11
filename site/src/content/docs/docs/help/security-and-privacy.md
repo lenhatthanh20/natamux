@@ -52,7 +52,7 @@ For each agent it starts, Natamux adds hook settings that call `natamux hook` or
 
 ## Permission prompts
 
-By default Natamux starts each agent with a flag that skips most permission prompts. Only Claude Code (`--permission-mode auto`) checks each action. Codex (`--full-auto`), Gemini CLI (`--approval-mode yolo`), Copilot CLI (`--allow-all-tools`) and Cursor CLI (`--force`) run commands without asking, in the task's worktree with your user rights. Set `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) to keep the prompts.
+By default Natamux starts each agent with a flag that skips most permission prompts. Only Claude Code (`--permission-mode auto`) checks each action. Codex (`--sandbox workspace-write --ask-for-approval never`), Gemini CLI (`--approval-mode yolo`), Copilot CLI (`--allow-all-tools`) and Cursor CLI (`--force`) run commands without asking, in the task's worktree with your user rights. Set `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) to keep the prompts.
 
 ## The desktop app is unsigned
 

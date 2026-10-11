@@ -25,7 +25,8 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
 // the others have no such check, so their closest flag lets them run (almost) anything.
 export const AUTO_FLAGS: Record<LaunchableAgent, string[]> = {
   'claude-code': ['--permission-mode', 'auto'],
-  codex: ['--full-auto'],
+  // Codex dropped `--full-auto`. These two flags mean the same and exist in old and new versions.
+  codex: ['--sandbox', 'workspace-write', '--ask-for-approval', 'never'],
   gemini: ['--approval-mode', 'yolo'],
   copilot: ['--allow-all-tools'],
   cursor: ['--force'],
