@@ -181,6 +181,119 @@ describe('AgentPanes header around the badge', () => {
   })
 })
 
+describe('AgentPanes order', () => {
+  const panes = () => screen.getAllByRole('region', { name: /^Agent of / })
+
+  it('keeps each pane in its place, and mounted, when another task gets an update', () => {
+    const view = grid([makeTask('T-0012'), makeTask('T-0003')])
+    const before = panes()
+    expect(before.map((pane) => pane.getAttribute('aria-label'))).toEqual([
+      'Agent of T-0003',
+      'Agent of T-0012',
+    ])
+    view.rerender([
+      makeTask('T-0003', { state: 'needs-input', updatedAt: '2026-10-08T09:05:00.000Z' }),
+      makeTask('T-0012'),
+    ])
+    const after = panes()
+    expect(after).toHaveLength(2)
+    for (const [index, pane] of after.entries()) {
+      expect(pane).toBe(before[index])
+    }
+  })
+})
+
+// Tasks in the order of the task list: the first id is the newest.
+const newestFirst = (...ids: string[]) =>
+  ids.map((id, index) =>
+    makeTask(id, {
+      updatedAt: new Date(Date.UTC(2026, 9, 8, 9, 0, ids.length - index)).toISOString(),
+    }),
+  )
+
+const closePane = (id: string) =>
+  userEvent
+    .setup()
+    .click(within(header(id)).getByRole('button', { name: `Close Agent of ${id}` }))
+
+describe('AgentPanes first change of the default grid', () => {
+  it('saves the order the user sees on the first close', async () => {
+    const onChange = vi.fn()
+    grid(newestFirst('T-0012', 'T-0007', 'T-0003'), { onChange })
+    await closePane('T-0007')
+    expect(onChange).toHaveBeenCalledWith(['T-0003', 'T-0012'])
+  })
+
+  it('saves the order the user sees on the first add, with the new pane last', async () => {
+    const onChange = vi.fn()
+    grid([...newestFirst('T-0012', 'T-0007', 'T-0003'), makeTask('T-0020', { state: 'ready' })], {
+      onChange,
+    })
+    await userEvent
+      .setup()
+      .type(screen.getByRole('combobox', { name: 'Add a pane' }), 'T-0020{Enter}')
+    expect(onChange).toHaveBeenCalledWith(['T-0003', 'T-0007', 'T-0012', 'T-0020'])
+  })
+
+  it('saves only the shown panes when more agents run', async () => {
+    const onChange = vi.fn()
+    grid(
+      newestFirst('T-0008', 'T-0005', 'T-0002', 'T-0007', 'T-0001', 'T-0004', 'T-0006', 'T-0003'),
+      { onChange },
+    )
+    await closePane('T-0002')
+    expect(onChange).toHaveBeenCalledWith(['T-0001', 'T-0003', 'T-0004', 'T-0005', 'T-0006'])
+  })
+})
+
+describe('AgentPanes keys', () => {
+  const region = (id: string) => screen.getByRole('region', { name: `Agent of ${id}` })
+  const order = () =>
+    screen
+      .getAllByRole('region', { name: /^Agent of / })
+      .map((pane) => pane.getAttribute('aria-label'))
+
+  it('keeps the panes that stay mounted when others join, leave or get events', () => {
+    const view = grid(newestFirst('T-0012', 'T-0007', 'T-0003'))
+    const first = region('T-0003')
+    const last = region('T-0012')
+    view.rerender([
+      makeTask('T-0012', { updatedAt: '2026-10-08T09:10:00.000Z' }),
+      makeTask('T-0007', { state: 'review', updatedAt: '2026-10-08T09:09:00.000Z' }),
+      makeTask('T-0005', { updatedAt: '2026-10-08T09:08:00.000Z' }),
+      makeTask('T-0003'),
+    ])
+    expect(order()).toEqual(['Agent of T-0003', 'Agent of T-0005', 'Agent of T-0012'])
+    expect(region('T-0003')).toBe(first)
+    expect(region('T-0012')).toBe(last)
+  })
+
+  it('keeps the panes that stay mounted on add and close in the picked grid', () => {
+    const props = {
+      onChange: vi.fn(),
+      layout: '4' as const,
+      onLayout: vi.fn(),
+      connect: vi.fn(() => new Promise<WebSocket>(() => {})),
+      onOpenTask: vi.fn(),
+    }
+    const tasks = newestFirst('T-0003', 'T-0007', 'T-0012')
+    const view = render(<AgentPanes tasks={tasks} chosen={['T-0012', 'T-0003']} {...props} />)
+    const picked = region('T-0012')
+    const second = region('T-0003')
+    view.rerender(
+      <AgentPanes tasks={tasks} chosen={['T-0012', 'T-0003', 'T-0007']} {...props} />,
+    )
+    expect(order()).toEqual(['Agent of T-0012', 'Agent of T-0003', 'Agent of T-0007'])
+    expect(region('T-0012')).toBe(picked)
+    expect(region('T-0003')).toBe(second)
+    const added = region('T-0007')
+    view.rerender(<AgentPanes tasks={tasks} chosen={['T-0012', 'T-0007']} {...props} />)
+    expect(order()).toEqual(['Agent of T-0012', 'Agent of T-0007'])
+    expect(region('T-0012')).toBe(picked)
+    expect(region('T-0007')).toBe(added)
+  })
+})
+
 describe('AgentPanes in a group', () => {
   const build = (lanes: Task['lanes'], state: TaskState) =>
     makeTask('T-0001', { stage: 'build', state, lanes })

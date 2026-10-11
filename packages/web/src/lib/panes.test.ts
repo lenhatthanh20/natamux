@@ -11,6 +11,7 @@ import {
   parsePaneLayout,
   terminalState,
 } from './panes'
+import { sortByRecent, upsertTask } from './tasks'
 
 function makeTask(overrides: Partial<Task>): Task {
   return taskSchema.parse({
@@ -63,6 +64,204 @@ describe('agentPaneTasks', () => {
       makeTask({ id: `T-00${String(index + 10)}` }),
     )
     expect(agentPaneTasks(null, many)).toHaveLength(MAX_PANES)
+  })
+})
+
+describe('agentPaneTasks order', () => {
+  const ids = (tasks: readonly Task[]) => tasks.map((task) => task.id)
+  // The task list comes newest first, so a task with an event moves to the front.
+  const at = (id: string, minute: number, overrides: Partial<Task> = {}) => {
+    const updatedAt = `2026-10-08T09:${String(minute).padStart(2, '0')}:00.000Z`
+    return makeTask({ id, updatedAt, ...overrides })
+  }
+
+  it('orders the default grid by task id, not by the last update', () => {
+    expect(ids(agentPaneTasks(null, [at('T-0012', 3), at('T-0003', 2), at('T-0007', 1)]))).toEqual([
+      'T-0003',
+      'T-0007',
+      'T-0012',
+    ])
+  })
+
+  it('keeps the order when a task gets an update', () => {
+    const before = [at('T-0012', 3), at('T-0007', 2), at('T-0003', 1)]
+    const after = [at('T-0003', 9, { state: 'needs-input' }), at('T-0012', 3), at('T-0007', 2)]
+    expect(ids(agentPaneTasks(null, before))).toEqual(['T-0003', 'T-0007', 'T-0012'])
+    expect(ids(agentPaneTasks(null, after))).toEqual(['T-0003', 'T-0007', 'T-0012'])
+  })
+
+  it('keeps the others in order when a pane leaves or joins', () => {
+    const left = [at('T-0007', 9, { state: 'review' }), at('T-0012', 3), at('T-0003', 1)]
+    expect(ids(agentPaneTasks(null, left))).toEqual(['T-0003', 'T-0012'])
+    const joined = [at('T-0005', 9), at('T-0012', 3), at('T-0007', 2), at('T-0003', 1)]
+    expect(ids(agentPaneTasks(null, joined))).toEqual(['T-0003', 'T-0005', 'T-0007', 'T-0012'])
+  })
+
+  it('compares ids by number', () => {
+    const tasks = [at('T-10000', 4), at('T-1000', 3), at('T-9999', 2), at('T-0999', 1)]
+    expect(ids(agentPaneTasks(null, tasks))).toEqual(['T-0999', 'T-1000', 'T-9999', 'T-10000'])
+  })
+
+  it('shows the six lowest ids, whatever gets an update', () => {
+    const many = Array.from({ length: 8 }, (_, index) => at(`T-00${index + 10}`, index))
+    const lowest = ['T-0010', 'T-0011', 'T-0012', 'T-0013', 'T-0014', 'T-0015']
+    expect(ids(agentPaneTasks(null, [...many].reverse()))).toEqual(lowest)
+    const updated = [at('T-0017', 30), at('T-0010', 31), ...many.slice(1, 7)]
+    expect(ids(agentPaneTasks(null, updated))).toEqual(lowest)
+  })
+
+  it('keeps the order the user picked when tasks get updates', () => {
+    const tasks = [at('T-0003', 9), at('T-0012', 3), at('T-0007', 2)]
+    expect(ids(agentPaneTasks(['T-0012', 'T-0003'], tasks))).toEqual(['T-0012', 'T-0003'])
+    expect(ids(agentPaneTasks(['T-0012', 'T-0003', 'T-0007'], tasks))).toEqual([
+      'T-0012',
+      'T-0003',
+      'T-0007',
+    ])
+    expect(ids(agentPaneTasks(['T-0012', 'T-0007'], tasks))).toEqual(['T-0012', 'T-0007'])
+  })
+})
+
+describe('agentPaneTasks order with task events', () => {
+  const panes = (chosen: readonly string[] | null, tasks: readonly Task[]) =>
+    agentPaneTasks(chosen, tasks).map((task) => task.id)
+  // Running tasks in the order of the task list. The first id is the newest.
+  const newestFirst = (...ids: string[]) =>
+    sortByRecent(
+      ids.map((id, index) => {
+        const updatedAt = new Date(Date.UTC(2026, 9, 8, 9, 0, ids.length - index)).toISOString()
+        return makeTask({ id, updatedAt })
+      }),
+    )
+  // A task event as the live feed merges it: newer than every task, so it goes first.
+  const event = (tasks: readonly Task[], id: string, overrides: Partial<Task> = {}) => {
+    const newest = Math.max(0, ...tasks.map((task) => Date.parse(task.updatedAt)))
+    const known = tasks.find((task) => task.id === id) ?? makeTask({ id })
+    return upsertTask(tasks, {
+      ...known,
+      ...overrides,
+      updatedAt: new Date(newest + 1000).toISOString(),
+    })
+  }
+  const grid = () => newestFirst('T-0012', 'T-0007', 'T-0003')
+  const ids = (first: number, last: number) =>
+    Array.from(
+      { length: last - first + 1 },
+      (_, index) => `T-${String(first + index).padStart(4, '0')}`,
+    )
+
+  describe('default grid', () => {
+    it('orders panes by task id', () => {
+      expect(panes(null, grid())).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      expect(panes(null, newestFirst('T-0012'))).toEqual(['T-0012'])
+      expect(panes(null, [])).toEqual([])
+    })
+
+    it('leaves out tasks without a working agent or a workspace, even with the lowest id', () => {
+      let tasks = event(grid(), 'T-0001', { state: 'ready' })
+      tasks = event(tasks, 'T-0002', { state: 'review' })
+      tasks = event(tasks, 'T-0000', { state: 'done' })
+      tasks = event(tasks, 'T-0004', { workspace: null })
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      expect(panes(null, tasks.filter((task) => task.state === 'ready'))).toEqual([])
+    })
+
+    it('does not move panes on task events', () => {
+      let tasks = event(grid(), 'T-0012')
+      expect(tasks[0]?.id).toBe('T-0012')
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      tasks = event(tasks, 'T-0003')
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      tasks = event(tasks, 'T-0007', { state: 'needs-input' })
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      for (let count = 0; count < 5; count += 1) {
+        tasks = event(tasks, 'T-0012')
+      }
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+      tasks = event(event(tasks, 'T-0001', { state: 'ready' }), 'T-0001', { title: 'Renamed' })
+      expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+    })
+
+    it('orders by id when tasks have the same update time', () => {
+      const same = ['T-0012', 'T-0003', 'T-0007'].map((id) => makeTask({ id }))
+      expect(panes(null, same)).toEqual(['T-0003', 'T-0007', 'T-0012'])
+    })
+
+    it('keeps the others in order when a pane leaves', () => {
+      expect(panes(null, event(grid(), 'T-0007', { state: 'review' }))).toEqual([
+        'T-0003',
+        'T-0012',
+      ])
+      expect(panes(null, event(grid(), 'T-0003', { state: 'done' }))).toEqual(['T-0007', 'T-0012'])
+      expect(panes(null, event(grid(), 'T-0012', { workspace: null }))).toEqual([
+        'T-0003',
+        'T-0007',
+      ])
+      const all = ['T-0003', 'T-0007', 'T-0012'].reduce(
+        (tasks, id) => event(tasks, id, { state: 'review' }),
+        grid(),
+      )
+      expect(panes(null, all)).toEqual([])
+    })
+
+    it('puts a pane that joins in its place by id', () => {
+      expect(panes(null, event(grid(), 'T-0005'))).toEqual(['T-0003', 'T-0005', 'T-0007', 'T-0012'])
+      expect(panes(null, event(grid(), 'T-0001'))).toEqual(['T-0001', 'T-0003', 'T-0007', 'T-0012'])
+      expect(panes(null, event(grid(), 'T-0020'))).toEqual(['T-0003', 'T-0007', 'T-0012', 'T-0020'])
+      const left = event(grid(), 'T-0007', { state: 'review' })
+      expect(panes(null, left)).toEqual(['T-0003', 'T-0012'])
+      expect(panes(null, event(left, 'T-0007', { state: 'running' }))).toEqual([
+        'T-0003',
+        'T-0007',
+        'T-0012',
+      ])
+    })
+
+    it('compares ids by number, not by text', () => {
+      // A text sort puts T-10000 before T-9999.
+      const tasks = newestFirst('T-1000', 'T-0999', 'T-10000', 'T-9999')
+      expect(panes(null, tasks)).toEqual(['T-0999', 'T-1000', 'T-9999', 'T-10000'])
+    })
+
+    it('shows the six lowest ids when more agents run, whatever gets an event', () => {
+      const shuffled = ['T-0005', 'T-0008', 'T-0002', 'T-0007', 'T-0001', 'T-0004', 'T-0006', 'T-0003']
+      let tasks = newestFirst(...shuffled)
+      expect(MAX_PANES).toBe(6)
+      expect(panes(null, tasks)).toEqual(ids(1, 6))
+      for (const id of ids(1, 8)) {
+        tasks = event(tasks, id)
+        expect(panes(null, tasks)).toEqual(ids(1, 6))
+      }
+      expect(panes(null, event(tasks, 'T-0008'))).toEqual(ids(1, 6))
+      expect(panes(null, newestFirst(...ids(1, 6).reverse()))).toEqual(ids(1, 6))
+      expect(panes(null, event(tasks, 'T-0002', { state: 'review' }))).toEqual([
+        'T-0001',
+        'T-0003',
+        'T-0004',
+        'T-0005',
+        'T-0006',
+        'T-0007',
+      ])
+    })
+  })
+
+  describe('picked grid', () => {
+    const tasks = newestFirst('T-0003', 'T-0007', 'T-0012')
+
+    it('keeps the list order on task events, adds last and closes in place', () => {
+      // Neither id nor recency order: a sort would fail this.
+      const picked = ['T-0012', 'T-0003']
+      expect(panes(picked, tasks)).toEqual(picked)
+      const later = event(event(tasks, 'T-0003'), 'T-0012')
+      expect(panes(picked, event(tasks, 'T-0003'))).toEqual(picked)
+      expect(panes(picked, later)).toEqual(picked)
+      expect(panes([...picked, 'T-0007'], later)).toEqual(['T-0012', 'T-0003', 'T-0007'])
+      expect(panes(['T-0012', 'T-0007'], later)).toEqual(['T-0012', 'T-0007'])
+    })
+
+    it('stays empty after the last pane closes, without the default panes', () => {
+      expect(panes([], tasks)).toEqual([])
+    })
   })
 })
 
