@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The production images with demo data, for the end-to-end tests and for trying the dashboard in a
-# browser. Needs only Docker. See docs/e2e.md.
+# browser. Needs Docker, and the GitHub CLI to check pulled images. See docs/e2e.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -11,6 +11,8 @@ export NATAMUX_REPO=e2e-repo
 URL="http://127.0.0.1:$NATAMUX_PORT"
 IMAGES="${E2E_IMAGES:-ghcr.io/lenhatthanh20/natamux}"
 TAG="${E2E_TAG:-main}"
+# The repository whose E2E workflow must have built the images.
+SOURCE="${E2E_SOURCE:-lenhatthanh20/natamux}"
 # The tests in e2e/ look for these titles.
 DEMO_TITLE="Demo: changes and history"
 AGENT_TITLE="Command palette opened with Cmd+K"
@@ -19,7 +21,10 @@ usage() {
   cat <<'TEXT'
 Usage: scripts/e2e.sh <command>
 
-  up     Start the images built on main (or build them, with E2E_BUILD=1), then add demo data
+  up     Pull and check the images built on main, start them, then add demo data.
+         E2E_BUILD=1 builds them first (CI and codespaces only). E2E_LOCAL=1 starts the
+         natamux-daemon:local and natamux-web:local images that are there already.
+  build  Build the images (CI and codespaces only)
   seed   Add the demo data, unless it is there
   logs   Show the logs
   down   Stop, and remove the demo data and repository
@@ -32,21 +37,47 @@ compose() {
   docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml "$@"
 }
 
+build() {
+  # A build runs pnpm install. Packages are installed only in CI and in codespaces.
+  if [ -z "${CI:-}" ] && [ -z "${CODESPACES:-}" ]; then
+    echo "A build installs packages to build the images. Run it in CI or a codespace." >&2
+    echo "Here, run scripts/e2e.sh up: it pulls the images that CI built." >&2
+    exit 1
+  fi
+  compose build daemon web
+}
+
+# Pulls an image of main and prints its digest, once GitHub confirms that the E2E workflow on main
+# of SOURCE built it. A tag can move, so the containers start from the digest that was checked.
+pull_checked() {
+  local ref="$IMAGES-$1:$TAG" digest
+  docker pull --quiet "$ref" >/dev/null
+  digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref" |
+    grep -F -m 1 "$IMAGES-$1@")"
+  if ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
+    --signer-workflow "$SOURCE/.github/workflows/e2e.yml" --source-ref refs/heads/main \
+    >/dev/null; then
+    echo "$digest was not built by the E2E workflow on main of $SOURCE. Not starting it." >&2
+    exit 1
+  fi
+  echo "$digest"
+}
+
 up() {
   if [ "${E2E_BUILD:-}" = 1 ]; then
-    # A build runs pnpm install. Packages are installed only in CI and in codespaces.
-    if [ -z "${CI:-}" ] && [ -z "${CODESPACES:-}" ]; then
-      echo "E2E_BUILD=1 installs packages to build the images. Run it in CI or a codespace." >&2
-      echo "Here, run scripts/e2e.sh up without it: it pulls the images that CI built." >&2
+    build
+  elif [ "${E2E_LOCAL:-}" != 1 ]; then
+    if ! command -v gh >/dev/null; then
+      echo "Checking the images needs the GitHub CLI (gh), signed in." >&2
       exit 1
     fi
-    compose build daemon web
-  else
     # The images are built for Linux on x86. A Mac with Apple silicon runs them with Rosetta.
     export DOCKER_DEFAULT_PLATFORM=linux/amd64
-    export NATAMUX_DAEMON_IMAGE="$IMAGES-daemon:$TAG"
-    export NATAMUX_WEB_IMAGE="$IMAGES-web:$TAG"
-    compose pull daemon web
+    NATAMUX_DAEMON_IMAGE="$(pull_checked daemon)"
+    NATAMUX_WEB_IMAGE="$(pull_checked web)"
+    export NATAMUX_DAEMON_IMAGE NATAMUX_WEB_IMAGE
+    echo "Checked: $NATAMUX_DAEMON_IMAGE"
+    echo "Checked: $NATAMUX_WEB_IMAGE"
   fi
   compose run --rm repo
   compose up -d --no-build --wait --wait-timeout 180 daemon web
@@ -145,6 +176,7 @@ seed() {
 
 case "${1:-}" in
 up) up ;;
+build) build ;;
 seed) seed ;;
 logs) compose logs --no-color ;;
 down) compose --profile init down --volumes ;;

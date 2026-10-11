@@ -10,22 +10,28 @@ Full reference: `docs/e2e.md`.
 ## Parts
 
 - `compose.e2e.yaml`: goes on top of `compose.prod.yaml`. It adds a fake agent (`scripts/fake-agent.sh`) in place of Claude Code, git names, and a throwaway repository in a volume.
-- `scripts/e2e.sh up|seed|logs|down`: needs only Docker and curl. Allowed on the local machine: no pnpm or node runs on the host.
+- `scripts/e2e.sh up|build|seed|logs|down`: needs Docker, curl and `gh` (signed in). Allowed on the local machine: no pnpm or node runs on the host.
+  - `up` pulls each image, runs `gh attestation verify` on it (built by `e2e.yml` on main of `lenhatthanh20/natamux`), and starts the containers from the checked digest, not the tag.
+  - `E2E_LOCAL=1 up` starts `natamux-{daemon,web}:local` that are loaded already (CI test job).
 - `e2e/`: the Playwright tests (`@playwright/test` 1.64.0, exact pin). They are outside the pnpm workspace and run only in CI.
-- `.github/workflows/e2e.yml`: runs on every PR and push to main. On main it publishes `ghcr.io/lenhatthanh20/natamux-{daemon,web}:main` and `:sha-<commit>`.
+- `.github/workflows/e2e.yml`: runs on every PR and push to main. Three jobs:
+  - `build`: builds, saves the images as an artifact, outputs their ids. No package write.
+  - `test`: loads the images, runs the Playwright tests. No package write.
+  - `publish` (main only): checks the ids, pushes `ghcr.io/lenhatthanh20/natamux-{daemon,web}:main` and `:sha-<commit>`, attests build provenance. The only job with `packages: write`; installs nothing.
+  - Keep it that way: never add a package install or a third-party action that runs code to `publish`, and never give `packages: write` to another job.
 
 ## Rules on the local machine
 
 - Allowed: Docker (colima), `scripts/e2e.sh up|seed|logs|down` without `E2E_BUILD`, and `playwright-cli`, which the user installed and allows.
 - Never install anything: no `pnpm install`, no `playwright install`, no `npm i -g`, and no browser downloads. If `playwright-cli` is missing or asks to install a browser, stop and ask the user.
-- Never `E2E_BUILD=1` locally. A build runs `pnpm install` inside Docker. The script refuses it unless `CI` or `CODESPACES` is set.
+- Never `E2E_BUILD=1` or `scripts/e2e.sh build` locally. A build runs `pnpm install` inside Docker. The script refuses it unless `CI` or `CODESPACES` is set.
 - Never run the Playwright suite in `e2e/` locally. It needs `pnpm install`, so it runs in CI.
-- The tag `main` moves with every merge. To run exactly the build you checked, use `E2E_TAG=sha-<commit>`.
+- Never skip or work around the attestation check. If it fails, stop and tell the user.
 
 ## Try the dashboard locally
 
 1. Docker must run. Start colima with: `colima start --cpu 4 --memory 8 --vm-type vz --mount-type virtiofs --vz-rosetta`
-2. Run `scripts/e2e.sh up`. It pulls the images of main, starts them, and adds the demo data.
+2. Run `scripts/e2e.sh up`. It pulls and checks the images of main, starts them, and adds the demo data.
    - It shows the code of **main**, not of the current branch. To see a branch, use CI (its report or screenshots) or the codespace.
    - `E2E_TAG=sha-<commit>` picks another main commit.
    - "denied" on pull means the GHCR package is private. Ask the user to make it public, or to run `docker login ghcr.io`.

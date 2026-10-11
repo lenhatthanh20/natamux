@@ -5,7 +5,7 @@ The production images, started with demo data, tested in a real browser with Pla
 | Part | What it is |
 |---|---|
 | `compose.e2e.yaml` | On top of `compose.prod.yaml`: a fake agent (`scripts/fake-agent.sh`) in place of Claude Code, git names for commits, and a throwaway repository in a volume |
-| `scripts/e2e.sh` | Starts the images, adds the demo data, stops them. Needs only Docker and curl |
+| `scripts/e2e.sh` | Checks and starts the images, adds the demo data, stops them. Needs Docker, curl and the GitHub CLI |
 | `e2e/` | The Playwright tests. Not part of the pnpm workspace, so the images do not install it |
 | `.github/workflows/e2e.yml` | Builds the images, runs the tests, and on `main` publishes the images to ghcr.io |
 
@@ -21,23 +21,35 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch (`E2E_BUILD=1`), so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact.
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact.
 
-On `main`, after the tests pass, the images go to `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, tagged `main` and `sha-<commit>`.
+The workflow has three jobs:
+
+| Job | Does | Can write packages |
+|---|---|---|
+| `build` | `scripts/e2e.sh build`, then saves the images as an artifact and their ids as outputs | no |
+| `test` | loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests | no |
+| `publish` | on `main` only: checks the image ids against `build`, pushes the images, attests their build provenance | yes |
+
+Only `publish` can push images, and it installs no packages. A bad package in the Playwright install of `test` cannot push an image, and it cannot swap the artifact either, because `publish` checks the ids.
+
+On `main`, after the tests pass, the images go to `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, tagged `main` and `sha-<commit>`, each with a signed build provenance attestation.
 
 ## On your machine
 
-Needs Docker, for example colima. Nothing is built: the images come from ghcr.io.
+Needs Docker (for example colima) and the GitHub CLI, signed in. Nothing is built: the images come from ghcr.io.
+
+Before it starts them, `scripts/e2e.sh up` runs `gh attestation verify` on each image. The check passes only for an image that the E2E workflow built on `main` of `lenhatthanh20/natamux`. The containers then start from the digest that was checked, not from the tag, so a tag moved after the check changes nothing.
 
 ```sh
-scripts/e2e.sh up      # pull the images of main, start them, add the demo data
+scripts/e2e.sh up      # pull and check the images of main, start them, add the demo data
 scripts/e2e.sh logs
 scripts/e2e.sh down    # stop, and remove the demo data and the repository
 ```
 
-Nothing is installed on your machine. `E2E_BUILD=1`, which builds the images and so installs packages, works only in CI or a codespace. The script refuses it elsewhere. The Playwright tests in `e2e/` run in CI only.
+Nothing is installed on your machine. `scripts/e2e.sh build` and `E2E_BUILD=1`, which build the images and so install packages, work only in CI or a codespace. The script refuses them elsewhere. The Playwright tests in `e2e/` run in CI only.
 
-`E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag runs exactly the build you checked. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
+`E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag picks a known build. Images published before the workflow attested its builds fail the check. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
 
 Then try the dashboard by hand or with `playwright-cli`:
 
