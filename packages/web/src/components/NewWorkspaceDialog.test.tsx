@@ -119,11 +119,12 @@ function dialog({
   return { create, setRepos: (next: Repos) => rerender(view(next)) }
 }
 
-// The labels of the fields, top to bottom.
-const fieldLabels = () =>
-  [...screen.getByRole('dialog').querySelectorAll('form span.text-xs')].map(
-    (label) => label.textContent,
-  )
+// The labels of the fields, top to bottom, in the whole form or in one group of it.
+const fieldLabels = (root: HTMLElement = screen.getByRole('dialog')) =>
+  [...root.querySelectorAll('span.text-xs.font-medium')].map((label) => label.textContent)
+
+const contextGroup = () => screen.getByRole('group', { name: 'Context' })
+const contextHint = () => contextGroup().querySelector('p')?.textContent
 
 const startButton = () => screen.getByRole('button', { name: 'Start task' })
 
@@ -140,28 +141,124 @@ describe('the Start a task dialog', () => {
     expect(screen.queryByRole('button', { name: 'Advanced' })).toBeNull()
   })
 
-  it('says what it makes, and starts with the project, the title and the notes', () => {
+  it('says what it makes, and puts the context first, then the workspace and the agent', () => {
     dialog()
     const element = screen.getByRole('dialog', { name: 'Start a task' })
     expect(element.textContent).toContain(
       'A new task with its own workspace: a git worktree on a new branch.',
     )
-    expect(fieldLabels().slice(0, 3)).toEqual(['Project', 'Title', 'Notes'])
+    expect(fieldLabels()).toEqual([
+      'Title',
+      'Notes',
+      'Attachments',
+      'Project',
+      'Branch from',
+      'Agent',
+    ])
+    expect(fieldLabels(contextGroup())).toEqual(['Title', 'Notes', 'Attachments'])
+    const setup = screen.getByRole('group', { name: 'Workspace and agent' })
+    expect(fieldLabels(setup)).toEqual(['Project', 'Branch from', 'Agent'])
     expect(screen.getByLabelText('Project')).toBeTruthy()
     expect(screen.getByLabelText('Task title')).toBeTruthy()
-    expect(screen.queryByText('What should the agent do?')).toBeNull()
     expect(screen.queryByText(/Repository|Workspace name/)).toBeNull()
   })
 
-  it('gives the notes field its hint and room for a few lines', () => {
+  it('focuses the title first', async () => {
+    dialog()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Task title')))
+  })
+
+  it('says what the agent reads from the notes', () => {
+    dialog()
+    expect(contextHint()).toBe(
+      "The agent reads the title, the notes and the files as the task's context.",
+    )
+    expect(
+      screen.getByRole('group', { name: 'Context', description: contextHint() ?? '' }),
+    ).toBeTruthy()
+  })
+
+  it('gives the notes field a hint of what to write, and room for a full task', () => {
     dialog()
     const notes = screen.getByLabelText('Task notes') as HTMLTextAreaElement
     expect(notes.tagName).toBe('TEXTAREA')
     expect(notes.placeholder).toBe(
-      "Optional. What to do and why. The agent reads this as the task's context.",
+      'Optional. What to change and why, where to look (files, screens), and how to tell it is done.',
     )
-    expect(notes.rows).toBe(4)
+    expect(notes.rows).toBe(6)
     expect(notes.className).toContain('resize-y')
+  })
+
+  it('says the attached files are part of the context', () => {
+    dialog()
+    expect(contextGroup().textContent).toContain(
+      'Or drop or paste files here, such as screenshots, logs or specs. They are part of the context.',
+    )
+  })
+
+  it('puts the source right under the title, and the reference where the notes were', async () => {
+    dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    const source = await screen.findByLabelText('Where the context comes from')
+    expect(fieldLabels(contextGroup())).toEqual(['Title', 'Context from', 'Notes', 'Attachments'])
+
+    await user.selectOptions(source, 'github-issue')
+    expect(fieldLabels(contextGroup())).toEqual([
+      'Title',
+      'Context from',
+      'Reference',
+      'Attachments',
+    ])
+    const ref = screen.getByLabelText('Reference of the context') as HTMLInputElement
+    expect(ref.placeholder).toBe('#42 or the issue address')
+    expect(fieldLabels(screen.getByRole('group', { name: 'Workspace and agent' }))).toEqual([
+      'Project',
+      'Branch from',
+      'Agent',
+    ])
+  })
+
+  it('says under the reference what to enter for each source', async () => {
+    dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    const source = await screen.findByLabelText('Where the context comes from')
+    const hints: Record<string, string> = {
+      'github-issue':
+        'The issue number, such as #42, or its address. Natamux reads the issue from GitHub.',
+      'skill:Ticket': 'The key or address of the ticket. The Ticket skill reads it.',
+      'mcp:Tracker':
+        'The key or address of the ticket. The agent reads it through the Tracker MCP server.',
+    }
+    for (const [key, hint] of Object.entries(hints)) {
+      await user.selectOptions(source, key)
+      const ref = screen.getByRole('textbox', {
+        name: 'Reference of the context',
+        description: hint,
+      })
+      // The hint sits right under the field.
+      expect(ref.nextElementSibling?.textContent).toBe(hint)
+      expect(fieldLabels(contextGroup())).toContain('Reference')
+    }
+  })
+
+  it('says what the agent reads for each source', async () => {
+    dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    const source = await screen.findByLabelText('Where the context comes from')
+    const hints: Record<string, string> = {
+      'github-issue':
+        "The agent reads the issue (its title, text, labels and comments) and the files as the task's context.",
+      'skill:Ticket':
+        "The agent runs the Ticket skill on the reference, and reads what it finds and the files as the task's context.",
+      'mcp:Tracker':
+        "The agent asks the Tracker MCP server about the reference, and reads what it finds and the files as the task's context.",
+      manual:
+        "The agent reads the title, the notes and the files as the task's context.",
+    }
+    for (const [key, hint] of Object.entries(hints)) {
+      await user.selectOptions(source, key)
+      expect(contextHint()).toBe(hint)
+    }
   })
 
   it('shows the notes when the project offers more sources, with My notes first', async () => {
@@ -512,5 +609,244 @@ describe('attachments in the Start a task dialog', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'f20.txt is not attached: a task takes at most 20 files',
     )
+  })
+})
+
+describe('the context area of the Start a task dialog', () => {
+  const setupGroup = () => screen.getByRole('group', { name: 'Workspace and agent' })
+  const listed = () =>
+    within(screen.getByRole('list', { name: 'Attached files' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent)
+
+  // Presses Tab until focus comes back to the title, and returns what got focus on the way.
+  async function tabStops(user: ReturnType<typeof userEvent.setup>) {
+    const title = screen.getByLabelText('Task title')
+    const stops: Element[] = []
+    for (let step = 0; step < 30; step += 1) {
+      await user.tab()
+      if (document.activeElement === title) {
+        break
+      }
+      if (document.activeElement !== null) {
+        stops.push(document.activeElement)
+      }
+    }
+    return stops
+  }
+
+  const branch = () =>
+    screen.getByRole('combobox', { name: 'Branch to start from' }) as HTMLInputElement
+
+  it('keeps the setup fields in their own group with one project or none', () => {
+    for (const repos of [[{ id: 'web', name: 'Web app' }], []]) {
+      dialog({ repos })
+      expect(fieldLabels(setupGroup())).toEqual(['Project', 'Branch from', 'Agent'])
+      cleanup()
+    }
+  })
+
+  it('keeps every field in its own group', async () => {
+    dialog({ loadSettings: async () => EVERY_SOURCE })
+    await screen.findByLabelText('Where the context comes from')
+    const context = within(contextGroup())
+    const setup = within(setupGroup())
+    for (const name of [
+      'Task title',
+      'Where the context comes from',
+      'Task notes',
+      'Attach files',
+    ]) {
+      expect(context.getByLabelText(name)).toBeTruthy()
+      expect(setup.queryByLabelText(name)).toBeNull()
+    }
+    for (const name of ['Project', 'Agent']) {
+      expect(setup.getByLabelText(name)).toBeTruthy()
+      expect(context.queryByLabelText(name)).toBeNull()
+    }
+    expect(setup.getByRole('combobox', { name: 'Branch to start from' })).toBe(branch())
+  })
+
+  it('keeps the group names when the source changes, and only one line changes', async () => {
+    dialog({ loadSettings: async () => EVERY_SOURCE })
+    const user = userEvent.setup()
+    const source = await screen.findByLabelText('Where the context comes from')
+    const before = contextHint()
+    await user.selectOptions(source, 'mcp:Tracker')
+
+    expect(contextGroup()).toBeTruthy()
+    expect(setupGroup()).toBeTruthy()
+    expect(contextHint()).not.toBe(before)
+    expect(screen.getAllByRole('group')).toHaveLength(2)
+  })
+
+  it('shows the line for My notes when the project offers only My notes', async () => {
+    dialog({ loadSettings: async () => NOTES_ONLY })
+    await waitFor(() =>
+      expect(contextHint()).toBe(
+        "The agent reads the title, the notes and the files as the task's context.",
+      ),
+    )
+    expect(screen.queryByLabelText('Where the context comes from')).toBeNull()
+  })
+
+  it('tabs through the fields in the order they show, with no positive tabindex', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES })
+    const user = userEvent.setup()
+    await screen.findByLabelText('Where the context comes from')
+    await waitFor(() => expect(branch().disabled).toBe(false))
+    screen.getByLabelText('Task title').focus()
+
+    const expected = [
+      screen.getByLabelText('Where the context comes from'),
+      screen.getByLabelText('Task notes'),
+      screen.getByRole('button', { name: 'Add files' }),
+      screen.getByLabelText('Project'),
+      branch(),
+      screen.getByLabelText('Agent'),
+      screen.getByRole('button', { name: 'Cancel' }),
+      startButton(),
+    ]
+    const stops = await tabStops(user)
+    expect(stops.filter((stop) => expected.includes(stop))).toEqual(expected)
+    const positive = [...screen.getByRole('dialog').querySelectorAll('[tabindex]')].filter(
+      (element) => Number(element.getAttribute('tabindex')) > 0,
+    )
+    expect(positive).toEqual([])
+  })
+
+  it('tabs from the title to the notes when there is only one source', async () => {
+    dialog()
+    const user = userEvent.setup()
+    screen.getByLabelText('Task title').focus()
+    await user.tab()
+    expect(document.activeElement).toBe(screen.getByLabelText('Task notes'))
+  })
+
+  it('keeps focus on the source after a switch, and tabs on to the reference', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES })
+    const user = userEvent.setup()
+    const source = await screen.findByLabelText('Where the context comes from')
+    source.focus()
+    await user.selectOptions(source, 'github-issue')
+    expect(document.activeElement).toBe(source)
+    await user.tab()
+    expect(document.activeElement).toBe(screen.getByLabelText('Reference of the context'))
+  })
+
+  it('asks for the reference when another source has none, or only spaces', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(
+      await screen.findByLabelText('Where the context comes from'),
+      'github-issue',
+    )
+    expect(startButton().getAttribute('data-tip')).toBe('Enter the reference of the context')
+    await user.type(screen.getByLabelText('Reference of the context'), '   ')
+    expect(startButton().getAttribute('aria-disabled')).toBe('true')
+    expect(startButton().getAttribute('data-tip')).toBe('Enter the reference of the context')
+  })
+
+  it('treats a title of only spaces as no title', async () => {
+    dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), '   ')
+    expect(startButton().getAttribute('aria-disabled')).toBe('true')
+    expect(startButton().getAttribute('data-tip')).toBe('Enter a title')
+  })
+
+  it('starts the task with Mod+Enter from the title', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+  })
+
+  it('starts the task with Mod+Enter from the reference', async () => {
+    const { create } = dialog({ loadSettings: async () => WITH_ISSUES })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(
+      await screen.findByLabelText('Where the context comes from'),
+      'github-issue',
+    )
+    await user.type(screen.getByLabelText('Reference of the context'), '#4')
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({ source: 'github-issue', ref: '#4' })
+  })
+
+  it('sends the notes and no reference when My notes is picked back', async () => {
+    const { create } = dialog({ loadSettings: async () => WITH_ISSUES })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    const source = await screen.findByLabelText('Where the context comes from')
+    await user.selectOptions(source, 'github-issue')
+    await user.type(screen.getByLabelText('Reference of the context'), '#4')
+    await user.selectOptions(source, 'manual')
+    expect(screen.queryByLabelText('Reference of the context')).toBeNull()
+    await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ prompt: 'Keep the old URL' })
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('context')
+  })
+
+  it('sends the title, the project and the default agent, and nothing else', async () => {
+    const { create } = dialog()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), ' Fix the login ')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toEqual({
+      title: 'Fix the login',
+      repo: 'default',
+      agent: 'claude-code',
+    })
+  })
+
+  it('keeps the attachments line once files are attached', () => {
+    dialog()
+    fireEvent.change(screen.getByLabelText('Attach files'), {
+      target: { files: [new File(['a'], 'a.txt')] },
+    })
+    expect(listed()).toEqual(['a.txt1 B'])
+    expect(contextGroup().textContent).toContain('They are part of the context.')
+  })
+
+  it('opens the file picker from the keyboard', async () => {
+    dialog()
+    const user = userEvent.setup()
+    const click = vi.spyOn(screen.getByLabelText('Attach files'), 'click')
+    screen.getByRole('button', { name: 'Add files' }).focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
+    expect(click).toHaveBeenCalledTimes(2)
+  })
+
+  it('attaches every file dropped on the setup fields', () => {
+    dialog()
+    const dataTransfer = {
+      files: [new File(['x'], 'one.log'), new File(['y'], 'two.log')],
+      types: ['Files'],
+    }
+    fireEvent.dragOver(setupGroup(), { dataTransfer })
+    fireEvent.drop(setupGroup(), { dataTransfer })
+
+    expect(listed()).toEqual(['one.log1 B', 'two.log1 B'])
+  })
+
+  it('attaches a screenshot pasted in the notes', () => {
+    dialog()
+    const screenshot = new File(['png'], 'image.png', { type: 'image/png' })
+    fireEvent.paste(screen.getByLabelText('Task notes'), {
+      clipboardData: { files: [screenshot] },
+    })
+
+    expect(listed()).toEqual(['pasted-1.png3 B'])
   })
 })
