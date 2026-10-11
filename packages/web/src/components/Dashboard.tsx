@@ -148,8 +148,34 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const mergeTask = (task: Task) =>
     queryClient.setQueryData<Task[]>(TASKS_KEY, (current) => upsertTask(current ?? [], task))
 
-  const liveStatus = useLiveTasks(token, mergeTask, () =>
-    queryClient.invalidateQueries({ queryKey: ['repos'] }),
+  // A task the user just deleted must not also raise "there is no task".
+  const deletedIds = useRef(new Set<string>())
+  const forgetTask = (id: string) => {
+    deletedIds.current.add(id)
+    const view = useViewStore.getState()
+    if (view.changesTaskId === id) {
+      view.closeChanges()
+    }
+    if (view.selectedId === id) {
+      view.select(null)
+    }
+    if (view.pinned.includes(id)) {
+      view.togglePin(id)
+    }
+    const panes = view.agentPanes
+    if (panes !== null && panes.includes(id)) {
+      view.setAgentPanes(panes.filter((pane) => pane !== id))
+    }
+    queryClient.setQueryData<Task[]>(TASKS_KEY, (current) =>
+      (current ?? []).filter((task) => task.id !== id),
+    )
+  }
+
+  const liveStatus = useLiveTasks(
+    token,
+    mergeTask,
+    () => queryClient.invalidateQueries({ queryKey: ['repos'] }),
+    forgetTask,
   )
 
   // Messages sent while the socket was down are lost, so load again what they would have changed.
@@ -272,6 +298,18 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         select(task.id)
         openChanges(task.id, 'terminal')
       }
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (taskId: string) => api.deleteTask(taskId),
+    onSuccess: ({ id, tasks: related }) => {
+      forgetTask(id)
+      for (const task of related) {
+        mergeTask(task)
+      }
+      toast(`Deleted ${id}.`)
     },
     onError: (error) => toast(error.message, 'error'),
   })
@@ -676,7 +714,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
     if (changesTaskId !== null && !tasks.some((task) => task.id === changesTaskId)) {
       closeChanges()
-      toast(`There is no task ${changesTaskId}.`, 'error')
+      if (!deletedIds.current.has(changesTaskId)) {
+        toast(`There is no task ${changesTaskId}.`, 'error')
+      }
     } else if (selectedId !== null && !tasks.some((task) => task.id === selectedId)) {
       select(null)
     }
@@ -815,6 +855,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     }
                     onTogglePin={togglePin}
                     onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+                    onDelete={(id) => deleteMutation.mutate(id)}
                     onRemoveFinished={(ids) => removeFinishedMutation.mutate(ids)}
                     removingFinished={removeFinishedMutation.isPending}
                     onNewWorkspace={(repo) => openNewWorkspace({ repo })}
@@ -886,6 +927,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onFanOut={(count, start) =>
                       fanOutMutation.mutate({ task: detailTask, count, start })
                     }
+                    onDelete={() => deleteMutation.mutate(detailTask.id)}
                     onClose={() => setDetailOpen(detailTask.id, false)}
                     view={detailsViewFor(detailsView, besideWorkspace)}
                     onViewChange={setDetailsView}
@@ -1250,6 +1292,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onKeyboardMove={frozen.hold}
                   onAction={runAction}
                   onStartAgent={(task) => agentMutation.mutate({ task })}
+                  onDelete={(task) => deleteMutation.mutate(task.id)}
                 />
               )}
             </div>

@@ -1,3 +1,5 @@
+import { readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   applyTaskEvent,
   completeEvent,
@@ -27,8 +29,15 @@ import {
 import { z } from 'zod'
 import { type AttachmentFile, saveAttachments } from './attachments.js'
 import type { EventBus } from './event-bus.js'
-import { appendEventLine, readEventLog, writeEventLog } from './event-log.js'
-import { listTaskFiles, listTaskIds, readTaskFile, writeTaskFile } from './task-files.js'
+import { appendEventLine, eventLogPath, readEventLog, writeEventLog } from './event-log.js'
+import { archiveDir } from './stage-files.js'
+import {
+  listTaskFiles,
+  listTaskIds,
+  readTaskFile,
+  taskFilePath,
+  writeTaskFile,
+} from './task-files.js'
 import type { StoredEvent, TaskIndex } from './task-index.js'
 
 export const createTaskInputSchema = taskSchema
@@ -274,6 +283,85 @@ export class TaskService {
     this.logEvent(event, true)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
+  }
+
+  // Removes the task and everything stored with it. A workspace is refused here: the caller
+  // removes that first, so a worktree is never left behind with no task.
+  deleteTask(taskId: string): Task[] {
+    const task = this.getTask(taskId)
+    if (task.workspace !== null) {
+      throw new TaskEditError(`${taskId} still has a workspace`)
+    }
+    const related = this.detach(taskId)
+    this.removeStoredTask(taskId)
+    this.bus.publish({ kind: 'task.deleted', taskId })
+    return related
+  }
+
+  // A deleted task must not stay as a parent or a dependency of the tasks that remain.
+  private detach(taskId: string): Task[] {
+    const changed: Task[] = []
+    for (const other of this.listTasks()) {
+      if (other.id === taskId) {
+        continue
+      }
+      const fields: string[] = []
+      let parentId = other.parentId
+      let dependsOn = other.dependsOn
+      if (other.parentId === taskId) {
+        parentId = null
+        fields.push('parentId')
+      }
+      if (other.dependsOn.includes(taskId)) {
+        dependsOn = other.dependsOn.filter((id) => id !== taskId)
+        fields.push('dependsOn')
+      }
+      if (fields.length === 0) {
+        continue
+      }
+      const event: TaskEvent = {
+        taskId: other.id,
+        source: 'system',
+        type: 'task.edited',
+        at: this.timestamp(),
+        payload: { fields },
+      }
+      const updated = taskSchema.parse({ ...other, parentId, dependsOn, updatedAt: event.at })
+      writeTaskFile(this.dataDir, updated)
+      this.index.upsertTask(updated)
+      this.logEvent(event, true)
+      this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+      changed.push(updated)
+    }
+    return changed
+  }
+
+  private removeStoredTask(taskId: string): void {
+    rmSync(taskFilePath(this.dataDir, taskId), { force: true })
+    rmSync(eventLogPath(this.dataDir, taskId), { force: true })
+    rmSync(archiveDir(this.dataDir, taskId), { recursive: true, force: true })
+    this.removeLaunchScripts(taskId)
+    this.index.deleteTask(taskId)
+  }
+
+  // Launch scripts are named agent-launch-T-0001.sh and agent-launch-T-0001-2.sh.
+  private removeLaunchScripts(taskId: string): void {
+    let names: string[]
+    try {
+      names = readdirSync(this.dataDir)
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return
+      }
+      throw error
+    }
+    const exact = `agent-launch-${taskId}.sh`
+    const prefix = `agent-launch-${taskId}-`
+    for (const name of names) {
+      if (name === exact || (name.startsWith(prefix) && name.endsWith('.sh'))) {
+        rmSync(join(this.dataDir, name), { force: true })
+      }
+    }
   }
 
   // Subtasks are one level deep: the parent must exist and must not be a subtask itself.

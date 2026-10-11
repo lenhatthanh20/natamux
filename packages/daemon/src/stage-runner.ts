@@ -287,6 +287,10 @@ export class StageRunner {
   }
 
   private onMessage(message: DaemonMessage): void {
+    if (message.kind === 'task.deleted') {
+      this.finish(message.taskId)
+      return
+    }
     if (message.kind === 'task.created') {
       const step = this.stepOf(message.task)
       if (stagesOf(step).some((stage) => stage.kind === 'context')) {

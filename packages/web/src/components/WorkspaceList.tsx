@@ -43,6 +43,7 @@ type WorkspaceListProps = {
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string) => void
   onRemove: (id: string) => void
+  onDelete?: (id: string) => void
   // Removes the workspaces of these tasks, one after the other.
   onRemoveFinished: (ids: string[]) => void
   // A removal of finished workspaces runs.
@@ -77,6 +78,7 @@ export function WorkspaceList({
   onRename,
   onTogglePin,
   onRemove,
+  onDelete,
   onRemoveFinished,
   removingFinished = false,
   onNewWorkspace,
@@ -245,6 +247,7 @@ export function WorkspaceList({
       onRename={onRename}
       onTogglePin={onTogglePin}
       onRemove={onRemove}
+      onDelete={onDelete}
     />
   )
 

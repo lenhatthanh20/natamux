@@ -583,7 +583,7 @@ Shared shell:
 - Sections, each a disclosure with a 28px header button (chevron 12, caps label, optional count badge, optional right action); open state remembered in localStorage per section: Notes (description; empty state "No notes. Add some with Edit.", NAV-11), Workspace (Branch with copy, Folder with copy, "Dev ports 20190-20199 (first is $PORT)", [View changes] [Remove workspace]) , Pull request, Subtasks, Tries (only when > 1), Details (repo, depends on, created, updated), Activity.
 - Field rows: grid `96px 1fr`, gap 8, row min 24, label 12 muted, value 13; copy icon button 24 appears on row hover/focus.
 - Edit mode: the title block and Notes become the form (no duplicate title, NAV-09); focus moves to the Title field; sticky footer 52 with [Cancel] [Save `Mod Enter`].
-- "..." menu: Save as template / separator / Cancel task (danger, confirm).
+- "..." menu: Save as template / separator / Cancel task (danger, confirm) / Delete task (danger, confirm).
 - Copy: "Run 2 more tries" (not "Try 2 more in parallel / Fan out"), "Keep this try, cancel the others" with confirm, "Tries of T-0002" (not `tries-t-0002`) (NAV-14). Fan-out lives in the "..." menu and is hidden for running tasks (WS-17).
 - Activity: relative times with exact time tooltip; repeats grouped ("Details edited ×4 · You"); actor "You" / "Agent" / "Daemon" (NAV-12).
 
@@ -682,7 +682,7 @@ Rules:
 | Start a task (dialog) or Create workspace (details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
-| Destructive actions (remove workspace, remove finished workspaces, cancel task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
+| Destructive actions (remove workspace, remove finished workspaces, cancel task, delete task, close a busy shell, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |
 
 ### 5.5 Deep links (WS-22)
 Routes (history API, no router package, `lib/route.ts`): `/` all tasks, `/board`, `/agents`, `/t/T-0018` (details open), `/w/T-0018/terminal|changes|history`, `/w/T-0018/changes?file=src/a.ts`. Back/forward work; reload restores the view; the daemon serves `index.html` for these paths.
@@ -828,7 +828,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | L-05 | P1 | NAV-21 | `TaskBoard.tsx`, `Dashboard.tsx` | Board per 4.26: full-height columns with own scroll, "Show finished" toggle, filter drives columns, needs-you left border, edge fades, single-column mode < 768. |
 | L-06 | P1 | NAV-09, NAV-11, NAV-14 | `components/TaskDetail.tsx`, `TaskEditForm.tsx`, `CompareTries.tsx`, `FanOutForm.tsx` | Details per 4.27: 40px header, action row, banners, collapsible remembered sections in the new order, Notes section with empty state, edit mode replaces title/notes with focus in Title and sticky Save/Cancel footer, new copy for ports/tries/keep. |
 | L-07 | P1 | NAV-12, WS-32 | `components/Timeline.tsx`, `lib/tasks.ts`, `lib/events.ts`, all `formatAge` callers | One `formatAge(date, now, 'short' \| 'long')` per 5.7 with exact-time tooltip; Activity uses relative times, groups consecutive identical events ("×4"), actor "You"/"Agent"/"Daemon". |
-| L-08 | P1 | NAV-13 (details menu) | `TaskDetail.tsx` | "..." menu: Save as template, Run more tries..., separator, Cancel task (danger, confirm). Anchored under the button. |
+| L-08 | P1 | NAV-13 (details menu) | `TaskDetail.tsx` | "..." menu: Save as template, Run more tries..., separator, Cancel task, Delete task (both danger, confirm). Anchored under the button. |
 | L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in natamux (8 hidden)"); state counts follow the search; needs-you shows "Not filtered" note. |
 | L-10 | P1 | NAV-17, RA-23 | `WorkspaceList.tsx`, `WorkspaceRow.tsx`, new `hooks/useRovingFocus.ts` | Tree is one tab stop; keys per 4.9 (arrows, Home/End, Left/Right groups, Enter, F2, Shift+F10, Delete, type-ahead). Row "..." button gets `tabIndex={-1}`. |
 | L-11 | P1 | NAV-23, NAV-27 (anatomy) | `WorkspaceRow.tsx` | Row anatomy per 4.9: age on line 1 swapping with "..." on hover/focus; slug gets full line 2; rename field replaces only the title line (24px), select-all in both entry paths, focus returns to the row; finished rows use `--muted` color, no opacity. |

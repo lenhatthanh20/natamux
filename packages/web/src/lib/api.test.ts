@@ -124,6 +124,16 @@ describe('createApi', () => {
     expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001/workspace', method: 'POST' })
   })
 
+  it('deletes a task and reads back the tasks that changed', async () => {
+    const child = { ...task, id: 'T-0002', parentId: null, title: 'Notes' }
+    const { calls, fetchFunction } = fakeFetch(() => json({ id: 'T-0001', tasks: [child] }))
+
+    const result = await createApi('secret', fetchFunction).deleteTask('T-0001')
+
+    expect(result).toEqual({ id: 'T-0001', tasks: [child] })
+    expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001', method: 'DELETE' })
+  })
+
   it('removes a workspace and reports whether the branch was deleted', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ task, branchDeleted: true }))
 

@@ -71,6 +71,11 @@ export class TaskIndex {
     this.db.close()
   }
 
+  deleteTask(taskId: string): void {
+    this.db.prepare('delete from tasks_index where id = ?').run(taskId)
+    this.db.prepare('delete from events where task_id = ?').run(taskId)
+  }
+
   upsertTask(task: Task): void {
     this.db.prepare(UPSERT_TASK).run({
       id: task.id,

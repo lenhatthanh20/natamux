@@ -50,6 +50,7 @@ function table(tasks: readonly Task[] = TASKS) {
     onToggleDetails: vi.fn(),
     onAction: vi.fn(),
     onStartAgent: vi.fn(),
+    onDelete: vi.fn(),
   }
   render(
     <>
@@ -90,7 +91,8 @@ describe('TaskTable', () => {
     expect(retry).toBeGreaterThan(-1)
     expect(labels.findIndex((label) => label.startsWith('Restart agent'))).toBeGreaterThan(retry)
     expect(labels.findIndex((label) => label.startsWith('Copy task id'))).toBeGreaterThan(retry)
-    expect(labels.at(-1)).toBe('Cancel task')
+    expect(labels.at(-2)).toBe('Cancel task')
+    expect(labels.at(-1)).toBe('Delete task')
 
     await user.click(screen.getByRole('menuitem', { name: /^Retry/ }))
     expect(onAction).toHaveBeenCalledWith(
@@ -117,5 +119,22 @@ describe('TaskTable', () => {
       expect.objectContaining({ id: 'T-0002' }),
       expect.objectContaining({ type: 'task.cancelled' }),
     )
+  })
+
+  it('asks before it deletes a task, and says the workspace goes with it', async () => {
+    const { onDelete } = table([
+      makeTask({ id: 'T-0003', title: 'Keep the notes', state: 'done', workspace: '/work/T-0003' }),
+    ])
+    const user = userEvent.setup()
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Keep the notes') })
+    expect(screen.queryByRole('menuitem', { name: 'Cancel task' })).toBeNull()
+    await user.click(screen.getByRole('menuitem', { name: 'Delete task' }))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    const dialog = screen.getByRole('dialog', { name: 'Delete T-0003?' })
+    expect(within(dialog).getByText(/worktree folder/)).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Delete task' }))
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0003' }))
   })
 })
