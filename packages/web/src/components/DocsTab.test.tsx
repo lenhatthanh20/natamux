@@ -774,7 +774,7 @@ describe('DocsTab attachments', () => {
   it('lists the attachments under the stage files, with their sizes', async () => {
     withAttachments({ 'context.md': file('# Context') })
 
-    const nav = screen.getByRole('navigation', { name: 'Stage files' })
+    const nav = await screen.findByRole('navigation', { name: 'Stage files' })
     expect(await within(nav).findByRole('heading', { name: 'Attachments' })).toBeTruthy()
     expect(within(nav).getByRole('button', { name: /login-error\.png/ }).textContent).toContain(
       '12.3 KB',

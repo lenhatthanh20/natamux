@@ -21,7 +21,10 @@ export function useAttachments() {
   const pasted = useRef(0)
 
   const add = (added: readonly File[]) => {
-    const result = fitAttachments(files.map(({ file }) => file), added)
+    const result = fitAttachments(
+      files.map(({ file }) => file),
+      added,
+    )
     const picked = result.kept.map((file) => {
       lastId += 1
       return { id: lastId, file }

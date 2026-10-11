@@ -47,13 +47,7 @@ describe('attachmentNames', () => {
   it('makes each name safe and gives a repeated name a number', () => {
     expect(
       attachmentNames(['screenshot.png', 'screenshot.png', 'a/screenshot.png', 'notes', 'notes']),
-    ).toEqual([
-      'screenshot.png',
-      'screenshot-2.png',
-      'screenshot-3.png',
-      'notes',
-      'notes-2',
-    ])
+    ).toEqual(['screenshot.png', 'screenshot-2.png', 'screenshot-3.png', 'notes', 'notes-2'])
   })
 
   it('counts names that differ only in case as the same', () => {
