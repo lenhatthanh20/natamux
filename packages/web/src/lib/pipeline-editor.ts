@@ -550,6 +550,16 @@ export function setGate(steps: readonly Step[], id: string, gate: Gate): Step[] 
   return updateStage(steps, id, (stage) => ({ ...stage, gate }))
 }
 
+// Tasks get a "Run with a workflow" checkbox on the stage. Off leaves the field out.
+export function setWorkflow(steps: readonly Step[], id: string, on: boolean): Step[] {
+  return updateStage(steps, id, (stage) => withField(stage, 'workflow', on ? true : undefined))
+}
+
+// The catalog offers a workflow on its hard stages; a stage of your own does not.
+export function defaultWorkflow(stage: Pick<Stage, 'id' | 'kind'>): boolean {
+  return stage.kind === 'agent' && catalogEntry(stage.id)?.stage.workflow === true
+}
+
 export type TextField = 'name' | 'prompt' | 'command' | 'output' | 'doneWhen'
 
 // The default prompt as the agent gets it: the daemon puts the commit rule in `{commit}` of a

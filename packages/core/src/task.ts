@@ -66,6 +66,9 @@ export const taskSchema = z.object({
   // When the running agent ended its turn to wait for its background work, which wakes it again.
   // Null when it does not wait. A waiting task is not "quiet".
   backgroundSince: z.iso.datetime().nullable().default(null),
+  // The stages the user chose to run as a workflow, used the next time each one starts. A bad
+  // value in a hand-edited file means none, so the task still loads.
+  workflowStages: z.array(stageIdSchema).catch([]),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

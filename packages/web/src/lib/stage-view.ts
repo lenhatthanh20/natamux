@@ -120,6 +120,17 @@ export function sentBackCount(events: readonly TaskEvent[]): number {
   ).length
 }
 
+// The stages whose last start asked the agent for a workflow.
+export function ranWithWorkflow(events: readonly TaskEvent[]): Set<string> {
+  const last = new Map<string, boolean>()
+  for (const event of events) {
+    if (event.type === 'stage.started' && typeof event.payload.stage === 'string') {
+      last.set(event.payload.stage, event.payload.workflow === true)
+    }
+  }
+  return new Set([...last].filter(([, workflow]) => workflow).map(([stage]) => stage))
+}
+
 export function stepsKey(task: Pick<Task, 'stages'>): string {
   return JSON.stringify(task.stages)
 }

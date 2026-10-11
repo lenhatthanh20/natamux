@@ -104,6 +104,25 @@ describe('claudeCodeAdapter', () => {
       },
     )
 
+    it('pauses the turn for a workflow and a background shell at the same time', () => {
+      const hook = stop({
+        background_tasks: [
+          { id: 'w', type: 'workflow', status: 'running', description: 'implement' },
+          shell('pnpm test'),
+        ],
+      })
+      expect(hook?.signal).toBe('turn-paused')
+      expect(hook?.details.waitingFor).toEqual(['workflow: implement', 'Bash: pnpm test'])
+      expect(hook?.summary).toBe('Waiting for workflow: implement and 1 more')
+    })
+
+    it('ends the turn once the workflow is finished or stopped', () => {
+      for (const status of ['completed', 'failed', 'killed', 'stopped']) {
+        const hook = stop({ background_tasks: [{ id: 'w', type: 'workflow', status }] })
+        expect(hook?.signal).toBe('turn-ended')
+      }
+    })
+
     it.each(['running', 'pending', 'queued', 'starting'])(
       'counts a task with the status %s as still running',
       (status) => {

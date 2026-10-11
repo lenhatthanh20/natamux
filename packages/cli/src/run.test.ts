@@ -33,6 +33,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     lanes: {},
     stageSince: null,
     backgroundSince: null,
+    workflowStages: [],
     context: null,
     issue: null,
     parentId: null,
@@ -629,6 +630,21 @@ describe('more commands', () => {
     expect(back.calls[0]).toMatchObject({
       body: { action: 'reopen', to: 'plan', reason: 'Add tests' },
     })
+  })
+
+  it('turns the workflow of a stage on and off', async () => {
+    const handler = () => jsonResponse({ task: makeTask({ id: 'T-8' }) })
+    const on = await run(['stage', 'workflow', 'T-8', 'on', '--stage', 'implement'], { handler })
+    expect(on.code).toBe(0)
+    expect(on.calls[0]).toMatchObject({
+      method: 'PUT',
+      url: 'http://127.0.0.1:4317/tasks/T-8/workflow',
+      body: { stage: 'implement', on: true },
+    })
+    expect(on.stdout).toContain('implement runs with a workflow the next time it starts')
+    const off = await run(['stage', 'workflow', 'T-8', 'off', '--stage', 'implement'], { handler })
+    expect(off.calls[0]).toMatchObject({ body: { stage: 'implement', on: false } })
+    expect(off.stdout).toContain('implement runs without a workflow')
   })
 
   it('links an issue, and creates a task with its context source', async () => {

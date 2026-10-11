@@ -2,18 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-settings.js'
 import {
   activeSteps,
+  canRunWorkflow,
   combinedState,
   DEFAULT_PIPELINE,
   defaultPrompt,
   enterStep,
   firstPosition,
   LEGACY_STEP_REFS,
+  offersWorkflow,
   pipelineSchema,
   resolveSteps,
+  runsWorkflow,
   type Step,
   stageIdSchema,
   stageName,
   stageOfTerminal,
+  stagesOf,
   stepIndex,
   stepRefsOf,
   terminalLane,
@@ -92,6 +96,57 @@ describe('pipelineSchema', () => {
       },
     ]
     expect(pipelineSchema.safeParse(steps).success).toBe(true)
+  })
+
+  it('takes a workflow on agent stages only, also inside a group', () => {
+    const valid = (steps: unknown[]) => pipelineSchema.safeParse(steps).success
+    expect(valid([{ id: 'plan', kind: 'agent', gate: 'manual', workflow: true }])).toBe(true)
+    expect(
+      valid([
+        {
+          id: 'build',
+          parallel: [
+            { id: 'a', kind: 'agent', gate: 'auto', workflow: true },
+            { id: 'b', kind: 'manual', gate: 'manual' },
+          ],
+        },
+      ]),
+    ).toBe(true)
+    for (const kind of ['context', 'review', 'testing', 'release', 'manual']) {
+      const result = pipelineSchema.safeParse([{ id: 'x', kind, gate: 'manual', workflow: true }])
+      expect(result.success).toBe(false)
+      expect(result.error?.issues[0]?.message).toContain('workflow')
+    }
+    expect(valid([{ id: 'r', kind: 'review', gate: 'manual', workflow: false }])).toBe(true)
+  })
+
+  it('rejects a workflow that is not true or false', () => {
+    for (const workflow of ['yes', 1, null]) {
+      const steps = [{ id: 'plan', kind: 'agent', gate: 'manual', workflow }]
+      expect(pipelineSchema.safeParse(steps).success).toBe(false)
+    }
+  })
+
+  it('rejects a workflow on a manual stage inside a group, and names the first of several', () => {
+    const inGroup = pipelineSchema.safeParse([
+      {
+        id: 'build',
+        parallel: [
+          { id: 'code', kind: 'agent', gate: 'auto', workflow: true },
+          { id: 'sign-off', kind: 'manual', gate: 'manual', workflow: true },
+        ],
+      },
+    ])
+    expect(inGroup.error?.issues.map((issue) => issue.message)).toEqual([
+      'Only agent stages can run with a workflow, and "sign-off" is a manual stage',
+    ])
+
+    const several = pipelineSchema.safeParse([
+      { id: 'check', kind: 'manual', gate: 'manual', workflow: true },
+      { id: 'review', kind: 'review', gate: 'manual', workflow: true },
+    ])
+    expect(several.error?.issues[0]?.message).toContain('"check"')
+    expect(several.error?.issues).toHaveLength(2)
   })
 
   it('rejects an empty pipeline and a bad stage id', () => {
@@ -239,7 +294,7 @@ describe('resolveSteps', () => {
 
   it('finds a stage of a group for a task that has it on its own', () => {
     const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
-    expect(implement).toEqual({ id: 'implement', kind: 'agent', gate: 'auto' })
+    expect(implement).toEqual({ id: 'implement', kind: 'agent', gate: 'auto', workflow: true })
   })
 
   it('makes a stage of its own that is gone from the settings a manual one', () => {
@@ -375,5 +430,45 @@ describe('terminalLane', () => {
     const position = { stage: 'gone', state: 'review' as const, lanes: {} }
     expect(terminalLane(position, undefined, '1')).toEqual({ stage: 'gone', state: 'review' })
     expect(terminalLane(position, undefined, '2')).toEqual({ stage: null, state: null })
+  })
+})
+
+describe('workflows', () => {
+  const stage = (id: string) => DEFAULT_PIPELINE.flatMap(stagesOf).find((each) => each.id === id)
+
+  it('offers a workflow on plan and implement of the default pipeline only', () => {
+    const offered = DEFAULT_PIPELINE.flatMap(stagesOf)
+      .filter(offersWorkflow)
+      .map((each) => each.id)
+    expect(offered).toEqual(['plan', 'implement'])
+  })
+
+  it('offers a workflow on a stage of your own that asks for it, and not without the field', () => {
+    expect(offersWorkflow({ kind: 'agent', workflow: true })).toBe(true)
+    expect(offersWorkflow({ kind: 'agent' })).toBe(false)
+    expect(offersWorkflow({ kind: 'agent', workflow: false })).toBe(false)
+    expect(offersWorkflow({ kind: 'review', workflow: true })).toBe(false)
+  })
+
+  it('lets only Claude Code run a workflow; a task with no agent gets Claude Code', () => {
+    expect(canRunWorkflow('claude-code')).toBe(true)
+    expect(canRunWorkflow(null)).toBe(true)
+    for (const agent of ['codex', 'gemini', 'copilot', 'cursor']) {
+      expect(canRunWorkflow(agent)).toBe(false)
+    }
+  })
+
+  it('runs a workflow when the stage offers it, the task chose it and the agent can', () => {
+    const implement = stage('implement')
+    if (implement === undefined) {
+      throw new Error('The default pipeline has no implement stage')
+    }
+    expect(runsWorkflow(implement, ['implement'], 'claude-code')).toBe(true)
+    expect(runsWorkflow(implement, [], 'claude-code')).toBe(false)
+    expect(runsWorkflow(implement, ['plan'], 'claude-code')).toBe(false)
+    expect(runsWorkflow(implement, ['implement'], 'codex')).toBe(false)
+    expect(runsWorkflow({ ...implement, workflow: false }, ['implement'], 'claude-code')).toBe(
+      false,
+    )
   })
 })

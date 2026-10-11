@@ -168,6 +168,7 @@ Click **Settings** in the menu of a project to open **Project settings of <repo>
 |---|---|---|
 | **Name** | Every stage | The name in the dashboard. |
 | **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
+| **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. Shows **Default** or **Changed**. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. |
 | **Command** | Testing stages | The command to run. The Lint and types and End-to-end tests stages need one. |
 | **Output file** | Agent stages | The Markdown file the stage writes. Fixed for a catalog stage. |

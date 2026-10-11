@@ -29,9 +29,19 @@ describe('taskSchema', () => {
       lanes: {},
       stageSince: null,
       backgroundSince: null,
+      workflowStages: [],
       context: null,
       issue: null,
     })
+  })
+
+  it('reads the workflow stages, and a bad value as none, so a hand-edited file still loads', () => {
+    expect(taskSchema.parse({ ...minimalTask, workflowStages: ['plan'] }).workflowStages).toEqual([
+      'plan',
+    ])
+    for (const workflowStages of [null, 'plan', 3, ['Not An Id']]) {
+      expect(taskSchema.parse({ ...minimalTask, workflowStages }).workflowStages).toEqual([])
+    }
   })
 
   it('trims the title', () => {

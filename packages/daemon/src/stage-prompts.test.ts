@@ -1,6 +1,6 @@
 import { DEFAULT_PIPELINE, defaultPrompt, type Stage, stagesOf } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
+import { contextPrompt, manualContext, stagePrompt, WORKFLOW_LINE } from './stage-prompts.js'
 
 const task = { title: 'Export tasks', description: '', context: null }
 
@@ -34,6 +34,37 @@ describe('stagePrompt', () => {
     expect(stagePrompt(stage, task)).toBe(
       'Fix Export tasks. {commit}\nWhen you are done, run `natamux done`.',
     )
+  })
+
+  it('asks for a workflow once, just before the done line, when the stage runs one', () => {
+    const plain = stagePrompt(defaultStage('implement'), task)
+    const prompt = stagePrompt(defaultStage('implement'), task, { workflow: true })
+    expect(WORKFLOW_LINE).toContain('ultracode')
+    expect(prompt.split(WORKFLOW_LINE)).toHaveLength(2)
+    expect(prompt.endsWith(`${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`)).toBe(true)
+    expect(prompt.replace(`${WORKFLOW_LINE}\n`, '')).toBe(plain)
+  })
+
+  it('leaves the workflow out when the stage does not run one', () => {
+    for (const id of ['spec', 'plan', 'implement']) {
+      const prompt = stagePrompt(defaultStage(id), task, { workflow: false })
+      expect(prompt).toBe(stagePrompt(defaultStage(id), task))
+      expect(prompt).not.toContain('ultracode')
+    }
+  })
+
+  it('asks for a workflow in a prompt of your own too', () => {
+    const stage: Stage = { ...defaultStage('implement'), prompt: 'Fix {title}.' }
+    expect(stagePrompt(stage, task, { workflow: true })).toBe(
+      `Fix Export tasks.\n${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`,
+    )
+  })
+
+  it('adds the workflow line once, also when your prompt names ultracode itself', () => {
+    const stage: Stage = { ...defaultStage('implement'), prompt: 'ultracode: fix {title}.' }
+    const prompt = stagePrompt(stage, task, { workflow: true })
+    expect(prompt.split(WORKFLOW_LINE)).toHaveLength(2)
+    expect(prompt.startsWith('ultracode: fix Export tasks.\n')).toBe(true)
   })
 
   it('says nothing about commits in the spec prompt', () => {

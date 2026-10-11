@@ -1,7 +1,14 @@
 import { DEFAULT_PIPELINE, type Stage, stagesOf, type TaskEvent } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
-import { finishedWhen, formatDuration, missingSkills, stageCount, stepTime } from './stage-view'
+import {
+  finishedWhen,
+  formatDuration,
+  missingSkills,
+  ranWithWorkflow,
+  stageCount,
+  stepTime,
+} from './stage-view'
 
 describe('formatDuration', () => {
   it.each([
@@ -97,5 +104,25 @@ describe('missingSkills', () => {
     ])
     expect(missing.get('spec')).toEqual({ names: [], agent: null })
     expect(missing.get('plan')).toEqual({ names: ['c'], agent: 'codex' })
+  })
+})
+
+describe('ranWithWorkflow', () => {
+  const started = (stage: string, payload: Record<string, unknown> = {}): TaskEvent => ({
+    taskId: 'T-1',
+    source: 'system',
+    type: 'stage.started',
+    at: '2026-10-09T09:00:00.000Z',
+    payload: { stage, ...payload },
+  })
+
+  it('names the stages whose last start asked for a workflow', () => {
+    const events = [
+      started('plan', { workflow: true }),
+      started('implement', { workflow: true }),
+      started('implement'),
+      started('test-spec'),
+    ]
+    expect([...ranWithWorkflow(events)]).toEqual(['plan'])
   })
 })

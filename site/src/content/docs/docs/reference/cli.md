@@ -29,6 +29,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `ask <question>` | For an agent: say the task waits for you |
 | `done` | For an agent: say the stage is done, so the daemon checks it |
 | `stage <command> <id>` | `approve`, `back`, `skip`, `pass`, `fail` or `start` the task's stage |
+| `stage workflow <id> on\|off` | Run a stage as a workflow the next time it starts (needs `--stage`) |
 | `event <id> <type>` | Send an event to a task |
 | `events <id>` | Show the event log of a task |
 | `workspace create <id>` | Create a git worktree and a branch for a task |
@@ -52,7 +53,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--attach <path>` | `task create` | A file for the agents to read, such as a document or a screenshot. Repeat for more. At most 20 files, 20 MB each and 50 MB together |
 | `--prompt <text>` | `agent start` | First prompt. Default: the task title and notes |
 | `--task <id>` | `ask`, `done` | The task. Default: `NATAMUX_TASK_ID` |
-| `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side |
+| `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side. For `stage workflow`: the stage to change |
 | `--to <id>` | `stage back` | The stage to go back to. Default: the last agent stage |
 | `--reason <text>` | `stage back`, `stage fail` | Why, for the agent and the log |
 | `--issue <key>` | `task link` | The issue or ticket, such as `#42` or `ABC-123` |
@@ -118,6 +119,13 @@ natamux stage fail T-42 --reason "Tests do not pass"
 ```
 
 `back` goes to the stage named with `--to`. It cannot be used with `--stage`. See [Stages](/docs/concepts/stages/).
+
+```sh
+natamux stage workflow T-42 on --stage implement
+natamux stage workflow T-42 off --stage implement
+```
+
+`workflow` chooses whether a stage runs as a workflow the next time it starts. The project settings must offer it on the stage, and the agent of the task must be Claude Code. Turning it off always works. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).
 
 ## event and events
 

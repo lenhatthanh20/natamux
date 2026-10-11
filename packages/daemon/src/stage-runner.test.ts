@@ -14,6 +14,7 @@ import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import type { RunCommand } from './stage-checks.js'
 import { archiveDir, STAGE_DIR } from './stage-files.js'
+import { WORKFLOW_LINE } from './stage-prompts.js'
 import {
   issueContext,
   issueNumber,
@@ -509,6 +510,196 @@ describe('a group', () => {
     await expect(runner.act(task.id, 'fail')).rejects.toThrow(StageActionError)
     const failed = await runner.act(task.id, 'fail', { stage: 'test-spec', reason: 'Stuck' })
     expect(failed.lanes['test-spec']).toBe('failed')
+  })
+})
+
+describe('a stage that runs as a workflow', () => {
+  // Plan waits for approval; the next step is Test spec and Implement.
+  async function atPlanReview(agent = 'claude-code'): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'plan' },
+    })
+    return withWorkspace(task.id)
+  }
+
+  const lastStart = (id: string, stage: string) =>
+    tasks
+      .listEvents(id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === stage)
+      .at(-1)
+
+  it('asks the agent for a workflow when Implement starts after Plan is approved', async () => {
+    const task = await atPlanReview()
+    tasks.setWorkflow(task.id, 'implement', true)
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'running', implement: 'running' })
+    expect(launchScript(task.id).split(WORKFLOW_LINE)).toHaveLength(2)
+    expect(launchScript(task.id, '2')).not.toContain(WORKFLOW_LINE)
+    expect(lastStart(task.id, 'implement')?.payload.workflow).toBe(true)
+    expect(lastStart(task.id, 'test-spec')?.payload.workflow).toBeUndefined()
+  })
+
+  it('sends the same prompt without the workflow when it is off', async () => {
+    const task = await atPlanReview()
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(launchScript(task.id)).toContain('Write the tests first')
+    expect(launchScript(task.id)).not.toContain(WORKFLOW_LINE)
+    expect(lastStart(task.id, 'implement')?.payload.workflow).toBeUndefined()
+  })
+
+  it('asks for it in the prompt pasted to an agent that runs already', async () => {
+    const task = await atPlanReview()
+    tasks.setWorkflow(task.id, 'implement', true)
+    terminals.run(task.id, 'claude')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    const pasted = pty.written.join('')
+    expect(pasted).toContain('\x1b[200~Task: Export tasks')
+    expect(pasted.split(WORKFLOW_LINE)).toHaveLength(2)
+  })
+
+  it('asks for it again when the stage is sent back, but not with failed checks', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto', check: 'make test', workflow: true },
+        { id: 'review', kind: 'review', gate: 'manual' },
+      ],
+    }
+    runCommand = async () => ({ code: 1, output: 'tests failed' })
+    const made = await created({ title: 'Export', agent: 'claude-code' })
+    tasks.setWorkflow(made.id, 'implement', true)
+    await withWorkspace(made.id)
+    const task = await runner.act(made.id, 'start')
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await expectSubmitted(pty, 'The checks of this stage failed')
+    const failedPrompt = pty.written.find((data) => data.includes('The checks of this stage'))
+    expect(failedPrompt).not.toContain(WORKFLOW_LINE)
+
+    await runner.act(task.id, 'reopen', { to: 'implement', reason: 'Fix the dates' })
+    await expectSubmitted(pty, 'Task: Export')
+    const again = pty.written.filter((data) => data.startsWith('\x1b[200~Task: Export')).at(-1)
+    expect(again).toContain(WORKFLOW_LINE)
+    expect(again).toContain('What to change: Fix the dates')
+  })
+
+  it('never asks an agent other than Claude Code for a workflow', async () => {
+    const task = await atPlanReview('claude-code')
+    tasks.setWorkflow(task.id, 'implement', true)
+    tasks.recordAgentLaunch(task.id, 'codex')
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(launchScript(task.id)).not.toContain(WORKFLOW_LINE)
+    expect(lastStart(task.id, 'implement')?.payload.workflow).toBeUndefined()
+  })
+
+  it('asks for it in Plan when only Plan is ticked, and not in Implement', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'spec' },
+    })
+    tasks.setWorkflow(task.id, 'plan', true)
+    await withWorkspace(task.id)
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'plan', state: 'running' })
+    expect(launchScript(task.id)).toContain('plan.md')
+    expect(launchScript(task.id).split(WORKFLOW_LINE)).toHaveLength(2)
+    expect(lastStart(task.id, 'plan')?.payload.workflow).toBe(true)
+  })
+
+  it('starts without the workflow when it was ticked and then unticked', async () => {
+    const task = await atPlanReview()
+    tasks.setWorkflow(task.id, 'implement', true)
+    tasks.setWorkflow(task.id, 'implement', false)
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(launchScript(task.id)).toContain('Write the tests first')
+    expect(launchScript(task.id)).not.toContain(WORKFLOW_LINE)
+  })
+
+  it('sends nothing to a running stage, and uses the choice at its next start', async () => {
+    const task = await atPlanReview()
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+    const written = () => ptys.map((pty) => pty.written.join(''))
+    const before = written()
+
+    tasks.setWorkflow(task.id, 'implement', true)
+    await runner.settle()
+
+    expect(written()).toEqual(before)
+    expect(tasks.getTask(task.id).lanes.implement).toBe('running')
+
+    // Each send back pastes the prompt again, with the line once, not once per round.
+    for (const reason of ['Fix the dates', 'Fix the times']) {
+      await runner.act(task.id, 'reopen', { to: 'implement', reason })
+      const sent = () =>
+        ptys.flatMap((pty) => pty.written).filter((data) => data.includes(`change: ${reason}`))
+      await vi.waitFor(() => expect(sent()).toHaveLength(1))
+      expect(sent()[0]?.split(WORKFLOW_LINE)).toHaveLength(2)
+    }
+  })
+
+  it('asks for it again once the task is back on Claude Code', async () => {
+    const task = await atPlanReview()
+    tasks.setWorkflow(task.id, 'implement', true)
+    tasks.recordAgentLaunch(task.id, 'codex')
+    tasks.recordAgentLaunch(task.id, 'claude-code')
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(launchScript(task.id).split(WORKFLOW_LINE)).toHaveLength(2)
+  })
+
+  it('drops the workflow when the settings no longer offer it for the stage', async () => {
+    const task = await atPlanReview()
+    tasks.setWorkflow(task.id, 'implement', true)
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'build' && 'parallel' in step
+          ? {
+              ...step,
+              parallel: step.parallel.map((stage) =>
+                stage.id === 'implement' ? { ...stage, workflow: false } : stage,
+              ),
+            }
+          : step,
+      ),
+    }
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(launchScript(task.id)).toContain('Write the tests first')
+    expect(launchScript(task.id)).not.toContain(WORKFLOW_LINE)
   })
 })
 

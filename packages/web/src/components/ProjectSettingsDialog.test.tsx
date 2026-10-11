@@ -132,7 +132,7 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    expect(within(spec).getAllByText('Default')).toHaveLength(3)
+    expect(within(spec).getAllByText('Default')).toHaveLength(4)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
   })
@@ -206,6 +206,7 @@ describe('ProjectSettingsDialog', () => {
       gate: 'manual',
       output: 'plan.md',
       sections: ['Steps', 'Files', 'Tests'],
+      workflow: true,
       enabled: false,
     })
     expect(save.mock.calls[0]?.[1]).toBe('none')
@@ -800,6 +801,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
       gate: 'auto',
       output: 'plan.md',
       sections: ['Steps', 'Files', 'Tests'],
+      workflow: true,
       prompt: 'Plan it my way.',
       enabled: false,
     })
@@ -1346,5 +1348,97 @@ describe('ProjectSettingsDialog, test spec cases', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add stage' })),
     )
+  })
+})
+
+describe('ProjectSettingsDialog, workflow', () => {
+  const workflowBox = (name: string) =>
+    within(details(name)).getByRole('checkbox', { name: 'Tasks can run it as a workflow' })
+
+  it('offers a workflow on Plan and Implement by default, and on agent stages only', async () => {
+    const { user } = open()
+
+    await user.click(await row('Plan'))
+    expect(workflowBox('Plan')).toHaveProperty('checked', true)
+    await user.click(await row('Implement'))
+    expect(workflowBox('Implement')).toHaveProperty('checked', true)
+    await user.click(await row('Spec'))
+    expect(workflowBox('Spec')).toHaveProperty('checked', false)
+    await user.click(await row('Review'))
+    expect(
+      within(details('Review')).queryByRole('checkbox', { name: 'Tasks can run it as a workflow' }),
+    ).toBeNull()
+  })
+
+  it('saves a stage that offers it and one that no longer does', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Spec'))
+    await user.click(workflowBox('Spec'))
+    const option = within(details('Spec')).getByRole('group', {
+      name: 'Tasks can run it as a workflow',
+    })
+    expect(within(option).getByText('Changed')).toBeTruthy()
+    await user.click(await row('Implement'))
+    await user.click(workflowBox('Implement'))
+
+    await user.click(saveButton())
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    const steps = savedStages(save)
+    expect(stageIn(steps, 'spec')?.workflow).toBe(true)
+    expect(stageIn(steps, 'implement')).not.toHaveProperty('workflow')
+    expect(stageIn(steps, 'plan')?.workflow).toBe(true)
+  })
+
+  it('puts the default back with Use default', async () => {
+    const { user } = open()
+
+    await user.click(await row('Plan'))
+    await user.click(workflowBox('Plan'))
+    const option = within(details('Plan')).getByRole('group', {
+      name: 'Tasks can run it as a workflow',
+    })
+    await user.click(within(option).getByRole('button', { name: 'Use default' }))
+
+    expect(workflowBox('Plan')).toHaveProperty('checked', true)
+    expect(within(option).getByText('Default')).toBeTruthy()
+  })
+
+  it('follows the JSON tab, for a stage of your own too', async () => {
+    const { user } = open()
+
+    await stageList()
+    await jsonTab(
+      user,
+      '{ "stages": [{ "id": "refactor-code", "kind": "agent", "gate": "auto", "workflow": true }] }',
+    )
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+    await user.click(await row('Refactor code'))
+
+    expect(workflowBox('Refactor code')).toHaveProperty('checked', true)
+    const option = within(details('Refactor code')).getByRole('group', {
+      name: 'Tasks can run it as a workflow',
+    })
+    expect(within(option).getByText('Changed')).toBeTruthy()
+  })
+
+  it('shows a workflow on a stage that is not an agent stage as a problem, and blocks Save', async () => {
+    const { save, user } = open()
+
+    await stageList()
+    await jsonTab(
+      user,
+      '{ "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }, { "id": "review", "kind": "review", "gate": "manual", "workflow": true }] }',
+    )
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+
+    expect(
+      within(await stageList()).getByText(
+        'Only agent stages can run with a workflow, and "review" is a review stage',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('1 problem')
+    await user.click(saveButton())
+    expect(save).not.toHaveBeenCalled()
   })
 })

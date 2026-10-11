@@ -1,4 +1,9 @@
-import { DEFAULT_PROJECT_SETTINGS, type Task, type TaskEvent } from '@natamux/core'
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  projectSettingsSchema,
+  type Task,
+  type TaskEvent,
+} from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act as actOn, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -34,6 +39,7 @@ const TASK: Task = {
   lanes: {},
   stageSince: '2026-10-10T08:11:00.000Z',
   backgroundSince: null,
+  workflowStages: [],
   context: null,
   issue: null,
   parentId: null,
@@ -118,7 +124,11 @@ type Options = {
   activity?: string
   startAgent?: (agent: AgentId) => Promise<Task>
   startInBanner?: boolean
+  setWorkflow?: SetWorkflow
+  settings?: LoadedSettings
 }
+
+type SetWorkflow = (stage: string, on: boolean) => Promise<Task>
 
 afterEach(() => {
   cleanup()
@@ -129,6 +139,7 @@ afterEach(() => {
 
 function progress(options: Options = {}) {
   const act = vi.fn<Act>(options.act ?? (async () => TASK))
+  const setWorkflow = vi.fn<SetWorkflow>(options.setWorkflow ?? (async () => TASK))
   const createIssue = vi.fn(async () => TASK)
   const onOpenFile = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -137,7 +148,7 @@ function progress(options: Options = {}) {
       <ProgressTab
         task={task}
         now={NOW}
-        loadSettings={async () => SETTINGS}
+        loadSettings={async () => options.settings ?? SETTINGS}
         loadEvents={async () => events}
         loadFiles={options.loadFiles ?? (async () => FILES)}
         act={act}
@@ -146,12 +157,13 @@ function progress(options: Options = {}) {
         activity={options.activity}
         startAgent={options.startAgent}
         startInBanner={options.startInBanner}
+        setWorkflow={setWorkflow}
       />
     </QueryClientProvider>
   )
   const { rerender } = render(view(options.task ?? TASK, options.events ?? EVENTS))
   const update = (task: Task, events: StoredEvent[]) => rerender(view(task, events))
-  return { act, createIssue, onOpenFile, client, update }
+  return { act, createIssue, onOpenFile, setWorkflow, client, update }
 }
 
 describe('ProgressTab', () => {
@@ -617,5 +629,246 @@ describe('the data of the progress', () => {
     expect(await within(plan).findByRole('button', { name: 'Mark as done' })).toBeTruthy()
     const spec = screen.getByRole('article', { name: 'Spec' })
     expect(within(spec).getByRole('button', { expanded: false })).toBeTruthy()
+  })
+})
+
+describe('ProgressTab workflow', () => {
+  const box = (card: HTMLElement) =>
+    within(card).queryByRole('checkbox', { name: /Run with a workflow/ })
+
+  it('offers the workflow on the stages the settings allow, off by default', async () => {
+    progress({ task: FULL_TASK, events: FULL_EVENTS })
+
+    const plan = await screen.findByRole('article', { name: 'Plan' })
+    const implement = screen.getByRole('article', { name: 'Implement' })
+    expect((box(plan) as HTMLInputElement).checked).toBe(false)
+    expect((box(implement) as HTMLInputElement).checked).toBe(false)
+    expect(within(implement).getByText(/uses many more tokens/)).toBeTruthy()
+    for (const name of ['Context', 'Spec', 'Test spec', 'Review']) {
+      expect(box(screen.getByRole('article', { name }))).toBeNull()
+    }
+  })
+
+  it('turns the workflow on for a stage not reached yet, and off again', async () => {
+    const { setWorkflow, update } = progress({ task: FULL_TASK, events: FULL_EVENTS })
+    const user = userEvent.setup()
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    await user.click(box(implement) as HTMLElement)
+    await waitFor(() => expect(setWorkflow).toHaveBeenCalledWith('implement', true))
+
+    update({ ...FULL_TASK, workflowStages: ['implement'] }, FULL_EVENTS)
+    const ticked = box(screen.getByRole('article', { name: 'Implement' })) as HTMLInputElement
+    expect(ticked.checked).toBe(true)
+    await user.click(ticked)
+    await waitFor(() => expect(setWorkflow).toHaveBeenCalledWith('implement', false))
+  })
+
+  it('says a change waits for the next start while the stage runs', async () => {
+    progress({
+      task: {
+        ...TASK,
+        stage: 'implement',
+        state: 'running',
+        stages: ['implement', 'review'],
+        workflowStages: ['implement'],
+      },
+      events: [
+        stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', {
+          stage: 'implement',
+          workflow: true,
+        }),
+      ],
+    })
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect((box(implement) as HTMLInputElement).checked).toBe(true)
+    expect(within(implement).getByText(/the next time this stage starts/)).toBeTruthy()
+  })
+
+  it('lets only Claude Code run a workflow', async () => {
+    progress({ task: { ...FULL_TASK, agent: 'codex' }, events: FULL_EVENTS })
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect((box(implement) as HTMLInputElement).disabled).toBe(true)
+    expect(within(implement).getByText('Only Claude Code can run a workflow.')).toBeTruthy()
+  })
+
+  it('marks a finished stage that ran with a workflow, and offers no checkbox on it', async () => {
+    progress({
+      task: { ...TASK, stage: 'review', state: 'review', stages: ['plan', 'review'] },
+      events: [
+        stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'plan', workflow: true }),
+        stored(2, 'stage.approved', '2026-10-10T08:10:00.000Z', { stage: 'plan' }),
+      ],
+    })
+
+    const plan = await screen.findByRole('article', { name: 'Plan' })
+    expect(within(plan).getByText('Workflow')).toBeTruthy()
+    expect(box(plan)).toBeNull()
+  })
+
+  it('says why the choice could not be changed', async () => {
+    progress({
+      task: FULL_TASK,
+      events: FULL_EVENTS,
+      setWorkflow: async () => {
+        throw new Error('Only Claude Code can run a workflow')
+      },
+    })
+    const user = userEvent.setup()
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    await user.click(box(implement) as HTMLElement)
+
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.map((toast) => toast.text)).toContain(
+        'Could not change the workflow of the stage.',
+      ),
+    )
+  })
+})
+
+describe('ProgressTab workflow and the settings', () => {
+  const box = (card: HTMLElement) =>
+    within(card).queryByRole('checkbox', { name: /Run with a workflow/ })
+  const withStages = (stages: unknown[]): LoadedSettings => ({
+    ...SETTINGS,
+    settings: projectSettingsSchema.parse({ stages }),
+  })
+  const agent = (id: string, workflow?: boolean) => ({
+    id,
+    kind: 'agent',
+    gate: 'auto',
+    ...(workflow === undefined ? {} : { workflow }),
+  })
+
+  it('puts the checkbox on the Implement lane only, not on its group', async () => {
+    progress({ task: FULL_TASK, events: FULL_EVENTS })
+
+    const group = await screen.findByRole('region', { name: 'Test spec and Implement' })
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(1)
+    expect(box(within(group).getByRole('article', { name: 'Implement' }))).not.toBeNull()
+  })
+
+  it('offers it on a stage of your own, each lane on its own, and not without the field', async () => {
+    const { setWorkflow } = progress({
+      task: {
+        ...TASK,
+        stage: 'refactor',
+        state: 'ready',
+        stages: ['refactor', 'notes', { id: 'build', parallel: ['front', 'back'] }],
+      },
+      events: [],
+      settings: withStages([
+        agent('refactor', true),
+        agent('notes'),
+        { id: 'build', parallel: [agent('front', true), agent('back', true)] },
+      ]),
+    })
+    const user = userEvent.setup()
+
+    expect(box(await screen.findByRole('article', { name: 'Refactor' }))).not.toBeNull()
+    expect(box(screen.getByRole('article', { name: 'Notes' }))).toBeNull()
+    const front = box(screen.getByRole('article', { name: 'Front' })) as HTMLInputElement
+    const back = box(screen.getByRole('article', { name: 'Back' })) as HTMLInputElement
+    await user.click(front)
+
+    await waitFor(() => expect(setWorkflow).toHaveBeenCalledWith('front', true))
+    expect(setWorkflow).toHaveBeenCalledTimes(1)
+    expect(back.checked).toBe(false)
+  })
+
+  it('hides the checkbox where the settings turn the workflow off, keeping the choice', async () => {
+    const stages = DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+      'parallel' in step
+        ? { ...step, parallel: step.parallel.map((lane) => ({ ...lane, workflow: false })) }
+        : step,
+    )
+    progress({
+      task: { ...FULL_TASK, workflowStages: ['implement'] },
+      events: FULL_EVENTS,
+      settings: withStages(stages),
+    })
+
+    expect(box(await screen.findByRole('article', { name: 'Implement' }))).toBeNull()
+    expect(box(screen.getByRole('article', { name: 'Plan' }))).not.toBeNull()
+  })
+
+  it('shows no checkbox on a stage of your own that is gone or is no longer an agent stage', async () => {
+    progress({
+      task: { ...TASK, stage: 'context', state: 'ready', stages: ['context', 'gone', 'check'] },
+      events: [],
+      settings: withStages([
+        { id: 'context', kind: 'context', gate: 'manual' },
+        { id: 'check', kind: 'review', gate: 'manual' },
+      ]),
+    })
+
+    await screen.findByRole('article', { name: 'Gone' })
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+  })
+
+  it('lets a task on another agent untick a choice made before', async () => {
+    const { setWorkflow } = progress({
+      task: { ...FULL_TASK, agent: 'copilot', workflowStages: ['implement'] },
+      events: FULL_EVENTS,
+    })
+    const user = userEvent.setup()
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    const plan = screen.getByRole('article', { name: 'Plan' })
+    expect((box(plan) as HTMLInputElement).disabled).toBe(true)
+    expect(within(plan).getByText('Only Claude Code can run a workflow.')).toBeTruthy()
+    await user.click(box(implement) as HTMLElement)
+
+    await waitFor(() => expect(setWorkflow).toHaveBeenCalledWith('implement', false))
+  })
+
+  it('labels a finished stage by how it ran, not by the choice or the settings now', async () => {
+    const stages = DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+      'parallel' in step
+        ? { ...step, parallel: step.parallel.map((lane) => ({ ...lane, workflow: false })) }
+        : step,
+    )
+    progress({
+      task: {
+        ...FULL_TASK,
+        stage: 'review',
+        state: 'review',
+        stages: [
+          'context',
+          'spec',
+          'plan',
+          { id: 'build', parallel: ['test-spec', 'implement'] },
+          'review',
+        ],
+        workflowStages: ['plan'],
+      },
+      events: [
+        ...EVENTS.slice(0, 3),
+        stored(4, 'stage.skipped', '2026-10-10T08:11:00.000Z', { stage: 'spec' }),
+        stored(5, 'stage.started', '2026-10-10T08:12:00.000Z', { stage: 'plan' }),
+        stored(6, 'stage.approved', '2026-10-10T08:15:00.000Z', { stage: 'plan' }),
+        stored(7, 'stage.started', '2026-10-10T08:16:00.000Z', { stage: 'test-spec' }),
+        stored(8, 'stage.started', '2026-10-10T08:16:00.000Z', {
+          stage: 'implement',
+          workflow: true,
+        }),
+        stored(9, 'stage.approved', '2026-10-10T08:20:00.000Z', { stage: 'test-spec' }),
+        stored(10, 'stage.passed', '2026-10-10T08:25:00.000Z', { stage: 'implement' }),
+      ],
+      settings: withStages(stages),
+    })
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(implement).getByText('Workflow')).toBeTruthy()
+    expect(box(implement)).toBeNull()
+    const plan = screen.getByRole('article', { name: 'Plan' })
+    expect(within(plan).queryByText('Workflow')).toBeNull()
+    expect(box(plan)).toBeNull()
+    expect(box(screen.getByRole('article', { name: 'Spec' }))).toBeNull()
+    const group = screen.getByRole('region', { name: 'Test spec and Implement' })
+    expect(within(group).getAllByText('Workflow')).toHaveLength(1)
   })
 })
