@@ -246,6 +246,7 @@ describe('createApi', () => {
       base: 'main',
       ahead: 1,
       behind: 0,
+      push: { remote: 'tracked', unpushed: 1, unpulled: 0 },
       truncated: false,
       commits: [
         {
@@ -263,6 +264,24 @@ describe('createApi', () => {
 
     expect(await createApi('secret', fetchFunction).getGitGraph('T-0001')).toEqual(graph)
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/graph')
+  })
+
+  it('reads a git graph without a push status as one whose status is unknown', async () => {
+    const graph = {
+      branch: 'natamux/t-0001',
+      head: 'b2',
+      base: 'main',
+      ahead: 1,
+      behind: 0,
+      truncated: false,
+      commits: [],
+    }
+    const { fetchFunction } = fakeFetch(() => json(graph))
+
+    expect(await createApi('secret', fetchFunction).getGitGraph('T-0001')).toEqual({
+      ...graph,
+      push: null,
+    })
   })
 
   it('reads the stage and state of each agent terminal', async () => {

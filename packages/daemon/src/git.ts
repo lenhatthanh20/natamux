@@ -13,6 +13,7 @@ import {
   type ImageSide,
   imageTypeOf,
   type PullRequestStatus,
+  type PushStatus,
 } from '@natamux/core'
 
 const execFileAsync = promisify(execFile)
@@ -540,6 +541,36 @@ function lines(output: string): string[] {
   return output.split('\n').filter((line) => line !== '')
 }
 
+// Compares `branch` with its copy on origin. Uses the remote-tracking refs as they are: no fetch.
+// Not `@{upstream}`, because a branch made from origin/main tracks origin/main.
+export async function readPushStatus(worktreePath: string, branch: string): Promise<PushStatus> {
+  if (!lines(await git(worktreePath, ['remote'])).includes('origin')) {
+    return { remote: 'none' }
+  }
+  const remoteRef = `refs/remotes/origin/${branch}`
+  const found = lines(await git(worktreePath, ['for-each-ref', '--format=%(refname)', remoteRef]))
+  if (!found.includes(remoteRef)) {
+    const count = await git(worktreePath, [
+      'rev-list',
+      '--count',
+      'HEAD',
+      '--not',
+      '--remotes=origin',
+      '--',
+    ])
+    return { remote: 'new', unpushed: Number(count.trim()) }
+  }
+  const counts = await git(worktreePath, [
+    'rev-list',
+    '--left-right',
+    '--count',
+    `HEAD...${remoteRef}`,
+    '--',
+  ])
+  const [left, right] = counts.trim().split(/\s+/)
+  return { remote: 'tracked', unpushed: Number(left), unpulled: Number(right) }
+}
+
 // The history of the worktree's branch and of `base`, newest first, in the order git draws a graph.
 export async function readGitGraph(
   worktreePath: string,
@@ -595,6 +626,7 @@ export async function readGitGraph(
     base: compareTo,
     ahead,
     behind,
+    push: branch === null ? null : await readPushStatus(worktreePath, branch),
     commits: commits.slice(0, limit),
     truncated: commits.length > limit,
   }

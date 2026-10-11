@@ -336,6 +336,7 @@ function installDaemon(
         base: 'main',
         ahead: 1,
         behind: 0,
+        push: { remote: 'tracked', unpushed: 1, unpulled: 0 },
         truncated: false,
         commits: [
           {
@@ -835,7 +836,7 @@ describe('App', () => {
     expect(await tokenOfShell()).toBe('')
   })
 
-  it('shows the commits ahead on Push, and says why Push is off when there is no branch', async () => {
+  it('shows the commits to push on Push, and says why Push is off when there is no branch', async () => {
     installDaemon([
       makeTask({
         id: 'T-0001',

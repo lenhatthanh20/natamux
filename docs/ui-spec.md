@@ -353,7 +353,7 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 - Variants: `primary` (bg ink, text canvas; one per view), `secondary` (bg raised, 1px control border, ink), `ghost` (transparent, ink-2 text, hover bg-hover + ink), `danger` (bg danger, white), `link` (no box, `--link`, underline on hover).
 - Sizes: `xs` 24 (pad x 8, icon 12, only inside rows/pane headers), `sm` 28 (default, pad x 10, icon 14), `md` 32 (dialogs, sign-in, empty states; pad x 12, icon 14). Text 13/500. Gap 6. Radius 6.
 - States: hover (primary 85% ink; secondary bg-hover + control-hover border), active (bg-active), focus-visible (2px `--focus` ring, offset 1), busy (spinner replaces the icon, label stays, width locked with `min-width` from first render), disabled (opacity 0.5).
-- Disabled with a reason: use `aria-disabled="true"` (stays focusable) + tooltip with the reason ("Nothing to push: 0 commits ahead"). Click does nothing. Use `disabled` only when no reason is useful.
+- Disabled with a reason: use `aria-disabled="true"` (stays focusable) + tooltip with the reason ("Nothing to push: up to date with origin/<branch>"). Click does nothing. Use `disabled` only when no reason is useful.
 - Optional shortcut chip at the end (`Kbd` on-inverted variant for primary, 70% opacity). Never on Cancel.
 - Labels: verb first, sentence case, no period, max 3 words when possible.
 
@@ -595,7 +595,7 @@ Shared shell:
 
 ### 4.29 View header and workspace header
 - View header 44, pad x 16, border-bottom line: title 15/600 + count badge (NAV-31), then the state filter (4.30), then right: Show finished (board only), Segmented Table/Board (`aria-label="Layout"`, options "Table", "Board", NAV-22).
-- Workspace header 44, pad x 16: id mono 12 muted · title 16/600 truncate (wraps to 2 lines < 768) · state chip · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows ahead count; `aria-disabled` + tooltip "Nothing to push" when 0 ahead or no branch, WS-05), [Create pull request] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; label "Open PR" when main < 900, nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
+- Workspace header 44, pad x 16: id mono 12 muted · title 16/600 truncate (wraps to 2 lines < 768) · state chip · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows the commits that `origin/<branch>` does not have, and `↓N` when origin has commits the branch lacks; "Publish branch" when origin has no branch of this name; `aria-disabled` + tooltip with the reason when nothing to push, origin is ahead, no `origin` remote or no branch, WS-05), [Create pull request] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; label "Open PR" when main < 900, nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
 - Git action results go to toasts, never a status line inside the header (fixes WS-09 layout shift).
 - Needs-input banner (`components/NeedsInputBanner.tsx`) under the header when the task is needs-input: 40px, bg signal-soft, top+bottom 1px signal-line, `CircleQuestionMark` 16 signal, text "The agent asks: <question>" (from the latest needs-input event payload; fallback "The agent is waiting for your answer in Shell 1."), right: [Answer in terminal] (focuses Shell 1) [Resume] (WS-08).
 

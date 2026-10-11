@@ -940,7 +940,13 @@ describe('graph', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toMatchObject({ base: 'main', ahead: 0, behind: 0, truncated: false })
+    expect(response.json()).toMatchObject({
+      base: 'main',
+      ahead: 0,
+      behind: 0,
+      push: { remote: 'none' },
+      truncated: false,
+    })
     expect(response.json().commits).toHaveLength(1)
   })
 
