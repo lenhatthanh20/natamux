@@ -9,6 +9,9 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.5 (2026-10-11)
 
+- Attach files to a new task: in the **Start a task** dialog, click **Add files**, drop files or paste a screenshot, or use `natamux task create --attach <path>`. Up to 20 files, 20 MB each and 50 MB together. They are copied to `.natamux-task/attachments/` and listed in `context.md`. See [Attachments](/docs/concepts/stages/#attachments).
+- Fix: Codex tasks failed at start, because Codex CLI 0.159 no longer accepts `--full-auto`. Natamux now passes `--sandbox workspace-write --ask-for-approval never`. See [Codex](/docs/agents/codex/).
+- Fix: the **Push** button counted the commits ahead of the base branch, so it still showed **Push ↑N** after a push. It now counts the commits that `origin/<branch>` does not have, shows **Publish branch** when origin has no such branch, and says to pull or rebase first when origin has commits the branch lacks.
 - Fix: when a task started stages side by side (for example **Implement** and **Test spec**), the shell of the second stage showed only after you left the task and came back. It now shows as soon as the stage starts, and the shell you type in keeps the keyboard.
 - The **Agents** grid keeps its panes in place. A task event no longer moves its pane to the front.
 - The terminal scrollbar is thin, like the rest of the app, and shows search matches.
