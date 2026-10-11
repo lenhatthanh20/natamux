@@ -37,7 +37,8 @@ if [ "${1:-}" = "--published" ]; then
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
 
-  sha=$(git ls-remote --tags origin "refs/tags/$tag^{}" "refs/tags/$tag" | sort | head -n 1 | cut -f 1)
+  # An annotated tag lists its own object first and then the commit, as <tag>^{}.
+  sha=$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}" | sort -k 2 | tail -n 1 | cut -f 1)
   check "tag $tag is on origin" '[ -n "$sha" ]'
   [ -n "$sha" ] || finish
   check "tag $tag is on main" \
