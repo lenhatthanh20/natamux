@@ -1,7 +1,7 @@
 import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@natamux/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, RefreshCw } from 'lucide-react'
-import { type KeyboardEvent, lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { type KeyboardEvent, lazy, useEffect, useMemo, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFileViewMode } from '../hooks/useFileViewMode'
 import { useStoredFlag } from '../hooks/useStoredFlag'
@@ -15,6 +15,7 @@ import { ImageDiff } from './ImageDiff'
 import { Button } from './ui/Button'
 import { EmptyState } from './ui/EmptyState'
 import { IconButton } from './ui/IconButton'
+import { LazyView } from './ui/LazyView'
 import { ResizeHandle, useStoredWidth } from './ui/ResizeHandle'
 import { Select } from './ui/Select'
 import { SkeletonList } from './ui/Skeleton'
@@ -151,9 +152,9 @@ function FileBody({
       return <Notice>Empty file.</Notice>
     }
     return (
-      <Suspense fallback={viewer}>
+      <LazyView label="viewer" fallback={viewer}>
         <MonacoFile path={file.path} text={whole} kind={kind} wrap={wrap} onLine={onLine} />
-      </Suspense>
+      </LazyView>
     )
   }
   if (sameText) {
@@ -184,7 +185,7 @@ function FileBody({
           )}
         </div>
       )}
-      <Suspense fallback={viewer}>
+      <LazyView label="viewer" fallback={viewer}>
         <MonacoDiff
           path={file.path}
           original={file.original ?? ''}
@@ -198,7 +199,7 @@ function FileBody({
           onStats={onStats}
           onChanges={onChanges}
         />
-      </Suspense>
+      </LazyView>
     </>
   )
 }

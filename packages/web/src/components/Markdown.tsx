@@ -1,38 +1,22 @@
-import ReactMarkdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { lazy } from 'react'
+import { LazyView } from './ui/LazyView'
 
-const remarkPlugins = [remarkGfm]
+// The markdown parser is a large part of the bundle, and only the Docs tab needs it.
+const loadBody = () => import('./MarkdownBody')
+const MarkdownBody = lazy(loadBody)
 
-// Same rule as the desktop window: only web and mail addresses open, so a file cannot start a
-// program through another scheme.
-function isSafeLink(href: string | undefined): href is string {
-  try {
-    return href !== undefined && ['http:', 'https:', 'mailto:'].includes(new URL(href).protocol)
-  } catch {
-    return false
-  }
-}
-
-const components: Components = {
-  a: ({ href, children }) =>
-    isSafeLink(href) ? (
-      <a href={href} target="_blank" rel="noopener noreferrer">
-        {children}
-      </a>
-    ) : (
-      <span>{children}</span>
-    ),
-  // An image is never loaded: a remote one would tell its server that the file was read.
-  img: ({ alt }) => (alt ? <span className="text-muted">{alt}</span> : null),
+// Starts the download early, so the parser is there by the time the file text arrives.
+export function preloadMarkdown(): void {
+  loadBody().catch(() => undefined)
 }
 
 // Markdown shown as text, never as HTML: HTML in the source is dropped.
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="hm-markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components} skipHtml>
-        {text}
-      </ReactMarkdown>
+      <LazyView label="file view" fallback={null}>
+        <MarkdownBody text={text} />
+      </LazyView>
     </div>
   )
 }
