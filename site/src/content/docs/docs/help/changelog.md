@@ -13,6 +13,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - The **Agents** grid keeps its panes in place. A task event no longer moves its pane to the front.
 - The terminal scrollbar is thin, like the rest of the app, and shows search matches.
 - Fix: opening the shell of a done or cancelled task started a shell that kept running after you left. It now ends a minute after no pane shows it, unless a program runs in it. See [Terminal](/docs/guides/terminal/).
+- Fix: typing Vietnamese with an input method such as GoTiengViet, EVKey or OpenKey lost or mixed up letters in Claude Code. The input method erases a letter and types the accented one; Natamux now sends the two to the shell a moment apart, so Claude Code reads them apart.
 
 ## v0.1.4 (2026-10-11)
 

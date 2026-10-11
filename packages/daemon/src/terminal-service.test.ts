@@ -10,7 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   ENDED_IDLE_MS,
+  INPUT_GAP_MS,
   KILL_GRACE_MS,
+  MAIN_TERMINAL,
   MAX_SESSIONS,
   NoTerminalError,
   REPLAY_CHUNK_CHARS,
@@ -766,6 +768,67 @@ describe('onOutput', () => {
     ptys[0]?.emit('hi')
 
     expect(heard).toEqual(['T-0001/2:hi'])
+  })
+})
+
+describe('input with DEL', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function typing() {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const pty = ptys[0]
+    if (!pty) {
+      throw new Error('No shell was started.')
+    }
+    return { service, pty }
+  }
+
+  it('sends the letter that a Vietnamese input method types after a DEL a moment later', () => {
+    const { service, pty } = typing()
+    service.input('T-0001', 'a')
+    service.input('T-0001', '\x7f')
+    service.input('T-0001', 'á')
+    expect(pty.written).toEqual(['a'])
+
+    vi.advanceTimersByTime(INPUT_GAP_MS)
+    expect(pty.written).toEqual(['a', '\x7f'])
+    vi.advanceTimersByTime(INPUT_GAP_MS - 1)
+    expect(pty.written).toEqual(['a', '\x7f'])
+    vi.advanceTimersByTime(1)
+    expect(pty.written).toEqual(['a', '\x7f', 'á'])
+  })
+
+  it('splits one piece of input at its DELs and keeps the order', () => {
+    const { service, pty } = typing()
+    service.input('T-0001', 'vie\x7f\x7fiê')
+    service.input('T-0001', 't')
+    vi.advanceTimersByTime(INPUT_GAP_MS * 2)
+    expect(pty.written).toEqual(['vie', '\x7f\x7f', 'iê', 't'])
+  })
+
+  it('does not slow down typing without DEL, or holding Backspace', () => {
+    const { service, pty } = typing()
+    for (const key of ['l', 's', '\r']) {
+      service.input('T-0001', key)
+    }
+    vi.advanceTimersByTime(INPUT_GAP_MS)
+    for (const key of ['\x7f', '\x7f', '\x7f']) {
+      service.input('T-0001', key)
+    }
+    expect(pty.written).toEqual(['l', 's', '\r', '\x7f', '\x7f', '\x7f'])
+  })
+
+  it('drops input that waits when the shell is closed', () => {
+    const { service, pty } = typing()
+    service.input('T-0001', '\x7f')
+    service.input('T-0001', 'á')
+    service.closeOne('T-0001', MAIN_TERMINAL)
+    vi.advanceTimersByTime(INPUT_GAP_MS * 2)
+    expect(pty.written).toEqual(['\x7f'])
   })
 })
 
