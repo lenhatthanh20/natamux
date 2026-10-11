@@ -1,15 +1,33 @@
-import type { Task, TerminalLane } from '@natamux/core'
+import type { Task, TerminalLane, TerminalSize } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createElement } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createElement, useEffect } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_PANES } from '../lib/panes'
 import { ShellPanes } from './ShellPanes'
 
+type StandInProps = {
+  connect: (size: TerminalSize) => Promise<WebSocket>
+  focusToken?: number
+}
+
 // The stand-in shows the focus token it gets, which makes the real terminal take the keyboard.
+// It connects once when it mounts, as the real terminal does, so a test can count the mounts.
 vi.mock('./TerminalView', () => ({
-  default: ({ focusToken }: { focusToken?: number }) =>
-    createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in'),
+  default: ({ connect, focusToken }: StandInProps) => {
+    // biome-ignore lint/correctness/useExhaustiveDependencies: the real terminal connects once per mount.
+    useEffect(() => {
+      void connect({ cols: 80, rows: 24 })
+    }, [])
+    return createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in')
+  },
+}))
+
+const layout = vi.hoisted(() => ({ phone: false }))
+vi.mock('../hooks/useLayoutMode', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/useLayoutMode')>()),
+  usePhone: () => layout.phone,
 }))
 
 afterEach(cleanup)
@@ -222,5 +240,320 @@ describe('ShellPanes answer in terminal', () => {
     update({ implement: 'running', 'test-spec': 'needs-input' }, 1)
     await waitFor(() => expect(screen.getByRole('region', { name: 'Shell 2' })).toBeTruthy())
     expect(await tokenOf('Shell 2')).not.toBe('')
+  })
+})
+
+describe('ShellPanes stage shells', () => {
+  const IMPLEMENT: TerminalLane = { stage: 'implement', state: 'running' }
+  const TEST_SPEC: TerminalLane = { stage: 'test-spec', state: 'running' }
+  const DOCS: TerminalLane = { stage: 'docs', state: 'running' }
+
+  const implementing: ShellTask = {
+    id: 'T-0001',
+    state: 'running',
+    stage: 'implement',
+    lanes: {},
+    agent: 'claude-code',
+  }
+  const building: ShellTask = {
+    id: 'T-0001',
+    state: 'running',
+    stage: 'build',
+    lanes: { implement: 'running', 'test-spec': 'running' },
+    agent: 'claude-code',
+  }
+
+  const slots: HTMLElement[] = []
+
+  // The agent list is read every 5 s. Fake timers make a poll without waiting.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    layout.phone = false
+    for (const slot of slots.splice(0)) {
+      slot.remove()
+    }
+  })
+
+  const poll = () => act(() => vi.advanceTimersByTimeAsync(5000))
+  const typist = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+  // The daemon's lists, which a test changes as the daemon would. The page around the shells has
+  // a title field and the slot of "New shell".
+  function daemon(terminals: string[], lanes: Record<string, TerminalLane>) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const state = { terminals, lanes }
+    const loadTerminals = vi.fn(async () => state.terminals)
+    const connect = vi.fn((_size: TerminalSize, _name: string) => new Promise<WebSocket>(() => {}))
+    const slot = document.createElement('div')
+    document.body.append(slot)
+    slots.push(slot)
+    const view = (task: ShellTask) => (
+      <QueryClientProvider client={client}>
+        <input aria-label="Task title" />
+        <ShellPanes
+          task={task}
+          connect={connect}
+          loadTerminals={loadTerminals}
+          loadAgentTerminals={async () => state.lanes}
+          closeTerminal={async (name) => {
+            state.terminals = state.terminals.filter((item) => item !== name)
+            return state.terminals
+          }}
+          actionsSlot={slot}
+        />
+      </QueryClientProvider>
+    )
+    // The build group starts: the daemon opens Shell 2 for Test spec.
+    const startGroup = () => {
+      state.terminals = ['1', '2']
+      state.lanes = { '1': IMPLEMENT, '2': TEST_SPEC }
+    }
+    // How many times the terminal of a shell mounted and connected.
+    const connects = (name: string) => connect.mock.calls.filter(([, shell]) => shell === name)
+    return { client, state, loadTerminals, connects, view, startGroup }
+  }
+
+  const pane = (name: string) => screen.getByRole('region', { name })
+  const noPane = (name: string) => screen.queryByRole('region', { name })
+  const shellNames = () =>
+    screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'))
+  const focusTokenOf = (name: string) =>
+    within(pane(name)).getByText('Terminal stand-in').getAttribute('data-focus-token')
+  const newShell = () => screen.getByRole('button', { name: 'New shell' })
+  const names = (count: number) => Array.from({ length: count }, (_, index) => String(index + 1))
+
+  it('shows the shell of a stage that starts while the task is shown', async () => {
+    const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    const first = pane('Shell 1')
+    expect(noPane('Shell 2')).toBeNull()
+
+    startGroup()
+    rerender(view(building))
+    // Before the next poll: the new lanes make the agent list be read at once.
+    await agentShown('Shell 2')
+    expect(stateLine('Shell 2')).toBe('Running')
+    // Shell 1 keeps its terminal: the same element, connected once.
+    expect(pane('Shell 1')).toBe(first)
+    expect(connects('1')).toHaveLength(1)
+    expect(connects('2')).toHaveLength(1)
+  })
+
+  it('shows a stage shell at the next poll of the agent list', async () => {
+    const { view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    render(view(building))
+    await agentShown('Shell 1')
+    startGroup()
+    expect(noPane('Shell 2')).toBeNull()
+
+    await poll()
+    await agentShown('Shell 2')
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+  })
+
+  it('shows a shell once both lists have it, when the open list is late', async () => {
+    const { state, view } = daemon(['1'], { '1': IMPLEMENT })
+    render(view(building))
+    await agentShown('Shell 1')
+    state.lanes = { '1': IMPLEMENT, '2': TEST_SPEC }
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+
+    state.terminals = ['1', '2']
+    await poll()
+    await agentShown('Shell 2')
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+  })
+
+  it('shows every shell of a group with three stages', async () => {
+    const { state, view } = daemon(['1'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    state.terminals = ['1', '2', '3']
+    state.lanes = { '1': IMPLEMENT, '2': TEST_SPEC, '3': DOCS }
+    const lanes = { implement: 'running', 'test-spec': 'running', docs: 'running' } as const
+    rerender(view({ ...building, lanes }))
+    await agentShown('Shell 2')
+    await agentShown('Shell 3')
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2', 'Shell 3'])
+  })
+
+  it('shows a plain shell until its agent is listed, then follows its state', async () => {
+    const { state, view } = daemon(['1', '2'], { '1': IMPLEMENT })
+    const { rerender } = render(view(building))
+    await agentShown('Shell 1')
+    expect(pane('Shell 2')).toBeTruthy()
+    expect(stateLine('Shell 2')).toBeUndefined()
+
+    state.lanes = { '1': IMPLEMENT, '2': TEST_SPEC }
+    await poll()
+    await agentShown('Shell 2')
+    expect(stateLine('Shell 2')).toBe('Running')
+
+    rerender(view({ ...building, lanes: { implement: 'running', 'test-spec': 'needs-input' } }))
+    expect(stateLine('Shell 2')).toBe('Needs your input')
+  })
+
+  it('keeps every terminal through polls that read the same lists', async () => {
+    const { connects, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    render(view(building))
+    await agentShown('Shell 2')
+    const panes = [pane('Shell 1'), pane('Shell 2')]
+
+    await poll()
+    await poll()
+    await poll()
+    expect(pane('Shell 1')).toBe(panes[0])
+    expect(pane('Shell 2')).toBe(panes[1])
+    expect(connects('1')).toHaveLength(1)
+    expect(connects('2')).toHaveLength(1)
+  })
+
+  it('keeps the keyboard where it is when a stage shell appears', async () => {
+    const { view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    const title = screen.getByRole('textbox', { name: 'Task title' })
+    title.focus()
+
+    startGroup()
+    rerender(view(building))
+    await agentShown('Shell 2')
+    expect(document.activeElement).toBe(title)
+    expect(focusTokenOf('Shell 2')).toBe('')
+  })
+
+  it('shows each shell once after the user leaves the task and comes back', async () => {
+    const { view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    startGroup()
+    rerender(view(building))
+    await agentShown('Shell 2')
+
+    for (let round = 0; round < 3; round += 1) {
+      cleanup()
+      render(view(building))
+      await agentShown('Shell 2')
+      expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+    }
+  })
+
+  it('does not bring back a closed shell that the agent list still has', async () => {
+    const { state, loadTerminals, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const user = typist()
+    render(view(building))
+    await agentShown('Shell 2')
+    // Shell 1 runs the agent of the task and has no close button.
+    expect(screen.queryByRole('button', { name: 'Close Shell 1' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Close Shell 2' }))
+    // Read when the task opens, after the close, and once more as the agent list still has it.
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(3))
+    expect(noPane('Shell 2')).toBeNull()
+    await poll()
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+    expect(pane('Shell 1')).toBeTruthy()
+    expect(state.terminals).toEqual(['1'])
+  })
+
+  it('brings back a closed shell when the daemon opens it again', async () => {
+    const { state, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const user = typist()
+    render(view(building))
+    await agentShown('Shell 2')
+    await user.click(screen.getByRole('button', { name: 'Close Shell 2' }))
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+
+    state.terminals = ['1', '2']
+    await poll()
+    await agentShown('Shell 2')
+  })
+
+  it('shows a hand-added shell once when a stage shell gets the same name', async () => {
+    const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    const user = typist()
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    await user.click(newShell())
+    const added = await screen.findByRole('region', { name: 'Shell 2' })
+
+    // The daemon names the shell of the second stage "2", as the one the user added.
+    startGroup()
+    rerender(view(building))
+    await agentShown('Shell 2')
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+    expect(pane('Shell 2')).toBe(added)
+    expect(connects('2')).toHaveLength(1)
+  })
+
+  it('names a new shell after the stage shells', async () => {
+    const { view } = daemon(['1', '3'], { '1': IMPLEMENT, '3': TEST_SPEC })
+    const user = typist()
+    render(view(building))
+    await agentShown('Shell 3')
+    await user.click(newShell())
+    expect(await screen.findByRole('region', { name: 'Shell 4' })).toBeTruthy()
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 3', 'Shell 4'])
+  })
+
+  it('gives a stage shell a chip on a phone and keeps the shown shell', async () => {
+    layout.phone = true
+    const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
+    const user = typist()
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    const first = pane('Shell 1')
+
+    startGroup()
+    rerender(view(building))
+    const chip = await screen.findByRole('button', { name: 'Shell 2' })
+    expect(chip.getAttribute('aria-pressed')).toBe('false')
+    // Shell 2 is mounted but not drawn until the user picks it.
+    expect(noPane('Shell 2')).toBeNull()
+    expect(pane('Shell 1')).toBe(first)
+
+    await user.click(chip)
+    expect(pane('Shell 2')).toBeTruthy()
+    expect(noPane('Shell 1')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Shell 1' }))
+    expect(pane('Shell 1')).toBe(first)
+    expect(connects('1')).toHaveLength(1)
+  })
+
+  it('disables "New shell" when a stage shell fills the grid, until a close', async () => {
+    const { state, view } = daemon(names(MAX_PANES - 1), { '1': IMPLEMENT })
+    const user = typist()
+    render(view(building))
+    await screen.findByRole('region', { name: `Shell ${MAX_PANES - 1}` })
+    expect(newShell().getAttribute('aria-disabled')).toBeNull()
+
+    state.terminals = names(MAX_PANES)
+    state.lanes = { '1': IMPLEMENT, [String(MAX_PANES)]: TEST_SPEC }
+    await poll()
+    await screen.findByRole('region', { name: `Shell ${MAX_PANES}` })
+    expect(newShell().getAttribute('aria-disabled')).toBe('true')
+
+    await user.click(screen.getByRole('button', { name: `Close Shell ${MAX_PANES - 1}` }))
+    await waitFor(() => expect(newShell().getAttribute('aria-disabled')).toBeNull())
+  })
+
+  it('shows a stage shell past MAX_PANES and keeps "New shell" disabled', async () => {
+    const { state, view } = daemon(names(MAX_PANES), { '1': IMPLEMENT })
+    render(view(building))
+    await screen.findByRole('region', { name: `Shell ${MAX_PANES}` })
+    expect(newShell().getAttribute('aria-disabled')).toBe('true')
+
+    state.terminals = names(MAX_PANES + 1)
+    state.lanes = { '1': IMPLEMENT, [String(MAX_PANES + 1)]: TEST_SPEC }
+    await poll()
+    await screen.findByRole('region', { name: `Shell ${MAX_PANES + 1}` })
+    expect(shellNames()).toHaveLength(MAX_PANES + 1)
+    expect(newShell().getAttribute('aria-disabled')).toBe('true')
   })
 })
