@@ -15,6 +15,10 @@ import { TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
+
+// What Windows types: the command between the window titles that tell its start and its end.
+const windowsLine = (command: string) =>
+  `$Host.UI.RawUI.WindowTitle = 'natamux-agent'; ${command}; $Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'\r`
 let dataDir: string
 let index: TaskIndex
 let tasks: TaskService
@@ -144,7 +148,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 
@@ -236,7 +240,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 

@@ -61,6 +61,8 @@ const EDITABLE_FIELDS = ['title', 'description', 'priority', 'labels', 'dependsO
 // How often a running task's sign of life is written down at most.
 export const ACTIVITY_INTERVAL_MS = 30_000
 
+export type ActivityOptions = { minIntervalMs?: number; endsWait?: boolean }
+
 export const applyEventInputSchema = taskEventSchema
   .pick({ source: true, type: true, payload: true })
   .refine((input) => !RECORD_ONLY_EVENT_TYPES.includes(input.type), {
@@ -502,23 +504,29 @@ export class TaskService {
   // Writes down that the agent of a running task is still at work, so the time of its last update
   // is the time of its last sign of life. At most once per `minIntervalMs`, so a busy agent does
   // not fill the log, except that the first sign of life ends a wait for background work at once.
-  // Returns whether it wrote anything.
-  recordActivity(taskId: string, minIntervalMs = ACTIVITY_INTERVAL_MS): boolean {
+  // Terminal output alone is no such sign: a redraw after a resize prints too while the agent
+  // still waits. So with `endsWait: false` the wait stays. Returns whether it wrote anything.
+  recordActivity(
+    taskId: string,
+    { minIntervalMs = ACTIVITY_INTERVAL_MS, endsWait = true }: ActivityOptions = {},
+  ): boolean {
     const task = this.getTask(taskId)
     if (task.state !== 'running') {
       return false
     }
 
     const at = this.timestamp()
-    if (
-      task.backgroundSince === null &&
-      Date.parse(at) - Date.parse(task.updatedAt) < minIntervalMs
-    ) {
+    const endsWaitNow = endsWait && task.backgroundSince !== null
+    if (!endsWaitNow && Date.parse(at) - Date.parse(task.updatedAt) < minIntervalMs) {
       return false
     }
 
     const event: TaskEvent = { taskId, source: 'agent', type: 'agent.active', at, payload: {} }
-    const updated: Task = { ...task, backgroundSince: null, updatedAt: at }
+    const updated: Task = {
+      ...task,
+      backgroundSince: endsWait ? null : task.backgroundSince,
+      updatedAt: at,
+    }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)

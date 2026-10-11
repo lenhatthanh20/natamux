@@ -6,6 +6,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  hasSubmodules,
   listBranches,
   listChanges,
   pushBranch,
@@ -47,8 +48,9 @@ type WorkspaceServiceOptions = {
   onCreated?: (task: Task) => void
   // The body of a task's pull request. Default: the task's notes.
   pullRequestBody?: (task: Task) => Promise<string>
-  // Ends the shells of a task, before its worktree is removed.
-  closeTerminals?: (taskId: string) => void
+  // Ends the shells of a task, before its worktree is removed. A promise it returns ends when
+  // the shells have ended.
+  closeTerminals?: (taskId: string) => unknown
 }
 
 export type RemoveWorkspaceResult = {
@@ -80,7 +82,7 @@ export class WorkspaceService {
   private readonly gh: RunGh
   private readonly onCreated: (task: Task) => void
   private readonly pullRequestBody: (task: Task) => Promise<string>
-  private readonly closeTerminals: (taskId: string) => void
+  private readonly closeTerminals: (taskId: string) => unknown
   private readonly busy = new Set<string>()
 
   constructor(options: WorkspaceServiceOptions) {
@@ -179,22 +181,33 @@ export class WorkspaceService {
           `${task.workspace} is not a git worktree of this repository, so it is not removed`,
         )
       }
+      let submodules = false
       if (state === 'present') {
         // git refuses a worktree with changes that are not committed. Refuse it here, before the
-        // agent and the shells of the task are ended for nothing.
-        const changes = await listChanges(task.workspace).catch(() => [])
+        // agent and the shells of the task are ended for nothing. A status that git cannot read
+        // proves nothing, so its error stops the removal too.
+        const changes = await listChanges(task.workspace)
         if (changes.length > 0) {
           const count = changes.length === 1 ? '1 change' : `${changes.length} changes`
           throw new WorkspaceConflictError(
             `${taskId} has ${count} that are not committed. Commit or discard them first`,
           )
         }
+        // git also refuses a clean worktree with submodules checked out. The status above counts
+        // changes inside submodules too, so forcing loses no work.
+        submodules = await hasSubmodules(task.workspace)
       }
       // A shell that runs in the folder would keep files open while git removes it.
-      this.closeTerminals(taskId)
+      await this.closeTerminals(taskId)
       // A stale entry keeps git from deleting the branch or adding the worktree again.
       if (state !== 'missing') {
-        await removeWorktree(repoDir, task.workspace)
+        try {
+          await removeWorktree(repoDir, task.workspace, submodules)
+        } catch (error) {
+          // The agent ended with its shell. Left running, the task would wait for it forever.
+          this.tasks.stopAgents(taskId)
+          throw error
+        }
       }
 
       const branchDeleted =

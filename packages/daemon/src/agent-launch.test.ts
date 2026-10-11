@@ -11,6 +11,7 @@ import {
   type LaunchOptions,
   launchCommand,
   prepareWorkspace,
+  quoteArgument,
 } from './agent-launch.js'
 
 const base: LaunchOptions = {
@@ -71,6 +72,17 @@ describe('launchCommand', () => {
     const command = launchCommand(agent, { ...auto, platform: 'win32', prompt: "it's" })
     expect(command).toContain(` ${flag} `)
     expect(command.endsWith(" 'it''s'")).toBe(true)
+  })
+
+  it('doubles the typographic single quotes for PowerShell too', () => {
+    expect(quoteArgument('Don\u2019t crash; Remove-Item ~\\src', 'win32')).toBe(
+      "'Don\u2019\u2019t crash; Remove-Item ~\\src'",
+    )
+    expect(quoteArgument("a'b\u2018c\u2019d\u201Ae\u201Bf", 'win32')).toBe(
+      "'a''b\u2018\u2018c\u2019\u2019d\u201A\u201Ae\u201B\u201Bf'",
+    )
+    // A POSIX shell has only the ASCII quote.
+    expect(quoteArgument('Don\u2019t', 'linux')).toBe("'Don\u2019t'")
   })
 
   it('starts each agent interactive, with its first prompt and its hooks', () => {

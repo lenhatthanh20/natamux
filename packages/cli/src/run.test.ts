@@ -81,6 +81,14 @@ async function run(
   return { code, stdout, stderr, calls }
 }
 
+// `task create` without --repo asks for the projects first; with one project, it uses that one.
+function oneProject(handler: Handler): Handler {
+  return (call) =>
+    call.url.endsWith('/repos')
+      ? jsonResponse({ repos: [{ id: 'app', name: 'app', path: '/work/app' }] })
+      : handler(call)
+}
+
 // Split every line of a printed table into its cells, so tests do not depend on the padding.
 function cells(output: string): string[][] {
   return output
@@ -149,12 +157,15 @@ describe('runCli', () => {
           'ui',
           '--depends-on',
           'T-0007',
+          '--repo',
+          'web',
         ],
         { handler: () => jsonResponse({ task: makeTask() }, 201) },
       )
 
       expect(result.code).toBe(EXIT_OK)
       expect(result.stdout).toBe('Created T-0001  Fix the dashboard\n')
+      expect(result.calls).toHaveLength(1)
       expect(result.calls[0]?.headers['content-type']).toBe('application/json')
       expect(result.calls[0]).toMatchObject({
         url: 'http://127.0.0.1:4317/tasks',
@@ -164,6 +175,7 @@ describe('runCli', () => {
           priority: 'high',
           labels: ['ui'],
           dependsOn: ['T-0007'],
+          repo: 'web',
         },
       })
     })
@@ -171,9 +183,46 @@ describe('runCli', () => {
     it('prints JSON with --json', async () => {
       const task = makeTask()
       const result = await run(['task', 'create', 'Fix the dashboard', '--json'], {
-        handler: () => jsonResponse({ task }, 201),
+        handler: oneProject(() => jsonResponse({ task }, 201)),
       })
       expect(JSON.parse(result.stdout)).toEqual(task)
+    })
+
+    it('puts the task in the only project when none is named', async () => {
+      const result = await run(['task', 'create', 'Fix the dashboard'], {
+        handler: oneProject(() => jsonResponse({ task: makeTask() }, 201)),
+      })
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+        'GET http://127.0.0.1:4317/repos',
+        'POST http://127.0.0.1:4317/tasks',
+      ])
+      expect(result.calls[1]?.body).toMatchObject({ repo: 'app' })
+    })
+
+    it('puts the task in the project of the terminal, from NATAMUX_TASK_ID', async () => {
+      const result = await run(['task', 'create', 'Follow-up'], {
+        env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'T-7' },
+        handler: () => jsonResponse({ task: makeTask({ id: 'T-7', repo: 'web' }) }),
+      })
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.calls[0]?.url).toBe('http://127.0.0.1:4317/tasks/T-7')
+      expect(result.calls[1]).toMatchObject({ method: 'POST', body: { repo: 'web' } })
+    })
+
+    it('asks for --repo and lists the projects when there are several', async () => {
+      const result = await run(['task', 'create', 'Fix the dashboard'], {
+        handler: () =>
+          jsonResponse({
+            repos: [
+              { id: 'app', name: 'app', path: '/work/app' },
+              { id: 'web', name: 'web', path: '/work/web' },
+            ],
+          }),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toBe('Error: Name the project with --repo. Projects: app, web\n')
+      expect(result.calls.map((call) => call.method)).toEqual(['GET'])
     })
   })
 
@@ -386,7 +435,7 @@ describe('runCli', () => {
     })
 
     it('shows the issues of an invalid request', async () => {
-      const result = await run(['task', 'create', 'x'], {
+      const result = await run(['task', 'create', 'x', '--repo', 'app'], {
         handler: () =>
           jsonResponse(
             {
@@ -531,9 +580,9 @@ describe('more commands', () => {
       body: { provider: 'tracker', key: 'ABC-1' },
     })
     const create = await run(['task', 'create', 'Export', '--context', 'github-issue:42'], {
-      handler: () => jsonResponse({ task: makeTask({ id: 'T-9' }) }, 201),
+      handler: oneProject(() => jsonResponse({ task: makeTask({ id: 'T-9' }) }, 201)),
     })
-    expect(create.calls[0]).toMatchObject({
+    expect(create.calls.at(-1)).toMatchObject({
       body: { title: 'Export', context: { source: 'github-issue', ref: '42' } },
     })
   })

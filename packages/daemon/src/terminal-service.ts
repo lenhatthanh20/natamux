@@ -50,6 +50,8 @@ export const REPLAY_CHUNK_CHARS = 64 * 1024
 const CUT_SEARCH_CHARS = 10_000
 // A shell gets this long to end after SIGHUP, then it is killed.
 export const KILL_GRACE_MS = 2000
+// How long a killed shell may take to end before closeAndWait stops waiting for it.
+const EXIT_WAIT_MS = 1000
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
 const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
@@ -150,6 +152,10 @@ type Session = {
   size: TerminalSize
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
   stopKillTimer?: () => void
+}
+
+function exitOf(session: Session): Promise<void> {
+  return new Promise((resolve) => session.pty.onExit(() => resolve()))
 }
 
 type TerminalServiceOptions = {
@@ -304,6 +310,23 @@ export class TerminalService {
   close(taskId: string): void {
     for (const terminal of this.list(taskId)) {
       this.closeOne(taskId, terminal)
+    }
+  }
+
+  // Ends every shell of a task and waits until they have ended. Windows does not let git delete a
+  // folder that a process still has open. The wait ends a moment after a stubborn shell is killed.
+  async closeAndWait(taskId: string): Promise<void> {
+    const sessions = [...this.sessions.values()].filter((session) => session.taskId === taskId)
+    const ended = Promise.all(sessions.map(exitOf))
+    this.close(taskId)
+    let timer: NodeJS.Timeout | undefined
+    const limit = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, KILL_GRACE_MS + EXIT_WAIT_MS)
+    })
+    try {
+      await Promise.race([ended, limit])
+    } finally {
+      clearTimeout(timer)
     }
   }
 

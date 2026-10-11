@@ -37,7 +37,9 @@ const HOOK = 'natamux hook'
 // Quotes one argument for the shell of the terminal: PowerShell on Windows, a POSIX shell elsewhere.
 export function quoteArgument(value: string, platform: NodeJS.Platform = process.platform): string {
   if (platform === 'win32') {
-    return `'${value.replaceAll("'", "''")}'`
+    // PowerShell also ends a quoted string at the typographic single quotes, which titles of
+    // imported issues often hold. Doubling each one keeps it inside the string.
+    return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`
   }
   return `'${value.replaceAll("'", "'\\''")}'`
 }

@@ -51,7 +51,7 @@ const workspaces = new WorkspaceService({
   worktreesDir: config.worktreesDir,
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
-  closeTerminals: (taskId) => terminals.close(taskId),
+  closeTerminals: (taskId) => terminals.closeAndWait(taskId),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -68,7 +68,10 @@ const terminals = new TerminalService({
   spawn: spawnShell,
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
-  onOutput: (taskId, terminal, data) => genericSignals.onOutput(taskId, terminal, data),
+  onOutput: (taskId, terminal, data) => {
+    stages.onOutput(taskId, terminal, data)
+    genericSignals.onOutput(taskId, terminal, data)
+  },
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')

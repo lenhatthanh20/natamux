@@ -325,8 +325,27 @@ describe('recordActivity', () => {
     const task = startedTask()
     later(5)
 
-    expect(activityService.recordActivity(task.id, 60_000)).toBe(false)
-    expect(activityService.recordActivity(task.id, 1000)).toBe(true)
+    expect(activityService.recordActivity(task.id, { minIntervalMs: 60_000 })).toBe(false)
+    expect(activityService.recordActivity(task.id, { minIntervalMs: 1000 })).toBe(true)
+  })
+
+  it('ends a wait for background work at once, unless told to keep it', () => {
+    const task = startedTask()
+    activityService.applyEvent(task.id, { source: 'agent', type: 'agent.waiting' })
+    const since = activityService.getTask(task.id).backgroundSince
+    later(5)
+
+    expect(activityService.recordActivity(task.id, { endsWait: false })).toBe(false)
+    later(31)
+    expect(activityService.recordActivity(task.id, { endsWait: false })).toBe(true)
+    expect(activityService.getTask(task.id)).toMatchObject({
+      backgroundSince: since,
+      updatedAt: '2026-10-08T09:00:36.000Z',
+    })
+
+    later(1)
+    expect(activityService.recordActivity(task.id)).toBe(true)
+    expect(activityService.getTask(task.id).backgroundSince).toBeNull()
   })
 
   it.each(['draft', 'ready', 'review'])('does nothing for a task that is %s', (state) => {
