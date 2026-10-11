@@ -41,9 +41,7 @@ describe('stagePrompt', () => {
     const prompt = stagePrompt(defaultStage('implement'), task, { workflow: true })
     expect(WORKFLOW_LINE).toContain('ultracode')
     expect(prompt.split(WORKFLOW_LINE)).toHaveLength(2)
-    expect(prompt.endsWith(`${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`)).toBe(
-      true,
-    )
+    expect(prompt.endsWith(`${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`)).toBe(true)
     expect(prompt.replace(`${WORKFLOW_LINE}\n`, '')).toBe(plain)
   })
 

@@ -1407,6 +1407,7 @@ describe('ProjectSettingsDialog, workflow', () => {
   it('follows the JSON tab, for a stage of your own too', async () => {
     const { user } = open()
 
+    await stageList()
     await jsonTab(
       user,
       '{ "stages": [{ "id": "refactor-code", "kind": "agent", "gate": "auto", "workflow": true }] }',
@@ -1424,6 +1425,7 @@ describe('ProjectSettingsDialog, workflow', () => {
   it('shows a workflow on a stage that is not an agent stage as a problem, and blocks Save', async () => {
     const { save, user } = open()
 
+    await stageList()
     await jsonTab(
       user,
       '{ "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }, { "id": "review", "kind": "review", "gate": "manual", "workflow": true }] }',

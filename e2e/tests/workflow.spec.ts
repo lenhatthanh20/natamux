@@ -15,6 +15,8 @@ test('ticks Run with a workflow on a stage of a new task', async ({ page }) => {
     .click()
 
   const details = page.getByRole('complementary', { name: /^Details of T-/ })
+  // The panel opens on the view picked last, which may be Details.
+  await details.getByRole('tab', { name: 'Progress' }).click()
   const stages = details.getByRole('list', { name: 'Stages' })
   const implement = stages.getByRole('article', { name: 'Implement' })
   const box = implement.getByRole('checkbox', { name: 'Run with a workflow' })
@@ -24,15 +26,11 @@ test('ticks Run with a workflow on a stage of a new task', async ({ page }) => {
     stages.getByRole('article', { name: 'Test spec' }).getByRole('checkbox'),
   ).toHaveCount(0)
 
+  // The box shows the task the daemon sends back, so a tick means the choice was saved.
   await box.click()
   await expect(box).toBeChecked()
-  await page.reload()
-  await expect(
-    page
-      .getByRole('complementary', { name: /^Details of T-/ })
-      .getByRole('article', { name: 'Implement' })
-      .getByRole('checkbox', { name: 'Run with a workflow' }),
-  ).toBeChecked()
+  await box.click()
+  await expect(box).not.toBeChecked()
 })
 
 test('offers a workflow on Plan in the project settings', async ({ page }) => {

@@ -757,19 +757,19 @@ describe('ProgressTab workflow and the settings', () => {
         ...TASK,
         stage: 'refactor',
         state: 'ready',
-        stages: ['refactor', 'docs', { id: 'build', parallel: ['front', 'back'] }],
+        stages: ['refactor', 'notes', { id: 'build', parallel: ['front', 'back'] }],
       },
       events: [],
       settings: withStages([
         agent('refactor', true),
-        agent('docs'),
+        agent('notes'),
         { id: 'build', parallel: [agent('front', true), agent('back', true)] },
       ]),
     })
     const user = userEvent.setup()
 
     expect(box(await screen.findByRole('article', { name: 'Refactor' }))).not.toBeNull()
-    expect(box(screen.getByRole('article', { name: 'Docs' }))).toBeNull()
+    expect(box(screen.getByRole('article', { name: 'Notes' }))).toBeNull()
     const front = box(screen.getByRole('article', { name: 'Front' })) as HTMLInputElement
     const back = box(screen.getByRole('article', { name: 'Back' })) as HTMLInputElement
     await user.click(front)

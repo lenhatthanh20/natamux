@@ -723,10 +723,7 @@ describe('setWorkflow', () => {
       event: { type: 'stage.workflow-set', source: 'human' },
     })
 
-    expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual([
-      'implement',
-      'plan',
-    ])
+    expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual(['implement', 'plan'])
     expect(service.setWorkflow(task.id, 'implement', false).workflowStages).toEqual(['plan'])
     expect(
       service
