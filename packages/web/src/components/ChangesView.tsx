@@ -13,13 +13,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
 import type { StageFile, StoredEvent } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
-import { toast } from '../lib/toasts'
+import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
-import { waitReason } from '../lib/workspace'
+import { nextGitStep, waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
 import { GitGraph } from './GitGraph'
 import { NeedsInputBanner } from './NeedsInputBanner'
+import { ReviewBanner } from './ReviewBanner'
 import { ShellPanes } from './ShellPanes'
 import { SkeletonList } from './ui/Skeleton'
 import { Tabs, tabPanelProps } from './ui/Tabs'
@@ -61,6 +62,9 @@ type ChangesViewProps = {
   writeStageFile: (name: string, text: string) => Promise<void>
   // Starts an agent in the task's terminal, for an agent that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
+  // For a task in review: approve a stage, or open the form that sends the task back.
+  approveStage?: (stage: string) => Promise<Task>
+  onSendBack?: () => void
 }
 
 type GitAction = {
@@ -100,6 +104,8 @@ export function ChangesView({
   resume,
   resuming,
   startAgent,
+  approveStage,
+  onSendBack,
   loadStageFiles,
   readStageFile,
   writeStageFile,
@@ -141,6 +147,19 @@ export function ChangesView({
   })
   const ahead = graph.data?.ahead ?? null
   const base = graph.data?.base ?? null
+  // The files that are not committed, under the key the Changes tab reads too. They tell whether
+  // the next step is a commit or a push.
+  const changes = useQuery({
+    queryKey: ['changes', task.id],
+    queryFn: loadChanges,
+    refetchInterval: REFRESH_MS,
+  })
+  const uncommitted = changes.data?.length ?? null
+  const openCommit = () => {
+    pickTab('changes')
+    // The commit box is drawn with the tab.
+    requestAnimationFrame(() => document.getElementById('commit-message')?.focus())
+  }
 
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
@@ -150,6 +169,16 @@ export function ChangesView({
     enabled: waiting,
     refetchInterval: 5000,
   })
+
+  // The dashboard reports a failed start.
+  const starting = useMutation({
+    mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
+  })
+  // Before its events are read, a failed task still says it failed, not that it waits.
+  const reason =
+    task.state === 'failed' && events.data === undefined
+      ? ({ kind: 'failed', reason: null } as const)
+      : waitReason(events.data)
 
   const refreshGit = () => {
     for (const key of ['changes', 'file-diff', 'graph']) {
@@ -169,19 +198,36 @@ export function ChangesView({
       const opened = await openPullRequest()
       return { text: 'Pull request opened.', url: opened.pr }
     },
-    onSuccess: ({ text, url }) => {
+    onSuccess: ({ text, url }, { action }) => {
       const link = url
-      toast(text, 'success', {
-        actions:
-          link === undefined || link === null
-            ? undefined
-            : [{ label: 'Open', run: () => window.open(link, '_blank', 'noopener,noreferrer') }],
-      })
+      // Each step offers the next one, so commit, push and pull request need no trip across the
+      // screen.
+      const next = nextGitStep(action, task.pr !== null)
+      const actions: ToastAction[] = []
+      if (link !== undefined && link !== null) {
+        actions.push({
+          label: 'Open',
+          run: () => window.open(link, '_blank', 'noopener,noreferrer'),
+        })
+      } else if (next !== null) {
+        actions.push({
+          label: next === 'push' ? 'Push' : 'Create pull request',
+          run: () => {
+            gitAction.mutate({ action: next })
+          },
+        })
+      }
+      toast(text, 'success', { actions: actions.length === 0 ? undefined : actions })
       refreshGit()
     },
     onError: (error, { action }) => toast(FAILED[action], 'error', { detail: error.message }),
   })
   const pending = gitAction.isPending ? (gitAction.variables?.action ?? null) : null
+
+  const approval = useMutation({
+    mutationFn: (stage: string) => approveStage?.(stage) ?? Promise.resolve(task),
+    onError: (error) => toast('Could not approve the stage.', 'error', { detail: error.message }),
+  })
 
   const commitFiles = async (message: string, fileCount: number) => {
     try {
@@ -199,14 +245,18 @@ export function ChangesView({
         task={task}
         ahead={ahead}
         base={base}
+        uncommitted={uncommitted}
         pending={pending}
         onPush={() => gitAction.mutate({ action: 'push' })}
         onPullRequest={() => gitAction.mutate({ action: 'pull-request' })}
+        onCommit={openCommit}
       />
       {waiting && (
         <NeedsInputBanner
-          reason={waitReason(events.data)}
+          reason={reason}
+          failed={task.state === 'failed'}
           resuming={resuming}
+          starting={starting.isPending}
           onAnswer={() => {
             pickTab('terminal')
             setFocusToken((value) => value + 1)
@@ -214,10 +264,18 @@ export function ChangesView({
           onResume={resume}
           onStartAgent={
             task.state === 'failed' && startAgent !== undefined
-              ? (agent) => void startAgent(agent).catch(() => undefined)
+              ? (agent) => starting.mutate(agent)
               : undefined
           }
           agent={task.agent}
+        />
+      )}
+      {task.state === 'review' && approveStage !== undefined && onSendBack !== undefined && (
+        <ReviewBanner
+          task={task}
+          approving={approval.isPending ? (approval.variables ?? null) : null}
+          onApprove={(stage) => approval.mutate(stage)}
+          onSendBack={onSendBack}
         />
       )}
       <Tabs
@@ -229,7 +287,14 @@ export function ChangesView({
         actions={tab === 'terminal' ? <div ref={setTabActions} className="flex" /> : undefined}
         tabs={[
           { id: 'terminal', label: 'Terminal', icon: Terminal },
-          { id: 'changes', label: 'Changes', icon: FileDiffIcon },
+          // The files the tab lists, so the user sees from any tab that the agent changed some.
+          {
+            id: 'changes',
+            label: 'Changes',
+            icon: FileDiffIcon,
+            count: uncommitted !== null && uncommitted > 0 ? uncommitted : undefined,
+            countLabel: uncommitted === 1 ? '1 file to commit' : `${uncommitted} files to commit`,
+          },
           { id: 'history', label: 'History', icon: History },
           { id: 'docs', label: 'Docs', icon: FileText },
         ]}
@@ -261,7 +326,13 @@ export function ChangesView({
           {graph.isPending && <SkeletonList rows={8} rowHeight={28} label="Reading the history" />}
           {graph.isError && <p role="alert">{graph.error.message}</p>}
           {graph.data && (
-            <GitGraph graph={graph.data} now={now} onRefresh={() => graph.refetch()} />
+            <GitGraph
+              graph={graph.data}
+              now={now}
+              uncommitted={uncommitted}
+              onShowChanges={() => pickTab('changes')}
+              onRefresh={() => graph.refetch()}
+            />
           )}
         </div>
       )}

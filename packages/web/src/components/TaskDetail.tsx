@@ -187,6 +187,7 @@ export function TaskDetail({
             }
           }}
           className="px-2"
+          background="surface"
           tabs={[
             { id: 'progress', label: 'Progress' },
             { id: 'details', label: 'Details' },

@@ -20,13 +20,26 @@ export function useScrollEdges<T extends HTMLElement>() {
     update()
     element.addEventListener('scroll', update, { passive: true })
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
-    observer?.observe(element)
-    for (const child of element.children) {
-      observer?.observe(child)
+    const observeAll = () => {
+      observer?.observe(element)
+      for (const child of element.children) {
+        observer?.observe(child)
+      }
     }
+    observeAll()
+    // A child that comes or goes changes the scroll width, such as a board column that unfolds.
+    const children =
+      typeof MutationObserver === 'undefined'
+        ? null
+        : new MutationObserver(() => {
+            observeAll()
+            update()
+          })
+    children?.observe(element, { childList: true })
     return () => {
       element.removeEventListener('scroll', update)
       observer?.disconnect()
+      children?.disconnect()
     }
   }, [element])
 

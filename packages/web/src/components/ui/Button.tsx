@@ -5,7 +5,6 @@ import {
   type Ref,
   useLayoutEffect,
   useRef,
-  useState,
 } from 'react'
 import { Kbd } from './Kbd'
 import { type ButtonSize, type ButtonVariant, button, ICON } from './styles'
@@ -39,15 +38,17 @@ export function Button({
   ...props
 }: ButtonProps) {
   const own = useRef<HTMLButtonElement | null>(null)
-  const [minWidth, setMinWidth] = useState<number | undefined>(undefined)
+  const idleWidth = useRef<number | undefined>(undefined)
   const blocked = disabledReason !== undefined
 
-  // The first width is the idle one, so the label does not jump when the spinner appears.
+  // The width is kept only while busy, so the button does not jump when the spinner appears. It is
+  // measured again when the label changes, so a shorter label also gets a narrower button.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the label parts are the triggers.
   useLayoutEffect(() => {
-    if (minWidth === undefined && own.current) {
-      setMinWidth(own.current.offsetWidth)
+    if (!busy && own.current) {
+      idleWidth.current = own.current.offsetWidth
     }
-  }, [minWidth])
+  }, [busy, children, Icon, shortcut, size])
 
   const click = (event: MouseEvent<HTMLButtonElement>) => {
     if (blocked) {
@@ -75,7 +76,7 @@ export function Button({
       aria-busy={busy ? true : undefined}
       data-variant={variant}
       {...(blocked ? { 'data-tip': disabledReason } : {})}
-      style={{ ...props.style, minWidth }}
+      style={busy ? { ...props.style, minWidth: idleWidth.current } : props.style}
       onClick={click}
       className={`${button(variant, size)} ${className}`}
     >

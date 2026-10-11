@@ -1,12 +1,29 @@
-import type { DiffStat, Task } from '@natamux/core'
-import { ArrowDown, ArrowUp, Copy, ExternalLink, FileDiff, PanelRight } from 'lucide-react'
-import type { MouseEvent } from 'react'
+import { type DiffStat, type EventType, type Task, waitingOn } from '@natamux/core'
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Check,
+  CirclePause,
+  CirclePlay,
+  Copy,
+  ExternalLink,
+  FileDiff,
+  type LucideIcon,
+  PanelRight,
+  Play,
+  RotateCcw,
+  Undo2,
+} from 'lucide-react'
+import { type MouseEvent, useState } from 'react'
 import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
 import { copyText } from '../lib/clipboard'
 import { shortcutOf } from '../lib/commands'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { COLUMN_LABEL, type ColumnKey, tableLayout } from '../lib/table-columns'
 import {
+  actionsFor,
+  agentAction,
   formatAge,
   formatExact,
   isQuiet,
@@ -15,13 +32,16 @@ import {
   type SortKey,
   stageLabel,
   stageStateLabel,
+  type TaskAction,
   type TaskSort,
 } from '../lib/tasks'
 import { shortBranch } from '../lib/workspace-groups'
+import { AgentName } from './AgentBadge'
 import { DiffSize } from './DiffSize'
 import { StateBadge } from './StateBadge'
 import { StatusGlyph } from './StatusGlyph'
 import { TaskChips } from './TaskChips'
+import { ConfirmDialog } from './ui/Dialog'
 import { type MenuItem, openContextMenu } from './ui/Menu'
 import { ICON } from './ui/styles'
 
@@ -48,9 +68,26 @@ type TaskTableProps = {
   onToggleDetails: (id: string) => void
   // A key moved the selection, so the rows should hold still for a moment.
   onKeyboardMove?: () => void
+  // The task actions of the row menu, so the table can triage without opening each task.
+  onAction?: (task: Task, action: TaskAction) => void
+  onStartAgent?: (task: Task) => void
 }
 
 const RIGHT: readonly ColumnKey[] = ['changes', 'activity']
+
+const ACTION_ICON: Partial<Record<EventType, LucideIcon>> = {
+  'task.readied': Check,
+  'task.blocked': CirclePause,
+  'agent.resumed': Play,
+  'review.approved': Check,
+  'review.changes-requested': Undo2,
+  'task.unblocked': CirclePlay,
+  'task.retried': RotateCcw,
+}
+
+// Where the row menu offers to start an agent. Elsewhere the agent works, or the task is
+// waiting for a person or finished.
+const STARTS_AGENT = new Set(['draft', 'ready', 'failed'])
 
 function HeaderCell({
   column,
@@ -96,7 +133,10 @@ export function TaskTable({
   onOpen,
   onToggleDetails,
   onKeyboardMove,
+  onAction,
+  onStartAgent,
 }: TaskTableProps) {
+  const [cancelling, setCancelling] = useState<Task | null>(null)
   const roving = useRovingFocus({
     keys: tasks.map((task) => task.id),
     preferred: selectedId,
@@ -127,28 +167,81 @@ export function TaskTable({
     },
   })
 
-  const menuFor = (task: Task): MenuItem[] => [
-    {
-      label: 'Open workspace',
-      icon: FileDiff,
-      shortcut: shortcutOf('task.open'),
-      onSelect: () => onOpen(task.id),
-    },
-    {
-      label: 'Show details',
-      icon: PanelRight,
-      shortcut: shortcutOf('task.details'),
-      onSelect: () => onSelect(task.id, true),
-    },
-    { type: 'separator' },
-    { label: 'Copy task id', icon: Copy, onSelect: () => copyText(task.id, 'the task id') },
-    {
-      label: 'Copy branch name',
-      icon: Copy,
-      disabled: task.branch === null,
-      onSelect: () => copyText(task.branch ?? '', 'the branch name'),
-    },
-  ]
+  // The same actions as the details, in the same words.
+  const taskActionsFor = (task: Task): MenuItem[] => {
+    const actions = onAction === undefined ? [] : actionsFor(task.state)
+    const items: MenuItem[] = actions
+      .filter((action) => !action.confirm)
+      .map((action) => ({
+        label: action.label,
+        icon: ACTION_ICON[action.type],
+        onSelect: () => onAction?.(task, action),
+      }))
+    const agent = agentAction(task)
+    if (onStartAgent !== undefined && agent !== null && STARTS_AGENT.has(task.state)) {
+      const waits = waitingOn(task, allTasks)
+      items.push({
+        label: agent === 'restart' ? 'Restart agent' : 'Start agent',
+        icon: agent === 'restart' ? RotateCcw : Play,
+        disabled: waits.length > 0,
+        hint: waits.length > 0 ? `Waits for ${waits.join(', ')} to be done` : undefined,
+        onSelect: () => onStartAgent(task),
+      })
+    }
+    return items.length === 0 ? [] : [...items, { type: 'separator' }]
+  }
+
+  const menuFor = (task: Task): MenuItem[] => {
+    const cancel =
+      onAction === undefined ? undefined : actionsFor(task.state).find((action) => action.confirm)
+    return [
+      {
+        label: 'Open workspace',
+        icon: FileDiff,
+        shortcut: shortcutOf('task.open'),
+        onSelect: () => onOpen(task.id),
+      },
+      {
+        label: 'Show details',
+        icon: PanelRight,
+        shortcut: shortcutOf('task.details'),
+        onSelect: () => onSelect(task.id, true),
+      },
+      { type: 'separator' },
+      ...taskActionsFor(task),
+      { label: 'Copy task id', icon: Copy, onSelect: () => copyText(task.id, 'the task id') },
+      {
+        label: 'Copy branch name',
+        icon: Copy,
+        disabled: task.branch === null,
+        onSelect: () => copyText(task.branch ?? '', 'the branch name'),
+      },
+      ...(cancel === undefined
+        ? []
+        : [
+            { type: 'separator' as const },
+            {
+              label: cancel.label,
+              icon: Ban,
+              danger: true,
+              onSelect: () => setCancelling(task),
+            },
+          ]),
+    ]
+  }
+
+  // Cancel asks first, as it does in the details.
+  const cancelAction =
+    cancelling === null ? undefined : actionsFor(cancelling.state).find((action) => action.confirm)
+  const confirmCancel = cancelling !== null && cancelAction !== undefined && (
+    <ConfirmDialog
+      title={`Cancel ${cancelling.id}?`}
+      description="A cancelled task cannot be started again."
+      confirmLabel="Cancel task"
+      onConfirm={() => onAction?.(cancelling, cancelAction)}
+      onClose={() => setCancelling(null)}
+    />
+  )
 
   const layout = tableLayout(mainWidth, {
     changes: tasks.some((task) => diffStats[task.id] !== undefined && diffStats[task.id]?.files),
@@ -165,43 +258,46 @@ export function TaskTable({
 
   if (layout.kind === 'cards') {
     return (
-      <ul
-        ref={roving.container}
-        aria-label="Tasks"
-        {...roving.containerProps}
-        className="group/table flex flex-col overflow-hidden rounded-lg border border-line bg-surface"
-      >
-        {tasks.map((task) => {
-          const quiet = isQuiet(task, now)
-          return (
-            <li
-              key={task.id}
-              {...rowProps(task)}
-              className="h-14 border-b border-line last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
-            >
-              <button
-                type="button"
-                {...roving.item(task.id)}
-                aria-label={rowLabel(task, now)}
-                aria-current={task.id === selectedId ? 'true' : undefined}
-                className="focus-inset flex h-full w-full items-center gap-2 px-3 text-left"
+      <>
+        <ul
+          ref={roving.container}
+          aria-label="Tasks"
+          {...roving.containerProps}
+          className="group/table flex flex-col overflow-hidden rounded-lg border border-line bg-surface"
+        >
+          {tasks.map((task) => {
+            const quiet = isQuiet(task, now)
+            return (
+              <li
+                key={task.id}
+                {...rowProps(task)}
+                className="h-14 border-b border-line last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
               >
-                <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-medium">{task.title}</span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted">
-                    <span className="font-mono">{task.id}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{quiet ? 'Quiet' : stageStateLabel(task)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{formatAge(task.updatedAt, now)}</span>
+                <button
+                  type="button"
+                  {...roving.item(task.id)}
+                  aria-label={rowLabel(task, now)}
+                  aria-current={task.id === selectedId ? 'true' : undefined}
+                  className="focus-inset flex h-full w-full items-center gap-2 px-3 text-left"
+                >
+                  <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-medium">{task.title}</span>
+                    <span className="flex items-center gap-1.5 text-xs text-muted">
+                      <span className="font-mono">{task.id}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{quiet ? 'Quiet' : stageStateLabel(task)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatAge(task.updatedAt, now)}</span>
+                    </span>
                   </span>
-                </span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        {confirmCancel}
+      </>
     )
   }
 
@@ -241,8 +337,10 @@ export function TaskTable({
           <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">
             {note}
           </span>
+        ) : task.agent === null ? (
+          <span className="text-muted">-</span>
         ) : (
-          <span className="block truncate text-muted">{task.agent ?? '-'}</span>
+          <AgentName agent={task.agent} className="text-muted" />
         )
       case 'branch':
         return task.branch === null ? (
@@ -335,6 +433,7 @@ export function TaskTable({
           ))}
         </tbody>
       </table>
+      {confirmCancel}
     </div>
   )
 }

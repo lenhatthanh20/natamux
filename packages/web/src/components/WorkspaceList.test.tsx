@@ -419,3 +419,21 @@ describe('after the removal', () => {
     expect(screen.getByText('Still going')).toBeTruthy()
   })
 })
+
+describe('the line under a waiting or failed task', () => {
+  it('says why a task failed, in the failed color', () => {
+    const failed = makeTask({ id: 'T-0006', title: 'Broken', state: 'failed' })
+    const asks = makeTask({ id: 'T-0007', title: 'Asking', state: 'needs-input' })
+    render(
+      <WorkspaceList
+        {...props({ tasks: [failed, asks] })}
+        questions={{ 'T-0006': 'claude: command not found', 'T-0007': 'Which test runner?' }}
+      />,
+    )
+
+    const reason = screen.getByText('claude: command not found')
+    expect(reason.getAttribute('data-state')).toBe('failed')
+    expect(reason.className).toContain('text-(--chip-fg)')
+    expect(screen.getByText('Which test runner?').className).toContain('text-signal')
+  })
+})

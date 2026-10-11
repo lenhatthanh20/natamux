@@ -1,10 +1,16 @@
 import type { Task } from '@natamux/core'
-import { ArrowUpFromLine, ExternalLink, GitBranch, GitPullRequest } from 'lucide-react'
+import {
+  ArrowUpFromLine,
+  ExternalLink,
+  GitBranch,
+  GitCommitHorizontal,
+  GitPullRequest,
+} from 'lucide-react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { copyText } from '../lib/clipboard'
 import { laneSummary } from '../lib/tasks'
-import { pullRequestButton, pushButton } from '../lib/workspace'
+import { needsCommit, pullRequestButton, pushButton } from '../lib/workspace'
 import { StateBadge } from './StateBadge'
 import { Button } from './ui/Button'
 import { Menu, type MenuItem } from './ui/Menu'
@@ -19,9 +25,13 @@ type WorkspaceHeaderProps = {
   // Commits ahead of the base branch, and that branch. Null while they are unknown.
   ahead: number | null
   base: string | null
+  // Files that differ from the last commit. Null while unknown.
+  uncommitted: number | null
   pending: 'commit' | 'push' | 'pull-request' | null
   onPush: () => void
   onPullRequest: () => void
+  // Opens the commit box in the Changes tab.
+  onCommit: () => void
 }
 
 // One row: who, what, where, and the two git actions. Results of the actions are toasts, so
@@ -30,25 +40,31 @@ export function WorkspaceHeader({
   task,
   ahead,
   base,
+  uncommitted,
   pending,
   onPush,
   onPullRequest,
+  onCommit,
 }: WorkspaceHeaderProps) {
   const [ref, width] = useElementWidth<HTMLElement>()
   const phone = usePhone()
   // Unmeasured counts as wide, so nothing flickers in the first frame.
   const compact = width !== null && width < COMPACT_BELOW
-  const push = pushButton(task.branch, ahead, base)
-  const pullRequest = pullRequestButton(task.branch, ahead, base, compact)
+  const push = pushButton(task.branch, ahead, base, uncommitted)
+  const pullRequest = pullRequestButton(task.branch, ahead, base, compact, uncommitted)
   const busy = pending !== null
+  // With nothing to push, the next step is to commit, so that button takes Push's place.
+  const commitFirst = needsCommit(ahead, uncommitted)
 
   const menu: MenuItem[] = [
-    {
-      label: push.label,
-      icon: ArrowUpFromLine,
-      disabled: push.reason !== undefined || busy,
-      onSelect: onPush,
-    },
+    commitFirst
+      ? { label: 'Commit…', icon: GitCommitHorizontal, onSelect: onCommit }
+      : {
+          label: push.label,
+          icon: ArrowUpFromLine,
+          disabled: push.reason !== undefined || busy,
+          onSelect: onPush,
+        },
     task.pr === null
       ? {
           label: 'Create pull request',
@@ -73,7 +89,9 @@ export function WorkspaceHeader({
         {task.title}
       </h2>
       <StateBadge state={task.state} lanes={laneSummary(task)} />
-      {task.branch !== null && (
+      {/* In a narrow header the title needs the room more. The sidebar row and the details show
+          the branch too. */}
+      {task.branch !== null && !compact && (
         <button
           type="button"
           onClick={() => copyText(task.branch ?? '', 'the branch name')}
@@ -90,21 +108,34 @@ export function WorkspaceHeader({
         <Menu label="Git actions" items={menu} size="sm" />
       ) : (
         <>
-          <Button
-            icon={ArrowUpFromLine}
-            busy={pending === 'push'}
-            disabled={busy && pending !== 'push'}
-            disabledReason={push.reason}
-            onClick={onPush}
-            {...(push.reason === undefined && task.branch !== null
-              ? { 'data-tip': `Push ${task.branch} to origin` }
-              : {})}
-          >
-            {push.label}
-          </Button>
+          {commitFirst ? (
+            <Button
+              icon={GitCommitHorizontal}
+              disabled={busy}
+              onClick={onCommit}
+              data-tip="Commit your changes in the Changes tab"
+            >
+              Commit…
+            </Button>
+          ) : (
+            <Button
+              icon={ArrowUpFromLine}
+              busy={pending === 'push'}
+              disabled={busy && pending !== 'push'}
+              disabledReason={push.reason}
+              onClick={onPush}
+              {...(push.reason === undefined && task.branch !== null
+                ? { 'data-tip': `Push ${task.branch} to origin` }
+                : {})}
+            >
+              {push.label}
+            </Button>
+          )}
           {task.pr === null ? (
             <Button
-              variant="primary"
+              // Primary only when it works: a blocked primary would draw the eye to a control
+              // that does nothing, and the switch marks the moment the task is ready to ship.
+              variant={pullRequest.reason === undefined ? 'primary' : 'secondary'}
               icon={GitPullRequest}
               busy={pending === 'pull-request'}
               disabled={busy && pending !== 'pull-request'}

@@ -351,3 +351,30 @@ describe('NeedsMeStrip', () => {
     expect(isFramed(empty)).toBe(false)
   })
 })
+
+describe('the reason text on line 2', () => {
+  it('shows what the agent asks and why a task failed, after the stage', () => {
+    const asks = makeTask({ id: 'T-0001', title: 'Asking' })
+    const failed = makeTask({ id: 'T-0002', title: 'Broken', state: 'failed' })
+    render(
+      <NeedsMeStrip
+        waiting={[asks, failed]}
+        now={NOW}
+        currentId={null}
+        filtered={false}
+        questions={{ 'T-0001': 'Which test runner?', 'T-0002': 'claude: command not found' }}
+        onOpen={() => {}}
+      />,
+    )
+
+    const question = within(rowOf(asks)).getByText('Which test runner?')
+    expect(question.className).toContain('text-signal')
+    expect(question.className).toContain('truncate')
+    expect(within(rowOf(asks)).getByText('Implement')).toBeTruthy()
+    expect(within(rowOf(asks)).queryByText('asks')).toBeNull()
+
+    const reason = within(rowOf(failed)).getByText('claude: command not found')
+    expect(reason.getAttribute('data-state')).toBe('failed')
+    expect(within(rowOf(failed)).queryByText('failed')).toBeNull()
+  })
+})

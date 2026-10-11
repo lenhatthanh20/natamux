@@ -30,8 +30,10 @@ function describe(el: HTMLElement): Shown | null {
   if (text === '') {
     return null
   }
-  // Truncated text gets a tooltip only while it really is cut.
-  if (el.hasAttribute('data-tip-overflow') && el.scrollWidth <= el.clientWidth) {
+  // Truncated text gets a tooltip only while it really is cut: to one line (wider than its box) or
+  // to a few lines by a line clamp (taller than its box).
+  const cut = el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight + 1
+  if (el.hasAttribute('data-tip-overflow') && !cut) {
     return null
   }
   return {
