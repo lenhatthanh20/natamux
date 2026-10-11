@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { basename } from 'node:path'
 import {
   portRange,
   scrollbackLines,
@@ -57,8 +58,26 @@ const EXIT_WAIT_MS = 1000
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
 const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
+// A shell of a done or cancelled task that nobody looks at ends after this long, unless a program
+// runs in it. A dashboard that comes back sooner finds it as it was.
+export const ENDED_IDLE_MS = 60_000
+
 // A task can have several terminals, named "1", "2" and so on. The agent runs in the first.
 export const MAIN_TERMINAL = '1'
+
+// The names of shells. Another program in the foreground means something runs in the terminal.
+export const SHELLS = [
+  'bash',
+  'zsh',
+  'sh',
+  'dash',
+  'fish',
+  'ksh',
+  'nu',
+  'pwsh',
+  'powershell.exe',
+  'cmd.exe',
+]
 
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff
@@ -164,6 +183,8 @@ type Session = {
   size: TerminalSize
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
   stopKillTimer?: () => void
+  // Set while the shell of an ended task waits, with no client, to be closed.
+  idleTimer?: NodeJS.Timeout
 }
 
 function exitOf(session: Session): Promise<void> {
@@ -178,6 +199,8 @@ type TerminalServiceOptions = {
   now?: () => number
   // Called with every piece of output, for signs of life of an agent without hooks.
   onOutput?: (taskId: string, terminal: string, data: string) => void
+  // True when the task is done or cancelled, so its shells are only there to look around.
+  isEnded?: (taskId: string) => boolean
 }
 
 type Ticket = { taskId: string; expiresAt: number }
@@ -191,6 +214,7 @@ export class TerminalService {
   private readonly env: NodeJS.ProcessEnv
   private readonly now: () => number
   private readonly onOutput: (taskId: string, terminal: string, data: string) => void
+  private readonly isEnded: (taskId: string) => boolean
   private readonly sessions = new Map<string, Session>()
   private readonly tickets = new Map<string, Ticket>()
 
@@ -200,6 +224,7 @@ export class TerminalService {
     this.env = withLoopbackNoProxy(options.env ?? process.env)
     this.now = options.now ?? Date.now
     this.onOutput = options.onOutput ?? (() => undefined)
+    this.isEnded = options.isEnded ?? (() => false)
   }
 
   // A browser cannot set headers on a WebSocket. Instead of the daemon token in the URL, it asks
@@ -246,6 +271,7 @@ export class TerminalService {
     const session = this.ensure(taskId, terminal, size)
     const state: ClientState = { size, waiting: [] }
     session.clients.set(client, state)
+    clearTimeout(session.idleTimer)
     if (existed) {
       // The screen is drawn for this size, so the shell must know it before the replay.
       this.setSize(session, size)
@@ -271,8 +297,32 @@ export class TerminalService {
       const last = [...session.clients.values()].at(-1)
       if (last) {
         this.setSize(session, last.size)
+      } else {
+        this.closeWhenIdle(session)
       }
     }
+  }
+
+  // An ended task needs no shell that nobody looks at. One that runs a program, such as a dev
+  // server, is checked again later.
+  private closeWhenIdle(session: Session): void {
+    if (!this.isEnded(session.taskId)) {
+      return
+    }
+    clearTimeout(session.idleTimer)
+    session.idleTimer = setTimeout(() => {
+      const key = sessionKey(session.taskId, session.terminal)
+      if (this.sessions.get(key) !== session || session.clients.size > 0) {
+        return
+      }
+      const program = session.pty.foreground?.()
+      if (program !== undefined && !SHELLS.includes(basename(program))) {
+        this.closeWhenIdle(session)
+        return
+      }
+      this.closeOne(session.taskId, session.terminal)
+    }, ENDED_IDLE_MS)
+    session.idleTimer.unref()
   }
 
   // Resolves once all output so far is on the screen, and every client that attached before got
@@ -361,6 +411,7 @@ export class TerminalService {
       return
     }
     this.sessions.delete(key)
+    clearTimeout(session.idleTimer)
     session.screen.dispose()
     for (const client of session.clients.keys()) {
       client.send({ type: 'exit', code: null })
@@ -460,6 +511,7 @@ export class TerminalService {
     })
     pty.onExit((code) => {
       session.stopKillTimer?.()
+      clearTimeout(session.idleTimer)
       if (this.sessions.get(key) === session) {
         this.sessions.delete(key)
         session.screen.dispose()

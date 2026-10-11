@@ -32,20 +32,7 @@ import {
 } from './stage-files.js'
 import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
 import type { TaskService } from './task-service.js'
-import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
-
-const SHELLS = [
-  'bash',
-  'zsh',
-  'sh',
-  'dash',
-  'fish',
-  'ksh',
-  'nu',
-  'pwsh',
-  'powershell.exe',
-  'cmd.exe',
-]
+import { MAIN_TERMINAL, SHELLS, type TerminalService } from './terminal-service.js'
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
 export const LAUNCH_GRACE_MS = 30_000
