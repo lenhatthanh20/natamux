@@ -533,7 +533,8 @@ describe('a prompt for a running agent', () => {
     runner.onOutput(task.id, '1', '\x1b]0;natamux-ag')
     runner.onOutput(task.id, '1', 'ent-exited\x07PS C:\\work> ')
     await runner.act(task.id, 'reopen', { to: 'spec' })
-    expect(pty.written.join('').split(exited)).toHaveLength(3)
+    // The launch line waits for the Enter of the prompt pasted before.
+    await vi.waitFor(() => expect(pty.written.join('').split(exited)).toHaveLength(3))
   })
 
   it('makes a failed check final when no agent is left to fix it', async () => {
