@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.8 (2026-10-11)
+
+- The **Start a task** dialog has two groups. **Context** holds **Title**, **Context from**, **Notes** or **Reference**, and **Attachments**, under a line that says what the agent reads for the source you pick. **Workspace and agent** holds **Project**, **Branch from** and **Agent**. **Notes** is taller and suggests what to write, and **Reference** has a hint under it. See [Add a task](/docs/getting-started/quick-start/#2-add-a-task).
+
 ## v0.1.7 (2026-10-11)
 
 - **Project settings** has a **Stages** tab, so you change the pipeline without JSON. **Add stage** picks from a catalog of 27 common steps, such as Research, Security review or Manual QA, or makes a **Custom stage**. Turn a stage off with its switch (`"enabled": false` in the file), drag it or use `Alt+ArrowUp` and `Alt+ArrowDown`, and run it alongside the stage above. A flow chart shows the pipeline while you edit. See [Change the pipeline](/docs/concepts/stages/#change-the-pipeline) and [Project settings](/docs/guides/dashboard/#project-settings).
