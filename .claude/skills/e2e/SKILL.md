@@ -14,6 +14,14 @@ Full reference: `docs/e2e.md`.
 - `e2e/`: the Playwright tests (`@playwright/test` 1.64.0, exact pin). They are outside the pnpm workspace and run only in CI.
 - `.github/workflows/e2e.yml`: runs on every PR and push to main. On main it publishes `ghcr.io/lenhatthanh20/natamux-{daemon,web}:main` and `:sha-<commit>`.
 
+## Rules on the local machine
+
+- Allowed: Docker (colima), `scripts/e2e.sh up|seed|logs|down` without `E2E_BUILD`, and `playwright-cli`, which the user installed and allows.
+- Never install anything: no `pnpm install`, no `playwright install`, no `npm i -g`, and no browser downloads. If `playwright-cli` is missing or asks to install a browser, stop and ask the user.
+- Never `E2E_BUILD=1` locally. A build runs `pnpm install` inside Docker. The script refuses it unless `CI` or `CODESPACES` is set.
+- Never run the Playwright suite in `e2e/` locally. It needs `pnpm install`, so it runs in CI.
+- The tag `main` moves with every merge. To run exactly the build you checked, use `E2E_TAG=sha-<commit>`.
+
 ## Try the dashboard locally
 
 1. Docker must run. Start colima with: `colima start --cpu 4 --memory 8 --vm-type vz --mount-type virtiofs --vz-rosetta`
