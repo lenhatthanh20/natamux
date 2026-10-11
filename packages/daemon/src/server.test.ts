@@ -443,7 +443,7 @@ describe('task events', () => {
 
   it('sets the workflow of a stage, and refuses a stage that does not offer one', async () => {
     await createTask()
-    const set = (payload: unknown) =>
+    const set = (payload: Record<string, unknown>) =>
       app.inject({
         method: 'PUT',
         url: '/tasks/T-0001/workflow',
