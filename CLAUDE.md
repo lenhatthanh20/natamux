@@ -17,3 +17,11 @@ Natamux: an Agent Development Environment (ADE). Run many coding agents in paral
 - Keep dependencies few. Ask before adding a package.
 - Confirm with the user before deleting anything.
 - Follow `docs/plan-tech-stack.md` section 10 for build order. Do not skip ahead.
+
+## Skills (.claude/skills)
+
+- `validate` — run checks in the codespace or CI.
+- `e2e` — production images on localhost:8080, playwright-cli, Playwright tests.
+- `terminal` — how terminals work, and known Claude Code issues.
+- `docs` — which docs a change needs, and the writing style.
+- `web-ui` — dashboard conventions and tests.
