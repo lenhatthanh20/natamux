@@ -119,7 +119,7 @@ describe('ChangesView', () => {
 
     const tab = screen.getByRole('tab', { name: 'Changes' })
     await waitFor(() => expect(tab.getAttribute('aria-describedby')).not.toBeNull())
-    expect(screen.getByRole('tab', { name: 'Changes', description: '2 changed files' })).toBe(tab)
+    expect(screen.getByRole('tab', { name: 'Changes', description: '2 files to commit' })).toBe(tab)
     expect(within(tab).getByText('2').getAttribute('aria-hidden')).toBe('true')
   })
 
