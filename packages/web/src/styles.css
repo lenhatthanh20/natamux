@@ -733,6 +733,10 @@
   scrollbar-color: var(--scroll-hover) transparent;
 }
 
+.hm-terminal .xterm-scrollable-element > .scrollbar > .slider {
+  border-radius: 9999px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

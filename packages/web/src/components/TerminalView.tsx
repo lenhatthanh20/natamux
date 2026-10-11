@@ -13,7 +13,12 @@ import { keyBelongsToShell } from '../lib/dispatch'
 import { closeSocket } from '../lib/live'
 import { parseTerminalMessage, takesFocusOnOpen } from '../lib/terminal'
 import { terminalFont, useTerminalFont } from '../lib/terminal-font'
-import { MIN_CONTRAST_RATIO, TERMINAL_LINE_HEIGHT, terminalTheme } from '../lib/terminal-theme'
+import {
+  MIN_CONTRAST_RATIO,
+  TERMINAL_LINE_HEIGHT,
+  TERMINAL_SCROLLBAR_WIDTH,
+  terminalTheme,
+} from '../lib/terminal-theme'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
 import { TerminalFind } from './TerminalFind'
@@ -95,6 +100,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       fontSize: start.size * uiZoom(),
       lineHeight: TERMINAL_LINE_HEIGHT,
       minimumContrastRatio: MIN_CONTRAST_RATIO,
+      overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
       scrollback: scrollbackLines(80),
       theme: terminalTheme(themeRef.current),
     })

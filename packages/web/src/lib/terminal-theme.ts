@@ -9,6 +9,9 @@ const DARK: ITheme = {
   cursor: '#7aa2ff',
   cursorAccent: '#0b0c0e',
   selectionBackground: '#7aa2ff4d',
+  scrollbarSliderBackground: '#ffffff24',
+  scrollbarSliderHoverBackground: '#ffffff42',
+  scrollbarSliderActiveBackground: '#ffffff5c',
   black: '#3a3f4b',
   brightBlack: '#7d828c',
   red: '#ff7b72',
@@ -33,6 +36,9 @@ const LIGHT: ITheme = {
   cursor: '#2f5fe0',
   cursorAccent: '#fbfbfc',
   selectionBackground: '#2f5fe033',
+  scrollbarSliderBackground: '#14181f33',
+  scrollbarSliderHoverBackground: '#14181f5c',
+  scrollbarSliderActiveBackground: '#14181f7a',
   black: '#24272d',
   brightBlack: '#5f6570',
   red: '#c0362c',
@@ -59,6 +65,9 @@ export function terminalTheme(theme: ResolvedTheme): ITheme {
 export const MIN_CONTRAST_RATIO = 4.5
 export const TERMINAL_FONT_SIZE = 13
 export const TERMINAL_LINE_HEIGHT = 1.3
+// xterm sizes its scrollbar by the overview ruler width, so the ruler sets it. 8px matches
+// the code editor's scrollbar.
+export const TERMINAL_SCROLLBAR_WIDTH = 8
 
 type FindDecorations = NonNullable<ISearchOptions['decorations']>
 
