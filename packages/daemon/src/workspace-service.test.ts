@@ -53,6 +53,9 @@ function branchExists(branch: string): boolean {
   return runGit(repo.dir, 'branch', '--list', branch).trim() !== ''
 }
 
+// Tests that make, change and remove worktrees several times. Git on Windows is slow at that.
+const GIT_TEST_MS = 30_000
+
 describe('slugify and branchNameFor', () => {
   it.each([
     ['Fix the bug', 'fix-the-bug'],
@@ -282,6 +285,8 @@ describe('remove', () => {
     const { service, closed } = serviceWithShells()
     const task = tasks.createTask({ title: 'Fix the bug' })
     const created = await service.create(task.id)
+    // Windows marks .git hidden, and a hidden file cannot be opened for writing.
+    rmSync(join(created.workspace ?? '', '.git'))
     writeFileSync(join(created.workspace ?? '', '.git'), 'not a git file\n')
 
     await expect(service.remove(task.id, { deleteBranch: false })).rejects.toThrow(GitError)
@@ -304,38 +309,49 @@ describe('remove', () => {
     expect(tasks.getTask(task.id)).toMatchObject({ state: 'ready', workspace: created.workspace })
   })
 
-  it('removes a clean worktree with a submodule checked out', async () => {
-    const lib = join(repo.root, 'lib')
-    mkdirSync(lib)
-    runGit(lib, 'init', '-b', 'main')
-    runGit(lib, 'commit', '--allow-empty', '-m', 'lib')
-    const task = tasks.createTask({ title: 'Fix the bug' })
-    const path = (await workspaces.create(task.id)).workspace ?? ''
-    runGit(path, '-c', 'protocol.file.allow=always', 'submodule', 'add', lib, 'lib')
-    runGit(path, 'commit', '-m', 'Add lib')
+  it(
+    'removes a clean worktree with a submodule checked out',
+    async () => {
+      const lib = join(repo.root, 'lib')
+      mkdirSync(lib)
+      runGit(lib, 'init', '-b', 'main')
+      runGit(lib, 'commit', '--allow-empty', '-m', 'lib')
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      const path = (await workspaces.create(task.id)).workspace ?? ''
+      runGit(path, '-c', 'protocol.file.allow=always', 'submodule', 'add', lib, 'lib')
+      runGit(path, 'commit', '-m', 'Add lib')
 
-    const result = await workspaces.remove(task.id, { deleteBranch: false })
+      const result = await workspaces.remove(task.id, { deleteBranch: false })
 
-    expect(result.task.workspace).toBeNull()
-    expect(existsSync(path)).toBe(false)
-  })
+      expect(result.task.workspace).toBeNull()
+      expect(existsSync(path)).toBe(false)
+    },
+    GIT_TEST_MS,
+  )
 
-  it('removes a workspace made again the same way', async () => {
-    const task = tasks.createTask({ title: 'Fix the bug' })
-    await workspaces.create(task.id)
-    tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
-    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
-    await workspaces.remove(task.id, { deleteBranch: false })
+  it(
+    'removes a workspace made again the same way',
+    async () => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      await workspaces.create(task.id)
+      tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+      tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+      await workspaces.remove(task.id, { deleteBranch: false })
 
-    const again = await workspaces.create(task.id)
-    expect(again).toMatchObject({ state: 'ready', workspace: workspaces.worktreePathFor(task.id) })
-    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+      const again = await workspaces.create(task.id)
+      expect(again).toMatchObject({
+        state: 'ready',
+        workspace: workspaces.worktreePathFor(task.id),
+      })
+      tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
 
-    const result = await workspaces.remove(task.id, { deleteBranch: false })
+      const result = await workspaces.remove(task.id, { deleteBranch: false })
 
-    expect(result.task).toMatchObject({ state: 'ready', workspace: null })
-    expect(eventTypes(task.id).filter((type) => type === 'agent.stopped')).toHaveLength(2)
-  })
+      expect(result.task).toMatchObject({ state: 'ready', workspace: null })
+      expect(eventTypes(task.id).filter((type) => type === 'agent.stopped')).toHaveLength(2)
+    },
+    GIT_TEST_MS,
+  )
 
   it('keeps a stage that waits for approval', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
