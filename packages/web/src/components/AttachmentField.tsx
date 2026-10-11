@@ -109,7 +109,8 @@ export function AttachmentField({
           Add files
         </Button>
         <span className="text-xs text-muted">
-          Or drop or paste files here, such as screenshots, logs or specs. They are part of the context.
+          Or drop or paste files here, such as screenshots, logs or specs. They are part of the
+          context.
         </span>
         <input
           ref={picker}

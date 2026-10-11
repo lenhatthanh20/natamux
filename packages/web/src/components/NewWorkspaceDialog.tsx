@@ -205,15 +205,18 @@ export function NewWorkspaceDialog({
         {...attachments.handlers}
         className="flex flex-col gap-5"
       >
-        <div
-          role="group"
+        <fieldset
           aria-labelledby={contextId}
           aria-describedby={hintId}
-          className="flex flex-col gap-3"
+          className="flex min-w-0 flex-col gap-3"
         >
           <div className="flex flex-col gap-0.5">
-            <h3 id={contextId} className={sectionTitle}>Context</h3>
-            <p id={hintId} className="text-xs text-muted">{contextHint(picked)}</p>
+            <h3 id={contextId} className={sectionTitle}>
+              Context
+            </h3>
+            <p id={hintId} className="text-xs text-muted">
+              {contextHint(picked)}
+            </p>
           </div>
           <label className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Title</span>
@@ -267,7 +270,9 @@ export function NewWorkspaceDialog({
                 aria-describedby={refHintId}
                 className={inputLg}
               />
-              <span id={refHintId} className="text-xs text-muted">{refHint(picked)}</span>
+              <span id={refHintId} className="text-xs text-muted">
+                {refHint(picked)}
+              </span>
             </label>
           )}
           <div className="flex flex-col gap-1">
@@ -280,9 +285,11 @@ export function NewWorkspaceDialog({
               onRemove={attachments.remove}
             />
           </div>
-        </div>
-        <div role="group" aria-labelledby={setupId} className="flex flex-col gap-3">
-          <h3 id={setupId} className={sectionTitle}>Workspace and agent</h3>
+        </fieldset>
+        <fieldset aria-labelledby={setupId} className="flex min-w-0 flex-col gap-3">
+          <h3 id={setupId} className={sectionTitle}>
+            Workspace and agent
+          </h3>
           <div className="flex flex-col gap-1">
             <span className={FIELD_LABEL}>Project</span>
             <Select
@@ -332,7 +339,7 @@ export function NewWorkspaceDialog({
               <option value="">No agent, a plain shell</option>
             </Select>
           </div>
-        </div>
+        </fieldset>
         {making.isError && (
           <p role="alert" className="text-remove">
             {making.error.message}
