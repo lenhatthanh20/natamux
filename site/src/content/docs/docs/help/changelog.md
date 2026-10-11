@@ -9,6 +9,8 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.6 (2026-10-11)
 
+- **Delete task** in the menu of a task row, of a workspace row and of the details panel. It deletes the task, its notes and its history, and the worktree when there is one. It asks first, and deletes nothing when the worktree has changes that are not committed. **Remove workspace** still keeps the task. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- The dashboard opens faster: the Markdown view, the file editor and the terminal load their code only when you open them. A terminal hidden for 10 seconds gives back its GPU memory. Changed-file counts of many workspaces load faster. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
 - Fix: when a stage ended and the next one started (for example **Testing** after you approved **Review**), Cursor showed the next prompt but did not send it, and you had to press Enter. Natamux now presses Enter a moment after the paste, so Cursor sends the prompt on its own. Review comments and failed-check messages are sent the same way.
 
 ## v0.1.5 (2026-10-11)

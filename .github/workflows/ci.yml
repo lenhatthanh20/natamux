@@ -31,6 +31,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: scripts/fake-agent.test.sh
+      - run: scripts/release.test.sh
 
   # Node 24 is the next LTS line. Node 22 stays the one that the product targets.
   # Runs on main only, to save Actions minutes.
