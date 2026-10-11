@@ -1,10 +1,13 @@
-import type { Task } from '@natamux/core'
+import type { PushStatus, Task } from '@natamux/core'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceHeader } from './WorkspaceHeader'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 const TASK: Task = {
   id: 'T-0002',
@@ -32,13 +35,30 @@ const TASK: Task = {
   updatedAt: '2026-10-10T08:20:00.000Z',
 }
 
-function header({ ahead = 0, uncommitted = 0 }: { ahead?: number; uncommitted?: number }) {
+const tracked = (unpushed: number, unpulled = 0): PushStatus => ({
+  remote: 'tracked',
+  unpushed,
+  unpulled,
+})
+
+function header({
+  task = TASK,
+  ahead = 0,
+  push = tracked(0),
+  uncommitted = 0,
+}: {
+  task?: Task
+  ahead?: number
+  push?: PushStatus | null
+  uncommitted?: number
+}) {
   const handlers = { onPush: vi.fn(), onPullRequest: vi.fn(), onCommit: vi.fn() }
   render(
     <WorkspaceHeader
-      task={TASK}
+      task={task}
       ahead={ahead}
       base="main"
+      push={push}
       uncommitted={uncommitted}
       pending={null}
       {...handlers}
@@ -49,8 +69,23 @@ function header({ ahead = 0, uncommitted = 0 }: { ahead?: number; uncommitted?: 
 
 const pullRequest = () => screen.getByRole('button', { name: 'Create pull request' })
 
+// A phone-sized window, where the git actions move into a menu.
+function stubPhone() {
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    matches: false,
+    media,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+  vi.stubGlobal('innerWidth', 500)
+}
+
 describe('WorkspaceHeader', () => {
-  it('puts Commit in place of Push while changes are not committed and nothing is ahead', async () => {
+  it('puts Commit in place of Push while files are not committed and none unpushed', async () => {
     const { onCommit, onPush } = header({ uncommitted: 2 })
 
     expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
@@ -66,18 +101,92 @@ describe('WorkspaceHeader', () => {
     header({})
 
     const push = screen.getByRole('button', { name: 'Push' })
-    expect(push.dataset.tip).toBe('Nothing to push: 0 commits ahead of main')
+    expect(push.dataset.tip).toBe(`Nothing to push: up to date with origin/${TASK.branch}`)
     expect(pullRequest().dataset.tip).toBe('Push first: 0 commits ahead of main')
     expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull()
   })
 
-  it('pushes the commits that are ahead, with or without other changes', async () => {
-    const { onPush } = header({ ahead: 2, uncommitted: 1 })
+  it('says there is nothing to push after a push, while the pull request can open', () => {
+    header({ ahead: 2, push: tracked(0) })
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Push ↑2' }))
+    const push = screen.getByRole('button', { name: 'Push' })
+    expect(push.getAttribute('aria-disabled')).toBe('true')
+    expect(push.dataset.tip).toBe(`Nothing to push: up to date with origin/${TASK.branch}`)
+    expect(pullRequest().getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('pushes the commits that origin does not have, with or without other changes', async () => {
+    const { onPush } = header({ ahead: 3, push: tracked(2), uncommitted: 1 })
+
+    const push = screen.getByRole('button', { name: 'Push ↑2' })
+    expect(push.dataset.tip).toBe(`Push 2 commits to origin/${TASK.branch}`)
+    await userEvent.setup().click(push)
 
     expect(onPush).toHaveBeenCalledTimes(1)
     expect(pullRequest().getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('offers to publish a branch that origin does not have', async () => {
+    const { onPush } = header({ ahead: 2, push: { remote: 'new', unpushed: 2 } })
+
+    const publish = screen.getByRole('button', { name: 'Publish branch' })
+    expect(publish.dataset.tip).toBe(`Publish ${TASK.branch} to origin with 2 commits`)
+    await userEvent.setup().click(publish)
+
+    expect(onPush).toHaveBeenCalledTimes(1)
+  })
+
+  it('turns Push off while origin has commits that the branch does not have', async () => {
+    const { onPush } = header({ ahead: 2, push: tracked(1, 1) })
+
+    const push = screen.getByRole('button', { name: 'Push ↑1 ↓1' })
+    expect(push.getAttribute('aria-disabled')).toBe('true')
+    expect(push.dataset.tip).toBe(
+      `origin/${TASK.branch} has 1 commit that this branch does not have. Pull or rebase first.`,
+    )
+    await userEvent.setup().click(push)
+    expect(onPush).not.toHaveBeenCalled()
+    // The pull request still follows the commits ahead of the base.
+    expect(pullRequest().getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('offers Commit when origin has every commit, even with commits ahead of the base', () => {
+    header({ ahead: 2, push: tracked(0), uncommitted: 1 })
+
+    expect(screen.getByRole('button', { name: 'Commit…' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
+    expect(pullRequest().getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('shows the same Push state in the phone menu as on the desktop header', async () => {
+    const cases: { task?: Task; push: PushStatus | null }[] = [
+      { task: { ...TASK, branch: null }, push: tracked(2) },
+      { push: null },
+      { push: { remote: 'none' } },
+      { push: { remote: 'new', unpushed: 2 } },
+      { push: tracked(3) },
+      { push: tracked(0) },
+      { push: tracked(1, 2) },
+    ]
+    for (const { task, push } of cases) {
+      header({ task, ahead: 1, push })
+      const desktop = screen.getByRole('button', { name: /^(Push|Publish)/ })
+      const label = desktop.textContent ?? ''
+      const reason =
+        desktop.getAttribute('aria-disabled') === 'true' ? desktop.dataset.tip : undefined
+      cleanup()
+
+      stubPhone()
+      header({ task, ahead: 1, push })
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Git actions' }))
+      const item = screen.getByRole('menuitem', { name: label })
+      expect(item.hasAttribute('disabled')).toBe(reason !== undefined)
+      if (reason !== undefined) {
+        expect(item.textContent).toContain(reason)
+      }
+      cleanup()
+      vi.unstubAllGlobals()
+    }
   })
 
   it('draws the pull request button as primary only when it can be used', () => {
@@ -85,7 +194,7 @@ describe('WorkspaceHeader', () => {
     expect(pullRequest().dataset.variant).toBe('secondary')
     cleanup()
 
-    header({ ahead: 1 })
+    header({ ahead: 1, push: tracked(1) })
     expect(pullRequest().dataset.variant).toBe('primary')
   })
 })

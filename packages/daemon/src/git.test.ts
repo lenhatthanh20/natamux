@@ -34,6 +34,7 @@ import {
   readFileImage,
   readGitGraph,
   readPullRequestStatus,
+  readPushStatus,
   removeWorktree,
   statusFromCodes,
   summarizeChecks,
@@ -688,6 +689,268 @@ describe('readGitGraph', () => {
       expect(graph.commits.map((commit) => commit.subject)).toEqual(['two', 'one', 'init'])
       expect(graph.commits.every((commit) => commit.onBranch)).toBe(true)
     }
+  })
+
+  it('has no push status without a remote named origin, nor when HEAD is detached', async () => {
+    await divergedWorktree()
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({ remote: 'none' })
+
+    addBareOrigin(repo)
+    runGit(worktreePath, 'checkout', '--detach')
+    expect((await readGitGraph(worktreePath, 'main')).push).toBeNull()
+  })
+
+  it('counts the commits that origin has on no branch while the branch is not pushed', async () => {
+    addBareOrigin(repo)
+    runGit(repo.dir, 'push', 'origin', 'main')
+    await divergedWorktree()
+
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({ remote: 'new', unpushed: 2 })
+  })
+
+  it('does not count a commit that is on origin but not on the local base branch', async () => {
+    addBareOrigin(repo)
+    runGit(repo.dir, 'commit', '--allow-empty', '-m', 'on origin only')
+    runGit(repo.dir, 'push', 'origin', 'main')
+    runGit(repo.dir, 'reset', '--hard', 'HEAD~1')
+    await addWorktree(repo.dir, worktreePath, branch, 'origin/main')
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'one')
+
+    const graph = await readGitGraph(worktreePath, 'main')
+
+    expect(graph).toMatchObject({ ahead: 2, push: { remote: 'new', unpushed: 1 } })
+  })
+
+  it('compares with origin/<branch> once the branch is pushed', async () => {
+    addBareOrigin(repo)
+    await divergedWorktree()
+    await pushBranch(worktreePath, branch)
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({
+      remote: 'tracked',
+      unpushed: 0,
+      unpulled: 0,
+    })
+
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'three')
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({
+      remote: 'tracked',
+      unpushed: 1,
+      unpulled: 0,
+    })
+
+    // A push from a terminal counts the same as one from the button.
+    runGit(worktreePath, 'push', 'origin', branch)
+    expect((await readGitGraph(worktreePath, 'main')).push).toMatchObject({ unpushed: 0 })
+  })
+
+  it('counts both sides when the branch changed after a push', async () => {
+    addBareOrigin(repo)
+    await divergedWorktree()
+    await pushBranch(worktreePath, branch)
+    runGit(worktreePath, 'commit', '--amend', '--allow-empty', '-m', 'two again')
+
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({
+      remote: 'tracked',
+      unpushed: 1,
+      unpulled: 1,
+    })
+  })
+
+  it('counts like a new branch once the branch is deleted on origin', async () => {
+    addBareOrigin(repo)
+    runGit(repo.dir, 'push', 'origin', 'main')
+    await divergedWorktree()
+    await pushBranch(worktreePath, branch)
+    runGit(worktreePath, 'push', 'origin', '--delete', branch)
+
+    expect((await readGitGraph(worktreePath, 'main')).push).toEqual({ remote: 'new', unpushed: 2 })
+  })
+})
+
+// The cases of the push status that the tests of readGitGraph above do not cover.
+describe('readPushStatus', () => {
+  const branch = 'natamux/t-0001-example'
+
+  // A commit that changes a file, so a rebase keeps it.
+  function commitFile(cwd: string, name: string): void {
+    writeFileSync(join(cwd, `${name}.txt`), `${name}\n`)
+    runGit(cwd, 'add', '--all')
+    runGit(cwd, 'commit', '-m', name)
+  }
+
+  function originWithMain(): void {
+    addBareOrigin(repo)
+    runGit(repo.dir, 'push', 'origin', 'main')
+  }
+
+  it('keeps ahead and behind against the base as they were', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    commitFile(worktreePath, 'two')
+    commitFile(repo.dir, 'main-moved')
+
+    expect(await readGitGraph(worktreePath, 'main')).toMatchObject({
+      ahead: 2,
+      behind: 1,
+      push: { remote: 'new', unpushed: 2 },
+    })
+  })
+
+  it('counts nothing for a new branch that has no commits of its own', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 0 })
+  })
+
+  it('counts the commits of the local base that origin does not have', async () => {
+    originWithMain()
+    commitFile(repo.dir, 'local-main')
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 2 })
+  })
+
+  it('does not count a commit that is on another branch of origin', async () => {
+    originWithMain()
+    runGit(repo.dir, 'checkout', '-b', 'other')
+    commitFile(repo.dir, 'shared')
+    runGit(repo.dir, 'push', 'origin', 'other')
+    await addWorktree(repo.dir, worktreePath, branch, 'other')
+    commitFile(worktreePath, 'one')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 1 })
+  })
+
+  it('compares with origin/<branch> when the branch has no upstream', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    runGit(worktreePath, 'push', 'origin', branch)
+    commitFile(worktreePath, 'two')
+    commitFile(worktreePath, 'three')
+    commitFile(worktreePath, 'four')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 3,
+      unpulled: 0,
+    })
+  })
+
+  it('compares with origin/<branch> when the upstream is another branch', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    runGit(worktreePath, 'push', 'origin', branch)
+    runGit(worktreePath, 'branch', '--set-upstream-to=origin/main')
+    commitFile(worktreePath, 'two')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 1,
+      unpulled: 0,
+    })
+  })
+
+  it('looks only at commits, not at files that are not committed', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    await pushBranch(worktreePath, branch)
+    writeFileSync(join(worktreePath, 'one.txt'), 'changed\n')
+    writeFileSync(join(worktreePath, 'untracked.txt'), 'new\n')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 0,
+      unpulled: 0,
+    })
+  })
+
+  it('counts commits that only origin has', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    commitFile(worktreePath, 'two')
+    await pushBranch(worktreePath, branch)
+    runGit(worktreePath, 'reset', '--hard', 'HEAD~1')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 0,
+      unpulled: 1,
+    })
+  })
+
+  it('counts both sides after a rebase onto a newer base', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    commitFile(worktreePath, 'two')
+    await pushBranch(worktreePath, branch)
+    commitFile(repo.dir, 'main-moved')
+    runGit(worktreePath, 'rebase', 'main')
+
+    // Two rewritten commits, and the new base commit that origin does not have.
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 3,
+      unpulled: 2,
+    })
+  })
+
+  it('counts like a new branch after the remote-tracking ref is pruned', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    await pushBranch(worktreePath, branch)
+    runGit(worktreePath, 'update-ref', '-d', `refs/remotes/origin/${branch}`)
+    commitFile(worktreePath, 'two')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 2 })
+  })
+
+  it('still compares with a stale ref when the branch is deleted on origin only', async () => {
+    const remote = addBareOrigin(repo)
+    runGit(repo.dir, 'push', 'origin', 'main')
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    await pushBranch(worktreePath, branch)
+    runGit(remote, 'branch', '-D', branch)
+    commitFile(worktreePath, 'two')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({
+      remote: 'tracked',
+      unpushed: 1,
+      unpulled: 0,
+    })
+  })
+
+  it('has no remote when the only remote has another name', async () => {
+    runGit(repo.dir, 'remote', 'add', 'upstream', join(repo.root, 'upstream.git'))
+    await addWorktree(repo.dir, worktreePath, branch)
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'none' })
+  })
+
+  it('counts every commit when origin has no refs yet', async () => {
+    addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, branch)
+    commitFile(worktreePath, 'one')
+    commitFile(worktreePath, 'two')
+
+    expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 3 })
+  })
+
+  it('fails as before in a repository with no commits', async () => {
+    const empty = join(repo.root, 'empty')
+    mkdirSync(empty)
+    runGit(empty, 'init', '-b', 'main')
+
+    await expect(readGitGraph(empty, null)).rejects.toThrow(GitError)
   })
 })
 

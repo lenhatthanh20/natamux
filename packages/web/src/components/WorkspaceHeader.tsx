@@ -1,4 +1,4 @@
-import type { Task } from '@natamux/core'
+import type { PushStatus, Task } from '@natamux/core'
 import {
   ArrowUpFromLine,
   ExternalLink,
@@ -22,9 +22,11 @@ const COMPACT_BELOW = 900
 
 type WorkspaceHeaderProps = {
   task: Task
-  // Commits ahead of the base branch, and that branch. Null while they are unknown.
+  // Commits ahead of the base branch, and that branch, for the pull request. Null while unknown.
   ahead: number | null
   base: string | null
+  // Where the branch stands against origin, for Push. Null while unknown.
+  push: PushStatus | null
   // Files that differ from the last commit. Null while unknown.
   uncommitted: number | null
   pending: 'commit' | 'push' | 'pull-request' | null
@@ -40,6 +42,7 @@ export function WorkspaceHeader({
   task,
   ahead,
   base,
+  push: pushStatus,
   uncommitted,
   pending,
   onPush,
@@ -50,11 +53,11 @@ export function WorkspaceHeader({
   const phone = usePhone()
   // Unmeasured counts as wide, so nothing flickers in the first frame.
   const compact = width !== null && width < COMPACT_BELOW
-  const push = pushButton(task.branch, ahead, base, uncommitted)
+  const push = pushButton(task.branch, pushStatus, uncommitted)
   const pullRequest = pullRequestButton(task.branch, ahead, base, compact, uncommitted)
   const busy = pending !== null
   // With nothing to push, the next step is to commit, so that button takes Push's place.
-  const commitFirst = needsCommit(ahead, uncommitted)
+  const commitFirst = needsCommit(pushStatus, uncommitted)
 
   const menu: MenuItem[] = [
     commitFirst
@@ -63,6 +66,7 @@ export function WorkspaceHeader({
           label: push.label,
           icon: ArrowUpFromLine,
           disabled: push.reason !== undefined || busy,
+          hint: push.reason,
           onSelect: onPush,
         },
     task.pr === null
@@ -70,6 +74,7 @@ export function WorkspaceHeader({
           label: 'Create pull request',
           icon: GitPullRequest,
           disabled: pullRequest.reason !== undefined || busy,
+          hint: pullRequest.reason,
           onSelect: onPullRequest,
         }
       : {
@@ -124,9 +129,7 @@ export function WorkspaceHeader({
               disabled={busy && pending !== 'push'}
               disabledReason={push.reason}
               onClick={onPush}
-              {...(push.reason === undefined && task.branch !== null
-                ? { 'data-tip': `Push ${task.branch} to origin` }
-                : {})}
+              {...(push.tip === undefined ? {} : { 'data-tip': push.tip })}
             >
               {push.label}
             </Button>

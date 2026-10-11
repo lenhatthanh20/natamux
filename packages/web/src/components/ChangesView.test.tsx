@@ -43,6 +43,7 @@ const GRAPH: GitGraph = {
   base: 'main',
   ahead: 1,
   behind: 0,
+  push: { remote: 'tracked', unpushed: 1, unpulled: 0 },
   commits: [],
   truncated: false,
 }
@@ -60,10 +61,27 @@ type Options = {
   changes?: ChangeEntry[]
   approveStage?: (stage: string) => Promise<Task>
   onSendBack?: () => void
+  // The graph after a push. Without it, the graph stays as it is.
+  pushedGraph?: GitGraph
+  pushFails?: boolean
 }
 
-function view({ task = TASK, changes = [], approveStage, onSendBack }: Options = {}) {
-  const push = vi.fn(async () => task)
+function view({
+  task = TASK,
+  changes = [],
+  approveStage,
+  onSendBack,
+  pushedGraph,
+  pushFails = false,
+}: Options = {}) {
+  let graph = GRAPH
+  const push = vi.fn(async () => {
+    if (pushFails) {
+      throw new Error('rejected')
+    }
+    graph = pushedGraph ?? graph
+    return task
+  })
   const openPullRequest = vi.fn(async () => ({ ...task, pr: 'https://github.com/o/r/pull/1' }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const reject = () => Promise.reject(new Error('Not in this test'))
@@ -76,7 +94,7 @@ function view({ task = TASK, changes = [], approveStage, onSendBack }: Options =
         loadChanges={async () => changes}
         loadFile={reject}
         loadImage={reject}
-        loadGraph={async () => GRAPH}
+        loadGraph={async () => graph}
         loadEvents={async () => []}
         connectTerminal={reject}
         loadTerminals={async () => []}
@@ -112,6 +130,32 @@ describe('ChangesView', () => {
 
     act(() => pushed?.actions?.[0]?.run())
     await waitFor(() => expect(openPullRequest).toHaveBeenCalledTimes(1))
+  })
+
+  it('reads the push status again after a push', async () => {
+    view({ pushedGraph: { ...GRAPH, push: { remote: 'tracked', unpushed: 0, unpulled: 0 } } })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Push ↑1' }))
+
+    const push = await screen.findByRole('button', { name: 'Push' })
+    expect(push.getAttribute('aria-disabled')).toBe('true')
+    expect(push.dataset.tip).toBe('Nothing to push: up to date with origin/natamux/t-0002')
+  })
+
+  it('keeps the push status when a push fails', async () => {
+    const { push } = view({
+      pushFails: true,
+      pushedGraph: { ...GRAPH, push: { remote: 'tracked', unpushed: 0, unpulled: 0 } },
+    })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Push ↑1' }))
+
+    await waitFor(() => expect(useToasts.getState().toasts[0]?.tone).toBe('error'))
+    expect(push).toHaveBeenCalledTimes(1)
+    const button = screen.getByRole('button', { name: 'Push ↑1' })
+    expect(button.getAttribute('aria-disabled')).toBeNull()
   })
 
   it('counts the files that are not committed on the Changes tab, and keeps its name', async () => {

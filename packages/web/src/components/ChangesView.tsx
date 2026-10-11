@@ -139,7 +139,7 @@ export function ChangesView({
     }
   }, [tab])
 
-  // The graph has the number of commits ahead of the base, which the Push button shows.
+  // The graph has the commits ahead of the base, for the pull request, and the push status.
   const graph = useQuery({
     queryKey: ['graph', task.id],
     queryFn: loadGraph,
@@ -147,6 +147,7 @@ export function ChangesView({
   })
   const ahead = graph.data?.ahead ?? null
   const base = graph.data?.base ?? null
+  const pushStatus = graph.data?.push ?? null
   // The files that are not committed, under the key the Changes tab reads too. They tell whether
   // the next step is a commit or a push.
   const changes = useQuery({
@@ -245,6 +246,7 @@ export function ChangesView({
         task={task}
         ahead={ahead}
         base={base}
+        push={pushStatus}
         uncommitted={uncommitted}
         pending={pending}
         onPush={() => gitAction.mutate({ action: 'push' })}

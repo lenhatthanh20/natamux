@@ -1,4 +1,4 @@
-import type { Task, TaskState } from '@natamux/core'
+import type { PushStatus, Task, TaskState } from '@natamux/core'
 import type { StoredEvent } from './api'
 import type { WorkspaceTab } from './view-store'
 
@@ -6,10 +6,16 @@ type GitButton = {
   label: string
   // Why the button does nothing now. Undefined: it works.
   reason?: string
+  // What a click does, when it works.
+  tip?: string
 }
 
 function ofBase(base: string | null): string {
   return base === null ? '' : ` of ${base}`
+}
+
+function commits(count: number): string {
+  return count === 1 ? '1 commit' : `${count} commits`
 }
 
 // Work that is not committed yet is the real next step when no commit is ahead.
@@ -20,29 +26,57 @@ function commitFirst(uncommitted: number | null): string | undefined {
   return `Commit your ${uncommitted === 1 ? 'changed file' : `${uncommitted} changed files`} first`
 }
 
-// Commit takes the place of Push while nothing is ahead and files are not committed.
-export function needsCommit(ahead: number | null, uncommitted: number | null): boolean {
-  return ahead === 0 && commitFirst(uncommitted) !== undefined
+// Commit takes the place of Push while origin has every commit and files are not committed.
+export function needsCommit(push: PushStatus | null, uncommitted: number | null): boolean {
+  return (
+    push !== null &&
+    push.remote !== 'none' &&
+    push.unpushed === 0 &&
+    commitFirst(uncommitted) !== undefined
+  )
 }
 
-// The Push button. `ahead` is the number of commits ahead of the base branch, null when unknown.
+// The Push button. `push` is where the branch stands against origin, null when unknown.
 // `uncommitted` is the number of files that differ from the last commit, null when unknown.
 export function pushButton(
   branch: string | null,
-  ahead: number | null,
-  base: string | null,
+  push: PushStatus | null,
   uncommitted: number | null = null,
 ): GitButton {
   if (branch === null) {
     return { label: 'Push', reason: 'This task has no branch to push' }
   }
-  if (ahead === 0) {
-    return {
-      label: 'Push',
-      reason: commitFirst(uncommitted) ?? `Nothing to push: 0 commits ahead${ofBase(base)}`,
-    }
+  if (push === null) {
+    return { label: 'Push', tip: `Push ${branch} to origin` }
   }
-  return { label: ahead === null ? 'Push' : `Push ↑${ahead}` }
+  if (push.remote === 'none') {
+    return { label: 'Push', reason: 'This repository has no remote named origin' }
+  }
+  // Like VS Code and GitHub Desktop: the first push of a branch is a publish.
+  if (push.remote === 'new') {
+    const label = 'Publish branch'
+    if (push.unpushed > 0) {
+      return { label, tip: `Publish ${branch} to origin with ${commits(push.unpushed)}` }
+    }
+    const nothing = 'Nothing to publish: every commit is on origin already'
+    return { label, reason: commitFirst(uncommitted) ?? nothing }
+  }
+  const remoteBranch = `origin/${branch}`
+  const { unpushed, unpulled } = push
+  const commitReason = unpushed === 0 ? commitFirst(uncommitted) : undefined
+  if (commitReason !== undefined) {
+    return { label: 'Push', reason: commitReason }
+  }
+  if (unpulled > 0) {
+    // git refuses a push that would drop commits on origin.
+    const arrows = unpushed > 0 ? `↑${unpushed} ↓${unpulled}` : `↓${unpulled}`
+    const missing = `${remoteBranch} has ${commits(unpulled)} that this branch does not have`
+    return { label: `Push ${arrows}`, reason: `${missing}. Pull or rebase first.` }
+  }
+  if (unpushed === 0) {
+    return { label: 'Push', reason: `Nothing to push: up to date with ${remoteBranch}` }
+  }
+  return { label: `Push ↑${unpushed}`, tip: `Push ${commits(unpushed)} to ${remoteBranch}` }
 }
 
 // The button that opens a pull request. The short label is for a narrow main area.

@@ -1,3 +1,4 @@
+import type { PushStatus } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { StoredEvent } from './api'
 import {
@@ -30,28 +31,99 @@ function asked(seq: number, payload: Record<string, unknown>): StoredEvent {
   }
 }
 
+const tracked = (unpushed: number, unpulled = 0): PushStatus => ({
+  remote: 'tracked',
+  unpushed,
+  unpulled,
+})
+
 describe('pushButton', () => {
-  it('shows the number of commits ahead on the label', () => {
-    expect(pushButton('natamux/t-1', 2, 'main')).toEqual({ label: 'Push ↑2' })
-    expect(pushButton('natamux/t-1', null, null)).toEqual({ label: 'Push' })
+  it('shows the commits that origin does not have on the label', () => {
+    expect(pushButton('b', tracked(3))).toEqual({
+      label: 'Push ↑3',
+      tip: 'Push 3 commits to origin/b',
+    })
+  })
+
+  it('offers to publish a branch that origin does not have', () => {
+    expect(pushButton('b', { remote: 'new', unpushed: 1 })).toEqual({
+      label: 'Publish branch',
+      tip: 'Publish b to origin with 1 commit',
+    })
+    expect(pushButton('b', { remote: 'new', unpushed: 3 }).tip).toBe(
+      'Publish b to origin with 3 commits',
+    )
+  })
+
+  it('shows the full count, however large', () => {
+    expect(pushButton('b', tracked(120)).label).toBe('Push ↑120')
+  })
+
+  it('works with a plain label while the status is unknown', () => {
+    expect(pushButton('b', null)).toEqual({ label: 'Push', tip: 'Push b to origin' })
   })
 
   it('says why there is nothing to push', () => {
-    expect(pushButton(null, null, null).reason).toBe('This task has no branch to push')
-    expect(pushButton('natamux/t-1', 0, 'main').reason).toBe(
-      'Nothing to push: 0 commits ahead of main',
-    )
-    expect(pushButton('natamux/t-1', 0, null).reason).toBe('Nothing to push: 0 commits ahead')
+    expect(pushButton(null, null)).toEqual({
+      label: 'Push',
+      reason: 'This task has no branch to push',
+    })
+    // A task without a branch wins over any status.
+    expect(pushButton(null, tracked(2)).reason).toBe('This task has no branch to push')
+    expect(pushButton(null, tracked(1, 2)).reason).toBe('This task has no branch to push')
+    expect(pushButton('b', { remote: 'none' })).toEqual({
+      label: 'Push',
+      reason: 'This repository has no remote named origin',
+    })
+    expect(pushButton('b', tracked(0))).toEqual({
+      label: 'Push',
+      reason: 'Nothing to push: up to date with origin/b',
+    })
+    expect(pushButton('b', { remote: 'new', unpushed: 0 })).toEqual({
+      label: 'Publish branch',
+      reason: 'Nothing to publish: every commit is on origin already',
+    })
   })
 
-  it('asks for a commit first when files are not committed and nothing is ahead', () => {
-    expect(pushButton('b', 0, 'main', 2).reason).toBe('Commit your 2 changed files first')
-    expect(pushButton('b', 0, 'main', 1).reason).toBe('Commit your changed file first')
-    expect(pushButton('b', 1, 'main', 3)).toEqual({ label: 'Push ↑1' })
-    expect(needsCommit(0, 2)).toBe(true)
-    expect(needsCommit(0, 0)).toBe(false)
-    expect(needsCommit(1, 2)).toBe(false)
-    expect(needsCommit(0, null)).toBe(false)
+  it('is off while origin has commits that the branch does not have', () => {
+    expect(pushButton('b', tracked(2, 1))).toEqual({
+      label: 'Push ↑2 ↓1',
+      reason: 'origin/b has 1 commit that this branch does not have. Pull or rebase first.',
+    })
+    expect(pushButton('b', tracked(0, 2))).toEqual({
+      label: 'Push ↓2',
+      reason: 'origin/b has 2 commits that this branch does not have. Pull or rebase first.',
+    })
+  })
+
+  it('asks for a commit first when files are not committed and nothing is unpushed', () => {
+    expect(pushButton('b', tracked(0), 2).reason).toBe('Commit your 2 changed files first')
+    expect(pushButton('b', { remote: 'new', unpushed: 0 }, 1)).toEqual({
+      label: 'Publish branch',
+      reason: 'Commit your changed file first',
+    })
+    // With no origin, Commit does not take Push's place: there is no count to compare.
+    expect(pushButton('b', { remote: 'none' }, 2)).toEqual({
+      label: 'Push',
+      reason: 'This repository has no remote named origin',
+    })
+    // Nothing to push and files to commit: committing comes before a pull or rebase.
+    expect(pushButton('b', tracked(0, 2), 1)).toEqual({
+      label: 'Push',
+      reason: 'Commit your changed file first',
+    })
+    expect(pushButton('b', tracked(1), 3)).toEqual({
+      label: 'Push ↑1',
+      tip: 'Push 1 commit to origin/b',
+    })
+    expect(needsCommit(tracked(0), 2)).toBe(true)
+    expect(needsCommit(tracked(0, 2), 2)).toBe(true)
+    expect(needsCommit({ remote: 'new', unpushed: 0 }, 2)).toBe(true)
+    expect(needsCommit(tracked(0), 0)).toBe(false)
+    expect(needsCommit(tracked(1), 2)).toBe(false)
+    expect(needsCommit(tracked(0), null)).toBe(false)
+    expect(needsCommit(null, 2)).toBe(false)
+    expect(needsCommit({ remote: 'none' }, 2)).toBe(false)
   })
 })
 
