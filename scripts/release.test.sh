@@ -107,11 +107,15 @@ check "packages depend on each other with workspace:*" \
 
 # Case 2: the homepage.
 check "homepage version is $version" "grep -qx \"const version = '$version'\" $homepage"
+check "homepage sets the version once" '[ "$(grep -c "^const version = " "$homepage")" = 1 ]'
 check "homepage has no ${prev#v} left" '[ -z "$prev" ] || ! grep -qF "${prev#v}" "$homepage"'
 check "homepage downloads Natamux-mac-arm64.dmg of the latest release" \
   'grep -qF "/releases/latest/download/" "$homepage" && grep -qF "Natamux-mac-arm64.dmg" "$homepage"'
 
 # Case 3: the release notes.
+# The release workflow reads docs/releases/<tag>.md, so a file named 0.1.8.md or v0.1.8.MD is never used.
+check "docs/releases has only vX.Y.Z.md files" \
+  '! ls docs/releases | grep -qvE "^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\.md$"'
 check "$notes exists" '[ -f "$notes" ]'
 [ -f "$notes" ] || finish
 check "$notes is the newest release notes" '[ "$(printf "%s\n" "$prev" "$tag" | sort -V | tail -n 1)" = "$tag" ]'
@@ -122,6 +126,7 @@ check "$notes intro says the app updates itself from v0.1.2" \
 check "$notes has the Guide: line as in $prev" \
   '[ -z "$prev" ] || [ "$(grep "^Guide: " "$notes")" = "$(grep "^Guide: " "docs/releases/$prev.md")" ]'
 check "$notes ends with a newline" '[ -z "$(tail -c 1 "$notes")" ]'
+check "$notes ends without a blank line" '[ -n "$(tail -n 1 "$notes")" ]'
 check "$notes has sections before ## Download" \
   '[ "$(sed "/^## Download$/,\$d" "$notes" | grep -c "^## ")" -gt 0 ]'
 check "$notes has ## Download" 'grep -qx "## Download" "$notes"'
@@ -141,6 +146,7 @@ check "changelog has one $tag heading" \
   '[ "$(grep -cE "^## ${tag//./\\.} \([0-9]{4}-[0-9]{2}-[0-9]{2}\)$" "$changelog")" = 1 ]'
 check "changelog starts with $tag" '[ "$(grep -m 1 "^## v" "$changelog" | cut -d " " -f 2)" = "$tag" ]'
 check "changelog $tag has items" '[ "$(grep -c "^- " <<<"$section")" -gt 0 ]'
+check "changelog $tag writes items with - only" '! grep -qE "^[*+] " <<<"$section"'
 check "changelog $tag writes fixes as Fix:" '! grep -iE "^- fix(ed|es)?:" <<<"$section" | grep -qv "^- Fix:"'
 check "changelog has a blank line before each release" \
   'awk "/^## v/ && last != \"\" { bad = 1 } { last = \$0 } END { exit bad }" "$changelog"'
@@ -170,6 +176,13 @@ for text in notes section; do
   check "no banned names in the $text" '! grep -qiwE "orca|atlas" <<<"$body"'
   check "no developer-only changes in the $text" \
     '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI" <<<"$body"'
+  # A / or - before # is a heading anchor such as /#2-add-a-task, and a backtick is an example such as `#42`.
+  check "no PR numbers in the $text" \
+    '! grep -qE "(^|[^-/[:alnum:]\`])#[0-9]+|/pull/[0-9]+|\bPR ?[0-9]+" <<<"$body"'
+  check "no marketing words in the $text" \
+    '! grep -qiwE "powerful|seamless|new and improved|blazing|effortless(ly)?|revolutionary" <<<"$body"'
+  # The UI writes labels such as Check for Updates… with one … character.
+  check "no ... in bold labels in the $text" '! grep -qF "...**" <<<"$body"'
 done
 
 finish
