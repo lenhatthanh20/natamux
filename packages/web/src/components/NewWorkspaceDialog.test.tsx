@@ -1,6 +1,6 @@
 import { DEFAULT_PROJECT_SETTINGS, type Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
@@ -424,5 +424,93 @@ describe('the Start a task dialog', () => {
     await user.click(screen.getByLabelText('Task notes'))
     await user.keyboard('Keep the URL{Meta>}{Enter}{/Meta}{Control>}{Enter}{/Control}')
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe('attachments in the Start a task dialog', () => {
+  const pick = (...files: File[]) =>
+    fireEvent.change(screen.getByLabelText('Attach files'), { target: { files } })
+  const listed = () =>
+    within(screen.getByRole('list', { name: 'Attached files' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent)
+
+  async function start(create: ReturnType<typeof dialog>['create']) {
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    return create.mock.calls[0]?.[0]
+  }
+
+  it('sends the picked files as base64, by name', async () => {
+    const { create } = dialog()
+    pick(new File(['hello'], 'notes.md'), new File([new Uint8Array([0, 255])], 'shot.png'))
+
+    expect(listed()).toEqual(['notes.md5 B', 'shot.png2 B'])
+    const input = await start(create)
+    expect(input?.attachments).toEqual([
+      { name: 'notes.md', data: 'aGVsbG8=' },
+      { name: 'shot.png', data: 'AP8=' },
+    ])
+  })
+
+  it('sends no attachments when none are picked', async () => {
+    const { create } = dialog()
+    const input = await start(create)
+    expect(input).not.toHaveProperty('attachments')
+    expect(screen.queryByRole('list', { name: 'Attached files' })).toBeNull()
+  })
+
+  it('takes a file out before the task starts', async () => {
+    const { create } = dialog()
+    pick(new File(['a'], 'a.txt'), new File(['b'], 'b.txt'))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove a.txt' }))
+
+    expect(listed()).toEqual(['b.txt1 B'])
+    expect((await start(create))?.attachments).toEqual([{ name: 'b.txt', data: 'Yg==' }])
+  })
+
+  it('attaches files dropped on the dialog', () => {
+    dialog()
+    const form = screen.getByRole('dialog').querySelector('form') as HTMLFormElement
+    const dataTransfer = { files: [new File(['x'], 'spec.pdf')], types: ['Files'] }
+    fireEvent.dragOver(form, { dataTransfer })
+    fireEvent.drop(form, { dataTransfer })
+
+    expect(listed()).toEqual(['spec.pdf1 B'])
+  })
+
+  it('names a pasted screenshot, and leaves pasted text alone', () => {
+    dialog()
+    const title = screen.getByLabelText('Task title')
+    const screenshot = new File(['png'], 'image.png', { type: 'image/png' })
+    fireEvent.paste(title, { clipboardData: { files: [screenshot] } })
+    fireEvent.paste(title, { clipboardData: { files: [screenshot] } })
+    fireEvent.paste(title, { clipboardData: { files: [] } })
+
+    expect(listed()).toEqual(['pasted-1.png3 B', 'pasted-2.png3 B'])
+  })
+
+  it('refuses a file over 20 MB with a reason, and keeps the others', () => {
+    dialog()
+    const big = new File(['x'], 'movie.mov')
+    Object.defineProperty(big, 'size', { value: 20_000_001 })
+    pick(big, new File(['a'], 'a.txt'))
+
+    expect(listed()).toEqual(['a.txt1 B'])
+    expect(screen.getByRole('alert').textContent).toBe(
+      'movie.mov is larger than 20 MB, the most for one file',
+    )
+  })
+
+  it('refuses the files after the 20th', () => {
+    dialog()
+    pick(...Array.from({ length: 21 }, (_, n) => new File(['x'], `f${n}.txt`)))
+
+    expect(listed()).toHaveLength(20)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'f20.txt is not attached: a task takes at most 20 files',
+    )
   })
 })

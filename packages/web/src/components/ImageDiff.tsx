@@ -38,7 +38,7 @@ export function formatBytes(bytes: number): string {
 }
 
 // An address for the bytes, given back when they are replaced or the panel goes away.
-function useObjectUrl(blob: Blob | undefined): string | null {
+export function useObjectUrl(blob: Blob | undefined): string | null {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     if (blob === undefined) {

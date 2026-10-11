@@ -3,9 +3,11 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { AGENT_CHOICES } from '../lib/agents'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
+import { readAsUpload } from '../lib/attachments'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
 import { createBlockedReason } from '../lib/workspace'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
+import { AttachmentField, useAttachments } from './AttachmentField'
 import { Button } from './ui/Button'
 import { Combobox } from './ui/Combobox'
 import { Dialog } from './ui/Dialog'
@@ -85,6 +87,7 @@ export function NewWorkspaceDialog({
   const [notes, setNotes] = useState('')
   const [pickedSource, setSource] = useState('manual')
   const [ref, setRef] = useState('')
+  const attachments = useAttachments()
   const settings = useQuery({
     queryKey: ['settings', repo],
     queryFn: () => loadSettings?.(repo) ?? Promise.reject(new Error('No settings')),
@@ -100,8 +103,9 @@ export function NewWorkspaceDialog({
     queryFn: () => loadBranches(repo),
   })
   const making = useMutation({
-    mutationFn: () =>
-      create({
+    mutationFn: async () => {
+      const uploads = await Promise.all(attachments.files.map(({ file }) => readAsUpload(file)))
+      return create({
         title: title.trim(),
         repo,
         ...(base === '' ? {} : { base }),
@@ -109,7 +113,9 @@ export function NewWorkspaceDialog({
         // Only notes typed by hand are the task's context; another source brings its own.
         ...(source !== 'manual' || notes.trim() === '' ? {} : { prompt: notes.trim() }),
         ...(source === 'manual' ? {} : { context: contextOf(picked, ref) }),
-      }),
+        ...(uploads.length === 0 ? {} : { attachments: uploads }),
+      })
+    },
     onSuccess: (task) => {
       if (base !== '') {
         rememberBase(repo, base)
@@ -156,7 +162,12 @@ export function NewWorkspaceDialog({
         </>
       }
     >
-      <form id="new-workspace" onSubmit={submit} className="flex flex-col gap-3">
+      <form
+        id="new-workspace"
+        onSubmit={submit}
+        {...attachments.handlers}
+        className="flex flex-col gap-3"
+      >
         <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Project</span>
           <Select
@@ -242,6 +253,16 @@ export function NewWorkspaceDialog({
             </div>
           </div>
         )}
+        <div className="flex flex-col gap-1">
+          <span className={FIELD_LABEL}>Attachments</span>
+          <AttachmentField
+            files={attachments.files}
+            refused={attachments.refused}
+            dragging={attachments.dragging}
+            onAdd={attachments.add}
+            onRemove={attachments.remove}
+          />
+        </div>
         <div className="flex flex-col gap-1">
           <span className={FIELD_LABEL}>Agent</span>
           <Select

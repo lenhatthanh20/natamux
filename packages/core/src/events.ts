@@ -58,6 +58,7 @@ export const EVENT_TYPES = [
   'issue.created',
   'agent.waiting',
   'agent.stopped',
+  'attachment.added',
 ] as const
 
 export const taskEventSchema = z.object({
@@ -89,6 +90,7 @@ export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'context.fetched',
   'issue.linked',
   'issue.created',
+  'attachment.added',
 ]
 
 // A move of one stage: the states it may happen in, and the state it leads to. `finish` ends the

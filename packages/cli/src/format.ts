@@ -37,6 +37,7 @@ Options:
   --context <source>    task create: where its context comes from, such as github-issue:42
   --repo <id>           task create: the project (default: the project of NATAMUX_TASK_ID's
                         task, or the only project)
+  --attach <path>       task create: a file for the agents to read (repeat for more)
   --stage <id>          stage, done, ask: the stage, when two run side by side
   --to <id>             stage back: the stage to go back to (default: the last agent stage)
   --reason <text>       stage back, stage fail: why, for the agent and the log

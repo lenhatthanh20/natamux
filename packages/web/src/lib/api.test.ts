@@ -358,6 +358,36 @@ describe('getFileImage', () => {
   })
 })
 
+describe('attachments', () => {
+  it('lists the attachments of a task', async () => {
+    const attachments = [{ name: 'a.png', size: 5, type: 'image/png' }]
+    const { calls, fetchFunction } = fakeFetch(() => json({ attachments }))
+
+    expect(await createApi('secret', fetchFunction).listAttachments('T-0001')).toEqual(attachments)
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/attachments')
+  })
+
+  it('reads one attachment as bytes, by its encoded name', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => new Response(new Uint8Array([7])))
+
+    const blob = await createApi('secret', fetchFunction).readAttachment('T-0001', 'a b.pdf')
+
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/attachments/a%20b.pdf')
+    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([7])
+  })
+
+  it('sends the attachments of a new workspace in its JSON', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task }, 201))
+    const api = createApi('secret', fetchFunction)
+    const attachments = [{ name: 'a.png', data: 'AA==' }]
+
+    await api.newWorkspace({ title: 'Fix it', attachments })
+
+    expect(calls[0]?.url).toBe('/api/workspaces')
+    expect(calls[0]?.body).toMatchObject({ title: 'Fix it', attachments })
+  })
+})
+
 describe('isUnauthorized', () => {
   it('is false for other errors', () => {
     expect(isUnauthorized(new ApiError(404, 'missing'))).toBe(false)

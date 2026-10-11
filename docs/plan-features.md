@@ -85,6 +85,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Approval gates: a task can require a human decision before it moves on. Done: each stage has a manual or auto gate (docs/design-task-stages.md) | v1 |
 | Stages per project: Context → Spec → Plan → [Test spec ‖ Implement] → Review → Testing → Release by default, changed in `.natamux.json` (drop, reorder, add, run side by side). Done: the daemon starts each stage, takes `natamux done`, checks the result (file, sections, commits, clean worktree, a command), and sends failed checks back to the agent once | v1 |
 | Task context from typed notes, a GitHub issue (with comments), a skill or an MCP server, written to `context.md`. Done | v1 |
+| Attach files (documents, screenshots) to a new task. Done: pick, drop or paste them in the Start a task dialog, or `natamux task create --attach`; up to 20 files, 20 MB each, 50 MB together. They are kept with the stage files, copied into `.natamux-task/attachments/`, listed in `context.md` and in the Docs tab | v1 |
 | Stage files (`context.md`, `spec.md`, `plan.md`, `test-spec.md`) in the worktree, ignored by git, kept with the task, editable in the Docs tab. Done | v1 |
 | Event log files: every event is also kept in `tasks/T-0001.events.jsonl`, and the index is rebuilt from them. Done | v1 |
 | Task notes as markdown, with a run log. Done: edit title, notes, priority and labels; every change is in the activity list | MVP |

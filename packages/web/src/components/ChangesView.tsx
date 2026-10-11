@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   ChangeEntry,
   FileDiff,
   GitGraph as GitGraphData,
@@ -60,6 +61,8 @@ type ChangesViewProps = {
   loadStageFiles: () => Promise<StageFile[]>
   readStageFile: (name: string) => Promise<string>
   writeStageFile: (name: string, text: string) => Promise<void>
+  loadAttachments?: () => Promise<Attachment[]>
+  readAttachment?: (name: string) => Promise<Blob>
   // Starts an agent in the task's terminal, for an agent that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
   // For a task in review: approve a stage, or open the form that sends the task back.
@@ -109,6 +112,8 @@ export function ChangesView({
   loadStageFiles,
   readStageFile,
   writeStageFile,
+  loadAttachments,
+  readAttachment,
 }: ChangesViewProps) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab)
   const [docFile, setDocFile] = useState<string | null>(null)
@@ -352,6 +357,8 @@ export function ChangesView({
             loadFiles={loadStageFiles}
             readFile={readStageFile}
             writeFile={writeStageFile}
+            loadAttachments={loadAttachments}
+            readAttachment={readAttachment}
           />
         </div>
       )}

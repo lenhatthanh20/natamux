@@ -90,6 +90,7 @@ The **Docs** tab of a workspace (key `4`) lists the stage files of the task, suc
 - **Rendered** shows Markdown as formatted text. **Source** shows the raw text. Natamux remembers your choice in this browser.
 - Click **Edit** to change a file, then **Save**. If the file changed after you began, Natamux asks before it replaces the new text. Your unsaved edit stays when you switch to another file or tab.
 - A task with no stage file shows **Write context.md** to start the first one.
+- **Attachments** lists the files attached to the task. An image opens in the tab; any other file downloads.
 - HTML in a file is not shown. Images are not loaded; the alt text shows instead. Only `http`, `https` and `mailto` links open, in your browser. Other links show as plain text.
 
 ### What happens when a check fails
@@ -188,6 +189,16 @@ The first stage of the default pipeline reads the context of the task. The sourc
 For `github-issue`, `gh` must be installed and logged in. See [GitHub](/docs/guides/github/). Configure the sources in `context.sources`; see the [configuration reference](/docs/reference/configuration/).
 
 Natamux starts the context stage as soon as you create the task. The other stages start when the task reaches them, or when you start them.
+
+### Attachments
+
+You can attach files to a new task: documents such as Word, Excel, PDF or Markdown files, and images such as screenshots. In the **Start a task** dialog, click **Add files**, drop files on the dialog, or paste a screenshot. From the CLI, use `natamux task create "Fix login" --attach error.png`.
+
+- A task takes at most 20 files, 20 MB each and 50 MB together.
+- Natamux keeps the files with the task and copies them to `.natamux-task/attachments/` in its worktree. Git ignores the folder, so the files never reach a commit.
+- `context.md` gets an **Attachments** section with the path of each file, so the agent of each stage finds them. With a `skill` or `mcp` source, the agent is asked to list them; Natamux adds the section if it does not.
+- Natamux does not convert the files. The agent reads them with its own tools, so whether it can read a Word or Excel file depends on the agent.
+- The files stay on your machine. They are not sent to the issue tracker.
 
 ## Related
 

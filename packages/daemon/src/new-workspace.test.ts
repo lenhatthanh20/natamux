@@ -1,8 +1,9 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
+import { decodeAttachments } from './attachments.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { newWorkspace } from './new-workspace.js'
@@ -122,6 +123,23 @@ describe('newWorkspace', () => {
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
     expect(ptys).toHaveLength(1)
+  })
+
+  it('puts the attachments into the new worktree and lists them in the context', async () => {
+    parts.stages.stop()
+    build(() => DEFAULT_PROJECT_SETTINGS)
+    const attachments = decodeAttachments([
+      { name: 'screenshot.png', data: Buffer.from('image').toString('base64') },
+    ])
+
+    const task = await newWorkspace(parts, { title: 'Fix the login page', attachments })
+    await parts.stages.settle()
+
+    const folder = join(task.workspace ?? '', '.natamux-task')
+    expect(readFileSync(join(folder, 'attachments', 'screenshot.png'), 'utf8')).toBe('image')
+    expect(readFileSync(join(folder, 'context.md'), 'utf8')).toContain(
+      '- `.natamux-task/attachments/screenshot.png` (5 B)',
+    )
   })
 
   it('refuses a base branch that does not exist and makes no task', async () => {

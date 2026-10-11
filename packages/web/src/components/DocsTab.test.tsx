@@ -725,3 +725,101 @@ describe('DocsTab empty and error states', () => {
     expect(screen.queryByRole('radiogroup')).toBeNull()
   })
 })
+
+describe('DocsTab attachments', () => {
+  const ATTACHMENTS = [
+    { name: 'login-error.png', size: 12_300, type: 'image/png' },
+    { name: 'spec.docx', size: 512, type: null },
+  ]
+
+  const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:file')
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  afterEach(() => {
+    URL.createObjectURL = original.create
+    URL.revokeObjectURL = original.revoke
+  })
+
+  function withAttachments(stageFiles: Files) {
+    taskCount += 1
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const readAttachment = vi.fn(async (name: string) => new Blob([name]))
+    render(
+      <QueryClientProvider client={client}>
+        <Harness
+          first={null}
+          taskId={`T-${taskCount}`}
+          now={NOW}
+          loadFiles={async () =>
+            Object.entries(stageFiles).map(([name, entry]) => ({
+              name,
+              size: entry.text.length,
+              modifiedAt: entry.modifiedAt,
+            }))
+          }
+          readFile={async (name) => stageFiles[name]?.text ?? ''}
+          writeFile={async () => {}}
+          loadAttachments={async () => ATTACHMENTS}
+          readAttachment={readAttachment}
+        />
+      </QueryClientProvider>,
+    )
+    return { readAttachment }
+  }
+
+  it('lists the attachments under the stage files, with their sizes', async () => {
+    withAttachments({ 'context.md': file('# Context') })
+
+    const nav = await screen.findByRole('navigation', { name: 'Stage files' })
+    expect(await within(nav).findByRole('heading', { name: 'Attachments' })).toBeTruthy()
+    expect(within(nav).getByRole('button', { name: /login-error\.png/ }).textContent).toContain(
+      '12.3 KB',
+    )
+    expect(within(nav).getByRole('button', { name: /spec\.docx/ }).textContent).toContain(
+      '512 B · download',
+    )
+  })
+
+  it('shows an attached image in place of the file until a file is picked', async () => {
+    const user = userEvent.setup()
+    const { readAttachment } = withAttachments({ 'context.md': file('# Context') })
+
+    await user.click(await screen.findByRole('button', { name: /login-error\.png/ }))
+
+    const region = await screen.findByRole('region', { name: 'login-error.png' })
+    const image = await within(region).findByRole('img', { name: 'login-error.png' })
+    expect(image.getAttribute('src')).toBe('blob:file')
+    expect(readAttachment).toHaveBeenCalledWith('login-error.png')
+
+    await user.click(screen.getByRole('button', { name: /context\.md/ }))
+    expect(await screen.findByRole('region', { name: 'context.md' })).toBeTruthy()
+  })
+
+  it('downloads a file that is not an image', async () => {
+    const user = userEvent.setup()
+    const saved: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      saved.push(`${this.download} ${this.href}`)
+    })
+    const { readAttachment } = withAttachments({ 'context.md': file('# Context') })
+
+    await user.click(await screen.findByRole('button', { name: /spec\.docx/ }))
+
+    await vi.waitFor(() => expect(saved).toEqual(['spec.docx blob:file']))
+    expect(readAttachment).toHaveBeenCalledWith('spec.docx')
+    expect(screen.queryByRole('region', { name: 'spec.docx' })).toBeNull()
+  })
+
+  it('lists the attachments of a task with no stage file yet', async () => {
+    withAttachments({})
+
+    const nav = await screen.findByRole('navigation', { name: 'Attachments' })
+    expect(within(nav).getByRole('button', { name: /login-error\.png/ })).toBeTruthy()
+  })
+})

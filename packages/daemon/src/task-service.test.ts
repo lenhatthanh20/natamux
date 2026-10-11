@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile } from './task-files.js'
@@ -57,6 +58,31 @@ describe('createTask', () => {
 
   it('rejects an empty title', () => {
     expect(() => service.createTask({ title: '  ' })).toThrow()
+  })
+
+  it('keeps the attachments with the task and logs each one, before the task is published', () => {
+    let listedOnPublish: string[] = []
+    const bus = new EventBus()
+    const withFiles = new TaskService({ dataDir, index, bus })
+    bus.subscribe((message) => {
+      if (message.kind === 'task.created') {
+        listedOnPublish = listAttachments(dataDir, message.task.id).map((each) => each.name)
+      }
+    })
+    const files = decodeAttachments([
+      { name: 'a.png', data: Buffer.from('image').toString('base64') },
+      { name: 'b.pdf', data: Buffer.from('pdf').toString('base64') },
+    ])
+
+    const task = withFiles.createTask({ title: 'With files' }, files)
+
+    expect(listedOnPublish).toEqual(['a.png', 'b.pdf'])
+    const events = withFiles.listEvents(task.id).map(({ event }) => [event.type, event.payload])
+    expect(events).toEqual([
+      ['task.created', {}],
+      ['attachment.added', { name: 'a.png', size: 5 }],
+      ['attachment.added', { name: 'b.pdf', size: 3 }],
+    ])
   })
 })
 

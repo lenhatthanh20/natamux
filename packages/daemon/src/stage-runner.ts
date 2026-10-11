@@ -20,12 +20,14 @@ import {
   waitingOn,
 } from '@natamux/core'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
+import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { type RunGh, runGh } from './git.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
 import {
   archiveStageFiles,
   excludeStageDir,
+  readStageFile,
   restoreStageFiles,
   workingDir,
   writeStageFile,
@@ -301,6 +303,7 @@ export class StageRunner {
     }
     if (event.type === 'workspace.created' && task.workspace !== null) {
       restoreStageFiles(this.dataDir, task)
+      restoreAttachments(this.dataDir, task)
       this.background(excludeStageDir(task.workspace))
       if (this.waitingForWorkspace.delete(task.id)) {
         this.startInBackground(task.id, ['ready', 'draft'])
@@ -617,7 +620,8 @@ export class StageRunner {
   private async startContext(task: Task, step: Step, stage: Stage): Promise<void> {
     const source = this.sourceOf(task)
     if (source.type === 'skill' || source.type === 'mcp') {
-      await this.startAgent(task, step, stage, contextPrompt(source, task))
+      const attachments = listAttachments(this.dataDir, task.id)
+      await this.startAgent(task, step, stage, contextPrompt(source, task, attachments))
       return
     }
     if (!this.markStarted(task, step, stage, { source: source.type })) {
@@ -626,8 +630,14 @@ export class StageRunner {
     const output = stage.output ?? 'context.md'
     try {
       const text = source.type === 'github-issue' ? await this.readIssue(task) : manualContext(task)
+      const attachments = listAttachments(this.dataDir, task.id)
       // The task may have got its workspace while the issue was read: write where it is now.
-      writeStageFile(this.dataDir, this.tasks.getTask(task.id), output, text)
+      writeStageFile(
+        this.dataDir,
+        this.tasks.getTask(task.id),
+        output,
+        withAttachmentSection(text, attachments),
+      )
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
       return
@@ -830,6 +840,9 @@ export class StageRunner {
     if (stage === undefined) {
       return
     }
+    if (stage.kind === 'context') {
+      this.addAttachmentSection(task, stage.output ?? 'context.md')
+    }
     const start = this.lastStart(taskId, stageId)
     const folder = workingDir(this.dataDir, task)
     const result = await runStageChecks(
@@ -881,6 +894,20 @@ export class StageRunner {
       } catch {
         // The terminal closed since: the reasons are in the log, and the next failure waits.
       }
+    }
+  }
+
+  // An agent that read the context from a skill or an MCP server may leave the attachments out of
+  // it. The later stages find them only through the context.
+  private addAttachmentSection(task: Task, output: string): void {
+    const attachments = listAttachments(this.dataDir, task.id)
+    const text = attachments.length === 0 ? undefined : readStageFile(this.dataDir, task, output)
+    if (text === undefined) {
+      return
+    }
+    const next = withAttachmentSection(text, attachments)
+    if (next !== text) {
+      writeStageFile(this.dataDir, task, output, next)
     }
   }
 

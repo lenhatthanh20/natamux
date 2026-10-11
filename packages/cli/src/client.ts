@@ -1,4 +1,5 @@
 import {
+  type AttachmentUpload,
   type Repo,
   repoSchema,
   type Task,
@@ -21,6 +22,7 @@ export type CreateTaskRequest = {
   context?: { source: string; ref: string }
   // Null is the project with the id "default".
   repo?: string | null
+  attachments?: AttachmentUpload[]
 }
 
 export type StageActionRequest = {
