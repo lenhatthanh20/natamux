@@ -49,7 +49,17 @@ To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or
 
 `Mod+F` (`Ctrl+Shift+F` on Windows and Linux) opens **Find**. Press `Enter` for the next match and `Shift+Enter` for the previous one. **Match case** and **Use regular expression** are toggles. `Esc` closes the bar.
 
-When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. Each pane keeps 10,000 lines of scrollback. A shell keeps its screen and the 10,000 lines above it while no one looks at it, so when you switch tasks or reload the dashboard, you can scroll back to where the output began. When the pane is narrower or wider than before, long lines wrap again to fit it, as in any terminal. The output is gone when the shell ends, or when Natamux restarts or updates.
+When you scroll up, **Jump to latest** brings you back to the end. Links to web addresses open in a new tab. A shell keeps its screen and the history above it while no one looks at it, so when you switch tasks or reload the dashboard, you can scroll back as far as the pane could. When the pane is narrower or wider than before, long lines wrap again to fit it, as in any terminal.
+
+Like Ghostty, the history is limited by memory, about 10 MB for each shell, not by a number of lines. So a narrow pane keeps more lines than a wide one:
+
+| Pane width | Lines kept above the screen |
+|---|---|
+| 80 columns | about 7,800 |
+| 120 columns | about 5,200 |
+| 200 columns | about 3,100 |
+
+A pane keeps at most 10,000 lines and at least 1,000. When a pane gets wider, its oldest lines go first. The output is gone when the shell ends, or when Natamux restarts or updates.
 
 ### Keys that belong to the shell
 

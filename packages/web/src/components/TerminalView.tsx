@@ -1,4 +1,4 @@
-import { TERMINAL_SCROLLBACK_LINES, type TerminalSize } from '@natamux/core'
+import { scrollbackLines, type TerminalSize } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -83,7 +83,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       fontSize: TERMINAL_FONT_SIZE * uiZoom(),
       lineHeight: TERMINAL_LINE_HEIGHT,
       minimumContrastRatio: MIN_CONTRAST_RATIO,
-      scrollback: TERMINAL_SCROLLBACK_LINES,
+      scrollback: scrollbackLines(80),
       theme: terminalTheme(themeRef.current),
     })
     terminalRef.current = terminal
@@ -105,6 +105,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     terminal.attachCustomKeyEventHandler((event) => keyBelongsToShell(event))
     terminal.open(element)
     safeFit(fit)
+    terminal.options.scrollback = scrollbackLines(terminal.cols)
 
     let socket: WebSocket | null = null
     let disposed = false
@@ -175,7 +176,11 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       })
 
     const input = terminal.onData((data) => send({ type: 'input', data }))
-    const resized = terminal.onResize(() => sendSize())
+    const resized = terminal.onResize(() => {
+      // The history keeps the same memory at any width, as the daemon's screen does.
+      terminal.options.scrollback = scrollbackLines(terminal.cols)
+      sendSize()
+    })
     const updateScrolled = () => {
       const buffer = terminal.buffer.active
       setScrolledUp(buffer.viewportY < buffer.baseY)

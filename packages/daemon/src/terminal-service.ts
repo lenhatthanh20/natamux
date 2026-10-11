@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import {
   portRange,
-  TERMINAL_SCROLLBACK_LINES,
+  scrollbackLines,
   type TerminalServerMessage,
   type TerminalSize,
 } from '@natamux/core'
@@ -69,8 +69,12 @@ export class ScreenState {
   private readonly terminal: InstanceType<typeof xtermHeadless.Terminal>
   private readonly serializer = new SerializeAddon()
 
-  constructor(size: TerminalSize, scrollback = TERMINAL_SCROLLBACK_LINES) {
-    this.terminal = new xtermHeadless.Terminal({ ...size, scrollback, allowProposedApi: true })
+  constructor(size: TerminalSize) {
+    this.terminal = new xtermHeadless.Terminal({
+      ...size,
+      scrollback: scrollbackLines(size.cols),
+      allowProposedApi: true,
+    })
     this.terminal.loadAddon(this.serializer)
   }
 
@@ -80,8 +84,12 @@ export class ScreenState {
 
   // Output is parsed later, in order. A resize waits for the output before it, which was drawn
   // for the old size.
+  // The history keeps the same memory at the new width, as the dashboard's does.
   resize(size: TerminalSize): void {
-    this.terminal.write('', () => this.terminal.resize(size.cols, size.rows))
+    this.terminal.write('', () => {
+      this.terminal.resize(size.cols, size.rows)
+      this.terminal.options.scrollback = scrollbackLines(size.cols)
+    })
   }
 
   // Calls back with the screen, and the lines above it, once all output so far is on it.

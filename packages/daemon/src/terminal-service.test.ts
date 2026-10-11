@@ -1,5 +1,6 @@
 import {
-  TERMINAL_SCROLLBACK_LINES,
+  scrollbackLines,
+  TERMINAL_SCROLLBACK_MAX_LINES,
   type TerminalServerMessage,
   type TerminalSize,
 } from '@natamux/core'
@@ -66,7 +67,7 @@ async function screenOf(
 ): Promise<string[]> {
   const terminal = new xtermHeadless.Terminal({
     ...screen,
-    scrollback: TERMINAL_SCROLLBACK_LINES,
+    scrollback: TERMINAL_SCROLLBACK_MAX_LINES,
     allowProposedApi: true,
   })
   await new Promise<void>((resolve) => terminal.write(outputOf(messages), resolve))
@@ -173,7 +174,8 @@ describe('TerminalService', () => {
     async () => {
       const { service, ptys } = setup()
       service.attach('T-0001', client(), size)
-      const count = TERMINAL_SCROLLBACK_LINES + 500
+      const kept = scrollbackLines(size.cols)
+      const count = kept + 500
       ptys[0]?.emit(numbered(count))
 
       const later = client()
@@ -181,8 +183,8 @@ describe('TerminalService', () => {
       await service.settled('T-0001')
 
       const rows = await screenOf(later.messages)
-      expect(rows.length).toBeLessThanOrEqual(TERMINAL_SCROLLBACK_LINES + size.rows)
-      expect(rows).toContain(`line ${count - TERMINAL_SCROLLBACK_LINES}`)
+      expect(rows.length).toBeLessThanOrEqual(kept + size.rows)
+      expect(rows).toContain(`line ${count - kept}`)
       expect(rows).not.toContain('line 1')
       expect(rows.at(-1)).toBe(`line ${count}`)
     },
@@ -378,7 +380,7 @@ describe('attaching to a running shell', () => {
     async () => {
       const { service, ptys } = setup()
       service.attach('T-0001', client(), size)
-      for (let index = 1; index <= 8000; index += 1) {
+      for (let index = 1; index <= 7000; index += 1) {
         ptys[0]?.emit(`line ${index}\r\n`)
       }
 
@@ -386,7 +388,7 @@ describe('attaching to a running shell', () => {
       service.attach('T-0001', later, size)
       await service.settled('T-0001')
 
-      expect(await screenOf(later.messages)).toEqual(numberedLines(8000))
+      expect(await screenOf(later.messages)).toEqual(numberedLines(7000))
     },
     LONG_TEST_MS,
   )
@@ -407,7 +409,7 @@ describe('attaching to a running shell', () => {
   )
 
   it(
-    'keeps a long agent session on a wide screen: 10,000 colored lines of 186 chars',
+    'keeps a long agent session on a wide screen, as many rows as fit the memory limit',
     async () => {
       const wide = { cols: 200, rows: 40 }
       const { service, ptys } = setup()
@@ -424,8 +426,31 @@ describe('attaching to a running shell', () => {
       service.attach('T-0001', later, wide)
       await service.settled('T-0001')
 
-      expect(await screenOf(later.messages, wide)).toEqual(lines)
-      expect(outputOf(later.messages)).toContain('\u001b[32m00001')
+      // The last row is the empty one the cursor sits on.
+      const kept = scrollbackLines(wide.cols) + wide.rows - 1
+      expect(await screenOf(later.messages, wide)).toEqual(lines.slice(-kept))
+      expect(outputOf(later.messages)).toContain('\u001b[32m10000')
+    },
+    LONG_TEST_MS,
+  )
+
+  it(
+    'keeps fewer rows once the shell is wider, the newest ones',
+    async () => {
+      const wide = { cols: 200, rows: 24 }
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      ptys[0]?.emit(numbered(7000))
+
+      service.resize('T-0001', wide)
+      const later = client()
+      service.attach('T-0001', later, wide)
+      await service.settled('T-0001')
+
+      const rows = await screenOf(later.messages, wide)
+      expect(rows.length).toBeLessThanOrEqual(scrollbackLines(wide.cols) + wide.rows)
+      expect(rows.at(-1)).toBe('line 7000')
+      expect(rows).not.toContain('line 1')
     },
     LONG_TEST_MS,
   )
