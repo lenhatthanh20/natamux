@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  AUTO_FLAGS,
   codexHookArgs,
   copilotHookFile,
   cursorHookFile,
   geminiHookSettings,
+  LAUNCHABLE_AGENTS,
   type LaunchOptions,
   launchCommand,
   prepareWorkspace,
@@ -41,7 +43,12 @@ describe('launchCommand', () => {
       "GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini --approval-mode yolo --x -i 'Fix it'",
     )
     const codex = launchCommand('codex', { ...auto, program: 'codex', extraArgs: '--x' })
-    expect(codex.startsWith('codex --dangerously-bypass-hook-trust --full-auto -c ')).toBe(true)
+    expect(
+      codex.startsWith(
+        'codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c ',
+      ),
+    ).toBe(true)
+    expect(codex).not.toContain('--full-auto')
     expect(codex.endsWith(" --x 'Fix it'")).toBe(true)
   })
 
@@ -64,7 +71,7 @@ describe('launchCommand', () => {
 
   it.each([
     ['claude-code', '--permission-mode auto'],
-    ['codex', '--full-auto'],
+    ['codex', '--sandbox workspace-write --ask-for-approval never'],
     ['gemini', '--approval-mode yolo'],
     ['copilot', '--allow-all-tools'],
     ['cursor', '--force'],
@@ -100,11 +107,64 @@ describe('launchCommand', () => {
     )
     const codex = launchCommand('codex', { ...base, program: 'codex' })
     expect(codex.startsWith('codex --dangerously-bypass-hook-trust -c ')).toBe(true)
-    expect(codex).not.toContain('--full-auto')
+    expect(codex).not.toContain('--sandbox')
+    expect(codex).not.toContain('--ask-for-approval')
     expect(codex).toContain(
       `'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'`,
     )
     expect(codex.endsWith(" 'Fix it'")).toBe(true)
+  })
+
+  it('adds the Codex sandbox flags once each, in order, and keeps its hooks', () => {
+    const prompt = "Don't break 'Application Support' or \"$HOME\""
+    const asking = launchCommand('codex', { ...base, program: 'codex', prompt })
+    const codex = launchCommand('codex', { ...auto, program: 'codex', prompt })
+    expect(codex).toBe(
+      asking.replace(
+        '--dangerously-bypass-hook-trust ',
+        '--dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never ',
+      ),
+    )
+    expect(codex.split(' --sandbox ')).toHaveLength(2)
+    expect(codex.split(' --ask-for-approval ')).toHaveLength(2)
+    expect(codex.endsWith(` ${quoteArgument(prompt, 'linux')}`)).toBe(true)
+  })
+
+  it.each(LAUNCHABLE_AGENTS)('adds no auto flag of any agent to %s in the ask mode', (agent) => {
+    const command = launchCommand(agent, { ...base, program: agent })
+    for (const flags of Object.values(AUTO_FLAGS)) {
+      expect(command).not.toContain(flags.join(' '))
+    }
+    expect(command).not.toContain('--full-auto')
+  })
+
+  it('keeps the Codex hooks in the ask mode', () => {
+    const codex = launchCommand('codex', { ...base, program: 'codex' })
+    expect(codex).toContain(' --dangerously-bypass-hook-trust ')
+    expect(codex.split(' -c ')).toHaveLength(codexHookArgs().length / 2 + 1)
+  })
+
+  it('adds no flags for a mode other than auto', () => {
+    const mode = 'yolo' as string as LaunchOptions['permissionMode']
+    expect(launchCommand('codex', { ...base, program: 'codex', permissionMode: mode })).toBe(
+      launchCommand('codex', { ...base, program: 'codex' }),
+    )
+  })
+
+  it('puts the words of NATAMUX_CODEX_ARGS after the Codex mode flags', () => {
+    const extraArgs = '--sandbox read-only --ask-for-approval on-request --model "o3 mini"'
+    const codex = launchCommand('codex', { ...auto, program: 'codex', extraArgs })
+    expect(codex.indexOf(extraArgs)).toBeGreaterThan(
+      codex.indexOf('--sandbox workspace-write --ask-for-approval never'),
+    )
+    expect(codex.indexOf(extraArgs)).toBeGreaterThan(codex.lastIndexOf(' -c '))
+    expect(codex.endsWith(` ${extraArgs} 'Fix it'`)).toBe(true)
+  })
+
+  it('adds the words of NATAMUX_CODEX_ARGS without mode flags in the ask mode', () => {
+    const codex = launchCommand('codex', { ...base, program: 'codex', extraArgs: '--model o3' })
+    expect(codex.endsWith(" --model o3 'Fix it'")).toBe(true)
+    expect(codex).not.toContain('--sandbox')
   })
 
   it('sets the Gemini settings in PowerShell on Windows, and leaves the prompt out when empty', () => {
