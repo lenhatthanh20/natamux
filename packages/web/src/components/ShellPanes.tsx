@@ -7,7 +7,7 @@ import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
-import { nextTerminalName, terminalNames } from '../lib/terminal-tabs'
+import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
 import { useViewStore } from '../lib/view-store'
 import { StatusGlyph } from './StatusGlyph'
@@ -53,6 +53,42 @@ export function ShellPanes({
     queryFn: () => loadAgentTerminals?.() ?? Promise.resolve<Record<string, TerminalLane>>({}),
     enabled: loadAgentTerminals !== undefined,
     refetchInterval: 5000,
+  })
+  // A stage that starts or ends changes the lanes. The daemon may have opened or ended the
+  // stage's agent shell, so the agent list is read again now, not at the next poll.
+  const lanesKey = `${task.stage} ${JSON.stringify(task.lanes)}`
+  const seenLanes = useRef(lanesKey)
+  useEffect(() => {
+    if (seenLanes.current !== lanesKey) {
+      seenLanes.current = lanesKey
+      if (loadAgentTerminals !== undefined) {
+        void agentShells.refetch()
+      }
+    }
+  })
+  // An agent shell that the open list does not have was opened after the list was read. The
+  // lists are checked once per read of the agent list and each time the open list changes. A read
+  // with the same result keeps the same data, so a shell the user just closed and the agent list
+  // still has costs one read per poll, not a loop.
+  const checked = useRef<{
+    open?: string[]
+    agents?: Record<string, TerminalLane>
+    agentsReadAt?: number
+  }>({})
+  useEffect(() => {
+    const agents = agentShells.data
+    if (open.data === undefined || agents === undefined || open.isFetching) {
+      return
+    }
+    const agentsReadAt = agentShells.dataUpdatedAt
+    const last = checked.current
+    if (last.open === open.data && last.agents === agents && last.agentsReadAt === agentsReadAt) {
+      return
+    }
+    checked.current = { open: open.data, agents, agentsReadAt }
+    if (unlistedShells(open.data, Object.keys(agents)).length > 0) {
+      void open.refetch()
+    }
   })
   const [added, setAdded] = useState<string[]>([])
   // Shells that are being closed. They leave the screen at once, not when the list is read again.
