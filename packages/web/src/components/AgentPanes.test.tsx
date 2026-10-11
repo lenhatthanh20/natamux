@@ -212,9 +212,7 @@ const newestFirst = (...ids: string[]) =>
   )
 
 const closePane = (id: string) =>
-  userEvent
-    .setup()
-    .click(within(header(id)).getByRole('button', { name: `Close Agent of ${id}` }))
+  userEvent.setup().click(within(header(id)).getByRole('button', { name: `Close Agent of ${id}` }))
 
 describe('AgentPanes first change of the default grid', () => {
   it('saves the order the user sees on the first close', async () => {
@@ -280,9 +278,7 @@ describe('AgentPanes keys', () => {
     const view = render(<AgentPanes tasks={tasks} chosen={['T-0012', 'T-0003']} {...props} />)
     const picked = region('T-0012')
     const second = region('T-0003')
-    view.rerender(
-      <AgentPanes tasks={tasks} chosen={['T-0012', 'T-0003', 'T-0007']} {...props} />,
-    )
+    view.rerender(<AgentPanes tasks={tasks} chosen={['T-0012', 'T-0003', 'T-0007']} {...props} />)
     expect(order()).toEqual(['Agent of T-0012', 'Agent of T-0003', 'Agent of T-0007'])
     expect(region('T-0012')).toBe(picked)
     expect(region('T-0003')).toBe(second)

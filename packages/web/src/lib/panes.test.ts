@@ -163,7 +163,12 @@ describe('agentPaneTasks order with task events', () => {
       tasks = event(tasks, 'T-0000', { state: 'done' })
       tasks = event(tasks, 'T-0004', { workspace: null })
       expect(panes(null, tasks)).toEqual(['T-0003', 'T-0007', 'T-0012'])
-      expect(panes(null, tasks.filter((task) => task.state === 'ready'))).toEqual([])
+      expect(
+        panes(
+          null,
+          tasks.filter((task) => task.state === 'ready'),
+        ),
+      ).toEqual([])
     })
 
     it('does not move panes on task events', () => {
@@ -224,7 +229,16 @@ describe('agentPaneTasks order with task events', () => {
     })
 
     it('shows the six lowest ids when more agents run, whatever gets an event', () => {
-      const shuffled = ['T-0005', 'T-0008', 'T-0002', 'T-0007', 'T-0001', 'T-0004', 'T-0006', 'T-0003']
+      const shuffled = [
+        'T-0005',
+        'T-0008',
+        'T-0002',
+        'T-0007',
+        'T-0001',
+        'T-0004',
+        'T-0006',
+        'T-0003',
+      ]
       let tasks = newestFirst(...shuffled)
       expect(MAX_PANES).toBe(6)
       expect(panes(null, tasks)).toEqual(ids(1, 6))
