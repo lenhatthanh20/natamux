@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -112,6 +113,7 @@ type Options = {
   loadFiles?: () => Promise<StageFile[]>
   act?: Act
   activity?: string
+  startAgent?: (agent: AgentId) => Promise<Task>
 }
 
 afterEach(() => {
@@ -138,6 +140,7 @@ function progress(options: Options = {}) {
         createIssue={createIssue}
         onOpenFile={onOpenFile}
         activity={options.activity}
+        startAgent={options.startAgent}
       />
     </QueryClientProvider>
   )
@@ -404,6 +407,28 @@ describe('the actions of the current stage', () => {
       ),
     )
     await waitFor(() => expect(approve.hasAttribute('disabled')).toBe(false))
+  })
+
+  it('leaves the report of a failed agent start to the dashboard', async () => {
+    let fail: (error: Error) => void = () => {}
+    const startAgent = vi.fn(
+      (_agent: AgentId) =>
+        new Promise<Task>((_resolve, reject) => {
+          fail = reject
+        }),
+    )
+    progress({ task: { ...TASK, state: 'failed' }, startAgent })
+    const user = userEvent.setup()
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const start = within(spec).getByRole('button', { name: 'Start agent' })
+    await user.click(start)
+    await waitFor(() => expect(start.getAttribute('aria-busy')).toBe('true'))
+    fail(new Error('The daemon is down'))
+
+    await waitFor(() => expect(start.getAttribute('aria-busy')).toBeNull())
+    expect(startAgent).toHaveBeenCalledWith('claude-code')
+    expect(useToasts.getState().toasts).toEqual([])
   })
 
   it('skips the stage and marks a running one as done', async () => {

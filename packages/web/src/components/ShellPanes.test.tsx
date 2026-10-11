@@ -1,12 +1,15 @@
 import type { Task, TerminalLane } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellPanes } from './ShellPanes'
 
+// The stand-in shows the focus token it gets, which makes the real terminal take the keyboard.
 vi.mock('./TerminalView', () => ({
-  default: () => createElement('p', null, 'Terminal stand-in'),
+  default: ({ focusToken }: { focusToken?: number }) =>
+    createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in'),
 }))
 
 afterEach(cleanup)
@@ -157,5 +160,67 @@ describe('ShellPanes agent state', () => {
     expect(stateLine('Shell 2')).toBeUndefined()
     expect(glyphState('Shell 1')).toBe('running')
     expect(stateLine('Shell 1')).toBe('Running')
+  })
+})
+
+describe('ShellPanes answer in terminal', () => {
+  // A task in the build group whose stages wait or run as given, with an agent in each shell.
+  function answerable(lanes: Task['lanes']) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = (current: Task['lanes'], focusToken: number) => {
+      const states = Object.values(current)
+      const state = states.includes('needs-input') ? 'needs-input' : 'running'
+      return (
+        <QueryClientProvider client={client}>
+          <ShellPanes
+            task={{ id: 'T-0001', state, stage: 'build', lanes: current, agent: 'claude-code' }}
+            connect={() => new Promise<WebSocket>(() => {})}
+            loadTerminals={async () => ['1', '2']}
+            loadAgentTerminals={async () => ({
+              '1': { stage: 'implement', state: 'running' },
+              '2': { stage: 'test-spec', state: 'running' },
+            })}
+            closeTerminal={async () => ['1', '2']}
+            focusToken={focusToken}
+            actionsSlot={null}
+          />
+        </QueryClientProvider>
+      )
+    }
+    const { rerender } = render(view(lanes, 0))
+    const update = (next: Task['lanes'], focusToken: number) => rerender(view(next, focusToken))
+    return { update }
+  }
+
+  const tokenOf = async (name: string) => {
+    const pane = screen.getByRole('region', { name })
+    const terminal = await within(pane).findByText('Terminal stand-in')
+    return terminal.getAttribute('data-focus-token')
+  }
+
+  it('keeps the keyboard in the answered shell when another shell starts waiting', async () => {
+    const { update } = answerable({ implement: 'needs-input', 'test-spec': 'running' })
+    await agentShown('Shell 2')
+    update({ implement: 'needs-input', 'test-spec': 'running' }, 1)
+    await waitFor(async () => expect(await tokenOf('Shell 1')).not.toBe(''))
+    const token = await tokenOf('Shell 1')
+    expect(await tokenOf('Shell 2')).toBe('')
+
+    update({ implement: 'running', 'test-spec': 'needs-input' }, 1)
+    expect(await tokenOf('Shell 2')).toBe('')
+    update({ implement: 'needs-input', 'test-spec': 'running' }, 1)
+    expect(await tokenOf('Shell 1')).toBe(token)
+  })
+
+  it('shows the waiting shell when another one is maximized', async () => {
+    const { update } = answerable({ implement: 'running', 'test-spec': 'needs-input' })
+    const user = userEvent.setup()
+    await agentShown('Shell 2')
+    await user.click(screen.getByRole('button', { name: 'Maximize Shell 1' }))
+    expect(screen.queryByRole('region', { name: 'Shell 2' })).toBeNull()
+
+    update({ implement: 'running', 'test-spec': 'needs-input' }, 1)
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Shell 2' })).toBeTruthy())
+    expect(await tokenOf('Shell 2')).not.toBe('')
   })
 })

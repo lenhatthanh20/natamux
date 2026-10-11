@@ -55,6 +55,11 @@ describe('taskSchema', () => {
     expect(taskSchema.safeParse({ ...minimalTask, dependsOn: ['nope'] }).success).toBe(false)
   })
 
+  it('keeps the name of the context source', () => {
+    const context = { source: 'skill', name: 'Linear', ref: 'LIN-7' }
+    expect(taskSchema.parse({ ...minimalTask, context }).context).toEqual(context)
+  })
+
   it('rejects a pr that is not a URL', () => {
     expect(taskSchema.safeParse({ ...minimalTask, pr: 'pull 12' }).success).toBe(false)
   })

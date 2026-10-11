@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject, useEffect, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
+import { focusKind } from '../lib/dispatch'
 import type { DetailsMode, LayoutMode } from '../lib/layout-mode'
 import { ResizeHandle } from './ui/ResizeHandle'
 
@@ -60,6 +61,11 @@ function useLayer(
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // Beside a layer with no scrim the terminal still takes keys, and Esc means something to
+        // the agent or the editor in it.
+        if (!trap && focusKind(event.target) === 'terminal') {
+          return
+        }
         // A menu, a dialog or a tooltip on top of this layer takes the key first.
         const above = [
           ...document.querySelectorAll('[role="dialog"], [role="menu"], [role="tooltip"]'),

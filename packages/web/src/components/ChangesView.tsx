@@ -125,6 +125,13 @@ export function ChangesView({
     pickTab('docs')
   })
   useEffect(() => setTab(initialTab), [initialTab])
+  // A focus request is for the shells on screen now. Back on the Terminal tab later, the shells
+  // open with no request, so they do not take the keyboard from the tab row.
+  useEffect(() => {
+    if (tab !== 'terminal') {
+      setFocusToken(0)
+    }
+  }, [tab])
 
   // The graph has the number of commits ahead of the base, which the Push button shows.
   const graph = useQuery({

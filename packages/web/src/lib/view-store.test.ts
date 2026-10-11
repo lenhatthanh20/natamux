@@ -347,6 +347,12 @@ describe('the view of the details', () => {
     expect(store.getState().tabByTask).toEqual({ 'T-0002': 'history' })
   })
 
+  it('keeps a remembered Docs tab after a reload', async () => {
+    globalThis.localStorage.setItem('natamux.tab-by-task', '{"T-0001":"docs"}')
+    const store = await freshStore()
+    expect(store.getState().tabByTask).toEqual({ 'T-0001': 'docs' })
+  })
+
   it('remembers no tab when the stored tabs are broken', async () => {
     globalThis.localStorage.setItem('natamux.tab-by-task', '{oops')
     const store = await freshStore()

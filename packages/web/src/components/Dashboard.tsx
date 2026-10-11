@@ -152,9 +152,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     queryClient.invalidateQueries({ queryKey: ['repos'] }),
   )
 
+  // Messages sent while the socket was down are lost, so load again what they would have changed.
   useEffect(() => {
     if (liveStatus === 'live') {
       queryClient.invalidateQueries({ queryKey: TASKS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['repos'] })
     }
   }, [liveStatus, queryClient])
 
@@ -1293,11 +1295,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           loadTerminals={(taskId) => api.listTerminals(taskId)}
           onClose={() => setPalette(null)}
           onOpenTask={(id, shell) => {
-            openTask(id)
-            afterPick()
-            if (shell !== undefined) {
+            if (shell === undefined) {
+              openTask(id)
+            } else {
+              // Only the Terminal tab shows the shells; on another tab the request would wait.
+              select(id)
+              openChanges(id, 'terminal')
               requestShell(id, shell)
             }
+            afterPick()
           }}
           onAddToAgents={addToAgents}
           onRunCommand={(command: Command) =>

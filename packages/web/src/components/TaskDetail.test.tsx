@@ -100,6 +100,21 @@ describe('TaskDetail views', () => {
     expect(screen.queryByText('Stage list')).toBeNull()
   })
 
+  it('keeps the edit form and its changes when the Progress tab is clicked', async () => {
+    const { onViewChange } = details({ view: 'progress', progress: <p>Stage list</p> })
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.type(screen.getByLabelText('Notes (markdown)'), 'New notes')
+    await user.click(screen.getByRole('tab', { name: 'Progress' }))
+
+    expect(onViewChange).not.toHaveBeenCalled()
+    expect(screen.getByRole('form', { name: 'Edit T-0001' })).toBeTruthy()
+    expect((screen.getByLabelText('Notes (markdown)') as HTMLTextAreaElement).value).toBe(
+      'New notes',
+    )
+  })
+
   it('moves between the views with the arrow keys, from one tab stop', async () => {
     const { onViewChange } = details({ view: 'progress', progress: <p>Stage list</p> })
     const user = userEvent.setup()

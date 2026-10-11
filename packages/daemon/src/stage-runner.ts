@@ -617,9 +617,13 @@ export class StageRunner {
 
   private sourceOf(task: Task): ContextSource {
     const type = task.context?.source ?? 'manual'
-    const configured = this.tasks
+    const name = task.context?.name
+    const offered = this.tasks
       .settingsOf(task.repo)
-      .context.sources.find((source) => source.type === type)
+      .context.sources.filter((source) => source.type === type)
+    // A task from before names were sent, or one whose source was renamed, takes the first.
+    const configured =
+      offered.find((source) => 'name' in source && source.name === name) ?? offered[0]
     return configured ?? (type === 'skill' || type === 'mcp' ? { type: 'manual' } : { type })
   }
 

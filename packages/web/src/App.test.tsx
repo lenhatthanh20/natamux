@@ -25,8 +25,10 @@ vi.mock('./components/MonacoFile', () => ({
     createElement('pre', { 'aria-label': `New file ${path}` }, `${kind}: ${text}`),
 }))
 
+// It shows the focus token it gets, which makes the real terminal take the keyboard.
 vi.mock('./components/TerminalView', () => ({
-  default: () => createElement('p', null, 'Terminal stand-in'),
+  default: ({ focusToken }: { focusToken?: number }) =>
+    createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in'),
 }))
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -83,6 +85,8 @@ function json(data: unknown, status = 200): Response {
 const defaultRepo = { id: 'default', name: 'natamux', path: '/work/natamux' }
 // The stage files of every task in the stand-in daemon.
 let stageFiles: { name: string; size: number; modifiedAt: string }[] = []
+// The shells each workspace has open next to the first one.
+let extraShells: string[] = []
 const webRepo = { id: 'web', name: 'Web app', path: '/work/web' }
 
 function installDaemon(
@@ -259,11 +263,12 @@ function installDaemon(
     }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
       const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
+      const terminals = ['1', ...extraShells]
       if (!task?.agent) {
-        return json({ terminals: ['1'], agents: [], lanes: {} })
+        return json({ terminals, agents: [], lanes: {} })
       }
       const lanes = { '1': { stage: task.stage, state: task.state } }
-      return json({ terminals: ['1'], agents: ['1'], lanes })
+      return json({ terminals, agents: ['1'], lanes })
     }
     if (route === '/api/github/issues' && method === 'GET') {
       return json({
@@ -448,6 +453,7 @@ const runningTask = makeTask({
 beforeEach(() => {
   window.localStorage.clear()
   stageFiles = []
+  extraShells = []
   useViewStore.setState({ ...initialViewData, pinned: [] })
   useToasts.setState({ toasts: [] })
   FakeSocket.instances = []
@@ -792,6 +798,41 @@ describe('App', () => {
         calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
       ).toBe(true),
     )
+  })
+
+  it('does not take the keyboard again when the Terminal tab opens later', async () => {
+    installDaemon(
+      [workspaceTask({ state: 'needs-input', stage: 'implement' })],
+      [
+        {
+          taskId: 'T-0001',
+          source: 'agent',
+          type: 'agent.asked',
+          at: '2026-10-08T10:00:00.000Z',
+          payload: { message: 'Which test runner?' },
+        },
+      ],
+    )
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    openWorkspace('T-0001')
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const tokenOfShell = async () => {
+      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
+    }
+
+    await user.click(await within(view).findByRole('button', { name: 'Answer in terminal' }))
+    await waitFor(async () => expect(await tokenOfShell()).not.toBe(''))
+
+    await user.click(within(view).getByRole('tab', { name: 'Changes' }))
+    await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
+    expect(await tokenOfShell()).toBe('')
+    // Give the shells time to be read, after which an old request would be used.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(await tokenOfShell()).toBe('')
   })
 
   it('shows the commits ahead on Push, and says why Push is off when there is no branch', async () => {
@@ -1502,6 +1543,25 @@ describe('App', () => {
     expect(await within(sidebar).findByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
   })
 
+  it('loads the projects again after the live connection comes back', async () => {
+    const { setRepos } = installDaemon([runningTask], [], [defaultRepo])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    await within(sidebar).findByRole('button', { name: 'Actions for natamux' })
+    const socket = FakeSocket.instances[0]
+    act(() => socket?.onopen?.())
+
+    // A project added while the socket was down: its repos.changed message never arrives.
+    act(() => socket?.onclose?.())
+    setRepos([defaultRepo, webRepo])
+    act(() => socket?.onopen?.())
+
+    expect(await within(sidebar).findByRole('button', { name: 'Actions for Web app' })).toBeTruthy()
+  })
+
   it('shows why the daemon did not remove a project and keeps its group', async () => {
     const { setTasks } = installDaemon([runningTask], [], [defaultRepo, webRepo])
     const user = userEvent.setup()
@@ -2165,6 +2225,27 @@ describe('App', () => {
 
     expect(await screen.findByRole('region', { name: 'Changes of T-0001' })).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).toBeNull()
+  })
+
+  it('opens the Terminal tab for a shell picked in the jump palette', async () => {
+    installDaemon([workspaceTask()])
+    extraShells = ['2']
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    // The task was left on its Changes tab.
+    act(() => useViewStore.getState().rememberTab('T-0001', 'changes'))
+
+    await user.keyboard('{Control>}j{/Control}')
+    const jump = screen.getByRole('dialog', { name: 'Jump to a workspace' })
+    await user.click(await within(jump).findByRole('option', { name: /Shell 2/ }))
+
+    const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    await waitFor(() => expect(useViewStore.getState().shellRequest).toBeNull())
   })
 
   it('opens the palette from the title bar, and the jump palette from the needs-you pill', async () => {
