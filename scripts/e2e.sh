@@ -85,6 +85,11 @@ override() {
     "{\"source\":\"human\",\"type\":\"state.overridden\",\"payload\":$2}" >/dev/null
 }
 
+hold_at_first_stage() {
+  wait_for_state "$1" ready
+  override "$1" '{"to":"review","stage":"context"}'
+}
+
 in_daemon() {
   compose exec -T daemon "$@"
 }
@@ -96,9 +101,11 @@ seed() {
   fi
 
   # A workspace with two commits on a branch that diverges from its base, and changes that are not
-  # committed, for the Changes and History tabs.
+  # committed, for the Changes and History tabs. Each task is held at its first stage, so the next
+  # stage does not start an agent in its terminal (see scripts/dev.sh seed).
   local demo workspace
   demo="$(new_task "{\"title\":\"$DEMO_TITLE\",\"labels\":[\"demo\"]}")"
+  hold_at_first_stage "$demo"
   api POST "/tasks/$demo/workspace" >/dev/null
   workspace="/data/worktrees/$demo"
   in_daemon git -C "$workspace" reset --quiet --hard HEAD~2
@@ -110,12 +117,10 @@ seed() {
   in_daemon bash -c "printf '# Notes\n\nFirst idea, changed.\nSecond idea.\nThird idea.\n' >'$workspace/demo/notes.md'"
   in_daemon bash -c "printf 'Try the diff view.\n' >'$workspace/demo/todo.txt'"
 
-  # The fake agent keeps working in its terminal. The task is held at its first stage, so the next
-  # stage does not start an agent of its own (see scripts/dev.sh seed).
+  # The fake agent keeps working in its terminal.
   local agent
   agent="$(new_task "{\"title\":\"$AGENT_TITLE\",\"priority\":\"high\",\"labels\":[\"ui\"]}")"
-  wait_for_state "$agent" ready
-  override "$agent" '{"to":"review","stage":"context"}'
+  hold_at_first_stage "$agent"
   api POST "/tasks/$agent/workspace" >/dev/null
   api POST "/tasks/$agent/agent" \
     '{"agent":"claude-code","prompt":"loop: Add a command palette that lists tasks and actions."}' \

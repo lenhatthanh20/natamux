@@ -31,10 +31,11 @@ test('runs a command in a shell of the workspace', async ({ page }) => {
   await expect(rows).toContainText('e2e-42')
 })
 
+// The fake agent edits a notes file every few seconds.
 test('shows the agent at work in its terminal', async ({ page }) => {
   const tabs = await openTask(page, AGENT_TITLE)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   await expect(
     page.getByRole('region', { name: 'Terminal screen' }).first().locator('.xterm-rows'),
-  ).toContainText('Fake agent', { timeout: 30_000 })
+  ).toContainText('Edit notes/', { timeout: 30_000 })
 })
