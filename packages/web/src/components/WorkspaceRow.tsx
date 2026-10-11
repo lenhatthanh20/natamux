@@ -1,7 +1,14 @@
 import type { DiffStat, Task } from '@natamux/core'
-import { Copy, FileDiff, FolderMinus, GitBranch, Pencil, Pin, PinOff } from 'lucide-react'
+import { Copy, FileDiff, FolderMinus, GitBranch, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useRef, useState } from 'react'
-import { formatAge, formatExact, isQuiet, laneSummary, rowLabel } from '../lib/tasks'
+import {
+  deleteTaskDescription,
+  formatAge,
+  formatExact,
+  isQuiet,
+  laneSummary,
+  rowLabel,
+} from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { shortBranch } from '../lib/workspace-groups'
 import { DiffSize } from './DiffSize'
@@ -34,6 +41,7 @@ type WorkspaceRowProps = {
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string) => void
   onRemove: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
 function copy(text: string, what: string) {
@@ -64,10 +72,12 @@ export function WorkspaceRow({
   onRename,
   onTogglePin,
   onRemove,
+  onDelete,
 }: WorkspaceRowProps) {
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(task.title)
   const [removing, setRemoving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const field = useRef<HTMLInputElement>(null)
   const row = useRef<HTMLButtonElement>(null)
@@ -132,6 +142,16 @@ export function WorkspaceRow({
       danger: true,
       onSelect: () => setRemoving(true),
     },
+    ...(onDelete === undefined
+      ? []
+      : [
+          {
+            label: 'Delete task',
+            icon: Trash2,
+            danger: true,
+            onSelect: () => setDeleting(true),
+          },
+        ]),
   ]
 
   const titleClass = `min-w-0 flex-1 truncate text-sm ${unseen ? 'font-semibold' : 'font-medium'} ${
@@ -275,6 +295,15 @@ export function WorkspaceRow({
           confirmLabel="Remove"
           onConfirm={() => onRemove(task.id)}
           onClose={() => setRemoving(false)}
+        />
+      )}
+      {deleting && onDelete !== undefined && (
+        <ConfirmDialog
+          title={`Delete ${task.id}?`}
+          description={deleteTaskDescription(task)}
+          confirmLabel="Delete task"
+          onConfirm={() => onDelete(task.id)}
+          onClose={() => setDeleting(false)}
         />
       )}
     </li>

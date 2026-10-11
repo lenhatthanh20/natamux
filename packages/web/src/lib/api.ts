@@ -538,6 +538,13 @@ export function createApi(
       return projectSettingsSchema.parse(body.settings)
     },
 
+    async deleteTask(taskId: string): Promise<{ id: string; tasks: Task[] }> {
+      const body = asRecord(await request('DELETE', `/tasks/${encodeURIComponent(taskId)}`))
+      const listed = Array.isArray(body.tasks) ? body.tasks : []
+      const tasks = listed.map((task) => taskSchema.parse(task))
+      return { id: typeof body.id === 'string' ? body.id : taskId, tasks }
+    },
+
     async removeWorkspace(taskId: string): Promise<RemoveWorkspaceResult> {
       const body = asRecord(
         await request('DELETE', `/tasks/${encodeURIComponent(taskId)}/workspace?deleteBranch=true`),

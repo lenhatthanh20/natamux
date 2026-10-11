@@ -6,6 +6,8 @@ export type DaemonMessage =
   | { kind: 'task.updated'; task: Task; event: TaskEvent; accepted: boolean; moved?: boolean }
   // A change that is not worth a line in the log, such as checks that started to run.
   | { kind: 'task.changed'; task: Task }
+  // The task and its files are gone. There is no task left to send.
+  | { kind: 'task.deleted'; taskId: string }
   // A repository was added or removed. The dashboards load the list again.
   | { kind: 'repos.changed' }
 

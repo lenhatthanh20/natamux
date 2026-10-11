@@ -23,6 +23,26 @@ export function parseLiveMessage(text: string): Task | undefined {
   return parsed.success ? parsed.data : undefined
 }
 
+// The id of a task that was deleted, or undefined for any other message.
+export function deletedTaskId(text: string): string | undefined {
+  try {
+    const message: unknown = JSON.parse(text)
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'kind' in message &&
+      message.kind === 'task.deleted' &&
+      'taskId' in message &&
+      typeof message.taskId === 'string'
+    ) {
+      return message.taskId
+    }
+  } catch {
+    // Not JSON.
+  }
+  return undefined
+}
+
 // True for the message that a project was added or removed.
 export function isReposChanged(text: string): boolean {
   try {

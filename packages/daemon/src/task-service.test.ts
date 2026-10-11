@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
@@ -586,6 +586,50 @@ describe('event log files', () => {
     expect(readEventLog(dataDir, task.id)?.map((entry) => entry.event.type)).toEqual([
       'task.created',
     ])
+  })
+
+  it('deletes a task and the files stored with it', () => {
+    const task = service.createTask(
+      { title: 'Fix it' },
+      decodeAttachments([{ name: 'a.txt', data: Buffer.from('hello').toString('base64') }]),
+    )
+    writeFileSync(join(dataDir, `agent-launch-${task.id}.sh`), 'echo hi\n')
+    writeFileSync(join(dataDir, `agent-launch-${task.id}-2.sh`), 'echo hi\n')
+    writeFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'keep\n')
+
+    expect(service.deleteTask(task.id)).toEqual([])
+
+    expect(readTaskFile(dataDir, task.id)).toBeUndefined()
+    expect(existsSync(eventLogPath(dataDir, task.id))).toBe(false)
+    expect(existsSync(join(dataDir, 'tasks', task.id))).toBe(false)
+    expect(existsSync(join(dataDir, `agent-launch-${task.id}.sh`))).toBe(false)
+    expect(existsSync(join(dataDir, `agent-launch-${task.id}-2.sh`))).toBe(false)
+    expect(readFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'utf8')).toBe('keep\n')
+    expect(service.listTasks()).toEqual([])
+    expect(messages.at(-1)).toEqual({ kind: 'task.deleted', taskId: task.id })
+  })
+
+  it('refuses a task that still has a workspace, and an unknown task', () => {
+    const task = service.createTask({ title: 'Fix it' })
+    service.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'natamux/t-0001' })
+
+    expect(() => service.deleteTask(task.id)).toThrow(/workspace/)
+    expect(readTaskFile(dataDir, task.id)?.workspace).toBe('/work/T-0001')
+    expect(() => service.deleteTask('T-0099')).toThrow(TaskNotFoundError)
+  })
+
+  it('drops the parent and the dependency from the tasks that remain', () => {
+    const parent = service.createTask({ title: 'Release' })
+    const child = service.createTask({ title: 'Notes', parentId: parent.id })
+    const waiting = service.createTask({ title: 'After' })
+    service.updateTask(waiting.id, { dependsOn: [parent.id] })
+
+    const related = service.deleteTask(parent.id)
+
+    expect(related.map((task) => task.id).sort()).toEqual([child.id, waiting.id])
+    expect(service.getTask(child.id).parentId).toBeNull()
+    expect(service.getTask(waiting.id).dependsOn).toEqual([])
+    expect(messages.at(-1)).toEqual({ kind: 'task.deleted', taskId: parent.id })
   })
 
   it('links an issue and logs it', () => {

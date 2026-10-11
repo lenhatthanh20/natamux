@@ -40,7 +40,7 @@ In the workspace list:
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
 - Double-click a title, or press `F2`, to rename it.
-- Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path** and **Remove workspace**. Pinned workspaces move to a **Pinned** section at the top.
+- Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path**, **Remove workspace** and **Delete task**. **Remove workspace** deletes the worktree and keeps the task. **Delete task** deletes the task, its notes and its history, and the worktree when there is one. Both ask first. Pinned workspaces move to a **Pinned** section at the top.
 - Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.
 
 ## Task views
@@ -63,7 +63,7 @@ The default order puts what needs you first: Needs input, In review, Failed, Blo
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
-Right-click a row, or press `Shift+F10`, for **Open workspace**, **Show details**, the actions for its state (such as **Retry**, **Approve** or **Start agent**), the copy items, and **Cancel task**, which asks first.
+Right-click a row, or press `Shift+F10`, for **Open workspace**, **Show details**, the actions for its state (such as **Retry**, **Approve** or **Start agent**), the copy items, **Cancel task** and **Delete task**. Both ask first. **Cancel task** marks the task cancelled and keeps it in the list. **Delete task** removes the task, its notes and its history.
 
 ## Add a task
 
@@ -80,7 +80,7 @@ Two lists appear next to the field when they have something to choose:
 
 To start work right away, click **Start a task** next to **Add task**, or press `c`. It uses the title you typed, makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
 
-In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and use the actions for its state, such as **Mark ready**, **Approve** or **Retry**. **Cancel task** asks first.
+In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and use the actions for its state, such as **Mark ready**, **Approve** or **Retry**. **Cancel task** and **Delete task**, in the **...** menu, both ask first.
 
 ## Filter and search
 

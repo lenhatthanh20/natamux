@@ -275,6 +275,48 @@ describe('tasks', () => {
     expect(response.statusCode).toBe(400)
   })
 
+  it('deletes a task and the tasks that pointed at it stay', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Release' },
+    })
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Notes', parentId: 'T-0001' },
+    })
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+
+    expect(deleted.statusCode).toBe(200)
+    expect(deleted.json().id).toBe('T-0001')
+    expect(deleted.json().tasks).toMatchObject([{ id: 'T-0002', parentId: null }])
+    const listed = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(listed.json().tasks.map((task: { id: string }) => task.id)).toEqual(['T-0002'])
+    const gone = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+    expect(gone.statusCode).toBe(404)
+  })
+
+  it('returns 404 when deleting an unknown task', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0099',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(404)
+  })
+
   it('returns 404 for an unknown task', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -547,6 +589,40 @@ describe('workspaces', () => {
 
     expect(removed.statusCode).toBe(409)
     expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+  })
+
+  it('deletes a task and its worktree, and keeps both when the worktree has changes', async () => {
+    const { workspace } = await createWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'work in progress')
+
+    const refused = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+    expect(refused.statusCode).toBe(409)
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+    const stillThere = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+    expect(stillThere.statusCode).toBe(200)
+
+    rmSync(join(workspace, 'notes.txt'))
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+    expect(deleted.statusCode).toBe(200)
+    expect(existsSync(workspace)).toBe(false)
+    const gone = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001',
+      headers: authorization,
+    })
+    expect(gone.statusCode).toBe(404)
   })
 
   it('keeps the earlier stage files when the folder was already deleted', async () => {

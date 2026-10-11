@@ -13,6 +13,7 @@ import {
   PanelRight,
   Play,
   RotateCcw,
+  Trash2,
   Undo2,
 } from 'lucide-react'
 import { type MouseEvent, useState } from 'react'
@@ -24,6 +25,7 @@ import { COLUMN_LABEL, type ColumnKey, tableLayout } from '../lib/table-columns'
 import {
   actionsFor,
   agentAction,
+  deleteTaskDescription,
   formatAge,
   formatExact,
   isQuiet,
@@ -71,6 +73,7 @@ type TaskTableProps = {
   // The task actions of the row menu, so the table can triage without opening each task.
   onAction?: (task: Task, action: TaskAction) => void
   onStartAgent?: (task: Task) => void
+  onDelete?: (task: Task) => void
 }
 
 const RIGHT: readonly ColumnKey[] = ['changes', 'activity']
@@ -135,8 +138,10 @@ export function TaskTable({
   onKeyboardMove,
   onAction,
   onStartAgent,
+  onDelete,
 }: TaskTableProps) {
   const [cancelling, setCancelling] = useState<Task | null>(null)
+  const [deleting, setDeleting] = useState<Task | null>(null)
   const roving = useRovingFocus({
     keys: tasks.map((task) => task.id),
     preferred: selectedId,
@@ -227,6 +232,17 @@ export function TaskTable({
               onSelect: () => setCancelling(task),
             },
           ]),
+      ...(onDelete === undefined
+        ? []
+        : [
+            ...(cancel === undefined ? [{ type: 'separator' as const }] : []),
+            {
+              label: 'Delete task',
+              icon: Trash2,
+              danger: true,
+              onSelect: () => setDeleting(task),
+            },
+          ]),
     ]
   }
 
@@ -240,6 +256,15 @@ export function TaskTable({
       confirmLabel="Cancel task"
       onConfirm={() => onAction?.(cancelling, cancelAction)}
       onClose={() => setCancelling(null)}
+    />
+  )
+  const confirmDelete = deleting !== null && onDelete !== undefined && (
+    <ConfirmDialog
+      title={`Delete ${deleting.id}?`}
+      description={deleteTaskDescription(deleting)}
+      confirmLabel="Delete task"
+      onConfirm={() => onDelete(deleting)}
+      onClose={() => setDeleting(null)}
     />
   )
 
@@ -297,6 +322,7 @@ export function TaskTable({
           })}
         </ul>
         {confirmCancel}
+        {confirmDelete}
       </>
     )
   }
@@ -434,6 +460,7 @@ export function TaskTable({
         </tbody>
       </table>
       {confirmCancel}
+      {confirmDelete}
     </div>
   )
 }

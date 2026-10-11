@@ -11,6 +11,7 @@ import {
   Play,
   RotateCcw,
   Save,
+  Trash2,
   X,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
@@ -24,6 +25,7 @@ import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import {
   actionsFor,
   agentAction,
+  deleteTaskDescription,
   formatAge,
   formatExact,
   isQuiet,
@@ -74,6 +76,7 @@ type TaskDetailProps = {
   tries?: readonly Task[]
   diffStats?: Readonly<Record<string, DiffStat>>
   onKeepTry?: (task: Task) => void
+  onDelete?: () => void
   onClose: () => void
   // The progress of the task. When it is set, a row of tabs switches between it and the details.
   progress?: ReactNode
@@ -110,6 +113,7 @@ export function TaskDetail({
   tries = [],
   diffStats,
   onKeepTry,
+  onDelete,
   onClose,
   progress,
   view = 'details',
@@ -117,7 +121,7 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
-  const [asking, setAsking] = useState<'cancel' | 'remove' | 'tries' | null>(null)
+  const [asking, setAsking] = useState<'cancel' | 'remove' | 'delete' | 'tries' | null>(null)
   const actions = actionsFor(task.state)
   const stateActions = actions.filter((action) => !action.confirm)
   const cancelAction = actions.find((action) => action.confirm)
@@ -133,17 +137,18 @@ export function TaskDetail({
   // The E key is a command, see lib/commands.ts.
   useAppEvent('edit-task', () => setEditing(true))
 
-  const menu: MenuItem[] = [
+  const leading: MenuItem[] = [
     ...(onSaveTemplate === undefined
       ? []
       : [{ label: 'Save as template', icon: Save, onSelect: onSaveTemplate }]),
     ...(canFanOut
       ? [{ label: 'Run more tries...', icon: CopyPlus, onSelect: () => setAsking('tries') }]
       : []),
+  ]
+  const danger: MenuItem[] = [
     ...(cancelAction === undefined
       ? []
       : [
-          ...(onSaveTemplate !== undefined || canFanOut ? [{ type: 'separator' as const }] : []),
           {
             label: cancelAction.label,
             icon: Ban,
@@ -151,6 +156,21 @@ export function TaskDetail({
             onSelect: () => setAsking('cancel'),
           },
         ]),
+    ...(onDelete === undefined
+      ? []
+      : [
+          {
+            label: 'Delete task',
+            icon: Trash2,
+            danger: true,
+            onSelect: () => setAsking('delete'),
+          },
+        ]),
+  ]
+  const menu: MenuItem[] = [
+    ...leading,
+    ...(leading.length > 0 && danger.length > 0 ? [{ type: 'separator' as const }] : []),
+    ...danger,
   ]
 
   return (
@@ -481,6 +501,15 @@ export function TaskDetail({
           description="A cancelled task cannot be started again."
           confirmLabel="Cancel task"
           onConfirm={() => onAction(cancelAction)}
+          onClose={() => setAsking(null)}
+        />
+      )}
+      {asking === 'delete' && onDelete !== undefined && (
+        <ConfirmDialog
+          title={`Delete ${task.id}?`}
+          description={deleteTaskDescription(task)}
+          confirmLabel="Delete task"
+          onConfirm={onDelete}
           onClose={() => setAsking(null)}
         />
       )}

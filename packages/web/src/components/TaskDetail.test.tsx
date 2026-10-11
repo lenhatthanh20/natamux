@@ -1,6 +1,6 @@
 import type { Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -43,6 +43,7 @@ type DetailsOptions = { view?: DetailsView; progress?: ReactNode; mode?: Details
 
 function details({ view, progress, mode }: DetailsOptions = {}) {
   const onViewChange = vi.fn()
+  const onDelete = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -58,6 +59,7 @@ function details({ view, progress, mode }: DetailsOptions = {}) {
         onStartAgent={vi.fn()}
         onEdit={vi.fn()}
         onCheckPullRequest={vi.fn()}
+        onDelete={onDelete}
         onClose={vi.fn()}
         mode={mode}
         view={view}
@@ -66,7 +68,7 @@ function details({ view, progress, mode }: DetailsOptions = {}) {
       />
     </QueryClientProvider>,
   )
-  return { onViewChange }
+  return { onViewChange, onDelete }
 }
 
 describe('TaskDetail views', () => {
@@ -132,6 +134,20 @@ describe('TaskDetail views', () => {
 
     expect(screen.getByRole('tab', { name: 'Progress' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('Stage list')).toBeTruthy()
+  })
+
+  it('asks before it deletes the task', async () => {
+    const { onDelete } = details()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'More actions for T-0001' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete task' }))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    const dialog = screen.getByRole('dialog', { name: 'Delete T-0001?' })
+    expect(within(dialog).getByText(/worktree folder/)).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: 'Delete task' }))
+    expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
   it('has no view tabs when there is no progress view', () => {

@@ -357,6 +357,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { task: options.service.getTask(id) }
   })
 
+  // The task, its notes, stage files and history. A workspace goes too. Uncommitted changes
+  // refuse the delete, so the task and the worktree both stay.
+  app.delete('/tasks/:id', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const current = options.service.getTask(id)
+    if (current.workspace !== null) {
+      await options.workspaces.remove(id, { deleteBranch: true })
+    }
+    return { id, tasks: options.service.deleteTask(id) }
+  })
+
   app.patch('/tasks/:id', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { task: options.service.updateTask(id, request.body) }
