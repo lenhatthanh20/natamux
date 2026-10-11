@@ -24,6 +24,9 @@
   "dependencies": {
     "@fastify/websocket": "^11.3.3",
     "@natamux/core": "workspace:*",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/headless": "^6.0.0",
     "fastify": "^5.12.5",
     "gray-matter": "^4.0.3",
     "node-pty": "^1.0.0",

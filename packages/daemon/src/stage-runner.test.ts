@@ -48,13 +48,14 @@ let settings: ProjectSettings
 let clock: number
 let runCommand: RunCommand
 let terminals: TerminalService
+let bus: EventBus
 
 beforeEach(() => {
   repo = createTestRepo()
   dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
   index = new TaskIndex(':memory:')
-  const bus = new EventBus()
+  bus = new EventBus()
   settings = DEFAULT_PROJECT_SETTINGS
   clock = Date.parse('2026-10-09T09:00:00.000Z')
   runCommand = async () => ({ code: 0, output: '' })
@@ -151,6 +152,28 @@ describe('context', () => {
     expect(ghCalls[0]?.slice(0, 3)).toEqual(['issue', 'view', '7'])
     const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
     expect(context).toContain('Dates in UTC, please.')
+  })
+
+  it('runs the skill that was picked, of two', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      context: {
+        sources: [
+          { type: 'manual' },
+          { type: 'skill', name: 'Jira', skill: 'jira-ticket' },
+          { type: 'skill', name: 'Linear', skill: 'linear-issue' },
+        ],
+      },
+    }
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', name: 'Linear', ref: 'LIN-7' },
+    })
+
+    const task = await withWorkspace(waiting.id)
+    expect(launchScript(task.id)).toContain('/linear-issue LIN-7')
+    expect(launchScript(task.id)).not.toContain('jira-ticket')
   })
 
   it('writes the context into a workspace made while the issue was read', async () => {
@@ -364,6 +387,41 @@ describe('a prompt for a running agent', () => {
     const typed = pty.written.join('')
     expect(typed.split(`agent-launch-${task.id}.sh`)).toHaveLength(3)
     expect(typed).not.toContain('\x1b[200~')
+  })
+
+  it('on Windows, starts the agent again only once the shell says the agent ended', async () => {
+    runner.stop()
+    const agents = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: join(dataDir, 'settings.json'),
+      platform: 'win32',
+    })
+    runner = new StageRunner({
+      tasks,
+      terminals,
+      agents,
+      bus,
+      dataDir,
+      repoPath: () => repo.dir,
+      now: () => clock,
+      platform: 'win32',
+    })
+    runner.start()
+    const exited = "$Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'"
+    const { task, pty } = await atSpecWithShell('powershell.exe')
+    clock += LAUNCH_GRACE_MS + 1
+    expect(pty.written.join('').split(exited)).toHaveLength(2)
+
+    // The shell echoes the typed line, which is no sign that the agent ended.
+    runner.onOutput(task.id, '1', exited)
+    await runner.act(task.id, 'reopen', { to: 'spec' })
+    expect(pty.written.join('')).toContain('\x1b[200~')
+
+    runner.onOutput(task.id, '1', '\x1b]0;natamux-ag')
+    runner.onOutput(task.id, '1', 'ent-exited\x07PS C:\\work> ')
+    await runner.act(task.id, 'reopen', { to: 'spec' })
+    expect(pty.written.join('').split(exited)).toHaveLength(3)
   })
 
   it('makes a failed check final when no agent is left to fix it', async () => {

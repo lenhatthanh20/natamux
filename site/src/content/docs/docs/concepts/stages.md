@@ -130,6 +130,8 @@ The turn end that follows `natamux done` does not count as "stopped early".
 | Mark as done | **Mark as done** | `natamux done --task T-0001` |
 | Pass or fail | | `natamux stage pass T-0001`, `natamux stage fail T-0001` |
 
+The buttons are in the stage card in the **Progress** view of the details. While a stage waits for review, the workspace also shows a **Ready for review** banner under its header with **Approve** and **Send back**, so you can approve while you read the diff, also with the details closed or on a phone.
+
 Add `--stage <id>` when two stages run side by side.
 
 ### Send a stage back

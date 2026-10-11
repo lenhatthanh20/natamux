@@ -39,6 +39,22 @@ function sourceLabel(source: ContextSource): string {
   }
 }
 
+const MANUAL: ContextSource = { type: 'manual' }
+
+// Two skills or two MCP servers share a type, so their names tell the options apart.
+function sourceKey(source: ContextSource): string {
+  return 'name' in source ? `${source.type}:${source.name}` : source.type
+}
+
+// The daemon runs the source with this name, not the first one of its type.
+function contextOf(source: ContextSource, ref: string): NewWorkspaceInput['context'] {
+  return {
+    source: source.type,
+    ...('name' in source ? { name: source.name } : {}),
+    ref: ref.trim(),
+  }
+}
+
 const REF_PLACEHOLDER: Record<ContextSourceType, string> = {
   manual: '',
   'github-issue': '#42 or the issue address',
@@ -60,18 +76,24 @@ export function NewWorkspaceDialog({
   loadSettings,
 }: NewWorkspaceDialogProps) {
   const [title, setTitle] = useState(initialTitle)
-  const [repo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
+  const [pickedRepo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
+  // The picked project may be gone, or the list was not loaded when the dialog opened. Then the
+  // first project stands in, as the Select shows it.
+  const repo = repos.find((item) => item.id === pickedRepo)?.id ?? repos[0]?.id ?? pickedRepo
   const [base, setBase] = useState('')
   const [agent, setAgent] = useState('claude-code')
   const [notes, setNotes] = useState('')
-  const [source, setSource] = useState<ContextSourceType>('manual')
+  const [pickedSource, setSource] = useState('manual')
   const [ref, setRef] = useState('')
   const settings = useQuery({
     queryKey: ['settings', repo],
     queryFn: () => loadSettings?.(repo) ?? Promise.reject(new Error('No settings')),
     enabled: loadSettings !== undefined,
   })
-  const sources = settings.data?.settings.context.sources ?? [{ type: 'manual' as const }]
+  const sources = settings.data?.settings.context.sources ?? [MANUAL]
+  // Another project may not offer the source picked in the first one.
+  const picked = sources.find((item) => sourceKey(item) === pickedSource) ?? MANUAL
+  const source = picked.type
 
   const branches = useQuery({
     queryKey: ['branches', repo],
@@ -86,7 +108,7 @@ export function NewWorkspaceDialog({
         ...(agent === '' ? {} : { agent }),
         // Only notes typed by hand are the task's context; another source brings its own.
         ...(source !== 'manual' || notes.trim() === '' ? {} : { prompt: notes.trim() }),
-        ...(source === 'manual' ? {} : { context: { source, ref: ref.trim() } }),
+        ...(source === 'manual' ? {} : { context: contextOf(picked, ref) }),
       }),
     onSuccess: (task) => {
       if (base !== '') {
@@ -196,14 +218,14 @@ export function NewWorkspaceDialog({
             <span className={FIELD_LABEL}>Context from</span>
             <div className="flex gap-2">
               <Select
-                value={source}
-                onChange={(event) => setSource(event.target.value as ContextSourceType)}
+                value={sourceKey(picked)}
+                onChange={(event) => setSource(event.target.value)}
                 aria-label="Where the context comes from"
                 fieldSize="md"
                 className="w-52 shrink-0"
               >
                 {sources.map((item) => (
-                  <option key={`${item.type}-${'name' in item ? item.name : ''}`} value={item.type}>
+                  <option key={sourceKey(item)} value={sourceKey(item)}>
                     {sourceLabel(item)}
                   </option>
                 ))}

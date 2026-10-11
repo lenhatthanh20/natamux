@@ -572,16 +572,18 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     }
     const taskId = params.data.id
     const { terminal } = query.data
-    const send = (message: TerminalServerMessage) => {
-      socket.send(JSON.stringify(message))
-      if (message.type === 'exit') {
-        socket.close()
-      }
+    const client = {
+      send: (message: TerminalServerMessage) => {
+        socket.send(JSON.stringify(message))
+        if (message.type === 'exit') {
+          socket.close()
+        }
+      },
     }
 
     let detach: () => void
     try {
-      detach = options.terminals.attach(taskId, { send }, query.data, terminal)
+      detach = options.terminals.attach(taskId, client, query.data, terminal)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The terminal could not start.'
       socket.send(JSON.stringify({ type: 'error', message } satisfies TerminalServerMessage))
@@ -601,9 +603,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         return
       }
       if (message.data.type === 'input') {
-        options.terminals.input(taskId, message.data.data, terminal)
+        options.terminals.input(taskId, message.data.data, terminal, client)
       } else {
-        options.terminals.resize(taskId, message.data, terminal)
+        options.terminals.resize(taskId, message.data, terminal, client)
       }
     })
     socket.on('close', () => detach())

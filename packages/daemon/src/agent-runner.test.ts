@@ -15,6 +15,10 @@ import { TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
+
+// What Windows types: the command between the window titles that tell its start and its end.
+const windowsLine = (command: string) =>
+  `$Host.UI.RawUI.WindowTitle = 'natamux-agent'; ${command}; $Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'\r`
 let dataDir: string
 let index: TaskIndex
 let tasks: TaskService
@@ -100,13 +104,14 @@ describe('AgentRunner', () => {
     })
   })
 
-  it('does not show the settings path or the prompt in the terminal', () => {
+  it('does not show the settings path or the prompt in the terminal', async () => {
     const task = taskWithWorkspace('Fix the bug', 'A long secret description.')
     runner.start(task.id, 'claude-code')
 
     // The fake terminal echoes what is typed, like a real one. This is what a browser sees.
     const seen: string[] = []
     terminals.attach(task.id, { send: (message) => seen.push(JSON.stringify(message)) }, size)
+    await terminals.settled(task.id)
 
     const text = seen.join('')
     expect(text).toContain('agent-launch-T-0001.sh')
@@ -144,7 +149,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 
@@ -236,7 +241,7 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'Only this')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'\r",
+      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'Only this'"),
     ])
   })
 

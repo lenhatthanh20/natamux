@@ -181,12 +181,13 @@ export function TaskDetail({
           idPrefix="details"
           value={shown}
           onChange={(next) => {
-            if (next !== shown) {
-              setEditing(false)
+            // Leaving the form would drop its unsaved changes; Save or Cancel closes it.
+            if (next !== shown && !editing) {
               onViewChange?.(next)
             }
           }}
           className="px-2"
+          background="surface"
           tabs={[
             { id: 'progress', label: 'Progress' },
             { id: 'details', label: 'Details' },

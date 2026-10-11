@@ -1,4 +1,4 @@
-import type { TaskState } from '@natamux/core'
+import type { Task, TaskState } from '@natamux/core'
 import type { StoredEvent } from './api'
 import type { WorkspaceTab } from './view-store'
 
@@ -12,17 +12,35 @@ function ofBase(base: string | null): string {
   return base === null ? '' : ` of ${base}`
 }
 
+// Work that is not committed yet is the real next step when no commit is ahead.
+function commitFirst(uncommitted: number | null): string | undefined {
+  if (uncommitted === null || uncommitted === 0) {
+    return undefined
+  }
+  return `Commit your ${uncommitted === 1 ? 'changed file' : `${uncommitted} changed files`} first`
+}
+
+// Commit takes the place of Push while nothing is ahead and files are not committed.
+export function needsCommit(ahead: number | null, uncommitted: number | null): boolean {
+  return ahead === 0 && commitFirst(uncommitted) !== undefined
+}
+
 // The Push button. `ahead` is the number of commits ahead of the base branch, null when unknown.
+// `uncommitted` is the number of files that differ from the last commit, null when unknown.
 export function pushButton(
   branch: string | null,
   ahead: number | null,
   base: string | null,
+  uncommitted: number | null = null,
 ): GitButton {
   if (branch === null) {
     return { label: 'Push', reason: 'This task has no branch to push' }
   }
   if (ahead === 0) {
-    return { label: 'Push', reason: `Nothing to push: 0 commits ahead${ofBase(base)}` }
+    return {
+      label: 'Push',
+      reason: commitFirst(uncommitted) ?? `Nothing to push: 0 commits ahead${ofBase(base)}`,
+    }
   }
   return { label: ahead === null ? 'Push' : `Push ↑${ahead}` }
 }
@@ -33,15 +51,31 @@ export function pullRequestButton(
   ahead: number | null,
   base: string | null,
   compact: boolean,
+  uncommitted: number | null = null,
 ): GitButton {
   const label = compact ? 'Open PR' : 'Create pull request'
   if (branch === null) {
     return { label, reason: 'This task has no branch yet' }
   }
   if (ahead === 0) {
-    return { label, reason: `Push first: 0 commits ahead${ofBase(base)}` }
+    return {
+      label,
+      reason: commitFirst(uncommitted) ?? `Push first: 0 commits ahead${ofBase(base)}`,
+    }
   }
   return { label }
+}
+
+// The git step to offer after one ends: a commit is pushed next, and a push opens the pull request
+// unless the task has one.
+export function nextGitStep(
+  done: 'commit' | 'push' | 'pull-request',
+  hasPullRequest: boolean,
+): 'push' | 'pull-request' | null {
+  if (done === 'commit') {
+    return 'push'
+  }
+  return done === 'push' && !hasPullRequest ? 'pull-request' : null
 }
 
 // What the agent asked, from the newest "agent.asked" event that carries a message.
@@ -135,6 +169,15 @@ export function rowText(reason: WaitReason): string {
   return reason.kind === 'asked' && reason.question === null
     ? 'Waiting for your answer'
     : bannerText(reason)
+}
+
+// The stages that wait for the user's review. In a group of stages that run side by side, only
+// the ones in review; else the task's own stage.
+export function reviewStages(task: Pick<Task, 'stage' | 'lanes'>): string[] {
+  const lanes = Object.entries(task.lanes)
+    .filter(([, state]) => state === 'review')
+    .map(([id]) => id)
+  return lanes.length > 0 ? lanes : [task.stage]
 }
 
 // A task whose agent works or waits opens on its terminal. Another task opens on the tab that

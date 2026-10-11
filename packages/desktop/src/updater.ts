@@ -149,8 +149,9 @@ export class Updater {
     if (state.name === 'checking' || state.name === 'downloading') {
       return
     }
-    if (state.name === 'ready') {
-      await this.offerRestart(state.release, manual)
+    const ready = state.name === 'ready' ? state : undefined
+    if (ready !== undefined && !(await this.newerThanReady(ready.release))) {
+      await this.offerRestart(ready.release, manual)
       return
     }
     this.set({ name: 'checking' })
@@ -182,7 +183,8 @@ export class Updater {
       await this.offerRestart(release, manual)
     } catch (error) {
       this.log(`failed: ${reason(error)}`)
-      this.set({ name: 'idle' })
+      // A newer download that fails must not lose the update that is ready.
+      this.set(ready ?? { name: 'idle' })
       if (manual) {
         await dialog.showMessageBox({
           type: 'warning',
@@ -190,6 +192,15 @@ export class Updater {
           detail: `${reason(error)}\n\nThe log: ${this.logFile}`,
         })
       }
+    }
+  }
+
+  private async newerThanReady(ready: Release): Promise<boolean> {
+    try {
+      return isNewer((await this.latest()).version, ready.version)
+    } catch (error) {
+      this.log(`check: ${reason(error)}`)
+      return false
     }
   }
 

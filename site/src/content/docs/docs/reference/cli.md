@@ -48,6 +48,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--agent <name>` | `task create`, `agent start` | The agent that works on the task, or the agent to start (default for `agent start`: `claude-code`) |
 | `--depends-on <id>` | `task create`, `task edit` | A task that must finish first. Repeat for more |
 | `--context <source>` | `task create` | Where the context comes from: `manual`, `github-issue`, `skill` or `mcp`, as `source` or `source:ref`, such as `github-issue:42` |
+| `--repo <id>` | `task create` | The project of the task. Default: the project of the `NATAMUX_TASK_ID` task, or the only project |
 | `--prompt <text>` | `agent start` | First prompt. Default: the task title and notes |
 | `--task <id>` | `ask`, `done` | The task. Default: `NATAMUX_TASK_ID` |
 | `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side |
@@ -70,6 +71,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 ```sh
 natamux task create "Fix the login bug" --priority high --label bug
 natamux task create "Add export" --depends-on T-41 --context github-issue:42
+natamux task create "Update the docs" --repo my-app
 natamux task list --state running
 natamux task show T-42
 natamux task edit T-42 --title "Fix the login redirect" --label auth
@@ -77,6 +79,7 @@ natamux task link T-42 --issue ABC-123 --url https://example.com/browse/ABC-123
 ```
 
 - `task create` needs a title. All words after `create` form the title.
+- Without `--repo`, `task create` uses the project of the task in `NATAMUX_TASK_ID`. Outside a task terminal it uses the only project. With more than one project, it fails and lists the project ids.
 - `task edit` needs at least one of `--title`, `--description`, `--priority`, `--label` or `--depends-on`.
 - `task show` without an id shows the task of this terminal (`NATAMUX_TASK_ID`).
 - `task link` needs `--issue` and `--url`.
@@ -170,7 +173,7 @@ natamux task list --json
 |---|---|
 | `NATAMUX_TOKEN` | The daemon's token. Required, except for `hooks claude-code` |
 | `NATAMUX_URL` | The daemon's address. Default: `http://127.0.0.1:4317` |
-| `NATAMUX_TASK_ID` | The task of this terminal. Used by `ask`, `done`, `task show` and hooks. Natamux terminals set it |
+| `NATAMUX_TASK_ID` | The task of this terminal. Used by `ask`, `done`, `task show`, `task create` (for its project) and hooks. Natamux terminals set it |
 | `NATAMUX_TERMINAL` | The terminal of the task. Tells the daemon which stage `done` is about. Natamux terminals set it |
 | `NATAMUX_DEBUG` | `natamux hook` only. Any value prints problems to stderr |
 

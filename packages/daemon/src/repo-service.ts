@@ -46,11 +46,14 @@ export class RepoInUseError extends Error {
 }
 
 // The repositories whose tasks Natamux manages, kept in <data dir>/repos.json. Any of them can be
-// removed. Tasks without a repository belong to the one with the id "default".
+// removed; repos-removed.json keeps their folders. Tasks without a repository belong to the one
+// with the id "default".
 export class RepoService {
   private readonly file: string
   // Holds the folder that was added as "default".
   private readonly defaultMarker: string
+  // Holds the folder of each removed repository by id, as its tasks still name it.
+  private readonly removedFile: string
   // A function, not the task service itself: the task service is made after this one.
   private readonly tasks: () => readonly Pick<Task, 'repo' | 'workspace'>[]
 
@@ -63,6 +66,7 @@ export class RepoService {
   }) {
     this.file = join(options.dataDir, 'repos.json')
     this.defaultMarker = join(options.dataDir, 'repos-default-added')
+    this.removedFile = join(options.dataDir, 'repos-removed.json')
     this.tasks = options.tasks ?? (() => [])
     if (options.defaultPath !== undefined) {
       this.addDefaultOnce(options.defaultPath)
@@ -106,7 +110,7 @@ export class RepoService {
     const name = input.name ?? basename(root)
     const base = this.wasDefault(root) ? DEFAULT_REPO : slugify(name)
     let id = base
-    for (let number = 2; known.some((repo) => repo.id === id); number += 1) {
+    for (let number = 2; !this.isFreeFor(id, root, known); number += 1) {
       id = `${base}-${number}`
     }
     const repo = repoSchema.parse({ id, name, path: root })
@@ -118,7 +122,8 @@ export class RepoService {
   // lost to Natamux, so its workspaces go first.
   remove(id: string): void {
     const stored = this.stored()
-    if (!stored.some((repo) => repo.id === id)) {
+    const removed = stored.find((repo) => repo.id === id)
+    if (removed === undefined) {
       throw new RepoNotFoundError(id)
     }
     const inUse = this.tasks().filter(
@@ -128,7 +133,26 @@ export class RepoService {
       const noun = inUse.length === 1 ? 'workspace' : 'workspaces'
       throw new RepoInUseError(`Remove the ${inUse.length} ${noun} of ${id} first`)
     }
+    this.saveRemoved({ ...this.removed(), [id]: removed.path })
     this.save(stored.filter((repo) => repo.id !== id))
+  }
+
+  // The tasks of a removed repository keep its id. Given to another folder, the id would move
+  // them there: their workspaces and pull requests would use the wrong repository. Tasks without
+  // a repository belong to "default", so only the folder first added as "default" gets it.
+  private isFreeFor(id: string, root: string, known: readonly Repo[]): boolean {
+    if (known.some((repo) => repo.id === id)) {
+      return false
+    }
+    if (id === DEFAULT_REPO) {
+      return this.wasDefault(root)
+    }
+    // With no removed folder on record, tasks that name the id are waiting for this repository.
+    const path = this.removed()[id]
+    if (path === undefined || canonical(path) === canonical(root)) {
+      return true
+    }
+    return !this.tasks().some((task) => task.repo === id)
   }
 
   // The marker file keeps a removed repository from coming back at the next start.
@@ -160,6 +184,20 @@ export class RepoService {
       return []
     }
     return z.array(repoSchema).parse(JSON.parse(readFileSync(this.file, 'utf8')))
+  }
+
+  private removed(): Record<string, string> {
+    if (!existsSync(this.removedFile)) {
+      return {}
+    }
+    const text = readFileSync(this.removedFile, 'utf8')
+    return z.record(z.string(), z.string()).parse(JSON.parse(text))
+  }
+
+  private saveRemoved(paths: Record<string, string>): void {
+    mkdirSync(join(this.removedFile, '..'), { recursive: true })
+    writeFileSync(`${this.removedFile}.tmp`, `${JSON.stringify(paths, null, 2)}\n`)
+    renameSync(`${this.removedFile}.tmp`, this.removedFile)
   }
 
   private save(repos: readonly Repo[]): void {

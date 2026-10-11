@@ -43,6 +43,12 @@ const WITH_ISSUES: LoadedSettings = {
   path: '/work/natamux/.natamux.json',
 }
 
+// Settings that offer only the user's own notes.
+const NOTES_ONLY: LoadedSettings = {
+  ...WITH_ISSUES,
+  settings: { ...DEFAULT_PROJECT_SETTINGS, context: { sources: [{ type: 'manual' }] } },
+}
+
 // Settings that offer every kind of context source.
 const EVERY_SOURCE: LoadedSettings = {
   ...WITH_ISSUES,
@@ -59,22 +65,47 @@ const EVERY_SOURCE: LoadedSettings = {
   },
 }
 
+// Settings with two skills, which share a type.
+const TWO_SKILLS: LoadedSettings = {
+  ...WITH_ISSUES,
+  settings: {
+    ...DEFAULT_PROJECT_SETTINGS,
+    context: {
+      sources: [
+        { type: 'manual' },
+        { type: 'skill', name: 'Jira', skill: 'jira-ticket' },
+        { type: 'skill', name: 'Linear', skill: 'linear-issue' },
+      ],
+    },
+  },
+}
+
+type Repos = { id: string; name: string }[]
+
+const REPOS: Repos = [
+  { id: 'default', name: 'natamux' },
+  { id: 'web', name: 'Web & "app"' },
+]
+
 type DialogOptions = {
   loadSettings?: (repo: string) => Promise<LoadedSettings>
   create?: (input: NewWorkspaceInput) => Promise<Task>
   initialRepo?: string
+  repos?: Repos
 }
 
-function dialog({ loadSettings, create: makeTask, initialRepo }: DialogOptions = {}) {
+function dialog({
+  loadSettings,
+  create: makeTask,
+  initialRepo,
+  repos = REPOS,
+}: DialogOptions = {}) {
   const create = vi.fn(makeTask ?? (async (_input: NewWorkspaceInput) => TASK))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
+  const view = (list: Repos) => (
     <QueryClientProvider client={client}>
       <NewWorkspaceDialog
-        repos={[
-          { id: 'default', name: 'natamux' },
-          { id: 'web', name: 'Web & "app"' },
-        ]}
+        repos={list}
         loadBranches={async () => ({ branches: ['main'], current: 'main' })}
         create={create}
         onCreated={vi.fn()}
@@ -82,9 +113,10 @@ function dialog({ loadSettings, create: makeTask, initialRepo }: DialogOptions =
         {...(loadSettings === undefined ? {} : { loadSettings })}
         {...(initialRepo === undefined ? {} : { initialRepo })}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { create }
+  const { rerender } = render(view(repos))
+  return { create, setRepos: (next: Repos) => rerender(view(next)) }
 }
 
 // The labels of the fields, top to bottom.
@@ -146,6 +178,29 @@ describe('the Start a task dialog', () => {
     const project = screen.getByLabelText('Project') as HTMLSelectElement
     expect(project.value).toBe('web')
     expect(project.selectedOptions[0]?.textContent).toBe('Web & "app"')
+  })
+
+  it('starts in the first project when the one it was opened for is gone', async () => {
+    const { create } = dialog({ initialRepo: 'old' })
+    const user = userEvent.setup()
+    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('default')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.repo).toBe('default')
+  })
+
+  it('starts in a real project when the projects load after it opens', async () => {
+    const { create, setRepos } = dialog({ repos: [] })
+    setRepos([{ id: 'web', name: 'Web app' }])
+    const user = userEvent.setup()
+    expect((screen.getByLabelText('Project') as HTMLSelectElement).value).toBe('web')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.repo).toBe('web')
   })
 
   it('keeps the notes of a task with no agent', async () => {
@@ -250,15 +305,59 @@ describe('the Start a task dialog', () => {
     await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
     const source = await screen.findByLabelText('Where the context comes from')
 
-    for (const type of ['skill', 'mcp', 'github-issue', 'skill']) {
-      await user.selectOptions(source, type)
+    for (const key of ['skill:Ticket', 'mcp:Tracker', 'github-issue', 'skill:Ticket']) {
+      await user.selectOptions(source, key)
       expect(screen.queryByLabelText('Task notes')).toBeNull()
     }
     await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
     await user.click(startButton())
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
-    expect(create.mock.calls[0]?.[0]?.context).toEqual({ source: 'skill', ref: 'ABC-1' })
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      name: 'Ticket',
+      ref: 'ABC-1',
+    })
+  })
+
+  it('picks the second of two skills and names it', async () => {
+    const { create } = dialog({ loadSettings: async () => TWO_SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    const source = (await screen.findByLabelText(
+      'Where the context comes from',
+    )) as HTMLSelectElement
+    await user.selectOptions(source, 'skill:Linear')
+    expect(source.selectedOptions[0]?.textContent).toBe('Linear (skill)')
+    await user.type(screen.getByLabelText('Reference of the context'), 'LIN-7')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      name: 'Linear',
+      ref: 'LIN-7',
+    })
+  })
+
+  it('goes back to My notes in a project that does not offer the picked source', async () => {
+    const { create } = dialog({
+      loadSettings: async (repo) => (repo === 'web' ? NOTES_ONLY : WITH_ISSUES),
+    })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(
+      await screen.findByLabelText('Where the context comes from'),
+      'github-issue',
+    )
+    await user.selectOptions(screen.getByLabelText('Project'), 'web')
+
+    await user.type(await screen.findByLabelText('Task notes'), 'Keep the old URL')
+    expect(screen.queryByLabelText('Reference of the context')).toBeNull()
+    await user.click(startButton())
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ repo: 'web', prompt: 'Keep the old URL' })
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('context')
   })
 
   it('shows the same notes again when My notes is picked back, and sends them once', async () => {
@@ -267,8 +366,8 @@ describe('the Start a task dialog', () => {
     await user.type(screen.getByLabelText('Task title'), 'Fix the login')
     await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
     const source = await screen.findByLabelText('Where the context comes from')
-    for (const type of ['mcp', 'manual', 'github-issue', 'manual']) {
-      await user.selectOptions(source, type)
+    for (const key of ['mcp:Tracker', 'manual', 'github-issue', 'manual']) {
+      await user.selectOptions(source, key)
     }
 
     expect((screen.getByLabelText('Task notes') as HTMLTextAreaElement).value).toBe(

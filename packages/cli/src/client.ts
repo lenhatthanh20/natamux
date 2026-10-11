@@ -1,4 +1,6 @@
 import {
+  type Repo,
+  repoSchema,
   type Task,
   type TaskEvent,
   type TaskState,
@@ -17,6 +19,8 @@ export type CreateTaskRequest = {
   agent?: string
   dependsOn?: string[]
   context?: { source: string; ref: string }
+  // Null is the project with the id "default".
+  repo?: string | null
 }
 
 export type StageActionRequest = {
@@ -129,6 +133,11 @@ export class DaemonClient {
   async createTask(request: CreateTaskRequest): Promise<Task> {
     const body = asRecord(await this.request('POST', '/tasks', request), 'created task')
     return taskSchema.parse(body.task)
+  }
+
+  async listRepos(): Promise<Repo[]> {
+    const body = asRecord(await this.request('GET', '/repos'), 'project list')
+    return asArray(body.repos, 'project list').map((repo) => repoSchema.parse(repo))
   }
 
   async getTask(id: string): Promise<Task> {

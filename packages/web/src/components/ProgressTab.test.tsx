@@ -1,8 +1,9 @@
 import { DEFAULT_PROJECT_SETTINGS, type Task, type TaskEvent } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act as actOn, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
   StageAction,
@@ -10,6 +11,7 @@ import type {
   StageFile,
   StoredEvent,
 } from '../lib/api'
+import { fireAppEvent } from '../lib/app-events'
 import { useToasts } from '../lib/toasts'
 import { ProgressTab } from './ProgressTab'
 
@@ -112,6 +114,8 @@ type Options = {
   loadFiles?: () => Promise<StageFile[]>
   act?: Act
   activity?: string
+  startAgent?: (agent: AgentId) => Promise<Task>
+  startInBanner?: boolean
 }
 
 afterEach(() => {
@@ -138,6 +142,8 @@ function progress(options: Options = {}) {
         createIssue={createIssue}
         onOpenFile={onOpenFile}
         activity={options.activity}
+        startAgent={options.startAgent}
+        startInBanner={options.startInBanner}
       />
     </QueryClientProvider>
   )
@@ -406,6 +412,46 @@ describe('the actions of the current stage', () => {
     await waitFor(() => expect(approve.hasAttribute('disabled')).toBe(false))
   })
 
+  it('leaves the report of a failed agent start to the dashboard', async () => {
+    let fail: (error: Error) => void = () => {}
+    const startAgent = vi.fn(
+      (_agent: AgentId) =>
+        new Promise<Task>((_resolve, reject) => {
+          fail = reject
+        }),
+    )
+    progress({ task: { ...TASK, state: 'failed' }, startAgent })
+    const user = userEvent.setup()
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const start = within(spec).getByRole('button', { name: 'Start agent' })
+    await user.click(start)
+    await waitFor(() => expect(start.getAttribute('aria-busy')).toBe('true'))
+    fail(new Error('The daemon is down'))
+
+    await waitFor(() => expect(start.getAttribute('aria-busy')).toBeNull())
+    expect(startAgent).toHaveBeenCalledWith('claude-code')
+    expect(useToasts.getState().toasts).toEqual([])
+  })
+
+  it('shows why the agent failed in red, and Start agent once per screen', async () => {
+    const failed = stored(5, 'agent.failed', '2026-10-10T08:15:00.000Z', {
+      stage: 'spec',
+      reason: 'claude: command not found',
+    })
+    progress({
+      task: { ...TASK, state: 'failed' },
+      events: [...EVENTS, failed],
+      startAgent: async () => TASK,
+      startInBanner: true,
+    })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const reason = within(spec).getByText('claude: command not found')
+    expect(reason.closest('ul')?.getAttribute('data-state')).toBe('failed')
+    expect(within(spec).queryByRole('button', { name: 'Start agent' })).toBeNull()
+  })
+
   it('skips the stage and marks a running one as done', async () => {
     const { act } = progress()
     const user = userEvent.setup()
@@ -432,6 +478,25 @@ describe('the actions of the current stage', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Send the task back' })).toBeNull()
     expect(act).not.toHaveBeenCalled()
+  })
+
+  it('opens the send back dialog when the review banner asks for it', async () => {
+    progress()
+    const user = userEvent.setup()
+    await screen.findByRole('article', { name: 'Spec' })
+
+    actOn(() => fireAppEvent('send-back'))
+    const dialog = await screen.findByRole('dialog', { name: 'Send the task back' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Send the task back' })).toBeNull()
+  })
+
+  it('names the source of the context when it has a name', async () => {
+    progress({ task: { ...TASK, context: { source: 'skill', name: 'linear', ref: 'LIN-7' } } })
+
+    const facts = await screen.findByRole('region', { name: 'Context and issue' })
+    expect(within(facts).getByText('linear (skill) LIN-7')).toBeTruthy()
   })
 
   it('creates the issue of the task', async () => {

@@ -13,3 +13,17 @@ if (typeof daemonToken === 'string' && daemonToken !== '') {
     // Storage is off: the page asks for the token instead.
   }
 }
+
+// Ghostty's font for the terminals (packages/web/src/lib/terminal-font.ts). A font the user
+// picks in the dashboard comes first.
+const GHOSTTY_FONT_KEY = 'natamux.ghostty-font'
+const ghosttyFont: unknown = electron.ipcRenderer.sendSync('natamux:ghostty-font')
+try {
+  if (typeof ghosttyFont === 'string' && ghosttyFont !== '') {
+    window.localStorage.setItem(GHOSTTY_FONT_KEY, ghosttyFont)
+  } else {
+    window.localStorage.removeItem(GHOSTTY_FONT_KEY)
+  }
+} catch {
+  // Storage is off: the terminals use the built-in font.
+}

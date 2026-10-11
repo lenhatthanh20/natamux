@@ -44,6 +44,29 @@ function terminalOf(env: Record<string, string | undefined>, taskId: string): st
   return terminal && env.NATAMUX_TASK_ID?.trim() === taskId ? terminal : undefined
 }
 
+// The project of a new task that names none: the one of the task this terminal belongs to, or
+// the only project. The daemon would pick the "default" project, which may not exist.
+async function projectOf(
+  client: DaemonClient,
+  env: Record<string, string | undefined>,
+): Promise<string | null> {
+  const taskId = env.NATAMUX_TASK_ID?.trim()
+  if (taskId) {
+    return (await client.getTask(taskId)).repo
+  }
+  const repos = await client.listRepos()
+  const [only] = repos
+  if (only !== undefined && repos.length === 1) {
+    return only.id
+  }
+  if (repos.length === 0) {
+    throw new Error('There is no project. Add a project first')
+  }
+  throw new Error(
+    `Name the project with --repo. Projects: ${repos.map((repo) => repo.id).join(', ')}`,
+  )
+}
+
 async function execute(
   command: Command,
   client: DaemonClient,
@@ -56,6 +79,7 @@ async function execute(
       return
 
     case 'task.create': {
+      const repo = command.repo ?? (await projectOf(client, env))
       const task = await client.createTask({
         title: command.title,
         description: command.description,
@@ -64,6 +88,7 @@ async function execute(
         agent: command.agent,
         dependsOn: command.dependsOn,
         ...(command.context === undefined ? {} : { context: command.context }),
+        repo,
       })
       if (command.json) {
         printJson(io, task)

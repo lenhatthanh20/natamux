@@ -50,7 +50,7 @@ Pick a view with the **Layout** switch above the list.
 | View | Shows |
 |---|---|
 | Table | One row per task. Click a column header to sort. |
-| Board | One column per state. **Show finished** adds the done and cancelled columns. |
+| Board | One column per state. An empty column is folded to a narrow rail; click it to open it. **Show finished** adds the done and cancelled columns. |
 | Progress | Tasks against their [stages](/docs/concepts/stages/) |
 
 ![The board view](/screens/board.png)
@@ -62,6 +62,8 @@ The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activ
 The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
+
+Right-click a row, or press `Shift+F10`, for **Open workspace**, **Show details**, the actions for its state (such as **Retry**, **Approve** or **Start agent**), the copy items, and **Cancel task**, which asks first.
 
 ## Add a task
 
@@ -76,7 +78,7 @@ Two lists appear next to the field when they have something to choose:
 - **Project**, when you have more than one project.
 - **Template**, when you saved a template. Choose **No template** to skip it. Save a template from the **More actions** menu of a task: **Save as template**.
 
-To start work right away, press `c` for **Start a task**. It makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
+To start work right away, click **Start a task** next to **Add task**, or press `c`. It uses the title you typed, makes a git worktree and a task, and can start an agent in it. See [Workspaces](/docs/concepts/workspaces/).
 
 In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and use the actions for its state, such as **Mark ready**, **Approve** or **Retry**. **Cancel task** asks first.
 
@@ -125,7 +127,7 @@ See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
-- The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage, the reason and how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
+- The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage and what the agent asks, or why the task failed, with how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
 - The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks.
 - The browser tab title shows the count: `(2) Natamux`.
 

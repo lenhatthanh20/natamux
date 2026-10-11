@@ -1,7 +1,7 @@
 import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
 import { useQuery } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
@@ -13,6 +13,7 @@ import { useViewStore } from '../lib/view-store'
 import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
 import { Button } from './ui/Button'
+import { IconButton } from './ui/IconButton'
 
 type ShellPanesProps = {
   // `agent` is set when an agent was started in this workspace. Shell 1 is the agent's.
@@ -25,7 +26,8 @@ type ShellPanesProps = {
   // counts as the agent's and has the task state.
   loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
   closeTerminal: (terminal: string) => Promise<string[]>
-  // A new number puts the keyboard in the shell that waits for the user, else in Shell 1.
+  // A new number puts the keyboard in the shell that waits for the user, else in Shell 1. 0 asks
+  // for nothing.
   focusToken?: number
   // Where "New shell" goes: the right end of the tab row, which the parent owns.
   actionsSlot: HTMLElement | null
@@ -116,15 +118,34 @@ export function ShellPanes({
   // Ctrl+Shift+` is a command, see lib/commands.ts.
   useAppEvent('new-shell', addShell)
 
+  // The shell that gets the keyboard, and a new number each time it is asked for.
+  const [focusing, setFocusing] = useState<{ name: string; at: number } | null>(null)
+
   // The jump palette can ask for one shell of the workspace.
   const request = useViewStore((state) => state.shellRequest)
-  const [asked, setAsked] = useState<{ name: string; at: number } | null>(null)
   useEffect(() => {
     if (request !== null && request.taskId === taskId && names.includes(request.name)) {
       setShown(request.name)
       setMaximized(null)
-      setAsked({ name: request.name, at: request.at })
+      setFocusing({ name: request.name, at: request.at })
       useViewStore.getState().clearShellRequest()
+    }
+  })
+
+  // The waiting shell is chosen once per token, after the shells and their agents are read. A
+  // shell that starts or stops waiting later must not take the keyboard. It is shown in the same
+  // render, as a hidden terminal cannot take the focus.
+  const answered = useRef(0)
+  const shellsRead =
+    !open.isPending &&
+    !open.isFetching &&
+    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
+  useEffect(() => {
+    if (shellsRead && focusToken && focusToken !== answered.current) {
+      answered.current = focusToken
+      setShown(waiting)
+      setMaximized(null)
+      setFocusing({ name: waiting, at: Date.now() })
     }
   })
 
@@ -132,15 +153,25 @@ export function ShellPanes({
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {actionsSlot !== null &&
         createPortal(
-          <Button
-            variant="ghost"
-            icon={SquareSplitHorizontal}
-            onClick={addShell}
-            disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
-            data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
-          >
-            New shell
-          </Button>,
+          // On a phone the label would take the room of a tab, so the button is an icon.
+          phone ? (
+            <IconButton
+              label="New shell"
+              icon={SquareSplitHorizontal}
+              onClick={addShell}
+              disabled={full}
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              icon={SquareSplitHorizontal}
+              onClick={addShell}
+              disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
+              data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
+            >
+              New shell
+            </Button>
+          ),
           actionsSlot,
         )}
       {phone && names.length > 1 && (
@@ -169,7 +200,6 @@ export function ShellPanes({
           const isAgent = state !== undefined
           const own = state ?? null
           const glyph = own === null ? null : <StatusGlyph state={own} />
-          const focus = asked?.name === name ? asked.at : name === waiting ? focusToken : undefined
           const index = visible.indexOf(name)
           return (
             <TerminalPane
@@ -189,7 +219,7 @@ export function ShellPanes({
               }
               needsInput={own === 'needs-input'}
               connect={(size) => connect(size, name)}
-              focusToken={focus}
+              focusToken={focusing?.name === name ? focusing.at : undefined}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}
               onClose={name === '1' ? undefined : () => void closeShell(name)}

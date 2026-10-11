@@ -61,6 +61,20 @@ describe('GenericSignals', () => {
     expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:02:02.000Z')
   })
 
+  it('keeps the wait for background work while the terminal prints', () => {
+    const task = runningTask('claude-code')
+    tasks.applyEvent(task.id, { source: 'agent', type: 'agent.waiting' })
+    const since = tasks.getTask(task.id).backgroundSince
+    later(60)
+
+    signals.onOutput(task.id, '1', '\x1b[2J redraw after a resize')
+
+    expect(tasks.getTask(task.id)).toMatchObject({
+      backgroundSince: since,
+      updatedAt: '2026-10-08T09:01:00.000Z',
+    })
+  })
+
   it('moves a running task to needs input when an agent without hooks rings the bell', () => {
     const task = runningTask('cursor')
 

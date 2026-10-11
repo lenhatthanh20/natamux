@@ -34,7 +34,7 @@ type WorkspaceListProps = {
   pinnedIds: readonly string[]
   diffStats?: Readonly<Record<string, DiffStat>>
   activity?: Readonly<Record<string, string>>
-  // What waiting agents asked, by task id.
+  // What waiting agents asked, or why tasks failed, by task id.
   questions?: Readonly<Record<string, string | null>>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>
@@ -289,6 +289,8 @@ export function WorkspaceList({
         const hiddenInGroup = filtered && open.length + finished.length === 0 && hidden > 0
         const items = repoItems(repo.id)
         const menuLabel = `Actions for ${repo.name}`
+        // A project that is gone takes no new tasks.
+        const gone = !repos.some((known) => known.id === repo.id)
         return (
           <div key={repo.id} className="flex flex-col">
             <div className="group flex h-7 items-center rounded-md pr-0.5 hover:bg-hover">
@@ -337,13 +339,15 @@ export function WorkspaceList({
                   />
                 )}
               </button>
-              <IconButton
-                label={`Start a task in ${repo.name}`}
-                icon={Plus}
-                size="xs"
-                onClick={() => onNewWorkspace(repo.id)}
-                className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
-              />
+              {!gone && (
+                <IconButton
+                  label={`Start a task in ${repo.name}`}
+                  icon={Plus}
+                  size="xs"
+                  onClick={() => onNewWorkspace(repo.id)}
+                  className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+                />
+              )}
               {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
@@ -352,13 +356,15 @@ export function WorkspaceList({
                 {open.length === 0 && !hiddenInGroup && (
                   <li className="py-1 pl-8 text-xs text-muted">
                     No workspaces.{' '}
-                    <button
-                      type="button"
-                      onClick={() => onNewWorkspace(repo.id)}
-                      className="text-ink underline-offset-2 hover:underline"
-                    >
-                      Start a task
-                    </button>
+                    {!gone && (
+                      <button
+                        type="button"
+                        onClick={() => onNewWorkspace(repo.id)}
+                        className="text-ink underline-offset-2 hover:underline"
+                      >
+                        Start a task
+                      </button>
+                    )}
                   </li>
                 )}
                 {hiddenInGroup && (

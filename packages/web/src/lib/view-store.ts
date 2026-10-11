@@ -104,7 +104,7 @@ export function detailsOpenFor(choice: boolean | undefined, dockedBesideWorkspac
 }
 
 function isWorkspaceTab(value: unknown): value is WorkspaceTab {
-  return value === 'changes' || value === 'history' || value === 'terminal'
+  return value === 'changes' || value === 'history' || value === 'terminal' || value === 'docs'
 }
 
 function savedTabs(): Record<string, WorkspaceTab> {

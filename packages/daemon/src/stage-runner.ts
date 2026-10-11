@@ -19,7 +19,7 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
-import { type AgentRunner, quoteArgument } from './agent-runner.js'
+import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { type RunGh, runGh } from './git.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
@@ -49,6 +49,11 @@ const SHELLS = [
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
 export const LAUNCH_GRACE_MS = 30_000
+
+// The escape sequences that set the window title, as the Windows console passes them on.
+const AGENT_EXITED_MARKS = [`\x1b]0;${AGENT_EXITED_TITLE}`, `\x1b]2;${AGENT_EXITED_TITLE}`]
+// Enough of the last output to find a mark that comes in two pieces.
+const MARK_TAIL_CHARS = 64
 
 export const STAGE_ACTIONS = [
   'approve',
@@ -206,8 +211,12 @@ export class StageRunner {
   private readonly waitingForTasks = new Set<string>()
   // Terminals where this daemon started an agent, and when.
   private readonly launched = new Map<string, number>()
+  // The end of the output of those terminals, on Windows.
+  private readonly outputTails = new Map<string, string>()
   // The agent a person picked, while the stage it starts is starting.
   private readonly chosenAgents = new Map<string, string>()
+  // Tasks made for a plain shell. Their agent stages wait for a person to start an agent.
+  private readonly withoutAgent = new Set<string>()
   // The terminal where each task runs its stage command.
   private readonly commandTerminals = new Map<string, string>()
   // The stages each task is starting now, so an action can answer with the task after them.
@@ -329,11 +338,19 @@ export class StageRunner {
       if (key.startsWith(`${taskId}/`)) {
         this.launched.delete(key)
         this.reported.delete(key)
+        this.outputTails.delete(key)
       }
     }
     this.commandTerminals.delete(taskId)
     this.waitingForWorkspace.delete(taskId)
     this.waitingForTasks.delete(taskId)
+    this.withoutAgent.delete(taskId)
+  }
+
+  // A task made with no agent: its stages that need one stay ready, and no agent starts in its
+  // shell until a person starts one.
+  leaveToPerson(taskId: string): void {
+    this.withoutAgent.add(taskId)
   }
 
   // Starts the stages that waited for other tasks, once those are done.
@@ -441,6 +458,9 @@ export class StageRunner {
       this.waitingForTasks.add(task.id)
       return
     }
+    if (this.withoutAgent.has(task.id) && !this.chosenAgents.has(task.id)) {
+      return
+    }
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
     if (!this.markStarted(task, step, stage, { head }) || prompt === undefined) {
@@ -470,6 +490,7 @@ export class StageRunner {
     prompt?: string,
     makeWorkspace?: () => Promise<unknown>,
   ): Promise<Task> {
+    this.withoutAgent.delete(taskId)
     if (makeWorkspace !== undefined && this.tasks.getTask(taskId).workspace === null) {
       // The new workspace starts the stage that waits for it. It must start the agent picked
       // here, not the task's own.
@@ -510,6 +531,7 @@ export class StageRunner {
     if (!this.terminals.isOpen(taskId, terminal)) {
       // A new shell with this name has no agent in it.
       this.launched.delete(key)
+      this.outputTails.delete(key)
       return false
     }
     const launchedAt = this.launched.get(key)
@@ -526,6 +548,22 @@ export class StageRunner {
       this.platform === 'win32' ||
       this.now() - launchedAt < LAUNCH_GRACE_MS
     )
+  }
+
+  // Output of a terminal of a task. On Windows an agent started here counts as running until its
+  // launch line sets the window title that says it has ended (/exit, a crash).
+  onOutput(taskId: string, terminal: string, data: string): void {
+    const key = `${taskId}/${terminal}`
+    if (this.platform !== 'win32' || !this.launched.has(key)) {
+      return
+    }
+    const text = (this.outputTails.get(key) ?? '') + data
+    if (AGENT_EXITED_MARKS.some((mark) => text.includes(mark))) {
+      this.launched.delete(key)
+      this.outputTails.delete(key)
+      return
+    }
+    this.outputTails.set(key, text.slice(-MARK_TAIL_CHARS))
   }
 
   // A command whose exit code decides the stage, such as the test command.
@@ -579,9 +617,13 @@ export class StageRunner {
 
   private sourceOf(task: Task): ContextSource {
     const type = task.context?.source ?? 'manual'
-    const configured = this.tasks
+    const name = task.context?.name
+    const offered = this.tasks
       .settingsOf(task.repo)
-      .context.sources.find((source) => source.type === type)
+      .context.sources.filter((source) => source.type === type)
+    // A task from before names were sent, or one whose source was renamed, takes the first.
+    const configured =
+      offered.find((source) => 'name' in source && source.name === name) ?? offered[0]
     return configured ?? (type === 'skill' || type === 'mcp' ? { type: 'manual' } : { type })
   }
 
@@ -687,6 +729,7 @@ export class StageRunner {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     if (action === 'start') {
+      this.withoutAgent.delete(taskId)
       await this.startLanes(taskId, ['draft', 'ready'])
       return this.tasks.getTask(taskId)
     }

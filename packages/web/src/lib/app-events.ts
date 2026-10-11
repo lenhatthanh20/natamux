@@ -14,6 +14,7 @@ export type AppEventName =
   | 'new-shell'
   | 'edit-task'
   | 'open-doc'
+  | 'send-back'
 
 export function fireAppEvent(name: AppEventName, detail?: unknown): void {
   window.dispatchEvent(new CustomEvent(`natamux:${name}`, { detail }))

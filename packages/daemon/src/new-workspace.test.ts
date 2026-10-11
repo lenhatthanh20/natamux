@@ -1,13 +1,14 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, type TestRepo } from './git-repo.fixture.js'
 import { newWorkspace } from './new-workspace.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
-import { TaskService } from './task-service.js'
+import { type SettingsOf, TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError, WorkspaceService } from './workspace-service.js'
@@ -20,11 +21,21 @@ let parts: { tasks: TaskService; workspaces: WorkspaceService; stages: StageRunn
 
 beforeEach(() => {
   repo = createTestRepo()
-  const dataDir = join(repo.root, 'data')
-  mkdirSync(dataDir)
+  mkdirSync(join(repo.root, 'data'))
   index = new TaskIndex(':memory:')
+  build()
+})
+
+// Without settingsOf, tasks go through the legacy pipeline.
+function build(settingsOf?: SettingsOf) {
+  const dataDir = join(repo.root, 'data')
   const bus = new EventBus()
-  tasks = new TaskService({ dataDir, index, bus })
+  tasks = new TaskService({
+    dataDir,
+    index,
+    bus,
+    ...(settingsOf === undefined ? {} : { settingsOf }),
+  })
   const workspaces = new WorkspaceService({
     tasks,
     repoDir: repo.dir,
@@ -53,7 +64,7 @@ beforeEach(() => {
   })
   stages.start()
   parts = { tasks, workspaces, stages }
-})
+}
 
 afterEach(async () => {
   // Background git work in the worktree would keep its folder busy on Windows.
@@ -97,10 +108,33 @@ describe('newWorkspace', () => {
     expect(ptys).toHaveLength(1)
   })
 
+  it('starts no agent with the default pipeline, until a person starts one', async () => {
+    parts.stages.stop()
+    build(() => DEFAULT_PROJECT_SETTINGS)
+
+    const task = await newWorkspace(parts, { title: 'Fix the login page' })
+    await parts.stages.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'ready' })
+    expect(ptys).toHaveLength(0)
+
+    await parts.stages.startByHand(task.id, 'claude-code')
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
+    expect(ptys).toHaveLength(1)
+  })
+
   it('refuses a base branch that does not exist and makes no task', async () => {
     await expect(newWorkspace(parts, { title: 'X', base: 'no-such-branch' })).rejects.toThrow(
       WorkspaceConflictError,
     )
     expect(tasks.listTasks()).toHaveLength(0)
+  })
+
+  it('cancels the new task when the worktree cannot be made', async () => {
+    vi.spyOn(parts.workspaces, 'create').mockRejectedValue(new Error('index.lock exists'))
+
+    await expect(newWorkspace(parts, { title: 'X' })).rejects.toThrow('index.lock exists')
+    expect(tasks.listTasks().map((task) => task.state)).toEqual(['cancelled'])
   })
 })

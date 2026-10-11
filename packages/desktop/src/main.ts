@@ -1,4 +1,5 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -16,6 +17,7 @@ import {
 import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
+import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
@@ -103,6 +105,8 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     }
   }
   daemonExited = false
+  // While it starts, the caller reports a failure, so the exit handler stays quiet.
+  let starting = true
   daemon = utilityProcess.fork(parts.daemonMain, [], {
     env: daemonEnv(process.env, daemonToken, {
       port,
@@ -122,7 +126,7 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
   daemon.on('exit', (code) => {
     daemonExited = true
     log(`--- the daemon exited with code ${code}\n`)
-    if (!quitConfirmed) {
+    if (!quitConfirmed && !starting) {
       void dialog
         .showMessageBox({
           type: 'error',
@@ -134,10 +138,14 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     }
   })
 
-  await waitForHealth(`${dashboardUrl}/health`, {
-    timeoutMs: 30_000,
-    exited: () => daemonExited,
-  })
+  try {
+    await waitForHealth(`${dashboardUrl}/health`, {
+      timeoutMs: 30_000,
+      exited: () => daemonExited,
+    })
+  } finally {
+    starting = false
+  }
 }
 
 function createWindow(): void {
@@ -314,6 +322,13 @@ ipcMain.on('natamux:daemon-token', (event) => {
     dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
 })
 
+// The terminals of the dashboard use Ghostty's font when the user has one and picked none.
+// Read again at each load, so a change in Ghostty shows after a reload.
+ipcMain.on('natamux:ghostty-font', (event) => {
+  const font = readGhosttyFont(process.env, homedir(), process.platform)
+  event.returnValue = font === undefined ? '' : JSON.stringify(font)
+})
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -333,6 +348,9 @@ if (!app.requestSingleInstanceLock()) {
       if (yes) {
         quitConfirmed = true
         app.quit()
+      } else if (window === undefined && dashboardUrl !== '') {
+        // Closing the last window on Windows or Linux asked to quit. Cancel keeps the app usable.
+        createWindow()
       }
     })
   })

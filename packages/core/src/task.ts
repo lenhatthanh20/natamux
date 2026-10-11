@@ -20,6 +20,8 @@ export type PullRequestStatus = z.infer<typeof pullRequestStatusSchema>
 // Where the context of a task came from, and what it was asked for: an issue number, a ticket key.
 export const taskContextSchema = z.object({
   source: z.enum(CONTEXT_SOURCE_TYPES),
+  // Picks one of several skills or MCP servers in the project settings.
+  name: z.string().trim().min(1).max(60).optional(),
   ref: z.string().trim().max(500).default(''),
 })
 

@@ -13,7 +13,7 @@ Open them from a workspace, or press `2` for **Changes** and `3` for **History**
 
 ## Changes tab
 
-The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The list refreshes every 10 seconds. Click **Refresh**, or press `Shift+R`, to refresh at once.
+The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The tab label shows how many there are. The list refreshes every 10 seconds. Click **Refresh**, or press `Shift+R`, to refresh at once.
 
 When no file differs, the tab says **No changes** and **The workspace matches its last commit.**
 
@@ -96,16 +96,16 @@ The commit box is under the file list.
 1. Write a **Commit message**.
 2. Click **Commit all**, or press `Mod+Enter`.
 
-**Commit all** stages every change in the workspace, new files too, and commits them. You cannot pick single files. A toast says **Committed N files.** The button is off until you write a message.
+**Commit all** stages every change in the workspace, new files too, and commits them. You cannot pick single files. A toast says **Committed N files.** and has a **Push** action. The button is off until you write a message.
 
 ### Push and open a pull request
 
 The header of the workspace has two buttons.
 
-- **Push** pushes the task branch to `origin` and sets it as the upstream branch. The label shows how many commits are ahead of the base, such as `Push ↑2`. A toast says **Pushed `<branch>` to origin.**
+- **Push** pushes the task branch to `origin` and sets it as the upstream branch. The label shows how many commits are ahead of the base, such as `Push ↑2`. A toast says **Pushed `<branch>` to origin.** and, while the task has no pull request, has a **Create pull request** action.
 - **Create pull request** pushes the branch first, then opens a pull request on GitHub with the GitHub CLI. In a narrow window the label is **Open PR**. A toast says **Pull request opened.** and has an **Open** action.
 
-Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. Commit first.
+Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. When files are not committed yet, the reason is **Commit your N changed files first**, and **Commit…** takes the place of **Push**: it opens the Changes tab with the cursor in the commit message. **Create pull request** is drawn as the main button only when it can be used.
 
 The pull request gets the task title as its title and the task notes as its body. When the task has a linked GitHub issue, the body ends with `Closes #N`. See [GitHub](/docs/guides/github/).
 
@@ -123,7 +123,7 @@ Natamux asks GitHub about open pull requests once a minute. Click **Check now** 
 
 The **History** tab draws the git graph of the task branch and of the branch of the main checkout, newest commit first.
 
-- The first line says how far the task branch is from the base: `2 commits ahead of main, 0 behind.`
+- The first line says how far the task branch is from the base: `2 commits ahead of main, 0 behind.` When files are not committed, it adds **N files not committed.**, which opens the Changes tab.
 - The base is the branch that the main checkout of the repository is on. When that checkout is not on a branch, or is on the task's own branch, the line says **No base branch to compare with.**
 - Commits that are on the task branch and not on the base are drawn as filled dots. Commits of the base are muted.
 - The current commit (HEAD) is in bold.

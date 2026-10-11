@@ -6,6 +6,7 @@ import {
   EVENT_TYPES,
   type EventType,
   RECORD_ONLY_EVENT_TYPES,
+  repoIdSchema,
   TASK_PRIORITIES,
   TASK_STATES,
   type TaskState,
@@ -45,6 +46,8 @@ export type Command =
       agent?: string
       dependsOn: string[]
       context?: { source: ContextSourceType; ref: string }
+      // Without it, the project of NATAMUX_TASK_ID's task, or the only project.
+      repo?: string
       json: boolean
     }
   | { name: 'task.list'; state?: TaskState; json: boolean }
@@ -113,6 +116,13 @@ function taskId(value: string | undefined): string {
   return value
 }
 
+function repoId(value: string): string {
+  if (!repoIdSchema.safeParse(value).success) {
+    throw new UsageError(`"${value}" is not a project id. A project id looks like my-app`)
+  }
+  return value
+}
+
 function payloadObject(text: string): Record<string, unknown> {
   let parsed: unknown
   try {
@@ -155,6 +165,7 @@ function parseOptions(argv: readonly string[]) {
         issue: { type: 'string' },
         url: { type: 'string' },
         provider: { type: 'string' },
+        repo: { type: 'string' },
       },
     })
   } catch (error) {
@@ -205,6 +216,7 @@ export function parseCommand(argv: readonly string[]): Command {
         agent: values.agent,
         dependsOn: (values['depends-on'] ?? []).map((id) => taskId(id)),
         ...(values.context === undefined ? {} : { context: contextOption(values.context) }),
+        ...(values.repo === undefined ? {} : { repo: repoId(values.repo) }),
         json,
       }
     }

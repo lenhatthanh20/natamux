@@ -19,6 +19,7 @@ import type {
   StageFile,
   StoredEvent,
 } from '../lib/api'
+import { useAppEvent } from '../lib/app-events'
 import { describeEvent } from '../lib/events'
 import {
   finishedWhen,
@@ -27,8 +28,9 @@ import {
   stageCount,
   stageTime,
 } from '../lib/stage-view'
-import { formatAge, STATE_LABEL } from '../lib/tasks'
+import { contextText, formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { STATE_TONE } from './Banner'
 import { DetailSection } from './DetailSection'
 import { StageMarker } from './StageMarker'
 import { StartAgentControl } from './StartAgentControl'
@@ -50,6 +52,9 @@ type ProgressTabProps = {
   activity?: string
   // Starts an agent for the stage, for one that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
+  // The banner of the workspace beside the details offers Start agent for a failed task, so the
+  // stage card does not offer it a second time.
+  startInBanner?: boolean
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -85,6 +90,7 @@ export function ProgressTab({
   onOpenFile,
   activity,
   startAgent,
+  startInBanner = false,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -102,6 +108,9 @@ export function ProgressTab({
     placeholderData: keepPreviousData,
   })
   const [sendingBack, setSendingBack] = useState<StageProgress | null>(null)
+  // Send back from the review banner. The form opens once the stages are read.
+  const [sendBackAsked, setSendBackAsked] = useState(false)
+  useAppEvent('send-back', () => setSendBackAsked(true))
   const stageList = useRef<HTMLOListElement>(null)
 
   const action = useMutation({
@@ -109,9 +118,9 @@ export function ProgressTab({
       act(name, input),
     onError: (error, { name }) => toast(FAILED_ACTION[name], 'error', { detail: error.message }),
   })
+  // The dashboard reports a failed start already.
   const starting = useMutation({
     mutationFn: (agent: AgentId) => startAgent?.(agent) ?? Promise.resolve(task),
-    onError: (error) => toast('Could not start the agent.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -154,6 +163,14 @@ export function ProgressTab({
   const count = stageCount(progress)
   const open = task.state !== 'done' && task.state !== 'cancelled'
   const run = (name: StageAction, input?: StageActionInput) => action.mutate({ name, input })
+  const reviewed =
+    progress.find((entry) => entry.status === 'current' && entry.state === 'review') ??
+    progress.find((entry) => entry.status === 'current')
+  const sendBackFrom = sendingBack ?? (sendBackAsked && open ? (reviewed ?? null) : null)
+  const closeSendBack = () => {
+    setSendingBack(null)
+    setSendBackAsked(false)
+  }
   const latest = loadedEvents
     // "Agent is working" lines only keep the clock fresh; they would fill the list.
     .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
@@ -178,6 +195,7 @@ export function ProgressTab({
         onSendBack={() => setSendingBack(entry)}
         onOpenFile={onOpenFile}
         agent={task.agent}
+        startInBanner={startInBanner}
         starting={starting.isPending}
         onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
         activity={
@@ -278,10 +296,8 @@ export function ProgressTab({
       <DetailSection id="progress-context" title="Context and issue">
         <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted">Context</dt>
-          <dd className="m-0 truncate">
-            {task.context === null
-              ? 'The task notes'
-              : `${task.context.source}${task.context.ref === '' ? '' : ` ${task.context.ref}`}`}
+          <dd className="m-0 truncate" data-tip-overflow>
+            {task.context === null ? 'The task notes' : contextText(task.context)}
           </dd>
           <dt className="text-muted">Issue</dt>
           <dd className="m-0 truncate">
@@ -347,20 +363,20 @@ export function ProgressTab({
         </ul>
       </DetailSection>
 
-      {sendingBack !== null && (
+      {sendBackFrom !== null && (
         <SendBackDialog
-          stage={sendingBack}
+          stage={sendBackFrom}
           earlier={progress.filter(
             (entry) =>
               entry.status !== 'upcoming' &&
               (entry.kind === 'agent' || entry.kind === 'context' || entry.kind === 'testing'),
           )}
           busy={action.isPending}
-          onClose={() => setSendingBack(null)}
+          onClose={closeSendBack}
           onSend={(to, reason) => {
             action.mutate(
               { name: 'reopen', input: { to, ...(reason === '' ? {} : { reason }) } },
-              { onSuccess: () => setSendingBack(null) },
+              { onSuccess: closeSendBack },
             )
           }}
         />
@@ -537,11 +553,13 @@ function StageCard({
   onOpenFile,
   activity,
   agent,
+  startInBanner,
   starting,
   onStartAgent,
 }: {
   activity?: string
   agent: string | null
+  startInBanner: boolean
   starting: boolean
   onStartAgent?: (agent: AgentId) => void
   stage: Stage
@@ -711,7 +729,11 @@ function StageCard({
           )}
 
           {current && progress.reasons.length > 0 && (
-            <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm">
+            <ul
+              // A failed stage is red, as its chip; checks that wait for the user are amber.
+              data-state={state === 'failed' ? 'failed' : undefined}
+              className={`m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border px-3 py-2 text-sm ${state === 'failed' ? STATE_TONE : 'border-signal-line bg-signal-soft'}`}
+            >
               {progress.reasons.map((reason) => (
                 <li key={reason} className="whitespace-pre-wrap break-words text-ink">
                   {reason}
@@ -777,7 +799,7 @@ function StageCard({
                     Start
                   </Button>
                 )}
-                {(state === 'failed' || state === 'needs-input') &&
+                {((state === 'failed' && !startInBanner) || state === 'needs-input') &&
                   STARTS_ITSELF.has(stage.kind) &&
                   onStartAgent !== undefined && (
                     <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />

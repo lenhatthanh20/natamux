@@ -152,9 +152,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     queryClient.invalidateQueries({ queryKey: ['repos'] }),
   )
 
+  // Messages sent while the socket was down are lost, so load again what they would have changed.
   useEffect(() => {
     if (liveStatus === 'live') {
       queryClient.invalidateQueries({ queryKey: TASKS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['repos'] })
     }
   }, [liveStatus, queryClient])
 
@@ -428,8 +430,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     detailsWidth: details.width,
   })
   const phone = shellLayout.details === 'page'
-  // What waiting agents asked, for the sidebar rows.
-  const asking = tasks.filter((task) => task.state === 'needs-input' && task.workspace !== null)
+  // What waiting agents asked, or why tasks failed, for the sidebar rows.
+  const asking = tasks.filter(
+    (task) => (task.state === 'needs-input' || task.state === 'failed') && task.workspace !== null,
+  )
   const askQueries = useQueries({
     queries: asking.map((task) => ({
       queryKey: ['events', task.id, task.updatedAt],
@@ -772,6 +776,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   now={now}
                   currentId={changesTaskId}
                   filtered={search.trim() !== ''}
+                  questions={questions}
                   onOpen={(id) => {
                     openTask(id)
                     afterPick()
@@ -902,6 +907,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         startAgent={(agent) =>
                           agentMutation.mutateAsync({ task: detailTask, agent })
                         }
+                        startInBanner={dockedBesideWorkspace}
                         createIssue={async () => {
                           const updated = await api.createIssue(detailTask.id)
                           mergeTask(updated)
@@ -1000,6 +1006,16 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
             writeStageFile={(name, text) => api.writeStageFile(changesTask.id, name, text)}
             startAgent={(agent) => agentMutation.mutateAsync({ task: changesTask, agent })}
+            approveStage={async (stage) => {
+              const updated = await api.stageAction(changesTask.id, 'approve', { stage })
+              mergeTask(updated)
+              return updated
+            }}
+            onSendBack={() => {
+              // The form is in the progress of the details, which may have to open first.
+              showProgress(changesTask.id)
+              setTimeout(() => fireAppEvent('send-back'), 80)
+            }}
           />
         ) : agentsOpen ? (
           <AgentPanes
@@ -1059,13 +1075,14 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onSubmit={submitNewTask}
               className="flex shrink-0 flex-wrap items-center gap-2 px-4 pt-4 pb-3"
             >
+              {/* A phone has no keys to hint at, and little room: the buttons are icons there. */}
               <input
                 ref={newTaskRef}
                 value={newTitle}
                 onChange={(event) => setNewTitle(event.target.value)}
-                placeholder="Add a task to the backlog (n)"
+                placeholder={phone ? 'Add a task to the backlog' : 'Add a task to the backlog (n)'}
                 aria-label="New task title"
-                className={`${input} min-w-64 flex-1`}
+                className={`${input} flex-1 ${phone ? 'min-w-40' : 'min-w-64'}`}
               />
               {(repos.length > 1 || (templatesQuery.data?.length ?? 0) > 0) && (
                 <div className="flex gap-2">
@@ -1103,6 +1120,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               <Button
                 type="submit"
                 icon={Plus}
+                aria-label={phone ? 'Add task' : undefined}
                 // Not busy while a task is added: a disabled submit button stops Enter, and the
                 // next title is often typed before the daemon answers.
                 disabledReason={
@@ -1113,8 +1131,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       : undefined
                 }
               >
-                Add task
+                {phone ? null : 'Add task'}
               </Button>
+              {/* Starting an agent is the main daily action. The empty state offers it already. */}
+              {tasks.length > 0 && (
+                <Button
+                  variant="primary"
+                  icon={SquareTerminal}
+                  aria-label={phone ? 'Start a task' : undefined}
+                  shortcut={phone ? undefined : shortcutOf('workspace.new')}
+                  onClick={() => openNewWorkspace({ title: newTitle.trim() || undefined })}
+                  data-tip={newTitle.trim() === '' ? undefined : 'Start a task with this title'}
+                >
+                  {phone ? null : 'Start a task'}
+                </Button>
+              )}
             </form>
             <div
               {...frozen.handlers}
@@ -1215,6 +1246,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onOpen={openTask}
                   onToggleDetails={(id) => setDetailOpen(id, detailOpenByTask[id] !== true)}
                   onKeyboardMove={frozen.hold}
+                  onAction={runAction}
+                  onStartAgent={(task) => agentMutation.mutate({ task })}
                 />
               )}
             </div>
@@ -1238,6 +1271,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             select(task.id)
             openChanges(task.id, 'terminal')
             toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
+            // The title came from the task field, so it is used up.
+            if (newWorkspace.title !== undefined && newWorkspace.title === newTitle.trim()) {
+              setNewTitle('')
+            }
           }}
           onClose={() => setNewWorkspace(null)}
         />
@@ -1293,11 +1330,15 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           loadTerminals={(taskId) => api.listTerminals(taskId)}
           onClose={() => setPalette(null)}
           onOpenTask={(id, shell) => {
-            openTask(id)
-            afterPick()
-            if (shell !== undefined) {
+            if (shell === undefined) {
+              openTask(id)
+            } else {
+              // Only the Terminal tab shows the shells; on another tab the request would wait.
+              select(id)
+              openChanges(id, 'terminal')
               requestShell(id, shell)
             }
+            afterPick()
           }}
           onAddToAgents={addToAgents}
           onRunCommand={(command: Command) =>
