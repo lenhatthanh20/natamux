@@ -26,15 +26,24 @@ You have two ways to start.
 - **Add a task** puts an idea in the backlog. Type a title in the field "Add a task to the backlog" (press `n`) and press Enter.
 - **Start a task** starts work right away. Click the **+** button in the title bar, or press `c`.
 
-For this guide, use **Start a task**. In the dialog:
+For this guide, use **Start a task**. The dialog has two groups.
+
+**Context** is what the agent reads as the task's context. The line under the heading says what that is for the source you pick.
 
 | Field | What to enter |
 |---|---|
-| Project | The project to work in. It shows when you have more than one |
 | Title | A short title, for example `Fix the login redirect` |
-| Notes | Optional. What to do and why. The agent reads this as the task's context |
-| Branch from | The branch to start from. It defaults to the current branch |
 | Context from | Where the context comes from. It shows when the project offers more than one source |
+| Notes | Optional, with **My notes**. What to change and why, where to look, and how to tell it is done |
+| Reference | With any other source. The issue or ticket to read, for example `#42` |
+| Attachments | Optional. Screenshots, logs or specs. Click **Add files**, drop them, or paste a screenshot |
+
+**Workspace and agent** is where and how the task runs.
+
+| Field | What to enter |
+|---|---|
+| Project | The project to work in |
+| Branch from | The branch to start from. It defaults to the current branch |
 | Agent | Pick an agent, or "No agent, a plain shell" |
 
 Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
