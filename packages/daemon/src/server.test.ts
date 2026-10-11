@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { FastifyInstance } from 'fastify'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { worktreeState } from './git.js'
@@ -1317,7 +1317,9 @@ describe('terminal', () => {
     })
 
     expect(sent.statusCode).toBe(200)
-    expect(ptys[0]?.written).toEqual(['\x1b[200~Rename the function\x1b[201~\r'])
+    await vi.waitFor(() =>
+      expect(ptys[0]?.written).toEqual(['\x1b[200~Rename the function\x1b[201~', '\r']),
+    )
     const events = await app.inject({
       method: 'GET',
       url: '/tasks/T-0001/events',

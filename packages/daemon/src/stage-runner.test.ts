@@ -6,7 +6,7 @@ import {
   type ProjectSettings,
   type Task,
 } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { decodeAttachments } from './attachments.js'
 import { EventBus } from './event-bus.js'
@@ -120,6 +120,18 @@ const launchScript = (id: string, terminal = '1') =>
     join(dataDir, `agent-launch-${id}${terminal === '1' ? '' : `-${terminal}`}.sh`),
     'utf8',
   )
+
+// The agent got the text as a paste, and its own Enter as the next write. Agents such as the
+// Cursor CLI ignore an Enter in the same write as the paste.
+async function expectSubmitted(pty: FakePty | undefined, start: string): Promise<void> {
+  await vi.waitFor(() => {
+    const written = pty?.written ?? []
+    const at = written.findIndex((data) => data.startsWith(`\x1b[200~${start}`))
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(written[at]?.endsWith('\x1b[201~')).toBe(true)
+    expect(written[at + 1]).toBe('\r')
+  })
+}
 
 function writeWorking(task: Task, name: string, text: string): void {
   const dir = join(task.workspace ?? '', STAGE_DIR)
@@ -335,6 +347,7 @@ describe('agent stages', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
     expect(tasks.getTask(task.id).state).toBe('running')
     expect(ptys[0]?.written.join('')).toContain('spec.md is missing')
+    await expectSubmitted(ptys[0], 'The checks of this stage failed')
 
     await runner.act(task.id, 'report', { terminal: '1' })
     expect(tasks.getTask(task.id).state).toBe('needs-input')
@@ -474,6 +487,7 @@ describe('a prompt for a running agent', () => {
   it('pastes the prompt when an agent runs in the foreground', async () => {
     const { pty } = await atSpecWithShell('node')
     expect(pty.written.join('')).toContain('\x1b[200~Task: Export tasks')
+    await expectSubmitted(pty, 'Task: Export tasks')
   })
 
   it('starts the agent again when it ended and only the shell is left', async () => {
@@ -519,7 +533,8 @@ describe('a prompt for a running agent', () => {
     runner.onOutput(task.id, '1', '\x1b]0;natamux-ag')
     runner.onOutput(task.id, '1', 'ent-exited\x07PS C:\\work> ')
     await runner.act(task.id, 'reopen', { to: 'spec' })
-    expect(pty.written.join('').split(exited)).toHaveLength(3)
+    // The launch line waits for the Enter of the prompt pasted before.
+    await vi.waitFor(() => expect(pty.written.join('').split(exited)).toHaveLength(3))
   })
 
   it('makes a failed check final when no agent is left to fix it', async () => {
@@ -573,6 +588,7 @@ describe('a prompt for a running agent', () => {
 
     expect(ptys).toHaveLength(1)
     expect(pty.written.join('')).toContain('\x1b[200~Also add a test')
+    await expectSubmitted(pty, 'Also add a test')
   })
 
   it('ends the shells of a task that is cancelled', async () => {

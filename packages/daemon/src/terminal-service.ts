@@ -57,6 +57,8 @@ export const KILL_GRACE_MS = 2000
 const EXIT_WAIT_MS = 1000
 // Time between a DEL and other input that a program must read apart, see TerminalService.write.
 export const INPUT_GAP_MS = 25
+// Time between a paste and its Enter, see TerminalService.paste.
+export const ENTER_AFTER_PASTE_MS = 100
 // The size of a shell started before any dashboard looks at it. The first resize fixes it.
 const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 
@@ -188,10 +190,13 @@ type Session = {
   // Set while the shell of an ended task waits, with no client, to be closed.
   idleTimer?: NodeJS.Timeout
   // Input that waits for its turn, see write().
-  pending: string[]
-  lastWrite?: { at: number; erases: boolean }
+  pending: Input[]
+  lastWrite?: { at: number; kind: Input['kind'] }
   writeTimer?: NodeJS.Timeout
 }
+
+// A piece of input for a shell. Pieces of another kind than the one before go a moment apart.
+type Input = { data: string; kind: 'text' | 'erase' | 'submit' }
 
 function exitOf(session: Session): Promise<void> {
   return new Promise((resolve) => session.pty.onExit(() => resolve()))
@@ -344,13 +349,17 @@ export class TerminalService {
   }
 
   // Pastes text into a shell (the first by default) and presses Enter, so the agent there takes it
-  // as its next prompt. Bracketed paste keeps line breaks from sending the text early.
+  // as its next prompt. Bracketed paste keeps line breaks from sending the text early. The Cursor
+  // CLI ignores an Enter that it reads in one piece with the end of a paste, so the Enter goes
+  // ENTER_AFTER_PASTE_MS later.
   paste(taskId: string, text: string, terminal = MAIN_TERMINAL): void {
     const session = this.sessions.get(sessionKey(taskId, terminal))
     if (!session) {
       throw new NoTerminalError(taskId)
     }
-    this.write(session, `\x1b[200~${text}\x1b[201~\r`)
+    this.write(session, `\x1b[200~${text}\x1b[201~`)
+    session.pending.push({ data: '\r', kind: 'submit' })
+    this.flush(session)
   }
 
   // The program in the foreground of a shell, when the platform tells.
@@ -376,7 +385,9 @@ export class TerminalService {
   // together. So DEL and other input go to the shell apart, INPUT_GAP_MS from each other. Typing
   // without DEL, or holding Backspace, is not slowed down.
   private write(session: Session, data: string): void {
-    session.pending.push(...(data.match(/\x7f+|[^\x7f]+/g) ?? []))
+    for (const piece of data.match(/\x7f+|[^\x7f]+/g) ?? []) {
+      session.pending.push({ data: piece, kind: piece.startsWith('\x7f') ? 'erase' : 'text' })
+    }
     this.flush(session)
   }
 
@@ -385,9 +396,10 @@ export class TerminalService {
       return
     }
     for (let part = session.pending[0]; part !== undefined; part = session.pending[0]) {
-      const erases = part.startsWith('\x7f')
+      const { data, kind } = part
       const last = session.lastWrite
-      const wait = last && last.erases !== erases ? last.at + INPUT_GAP_MS - this.now() : 0
+      const gap = kind === 'submit' ? ENTER_AFTER_PASTE_MS : INPUT_GAP_MS
+      const wait = last && last.kind !== kind ? last.at + gap - this.now() : 0
       if (wait > 0) {
         session.writeTimer = setTimeout(() => {
           session.writeTimer = undefined
@@ -396,8 +408,8 @@ export class TerminalService {
         return
       }
       session.pending.shift()
-      session.pty.write(part)
-      session.lastWrite = { at: this.now(), erases }
+      session.pty.write(data)
+      session.lastWrite = { at: this.now(), kind }
     }
   }
 
