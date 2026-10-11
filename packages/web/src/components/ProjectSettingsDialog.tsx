@@ -174,8 +174,7 @@ export function ProjectSettingsDialog({
     const fresh = (await loaded.refetch()).data
     const start = parseDraft(current.text)
     const now = fresh === undefined || fresh.error !== null ? null : parseDraft(baseOf(fresh).text)
-    const raw =
-      start.ok && now !== null && now.ok ? mergeChanges(start.raw, draft.raw, now.raw) : draft.raw
+    const raw = start.ok && now?.ok ? mergeChanges(start.raw, draft.raw, now.raw) : draft.raw
     setConflict(false)
     setProblem(null)
     saving.mutate({ raw, version: fresh?.version ?? undefined })

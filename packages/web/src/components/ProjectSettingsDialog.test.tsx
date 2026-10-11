@@ -612,14 +612,14 @@ type User = ReturnType<typeof userEvent.setup>
 
 // Adds a catalog stage through Add stage and its search field.
 async function addFromList(user: User, name: string) {
-  await user.click(screen.getByRole('button', { name: 'Add stage' }))
+  await user.click(await screen.findByRole('button', { name: 'Add stage' }))
   const picker = screen.getByRole('region', { name: 'Add stage' })
   await user.type(within(picker).getByRole('textbox', { name: 'Search stages' }), name)
   await user.click(within(picker).getByRole('button', { name: new RegExp(`^${name}`) }))
 }
 
 async function addCustom(user: User, name: string, kind: 'agent' | 'testing' | 'manual') {
-  await user.click(screen.getByRole('button', { name: 'Add stage' }))
+  await user.click(await screen.findByRole('button', { name: 'Add stage' }))
   await user.click(screen.getByRole('button', { name: 'Custom stage' }))
   const form = screen.getByRole('form', { name: 'Custom stage' })
   await user.type(within(form).getByRole('textbox', { name: 'Name' }), name)
@@ -1348,4 +1348,3 @@ describe('ProjectSettingsDialog, test spec cases', () => {
     )
   })
 })
-
