@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE, type Step, stagesOf } from '@natamux/core'
+import { DEFAULT_PIPELINE, type Stage, type Step, stagesOf } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -86,7 +86,7 @@ describe('PipelinePreview', () => {
 
   it('C19: draws a group of four as four rows of one fork', () => {
     const lanes = ['docs', 'refactor', 'i18n', 'changelog'].map(
-      (id): Step => ({ id, kind: 'agent', gate: 'auto' }),
+      (id): Stage => ({ id, kind: 'agent', gate: 'auto' }),
     )
     const { chart } = preview([{ id: 'finish', parallel: lanes }])
     const fork = within(chart).getByRole('list', {
