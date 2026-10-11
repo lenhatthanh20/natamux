@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { type ComponentProps, useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StageFile } from '../lib/api'
 import { useToasts } from '../lib/toasts'
 import { DocsTab } from './DocsTab'
@@ -114,6 +114,12 @@ function docs(start: Files, fail: Failures = {}, first: string | null = null) {
 
 const file = (text: string) => ({ text, modifiedAt: '2026-10-11T09:00:00.000Z' })
 const view = () => screen.getByRole('region', { name: 'spec.md' })
+
+beforeAll(async () => {
+  // The parser is a lazy chunk. On a cold Windows runner that import can outlast findBy,
+  // so the first test sees an empty file view.
+  await import('./MarkdownBody')
+})
 
 beforeEach(() => {
   window.localStorage.clear()
