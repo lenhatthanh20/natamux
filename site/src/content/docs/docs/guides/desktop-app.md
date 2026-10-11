@@ -22,7 +22,6 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 |---|---|
 | **File → Add Project…** (`Cmd/Ctrl+Shift+O`) | Pick a git repository and add it as a project. No restart |
 | **File → Show Daemon Log** | Opens the daemon log file |
-
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Linux |
 | **Check for Updates Automatically** | Turns the timed update checks off and on. Next to the item above |
 
@@ -66,7 +65,7 @@ The app keeps its files in the user data folder.
 
 | Path in that folder | Holds |
 |---|---|
-| `settings.json` | The repository you picked, and whether timed update checks are on |
+| `settings.json` | Whether timed update checks are on. An older version also kept its repository here |
 | `daemon-token` | The daemon token, readable only by you. It stays the same between runs |
 | `data/` | Tasks, the task index and worktrees (`data/tasks`, `data/worktrees`) |
 | `logs/daemon.log` | The daemon's output |

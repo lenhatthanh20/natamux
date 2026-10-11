@@ -127,7 +127,7 @@ natamux events T-42
 
 Event types you can send:
 
-`task.readied`, `task.blocked`, `task.unblocked`, `task.retried`, `task.cancelled`, `agent.started`, `agent.asked`, `agent.resumed`, `agent.finished`, `agent.failed`, `review.approved`, `review.changes-requested`, `state.overridden`, `pr.merged`, `stage.started`, `stage.reported`, `stage.check-failed`, `stage.checked`, `stage.approved`, `stage.passed`, `stage.failed`, `stage.reopened`, `stage.skipped`.
+`task.readied`, `task.blocked`, `task.unblocked`, `task.retried`, `task.cancelled`, `agent.started`, `agent.asked`, `agent.resumed`, `agent.finished`, `agent.failed`, `agent.waiting`, `review.approved`, `review.changes-requested`, `state.overridden`, `pr.merged`, `stage.started`, `stage.reported`, `stage.check-failed`, `stage.checked`, `stage.approved`, `stage.passed`, `stage.failed`, `stage.reopened`, `stage.skipped`.
 
 The daemon records the other event types itself. An event that does not fit the task's state is logged as not accepted, and the task does not change.
 

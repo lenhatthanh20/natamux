@@ -48,7 +48,7 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 |---|---|---|
 | Show the keyboard shortcuts | `?` | Anywhere outside a field |
 | Search the sidebar | `/` | Anywhere outside a field |
-| New workspace | `c` | Anywhere outside a field |
+| Start a task | `c` | Anywhere outside a field |
 | Add a task | `n` | Anywhere outside a field |
 | Select the next task | `j` or `↓` | The task list is shown |
 | Select the previous task | `k` or `↑` | The task list is shown |
@@ -127,6 +127,7 @@ Some commands are only in the palette (`Mod+K`, then type the name):
 - **Show tasks as a table**, **Show tasks as a board**, **Show tasks against their stages**
 - **Follow the system**, **Light**, **Dark** (theme)
 - **Text size: Compact**, **Default**, **Large**
-- **Add a repository**, **Import GitHub issues**
+- **Add a project**, **Import GitHub issues**
+- **Show the task progress**, for the open or selected task (opens the details on **Progress**)
 - **Mark ready**, **Block**, **Resume the agent**, **Unblock**, **Retry**, for the selected task
 - **Skip the stage**, **Mark the stage as done**, **Approve the stage anyway**, **Send the task back to an earlier stage**, for the selected task in a workspace

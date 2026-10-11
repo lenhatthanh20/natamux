@@ -51,7 +51,7 @@ An issue becomes a task once. Issues that were imported already are ticked and g
 
 A task can read its context from a GitHub issue instead of its own notes. The first stage of the default pipeline fetches the context into `context.md`: the title, the link, the labels, the text and the comments of the issue. See [Stages](/docs/concepts/stages/).
 
-In the dashboard, open **New workspace** (`c`), then pick **A GitHub issue** in **Context from**. Enter `#42` or the address of the issue. This list shows only when the project offers more than one context source, which is the default.
+In the dashboard, open **Start a task** (`c`), then pick **A GitHub issue** in **Context from**. Enter `#42` or the address of the issue. This list shows only when the project offers more than one context source, which is the default.
 
 In the CLI:
 
@@ -69,7 +69,7 @@ The **Progress** view of the details panel shows the context source and the issu
 
 Natamux can open a GitHub issue for a task that you made in the app, and link the two. The issue has the task title as its title. Its body is the spec (`spec.md`) when there is one, and otherwise the task notes, plus a line `Made by Natamux for T-0001.`
 
-You choose when with `tracker.createIssue` in the `.natamux.json` file at the root of the repository. Open it from **Repos** > **Settings**.
+You choose when with `tracker.createIssue` in the `.natamux.json` file at the root of the repository. Open it from **Projects** > **Settings**.
 
 | Value | Natamux opens the issue |
 |---|---|

@@ -79,7 +79,18 @@ The default pipeline has no commit check, so agents leave their changes uncommit
 
 Stage files are Markdown files in the `.natamux-task/` folder of the worktree. They are named like `spec.md` and can be up to 1 MB. Natamux keeps git from tracking them. See [Workspaces](/docs/concepts/workspaces/).
 
-The progress view lists the checks that passed under **Show evidence**, and the reasons for those that failed.
+### Progress
+
+A task in a workspace shows its stages in the **Progress** view of the details panel, beside the terminal. The panel is open by default beside a workspace. Use the palette command **Show the task progress**, or the link `/w/<id>/progress`, to open it on **Progress**. The progress view lists the checks that passed under **Show evidence**, and the reasons for those that failed.
+
+### The Docs tab
+
+The **Docs** tab of a workspace (key `4`) lists the stage files of the task, such as `context.md`, `spec.md` and `plan.md`, with the time each changed. You can read them and fix them by hand before you approve a stage.
+
+- **Rendered** shows Markdown as formatted text. **Source** shows the raw text. Natamux remembers your choice in this browser.
+- Click **Edit** to change a file, then **Save**. If the file changed after you began, Natamux asks before it replaces the new text. Your unsaved edit stays when you switch to another file or tab.
+- A task with no stage file shows **Write context.md** to start the first one.
+- HTML in a file is not shown. Images are not loaded; the alt text shows instead. Only `http`, `https` and `mailto` links open, in your browser. Other links show as plain text.
 
 ### What happens when a check fails
 

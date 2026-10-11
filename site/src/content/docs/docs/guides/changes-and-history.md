@@ -9,7 +9,7 @@ Each workspace has a **Changes** tab and a **History** tab. Use them to review t
 
 ![The Changes tab with the file tree and a side by side diff](/screens/changes.png)
 
-Open them from a workspace, or press `2` for **Changes** and `3` for **History**.
+Open them from a workspace, or press `2` for **Changes** and `3` for **History**. The **Docs** tab (`4`) shows the stage files; see [Stages](/docs/concepts/stages/#the-docs-tab).
 
 ## Changes tab
 

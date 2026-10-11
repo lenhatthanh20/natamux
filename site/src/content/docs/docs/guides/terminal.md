@@ -19,7 +19,7 @@ A task without a workspace shows **Start agent** and a way to make a workspace i
 
 ## Shells
 
-The tab shows each shell in its own pane. Shell 1 is always there. The agent runs in Shell 1 and its pane carries an **Agent** label and the task state, for example `Running · Edit a.ts`.
+The tab shows each shell in its own pane. Shell 1 is always there. The agent runs in Shell 1. Its pane header shows the agent's icon and name, such as `Claude Code` (only the icon in a narrow pane), and the state of its stage, for example `Running · Edit a.ts`. When stages run side by side, each shell shows the state of its own stage. In **Agents**, the grid shows Shell 1 and names another shell that needs you.
 
 | To do this | Do this |
 |---|---|

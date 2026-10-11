@@ -10,7 +10,7 @@ Nothing. Natamux sends no usage data, crash reports or analytics anywhere. The o
 
 - Tasks, their history and stage files: in `.natamux/` of each repository, as Markdown and JSON files, plus a local SQLite index.
 - Worktrees: in `.natamux/worktrees/`, or the folder you set.
-- The daemon token, the chosen repository, the update setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux).
+- The daemon token, the update setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux).
 - Dashboard preferences (theme, layout, the token): in your browser's `localStorage`.
 
 You can delete any of these folders at any time.

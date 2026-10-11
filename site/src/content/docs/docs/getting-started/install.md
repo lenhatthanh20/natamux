@@ -48,6 +48,8 @@ The apps are **not signed** with an Apple certificate. Download them only from t
 
 ## Install on Linux
 
+The Linux builds are paused. Use these steps for v0.1.2 or for an app you built from source.
+
 ### AppImage
 
 ```sh

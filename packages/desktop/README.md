@@ -1,6 +1,6 @@
 # @natamux/desktop
 
-The desktop app: an Electron shell for macOS and Windows. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
+The desktop app: an Electron shell. Releases are built for macOS on Apple silicon only; Intel Mac and Linux builds are paused, and there is no Windows build. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
 
 ## What it does
 

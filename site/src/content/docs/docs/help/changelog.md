@@ -7,6 +7,23 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## Unreleased
+
+- The **Progress** view moved from a workspace tab into the details panel, next to the terminal. Key `4` now shows **Docs**. The details panel is open by default beside a workspace. See [Progress](/docs/concepts/stages/#progress).
+- The **Docs** tab shows Markdown as formatted text. Switch to **Source** for the raw text. See [The Docs tab](/docs/concepts/stages/#the-docs-tab).
+- Each terminal shows the state of its own stage, not the state of the whole task.
+- **Remove finished workspaces** in the menu of a project, and on its "N finished" row. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Any project can be removed. The app opens with no project: use **File → Add Project…** (no restart). The live socket tells open dashboards when the project list changes.
+- A task whose agent waits for background work stays running and says what it waits for. It is not quiet. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work).
+- The **Needs you** section has an amber frame and a bell, with two-line rows. A task whose workspace was removed leaves it.
+- Fix: after a resize or a reconnect, words of an agent broke apart at the right edge of the terminal. A terminal now shows the screen of the shell, drawn for its size. The pane you type in or click sets the size of the shell. See [Terminal](/docs/guides/terminal/).
+- Terminals draw with the GPU, wait for the end of each screen update (no flicker with Claude Code), give emoji two columns and keep about 10 MB of history each, like Ghostty. **Terminal font…** in the Account menu; the desktop app uses your Ghostty font by default. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
+- A task in review shows a banner with **Approve** and **Send back** in its workspace. With changed files and nothing committed, the header offers **Commit…**, and the commit and push toasts offer the next step.
+- **Needs you** rows say what the agent asks or why it failed. Empty board columns fold. The table row menu has the task actions. **Start a task** has its own button next to **Add task**.
+- `natamux task create --repo <id>` names the project. See [CLI](/docs/reference/cli/).
+- Fix: on Windows, a task title with a typographic quote (’) could end the PowerShell launch line early.
+- Fix: **No agent, a plain shell** started Claude Code anyway with the default stages.
+
 ## v0.1.3 (2026-10-11)
 
 - **Remove project** in the menu of a repository's group in the sidebar. See [Repositories](/docs/guides/dashboard/#repositories).

@@ -49,7 +49,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `POST /tasks/:id/events` | Send an event `{ source, type, payload? }`. Returns `{ task, accepted }` |
 | `GET /repos` | Repositories whose tasks Natamux manages: `{ repos: [{ id, name, path }] }`. Any of them can be removed. Tasks without a repository belong to the one with the id `default` |
 | `POST /repos` | Body `{ path, name? }`. Adds the repository whose top folder is `path` (absolute, on the daemon's machine). Its id comes from the name or the folder name. Answers 201; 400 for a path that is not absolute, inside a repository but not its top, or added already; 409 when git finds no repository there. Kept in `<data dir>/repos.json` |
-| `DELETE /repos/:id` | Natamux forgets the repository; its folder, branches and tasks stay. Answers 204; 400 for `default`; 404 for an unknown id; 409 while tasks of the repository have workspaces |
+| `DELETE /repos/:id` | Natamux forgets the repository; its folder, branches and tasks stay. Any repository can be removed, `default` too. A `default` that came from `NATAMUX_REPO_DIR` does not come back at the next start. Answers 204 and sends `repos.changed` on `/events`; 404 for an unknown id; 409 while tasks of the repository have workspaces |
 | `GET /git/branches?repo=` | Local branches of a repository (the default one when `repo` is left out) and the one its checkout is on: `{ branches, current }` |
 | `POST /tasks/:id/workspace` | Create a git worktree and a branch `natamux/t-0001-<title>` for the task. Body `{ base? }`: start from that local branch instead of HEAD (409 when there is no such branch). When the worktree has a `.natamux-setup` script (`.natamux-setup.ps1` on Windows), it runs in the task's first terminal (`sh ./.natamux-setup`). Answers 409 if the task has one, is done or cancelled, or git refuses |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree. Git refuses when it has files that are not committed (409). The branch is deleted only when it is fully merged. Returns `{ task, branchDeleted }` |
@@ -76,7 +76,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /github/issues` | Open issues of the repository, from `gh issue list` (at most 100): `{ issues: [{ number, title, body, url, labels, taskId }] }`. `taskId` names the task made from the issue, or is null |
 | `POST /github/issues/import` | Body `{ numbers }`. Makes a draft task from each open issue that was not imported yet: its title, its body plus `Imported from <url>` as notes, its labels. Returns `{ tasks }` |
 | `POST /hooks/:agent` | Where an agent posts its hook, for example `/hooks/claude-code`. The adapter of that agent turns the hook into task events. Always answers `200 {}` (even for a hook that matches no task or changes nothing), `404` for an agent without an adapter, `400` for input that is not a hook of that agent. The task comes from the `X-Natamux-Task` header or from the workspace that holds the hook's `cwd`. See `docs/agent-adapters.md` and `docs/claude-code-adapter.md` |
-| `GET /events` (WebSocket) | Live task changes. Use `?token=<token>` because browsers cannot set headers |
+| `GET /events` (WebSocket) | Live task changes. Also sends `{ "kind": "repos.changed" }` when a repository is added or removed, so dashboards read `GET /repos` again. Use `?token=<token>` because browsers cannot set headers |
 
 ## Deep links
 

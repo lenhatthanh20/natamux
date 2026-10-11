@@ -7,10 +7,6 @@ const repo = 'https://github.com/lenhatthanh20/natamux'
 const download = (file: string) => `${repo}/releases/latest/download/${file}`
 const files = {
   macArm: download(`Natamux-mac-arm64.dmg`),
-  macIntel: download(`Natamux-mac-x64.dmg`),
-  appImage: download(`Natamux-linux-x86_64.AppImage`),
-  deb: download(`Natamux-linux-amd64.deb`),
-  tar: download(`Natamux-linux-x64.tar.gz`),
 }
 const docs = `${base}docs/`
 const stages = [
@@ -74,14 +70,14 @@ const stages = [
             that needs you.
           </p>
           <div class="ctas">
-            <a class="btn primary" id="download" href={files.macArm} data-mac={files.macArm} data-linux={files.appImage}>
+            <a class="btn primary" id="download" href={files.macArm}>
               Download for macOS
             </a>
             <a class="btn" href={docs}>Read the docs</a>
           </div>
           <p class="fine">
-            Version {version} for <a href={files.macArm}>Apple silicon</a>, <a href={files.macIntel}>Intel Macs</a> and{' '}
-            <a href={`${docs}getting-started/install/`}>Linux</a>. Free and open source under MIT.
+            Version {version} for <a href={files.macArm}>Apple silicon</a> Macs. Intel Mac and Linux builds are paused (<a
+              href={`${repo}/releases/tag/v0.1.2`}>last release with them: v0.1.2</a>). Free and open source under MIT.
           </p>
         </div>
 
@@ -214,25 +210,21 @@ nmx done</code></pre>
         <div class="tabs" data-tabs>
           <div class="tablist" role="tablist" aria-label="Platform">
             <button role="tab" aria-selected="true" aria-controls="tab-mac" id="t-mac">macOS</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-linux" id="t-linux" tabindex="-1">Linux</button>
             <button role="tab" aria-selected="false" aria-controls="tab-source" id="t-source" tabindex="-1">From source</button>
           </div>
           <div class="tabpanel" role="tabpanel" id="tab-mac" aria-labelledby="t-mac">
             <p>
-              Download <a href={files.macArm}>Apple silicon</a> or <a href={files.macIntel}>Intel</a>, drag
+              Download <a href={files.macArm}>Apple silicon</a> (M1 and later), drag
               Natamux to Applications and open it once. Releases are not signed yet, so macOS
               blocks it: open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.
               Or clear the download mark:
             </p>
             <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
-          </div>
-          <div class="tabpanel" role="tabpanel" id="tab-linux" aria-labelledby="t-linux" hidden>
             <p>
-              Debian and Ubuntu: install the <a href={files.deb}>.deb</a>, then start <code>natamux-desktop</code>
-              from the menu. Other distributions: the <a href={files.appImage}>AppImage</a> or the
-              <a href={files.tar}>.tar.gz</a>.
+              Intel Mac and Linux builds are paused. The last release with them is
+              <a href={`${repo}/releases/tag/v0.1.2`}>v0.1.2</a>. You can build the app from source:
+              see the <a href={`${docs}getting-started/install/`}>install guide</a>.
             </p>
-            <div class="cmd"><code>sudo apt install ./Natamux-linux-amd64.deb</code><button type="button" data-copy>Copy</button></div>
           </div>
           <div class="tabpanel" role="tabpanel" id="tab-source" aria-labelledby="t-source" hidden>
             <p>
@@ -243,7 +235,7 @@ nmx done</code></pre>
           </div>
         </div>
         <p class="more">
-          Checksums, the AppImage sandbox note and the command line in your own shell:{' '}
+          Checksums and the command line in your own shell:{' '}
           <a href={`${docs}getting-started/install/`}>the install guide</a>.
         </p>
       </section>
@@ -274,13 +266,6 @@ nmx done</code></pre>
     </footer>
 
     <script>
-      // The download button offers the Linux AppImage on Linux.
-      const button = document.getElementById('download')
-      if (button && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
-        button.setAttribute('href', button.dataset.linux ?? '')
-        button.textContent = 'Download for Linux'
-      }
-
       // Install tabs, with arrow keys between them.
       for (const tabs of document.querySelectorAll<HTMLElement>('[data-tabs]')) {
         const list = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')]

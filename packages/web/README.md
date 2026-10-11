@@ -24,7 +24,7 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 - Details of one task with the actions that fit its state (approve, request changes, retry, unblock, cancel). Cancel asks twice.
 - A workspace field: create a git worktree and a branch for the task, or remove it (asks twice).
 - Views beside the table: a board, and a progress view of every task against its stages.
-- A Progress tab (the evidence of each stage) and a Docs tab (the stage files, editable) on each task; project settings for the stage pipeline of a repository.
+- A Docs tab (the stage files, editable, shown as Markdown or source) in each workspace. The details panel has a Progress view (the evidence of each stage) and a Details view. Project settings for the stage pipeline of a repository.
 - Terminals, changes and history of a task's workspace, system notifications, a command palette, diff size of each task, and several repositories.
 
 ## Keyboard
@@ -32,8 +32,9 @@ Open the forwarded port 5173 and paste the token. The dev server sends `/api` to
 | Key | Action |
 |---|---|
 | `j` / `k` or arrows | Move the selection |
-| `Enter` | Open the details |
-| `Esc` | Close the details, or leave a field |
+| `Enter` | Open the workspace of the task |
+| `i` | Show or hide the details |
+| `Esc` | Close the open workspace or details, or leave a field |
 | `/` | Search |
 | `n` | New task title |
 | `a` / `r` | Approve / request changes on the selected task in review |
