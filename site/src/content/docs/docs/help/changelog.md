@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.5 (2026-10-11)
+
+- Fix: when a task started stages side by side (for example **Implement** and **Test spec**), the shell of the second stage showed only after you left the task and came back. It now shows as soon as the stage starts, and the shell you type in keeps the keyboard.
+- The **Agents** grid keeps its panes in place. A task event no longer moves its pane to the front.
+- The terminal scrollbar is thin, like the rest of the app, and shows search matches.
+
 ## v0.1.4 (2026-10-11)
 
 - The **Progress** view moved from a workspace tab into the details panel, next to the terminal. Key `4` now shows **Docs**. The details panel is open by default beside a workspace. See [Progress](/docs/concepts/stages/#progress).
