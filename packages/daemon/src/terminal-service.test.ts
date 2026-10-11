@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeSpawner } from './terminal-fake.fixture.js'
 import {
   ENDED_IDLE_MS,
+  ENTER_AFTER_PASTE_MS,
   INPUT_GAP_MS,
   KILL_GRACE_MS,
   MAIN_TERMINAL,
@@ -833,18 +834,148 @@ describe('input with DEL', () => {
 })
 
 describe('paste', () => {
-  it('pastes text into the first shell and presses Enter', () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)
-
-    service.paste('T-0001', 'Rename it.\nThen test.')
-
-    expect(ptys[0]?.written).toEqual(['\x1b[200~Rename it.\nThen test.\x1b[201~\r'])
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('refuses a task without an open shell', () => {
+  function pasting() {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const pty = ptys[0]
+    if (!pty) {
+      throw new Error('No shell was started.')
+    }
+    return { service, pty }
+  }
+
+  it('pastes text into the first shell, then presses Enter apart, a moment later', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'Rename it.\nThen test.')
+    expect(pty.written).toEqual(['\x1b[200~Rename it.\nThen test.\x1b[201~'])
+
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS - 1)
+    expect(pty.written).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(pty.written).toEqual(['\x1b[200~Rename it.\nThen test.\x1b[201~', '\r'])
+  })
+
+  it('keeps input typed meanwhile after the Enter of the paste', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'Run the tests.')
+    service.input('T-0001', 'x')
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS + INPUT_GAP_MS)
+
+    expect(pty.written).toEqual(['\x1b[200~Run the tests.\x1b[201~', '\r', 'x'])
+  })
+
+  it('submits each of two pastes on its own', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'One')
+    service.paste('T-0001', 'Two')
+    vi.advanceTimersByTime((ENTER_AFTER_PASTE_MS + INPUT_GAP_MS) * 2)
+
+    expect(pty.written).toEqual([
+      '\x1b[200~One\x1b[201~',
+      '\r',
+      '\x1b[200~Two\x1b[201~',
+      '\r',
+    ])
+  })
+
+  it('does not slow down the typed Enter of a command line', () => {
+    const { service, pty } = pasting()
+    service.input('T-0001', 'ls')
+    service.input('T-0001', '\r')
+    expect(pty.written).toEqual(['ls', '\r'])
+  })
+
+  it.each([
+    ['LF line breaks', 'line 1\nline 2\n\nline 4'],
+    ['CRLF line breaks', 'line 1\r\nline 2'],
+    ['a line break at the end', 'line 1\n'],
+    ['the end of a paste in it', 'a\x1b[201~b'],
+    ['no text', ''],
+  ])('keeps text with %s in the paste, and presses Enter once', (_, text) => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', text)
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS * 10)
+
+    expect(pty.written).toEqual([`\x1b[200~${text}\x1b[201~`, '\r'])
+  })
+
+  it('drops the Enter of a paste when the shell is closed before it', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'hello')
+    service.closeOne('T-0001', MAIN_TERMINAL)
+
+    expect(() => vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS * 2)).not.toThrow()
+    expect(pty.written).toEqual(['\x1b[200~hello\x1b[201~'])
+  })
+
+  it('drops the Enter of a paste when the shell ends before it', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'hello')
+    pty.exit(0)
+
+    expect(() => vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS * 2)).not.toThrow()
+    expect(pty.written).toEqual(['\x1b[200~hello\x1b[201~'])
+  })
+
+  it('refuses a task without an open shell, and starts no timer', () => {
+    vi.useFakeTimers()
     const { service } = setup()
     expect(() => service.paste('T-0001', 'x')).toThrow(NoTerminalError)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps several keys typed meanwhile after the Enter, in order', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'prompt')
+    for (const key of ['a', 'b', 'c']) {
+      service.input('T-0001', key)
+    }
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS + INPUT_GAP_MS)
+
+    expect(pty.written).toEqual(['\x1b[200~prompt\x1b[201~', '\r', 'a', 'b', 'c'])
+  })
+
+  it('submits a paste with its own Enter when an Enter is typed meanwhile', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'prompt')
+    service.input('T-0001', '\r')
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS + INPUT_GAP_MS)
+
+    expect(pty.written).toEqual(['\x1b[200~prompt\x1b[201~', '\r', '\r'])
+  })
+
+  it('writes input typed before a paste first, unchanged', () => {
+    const { service, pty } = pasting()
+
+    service.input('T-0001', 'x')
+    service.paste('T-0001', 'prompt')
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS)
+
+    expect(pty.written).toEqual(['x', '\x1b[200~prompt\x1b[201~', '\r'])
+  })
+
+  it('keeps the order when the shell is resized before the Enter', () => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', 'prompt')
+    service.resize('T-0001', { cols: 100, rows: 30 })
+    service.input('T-0001', 'x')
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS + INPUT_GAP_MS)
+
+    expect(pty.written).toEqual(['\x1b[200~prompt\x1b[201~', '\r', 'x'])
   })
 })
 

@@ -33,7 +33,7 @@ node-pty shell (daemon) ──output──▶ ScreenState (headless xterm) ─�
 - **One screen per shell in the daemon.** A client that attaches gets `screen.snapshot()`, serialized for its size and sent in 64 K chunks. Output that comes in meanwhile waits in `ClientState.waiting`.
 - **Order.** `resize` and `snapshot` run in xterm write callbacks, after the output already received. After `dispose()` the callbacks do nothing.
 - **Size.** One shell has one size, and the client used last sets it. Input, resize, focus and attach "touch" a client. On detach, the previous client's size comes back. `setSize` tells the pty only when the size really changes, because every resize makes programs redraw.
-- **Input goes through `write()`, never `pty.write` directly.** It splits DEL (`\x7f`) runs from other text and keeps `INPUT_GAP_MS` (25 ms) between them. Plain typing, pastes and a held Backspace are not delayed.
+- **Input goes through `write()`, never `pty.write` directly.** It splits DEL (`\x7f`) runs from other text and keeps `INPUT_GAP_MS` (25 ms) between them. Plain typing, pastes and a held Backspace are not delayed. `paste` sends its Enter as a separate piece, `ENTER_AFTER_PASTE_MS` (100 ms) after the paste, because the Cursor CLI ignores an Enter read together with the paste end.
 - **Limits.** At most `MAX_SESSIONS` = 20 shells. History is limited by memory, not by a fixed row count.
 - **Ending.**
   - A done or cancelled task ends all its shells (`stage-runner.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).

@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.6 (2026-10-11)
+
+- Fix: when a stage ended and the next one started (for example **Testing** after you approved **Review**), Cursor showed the next prompt but did not send it, and you had to press Enter. Natamux now presses Enter a moment after the paste, so Cursor sends the prompt on its own. Review comments and failed-check messages are sent the same way.
+
 ## v0.1.5 (2026-10-11)
 
 - Attach files to a new task: in the **Start a task** dialog, click **Add files**, drop files or paste a screenshot, or use `natamux task create --attach <path>`. Up to 20 files, 20 MB each and 50 MB together. They are copied to `.natamux-task/attachments/` and listed in `context.md`. See [Attachments](/docs/concepts/stages/#attachments).
