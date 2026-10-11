@@ -1,5 +1,5 @@
 import type { Task, TaskState, TerminalLane } from '@natamux/core'
-import { STATE_LABEL } from './tasks'
+import { STATE_LABEL, taskNumber } from './tasks'
 
 // More panes than this make each terminal too small to read.
 export const MAX_PANES = 6
@@ -8,10 +8,15 @@ function hasAgent(task: Task): boolean {
   return task.workspace !== null && (task.state === 'running' || task.state === 'needs-input')
 }
 
+// The task list comes newest first, so each update would move a pane. Task ids do not change.
+function byTaskId(a: Task, b: Task): number {
+  return taskNumber(a.id) - taskNumber(b.id) || a.id.localeCompare(b.id)
+}
+
 // The tasks in the agents grid. Until the user picks, the ones whose agent works or waits.
 export function agentPaneTasks(chosen: readonly string[] | null, tasks: readonly Task[]): Task[] {
   if (chosen === null) {
-    return tasks.filter(hasAgent).slice(0, MAX_PANES)
+    return tasks.filter(hasAgent).sort(byTaskId).slice(0, MAX_PANES)
   }
   return chosen
     .map((id) => tasks.find((task) => task.id === id))
