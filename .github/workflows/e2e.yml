@@ -1,8 +1,11 @@
 name: E2E
 
 # Builds the production images, starts them with demo data (scripts/e2e.sh) and runs the
-# Playwright tests in e2e/ against them. On main it then publishes the images to ghcr.io, so
-# scripts/e2e.sh can start them on any machine with Docker. See docs/e2e.md.
+# Playwright tests in e2e/ against them. On main it then publishes the images to ghcr.io, with
+# build provenance, so scripts/e2e.sh can start them on any machine with Docker. See docs/e2e.md.
+#
+# Only the publish job can write packages, and it runs no package installs: a bad package in the
+# test job cannot push images that other machines then run.
 on:
   push:
     branches: [main]
@@ -17,19 +20,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-    env:
-      E2E_BUILD: "1"
+    timeout-minutes: 20
+    outputs:
+      daemon: ${{ steps.save.outputs.daemon }}
+      web: ${{ steps.save.outputs.web }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Build and start the production images, with demo data
-        run: scripts/e2e.sh up
+      - name: Build the production images
+        run: scripts/e2e.sh build
+
+      # The publish job checks these ids, so an artifact replaced after this job is not pushed.
+      - name: Save the images
+        id: save
+        run: |
+          docker save natamux-daemon:local natamux-web:local | gzip > images.tar.gz
+          for name in daemon web; do
+            echo "$name=$(docker image inspect --format '{{.Id}}' "natamux-$name:local")" >> "$GITHUB_OUTPUT"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: images
+          path: images.tar.gz
+          compression-level: 0
+          retention-days: 1
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: images
+
+      - name: Start the images, with demo data
+        env:
+          E2E_LOCAL: "1"
+        run: |
+          gunzip -c images.tar.gz | docker load
+          scripts/e2e.sh up
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -61,20 +100,56 @@ jobs:
         if: failure()
         run: scripts/e2e.sh logs
 
+      - name: Stop
+        if: always()
+        run: scripts/e2e.sh down
+
+  publish:
+    needs: [build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: images
+
+      - name: Load the images that the build job made
+        env:
+          DAEMON_ID: ${{ needs.build.outputs.daemon }}
+          WEB_ID: ${{ needs.build.outputs.web }}
+        run: |
+          gunzip -c images.tar.gz | docker load
+          test "$(docker image inspect --format '{{.Id}}' natamux-daemon:local)" = "$DAEMON_ID"
+          test "$(docker image inspect --format '{{.Id}}' natamux-web:local)" = "$WEB_ID"
+
       - name: Publish the images
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: push
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
+          IMAGES: ghcr.io/${{ github.repository_owner }}/natamux
         run: |
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           for name in daemon web; do
             for tag in main "sha-${GITHUB_SHA::7}"; do
-              docker tag "natamux-$name:local" "ghcr.io/$OWNER/natamux-$name:$tag"
-              docker push --quiet "ghcr.io/$OWNER/natamux-$name:$tag"
+              docker tag "natamux-$name:local" "$IMAGES-$name:$tag"
+              docker push --quiet "$IMAGES-$name:$tag"
             done
+            digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGES-$name:main")"
+            echo "$name=${digest#*@}" >> "$GITHUB_OUTPUT"
           done
 
-      - name: Stop
-        if: always()
-        run: scripts/e2e.sh down
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-daemon
+          subject-digest: ${{ steps.push.outputs.daemon }}
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/natamux-web
+          subject-digest: ${{ steps.push.outputs.web }}
