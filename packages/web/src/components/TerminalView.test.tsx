@@ -48,7 +48,11 @@ vi.mock('@xterm/xterm', () => {
     },
   }
 })
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = () => undefined } }))
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    fit = () => undefined
+  },
+}))
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {} }))
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class {} }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: class {} }))
