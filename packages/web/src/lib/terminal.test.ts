@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isQueryReply, parseTerminalMessage, takesFocusOnOpen, terminalSocketUrl } from './terminal'
+import {
+  isQueryReply,
+  parseTerminalMessage,
+  reconnectDelay,
+  takesFocusOnOpen,
+  terminalSocketUrl,
+} from './terminal'
 
 describe('terminalSocketUrl', () => {
   it('builds the socket address through /api with the ticket, the size and the visibility', () => {
@@ -24,6 +30,35 @@ describe('terminalSocketUrl', () => {
       'ws://localhost:5173/api/tasks/T-0002/terminal?ticket=t&cols=1&rows=2&terminal=3&visible=0',
     )
   })
+
+  // AC 43: a resume names the shell, and the offset only when the client knows it.
+  it('adds the shell id and the offset of a resume', () => {
+    const location = { protocol: 'http:', host: 'h' }
+    const size = { cols: 80, rows: 24, visible: true }
+    expect(terminalSocketUrl(location, 'T-0001', 't', { ...size, shellId: 'a/b' })).toBe(
+      'ws://h/api/tasks/T-0001/terminal?ticket=t&cols=80&rows=24&terminal=1&visible=1&shellId=a%2Fb',
+    )
+    expect(terminalSocketUrl(location, 'T-0001', 't', { ...size, shellId: 's', offset: 0 })).toBe(
+      'ws://h/api/tasks/T-0001/terminal?ticket=t&cols=80&rows=24&terminal=1&visible=1&shellId=s&offset=0',
+    )
+  })
+})
+
+// AC 31, C33
+describe('reconnectDelay', () => {
+  it('doubles from 0.5 s up to 10 s', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 40].map((tries) => reconnectDelay(tries, 0.5))).toEqual([
+      500, 1000, 2000, 4000, 8000, 10_000, 10_000, 10_000,
+    ])
+  })
+
+  it('stays within 20% either way, in whole milliseconds', () => {
+    expect(reconnectDelay(0, 0)).toBe(400)
+    expect(reconnectDelay(0, 0.999_999_9)).toBe(600)
+    expect(reconnectDelay(0, 0.3)).toBe(460)
+    expect(reconnectDelay(9, 0)).toBe(8000)
+    expect(reconnectDelay(9, 0.999_999_9)).toBe(12_000)
+  })
 })
 
 describe('parseTerminalMessage', () => {
@@ -32,6 +67,7 @@ describe('parseTerminalMessage', () => {
     ['{"type":"snapshot","cols":100,"rows":30}', { type: 'snapshot', cols: 100, rows: 30 }],
     ['{"type":"resume","offset":5}', { type: 'resume', offset: 5 }],
     ['{"type":"replayed","offset":0}', { type: 'replayed', offset: 0 }],
+    ['{"type":"pong"}', { type: 'pong' }],
     ['{"type":"exit","code":0}', { type: 'exit', code: 0 }],
     ['{"type":"exit","code":null}', { type: 'exit', code: null }],
     ['{"type":"error","message":"no"}', { type: 'error', message: 'no' }],

@@ -1,3 +1,4 @@
+import { CLOSE_GONE } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { gpuBudget } from '../lib/gpu-renderer'
@@ -350,13 +351,54 @@ describe('TerminalView in the cache', () => {
 
   it('disposes a terminal whose shell ended when it leaves the screen', async () => {
     const { socket, terminal, view } = await openTerminal(KEY)
-    act(() => socket.drop())
+    act(() => socket.drop(CLOSE_GONE))
     expect(status()).toContain('The shell ended.')
 
     view.unmount()
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
     act(() => vi.advanceTimersByTime(DISPOSE_DELAY_MS))
     expect(terminal.disposed).toBe(true)
+  })
+
+  // AC 27: the strip shows while the socket comes back, and goes once it is open.
+  it('shows "Reconnecting." while a lost socket comes back, with no new shell offered', async () => {
+    const { made, connect } = sockets(2)
+    render(<TerminalView connect={connect} cacheKey={KEY} />)
+    await flush()
+    act(() => made[0]?.open())
+    act(() => made[0]?.message({ type: 'hello', shellId: 'shell-1' }))
+
+    act(() => made[0]?.drop())
+    expect(status()).toBe('Reconnecting.')
+    expect(screen.queryByRole('button', { name: 'Start a new shell' })).toBeNull()
+    act(() => vi.advanceTimersByTime(600))
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+    act(() => made[1]?.open())
+    expect(status()).toBeNull()
+    expect(fakes.terminals).toHaveLength(1)
+  })
+
+  // AC 29: a resume that finds the shell gone.
+  it('shows "The shell ended." and "Start a new shell" when the shell is gone', async () => {
+    const { made, connect } = sockets(2)
+    const view = render(<TerminalView connect={connect} cacheKey={KEY} />)
+    await flush()
+    act(() => made[0]?.open())
+    act(() => made[0]?.message({ type: 'hello', shellId: 'shell-1' }))
+    act(() => made[0]?.drop())
+    act(() => vi.advanceTimersByTime(600))
+    await flush()
+
+    act(() => made[1]?.open())
+    act(() => made[1]?.drop(CLOSE_GONE))
+    expect(status()).toContain('The shell ended.')
+    expect(screen.getByRole('button', { name: 'Start a new shell' })).toBeTruthy()
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(connect).toHaveBeenCalledTimes(2)
+    // The cache drops it once it leaves the screen.
+    view.unmount()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
   })
 
   it('shows "Jump to latest" when scrolled up and goes to the bottom on click', async () => {

@@ -30,6 +30,7 @@ import {
   RESYNC_QUIET_WINDOW_MS,
   SCREEN_HIGH_WATER,
   SCREEN_LOW_WATER,
+  ShellGoneError,
   SNAPSHOT_SEND_BYTES,
   SNAPSHOT_SYNC_WAIT_MS,
   sliceEnd,
@@ -2708,5 +2709,170 @@ describe('catching up a client that is behind', () => {
     service.attach('T-0001', fresh, size)
     await service.settled('T-0001')
     await expectSameScreen(sinceSnapshot(later.frames), fresh.frames)
+  })
+})
+
+describe('a client that comes back', () => {
+  const large = { cols: 120, rows: 40 }
+  const middle = { cols: 100, rows: 30 }
+
+  function shellIdOf(frames: TerminalFrame[]): string {
+    const message = controls(frames)[0]
+    if (message?.type !== 'hello') {
+      throw new Error('No hello came first.')
+    }
+    return message.shellId
+  }
+
+  // A client that saw the screen so far, then lost its socket.
+  async function lost() {
+    const { service, ptys } = setup()
+    const away = client()
+    const detach = service.attach('T-0001', away, size)
+    first(ptys).emit('before\r\n')
+    await service.settled('T-0001')
+    detach()
+    return { service, ptys, away, shellId: shellIdOf(away.frames), offset: sentTo(away.frames) }
+  }
+
+  // What a client attached now gets, once its snapshot is done.
+  async function daemonScreen(service: TerminalService): Promise<TerminalFrame[]> {
+    const fresh = client()
+    service.attach('T-0001', fresh, size)
+    await service.settled('T-0001')
+    return fresh.frames
+  }
+
+  // AC 27, C29
+  it('resumes from the ring with only the bytes it missed, with no snapshot', async () => {
+    const { service, ptys, away, shellId, offset } = await lost()
+    const missed = 'missed 1\r\nmissed 2 é\r\n'
+    first(ptys).emit(missed)
+
+    const back = client()
+    service.attach('T-0001', back, size, MAIN_TERMINAL, { shellId, offset })
+
+    const end = offset + Buffer.byteLength(missed)
+    expect(controls(back.frames)).toEqual([
+      { type: 'hello', shellId },
+      { type: 'resume', offset },
+      { type: 'replayed', offset: end },
+    ])
+    expect(outputOf(back.frames)).toBe(missed)
+    expect(ptys).toHaveLength(1)
+    // Live output follows, and its screen is the daemon's.
+    first(ptys).emit('live\r\n')
+    await service.settled('T-0001')
+    expect(outputOf(back.frames)).toBe(`${missed}live\r\n`)
+    await expectSameScreen([...away.frames, ...back.frames], await daemonScreen(service))
+  })
+
+  it('resumes with no bytes when nothing was missed', async () => {
+    const { service, shellId, offset } = await lost()
+    const back = client()
+    service.attach('T-0001', back, size, MAIN_TERMINAL, { shellId, offset })
+
+    expect(back.frames).toEqual([
+      { type: 'hello', shellId },
+      { type: 'resume', offset },
+      { type: 'replayed', offset },
+    ])
+  })
+
+  // AC 28, C30
+  it(
+    'takes the snapshot path for an offset the ring no longer has, or never had',
+    async () => {
+      const { service, ptys, shellId } = await lost()
+      const frames = (OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES) * 1.25
+      for (let index = 0; index < frames; index += 1) {
+        first(ptys).emit(frameOf(index))
+      }
+      await service.settled('T-0001')
+      const end = Buffer.byteLength('before\r\n') + frames * OUTPUT_FRAME_BYTES
+      const ringStart = end - OUTPUT_RING_BYTES
+      const daemon = await daemonScreen(service)
+
+      // Too old, in the future, inside a frame.
+      for (const offset of [0, end + 1, ringStart + 10]) {
+        const back = client()
+        service.attach('T-0001', back, size, MAIN_TERMINAL, { shellId, offset })
+        await service.settled('T-0001')
+        expect(controls(back.frames)).toEqual([
+          { type: 'hello', shellId },
+          { type: 'snapshot', ...size },
+          { type: 'replayed', offset: end },
+        ])
+        await expectSameScreen(back.frames, daemon)
+      }
+      // Exactly at the start of the ring.
+      const edge = client()
+      service.attach('T-0001', edge, size, MAIN_TERMINAL, { shellId, offset: ringStart })
+      expect(controls(edge.frames)[1]).toEqual({ type: 'resume', offset: ringStart })
+      expect(bytesOf(edge.frames).byteLength).toBe(OUTPUT_RING_BYTES)
+      expect(ptys).toHaveLength(1)
+    },
+    LONG_TEST_MS,
+  )
+
+  // AC 43, C45 (b)
+  it('takes the snapshot path for a resume without an offset, and starts no shell', async () => {
+    const { service, ptys, away, shellId } = await lost()
+    first(ptys).emit('while away\r\n')
+
+    const back = client()
+    service.attach('T-0001', back, size, MAIN_TERMINAL, { shellId })
+    await service.settled('T-0001')
+
+    expect(controls(back.frames)).toEqual([
+      { type: 'hello', shellId },
+      { type: 'snapshot', ...size },
+      { type: 'replayed', offset: sentTo(away.frames) + Buffer.byteLength('while away\r\n') },
+    ])
+    expect(await screenOf(back.frames)).toEqual(['before', 'while away'])
+    expect(ptys).toHaveLength(1)
+  })
+
+  // AC 29, C31
+  it('refuses a resume of a shell that is gone or was started again, and starts none', () => {
+    const { service, ptys } = setup()
+    const none = client()
+    expect(() =>
+      service.attach('T-0001', none, size, MAIN_TERMINAL, { shellId: 'old', offset: 0 }),
+    ).toThrow(ShellGoneError)
+    expect(ptys).toHaveLength(0)
+    expect(none.frames).toEqual([])
+
+    const running = client()
+    service.attach('T-0001', running, size)
+    const shellId = shellIdOf(running.frames)
+    const other = client()
+    expect(() =>
+      service.attach('T-0001', other, size, MAIN_TERMINAL, { shellId: `${shellId}x` }),
+    ).toThrow(ShellGoneError)
+    expect(other.frames).toEqual([])
+
+    first(ptys).exit(0)
+    expect(() => service.attach('T-0001', client(), size, MAIN_TERMINAL, { shellId })).toThrow(
+      ShellGoneError,
+    )
+    expect(service.isOpen('T-0001')).toBe(false)
+    expect(ptys).toHaveLength(1)
+  })
+
+  // AC 42, C44: a resume on screen still does not claim, and never gets the size back.
+  it('never takes the size for a resume, even on screen', async () => {
+    const { service, ptys } = setup()
+    const watching = client()
+    service.attach('T-0001', watching, middle)
+    const detach = service.attach('T-0001', client(), large)
+    await service.settled('T-0001')
+    const shellId = shellIdOf(watching.frames)
+
+    service.attach('T-0001', client(), size, MAIN_TERMINAL, { shellId, offset: 0 })
+    expect(ptys[0]?.sizes).toEqual([large])
+    detach()
+
+    expect(ptys[0]?.sizes).toEqual([large, middle])
   })
 })

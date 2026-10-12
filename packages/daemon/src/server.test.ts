@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { CLOSE_GONE, SILENT_CLOSE_MS } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
@@ -1356,6 +1357,91 @@ describe('terminal', () => {
     ack.mockRestore()
     expect(ptys[0]?.written).toEqual(['after'])
     expect(socket.readyState).toBe(socket.OPEN)
+  })
+
+  it('answers a ping with a pong', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+
+    socket.send(JSON.stringify({ type: 'ping' }))
+
+    await vi.waitFor(() => expect(controls(frames).at(-1)).toEqual({ type: 'pong' }))
+  })
+
+  // AC 27: the daemon side of a reconnect.
+  it('resumes a shell by its id, with only the output since the offset', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    const [hello, , done] = controls(first.frames) as [
+      { type: 'hello'; shellId: string },
+      { type: string },
+      { type: 'replayed'; offset: number },
+    ]
+    first.socket.terminate()
+    ptys[0]?.emit('missed')
+
+    const shellId = encodeURIComponent(hello.shellId)
+    const back = await open(`cols=100&rows=30&shellId=${shellId}&offset=${done.offset}`)
+    await replayed(back.frames)
+
+    expect(controls(back.frames)).toEqual([
+      hello,
+      { type: 'resume', offset: done.offset },
+      { type: 'replayed', offset: done.offset + 'missed'.length },
+    ])
+    const bytes = back.frames.filter((frame) => frame.binary).map((frame) => frame.text)
+    expect(bytes.join('')).toBe('missed')
+    expect(ptys).toHaveLength(1)
+    // A resume never takes the shell's size.
+    expect(ptys[0]?.sizes).toEqual([])
+  })
+
+  // AC 29
+  it('closes a resume of a shell that no longer runs with CLOSE_GONE, and starts none', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24&shellId=gone&offset=0')
+
+    expect(await closeCode(socket)).toBe(CLOSE_GONE)
+    expect(frames).toEqual([])
+    expect(ptys).toHaveLength(0)
+  })
+
+  // AC 32
+  it('closes a socket that sent nothing for SILENT_CLOSE_MS, and its client detaches', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    // Only from here on, so the timer of the first socket stays a real one.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const quiet = await open('cols=120&rows=40')
+      await replayed(quiet.frames)
+      expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
+      const ack = vi.spyOn(TerminalService.prototype, 'ack')
+
+      await vi.advanceTimersByTimeAsync(SILENT_CLOSE_MS - 5000)
+      // Any message counts.
+      quiet.socket.send(JSON.stringify({ type: 'ack', offset: 0 }))
+      await vi.waitFor(() => expect(ack).toHaveBeenCalled())
+      ack.mockRestore()
+      await vi.advanceTimersByTimeAsync(SILENT_CLOSE_MS - 5000)
+      expect(quiet.socket.readyState).toBe(quiet.socket.OPEN)
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await vi.waitFor(() => expect(quiet.socket.readyState).toBe(quiet.socket.CLOSED))
+      // The shell goes back to the size of the client that is left.
+      await vi.waitFor(() =>
+        expect(ptys[0]?.sizes).toEqual([
+          { cols: 120, rows: 40 },
+          { cols: 80, rows: 24 },
+        ]),
+      )
+      expect(first.socket.readyState).toBe(first.socket.OPEN)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('answers an error and closes when the shell cannot start, without hello', async () => {

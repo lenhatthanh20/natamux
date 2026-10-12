@@ -1,4 +1,12 @@
-import { ACK_EVERY_BYTES, scrollbackLines, type TerminalClientMessage } from '@natamux/core'
+import {
+  ACK_EVERY_BYTES,
+  CLOSE_GONE,
+  CLOSE_REFUSED,
+  CLOSE_UNAUTHORIZED,
+  HEARTBEAT_MS,
+  scrollbackLines,
+  type TerminalClientMessage,
+} from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -11,6 +19,7 @@ import { closeSocket } from './live'
 import {
   isQueryReply,
   parseTerminalMessage,
+  reconnectDelay,
   type TerminalConnectQuery,
   takesFocusOnOpen,
 } from './terminal'
@@ -37,8 +46,10 @@ export const CATCH_UP_TIMEOUT_MS = 10_000
 // A resume up to this size is drawn in place. A larger one stays hidden until it ends, as a
 // snapshot does.
 export const HIDDEN_RESUME_BYTES = 64 * 1024
+// After these, the shell is gone or the daemon said no: a new socket would not help.
+const FINAL_CLOSE_CODES = [CLOSE_UNAUTHORIZED, CLOSE_REFUSED, CLOSE_GONE]
 
-export type TerminalStatus = 'connecting' | 'open' | 'ended' | 'error'
+export type TerminalStatus = 'connecting' | 'open' | 'reconnecting' | 'ended' | 'error'
 export type TerminalSessionState = {
   status: TerminalStatus
   error: string | null
@@ -98,8 +109,10 @@ function fontKey(font: ResolvedTerminalFont, zoom: number): string {
 export function createTerminalSession(options: {
   connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   onEnd?: (session: TerminalSession) => void
+  // For the jitter of reconnect delays; tests pass a fixed one.
+  random?: () => number
 }): TerminalSession {
-  const { connect, onEnd } = options
+  const { connect, onEnd, random = Math.random } = options
   let theme = pageTheme()
   const firstFont = terminalFont()
   const firstZoom = uiZoom()
@@ -189,6 +202,18 @@ export function createTerminalSession(options: {
   let sentVisible = true
   // The terminal came on screen during a catch-up. It claims once its own size is back.
   let claimAfterCatchUp = false
+  // Reconnect (spec 5). The shell this terminal shows, from `hello`, and whether `offset` is right
+  // for a resume: set by `replayed`, cleared when a catch-up starts.
+  let shellId: string | null = null
+  let offsetKnown = false
+  // A socket of this session opened once. Before that, a close is a failed start, not a loss.
+  let everOpened = false
+  // A connect or a socket that is not open yet is on its way.
+  let connecting = false
+  let tries = 0
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let pingTimer: ReturnType<typeof setInterval> | undefined
+  let pongTimer: ReturnType<typeof setTimeout> | undefined
 
   // Returns false when the socket is not open and nothing went out.
   const send = (message: TerminalClientMessage): boolean => {
@@ -202,13 +227,16 @@ export function createTerminalSession(options: {
   // screen takes the focus: another screen of the same shell may have set its own size since.
   // Never during a catch-up: the local resizes to the snapshot size and back are not the user's.
   let sentSize = { cols: terminal.cols, rows: terminal.rows }
+  // A size that could not go out (no socket) is not taken as sent, so a fit back to the old size
+  // after a reconnect sends nothing.
   const sendSize = (always = false) => {
     if (catchUp !== null) {
       return
     }
     if (always || terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
-      sentSize = { cols: terminal.cols, rows: terminal.rows }
-      if (send({ type: 'resize', ...sentSize })) {
+      const size = { cols: terminal.cols, rows: terminal.rows }
+      if (send({ type: 'resize', ...size })) {
+        sentSize = size
         claimed = true
       }
     }
@@ -269,7 +297,17 @@ export function createTerminalSession(options: {
       send({ type: 'visible', visible })
     }
   }
-  const onPageVisibility = () => sendVisible(false)
+  const onPageVisibility = () => {
+    sendVisible(false)
+    if (pageHidden()) {
+      stopHeartbeat()
+      clearTimeout(retryTimer)
+      retryTimer = undefined
+    } else {
+      startHeartbeat()
+      retry()
+    }
+  }
 
   // The textarea stays visible, so it keeps the focus and typed keys are queued, not lost.
   const hideScreen = () => {
@@ -319,13 +357,18 @@ export function createTerminalSession(options: {
       claimAfterCatchUp = false
       sendVisible(true)
     }
-    for (const data of typed.splice(0)) {
-      sendInput(data)
+    // Kept while the socket is down: the catch-up of the next socket sends them.
+    if (socket?.readyState === WebSocket.OPEN) {
+      for (const data of typed.splice(0)) {
+        sendInput(data)
+      }
     }
     updateScrolled()
   }
 
   const beginCatchUp = (kind: CatchUp['kind']) => {
+    // Bytes of a catch-up are not counted: a socket lost now resumes with a snapshot.
+    offsetKnown = false
     if (catchUp !== null) {
       clearTimeout(catchUp.timer)
     }
@@ -455,6 +498,75 @@ export function createTerminalSession(options: {
     }
   }
 
+  const pageHidden = () => document.visibilityState === 'hidden'
+
+  const stopHeartbeat = () => {
+    clearInterval(pingTimer)
+    clearTimeout(pongTimer)
+    pingTimer = undefined
+    pongTimer = undefined
+  }
+  // The deadline is set before the ping goes out, so a pong can never come before it.
+  const ping = () => {
+    if (socket?.readyState === WebSocket.OPEN) {
+      pongTimer ??= setTimeout(stale, 2 * HEARTBEAT_MS)
+      send({ type: 'ping' })
+    }
+  }
+  // Only while the page is visible: a page in the background has its timers slowed down, and a
+  // pong would seem late.
+  const startHeartbeat = () => {
+    stopHeartbeat()
+    if (!pageHidden() && socket?.readyState === WebSocket.OPEN) {
+      pingTimer = setInterval(ping, HEARTBEAT_MS)
+    }
+  }
+
+  // Tries again after the backoff delay. A hidden page does not: it tries when it comes back.
+  const planRetry = () => {
+    clearTimeout(retryTimer)
+    retryTimer = undefined
+    if (disposed || pageHidden()) {
+      return
+    }
+    retryTimer = setTimeout(retry, reconnectDelay(tries, random()))
+    tries += 1
+  }
+  // Also at once on `online` and when the page comes back, once, even with a timer planned.
+  const retry = () => {
+    clearTimeout(retryTimer)
+    retryTimer = undefined
+    if (disposed || connecting || state.status !== 'reconnecting' || pageHidden()) {
+      return
+    }
+    open(onScreen)
+  }
+
+  // The socket closed, or went silent, while the shell may still run (spec 5). Typing queued by a
+  // catch-up stays queued: the catch-up of the next socket sends it.
+  const lost = () => {
+    socket = null
+    connecting = false
+    stopHeartbeat()
+    if (catchUp !== null) {
+      clearTimeout(catchUp.timer)
+    }
+    update({ status: 'reconnecting' })
+    planRetry()
+  }
+  // No pong in time: the connection is dead even if the browser has not noticed yet.
+  const stale = () => {
+    const old = socket
+    if (old === null) {
+      return
+    }
+    old.onopen = null
+    old.onmessage = null
+    old.onclose = null
+    closeSocket(old)
+    lost()
+  }
+
   const listen = (opened: WebSocket) => {
     socket = opened
     // Output comes in binary frames. An ArrayBuffer can be written at once, a Blob cannot.
@@ -462,6 +574,8 @@ export function createTerminalSession(options: {
     let wasOpen = false
     opened.onopen = () => {
       wasOpen = true
+      everOpened = true
+      connecting = false
       update({ status: 'open' })
       // The page may have been hidden or shown while the socket was opening.
       sendVisible(false)
@@ -469,6 +583,7 @@ export function createTerminalSession(options: {
       if (claimed) {
         sendSize()
       }
+      startHeartbeat()
     }
     opened.onmessage = (event) => {
       // typeof, not instanceof: a buffer from another realm (jsdom in tests) fails instanceof.
@@ -477,7 +592,14 @@ export function createTerminalSession(options: {
         return
       }
       const message = parseTerminalMessage(event.data)
-      if (message?.type === 'snapshot') {
+      if (message?.type === 'hello') {
+        shellId = message.shellId
+        // The daemon answered: the next loss starts the backoff from the first delay.
+        tries = 0
+      } else if (message?.type === 'pong') {
+        clearTimeout(pongTimer)
+        pongTimer = undefined
+      } else if (message?.type === 'snapshot') {
         beginCatchUp('snapshot')
         hideScreen()
         const { cols, rows } = message
@@ -497,12 +619,19 @@ export function createTerminalSession(options: {
         // the catch-up counts from here. Left uncounted, the client would ack too little forever,
         // and the daemon would never catch it up again once it is behind.
         offset = at
+        offsetKnown = true
         if (catchUp !== null) {
           catchUp.replayed = true
         }
         // The catch-up ends once xterm parsed the last chunk: the screen stays hidden until then,
-        // and an ack means parsed. After the 10 s failure path this only acks.
-        terminal.write('', () => finishCatchUp(at))
+        // and an ack means parsed. After the 10 s failure path this only acks. A catch-up of a
+        // later socket is not this one's to end.
+        const current = catchUp
+        terminal.write('', () => {
+          if (catchUp === current) {
+            finishCatchUp(at)
+          }
+        })
       } else if (message?.type === 'exit') {
         finishCatchUp(null)
         terminal.write('\r\n')
@@ -514,18 +643,70 @@ export function createTerminalSession(options: {
         end()
       }
     }
-    opened.onclose = () => {
-      if (disposed) {
+    opened.onclose = (event) => {
+      if (disposed || socket !== opened) {
         return
       }
+      // After `exit` or `error` the session is over; after a final code a retry would not help.
+      if (!ended && everOpened && !FINAL_CLOSE_CODES.includes(event.code)) {
+        lost()
+        return
+      }
+      socket = null
+      connecting = false
+      stopHeartbeat()
+      if (ended) {
+        return
+      }
+      finishCatchUp(null)
       // A close before the open is a failed handshake, not a shell that ended.
-      if (!wasOpen) {
-        update({ status: 'error', error: state.error ?? 'Could not connect to the terminal.' })
-      } else if (state.status !== 'error') {
+      if (wasOpen) {
         update({ status: 'ended' })
+      } else {
+        update({ status: 'error', error: state.error ?? 'Could not connect to the terminal.' })
       }
       end()
     }
+  }
+
+  // The first socket asks for the shell as it is, and starts it when none runs. A later one
+  // resumes the shell it had: from its offset when known, else with a snapshot (spec 5). A resume
+  // never takes the shell's size; its next claim sends the size.
+  const open = (onScreenNow: boolean) => {
+    connecting = true
+    const visible = onScreenNow && !pageHidden()
+    claimed = visible && shellId === null
+    sentVisible = visible
+    const query: TerminalConnectQuery = { cols: terminal.cols, rows: terminal.rows, visible }
+    if (shellId !== null) {
+      query.shellId = shellId
+      if (offsetKnown) {
+        query.offset = offset
+      }
+    }
+    connect(query)
+      .then((opened) => {
+        if (disposed) {
+          closeSocket(opened)
+          return
+        }
+        listen(opened)
+      })
+      .catch((reason: unknown) => {
+        if (disposed) {
+          return
+        }
+        connecting = false
+        if (everOpened) {
+          planRetry()
+          return
+        }
+        update({
+          status: 'error',
+          error: reason instanceof Error ? reason.message : String(reason),
+        })
+        end()
+      })
   }
 
   // The first show opens xterm and connects, at the size of the pane it shows in.
@@ -545,26 +726,7 @@ export function createTerminalSession(options: {
 
     // start() runs from show(), so the terminal is about to be on screen. With the page hidden,
     // it does not take the shell's size (spec 2.1).
-    const visible = document.visibilityState !== 'hidden'
-    claimed = visible
-    sentVisible = visible
-    connect({ cols: terminal.cols, rows: terminal.rows, visible })
-      .then((opened) => {
-        if (disposed) {
-          closeSocket(opened)
-          return
-        }
-        listen(opened)
-      })
-      .catch((reason: unknown) => {
-        if (!disposed) {
-          update({
-            status: 'error',
-            error: reason instanceof Error ? reason.message : String(reason),
-          })
-          end()
-        }
-      })
+    open(true)
 
     subscriptions.push(
       terminal.onData((data) => {
@@ -647,6 +809,9 @@ export function createTerminalSession(options: {
     terminal.element?.removeEventListener('keydown', markUser, true)
     terminal.textarea?.removeEventListener('keydown', clearUser)
     document.removeEventListener('visibilitychange', onPageVisibility)
+    window.removeEventListener('online', retry)
+    stopHeartbeat()
+    clearTimeout(retryTimer)
     if (catchUp !== null) {
       clearTimeout(catchUp.timer)
       catchUp = null
@@ -666,6 +831,7 @@ export function createTerminalSession(options: {
   }
 
   document.addEventListener('visibilitychange', onPageVisibility)
+  window.addEventListener('online', retry)
 
   const session: TerminalSession = {
     terminal,

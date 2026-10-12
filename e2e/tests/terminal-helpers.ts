@@ -26,6 +26,7 @@ type Probes = {
   __e2eShow?: { clicked: number | null; shown: number | null; stop: () => void }
   __e2eKeys?: { latencies: number[]; landed: number; stop: () => void }
   __e2eFrames?: ScreenFrame[]
+  __e2eReconnecting?: boolean
 }
 
 export function median(values: number[]): number {
@@ -418,4 +419,118 @@ export async function holdReplayed(page: Page): Promise<{
     })
   })
   return { held, release: () => release(), clientFrames }
+}
+
+export type ServerControl = { type: string; at: number; shellId?: string; offset?: number }
+
+export type RoutedSocket = {
+  // JSON messages from the page, and from the daemon with the time they came.
+  sent: ClientFrame[]
+  got: ServerControl[]
+  // From the page side, with a code a lost network could give: the page should come back.
+  close: () => Promise<void>
+}
+
+// Set once a `replayed` is held: it sends what was held.
+type Hold = { release?: () => void }
+
+// Routes every terminal socket that opens after this call. A test sees the JSON messages, closes
+// a socket as a lost network would, refuses new sockets while blocked, and holds back the next
+// `replayed` with everything after it on its socket.
+export async function controlTerminalSockets(page: Page) {
+  const sockets: RoutedSocket[] = []
+  let blocked = false
+  let hold: Hold | null = null
+  await page.routeWebSocket(/\/terminal\?/, (ws) => {
+    if (blocked) {
+      // As a network that is down: the page's socket closes at once.
+      void ws.close({ code: 4000, reason: 'offline' })
+      return
+    }
+    const server = ws.connectToServer()
+    const socket: RoutedSocket = {
+      sent: [],
+      got: [],
+      close: async () => {
+        await ws.close({ code: 4000, reason: 'network' })
+        await server.close().catch(() => undefined)
+      },
+    }
+    sockets.push(socket)
+    let queue: (() => void)[] | null = null
+    ws.onMessage((message) => {
+      if (typeof message === 'string') {
+        socket.sent.push(JSON.parse(message) as ClientFrame)
+      }
+      server.send(message)
+    })
+    server.onMessage((message) => {
+      const pass = () => ws.send(message)
+      if (typeof message === 'string') {
+        const control = { ...JSON.parse(message), at: Date.now() } as ServerControl
+        socket.got.push(control)
+        const waiting = hold
+        if (control.type === 'replayed' && waiting !== null && waiting.release === undefined) {
+          const kept: (() => void)[] = []
+          queue = kept
+          waiting.release = () => {
+            queue = null
+            for (const send of kept) {
+              send()
+            }
+          }
+        }
+      }
+      if (queue !== null) {
+        queue.push(pass)
+        return
+      }
+      pass()
+    })
+  })
+  return {
+    sockets,
+    last: (): RoutedSocket => {
+      const socket = sockets.at(-1)
+      if (socket === undefined) {
+        throw new Error('No terminal socket opened.')
+      }
+      return socket
+    },
+    block: (on: boolean) => {
+      blocked = on
+    },
+    holdNextReplayed: () => {
+      const waiting: Hold = {}
+      hold = waiting
+      return {
+        isHeld: () => waiting.release !== undefined,
+        release: () => waiting.release?.(),
+      }
+    },
+  }
+}
+
+// Notes in the page whether a pane ever shows "Reconnecting.": it shows only for a moment.
+export async function watchReconnecting(page: Page): Promise<() => Promise<boolean>> {
+  await page.evaluate(() => {
+    const probes = window as unknown as Probes
+    probes.__e2eReconnecting = false
+    new MutationObserver(() => {
+      for (const element of document.querySelectorAll('[role="status"]')) {
+        if (element.textContent?.includes('Reconnecting.')) {
+          probes.__e2eReconnecting = true
+        }
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+  })
+  return () => page.evaluate(() => (window as unknown as Probes).__e2eReconnecting === true)
+}
+
+// The process id of the shell, as it prints it after `tag-`.
+export async function shellPid(page: Page, target: Locator, tag: string): Promise<number> {
+  await runIn(page, target, `echo ${tag}-$$`)
+  const pattern = new RegExp(`${tag}-(\\d+)`)
+  await expect(rows(target)).toContainText(pattern)
+  return Number(pattern.exec((await rows(target).textContent()) ?? '')?.[1])
 }

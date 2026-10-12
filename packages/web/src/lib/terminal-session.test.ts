@@ -1,4 +1,11 @@
-import { ACK_EVERY_BYTES, type TerminalSize } from '@natamux/core'
+import {
+  ACK_EVERY_BYTES,
+  CLOSE_GONE,
+  CLOSE_REFUSED,
+  CLOSE_UNAUTHORIZED,
+  HEARTBEAT_MS,
+  type TerminalSize,
+} from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
 import type { TerminalConnectQuery } from './terminal'
@@ -372,11 +379,12 @@ describe('the end of a terminal session (AC 5)', () => {
     expect(onEnd).toHaveBeenCalledTimes(1)
   })
 
-  it('treats a close after the open as a shell that ended', async () => {
+  // AC 29: the daemon closes a resume with CLOSE_GONE when the shell no longer runs.
+  it('treats a close with CLOSE_GONE after the open as a shell that ended', async () => {
     const onEnd = vi.fn()
     const { session, socket } = await shown(onEnd)
     expect(session.state().status).toBe('open')
-    socket.drop()
+    socket.drop(CLOSE_GONE)
 
     expect(session.state()).toMatchObject({ status: 'ended', error: null })
     expect(onEnd).toHaveBeenCalledTimes(1)
@@ -403,7 +411,7 @@ describe('the end of a terminal session (AC 5)', () => {
     await flush()
     socket.open()
     socket.drop()
-    expect(statuses).toEqual(['open', 'ended'])
+    expect(statuses).toEqual(['open', 'reconnecting'])
   })
 })
 
@@ -1112,5 +1120,349 @@ describe('the end of a catch-up by exit or dispose (C4)', () => {
     vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
     expect(terminal.resets).toBe(0)
     expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
+  })
+})
+
+// A session whose every connect gets a new socket. Jitter 0.5 means none: the delays are exact.
+function reconnecting(random = () => 0.5) {
+  const sockets: FakeSocket[] = []
+  const connect = vi.fn(async (_query: TerminalConnectQuery) => {
+    const socket = fakeSocket()
+    sockets.push(socket)
+    return socket.asWebSocket()
+  })
+  const onEnd = vi.fn()
+  const session = createTerminalSession({ connect, onEnd, random })
+  const terminal = session.terminal as unknown as FakeTerminal
+  const last = () => sockets.at(-1) as FakeSocket
+  return { session, sockets, connect, onEnd, terminal, last }
+}
+
+// That session on screen, its first socket open and caught up at offset 6.
+async function attached(random?: () => number) {
+  const made = reconnecting(random)
+  made.session.show(box())
+  await flush()
+  const socket = made.last()
+  socket.open()
+  snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'], 6)
+  made.terminal.parse()
+  return { ...made, socket }
+}
+
+// Lets the planned retry run, and its connect() reach the socket.
+async function wait(ms: number) {
+  vi.advanceTimersByTime(ms)
+  await flush()
+}
+
+describe('reconnecting a lost socket (AC 27, C29)', () => {
+  it('resumes the same shell from its offset, in place, and sends only an ack', async () => {
+    const { session, socket, connect, terminal, last } = await attached()
+    socket.bytes('live')
+    terminal.parse()
+
+    socket.drop()
+    expect(session.state().status).toBe('reconnecting')
+    await wait(499)
+    expect(connect).toHaveBeenCalledTimes(1)
+    await wait(1)
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(connect).toHaveBeenLastCalledWith({
+      cols: 80,
+      rows: 24,
+      visible: true,
+      shellId: 'shell-1',
+      offset: 10,
+    })
+
+    const next = last()
+    next.open()
+    expect(session.state().status).toBe('open')
+    next.message({ type: 'hello', shellId: 'shell-1' })
+    next.message({ type: 'resume', offset: 10 })
+    next.bytes('missed')
+    next.message({ type: 'replayed', offset: 16 })
+    terminal.parse()
+
+    // No reset: the screen stays and gets the missed bytes after the old ones.
+    expect(terminal.resets).toBe(1)
+    expect(terminal.written.filter(Boolean)).toEqual(['screen', 'live', 'missed'])
+    expect(session.state().catchingUp).toBe(false)
+    // A resume never claims the size, so nothing but the ack goes out.
+    expect(next.sent).toEqual([{ type: 'ack', offset: 16 }])
+  })
+
+  it('reconnects a hidden cached terminal too, as not visible', async () => {
+    const { session, socket, connect } = await attached()
+    session.hide(box())
+    socket.drop()
+    await wait(500)
+
+    expect(connect).toHaveBeenLastCalledWith({
+      cols: 80,
+      rows: 24,
+      visible: false,
+      shellId: 'shell-1',
+      offset: 6,
+    })
+  })
+
+  it('tries again when connect fails, with the next delay', async () => {
+    const { socket, connect } = await attached()
+    socket.drop()
+    connect.mockRejectedValueOnce(new Error('The daemon is down.'))
+    await wait(500)
+    expect(connect).toHaveBeenCalledTimes(2)
+
+    await wait(999)
+    expect(connect).toHaveBeenCalledTimes(2)
+    await wait(1)
+    expect(connect).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('what a reconnect asks for (AC 43, C45)', () => {
+  it('attaches plainly after a socket lost before hello', async () => {
+    const { session, connect, last } = reconnecting()
+    session.show(box())
+    await flush()
+    last().open()
+    last().drop()
+    await wait(500)
+
+    expect(connect).toHaveBeenLastCalledWith({ cols: 80, rows: 24, visible: true })
+  })
+
+  it('resumes with the shell id and no offset after a socket lost during its catch-up', async () => {
+    const { session, connect, last, terminal } = reconnecting()
+    session.show(box())
+    await flush()
+    const socket = last()
+    socket.open()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    socket.drop()
+    await wait(500)
+
+    expect(connect).toHaveBeenLastCalledWith({
+      cols: 80,
+      rows: 24,
+      visible: true,
+      shellId: 'shell-1',
+    })
+  })
+
+  it('keeps keys typed during a catch-up across a reconnect, for the next catch-up', async () => {
+    const { session, last, terminal } = reconnecting()
+    session.show(box())
+    await flush()
+    const socket = last()
+    socket.open()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    terminal.fire('data', 'a')
+    terminal.fire('data', 'á')
+    socket.drop()
+
+    // The old catch-up's timer must not end it while the socket is down.
+    await wait(CATCH_UP_TIMEOUT_MS)
+    expect(session.state().catchingUp).toBe(true)
+    const next = last()
+    next.open()
+    snapshotOf(next, { cols: 80, rows: 24 }, ['screen again'], 12)
+    terminal.parse()
+
+    expect(socket.sent).toEqual([])
+    // A resume did not claim, so the first input claims with its size first.
+    expect(next.sent).toEqual([
+      { type: 'ack', offset: 12 },
+      { type: 'resize', cols: 80, rows: 24 },
+      { type: 'input', data: 'a' },
+      { type: 'input', data: 'á' },
+    ])
+  })
+})
+
+describe('when a lost socket does not come back (AC 29, AC 30, C31, C32)', () => {
+  it('makes no new socket after the shell exits', async () => {
+    const { session, socket, connect } = await attached()
+    socket.message({ type: 'exit', code: 0 })
+    socket.drop(1000)
+    await wait(60_000)
+
+    expect(session.state().status).toBe('ended')
+    expect(connect).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([CLOSE_UNAUTHORIZED, CLOSE_REFUSED, CLOSE_GONE])(
+    'makes no new socket after close code %i',
+    async (code) => {
+      const { session, socket, connect, onEnd } = await attached()
+      socket.drop(code)
+      await wait(60_000)
+
+      expect(session.state().status).toBe('ended')
+      expect(connect).toHaveBeenCalledTimes(1)
+      expect(onEnd).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('ends when the resume finds the shell gone, and shows the screen', async () => {
+    const { session, connect, onEnd, last, terminal } = reconnecting()
+    session.show(box())
+    await flush()
+    last().open()
+    snapshotOf(last(), { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    last().drop()
+    await wait(500)
+
+    last().open()
+    last().drop(CLOSE_GONE)
+    await wait(60_000)
+
+    expect(session.state()).toMatchObject({ status: 'ended', catchingUp: false })
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(onEnd).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the retry schedule (AC 31, C33)', () => {
+  // Every try fails before its socket opens, as when the daemon is down.
+  async function failing(random: () => number, delays: number[]) {
+    const { socket, connect, last } = await attached(random)
+    socket.drop()
+    for (const [index, delay] of delays.entries()) {
+      await wait(delay - 1)
+      expect(connect).toHaveBeenCalledTimes(index + 1)
+      await wait(1)
+      expect(connect).toHaveBeenCalledTimes(index + 2)
+      last().drop()
+    }
+  }
+
+  it('doubles the delay from 0.5 s up to 10 s', async () => {
+    await failing(() => 0.5, [500, 1000, 2000, 4000, 8000, 10_000, 10_000])
+  })
+
+  it('takes 20% off with the lowest jitter', async () => {
+    await failing(() => 0, [400, 800, 1600, 3200, 6400, 8000, 8000])
+  })
+
+  it('adds 20% with the highest jitter', async () => {
+    await failing(() => 0.999_999_9, [600, 1200, 2400, 4800, 9600, 12_000])
+  })
+
+  it('starts from the first delay again after a try that worked', async () => {
+    const { socket, connect, last } = await attached()
+    socket.drop()
+    await wait(500)
+    last().drop()
+    await wait(1000)
+    const back = last()
+    back.open()
+    back.message({ type: 'hello', shellId: 'shell-1' })
+    back.drop()
+
+    await wait(499)
+    expect(connect).toHaveBeenCalledTimes(3)
+    await wait(1)
+    expect(connect).toHaveBeenCalledTimes(4)
+  })
+
+  it('tries at once on online, once, even with a try planned', async () => {
+    const { socket, connect } = await attached()
+    socket.drop()
+    window.dispatchEvent(new Event('online'))
+    window.dispatchEvent(new Event('online'))
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+
+    // The planned try is gone, and the one on its way is not doubled.
+    await wait(60_000)
+    expect(connect).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not try while the page is hidden, and tries at once when it comes back', async () => {
+    const { socket, connect } = await attached()
+    socket.drop()
+    // Hidden with a try planned: it is dropped.
+    setPageHidden(true)
+    await wait(60_000)
+    window.dispatchEvent(new Event('online'))
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(1)
+
+    setPageHidden(false)
+    await flush()
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(connect).toHaveBeenLastCalledWith({
+      cols: 80,
+      rows: 24,
+      visible: true,
+      shellId: 'shell-1',
+      offset: 6,
+    })
+  })
+
+  it('plans no try for a socket lost while the page is hidden', async () => {
+    const { socket, connect } = await attached()
+    setPageHidden(true)
+    socket.drop()
+    await wait(60_000)
+
+    expect(connect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the heartbeat (AC 32, C34)', () => {
+  it('pings every HEARTBEAT_MS, and reconnects when no pong came for two of them', async () => {
+    const { session, socket, connect } = await attached()
+    socket.answerPings = false
+
+    await wait(HEARTBEAT_MS - 1)
+    expect(socket.pings).toBe(0)
+    await wait(1)
+    expect(socket.pings).toBe(1)
+    await wait(2 * HEARTBEAT_MS - 1)
+    expect(socket.pings).toBe(2)
+    expect(socket.closed).toBe(false)
+    await wait(1)
+    expect(socket.closed).toBe(true)
+    expect(session.state().status).toBe('reconnecting')
+
+    await wait(500)
+    expect(connect).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a socket whose pongs come', async () => {
+    const { session, socket } = await attached()
+    await wait(10 * HEARTBEAT_MS)
+
+    expect(socket.pings).toBe(10)
+    expect(socket.closed).toBe(false)
+    expect(session.state().status).toBe('open')
+  })
+
+  it('does not ping while the page is hidden', async () => {
+    const { socket } = await attached()
+    socket.answerPings = false
+    setPageHidden(true)
+    await wait(10 * HEARTBEAT_MS)
+    expect(socket.pings).toBe(0)
+    expect(socket.closed).toBe(false)
+
+    setPageHidden(false)
+    await wait(HEARTBEAT_MS)
+    expect(socket.pings).toBe(1)
+  })
+
+  it('stops pinging when disposed', async () => {
+    const { session, socket } = await attached()
+    session.dispose()
+    await wait(10 * HEARTBEAT_MS)
+
+    expect(socket.pings).toBe(0)
   })
 })

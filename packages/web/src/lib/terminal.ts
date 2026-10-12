@@ -1,12 +1,20 @@
 import {
+  RECONNECT_BASE_MS,
+  RECONNECT_JITTER,
+  RECONNECT_MAX_MS,
   type TerminalServerMessage,
   type TerminalSize,
   terminalServerMessageSchema,
 } from '@natamux/core'
 
 // What a terminal tells the daemon when it connects. `visible` is false when the page is hidden:
-// such a client does not take the shell's size (spec 2.1).
-export type TerminalConnectQuery = TerminalSize & { visible: boolean }
+// such a client does not take the shell's size (spec 2.1). After a lost socket, `shellId` resumes
+// the shell it had, from `offset` when the client knows it (spec 5).
+export type TerminalConnectQuery = TerminalSize & {
+  visible: boolean
+  shellId?: string
+  offset?: number
+}
 
 export function terminalSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,
@@ -23,7 +31,20 @@ export function terminalSocketUrl(
     terminal,
     visible: query.visible ? '1' : '0',
   })
+  if (query.shellId !== undefined) {
+    params.set('shellId', query.shellId)
+  }
+  if (query.offset !== undefined) {
+    params.set('offset', String(query.offset))
+  }
   return `${scheme}://${location.host}/api/tasks/${encodeURIComponent(taskId)}/terminal?${params}`
+}
+
+// The wait in whole milliseconds before try `tries` (0 first) to bring back a lost socket.
+// `random` is in [0, 1): 0 waits RECONNECT_JITTER less, and near 1 that much more.
+export function reconnectDelay(tries: number, random: number): number {
+  const base = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** tries)
+  return Math.round(base * (1 + RECONNECT_JITTER * (2 * random - 1)))
 }
 
 // Returns undefined for a frame this dashboard does not understand.

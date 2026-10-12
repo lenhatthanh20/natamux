@@ -48,6 +48,14 @@ export class NoTerminalError extends Error {
   }
 }
 
+// A resume names a shell by its id. Thrown when no shell of that name runs, or another one does.
+export class ShellGoneError extends Error {
+  constructor(taskId: string, terminal: string) {
+    super(`Shell ${terminal} of ${taskId} has ended`)
+    this.name = 'ShellGoneError'
+  }
+}
+
 export class TerminalLimitError extends Error {
   constructor(limit: number) {
     super(`At most ${limit} terminals can be open. Close one first.`)
@@ -594,20 +602,28 @@ export class TerminalService {
 
   // Starts the shell when there is none. Returns the function that detaches the client. A client
   // that is not on screen does not take the shell's size.
+  // With `shellId` it is a resume of a client that lost its socket: it never starts a shell, never
+  // takes the size, and gets only the output since `offset` while the ring still has it.
   attach(
     taskId: string,
     client: TerminalClient,
     size: TerminalSize,
     terminal = MAIN_TERMINAL,
-    options: { visible?: boolean } = {},
+    options: { visible?: boolean; shellId?: string; offset?: number } = {},
   ): () => void {
     const visible = options.visible ?? true
-    const existed = this.sessions.has(sessionKey(taskId, terminal))
-    const session = this.ensure(taskId, terminal, size)
+    const key = sessionKey(taskId, terminal)
+    const existed = this.sessions.has(key)
+    const resumed = options.shellId === undefined ? undefined : this.sessions.get(key)
+    if (options.shellId !== undefined && resumed?.shellId !== options.shellId) {
+      throw new ShellGoneError(taskId, terminal)
+    }
+    const session = resumed ?? this.ensure(taskId, terminal, size)
+    const claims = visible && resumed === undefined
     const now = this.now()
     const state: ClientState = {
       size,
-      claimed: visible,
+      claimed: claims,
       visible,
       phase: 'snapshot',
       waiting: null,
@@ -621,7 +637,7 @@ export class TerminalService {
       budgetFrom: now,
       budgetBytes: 0,
     }
-    if (visible) {
+    if (claims) {
       session.clients.set(client, state)
       if (existed) {
         // The screen is drawn for this size, so the shell must know it before the snapshot.
@@ -634,7 +650,9 @@ export class TerminalService {
     clearTimeout(session.idleTimer)
     // No output reaches it before: it is in the snapshot phase with nothing waiting.
     client.send({ type: 'hello', shellId: session.shellId })
-    this.requestSnapshot(session, client, state)
+    if (resumed === undefined || !this.resume(session, client, state, options.offset)) {
+      this.requestSnapshot(session, client, state)
+    }
     return () => {
       if (session.clients.get(client) !== state) {
         return
@@ -720,6 +738,33 @@ export class TerminalService {
       at += frame.length
     }
     return at === offset ? [] : undefined
+  }
+
+  // Sends a client that comes back the output since `offset`, when the ring still has all of it.
+  // False when it does not (too old, in the future, inside a frame, or no offset): the client then
+  // needs a snapshot.
+  private resume(
+    session: Session,
+    client: TerminalClient,
+    state: ClientState,
+    offset: number | undefined,
+  ): boolean {
+    // The client is in the snapshot phase with nothing waiting, so the flush skips it and the ring
+    // gets the pending output.
+    this.flushOutput(session)
+    const missed = offset === undefined ? undefined : this.ringSince(session, offset)
+    if (offset === undefined || missed === undefined) {
+      return false
+    }
+    client.send({ type: 'resume', offset })
+    for (const frame of missed) {
+      client.send(frame)
+    }
+    client.send({ type: 'replayed', offset: session.offset })
+    state.sent = session.offset
+    state.acked = session.offset
+    state.phase = 'live'
+    return true
   }
 
   // A new client gets the running snapshot when its cut is right for it too: no output since the
