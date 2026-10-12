@@ -1728,6 +1728,42 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
+  it('puts the keyboard in the first agent of each workspace opened from the sidebar', async () => {
+    installDaemon([
+      workspaceTask(),
+      workspaceTask({ id: 'T-0002', title: 'Add export', state: 'running', agent: 'claude-code' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    const tokenIn = async (view: HTMLElement) => {
+      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
+    }
+
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    const first = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await waitFor(async () => expect(await tokenIn(first)).not.toBe(''))
+    // T-0001 is left on its Changes tab.
+    await user.click(within(first).getByRole('tab', { name: /^Changes/ }))
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    const second = await screen.findByRole('region', { name: 'Changes of T-0002' })
+    await waitFor(async () => expect(await tokenIn(second)).not.toBe(''))
+
+    // Back on T-0001, the remembered Changes tab shows, and no terminal takes the keyboard.
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    const again = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(within(again).getByRole('tab', { name: /^Changes/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    )
+    await user.click(within(again).getByRole('tab', { name: 'Terminal' }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(await tokenIn(again)).toBe('')
+  })
+
   it('opens the changes from the sidebar with the details beside them', async () => {
     installDaemon([
       makeTask({

@@ -6,6 +6,7 @@ import { createElement, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_PANES } from '../lib/panes'
 import { disposeTerminal } from '../lib/terminal-cache'
+import { useViewStore } from '../lib/view-store'
 import { ShellPanes } from './ShellPanes'
 
 type StandInProps = {
@@ -338,6 +339,77 @@ describe('ShellPanes answer in terminal', () => {
     update({ implement: 'running', 'test-spec': 'needs-input' }, 1)
     await waitFor(() => expect(screen.getByRole('region', { name: 'Shell 2' })).toBeTruthy())
     expect(await tokenOf('Shell 2')).not.toBe('')
+  })
+})
+
+describe('ShellPanes first agent', () => {
+  // Opening the workspace from another task asks for the first agent.
+  beforeEach(() => {
+    useViewStore.setState({ shellRequest: { taskId: 'T-0001', name: null, at: 1 } })
+  })
+  afterEach(() => {
+    useViewStore.setState({ shellRequest: null })
+    layout.phone = false
+  })
+
+  const tokenOf = (name: string) =>
+    within(screen.getByRole('region', { name }))
+      .getByText('Terminal stand-in')
+      .getAttribute('data-focus-token')
+  const answered = () => waitFor(() => expect(useViewStore.getState().shellRequest).toBeNull())
+
+  it('focuses the lowest shell where an agent runs', async () => {
+    shells('claude-code', ['1', '2', '3'], ['2', '3'])
+    await agentShown('Shell 3')
+    await answered()
+    expect(tokenOf('Shell 2')).not.toBe('')
+    expect(tokenOf('Shell 1')).toBe('')
+    expect(tokenOf('Shell 3')).toBe('')
+  })
+
+  it('focuses Shell 1 when no shell runs an agent', async () => {
+    shells(null, ['1', '2'], [])
+    await screen.findByRole('region', { name: 'Shell 2' })
+    await answered()
+    expect(tokenOf('Shell 1')).not.toBe('')
+    expect(tokenOf('Shell 2')).toBe('')
+  })
+
+  it('focuses the first agent, not the shell that waits for the user', async () => {
+    renderShells(
+      {
+        id: 'T-0001',
+        state: 'needs-input',
+        stage: 'build',
+        lanes: { 'test-spec': 'running', docs: 'needs-input' },
+        agent: 'claude-code',
+      },
+      ['1', '2', '3'],
+      {
+        '2': { stage: 'test-spec', state: 'running' },
+        '3': { stage: 'docs', state: 'needs-input' },
+      },
+    )
+    await agentShown('Shell 3')
+    await answered()
+    expect(tokenOf('Shell 2')).not.toBe('')
+    expect(tokenOf('Shell 3')).toBe('')
+  })
+
+  it('leaves a request for another task alone', async () => {
+    useViewStore.setState({ shellRequest: { taskId: 'T-0002', name: null, at: 1 } })
+    shells('claude-code', ['1'], ['1'])
+    await agentShown('Shell 1')
+    expect(tokenOf('Shell 1')).toBe('')
+    expect(useViewStore.getState().shellRequest).not.toBeNull()
+  })
+
+  it('takes no keyboard on a phone', async () => {
+    layout.phone = true
+    shells('claude-code', ['1'], ['1'])
+    await agentShown('Shell 1')
+    await answered()
+    expect(tokenOf('Shell 1')).toBe('')
   })
 })
 

@@ -161,10 +161,31 @@ export function ShellPanes({
   // The shell that gets the keyboard, and a new number each time it is asked for.
   const [focusing, setFocusing] = useState<{ name: string; at: number } | null>(null)
 
-  // The jump palette can ask for one shell of the workspace.
+  // The shells and their agents are read, so the first agent and the waiting shell are known.
+  const shellsRead =
+    !open.isPending &&
+    !open.isFetching &&
+    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
+
+  // The jump palette can ask for one shell of the workspace, and opening the workspace asks for
+  // the first agent. On a phone the first agent takes no keyboard, so no keyboard pops up.
   const request = useViewStore((state) => state.shellRequest)
   useEffect(() => {
-    if (request !== null && request.taskId === taskId && names.includes(request.name)) {
+    if (request === null || request.taskId !== taskId) {
+      return
+    }
+    if (request.name === null) {
+      if (!shellsRead) {
+        return
+      }
+      useViewStore.getState().clearShellRequest()
+      if (!phone) {
+        const first = names.find((name) => agentState(name) !== undefined) ?? '1'
+        setShown(first)
+        setMaximized(null)
+        setFocusing({ name: first, at: request.at })
+      }
+    } else if (names.includes(request.name)) {
       setShown(request.name)
       setMaximized(null)
       setFocusing({ name: request.name, at: request.at })
@@ -176,10 +197,6 @@ export function ShellPanes({
   // shell that starts or stops waiting later must not take the keyboard. It is shown in the same
   // render, as a hidden terminal cannot take the focus.
   const answered = useRef(0)
-  const shellsRead =
-    !open.isPending &&
-    !open.isFetching &&
-    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
   useEffect(() => {
     if (shellsRead && focusToken && focusToken !== answered.current) {
       answered.current = focusToken

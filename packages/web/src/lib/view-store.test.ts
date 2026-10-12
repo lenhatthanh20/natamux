@@ -218,6 +218,44 @@ describe('the shown tab', () => {
   })
 })
 
+describe('the shell to focus', () => {
+  const request = () => useViewStore.getState().shellRequest
+
+  it('asks for the first agent when another workspace opens on its terminal', () => {
+    useViewStore.setState({ ...initialViewData, changesTaskId: 'T-0001' })
+    useViewStore.getState().openChanges('T-0002', 'terminal')
+    expect(request()).toMatchObject({ taskId: 'T-0002', name: null })
+  })
+
+  it('asks for nothing when the workspace opens on another tab', () => {
+    useViewStore.setState({ ...initialViewData, changesTaskId: 'T-0001' })
+    useViewStore.getState().openChanges('T-0002', 'terminal')
+    useViewStore.getState().openChanges('T-0003', 'changes')
+    expect(request()).toBeNull()
+  })
+
+  it('asks for nothing when the open workspace opens again', () => {
+    useViewStore.setState({ ...initialViewData, changesTaskId: 'T-0001' })
+    useViewStore.getState().openChanges('T-0001', 'terminal')
+    expect(request()).toBeNull()
+  })
+
+  it('asks for the picked shell, not the first agent', () => {
+    useViewStore.setState({ ...initialViewData, changesTaskId: 'T-0001' })
+    useViewStore.getState().openChanges('T-0002', 'terminal')
+    useViewStore.getState().requestShell('T-0002', '4')
+    expect(request()).toMatchObject({ taskId: 'T-0002', name: '4' })
+  })
+
+  it('asks for nothing when an address opens the workspace', () => {
+    useViewStore.setState({ ...initialViewData, changesTaskId: 'T-0001' })
+    useViewStore
+      .getState()
+      .applyRoute({ kind: 'workspace', id: 'T-0002', tab: 'terminal', file: null })
+    expect(request()).toBeNull()
+  })
+})
+
 describe('the details on a new visit', () => {
   beforeEach(() => {
     globalThis.localStorage.clear()
