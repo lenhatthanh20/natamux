@@ -15,6 +15,8 @@ Every task with a workspace has a **Terminal** tab. It holds real shells that ru
 2. Double-click it, or press `Enter`. The workspace opens on the terminal while an agent works.
 3. From another tab of the workspace, click **Terminal** or press `1`.
 
+When you switch to another task's workspace, the keyboard goes to its first agent shell, so you can type to the agent at once. A shell you pick with **Jump to a workspace** gets the keyboard instead.
+
 A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/docs/concepts/workspaces/).
 
 ## Shells

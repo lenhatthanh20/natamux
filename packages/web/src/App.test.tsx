@@ -1738,27 +1738,31 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
     const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    // T-0001 is in review, so Needs you lists it too. Click the rows of the workspace list.
+    const list = within(sidebar).getByRole('region', { name: 'Workspaces' })
     const tokenIn = async (view: HTMLElement) => {
       const pane = await within(view).findByRole('region', { name: 'Shell 1' })
       return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
     }
 
-    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await user.click(within(list).getByRole('button', { name: /Fix timezone bug/ }))
     const first = await screen.findByRole('region', { name: 'Changes of T-0001' })
     await waitFor(async () => expect(await tokenIn(first)).not.toBe(''))
     // T-0001 is left on its Changes tab.
     await user.click(within(first).getByRole('tab', { name: /^Changes/ }))
 
-    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await user.click(within(list).getByRole('button', { name: /Add export/ }))
     const second = await screen.findByRole('region', { name: 'Changes of T-0002' })
     await waitFor(async () => expect(await tokenIn(second)).not.toBe(''))
 
     // Back on T-0001, the remembered Changes tab shows, and no terminal takes the keyboard.
-    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await user.click(within(list).getByRole('button', { name: /Fix timezone bug/ }))
     const again = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    expect(within(again).getByRole('tab', { name: /^Changes/ }).getAttribute('aria-selected')).toBe(
-      'true',
-    )
+    expect(
+      within(again)
+        .getByRole('tab', { name: /^Changes/ })
+        .getAttribute('aria-selected'),
+    ).toBe('true')
     await user.click(within(again).getByRole('tab', { name: 'Terminal' }))
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     expect(await tokenIn(again)).toBe('')

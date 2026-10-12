@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.10 (2026-10-12)
+
+- When a task is done or cancelled, each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.**, and **Open a new shell** opens a plain shell in the workspace without the agent. After a daemon restart, the pane shows **The shell ended.** with the same link. See [Shells](/docs/guides/terminal/#shells).
+- When you switch to another task's workspace, the keyboard goes to its first agent shell, so you can type to the agent at once. See [Open the terminal](/docs/guides/terminal/#open-the-terminal).
+- The sidebar and the details panel start at the same width, 320 px. A width you set by dragging stays.
+- Fix: after you quit and opened the app again, **Resume** on a task that waits for you moved it to running, but no agent ran in its terminal. Now **Resume** starts the agent again. Claude Code goes on with the same conversation; other agents start again with the stage prompt. See [Type to the agent](/docs/guides/terminal/#type-to-the-agent).
+- Fix: in the desktop app, the first click on a terminal from another app only brought the window to the front, and a second click was needed to type. Now one click does both.
+
 ## v0.1.9 (2026-10-12)
 
 - The terminal looks like a native terminal: **JetBrains Mono** at 13px with rows as tall as the font and bold at 700, bundled Nerd Font icons, the **Night** palette, dimmed panes without the focus, an outline cursor and a dimmer selection when a terminal has no focus, and `Alt` + wheel to scroll 5 times faster. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
