@@ -47,7 +47,7 @@ Things to know:
 - When the connection to a shell drops, for example after your computer sleeps or the network changes, the pane shows **Reconnecting.** and connects again by itself. The screen stays as it was, and the output you missed follows.
 - When a task is done or cancelled, its shells end, with the agent and everything else in them. Each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.** Click **Open a new shell** to open a plain shell in its workspace. It does not start the agent. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
 - When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
-- Natamux runs at most 20 shells in all.
+- Natamux runs at most 30 shells in all.
 
 To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or use **Search or run a command**. The palette lists the extra shells under their workspace.
 

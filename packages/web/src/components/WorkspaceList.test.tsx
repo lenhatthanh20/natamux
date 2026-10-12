@@ -761,12 +761,12 @@ describe('a task row', () => {
       'natamux/t-0001-parent-work',
     )
     expect(row.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
-    expect(within(row).getByText('Review')).toBeTruthy()
+    expect(within(row).getByText('Manual review')).toBeTruthy()
     expect(within(row).getByText('3/4')).toBeTruthy()
     const comet = row.querySelector('.comet')
     expect(comet?.getAttribute('data-state')).toBe('running')
     expect(comet?.getAttribute('data-tip')).toBe(
-      'Spec done, Implement done, Review running, Release not started',
+      'Spec done, Implement done, Manual review running, Release not started',
     )
     expect(within(row).getByText('#12')).toBeTruthy()
     expect(within(row).getByText('1/2')).toBeTruthy()
@@ -966,14 +966,15 @@ describe('test spec cases', () => {
   it('slides in rows and unfolded lists that come after the first paint only', async () => {
     const user = userEvent.setup()
     const quiet = { ...child, state: 'review' as const }
-    const { rerender } = list({ tasks: [parent, quiet], pinnedIds: [] })
+    const resting = { ...parent, state: 'review' as const }
+    const { rerender } = list({ tasks: [resting, quiet], pinnedIds: [] })
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
 
     await user.click(disclosure('T-0001'))
     expect(rowOf('Child').closest('ul')?.className).toContain('sb-unfold')
 
     const added = makeTask({ id: 'T-0005', title: 'Added', createdAt: '2026-10-10T08:30:00.000Z' })
-    rerender({ tasks: [parent, quiet, added], pinnedIds: [] })
+    rerender({ tasks: [resting, quiet, added], pinnedIds: [] })
     expect(rowOf('Added').closest('li')?.className).toContain('hm-pop')
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
   })

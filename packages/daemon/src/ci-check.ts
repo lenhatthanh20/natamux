@@ -68,15 +68,18 @@ export async function checkOnCi(
   const fields = 'databaseId,workflowName,status,conclusion,url'
   const list = ['run', 'list', '--commit', sha, '--json', fields, '--limit', '50']
   let runs: CiRun[] = []
+  // The last error of gh, so a check that gives up names the real cause.
+  let lastError = ''
   // How many runs were all done at the last read; -1 when they were not.
   let settled = -1
   for (;;) {
     try {
       runs = JSON.parse(await deps.gh(input.worktree, list)) as CiRun[]
     } catch (error) {
-      // A missing gh cannot get better; a network error may.
-      if (textOf(error).includes('not installed')) {
-        return stop(`Could not read the CI runs: ${textOf(error)}`)
+      lastError = textOf(error)
+      // A missing gh, or one that is not signed in, cannot get better; a network error may.
+      if (/not installed|auth|log ?in|token/i.test(lastError)) {
+        return stop(`Could not read the CI runs: ${lastError}`)
       }
     }
     const waited = deps.now() - start
@@ -87,8 +90,9 @@ export async function checkOnCi(
     }
     settled = done ? runs.length : -1
     if (runs.length === 0 && waited >= START_WAIT_MS) {
+      const cause = lastError === '' ? '' : ` The last gh error: ${lastError}`
       return stop(
-        `No CI run started for ${ref}. Make the CI workflows run on a push to "${CI_BRANCH_PREFIX}**".`,
+        `No CI run started for ${ref}. Make the CI workflows run on a push to "${CI_BRANCH_PREFIX}**".${cause}`,
       )
     }
     if (waited >= CI_TIMEOUT_MS) {

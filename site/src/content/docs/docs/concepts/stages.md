@@ -247,7 +247,7 @@ A stage that changes code (an agent stage without an output file) or a testing s
 - **Project settings** decide which stages offer it: tick **Tasks can check it on CI** on the stage, or write `"ci": true` in `.natamux.json`. The default pipeline offers it on **Implement** and **Automated tests**.
 - On each task, the card of such a stage has a **Check on CI** checkbox. It is off by default, because it pushes the work to your remote.
 - When the agent runs `natamux done` and the other checks pass, Natamux:
-  1. makes a commit of the worktree as it is, without changing your branch, your index or your files;
+  1. makes a commit of the worktree as it is, without changing your branch, your index or your files. It holds every file that git does not ignore, also new files you did not add, so keep secrets such as `.env` in ignored files;
   2. force-pushes it to `natamux-ci/<task branch>` on `origin`;
   3. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
 - **Every run passes:** the stage passes, and its checks list each run.

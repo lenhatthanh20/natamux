@@ -109,7 +109,7 @@ Each task has its own shells, started in the worktree. The first shell is called
 
 - A shell keeps running when you close the dashboard.
 - Stages that run side by side use more shells, one each. A testing stage with a command runs it in a shell of its own.
-- Natamux allows at most 20 shells at once, across all tasks.
+- Natamux allows at most 30 shells at once, across all tasks.
 - When a task is `done` or `cancelled`, Natamux closes its shells.
 
 See [Terminal](/docs/guides/terminal/).

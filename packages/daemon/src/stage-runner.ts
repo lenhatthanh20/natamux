@@ -95,6 +95,23 @@ function laneState(task: Pick<Task, 'state' | 'lanes'>, step: Step, stageId: str
 // Rounds of "fix it" an agent may ask for on its own before a person decides.
 export const MAX_AGENT_SEND_BACKS = 2
 
+// The stages whose CI check started and has no result yet.
+function stagesWaitingForCi(events: readonly { event: TaskEvent }[]): string[] {
+  const waits = new Set<string>()
+  for (const { event } of events) {
+    const stage = event.payload.stage
+    if (typeof stage !== 'string') {
+      continue
+    }
+    if (event.type === 'stage.ci-started') {
+      waits.add(stage)
+    } else if (['stage.started', 'stage.checked', 'stage.check-failed'].includes(event.type)) {
+      waits.delete(stage)
+    }
+  }
+  return [...waits]
+}
+
 // A CI check that could not run, such as gh missing, is a failure no agent can fix.
 function ciError(error: unknown): CiResult {
   const reason = error instanceof Error ? error.message : String(error)
@@ -240,6 +257,8 @@ export class StageRunner {
   private readonly pending = new Set<Promise<unknown>>()
   // Finished tasks whose CI branch was deleted, so later updates do not push again.
   private readonly ciCleaned = new Set<string>()
+  // The CI checks that run now, by task and stage. A second report waits for the first check.
+  private readonly ciRounds = new Set<string>()
   private unsubscribe: (() => void) | undefined
 
   constructor(options: StageRunnerOptions) {
@@ -259,6 +278,19 @@ export class StageRunner {
 
   start(): void {
     this.unsubscribe = this.bus.subscribe((message) => this.onMessage(message))
+    this.resumeCiChecks()
+  }
+
+  // A CI check that ran when the daemon stopped goes on: it pushes the work again and waits.
+  private resumeCiChecks(): void {
+    for (const task of this.tasks.listTasks()) {
+      if (task.state === 'done' || task.state === 'cancelled') {
+        continue
+      }
+      for (const stageId of stagesWaitingForCi(this.tasks.listEvents(task.id))) {
+        this.startCiRound(task.id, stageId, this.lastStart(task.id, stageId).seq, [])
+      }
+    }
   }
 
   stop(): void {
@@ -906,13 +938,18 @@ export class StageRunner {
       if (input.to !== undefined) {
         this.checkTarget(task, input.to)
       }
-      const from =
-        input.terminal === undefined ? undefined : this.agentSendsBack(task, step, input.terminal)
+      // A person can type the command in a task shell too; only an agent there counts.
+      const byAgent = input.terminal !== undefined && this.agentRuns(taskId, input.terminal)
+      const from = byAgent ? this.agentSendsBack(task, step, input.terminal ?? '') : undefined
       this.apply(taskId, 'stage.reopened', {
         ...(input.to === undefined ? {} : { to: input.to }),
         ...(input.reason === undefined ? {} : { reason: input.reason }),
         ...(from === undefined ? {} : { from, byAgent: true }),
       })
+      if (from !== undefined) {
+        // Its turn ends after this, as after `natamux done`.
+        this.reported.set(`${taskId}/${input.terminal}`, from)
+      }
       return this.afterStart(taskId)
     }
     const plan: Record<typeof action, { type: TaskEvent['type']; states: TaskState[] }> = {
@@ -963,15 +1000,13 @@ export class StageRunner {
         type: 'agent.asked',
         payload: {
           stage: from,
-          reason: `${name} sent the task back ${before} times. Decide what to do.`,
+          message: `${name} sent the task back ${before} times. Decide what to do.`,
         },
       })
       throw new StageActionError(
         `${task.id} went back ${before} times already, so it waits for the user now. Stop here.`,
       )
     }
-    // Its turn ends after this, as after `natamux done`.
-    this.reported.set(`${task.id}/${terminal}`, from)
     return from
   }
 
@@ -1065,11 +1100,14 @@ export class StageRunner {
       return
     }
     if (result.passed && this.waitsForCi(task, stage)) {
+      if (this.ciRounds.has(`${taskId}/${stageId}`)) {
+        return
+      }
       this.tasks.recordEvent(taskId, 'stage.ci-started', {
         stage: stageId,
         branch: ciBranchOf(task.branch ?? ''),
       })
-      this.background(this.ciRound(taskId, stageId, start.seq, result.passes))
+      this.startCiRound(taskId, stageId, start.seq, result.passes)
       return
     }
     if (result.passed) {
@@ -1087,6 +1125,16 @@ export class StageRunner {
   private waitsForCi(task: Task, stage: Stage): boolean {
     const chosen = (task.ciStages ?? []).includes(stage.id)
     return chosen && offersCi(stage) && task.workspace !== null && task.branch !== null
+  }
+
+  private startCiRound(taskId: string, stageId: string, seq: number, passes: string[]): void {
+    const key = `${taskId}/${stageId}`
+    if (this.ciRounds.has(key)) {
+      return
+    }
+    this.ciRounds.add(key)
+    const round = this.ciRound(taskId, stageId, seq, passes)
+    this.background(round.finally(() => this.ciRounds.delete(key)))
   }
 
   // CI takes minutes, so it runs after the report has its answer. Its result counts only for the

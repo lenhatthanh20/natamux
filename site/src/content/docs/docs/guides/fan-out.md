@@ -62,4 +62,4 @@ The kept try goes on as a normal task. Commit, push and open the pull request fr
 ## Limits
 
 - At most 5 copies in one run, so up to 6 tries in a group with the original.
-- Each try with a workspace is a worktree on your disk. A task can have at most 6 shells and Natamux runs at most 20 shells in all.
+- Each try with a workspace is a worktree on your disk. A task can have at most 6 shells and Natamux runs at most 30 shells in all.

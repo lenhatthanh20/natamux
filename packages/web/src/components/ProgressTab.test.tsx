@@ -287,7 +287,7 @@ describe('the stage cards', () => {
     const testSpec = within(group).getByRole('article', { name: 'Test spec' })
     expect(within(group).getByRole('article', { name: 'Implement' })).toBeTruthy()
     expect(within(group).getByText('side by side')).toBeTruthy()
-    expect(within(group).getByText('Review starts when both are finished')).toBeTruthy()
+    expect(within(group).getByText('Manual review starts when both are finished')).toBeTruthy()
     expect(testSpec.parentElement?.className).toContain('flex-col')
     expect(testSpec.parentElement?.className).not.toContain('grid')
   })
@@ -331,7 +331,7 @@ describe('the stage cards', () => {
   it('shows one line with the finish rule for a stage not reached yet', async () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
-    const review = await screen.findByRole('article', { name: 'Review' })
+    const review = await screen.findByRole('article', { name: 'Manual review' })
     expect(within(review).getByText('Not started')).toBeTruthy()
     expect(within(review).getByText('Finished when you approve the changes.')).toBeTruthy()
     expect(within(review).queryByRole('button')).toBeNull()
@@ -644,7 +644,7 @@ describe('ProgressTab check on CI', () => {
 
     const implement = await screen.findByRole('article', { name: 'Implement' })
     expect((box(implement) as HTMLInputElement).checked).toBe(false)
-    for (const name of ['Context', 'Spec', 'Plan', 'Test spec', 'Review']) {
+    for (const name of ['Context', 'Spec', 'Plan', 'Test spec', 'Manual review']) {
       expect(box(screen.getByRole('article', { name }))).toBeNull()
     }
     await user.click(box(implement) as HTMLElement)
@@ -690,7 +690,7 @@ describe('ProgressTab workflow', () => {
     expect((box(plan) as HTMLInputElement).checked).toBe(false)
     expect((box(implement) as HTMLInputElement).checked).toBe(false)
     expect(within(implement).getByText(/uses many more tokens/)).toBeTruthy()
-    for (const name of ['Context', 'Spec', 'Test spec', 'Review']) {
+    for (const name of ['Context', 'Spec', 'Test spec', 'Manual review']) {
       expect(box(screen.getByRole('article', { name }))).toBeNull()
     }
   })
@@ -793,8 +793,11 @@ describe('ProgressTab workflow and the settings', () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
     const group = await screen.findByRole('region', { name: 'Test spec and Implement' })
-    expect(within(group).getAllByRole('checkbox')).toHaveLength(1)
-    expect(box(within(group).getByRole('article', { name: 'Implement' }))).not.toBeNull()
+    const implement = within(group).getByRole('article', { name: 'Implement' })
+    // The workflow and the CI check, both on the lane.
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(2)
+    expect(within(implement).getAllByRole('checkbox')).toHaveLength(2)
+    expect(box(implement)).not.toBeNull()
   })
 
   it('offers it on a stage of your own, each lane on its own, and not without the field', async () => {

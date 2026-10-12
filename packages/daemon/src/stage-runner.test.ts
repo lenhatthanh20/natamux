@@ -46,6 +46,7 @@ let index: TaskIndex
 let tasks: TaskService
 let workspaces: WorkspaceService
 let runner: StageRunner
+let agents: AgentRunner
 let ptys: FakePty[]
 let ghCalls: string[][]
 let settings: ProjectSettings
@@ -80,14 +81,19 @@ beforeEach(() => {
     spawn: spawner.spawn,
     workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   })
-  const agents = new AgentRunner({
+  agents = new AgentRunner({
     tasks,
     terminals,
     claudeSettingsPath: join(dataDir, 'settings.json'),
     platform: 'linux',
   })
   ghCalls = []
-  runner = new StageRunner({
+  runner = makeRunner(agents)
+  runner.start()
+})
+
+function makeRunner(agents: AgentRunner): StageRunner {
+  return new StageRunner({
     tasks,
     terminals,
     agents,
@@ -110,8 +116,7 @@ beforeEach(() => {
       })
     },
   })
-  runner.start()
-})
+}
 
 afterEach(() => {
   runner.stop()
@@ -147,6 +152,17 @@ async function expectSubmitted(pty: FakePty | undefined, start: string): Promise
     expect(written[at]?.endsWith('\x1b[201~')).toBe(true)
     expect(written[at + 1]).toBe('\r')
   })
+}
+
+// A task of a pipeline that starts with Implement, ready and in its workspace, so Implement runs.
+async function implementing(): Promise<Task> {
+  const task = await created({ title: 'Export', agent: 'claude-code' })
+  tasks.applyEvent(task.id, {
+    source: 'human',
+    type: 'state.overridden',
+    payload: { to: 'ready', stage: 'implement' },
+  })
+  return withWorkspace(task.id)
 }
 
 // The default pipeline with a person's review in place of the agent's, for the cases about it.
@@ -534,7 +550,7 @@ describe('an agent review', () => {
   })
 
   async function atReview(): Promise<Task> {
-    const task = await withWorkspace((await created({ title: 'Export', agent: 'claude-code' })).id)
+    const task = await implementing()
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
     return tasks.getTask(task.id)
@@ -591,7 +607,7 @@ describe('a check on CI', () => {
   })
 
   async function reported(ci: boolean): Promise<Task> {
-    const task = await withWorkspace((await created({ title: 'Export', agent: 'claude-code' })).id)
+    const task = await implementing()
     if (ci) {
       tasks.setCi(task.id, 'implement', true)
     }
@@ -641,6 +657,20 @@ describe('a check on CI', () => {
 
     expect(lastOf(task.id, 'stage.check-failed')?.payload).toMatchObject({ final: true })
     expect(tasks.getTask(task.id).state).toBe('needs-input')
+  })
+
+  it('goes on with a CI check after a restart, and runs one at a time', async () => {
+    const task = await reported(true)
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(ciCalls).toHaveLength(1)
+
+    runner.stop()
+    runner = makeRunner(agents)
+    runner.start()
+    expect(ciCalls).toHaveLength(2)
+    finishCi({ passed: true, reasons: [], passes: ['CI passed: CI u'], final: false })
+    await runner.settle()
+    expect(tasks.getTask(task.id).state).toBe('review')
   })
 
   it('does not wait for CI when the task did not ask for it', async () => {
