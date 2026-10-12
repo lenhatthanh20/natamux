@@ -35,6 +35,9 @@ type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
   focusToken?: number
+  // False keeps the keyboard where it is when the terminal opens. Of several shells side by side,
+  // only one may take it, or the focus jumps from shell to shell as they open.
+  focusOnOpen?: boolean
 }
 
 // A terminal that is hidden, not open yet or already disposed has no size, and xterm throws
@@ -68,10 +71,16 @@ const STATUS_TEXT: Record<Status, string> = {
 }
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
-export default function TerminalView({ connect, focusToken }: TerminalViewProps) {
+export default function TerminalView({
+  connect,
+  focusToken,
+  focusOnOpen = true,
+}: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
+  const focusOnOpenRef = useRef(focusOnOpen)
+  focusOnOpenRef.current = focusOnOpen
   const [status, setStatus] = useState<Status>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -221,7 +230,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
       }, FIT_DELAY_MS)
     })
     observer.observe(element)
-    if (takesFocusOnOpen(document.activeElement, document.body)) {
+    if (focusOnOpenRef.current && takesFocusOnOpen(document.activeElement, document.body)) {
       terminal.focus()
     }
 

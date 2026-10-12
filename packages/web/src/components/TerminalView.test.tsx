@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RELEASE_DELAY_MS } from '../lib/gpu-renderer'
 import TerminalView from './TerminalView'
 
-type FakeTerminal = { written: string[]; disposed: boolean }
+type FakeTerminal = { written: string[]; disposed: boolean; focuses: number }
 type FakeWebgl = { disposed: boolean }
 
 const fakes = vi.hoisted(() => ({
@@ -24,6 +24,7 @@ vi.mock('@xterm/xterm', () => {
       textarea = undefined
       written: string[] = []
       disposed = false
+      focuses = 0
       constructor() {
         fakes.terminals.push(this)
       }
@@ -33,7 +34,9 @@ vi.mock('@xterm/xterm', () => {
         this.element = document.createElement('div')
         parent.append(this.element)
       }
-      focus = () => undefined
+      focus() {
+        this.focuses += 1
+      }
       write(data: string) {
         this.written.push(data)
       }
@@ -96,9 +99,14 @@ const flush = () =>
 
 const setVisible = (visible: boolean) => act(() => reportVisible([{ isIntersecting: visible }]))
 
-async function openTerminal() {
+async function openTerminal(focusOnOpen?: boolean) {
   const socket = fakeSocket()
-  const view = render(<TerminalView connect={async () => socket as unknown as WebSocket} />)
+  const view = render(
+    <TerminalView
+      connect={async () => socket as unknown as WebSocket}
+      focusOnOpen={focusOnOpen}
+    />,
+  )
   await flush()
   act(() => socket.onopen?.())
   const terminal = fakes.terminals.at(-1)
@@ -173,5 +181,29 @@ describe('TerminalView resources', () => {
     setVisible(true)
 
     expect(terminal.written).toEqual(['one ', 'two ', 'three'])
+  })
+})
+
+describe('TerminalView focus on open', () => {
+  // The user picked a task in the list: a control has the focus, so a terminal may take it.
+  const focusRow = () => {
+    const row = document.createElement('button')
+    document.body.append(row)
+    row.focus()
+    return row
+  }
+
+  it('takes the keyboard when it opens', async () => {
+    const row = focusRow()
+    const { terminal } = await openTerminal()
+    expect(terminal.focuses).toBe(1)
+    row.remove()
+  })
+
+  it('leaves the keyboard alone when asked not to take it on open', async () => {
+    const row = focusRow()
+    const { terminal } = await openTerminal(false)
+    expect(terminal.focuses).toBe(0)
+    row.remove()
   })
 })

@@ -27,6 +27,7 @@ type TerminalPaneProps = {
   hint?: string
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
+  focusOnOpen?: boolean
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -51,6 +52,7 @@ export function TerminalPane({
   hint,
   connect,
   focusToken,
+  focusOnOpen,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -129,7 +131,7 @@ export function TerminalPane({
         )}
       </header>
       <LazyView label="terminal" fallback={<Skeleton className="m-3" width="30%" />}>
-        <TerminalView connect={connect} focusToken={focusToken} />
+        <TerminalView connect={connect} focusToken={focusToken} focusOnOpen={focusOnOpen} />
       </LazyView>
     </section>
   )

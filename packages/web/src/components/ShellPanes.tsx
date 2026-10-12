@@ -176,6 +176,11 @@ export function ShellPanes({
     !open.isPending &&
     !open.isFetching &&
     (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
+  // While a shell is asked for, no shell takes the keyboard on open: the asked one takes it once
+  // it is known, with no stop in Shell 1 first.
+  const asked =
+    (focusToken !== undefined && focusToken !== 0 && focusToken !== answered.current) ||
+    request?.taskId === taskId
   useEffect(() => {
     if (shellsRead && focusToken && focusToken !== answered.current) {
       answered.current = focusToken
@@ -256,6 +261,7 @@ export function ShellPanes({
               needsInput={own === 'needs-input'}
               connect={(size) => connect(size, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
+              focusOnOpen={!asked && name === visible[0]}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}
               onClose={name === '1' ? undefined : () => void closeShell(name)}
