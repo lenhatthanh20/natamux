@@ -437,22 +437,6 @@ describe('settings of a hidden terminal (AC 6)', () => {
 })
 
 describe('visibility', () => {
-  it('is visible only on screen and while the page is visible', async () => {
-    const { session } = await shown()
-    expect(session.isVisible()).toBe(true)
-
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-    expect(session.isVisible()).toBe(false)
-    Reflect.deleteProperty(document, 'visibilityState')
-    expect(session.isVisible()).toBe(true)
-
-    session.setOnScreen(false)
-    expect(session.isVisible()).toBe(false)
-    session.setOnScreen(true)
-    session.hide(box())
-    expect(session.isVisible()).toBe(false)
-  })
-
   it('keeps its WebGL renderer while hidden, with no timer (AC 33)', async () => {
     const { session } = await shown()
     expect(fakes.webgl).toHaveLength(1)

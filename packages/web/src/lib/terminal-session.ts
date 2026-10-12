@@ -42,8 +42,6 @@ export type TerminalSession = CachedTerminal & {
   subscribe(listener: () => void): () => void
   show(container: HTMLElement): void
   setOnScreen(onScreen: boolean): void
-  // On screen, and the page is visible.
-  isVisible(): boolean
   applySettings(): void
 }
 
@@ -432,7 +430,6 @@ export function createTerminalSession(options: {
     show,
     hide,
     setOnScreen,
-    isVisible: () => onScreen && document.visibilityState !== 'hidden',
     applySettings,
     dispose,
   }
