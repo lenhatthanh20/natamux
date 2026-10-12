@@ -169,10 +169,7 @@ describe('AgentPanes header around the badge', () => {
 
   // One amber mark per pane: the state text. No bar and no tint, so it stays calm.
   it('marks a waiting pane with its state text only, and a running pane not at all', () => {
-    grid([
-      makeTask('T-0001', { state: 'needs-input' }),
-      makeTask('T-0002', { state: 'running' }),
-    ])
+    grid([makeTask('T-0001', { state: 'needs-input' }), makeTask('T-0002', { state: 'running' })])
     const line = (id: string) => header(id).querySelector('[data-tip-overflow]') as HTMLElement
     expect(line('T-0001').className).toMatch(/text-signal/)
     expect(line('T-0002').className).not.toMatch(/text-signal/)
