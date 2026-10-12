@@ -95,9 +95,14 @@ test('puts a picked font first, then goes back to the built-in one (C3, C4)', as
   await page.evaluate(() =>
     localStorage.setItem('natamux.terminal-font', JSON.stringify({ family: 'DejaVu Sans Mono' })),
   )
+  // The reload opens the same task again.
   await page.reload()
-  await openDemoTerminal(page)
+  await page
+    .getByRole('tablist', { name: 'View', exact: true })
+    .getByRole('tab', { name: 'Terminal' })
+    .click()
   const shell = pane(page, 'Shell 1')
+  await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
   expect(await rowsFont(shell)).toMatch(/^"DejaVu Sans Mono", "JetBrains Mono Variable"/)
 
   // No reload: the terminal takes the built-in font at once.
@@ -253,7 +258,7 @@ test('moves the dim with the focus, with no extra resize and no motion (C20)', a
   expect(transition).toBe('0s')
 })
 
-test('follows the app theme with the Night palette (C13)', async ({ page }) => {
+test('follows the app theme with the Night palette, as --terminal (C13)', async ({ page }) => {
   const shell = pane(page, 'Shell 1')
   for (const theme of ['Dark', 'Light'] as const) {
     await setTheme(page, theme)

@@ -1,6 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
 import { describe, expect, it } from 'vitest'
-import styles from '../styles.css?raw'
 import { findDecorations, TERMINAL_LOOK, terminalTheme } from './terminal-theme'
 
 const NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'] as const
@@ -62,11 +61,6 @@ describe('terminalTheme', () => {
         expect(contrast(color, background), `${name} ${key}`).toBeGreaterThanOrEqual(4.5)
       }
     }
-  })
-
-  it('has the same background as the --terminal token of the page', () => {
-    const tokens = [...styles.matchAll(/--terminal: (#[0-9a-f]{6});/g)].map((match) => match[1])
-    expect(tokens).toEqual([terminalTheme('light').background, terminalTheme('dark').background])
   })
 
   it('gives the scrollbar the same faint colors as the rest of the app', () => {
