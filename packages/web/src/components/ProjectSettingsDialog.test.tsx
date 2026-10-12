@@ -265,10 +265,15 @@ describe('ProjectSettingsDialog', () => {
   })
 
   it('always waits for a person on review and manual stages', async () => {
-    const { user } = open()
+    const { user } = open(
+      withStages([
+        { id: 'review', kind: 'review', gate: 'manual' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ]),
+    )
 
-    await user.click(await row('Review'))
-    const review = details('Review')
+    await user.click(await row('Manual review'))
+    const review = details('Manual review')
     const box = within(review).getByRole('checkbox', { name: 'Wait for my approval' })
     expect(box).toHaveProperty('checked', true)
     expect(box).toHaveProperty('disabled', true)
@@ -883,7 +888,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
 
     await openMenu(user, 'Implement')
     expect(screen.getByRole('menuitem', { name: 'Run on its own' })).toBeTruthy()
-    for (const name of ['Context', 'Review', 'Release']) {
+    for (const name of ['Context', 'Automated tests', 'Release']) {
       await user.keyboard('{Escape}')
       await openMenu(user, name)
       expect(screen.queryByRole('menuitem', { name: /^Run alongside/ })).toBeNull()
@@ -908,7 +913,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
     await openMenu(user, 'Refactor')
     const below = screen.getByRole('menuitem', { name: 'Run alongside the stage above' })
     expect(below.hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText('Review cannot run side by side with other stages')).toBeTruthy()
+    expect(screen.getByText('Manual review cannot run side by side with other stages')).toBeTruthy()
   })
 
   it('C6: saves a new group with its id', async () => {
@@ -992,7 +997,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
       ]),
     )
 
-    for (const name of ['Manual testing', 'Design review', 'Staging check', 'Review']) {
+    for (const name of ['Manual testing', 'Design review', 'Staging check', 'Manual review']) {
       await user.click(await row(name))
       const stage = details(name)
       const box = within(stage).getByRole('checkbox', { name: 'Wait for my approval' })
@@ -1069,7 +1074,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
 
     await user.click(await row('Automated tests'))
     expect(within(details('Automated tests')).getByRole('textbox', { name: 'Prompt' })).toBeTruthy()
-    for (const name of ['Context', 'Review', 'Release']) {
+    for (const name of ['Context', 'Release']) {
       await user.click(await row(name))
       expect(within(details(name)).queryByRole('textbox', { name: 'Prompt' }), name).toBeNull()
     }
@@ -1380,17 +1385,24 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     expect(stageIn(steps, 'implement')).not.toHaveProperty('agent')
   })
 
-  it("goes back to the task's agent", async () => {
-    const { save, user } = open()
+  it("goes back to the task's agent, which leaves nothing to save", async () => {
+    const { user } = open()
 
     await user.click(await row('Test spec'))
-    const select = agentSelect('Test spec') as HTMLElement
+    const select = agentSelect('Test spec') as HTMLSelectElement
     await user.selectOptions(select, 'codex')
+    expect(saveButton().getAttribute('aria-disabled')).toBeNull()
     await user.selectOptions(select, '')
-    await user.click(saveButton())
 
-    await waitFor(() => expect(save).toHaveBeenCalled())
-    expect(stageIn(savedStages(save), 'test-spec')).not.toHaveProperty('agent')
+    expect(select.value).toBe('')
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('offers an agent on the Review stage, which runs in its own shell', async () => {
+    const { user } = open()
+
+    await user.click(await row('Review'))
+    expect(agentSelect('Review')).not.toBeNull()
   })
 })
 
@@ -1431,10 +1443,9 @@ describe('ProjectSettingsDialog, workflow', () => {
     expect(workflowBox('Implement')).toHaveProperty('checked', true)
     await user.click(await row('Spec'))
     expect(workflowBox('Spec')).toHaveProperty('checked', false)
-    await user.click(await row('Review'))
-    expect(
-      within(details('Review')).queryByRole('checkbox', { name: 'Tasks can run it as a workflow' }),
-    ).toBeNull()
+    await user.click(await row('Release'))
+    const release = within(details('Release'))
+    expect(release.queryByRole('checkbox', { name: 'Tasks can run it as a workflow' })).toBeNull()
   })
 
   it('saves a stage that offers it and one that no longer does', async () => {

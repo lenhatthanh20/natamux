@@ -130,9 +130,9 @@ describe('moveStage', () => {
 
 describe('dropStage', () => {
   it('puts a stage before or after another', () => {
-    expect(ids(dropStage(DEFAULT_PIPELINE, 'review', 'spec', 'before')).slice(0, 3)).toEqual([
+    expect(ids(dropStage(DEFAULT_PIPELINE, 'testing', 'spec', 'before')).slice(0, 3)).toEqual([
       'context',
-      'review',
+      'testing',
       'spec',
     ])
     expect(ids(dropStage(DEFAULT_PIPELINE, 'context', 'plan', 'after')).slice(0, 3)).toEqual([
@@ -154,9 +154,9 @@ describe('dropStage', () => {
       id: 'build',
       parallel: ['test-spec', 'implement', 'plan'],
     })
-    expect(ids(dropStage(DEFAULT_PIPELINE, 'review', 'test-spec', 'before')).slice(2, 5)).toEqual([
+    expect(ids(dropStage(DEFAULT_PIPELINE, 'testing', 'test-spec', 'before')).slice(2, 5)).toEqual([
       'plan',
-      'review',
+      'testing',
       { id: 'build', parallel: ['test-spec', 'implement'] },
     ])
   })
@@ -229,6 +229,7 @@ describe('adding and removing', () => {
       gate: 'manual',
       output: 'security.md',
       sections: ['Findings'],
+      ownShell: true,
     })
     const noRelease = removeStage(DEFAULT_PIPELINE, 'release')
     expect(ids(addCatalogStage(noRelease, 'qa')).at(-1)).toBe('qa')

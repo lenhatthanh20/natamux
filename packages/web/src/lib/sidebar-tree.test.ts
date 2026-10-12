@@ -326,7 +326,7 @@ describe('cometOf', () => {
       }),
     )
     expect(comet.summary).toBe(
-      'Context done, Spec done, Plan done, Test spec done, Implement needs your input, Automated tests not started, Review not started',
+      'Context done, Spec done, Plan done, Test spec done, Implement needs your input, Automated tests not started, Manual review not started',
     )
   })
 })
