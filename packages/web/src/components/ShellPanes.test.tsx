@@ -474,6 +474,16 @@ describe('ShellPanes first agent', () => {
     expect(tokenOf('Shell 3')).toBe('')
   })
 
+  // The sidebar can ask for a shell that closed since it listed it.
+  it('focuses the first agent when the asked shell is gone', async () => {
+    useViewStore.setState({ shellRequest: { taskId: 'T-0001', name: '9', at: 1 } })
+    shells('claude-code', ['1', '2'], ['2'])
+    await agentShown('Shell 2')
+    await answered()
+    expect(tokenOf('Shell 2')).not.toBe('')
+    expect(tokenOf('Shell 1')).toBe('')
+  })
+
   it('leaves a request for another task alone', async () => {
     useViewStore.setState({ shellRequest: { taskId: 'T-0002', name: null, at: 1 } })
     shells('claude-code', ['1'], ['1'])

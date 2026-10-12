@@ -16,6 +16,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   queryClient.clear()
+  vi.restoreAllMocks()
   window.localStorage.clear()
   vi.useRealTimers()
 })
@@ -694,5 +695,263 @@ describe('a task row', () => {
     const row = rowOf('Parent')
     expect(row.getAttribute('aria-current')).toBe('true')
     expect(row.className).toContain('sb-row')
+  })
+})
+
+describe('test spec cases', () => {
+  // D2: only subtasks with a workspace; the open one is the current row, not its parent.
+  it('shows subtasks with a workspace only, and marks the open child alone', () => {
+    const noWorkspace = makeTask({
+      id: 'T-0003',
+      title: 'Draft child',
+      parentId: 'T-0001',
+      workspace: null,
+    })
+    list({ tasks: [parent, child, noWorkspace], pinnedIds: [], currentId: 'T-0002' })
+
+    expect(screen.queryByRole('button', { name: /^Draft child,/ })).toBeNull()
+    expect(rowOf('Child').getAttribute('aria-current')).toBe('true')
+    expect(rowOf('Parent').getAttribute('aria-current')).toBeNull()
+  })
+
+  // A3: a child that does not match stays hidden.
+  it('shows only the children that match the filter', () => {
+    const other = makeTask({ id: 'T-0003', title: 'Other part', parentId: 'T-0001' })
+    list({ tasks: [child], allTasks: [parent, child, other], filter: 'Child', pinnedIds: [] })
+
+    expect(rowOf('Child')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Other part,/ })).toBeNull()
+  })
+
+  // A7 and D8: the user's fold wins; the dot follows the children.
+  it('stays folded by the user when a child starts to wait, and shows it on the dot', async () => {
+    const user = userEvent.setup()
+    const { rerender } = list({ tasks: [parent, child], pinnedIds: [] })
+    await user.click(disclosure('T-0001'))
+
+    rerender({ tasks: [parent, { ...child, state: 'needs-input' }], pinnedIds: [] })
+
+    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
+    const dot = disclosure('T-0001').querySelector('[data-state]')
+    expect(dot?.getAttribute('data-state')).toBe('needs-input')
+  })
+
+  // B3: every kind of fold is kept.
+  it('keeps the folds of a group, a finished list and a row', async () => {
+    const user = userEvent.setup()
+    const done = makeTask({ id: 'T-0009', title: 'Old', state: 'done', repo: 'web' })
+    list({ tasks: [parent, child, done], pinnedIds: [] })
+
+    await user.click(screen.getByRole('button', { name: /^natamux/ }))
+    await user.click(screen.getByRole('button', { name: '1 finished' }))
+    expect(JSON.parse(window.localStorage.getItem('natamux.sidebar-folds') ?? '{}')).toEqual({
+      'repo:default': false,
+      'finished:web': true,
+    })
+  })
+
+  it('starts with the defaults when the browser storage fails', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    list({ tasks: [parent, child], pinnedIds: [] })
+
+    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  // D3: a lane that changes keeps its place.
+  it('updates the rows of parallel stages in place', () => {
+    const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running', beta: 'running' } })
+    const { rerender } = list({ tasks: [checks], pinnedIds: [] })
+    const names = () =>
+      [...document.querySelectorAll('[data-roving^="agent:"]')].map((row) =>
+        row.getAttribute('aria-label'),
+      )
+    expect(names()).toEqual(['Alpha, Running', 'Beta, Running'])
+
+    rerender({ tasks: [{ ...checks, lanes: { alpha: 'needs-input', beta: 'running' } }] })
+
+    expect(names()).toEqual(['Alpha, Needs your input', 'Beta, Running'])
+  })
+
+  // D4: unmount, a hidden tab and an error.
+  it('stops reading the terminals when the list goes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
+    const loadTerminals = vi.fn(async () => ({ '1': { stage: 'alpha', state: null } }))
+    const { unmount } = list({ tasks: [checks], pinnedIds: [], loadTerminals })
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
+
+    unmount()
+    await act(() => vi.advanceTimersByTimeAsync(15000))
+    expect(loadTerminals).toHaveBeenCalledTimes(1)
+  })
+
+  it('pauses while the tab is hidden', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
+    const loadTerminals = vi.fn(async () => ({ '1': { stage: 'alpha', state: null } }))
+    list({ tasks: [checks], pinnedIds: [], loadTerminals })
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
+    let state: DocumentVisibilityState = 'hidden'
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    await act(() => vi.advanceTimersByTimeAsync(15000))
+    expect(loadTerminals).toHaveBeenCalledTimes(1)
+
+    state = 'visible'
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    await waitFor(() => expect(loadTerminals.mock.calls.length).toBeGreaterThan(1))
+    // Back to the visibility of the document itself.
+    Reflect.deleteProperty(document, 'visibilityState')
+  })
+
+  it('keeps the stage rows when the terminals cannot be read', async () => {
+    const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
+    const loadTerminals = vi.fn(async () => {
+      throw new Error('daemon gone')
+    })
+    list({ tasks: [checks], pinnedIds: [], loadTerminals })
+
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Alpha, Running' })).toBeTruthy()
+  })
+
+  // D5 and D6: what each shell does, and Enter opens it.
+  it('shows what the agent of each shell does, and opens a shell with Enter', async () => {
+    const user = userEvent.setup()
+    const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running', beta: 'running' } })
+    const handlers = callbacks()
+    render(
+      withHost(
+        <WorkspaceList
+          {...props({ tasks: [checks], pinnedIds: [] }, handlers)}
+          loadTerminals={async () => ({
+            '1': { stage: 'alpha', state: null },
+            '2': { stage: 'beta', state: null },
+          })}
+          terminalActivity={{ 'T-0001': { '1': 'Edit src/app.ts' } }}
+        />,
+      ),
+    )
+
+    const first = await screen.findByRole('button', { name: 'Shell 1, Alpha, Running' })
+    expect(within(first).getByText('Edit src/app.ts')).toBeTruthy()
+    const second = screen.getByRole('button', { name: 'Shell 2, Beta, Running' })
+    expect(second.textContent).not.toContain('Edit')
+    act(() => second.focus())
+    await user.keyboard('{Enter}')
+    expect(handlers.onOpenShell).toHaveBeenCalledWith('T-0001', '2')
+  })
+
+  // D7: the control only where something is under the row.
+  it('has no fold line on a row with nothing under it', () => {
+    list({ tasks: [makeTask({ title: 'Alone', lanes: {} })], pinnedIds: [] })
+
+    expect(screen.queryByRole('button', { name: /^Work under/ })).toBeNull()
+  })
+
+  // E1 and E2: the bar, no inset ring, and no amber in the tree.
+  it('marks the open row with the bar only, and keeps amber out of the tree', () => {
+    const waiting = makeTask({ id: 'T-0003', title: 'Waiting', state: 'needs-input' })
+    list({ tasks: [parent, waiting], pinnedIds: [], currentId: 'T-0001' })
+
+    expect(rowOf('Parent').className).not.toContain('shadow-[inset')
+    const item = rowOf('Waiting').closest('li') as HTMLElement
+    expect(item.querySelector('.bg-signal, .bg-signal-soft, .text-signal')).toBeNull()
+  })
+
+  // G1 and G2: only what comes after the first paint moves.
+  it('slides in rows and unfolded lists that come after the first paint only', async () => {
+    const user = userEvent.setup()
+    const quiet = { ...child, state: 'review' as const }
+    const { rerender } = list({ tasks: [parent, quiet], pinnedIds: [] })
+    expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
+
+    await user.click(disclosure('T-0001'))
+    expect(rowOf('Child').closest('ul')?.className).toContain('sb-unfold')
+
+    const added = makeTask({ id: 'T-0005', title: 'Added', createdAt: '2026-10-10T08:30:00.000Z' })
+    rerender({ tasks: [parent, quiet, added], pinnedIds: [] })
+    expect(rowOf('Added').closest('li')?.className).toContain('hm-pop')
+    expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
+  })
+
+  // G3: a flash each time a row starts to wait, never on the first paint.
+  it('flashes a row each time it starts to wait', () => {
+    const asking = makeTask({ title: 'Asking', state: 'needs-input' })
+    const { rerender } = list({ tasks: [asking], pinnedIds: [] })
+    const flash = () => document.querySelector('.sb-flash')
+    expect(flash()).toBeNull()
+
+    rerender({ tasks: [{ ...asking, state: 'running' }], pinnedIds: [] })
+    expect(flash()).toBeNull()
+    rerender({ tasks: [{ ...asking, state: 'needs-input' }], pinnedIds: [] })
+    const once = flash()
+    expect(once).toBeTruthy()
+    rerender({ tasks: [{ ...asking, state: 'running' }], pinnedIds: [] })
+    rerender({ tasks: [{ ...asking, state: 'needs-input' }], pinnedIds: [] })
+    expect(flash()).not.toBe(once)
+  })
+
+  // H3: leaves, type-ahead and F2 on a child.
+  it('does nothing on Right on a leaf row, and reaches a child by typing', async () => {
+    const user = userEvent.setup()
+    list({ tasks: [parent, child], pinnedIds: [] })
+    act(() => rowOf('Child').focus())
+
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(rowOf('Child'))
+    act(() => rowOf('Parent').focus())
+    await user.keyboard('c')
+    expect(document.activeElement).toBe(rowOf('Child'))
+  })
+
+  it('renames the child, not its parent, with F2 on a child row', async () => {
+    const user = userEvent.setup()
+    const { onRename } = list({ tasks: [parent, child], pinnedIds: [] })
+    act(() => rowOf('Child').focus())
+
+    await user.keyboard('{F2}')
+    await user.keyboard('{Control>}a{/Control}New child{Enter}')
+    expect(onRename).toHaveBeenCalledWith('T-0002', 'New child')
+  })
+
+  // C2: what line 2 leaves out.
+  it('shows no pull request, subtasks or diff when there are none, and names any agent', () => {
+    list({
+      tasks: [
+        makeTask({ id: 'T-0001', title: 'Codex task', agent: 'codex' }),
+        makeTask({ id: 'T-0002', title: 'Odd agent', agent: 'my-agent' }),
+      ],
+      pinnedIds: [],
+    })
+
+    const row = rowOf('Codex task')
+    expect(row.querySelector('[data-tip="Codex"]')).toBeTruthy()
+    expect(row.querySelector('.lucide-git-pull-request, .lucide-list-tree')).toBeNull()
+    expect(rowOf('Odd agent').querySelector('[data-tip="my-agent"]')).toBeTruthy()
+  })
+
+  // C5: opening the row clears the mark.
+  it('drops the unseen mark once the user saw the state', () => {
+    const task = makeTask({ id: 'T-0001', title: 'Parent', state: 'review' })
+    const { rerender } = list({
+      tasks: [task],
+      pinnedIds: [],
+      seenState: { 'T-0001': 'running' },
+    })
+    expect(rowOf('Parent').getAttribute('aria-label')).toMatch(/, unseen$/)
+
+    rerender({ tasks: [task], pinnedIds: [], seenState: { 'T-0001': 'review' } })
+
+    expect(rowOf('Parent').getAttribute('aria-label')).not.toMatch(/unseen/)
+    expect(rowOf('Parent').querySelector('[data-unseen]')).toBeNull()
   })
 })

@@ -132,6 +132,53 @@ describe('subtasks', () => {
     expect(workspaceGroups(repos, [first], []).groups[0]?.open).toEqual([first])
   })
 
+  it('keeps an open subtask of a finished parent at the top, so it never hides', () => {
+    const done = { ...parent, state: 'done' as const }
+    const result = workspaceGroups(repos, [done, first], [])
+
+    expect(result.groups[0]?.open).toEqual([first])
+    expect(result.groups[0]?.finished).toEqual([done])
+    expect(result.children).toEqual({})
+  })
+
+  it('nests one level only, and never under itself', () => {
+    const grandchild = makeTask({ id: 'T-0004', parentId: 'T-0002' })
+    const self = makeTask({ id: 'T-0005', parentId: 'T-0005' })
+    const result = workspaceGroups(repos, [parent, first, grandchild, self], [])
+
+    expect(result.children).toEqual({ 'T-0001': [first] })
+    expect(result.groups[0]?.open.map((task) => task.id).sort()).toEqual([
+      'T-0001',
+      'T-0004',
+      'T-0005',
+    ])
+  })
+
+  it('orders children by creation, then by id, and keeps the order on live updates', () => {
+    const twin = makeTask({ id: 'T-0006', parentId: 'T-0001', createdAt: first.createdAt })
+    const ids = (tasks: Task[]) =>
+      workspaceGroups(repos, tasks, []).children['T-0001']?.map((task) => task.id)
+
+    expect(ids([parent, later, twin, first])).toEqual(['T-0002', 'T-0006', 'T-0003'])
+    const updated = {
+      ...first,
+      state: 'needs-input' as const,
+      updatedAt: '2026-10-09T09:00:00.000Z',
+    }
+    expect(ids([parent, later, twin, updated])).toEqual(['T-0002', 'T-0006', 'T-0003'])
+  })
+
+  it('keeps the order of top-level rows when one of them changes', () => {
+    const a = makeTask({ id: 'T-0007', createdAt: '2026-10-08T12:00:00.000Z' })
+    const b = makeTask({ id: 'T-0008', createdAt: '2026-10-08T13:00:00.000Z' })
+    const order = (tasks: Task[]) =>
+      workspaceGroups(repos, tasks, []).groups[0]?.open.map((task) => task.id)
+
+    expect(order([a, b, parent])).toEqual(['T-0008', 'T-0007', 'T-0001'])
+    const touched = { ...a, title: 'Renamed', updatedAt: '2026-10-09T09:00:00.000Z' }
+    expect(order([touched, b, parent])).toEqual(['T-0008', 'T-0007', 'T-0001'])
+  })
+
   it('keeps finished and pinned subtasks where they were', () => {
     const done = { ...first, state: 'done' as const }
     const result = workspaceGroups(repos, [parent, done, later], ['T-0003'])

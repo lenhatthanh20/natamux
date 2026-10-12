@@ -54,13 +54,17 @@ export function workspaceGroups(
   const pinned = pinnedIds
     .map((id) => withWorkspace.find((task) => task.id === id))
     .filter((task): task is Task => task !== undefined)
-  // A finished or pinned subtask stays where the user expects it. One level only.
+  // A finished or pinned subtask stays where the user expects it. An open one stays out of a
+  // finished parent, which is folded away in "N finished". One level only.
   const parentOf = (task: Task) =>
     task.parentId === null || isFinished(task) || pinnedIds.includes(task.id)
       ? undefined
       : withWorkspace.find(
           (other) =>
-            other.id === task.parentId && other.parentId === null && repoOf(other) === repoOf(task),
+            other.id === task.parentId &&
+            other.parentId === null &&
+            !isFinished(other) &&
+            repoOf(other) === repoOf(task),
         )
   const children: Record<string, Task[]> = {}
   for (const task of [...withWorkspace].sort(newestFirst).reverse()) {

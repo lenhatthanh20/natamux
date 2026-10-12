@@ -401,4 +401,30 @@ describe('the announcement', () => {
     expect(status.textContent).toBe('Add CSV export needs you')
     expect(status.getAttribute('aria-live')).toBe('polite')
   })
+
+  it('names every task that starts to wait at once', () => {
+    const first = makeTask()
+    const view = render(strip([first]))
+
+    view.rerender(
+      strip([
+        first,
+        makeTask({ id: 'T-0002', title: 'Add CSV export' }),
+        makeTask({ id: 'T-0003', title: 'Fix login' }),
+      ]),
+    )
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Add CSV export needs you. Fix login needs you',
+    )
+  })
+
+  it('says nothing new when a task stops waiting', () => {
+    const first = makeTask()
+    const view = render(strip([first, makeTask({ id: 'T-0002', title: 'Add CSV export' })]))
+
+    view.rerender(strip([first]))
+
+    expect(screen.getByRole('status').textContent).toBe('')
+  })
 })

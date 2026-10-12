@@ -2,6 +2,8 @@ import { type APIRequestContext, expect, type Page, test } from '@playwright/tes
 import { signIn, TOKEN, taskNamed } from './helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
+
+type Step = string | { id: string; parallel: string[] }
 const made: string[] = []
 
 test.beforeEach(async ({ page }) => {
@@ -100,4 +102,48 @@ test('shows a subtask and the agents under their task', async ({ page, request }
   await expect(childRow).toHaveCount(0)
   await page.reload()
   await expect(fold).toHaveAttribute('aria-expanded', 'false')
+})
+
+// M1 and G6 of the test spec.
+test('lists the stages of a parallel group, with reduced motion', async ({ page, request }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const title = `[no-done] Tree group ${Date.now()}`
+  const id = await runningTask(request, title)
+  const stages: Step[] = (await taskOf(request, id)).stages
+  const group = stages.find((step) => typeof step !== 'string')
+  expect(group, 'the default pipeline has a parallel group').toBeDefined()
+  if (group === undefined || typeof group === 'string') {
+    return
+  }
+  await request.post(`/api/tasks/${id}/events`, {
+    headers,
+    data: {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'running', stage: group.id },
+    },
+  })
+  const lanes = async () => Object.keys((await taskOf(request, id)).lanes).length
+  await expect.poll(lanes, { timeout: 30_000 }).toBe(group.parallel.length)
+  await page.reload()
+
+  const row = tree(page).getByRole('button', { name: taskNamed(title) })
+  const agents = row.locator('xpath=ancestor::li[1]').locator('[data-roving^="agent:"]')
+  const fold = tree(page).getByRole('button', { name: `Work under ${id}` })
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await expect(fold).toContainText(`${group.parallel.length} parallel stages`)
+  // A stage shows as its own row, or as the shell that works on it.
+  await expect(agents).toHaveCount(group.parallel.length, { timeout: 10_000 })
+
+  await fold.click()
+  await expect(agents).toHaveCount(0)
+  await fold.click()
+  await expect(agents.first()).toBeVisible({ timeout: 500 })
+  const endless = await page.evaluate(() => {
+    const nav = document.querySelector('nav[aria-label="Workspaces"]')
+    const all = nav?.getAnimations({ subtree: true }) ?? []
+    const forever = all.filter((one) => one.effect?.getComputedTiming().iterations === Infinity)
+    return forever.length
+  })
+  expect(endless).toBe(0)
 })

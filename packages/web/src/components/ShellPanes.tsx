@@ -177,22 +177,18 @@ export function ShellPanes({
     if (request === null || request.taskId !== taskId) {
       return
     }
-    if (request.name === null) {
-      if (!shellsRead) {
-        return
-      }
-      useViewStore.getState().clearShellRequest()
-      if (!phone) {
-        const first = names.find((name) => agentState(name) !== undefined) ?? '1'
-        setShown(first)
-        setMaximized(null)
-        setFocusing({ name: first, at: request.at })
-      }
-    } else if (names.includes(request.name)) {
-      setShown(request.name)
+    const wanted = request.name !== null && names.includes(request.name) ? request.name : null
+    if (wanted === null && !shellsRead) {
+      return
+    }
+    useViewStore.getState().clearShellRequest()
+    // A shell that is gone (the sidebar listed it before it closed) counts as no shell asked.
+    const first = names.find((shell) => agentState(shell) !== undefined) ?? '1'
+    const name = wanted ?? (phone ? null : first)
+    if (name !== null) {
+      setShown(name)
       setMaximized(null)
-      setFocusing({ name: request.name, at: request.at })
-      useViewStore.getState().clearShellRequest()
+      setFocusing({ name, at: request.at })
     }
   })
 
