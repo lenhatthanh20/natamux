@@ -72,6 +72,28 @@ describe('launchCommand', () => {
     ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini --approval-mode yolo")
   })
 
+  it('goes on with a Claude Code session after the mode', () => {
+    expect(
+      launchCommand('claude-code', { ...auto, program: 'claude', prompt: '', session: 's-1' }),
+    ).toBe("claude --settings '/data/claude.json' --permission-mode auto --resume 's-1'")
+  })
+
+  it('quotes the session, so it cannot run as a command', () => {
+    const session = "s'; rm -rf ~; '"
+    expect(launchCommand('claude-code', { ...base, program: 'claude', prompt: '', session })).toBe(
+      `claude --settings '/data/claude.json' --resume ${quoteArgument(session, 'linux')}`,
+    )
+    expect(quoteArgument(session, 'linux')).toBe("'s'\\''; rm -rf ~; '\\'''")
+  })
+
+  it('starts other agents with the prompt, as only Claude Code goes on with a session', () => {
+    for (const agent of LAUNCHABLE_AGENTS.filter((id) => id !== 'claude-code')) {
+      const command = launchCommand(agent, { ...base, session: 's-1' })
+      expect(command).not.toContain('s-1')
+      expect(command).toContain("'Fix it'")
+    }
+  })
+
   it.each([
     ['claude-code', '--permission-mode auto'],
     ['codex', '--sandbox workspace-write --ask-for-approval never'],

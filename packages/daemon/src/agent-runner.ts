@@ -115,8 +115,8 @@ export class AgentRunner {
   }
 
   // Starts the agent in a terminal of the task: the first by default, another for a stage that
-  // runs beside the first one.
-  start(taskId: string, agent: string, prompt?: string, terminal?: string): Task {
+  // runs beside the first one. With a session, Claude Code goes on with it and gets no prompt.
+  start(taskId: string, agent: string, prompt?: string, terminal?: string, session?: string): Task {
     if (!isLaunchable(agent)) {
       throw new UnknownAgentError(agent)
     }
@@ -131,7 +131,9 @@ export class AgentRunner {
     const command = launchCommand(agent, {
       program: this.programs[agent],
       extraArgs: this.extraArgs[agent] ?? '',
-      prompt: (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim(),
+      prompt:
+        session === undefined ? (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim() : '',
+      session,
       platform: this.platform,
       claudeSettingsPath: this.claudeSettingsPath,
       geminiSettingsPath: this.geminiSettingsPath,

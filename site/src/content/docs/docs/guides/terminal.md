@@ -90,6 +90,8 @@ Click in the pane and type. Your keys go straight to the agent. This is how you 
 
 When an agent asks something, the task goes to Needs input and a banner shows what it asks. The pane gets a colored bar. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
 
+After you quit and open the app again, no agent runs, but the task still waits. Click **Resume** to start the agent again in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt.
+
 ### Send a message to the agent
 
 You can send text to the agent without typing in the terminal. In the **Changes** tab, write a comment under the diff and click **Send to agent**. Natamux pastes it into Shell 1 as the agent's next prompt and presses Enter. See [Changes and history](/docs/guides/changes-and-history/).

@@ -166,6 +166,8 @@ export type LaunchOptions = {
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
+  // A Claude Code session to go on with. Other agents start a new one.
+  session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
   geminiSettingsPath: string
@@ -187,6 +189,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
+        ...(options.session === undefined ? [] : ['--resume', quote(options.session)]),
         ...extra,
         ...prompt,
       ].join(' ')
