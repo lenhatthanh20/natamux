@@ -46,6 +46,14 @@ describe('terminal font', () => {
     expect(MONO_FONT.startsWith('"Geist Mono Variable", ')).toBe(true)
   })
 
+  it("puts the user's font before Ghostty's, with the icon font after both", () => {
+    localStorage.setItem(GHOSTTY_FONT_KEY, JSON.stringify({ family: 'Iosevka' }))
+    saveTerminalFont({ family: 'Fira Code' })
+    expect(terminalFont().stack).toBe(`"Fira Code", ${TERMINAL_FONT}`)
+    saveTerminalFont(null)
+    expect(terminalFont().stack).toBe(`"Iosevka", ${TERMINAL_FONT}`)
+  })
+
   it('keeps the icon font after a font the user picked, for the icons that font lacks', () => {
     expect(fontStack('Menlo')).toBe(`"Menlo", ${TERMINAL_FONT}`)
     expect(fontStack('Menlo')).toContain(ICON_FONT)

@@ -1,5 +1,23 @@
+import type { ITheme } from '@xterm/xterm'
 import { describe, expect, it } from 'vitest'
+import styles from '../styles.css?raw'
 import { findDecorations, TERMINAL_LOOK, terminalTheme } from './terminal-theme'
+
+const NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'] as const
+const COLORS = NAMES.flatMap((name) => [name, `bright${name[0]?.toUpperCase()}${name.slice(1)}`])
+
+// WCAG 2 contrast of two #RRGGBB colors.
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r = 0, g = 0, bl = 0] = [1, 3, 5].map((start) => {
+      const value = Number.parseInt(hex.slice(start, start + 2), 16) / 255
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+  }
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05)
+}
 
 describe('terminalTheme', () => {
   it('has a dark and a light palette with all 16 colors', () => {
@@ -10,6 +28,45 @@ describe('terminalTheme', () => {
       expect(theme.black).toMatch(/^#/)
     }
     expect(terminalTheme('dark').background).not.toBe(terminalTheme('light').background)
+  })
+
+  it('is the Night palette, with every key xterm reads', () => {
+    expect(terminalTheme('dark')).toMatchObject({ background: '#0f1219', foreground: '#d6dcf0' })
+    expect(terminalTheme('light')).toMatchObject({ background: '#f7f9fd', foreground: '#1b2238' })
+    for (const name of ['dark', 'light'] as const) {
+      const theme: ITheme = terminalTheme(name)
+      for (const key of [
+        'background',
+        'foreground',
+        'cursor',
+        'cursorAccent',
+        'selectionBackground',
+        'selectionInactiveBackground',
+        'scrollbarSliderBackground',
+        'scrollbarSliderHoverBackground',
+        'scrollbarSliderActiveBackground',
+        ...COLORS,
+      ] as const) {
+        expect(theme[key as keyof ITheme], `${name} ${key}`).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/)
+      }
+      expect(theme.cursorAccent).toBe(theme.background)
+    }
+  })
+
+  it('keeps every named color readable on the background, except black', () => {
+    for (const name of ['dark', 'light'] as const) {
+      const theme: ITheme = terminalTheme(name)
+      const background = theme.background ?? ''
+      for (const key of ['foreground', ...COLORS.filter((color) => color !== 'black')]) {
+        const color = String(theme[key as keyof ITheme])
+        expect(contrast(color, background), `${name} ${key}`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+
+  it('has the same background as the --terminal token of the page', () => {
+    const tokens = [...styles.matchAll(/--terminal: (#[0-9a-f]{6});/g)].map((match) => match[1])
+    expect(tokens).toEqual([terminalTheme('light').background, terminalTheme('dark').background])
   })
 
   it('gives the scrollbar the same faint colors as the rest of the app', () => {
