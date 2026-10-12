@@ -122,9 +122,23 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 - WebGL stays the renderer, with the DOM fallback.
 - No ligatures addon, `allowTransparency` off, `smoothScrollDuration` 0. A test keeps them out.
-- The dim layer is one static element per unfocused pane, drawn by the compositor. Focus changes cause no resize. The selector uses `:focus-within` on the grid, not `:has()`, which the browser may check again for each row xterm writes.
+- The dim layer is one static element per unfocused pane, drawn by the compositor. Focus changes cause no resize. The selector uses `:focus-within` on the grid, not `:has()`. A first version with `.hm-panes:has(.hm-pane:focus-within)` raised the echo p95 of `terminal-cache` E2E from 50 to 123–149 ms; with `:focus-within` it is back to 50 ms.
 - The icon font loads once, only when an icon shows. Clearing the atlas happens once per load.
-- `e2e/tests/terminal-measures.spec.ts` records the output and key measures in CI. Compare with the numbers of `main`.
+- CI E2E measures, `main` (3aeb310) and this change (16fbd52), one run each:
+
+| Measure | main | this change |
+|---|---|---|
+| echo p95, idle | 50.0 ms | 49.5 ms |
+| echo p95, while another shell floods | 50.2 ms | 50.2 ms |
+| echo p95, while hidden shells of another task flood | 50.2 ms | 50.1 ms |
+| show a cached terminal after Changes | 13.3 ms | 13.2 ms |
+| show a cached terminal after another task | 24.3 ms | 20.7 ms |
+| show a history, plain / SGR | 288 / 366 ms | 209 / 294 ms |
+| longest task in a flood | 73 ms | 95 ms |
+| heap per terminal | 2.5 MB | 2.6 MB |
+| heap per hidden terminal | 2.2 MB | 2.2 MB |
+
+  The longest task stays under its 100 ms limit; it moves between runs.
 
 ## Tests
 

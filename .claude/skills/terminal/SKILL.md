@@ -224,6 +224,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 
 - The icon font loads on the first icon drawn (`unicode-range`). WebGL has cached that glyph as an empty box by then, so the session clears the texture atlas on `document.fonts` `loadingdone`.
 - Keep ligatures, `allowTransparency` and `smoothScrollDuration` off. Each one costs drawing time.
+- No CSS `:has()` on an element that holds terminals. The DOM renderer rewrites rows all the time, and a `:has()` dim rule tripled the echo p95 in E2E (T-0005).
 
 - xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
 - `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.
