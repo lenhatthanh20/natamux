@@ -218,7 +218,9 @@ export async function timeToShow(
     }
     const screen = 'section[aria-label="Terminal screen"] .xterm-rows'
     const selector = `section[aria-label="${label}"] ${screen}`
-    const look = (now: number) => {
+    // The time of the check, not the frame's start time from requestAnimationFrame: a click handled
+    // in the same frame comes after that start, and the result would be below zero.
+    const look = () => {
       if (stopped) {
         return
       }
@@ -229,7 +231,7 @@ export async function timeToShow(
         element.getClientRects().length > 0 &&
         (element.textContent ?? '').includes(text)
       ) {
-        state.shown = now
+        state.shown = performance.now()
         state.stop()
         return
       }
