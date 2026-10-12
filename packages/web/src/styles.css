@@ -747,8 +747,9 @@
 }
 
 /* With several panes, the ones without the focus are dimmed, as in Ghostty. Only the screen is
-   dimmed, so the header and its needs-input bar stay clear. A click goes through to the pane. */
-.hm-panes:has(.hm-pane:focus-within) .hm-pane:not(:focus-within) .hm-terminal::after {
+   dimmed, so the header and its needs-input bar stay clear. A click goes through to the pane.
+   No :has() here: each row xterm writes inside it would make the browser check it again. */
+.hm-panes:focus-within .hm-pane:not(:focus-within) .hm-terminal::after {
   content: "";
   position: absolute;
   inset: 0;

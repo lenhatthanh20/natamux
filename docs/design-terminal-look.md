@@ -122,7 +122,7 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 - WebGL stays the renderer, with the DOM fallback.
 - No ligatures addon, `allowTransparency` off, `smoothScrollDuration` 0. A test keeps them out.
-- The dim layer is one static element per unfocused pane, drawn by the compositor. Focus changes cause no resize.
+- The dim layer is one static element per unfocused pane, drawn by the compositor. Focus changes cause no resize. The selector uses `:focus-within` on the grid, not `:has()`, which the browser may check again for each row xterm writes.
 - The icon font loads once, only when an icon shows. Clearing the atlas happens once per load.
 - `e2e/tests/terminal-measures.spec.ts` records the output and key measures in CI. Compare with the numbers of `main`.
 
