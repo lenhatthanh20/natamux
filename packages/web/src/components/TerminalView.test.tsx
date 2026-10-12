@@ -1,9 +1,10 @@
-import { act, cleanup, render } from '@testing-library/react'
+import type { TaskState } from '@natamux/core'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RELEASE_DELAY_MS } from '../lib/gpu-renderer'
 import TerminalView from './TerminalView'
 
-type FakeTerminal = { written: string[]; disposed: boolean }
+type FakeTerminal = { written: string[]; disposed: boolean; options: Record<string, unknown> }
 type FakeWebgl = { disposed: boolean }
 
 const fakes = vi.hoisted(() => ({
@@ -24,7 +25,8 @@ vi.mock('@xterm/xterm', () => {
       textarea = undefined
       written: string[] = []
       disposed = false
-      constructor() {
+      constructor(options: Record<string, unknown> = {}) {
+        this.options = { ...options }
         fakes.terminals.push(this)
       }
       loadAddon = () => undefined
@@ -96,16 +98,17 @@ const flush = () =>
 
 const setVisible = (visible: boolean) => act(() => reportVisible([{ isIntersecting: visible }]))
 
-async function openTerminal() {
+async function openTerminal(taskState?: TaskState) {
   const socket = fakeSocket()
-  const view = render(<TerminalView connect={async () => socket as unknown as WebSocket} />)
+  const connect = vi.fn(async () => socket as unknown as WebSocket)
+  const view = render(<TerminalView connect={connect} taskState={taskState} />)
   await flush()
   act(() => socket.onopen?.())
   const terminal = fakes.terminals.at(-1)
   if (terminal === undefined) {
     throw new Error('No terminal was made.')
   }
-  return { socket, terminal, view }
+  return { socket, terminal, view, connect }
 }
 
 beforeEach(() => {
@@ -173,5 +176,58 @@ describe('TerminalView resources', () => {
     setVisible(true)
 
     expect(terminal.written).toEqual(['one ', 'two ', 'three'])
+  })
+})
+
+describe('TerminalView after the shell ends', () => {
+  const exit = (socket: ReturnType<typeof fakeSocket>, code: number | null = 0) =>
+    act(() => socket.onmessage?.({ data: JSON.stringify({ type: 'exit', code }) }))
+
+  it('says the task is done', async () => {
+    const { socket } = await openTerminal('done')
+    exit(socket)
+    expect(screen.getByRole('status').textContent).toBe(
+      'Task done. The agent and its shells were closed.',
+    )
+    expect(screen.getByRole('button', { name: 'Open a new shell' })).toBeTruthy()
+  })
+
+  it('says the task is cancelled', async () => {
+    const { socket } = await openTerminal('cancelled')
+    exit(socket)
+    expect(screen.getByRole('status').textContent).toBe(
+      'Task cancelled. The agent and its shells were closed.',
+    )
+  })
+
+  it('shows the exit code of a shell that failed, and none for code 0', async () => {
+    const first = await openTerminal('running')
+    exit(first.socket, 1)
+    expect(screen.getByRole('status').textContent).toBe('The shell ended. Exit code 1.')
+    cleanup()
+
+    const second = await openTerminal()
+    exit(second.socket, 0)
+    expect(screen.getByRole('status').textContent).toBe('The shell ended.')
+  })
+
+  it('takes no more input and hides the cursor', async () => {
+    const { socket, terminal } = await openTerminal('done')
+    exit(socket)
+    expect(terminal.options.disableStdin).toBe(true)
+    expect(terminal.options.cursorBlink).toBe(false)
+    expect(terminal.written.at(-1)).toContain('\x1b[?25l')
+  })
+
+  it('opens a new shell that takes input again', async () => {
+    const { socket, connect } = await openTerminal('done')
+    exit(socket)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open a new shell' }))
+    await flush()
+
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(fakes.terminals.at(-1)?.options.disableStdin).not.toBe(true)
+    expect(screen.queryByRole('button', { name: 'Open a new shell' })).toBeNull()
   })
 })

@@ -256,6 +256,7 @@ export function ShellPanes({
               needsInput={own === 'needs-input'}
               connect={(size) => connect(size, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
+              taskState={task.state}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}
               onClose={name === '1' ? undefined : () => void closeShell(name)}

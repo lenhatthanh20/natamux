@@ -1,4 +1,4 @@
-import { scrollbackLines, type TerminalSize } from '@natamux/core'
+import { scrollbackLines, type TaskState, type TerminalSize } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, SquareTerminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { keyBelongsToShell } from '../lib/dispatch'
@@ -22,6 +22,7 @@ import {
 } from '../lib/terminal-theme'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
+import { StatusGlyph } from './StatusGlyph'
 import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
 
@@ -35,6 +36,8 @@ type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
   focusToken?: number
+  // The state of the shell's task. Done and cancelled tasks say so when the shell ends.
+  taskState?: TaskState
 }
 
 // A terminal that is hidden, not open yet or already disposed has no size, and xterm throws
@@ -67,13 +70,24 @@ const STATUS_TEXT: Record<Status, string> = {
   error: 'The terminal could not start.',
 }
 
+function endedText(taskState: TaskState | undefined, code: number | null): string {
+  if (taskState === 'done') {
+    return 'Task done. The agent and its shells were closed.'
+  }
+  if (taskState === 'cancelled') {
+    return 'Task cancelled. The agent and its shells were closed.'
+  }
+  return code === null || code === 0 ? STATUS_TEXT.ended : `${STATUS_TEXT.ended} Exit code ${code}.`
+}
+
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
-export default function TerminalView({ connect, focusToken }: TerminalViewProps) {
+export default function TerminalView({ connect, focusToken, taskState }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
   const [status, setStatus] = useState<Status>('connecting')
   const [error, setError] = useState<string | null>(null)
+  const [exitCode, setExitCode] = useState<number | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [search, setSearch] = useState<SearchAddon | null>(null)
   const [findOpen, setFindOpen] = useState(false)
@@ -153,6 +167,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
 
     setStatus('connecting')
     setError(null)
+    setExitCode(null)
     connectRef
       .current({ cols: terminal.cols, rows: terminal.rows })
       .then((opened) => {
@@ -174,6 +189,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
             terminal.write(message.data)
           } else if (message?.type === 'exit') {
             terminal.write('\r\n')
+            setExitCode(message.code)
             setStatus('ended')
           } else if (message?.type === 'error') {
             setError(message.message)
@@ -271,6 +287,17 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     }
   }, [theme])
 
+  // An ended shell keeps its last screen to read, but must not look like it still takes keys.
+  // A new shell is a new xterm, so nothing here needs undoing.
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (status === 'ended' && terminal) {
+      terminal.options.disableStdin = true
+      terminal.options.cursorBlink = false
+      terminal.write('\x1b[?25l')
+    }
+  }, [status])
+
   // The UI size and the terminal font change the cells, and then the number of columns.
   // biome-ignore lint/correctness/useExhaustiveDependencies: uiSize is a trigger; uiZoom() reads the page.
   useEffect(() => {
@@ -311,13 +338,13 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {status !== 'open' && (
+      {(status === 'connecting' || status === 'error') && (
         <div className="flex h-7 shrink-0 items-center gap-3 border-b border-line px-3">
           <p className="flex-1 truncate text-xs text-muted" role="status">
             {STATUS_TEXT[status]}
             {error !== null && ` ${error}`}
           </p>
-          {(status === 'ended' || status === 'error') && (
+          {status === 'error' && (
             <Button variant="link" onClick={() => setAttempt((value) => value + 1)}>
               Start a new shell
             </Button>
@@ -329,7 +356,9 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
             on a wrapper. With it on the parent, the last row fell under the bottom edge. */}
         <section
           aria-label="Terminal screen"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-2.5"
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-2.5 ${
+            status === 'ended' ? 'opacity-60' : ''
+          }`}
         >
           <div ref={container} className="min-h-0 flex-1 overflow-hidden" />
         </section>
@@ -345,6 +374,25 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
           </Button>
         )}
       </div>
+      {status === 'ended' && (
+        <div className="flex h-8 shrink-0 items-center gap-2 border-t border-line bg-surface px-3">
+          {taskState === 'done' || taskState === 'cancelled' ? (
+            <StatusGlyph state={taskState} />
+          ) : (
+            <SquareTerminal size={14} aria-hidden className="shrink-0 text-muted" />
+          )}
+          <p className="flex-1 truncate text-xs text-ink-2" role="status">
+            {endedText(taskState, exitCode)}
+          </p>
+          <Button
+            variant="link"
+            data-tip="Starts a plain shell in the task's workspace. It does not start the agent."
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            Open a new shell
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
