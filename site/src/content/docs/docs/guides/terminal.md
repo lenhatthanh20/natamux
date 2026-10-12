@@ -42,7 +42,7 @@ Things to know:
 - Closing a shell ends its process and everything that runs in it.
 - A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again, drawn for the pane's size.
 - When the connection to a shell drops, for example after your computer sleeps or the network changes, the pane shows **Reconnecting.** and connects again by itself. The screen stays as it was, and the output you missed follows.
-- When a task is done or cancelled, its shells end, with the agent and everything else in them. You can still open a shell in its workspace. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
+- When a task is done or cancelled, its shells end, with the agent and everything else in them. Each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.** Click **Open a new shell** to open a plain shell in its workspace. It does not start the agent. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
 - When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
 - Natamux runs at most 20 shells in all.
 
@@ -106,7 +106,7 @@ A failed task shows a banner with the reason. Use **Start agent** or **Restart a
 
 Shells belong to the daemon. When the daemon stops, it ends every shell, and an agent in a shell ends with it.
 
-While the daemon is down, the pane shows **Reconnecting.** After a restart the pane shows **The shell ended.** (or **The terminal could not start.**) and a **Start a new shell** link. Click it. Natamux opens a fresh shell in the same workspace folder. The old screen and the processes in it are gone. Your files and your git state are not.
+While the daemon is down, the pane shows **Reconnecting.** After a restart the pane shows **The shell ended.** and an **Open a new shell** link at the bottom. Click it. If it shows **The terminal could not start.** at the top, click **Start a new shell** instead. Natamux opens a fresh shell in the same workspace folder. The old screen and the processes in it are gone. Your files and your git state are not.
 
 To run the agent again in Shell 1, use **Start agent**.
 

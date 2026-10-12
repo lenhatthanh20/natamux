@@ -52,6 +52,8 @@ export type TerminalSessionState = {
   scrolledUp: boolean
   // The screen is hidden while a large catch-up is written, and the view shows a skeleton.
   catchingUp: boolean
+  // From the `exit` frame; null when the shell ended another way or runs.
+  exitCode: number | null
 }
 
 // From `snapshot` or `resume` until xterm parsed the last chunk before `replayed` (spec 6).
@@ -151,6 +153,7 @@ export function createTerminalSession(options: {
     error: null,
     scrolledUp: false,
     catchingUp: false,
+    exitCode: null,
   }
   const listeners = new Set<() => void>()
   const update = (change: Partial<TerminalSessionState>) => {
@@ -159,7 +162,8 @@ export function createTerminalSession(options: {
       next.status === state.status &&
       next.error === state.error &&
       next.scrolledUp === state.scrolledUp &&
-      next.catchingUp === state.catchingUp
+      next.catchingUp === state.catchingUp &&
+      next.exitCode === state.exitCode
     ) {
       return
     }
@@ -208,9 +212,10 @@ export function createTerminalSession(options: {
   let pingTimer: ReturnType<typeof setInterval> | undefined
   let pongTimer: ReturnType<typeof setTimeout> | undefined
 
-  // Returns false when the socket is not open and nothing went out.
+  // Returns false when the socket is not open and nothing went out. After the end nothing goes
+  // out, also keys typed before xterm stops taking them.
   const send = (message: TerminalClientMessage): boolean => {
-    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    if (ended || socket === null || socket.readyState !== WebSocket.OPEN) {
       return false
     }
     socket.send(JSON.stringify(message))
@@ -245,6 +250,13 @@ export function createTerminalSession(options: {
   const ack = (at: number) => {
     acked = at
     send({ type: 'ack', offset: at })
+  }
+
+  // An ended shell keeps its last screen to read, but must not look like it still takes keys.
+  const readOnly = () => {
+    terminal.options.disableStdin = true
+    terminal.options.cursorBlink = false
+    terminal.write('\x1b[?25l')
   }
 
   // The cache drops a session whose shell ended or failed, so the next show starts fresh.
@@ -628,7 +640,8 @@ export function createTerminalSession(options: {
       } else if (message?.type === 'exit') {
         finishCatchUp(null)
         terminal.write('\r\n')
-        update({ status: 'ended' })
+        readOnly()
+        update({ status: 'ended', exitCode: message.code })
         end()
       } else if (message?.type === 'error') {
         finishCatchUp(null)
@@ -654,6 +667,7 @@ export function createTerminalSession(options: {
       finishCatchUp(null)
       // A close before the open is a failed handshake, not a shell that ended.
       if (wasOpen) {
+        readOnly()
         update({ status: 'ended' })
       } else {
         update({ status: 'error', error: state.error ?? 'Could not connect to the terminal.' })

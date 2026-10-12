@@ -1,5 +1,6 @@
+import type { TaskState } from '@natamux/core'
 import '@xterm/xterm/css/xterm.css'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, SquareTerminal } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { watchVisible } from '../lib/gpu-renderer'
@@ -14,6 +15,7 @@ import {
 } from '../lib/terminal-session'
 import { useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
+import { StatusGlyph } from './StatusGlyph'
 import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
 import { Skeleton } from './ui/Skeleton'
@@ -25,6 +27,8 @@ type TerminalViewProps = {
   // `${taskId}/${terminal}`: the terminal stays alive in the cache while no view shows it.
   // Without it, the terminal belongs to this view and ends with it.
   cacheKey?: string
+  // The state of the shell's task. Done and cancelled tasks say so when the shell ends.
+  taskState?: TaskState
 }
 
 const STATUS_TEXT: Record<TerminalStatus, string> = {
@@ -41,11 +45,27 @@ const CONNECTING: TerminalSessionState = {
   error: null,
   scrolledUp: false,
   catchingUp: false,
+  exitCode: null,
 }
 const noSubscribe = () => () => undefined
 
+function endedText(taskState: TaskState | undefined, code: number | null): string {
+  if (taskState === 'done') {
+    return 'Task done. The agent and its shells were closed.'
+  }
+  if (taskState === 'cancelled') {
+    return 'Task cancelled. The agent and its shells were closed.'
+  }
+  return code === null || code === 0 ? STATUS_TEXT.ended : `${STATUS_TEXT.ended} Exit code ${code}.`
+}
+
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
-export default function TerminalView({ connect, focusToken, cacheKey }: TerminalViewProps) {
+export default function TerminalView({
+  connect,
+  focusToken,
+  cacheKey,
+  taskState,
+}: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
@@ -59,7 +79,10 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
   const font = useTerminalFont()
   const subscribe = session?.subscribe ?? noSubscribe
   const snapshot = () => session?.state() ?? CONNECTING
-  const { status, error, scrolledUp, catchingUp } = useSyncExternalStore(subscribe, snapshot)
+  const { status, error, scrolledUp, catchingUp, exitCode } = useSyncExternalStore(
+    subscribe,
+    snapshot,
+  )
 
   // Layout effects, so a cached terminal is back in place before the browser paints.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
@@ -129,13 +152,13 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {status !== 'open' && (
+      {status !== 'open' && status !== 'ended' && (
         <div className="flex h-7 shrink-0 items-center gap-3 border-b border-line px-3">
           <p className="flex-1 truncate text-xs text-muted" role="status">
             {STATUS_TEXT[status]}
             {error !== null && ` ${error}`}
           </p>
-          {(status === 'ended' || status === 'error') && (
+          {status === 'error' && (
             <Button variant="link" onClick={startNewShell}>
               Start a new shell
             </Button>
@@ -149,7 +172,9 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
             10px as on the left, with the scrollbar inside it. */}
         <section
           aria-label="Terminal screen"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pr-0.5 pl-2.5"
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden py-2 pr-0.5 pl-2.5 ${
+            status === 'ended' ? 'opacity-60' : ''
+          }`}
         >
           {/* The session's own element, which moves between views, goes in here. */}
           <div ref={container} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
@@ -179,6 +204,25 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
           </Button>
         )}
       </div>
+      {status === 'ended' && (
+        <div className="flex h-8 shrink-0 items-center gap-2 border-t border-line bg-surface px-3">
+          {taskState === 'done' || taskState === 'cancelled' ? (
+            <StatusGlyph state={taskState} />
+          ) : (
+            <SquareTerminal size={14} aria-hidden className="shrink-0 text-muted" />
+          )}
+          <p className="flex-1 truncate text-xs text-ink-2" role="status">
+            {endedText(taskState, exitCode)}
+          </p>
+          <Button
+            variant="link"
+            data-tip="Starts a plain shell in the task's workspace. It does not start the agent."
+            onClick={startNewShell}
+          >
+            Open a new shell
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

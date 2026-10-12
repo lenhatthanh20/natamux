@@ -1,4 +1,4 @@
-import type { Task, TerminalLane, TerminalSize } from '@natamux/core'
+import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -12,20 +12,25 @@ type StandInProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
   cacheKey?: string
+  taskState?: TaskState
 }
 
 // The stand-in shows the focus token it gets, which makes the real terminal take the keyboard,
 // and its cache key. It connects once when it mounts, as the real terminal does, so a test can
 // count the mounts.
 vi.mock('./TerminalView', () => ({
-  default: ({ connect, focusToken, cacheKey }: StandInProps) => {
+  default: ({ connect, focusToken, cacheKey, taskState }: StandInProps) => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: the real terminal connects once per mount.
     useEffect(() => {
       void connect({ cols: 80, rows: 24 })
     }, [])
     return createElement(
       'p',
-      { 'data-focus-token': focusToken ?? '', 'data-cache-key': cacheKey ?? '' },
+      {
+        'data-focus-token': focusToken ?? '',
+        'data-cache-key': cacheKey ?? '',
+        'data-task-state': taskState ?? '',
+      },
       'Terminal stand-in',
     )
   },
@@ -238,6 +243,39 @@ describe('ShellPanes agent state', () => {
     expect(stateLine('Shell 2')).toBeUndefined()
     expect(glyphState('Shell 1')).toBe('running')
     expect(stateLine('Shell 1')).toBe('Running')
+  })
+})
+
+describe('ShellPanes task state', () => {
+  // Each terminal says why it ended from this state, so every shell needs it.
+  it('gives every shell the task state, and the new one when it changes', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const task: ShellTask = {
+      id: 'T-0001',
+      state: 'running',
+      stage: 'implement',
+      lanes: {},
+      agent: 'claude-code',
+    }
+    const view = (current: ShellTask) => (
+      <QueryClientProvider client={client}>
+        <ShellPanes
+          task={current}
+          connect={() => new Promise<WebSocket>(() => {})}
+          loadTerminals={async () => ['1', '2', '3']}
+          loadAgentTerminals={async () => ({ '1': { stage: 'implement', state: 'running' } })}
+          closeTerminal={async () => ['1', '2', '3']}
+          actionsSlot={null}
+        />
+      </QueryClientProvider>
+    )
+    const states = () =>
+      screen.getAllByText('Terminal stand-in').map((item) => item.getAttribute('data-task-state'))
+    const { rerender } = render(view(task))
+    await waitFor(() => expect(states()).toEqual(['running', 'running', 'running']))
+
+    rerender(view({ ...task, state: 'done' }))
+    expect(states()).toEqual(['done', 'done', 'done'])
   })
 })
 

@@ -1,3 +1,4 @@
+import type { TaskState } from '@natamux/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
 import { type CSSProperties, lazy, type ReactNode, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
@@ -30,6 +31,8 @@ type TerminalPaneProps = {
   focusToken?: number
   // Keeps the terminal alive while the pane is gone, see lib/terminal-cache.ts.
   cacheKey?: string
+  // The task's state, so an ended shell can say the task was done or cancelled.
+  taskState?: TaskState
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -55,6 +58,7 @@ export function TerminalPane({
   connect,
   focusToken,
   cacheKey,
+  taskState,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -133,7 +137,12 @@ export function TerminalPane({
         )}
       </header>
       <LazyView label="terminal" fallback={<Skeleton className="m-3" width="30%" />}>
-        <TerminalView connect={connect} focusToken={focusToken} cacheKey={cacheKey} />
+        <TerminalView
+          connect={connect}
+          focusToken={focusToken}
+          cacheKey={cacheKey}
+          taskState={taskState}
+        />
       </LazyView>
     </section>
   )

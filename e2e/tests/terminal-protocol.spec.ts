@@ -168,7 +168,7 @@ test('shows "The shell ended." after exit, and opens no new socket', async ({ pa
 
   await runIn(page, shell, 'exit')
   await expect(shell.getByText('The shell ended.')).toBeVisible()
-  await expect(shell.getByRole('button', { name: 'Start a new shell' })).toBeVisible()
+  await expect(shell.getByRole('button', { name: 'Open a new shell' })).toBeVisible()
   // Longer than the first retry delays would be.
   await page.waitForTimeout(3_000)
   expect(control.sockets.length).toBe(count)
