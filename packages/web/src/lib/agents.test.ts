@@ -7,12 +7,9 @@ describe('agentIcon', () => {
     ['gemini', 'gemini-ai'],
     ['copilot', 'copilot'],
     ['cursor', 'cursor'],
+    ['codex', 'codex'],
   ])('%s gets %s', (id, icon) => {
     expect(agentIcon(id)).toBe(icon)
-  })
-
-  it('has no icon for an agent the theme does not draw', () => {
-    expect(agentIcon('codex')).toBeUndefined()
   })
 
   it('has no icon for an unknown agent or no agent', () => {
@@ -23,11 +20,12 @@ describe('agentIcon', () => {
 
 describe('every known agent', () => {
   it.each(AGENT_CHOICES.map((choice) => [choice.id, choice]))(
-    '%s has a label and its own icon entry',
+    '%s has a label and an icon of its own, not the generic one',
     (id, choice) => {
       expect(choice.label.trim()).not.toBe('')
       expect(agentLabel(id)).toBe(choice.label)
       expect(agentIcon(id)).toBe(choice.icon)
+      expect(agentIcon(id)).toBeDefined()
     },
   )
 
@@ -39,7 +37,7 @@ describe('every known agent', () => {
 
 describe('agentIconNames', () => {
   it('lists each icon once', () => {
-    expect(agentIconNames()).toEqual(['claude', 'gemini-ai', 'copilot', 'cursor'])
+    expect(agentIconNames()).toEqual(['claude', 'codex', 'gemini-ai', 'copilot', 'cursor'])
   })
 })
 

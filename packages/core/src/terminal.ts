@@ -1,9 +1,31 @@
 import { z } from 'zod'
 
-// Messages on the WebSocket of a task terminal. Each frame is one JSON object.
+// Messages on the WebSocket of a task terminal. Output goes in binary frames: the raw UTF-8 bytes
+// for xterm. Every other message is one JSON object in a text frame.
 
 const MAX_INPUT_CHARS = 64 * 1024
 const MAX_SIZE = 1000
+
+// The client acks the output it has parsed after this many bytes, and once after a catch-up.
+export const ACK_EVERY_BYTES = 64 * 1024
+
+// Close codes of the terminal socket, in the range that applications may use. After any of them
+// the dashboard does not reconnect. GONE: the shell of a resume no longer runs.
+export const CLOSE_UNAUTHORIZED = 4401
+export const CLOSE_REFUSED = 4409
+export const CLOSE_GONE = 4410
+
+// The dashboard pings this often while the page is visible, and reconnects when no pong came for
+// two of these. The daemon closes a socket that sent nothing for SILENT_CLOSE_MS: a page in the
+// background throttles its timers, and reconnects by itself when it comes back.
+export const HEARTBEAT_MS = 15_000
+export const SILENT_CLOSE_MS = 90_000
+
+// A lost socket is tried again after min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** try), give or
+// take RECONNECT_JITTER of it, so many pages do not come back at the same moment.
+export const RECONNECT_BASE_MS = 500
+export const RECONNECT_MAX_MS = 10_000
+export const RECONNECT_JITTER = 0.2
 
 // How much history a terminal keeps above its screen: the dashboard, and the screen the daemon
 // keeps for each shell, so a new dashboard can show all of it again. Like Ghostty, the limit is
@@ -28,21 +50,38 @@ export const terminalSizeSchema = z.object({
 
 export type TerminalSize = z.infer<typeof terminalSizeSchema>
 
+const sizeSchema = z.number().int().min(1).max(MAX_SIZE)
+// Bytes of output since the shell started.
+const offsetSchema = z.number().int().min(0)
+// Random, set when a shell starts. A socket with `shellId` in its query resumes that shell.
+export const shellIdSchema = z.string().min(1).max(64)
+
 // From the dashboard to the daemon.
 export const terminalClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('input'), data: z.string().max(MAX_INPUT_CHARS) }),
+  z.object({ type: z.literal('resize'), cols: sizeSchema, rows: sizeSchema }),
+  // cols and rows come only when the terminal itself came on screen; only then it claims the size.
   z.object({
-    type: z.literal('resize'),
-    cols: z.number().int().min(1).max(MAX_SIZE),
-    rows: z.number().int().min(1).max(MAX_SIZE),
+    type: z.literal('visible'),
+    visible: z.boolean(),
+    cols: sizeSchema.optional(),
+    rows: sizeSchema.optional(),
   }),
+  z.object({ type: z.literal('ack'), offset: offsetSchema }),
+  z.object({ type: z.literal('ping') }),
 ])
 
 export type TerminalClientMessage = z.infer<typeof terminalClientMessageSchema>
 
-// From the daemon to the dashboard. `exit` ends the session; `error` says why it could not start.
+// From the daemon to the dashboard. `hello` is always first. `snapshot` and `resume` start a
+// catch-up and `replayed` ends it. `pong` answers `ping`. `exit` ends the session; `error` says why
+// it could not start.
 export const terminalServerMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('output'), data: z.string() }),
+  z.object({ type: z.literal('hello'), shellId: shellIdSchema }),
+  z.object({ type: z.literal('snapshot'), cols: sizeSchema, rows: sizeSchema }),
+  z.object({ type: z.literal('resume'), offset: offsetSchema }),
+  z.object({ type: z.literal('replayed'), offset: offsetSchema }),
+  z.object({ type: z.literal('pong') }),
   z.object({ type: z.literal('exit'), code: z.number().int().nullable() }),
   z.object({ type: z.literal('error'), message: z.string() }),
 ])

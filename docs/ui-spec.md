@@ -29,8 +29,9 @@ All tokens live in `packages/web/src/styles.css`. Raw values on `:root` (light) 
 
 | Token | Value | Use |
 |---|---|---|
-| `--font-sans` | `"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text |
-| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd, terminal, diff |
+| `--font-sans` | `"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text. Inter at 13px is the UI font of JetBrains IDEs |
+| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd |
+| terminal (`TERMINAL_FONT` in `lib/fonts.ts`) | `"JetBrains Mono Variable", "Symbols Nerd Font Mono"`, then the `--font-mono` stack | terminals and code views (Monaco diff and file). The icon font is bundled (`src/assets/fonts`) and loads on the first icon |
 | body features | `font-feature-settings: "ss01", "cv11"; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased` | already set, keep |
 
 - Both fonts are already installed (`@fontsource-variable/geist`, `geist-mono`). No new font package.
@@ -77,7 +78,7 @@ Contrast = WCAG 2.x ratio, computed with the script in the study folder (`tools/
 | `--raised` | `bg-raised` | `#1c1d21` | `#f6f7f9` | secondary buttons, segmented track, kbd |
 | `--popover` | `bg-popover` | `#1c1d21` | `#ffffff` | menus, tooltips (dark), toasts, dialogs, palette |
 | `--input` | `bg-input` | `#0f1012` | `#ffffff` | text fields, selects, textareas (sunken in dark) |
-| `--terminal` | `bg-terminal` | `#0b0c0e` | `#fbfbfc` | terminal body (sunken) |
+| `--terminal` | `bg-terminal` | `#0f1219` | `#f7f9fd` | terminal body (sunken) |
 | `--scrim` | `bg-scrim` | `rgb(0 0 0 / 0.5)` | `rgb(15 17 20 / 0.32)` | behind dialogs, drawers on small screens |
 | `--skeleton` | `bg-skeleton` | `rgb(255 255 255 / 0.06)` | `rgb(20 24 31 / 0.06)` | loading bars |
 | `--badge` | `bg-badge` | `#2a2c31` | `#e6e8ec` | count badges |
@@ -175,21 +176,21 @@ Running (blue) and needs-input (amber) are far apart in hue, so "working" never 
 
 #### Terminal ANSI palettes (xterm `ITheme`)
 
-Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Black is a background color in practice; its 1.9 is fine because the ratio option lifts it when used as text.
+The "Night" palette, picked from four designs in `docs/design-terminal-look.md` (2026-10-12). Ratios are against the background. Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Dark black is a background color in practice; its 1.7 is fine because the ratio option lifts it when used as text.
 
-| | Dark (on `#0b0c0e`) | Light (on `#fbfbfc`) |
+| | Dark (on `#0f1219`) | Light (on `#f7f9fd`) |
 |---|---|---|
-| background / foreground | `#0b0c0e` / `#e6e7ea` | `#fbfbfc` / `#17191d` |
-| cursor / cursorAccent | `#7aa2ff` / `#0b0c0e` | `#2f5fe0` / `#fbfbfc` |
-| selectionBackground | `#7aa2ff4d` | `#2f5fe033` |
-| black / brightBlack | `#3a3f4b` / `#7d828c` (5.1) | `#24272d` / `#5f6570` (5.7) |
-| red / brightRed | `#ff7b72` (7.8) / `#ffa198` | `#c0362c` (5.3) / `#b93a30` (5.5) |
-| green / brightGreen | `#6fd19a` (10.5) / `#8fe0b0` | `#1c7442` (5.6) / `#237a48` (5.1) |
-| yellow / brightYellow | `#e8c15a` (11.4) / `#f5d47a` | `#8a5a00` (5.7) / `#8f6000` (5.3) |
-| blue / brightBlue | `#7aa2ff` (7.9) / `#a5c0ff` | `#2448b8` (7.5) / `#2f5fe0` (5.3) |
-| magenta / brightMagenta | `#d09bff` (9.2) / `#e2bcff` | `#8a3fb8` (5.8) / `#8f45c2` (5.4) |
-| cyan / brightCyan | `#6cc4d6` (9.8) / `#97dbe8` | `#0b6274` (6.7) / `#0f7489` (5.2) |
-| white / brightWhite | `#c9ccd2` / `#f2f3f5` | `#5f6570` (5.7) / `#17191d` |
+| background / foreground | `#0f1219` / `#d6dcf0` (13.7) | `#f7f9fd` / `#1b2238` (15.0) |
+| cursor / cursorAccent | `#7aa2ff` / `#0f1219` | `#2f5fe0` / `#f7f9fd` |
+| selectionBackground / selectionInactiveBackground | `#7aa2ff47` / `#7aa2ff21` | `#2f5fe030` / `#2f5fe018` |
+| black / brightBlack | `#343b52` (1.7) / `#7c86a8` (5.2) | `#262d45` (12.9) / `#5d6684` (5.4) |
+| red / brightRed | `#f7768e` (7.1) / `#ff9bae` (9.4) | `#c4304f` (5.1) / `#b02a46` (6.1) |
+| green / brightGreen | `#8fd694` (10.9) / `#aee6b2` (13.2) | `#2c7a3a` (5.0) / `#256c33` (6.1) |
+| yellow / brightYellow | `#e6c07b` (10.9) / `#f0d39d` (12.9) | `#8c5f00` (5.3) / `#7b5300` (6.5) |
+| blue / brightBlue | `#7aa2ff` (7.5) / `#a6c1ff` (10.4) | `#2f5fe0` (5.2) / `#2448b8` (7.4) |
+| magenta / brightMagenta | `#bb9af7` (8.1) / `#d2bbfa` (10.9) | `#7c4dd6` (5.1) / `#6a3ec2` (6.5) |
+| cyan / brightCyan | `#6fd0e0` (10.5) / `#9ce0eb` (12.7) | `#0b6a80` (5.9) / `#095c6f` (7.2) |
+| white / brightWhite | `#b8c0dc` (10.4) / `#e8ecf8` (15.9) | `#5d6684` (5.4) / `#1b2238` (15.0) |
 
 The terminal follows the app theme (RA-17). A setting "Terminal: always dark" is P2.
 
@@ -287,7 +288,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | Title bar 36                                                     |
 +-----------+------------------------------------+-----------------+
 | Sidebar   | Main                               | Details         |
-| 272       | view header 44 / workspace hdr 44  | 360             |
+| 320       | view header 44 / workspace hdr 44  | 320             |
 | (220-440) | tabs 36                            | (320-560)       |
 |           | content                            |                 |
 +-----------+------------------------------------+-----------------+
@@ -305,7 +306,7 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 - Electron: whole bar is `-webkit-app-region: drag`; every control `no-drag`. Window inactive (`:root[data-window="inactive"]`): title bar text and icons use `--muted`.
 - Moves out of the sidebar header: "Natamux" title and the "Start a task" button (the sidebar keeps the filter field and lists).
 
-**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 272, min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
+**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 320 (the same as the details), min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
 2. Nav rows (28px): All tasks + count, Agents + count.
 3. Needs you section (compact, see 4.12).
@@ -315,7 +316,7 @@ Only part 5 scrolls (fixes NAV-16).
 
 **Main** (`<main id="main">`), `bg-canvas`, `container-type: inline-size; container-name: main`. Min widths: terminal content 480, diff 560, table 360 (card list below 560).
 
-**Details** (`<aside>`), `bg-surface`, default 360, min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
+**Details** (`<aside>`), `bg-surface`, default 320 (the same as the sidebar), min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
 
 **Status bar** (`components/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
@@ -331,8 +332,8 @@ Extra rule at every width: details dock only if main stays >= 640 after docking;
 
 | Width | Sidebar | Details | Main content | Title bar | Status bar |
 |---|---|---|---|---|---|
-| >= 1440 | docked 272 | docked 360 when open | table all columns; diff side by side; agents auto-fill | full | full |
-| 1280-1439 | docked 272 | docked if main >= 640, else sheet | table drops Branch | full | full |
+| >= 1440 | docked 320 | docked 320 when open | table all columns; diff side by side; agents auto-fill | full | full |
+| 1280-1439 | docked 320 | docked if main >= 640, else sheet | table drops Branch | full | full |
 | 1024-1279 | docked, default 248, max 30vw | sheet: slides over main from the right, 360, `--shadow-2`, no scrim, stays until Esc / close / toggle | table drops Branch + PR; diff inline if diff width < 720; agents max 2 columns | wordmark hidden | Projects / Import become icon-only with tooltips |
 | 768-1023 | drawer: 300 (max 85vw), slides from left over a scrim, opened by the title bar toggle or Mod+B, closes on pick / Esc / scrim click | sheet with scrim, 360 (max 90vw) | table: Id, Task, State, Last activity; diff inline only, file list collapses to a file picker above the diff; terminal panes stack when < 320 each; workspace header actions: Push stays, PR becomes icon+"PR" | breadcrumb shortened to task id | only Live dot, running, needs-you, `?`, account |
 | < 768 (design at 390) | drawer full height, width min(360, 100vw) | full page with a Back button (`ArrowLeft`), replaces main | table becomes a card list; board shows one column at a time with a state segmented control on top; workspace: title wraps to 2 lines, Push/PR go into a "..." menu, tabs scroll, ONE terminal at a time with a pane switcher (Shell 1 / Shell 2 chips); agents: 1 column, each pane `min-height: 60vh`, scroll; diff inline + wrap on; dialogs become bottom sheets; toasts full width | 44px: menu, view title, needs-you pill, `+`; command center becomes a `Search` icon button | hidden; Live state is a 6px dot on the title bar menu button; status items move to the drawer footer |
@@ -527,8 +528,10 @@ Shared shell:
 - Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); role chip "Agent" only when an agent runs in it (WS-13); state text 12 muted truncate ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
+- Opening another task's workspace on its Terminal tab puts the keyboard in its first agent shell (the lowest-numbered shell that runs an agent, else Shell 1), once the shells are read. Not on a phone, not when opened from an address, and a shell picked in the jump palette wins.
 - Needs-input pane: 2px top bar `--signal`, header bg signal-soft, state text "Needs your input" in signal (WS-21).
-- Body: bg terminal, pad 8 10. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body.
+- Body: bg terminal, pad 8 top and bottom, 10 left, 2 right (xterm keeps 8 for its scrollbar, so text has 10 on both sides). 13px, line height 1 (xterm multiplies the font's own height: about 17px rows, as in Ghostty and VS Code), bold 700 in its own color (not bright), block cursor, outline cursor when unfocused, Alt + wheel scrolls 5×. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Reconnecting", "Could not start" + [Start a new shell]) as a 28px strip at the top of the body. "Reconnecting" shows while a dropped connection comes back by itself; it has no button, the screen stays as it was, and the output missed meanwhile follows. If the shell is gone by then (a daemon restart), the pane shows the ended state below. A pane that comes back (another tab, another task) shows the same screen and scroll position at once, with no strip; "Connecting" shows only for a new connection. While a new connection writes the shell's history, the screen stays hidden and the body shows the pane's skeleton; the final screen then shows at once, scrolled to the bottom, so no history scrolls by. An ended shell dims the screen (opacity 60%), hides the cursor and takes no input; a 32px bar at the bottom (bg surface, border-top) shows the task state glyph (done, cancelled) or `SquareTerminal`, the reason, and [Open a new shell].
+- With two or more panes, the panes without the focus get a dim layer over the body: `--terminal` at 0.3 opacity, no animation, clicks go through (`.hm-panes` / `.hm-pane` in `styles.css`).
 
 ### 4.24 Diff view chrome (`components/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
 - Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.
@@ -542,7 +545,7 @@ Shared shell:
   - Right: `+12 −3` (text diffs); change navigator (Previous change `Shift+Alt+F5`, "2 of 7" or "7 changes", Next change `Alt+F5`; wraps at the ends); Segmented [Side by side | Inline] (icons only under 960; [Side by side | Stacked] for images); Collapse unchanged lines (aria-pressed); Wrap long lines (aria-pressed); Show image preview (SVG only); Diff options menu (Ignore leading and trailing whitespace, Show moved code); prev/next file (`[` `]`, in the order of the file panel).
 - Remembered per browser: `natamux.diff-side-by-side` (on), `natamux.diff-collapse-unchanged` (on), `natamux.diff-ignore-whitespace` (on), `natamux.diff-show-moves` (off), `natamux.diff-wrap-prose` (on), `natamux.diff-wrap-code` (off).
 - Side by side is offered only when the diff column >= 720. Below it the control shows Inline selected and Side by side disabled with tooltip "Needs a wider window" (WS-03). The stored choice is kept and comes back on a wider window. Monaco's own switch (`useInlineViewWhenSpaceIsLimited`) is off, so only one rule decides.
-- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = mono stack, `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
+- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = `TERMINAL_FONT` (JetBrains Mono, as the terminal; `remeasureFonts()` once it loads), `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
 - The editor is built again only for a new file or a new UI size. Every other option, and new text from the 10 s refresh, updates it in place, so the scroll position stays.
 - New or deleted files are not diffs: show a read-only single editor with the whole file decorated as added (or removed), and no phantom empty line (WS-02). An empty one shows "Empty file."
 - Notices instead of an editor: "Renamed without changes.", "The text did not change. Only the file mode may differ.", binary, larger than 1 MB. Above the editor, when the diff finds nothing: "Only whitespace or line endings changed." with [Show whitespace].

@@ -883,6 +883,373 @@ describe('a prompt for a running agent', () => {
   })
 })
 
+describe('a resume after a restart', () => {
+  // The spec agent ended its turn with this payload, then the app restarted: the agent and its
+  // shell are gone, the task still waits for you.
+  async function waitingAfterRestart(
+    payload: Record<string, unknown>,
+    agent = 'claude-code',
+  ): Promise<Task> {
+    const task = await withWorkspace((await created({ title: 'Export tasks', agent })).id)
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', ...payload },
+    })
+    terminals.close(task.id)
+    return tasks.getTask(task.id)
+  }
+
+  // As the Resume button sends it: no stage.
+  async function resume(taskId: string, payload: Record<string, unknown> = {}): Promise<void> {
+    tasks.applyEvent(taskId, { source: 'human', type: 'agent.resumed', payload })
+    await runner.settle()
+  }
+
+  const typedLaunch = (id: string) =>
+    ptys.at(-1)?.written.join('').includes(`agent-launch-${id}.sh`)
+
+  // The build step, with the session each stage reported, after a restart.
+  async function buildAfterRestart(): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    await withWorkspace(task.id)
+    for (const [stage, sessionId] of [
+      ['implement', 's-1'],
+      ['test-spec', 's-2'],
+    ]) {
+      tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.finished',
+        payload: { stage, sessionId },
+      })
+    }
+    terminals.close(task.id)
+    return tasks.getTask(task.id)
+  }
+
+  it('goes on with the last Claude Code session of the stage, with no new prompt', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+    expect(task.state).toBe('needs-input')
+
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(typedLaunch(task.id)).toBe(true)
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
+    expect(launchScript(task.id)).not.toContain('Task: Export tasks')
+  })
+
+  it('picks the newest session of the stage', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.resumed',
+      payload: { stage: 'spec', sessionId: 's-2' },
+    })
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-2' },
+    })
+
+    await resume(task.id)
+
+    expect(launchScript(task.id)).toContain("--resume 's-2'")
+  })
+
+  it('never takes a session of another task', async () => {
+    const other = await waitingAfterRestart({ sessionId: 'other' })
+    const task = await waitingAfterRestart({})
+
+    await resume(task.id)
+
+    expect(other.id).not.toBe(task.id)
+    expect(launchScript(task.id)).not.toContain('--resume')
+  })
+
+  it('goes on with the session of a stage that waits for approval', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'spec' },
+    })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'review' })
+
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
+  })
+
+  it.each([
+    ['no session', {}],
+    ['an empty session', { sessionId: '' }],
+    ['a session that is not text', { sessionId: 42 }],
+  ])('starts the agent with the stage prompt with %s', async (_name, payload) => {
+    const task = await waitingAfterRestart(payload)
+
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(typedLaunch(task.id)).toBe(true)
+    expect(launchScript(task.id)).toContain('Task: Export tasks')
+    expect(launchScript(task.id)).not.toContain('--resume')
+  })
+
+  const otherAgents = ['codex', 'gemini', 'copilot', 'cursor']
+
+  // Only Claude Code goes on with a session.
+  it.each(otherAgents)('starts %s with the stage prompt', async (agent) => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' }, agent)
+
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(typedLaunch(task.id)).toBe(true)
+    expect(launchScript(task.id)).toContain('Task: Export tasks')
+    expect(launchScript(task.id)).not.toContain('--resume')
+  })
+
+  it.each(['claude-code', 'codex'])('types nothing when %s still runs', async (agent) => {
+    const task = await withWorkspace((await created({ title: 'Export tasks', agent })).id)
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    const written = pty.written.length
+
+    // Twice, as a quick double click sends it.
+    await resume(task.id)
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(ptys).toHaveLength(1)
+    expect(pty.written).toHaveLength(written)
+  })
+
+  it('starts no agent for a prompt typed to the agent', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.resumed',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(terminals.list(task.id)).toEqual([])
+  })
+
+  it('goes on with the session of the stage, in the terminal of that stage', async () => {
+    const task = await buildAfterRestart()
+
+    await resume(task.id, { stage: 'test-spec' })
+
+    expect(tasks.getTask(task.id).lanes).toEqual({
+      'test-spec': 'running',
+      implement: 'needs-input',
+    })
+    expect(terminals.list(task.id)).toEqual(['2'])
+    expect(launchScript(task.id, '2')).toContain("--resume 's-2'")
+  })
+
+  it('never takes the session of another stage of the group', async () => {
+    const task = await buildAfterRestart()
+
+    await resume(task.id, { stage: 'implement' })
+
+    expect(terminals.list(task.id)).toEqual(['1'])
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
+  })
+
+  it('leaves the agent of the other terminal alone', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    await withWorkspace(task.id)
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'test-spec', sessionId: 's-2' },
+    })
+    // The agent of terminal 1 runs on; the one of terminal 2 is gone.
+    const running = [...ptys]
+    for (const pty of running) {
+      pty.program = 'node'
+    }
+    const written = running.map((pty) => pty.written.length)
+    terminals.closeOne(task.id, '2')
+
+    await resume(task.id, { stage: 'test-spec' })
+
+    expect(terminals.list(task.id)).toEqual(['1', '2'])
+    expect(launchScript(task.id, '2')).toContain("--resume 's-2'")
+    expect(running.map((pty) => pty.written.length)).toEqual(written)
+  })
+
+  it('starts the stage prompt on a new start of the stage, even with a session', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+
+    await runner.act(task.id, 'reopen', { to: 'spec' })
+    await runner.settle()
+
+    expect(typedLaunch(task.id)).toBe(true)
+    expect(launchScript(task.id)).toContain('Task: Export tasks')
+    expect(launchScript(task.id)).not.toContain('--resume')
+  })
+
+  it.each([
+    ['Claude Code with its session', 'claude-code'],
+    ['Codex with the stage prompt', 'codex'],
+  ])('waits for you with the reason when %s cannot start', async (_name, agent) => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' }, agent)
+    vi.spyOn(terminals, 'run').mockImplementation(() => {
+      throw new Error('No shell')
+    })
+
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'stage.check-failed',
+      payload: { stage: 'spec', reasons: ['No shell'] },
+    })
+  })
+
+  it('in a group, puts only the resumed stage back when its agent cannot start', async () => {
+    const task = await buildAfterRestart()
+    vi.spyOn(terminals, 'run').mockImplementation(() => {
+      throw new Error('No shell')
+    })
+
+    await resume(task.id, { stage: 'test-spec' })
+
+    expect(tasks.getTask(task.id).lanes).toEqual({
+      'test-spec': 'needs-input',
+      implement: 'needs-input',
+    })
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'stage.check-failed',
+      payload: { stage: 'test-spec', reasons: ['No shell'] },
+    })
+  })
+})
+
+describe('the agent in each terminal', () => {
+  it('names the agent a person typed into an extra shell, not the agent of the task', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    pty.commandLines = ['node /usr/local/bin/codex', '/usr/local/lib/codex/vendor/codex']
+
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+  })
+
+  it('names an agent typed by hand when the task has another agent', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'gemini' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'claude', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'claude'
+    pty.commandLines = ['claude']
+
+    expect(await runner.agentIn(task.id, '2')).toBe('claude-code')
+    expect(tasks.getTask(task.id).agent).toBe('gemini')
+  })
+
+  it('names an agent that a wrapper such as npx starts', async () => {
+    const task = await created({ title: 'Export tasks' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'npx @openai/codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    pty.commandLines = [
+      'node /usr/local/bin/npx @openai/codex',
+      'node /home/u/.npm/_npx/1a2b/node_modules/.bin/codex',
+    ]
+
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+  })
+
+  it('follows the agents a person starts and quits in an extra shell', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'claude', '2')
+    const pty = ptys.at(-1) as FakePty
+
+    pty.commandLines = ['claude']
+    expect(await runner.agentIn(task.id, '2')).toBe('claude-code')
+    pty.commandLines = []
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+    pty.commandLines = ['node /usr/local/bin/codex']
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+    // The shell itself ended.
+    terminals.closeOne(task.id, '2')
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+  })
+
+  it('names no agent when the processes cannot be read', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.commands = async () => {
+      throw new Error('ps failed')
+    }
+
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+  })
+
+  it('names no agent for a program that is not one', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'vim notes.md', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'vim'
+    pty.commandLines = ['vim notes.md']
+
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+    expect(await runner.agentIn(task.id, '3')).toBeNull()
+  })
+
+  it('names the agent it started where the processes cannot be listed', async () => {
+    const task = await created({ title: 'Export tasks' })
+    // The new workspace starts the stage with the agent picked here, not the default one.
+    await runner.startByHand(task.id, 'gemini', undefined, () => workspaces.create(task.id))
+    await runner.settle()
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    pty.commandLines = undefined
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Just after the launch the agent may not be up yet.
+    pty.commandLines = []
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Later, the processes tell: the agent ended and another program runs.
+    clock += LAUNCH_GRACE_MS + 1
+    pty.commandLines = ['vim notes.md']
+    expect(await runner.agentIn(task.id, '1')).toBeNull()
+    pty.commandLines = ['codex']
+    expect(await runner.agentIn(task.id, '1')).toBe('codex')
+  })
+})
+
 describe('a send back', () => {
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
@@ -937,6 +1304,20 @@ describe('a send back', () => {
     expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
     expect(typesSince(task.id, 'agent.resumed')).toEqual(['agent.resumed', 'stage.started'])
     expect(pty.written).toEqual(['claude\r'])
+  })
+
+  it('starts the agent again when you resume the review and no agent runs', async () => {
+    const task = await inReview()
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'agent.resumed' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    expect(typesSince(task.id, 'agent.resumed')).toEqual([
+      'agent.resumed',
+      'stage.started',
+      'agent.launched',
+    ])
   })
 
   it('refuses a stage the task does not have or has not reached', async () => {

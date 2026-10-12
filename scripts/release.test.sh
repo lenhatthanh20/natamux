@@ -119,6 +119,12 @@ check "docs/releases has only vX.Y.Z.md files" \
 check "$notes exists" '[ -f "$notes" ]'
 [ -f "$notes" ] || finish
 check "$notes is the newest release notes" '[ "$(printf "%s\n" "$prev" "$tag" | sort -V | tail -n 1)" = "$tag" ]'
+# The release body is copied from the notes when the tag is pushed, so later edits never reach users.
+if [ -n "$prev" ] && git rev-parse -q --verify "refs/tags/$prev" >/dev/null; then
+  check "docs/releases/$prev.md is as in tag $prev" 'git diff --quiet "$prev" -- "docs/releases/$prev.md"'
+else
+  skip "docs/releases/$prev.md is as in tag $prev (no such tag here)"
+fi
 check "$notes starts with an intro line" '[ -n "$(head -n 1 "$notes")" ] && ! head -n 1 "$notes" | grep -q "^#"'
 # v0.1.2 is the first version that updates itself, so the intro always names it.
 check "$notes intro says the app updates itself from v0.1.2" \
@@ -127,6 +133,7 @@ check "$notes has the Guide: line as in $prev" \
   '[ -z "$prev" ] || [ "$(grep "^Guide: " "$notes")" = "$(grep "^Guide: " "docs/releases/$prev.md")" ]'
 check "$notes ends with a newline" '[ -z "$(tail -c 1 "$notes")" ]'
 check "$notes ends without a blank line" '[ -n "$(tail -n 1 "$notes")" ]'
+check "$notes has no trailing spaces" '! grep -q "[[:space:]]$" "$notes"'
 check "$notes has sections before ## Download" \
   '[ "$(sed "/^## Download$/,\$d" "$notes" | grep -c "^## ")" -gt 0 ]'
 check "$notes has ## Download" 'grep -qx "## Download" "$notes"'
@@ -175,7 +182,7 @@ for text in notes section; do
   if [ "$text" = notes ]; then body=$(cat "$notes"); else body=$section; fi
   check "no banned names in the $text" '! grep -qiwE "orca|atlas" <<<"$body"'
   check "no developer-only changes in the $text" \
-    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI" <<<"$body"'
+    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI|README|[Bb]enchmarks?|[Ll]anding page" <<<"$body"'
   # A / or - before # is a heading anchor such as /#2-add-a-task, and a backtick is an example such as `#42`.
   check "no PR numbers in the $text" \
     '! grep -qE "(^|[^-/[:alnum:]\`])#[0-9]+|/pull/[0-9]+|\bPR ?[0-9]+" <<<"$body"'

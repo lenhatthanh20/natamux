@@ -1,10 +1,11 @@
-import type { Task, TerminalLane, TerminalSize } from '@natamux/core'
+import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement, useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_PANES } from '../lib/panes'
+import { disposeTerminal } from '../lib/terminal-cache'
 import { useViewStore } from '../lib/view-store'
 import { ShellPanes } from './ShellPanes'
 
@@ -12,14 +13,16 @@ type StandInProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
   focusOnOpen?: boolean
+  cacheKey?: string
+  taskState?: TaskState
 }
 
-// The stand-in shows the focus token it gets, which makes the real terminal take the keyboard.
-// It also shows if it may take the keyboard on open, as it was when it mounted: the real terminal
-// reads it only then.
-// It connects once when it mounts, as the real terminal does, so a test can count the mounts.
+// The stand-in shows the focus token it gets, which makes the real terminal take the keyboard,
+// and its cache key. It also shows if it may take the keyboard on open, as it was when it
+// mounted: the real terminal reads it only when it is shown. It connects once when it mounts, as
+// the real terminal does, so a test can count the mounts.
 vi.mock('./TerminalView', () => ({
-  default: ({ connect, focusToken, focusOnOpen = true }: StandInProps) => {
+  default: ({ connect, focusToken, focusOnOpen = true, cacheKey, taskState }: StandInProps) => {
     const [focusAtMount] = useState(focusOnOpen)
     // biome-ignore lint/correctness/useExhaustiveDependencies: the real terminal connects once per mount.
     useEffect(() => {
@@ -27,11 +30,21 @@ vi.mock('./TerminalView', () => ({
     }, [])
     return createElement(
       'p',
-      { 'data-focus-token': focusToken ?? '', 'data-focus-on-open': String(focusAtMount) },
+      {
+        'data-focus-token': focusToken ?? '',
+        'data-focus-on-open': String(focusAtMount),
+        'data-cache-key': cacheKey ?? '',
+        'data-task-state': taskState ?? '',
+      },
       'Terminal stand-in',
     )
   },
 }))
+
+vi.mock('../lib/terminal-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/terminal-cache')>()
+  return { ...actual, disposeTerminal: vi.fn(actual.disposeTerminal) }
+})
 
 const layout = vi.hoisted(() => ({ phone: false }))
 vi.mock('../hooks/useLayoutMode', async (importOriginal) => ({
@@ -166,6 +179,54 @@ describe('ShellPanes agent badge', () => {
     expect(within(header('Shell 2')).getByText('Shell 2')).toBeTruthy()
   })
 
+  it('shows the agent that runs in each shell, not the agent of the task', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2', '3'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+        '2': { ...NO_LANE, agent: 'codex' },
+        '3': { ...NO_LANE, agent: 'codex' },
+      },
+    )
+    for (const name of ['Shell 2', 'Shell 3']) {
+      await screen.findByRole('region', { name })
+      await within(header(name)).findByText('Codex')
+      expect(within(header(name)).queryByText('Claude Code')).toBeNull()
+      expect(agentIcons(name)).toHaveLength(1)
+    }
+    expect(within(header('Shell 1')).getByText('Claude Code')).toBeTruthy()
+  })
+
+  it('shows an agent typed by hand when the task has another agent', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'gemini' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'gemini' },
+        '2': { ...NO_LANE, agent: 'claude-code' },
+      },
+    )
+    await screen.findByRole('region', { name: 'Shell 2' })
+    await within(header('Shell 2')).findByText('Claude Code')
+    expect(within(header('Shell 1')).getByText('Gemini CLI')).toBeTruthy()
+  })
+
+  it('shows no badge on a shell whose program is no agent Natamux knows', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+        '2': { ...NO_LANE, agent: null },
+      },
+    )
+    await within(header('Shell 1')).findByText('Claude Code')
+    expect(within(header('Shell 2')).queryByText('Claude Code')).toBeNull()
+    expect(within(header('Shell 2')).queryByText('Agent')).toBeNull()
+    expect(agentIcons('Shell 2')).toHaveLength(0)
+  })
+
   it('shows no badge when the task has no agent and only plain shells', async () => {
     shells(null, ['1', '2'], [])
     expect(await screen.findByRole('region', { name: 'Shell 2' })).toBeTruthy()
@@ -222,6 +283,39 @@ describe('ShellPanes agent state', () => {
   })
 })
 
+describe('ShellPanes task state', () => {
+  // Each terminal says why it ended from this state, so every shell needs it.
+  it('gives every shell the task state, and the new one when it changes', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const task: ShellTask = {
+      id: 'T-0001',
+      state: 'running',
+      stage: 'implement',
+      lanes: {},
+      agent: 'claude-code',
+    }
+    const view = (current: ShellTask) => (
+      <QueryClientProvider client={client}>
+        <ShellPanes
+          task={current}
+          connect={() => new Promise<WebSocket>(() => {})}
+          loadTerminals={async () => ['1', '2', '3']}
+          loadAgentTerminals={async () => ({ '1': { stage: 'implement', state: 'running' } })}
+          closeTerminal={async () => ['1', '2', '3']}
+          actionsSlot={null}
+        />
+      </QueryClientProvider>
+    )
+    const states = () =>
+      screen.getAllByText('Terminal stand-in').map((item) => item.getAttribute('data-task-state'))
+    const { rerender } = render(view(task))
+    await waitFor(() => expect(states()).toEqual(['running', 'running', 'running']))
+
+    rerender(view({ ...task, state: 'done' }))
+    expect(states()).toEqual(['done', 'done', 'done'])
+  })
+})
+
 describe('ShellPanes answer in terminal', () => {
   // A task in the build group whose stages wait or run as given, with an agent in each shell.
   function answerable(lanes: Task['lanes'], firstToken = 0) {
@@ -271,7 +365,7 @@ describe('ShellPanes answer in terminal', () => {
     expect(await tokenOf('Shell 1')).toBe(token)
   })
 
-  it('puts the keyboard in the waiting shell, with no stop in Shell 1, as shells open', async () => {
+  it('puts the keyboard in the waiting shell, with no stop in Shell 1, on open', async () => {
     answerable({ implement: 'running', 'test-spec': 'needs-input' }, 1)
     await agentShown('Shell 2')
     await waitFor(async () => expect(await tokenOf('Shell 2')).not.toBe(''))
@@ -290,6 +384,77 @@ describe('ShellPanes answer in terminal', () => {
     update({ implement: 'running', 'test-spec': 'needs-input' }, 1)
     await waitFor(() => expect(screen.getByRole('region', { name: 'Shell 2' })).toBeTruthy())
     expect(await tokenOf('Shell 2')).not.toBe('')
+  })
+})
+
+describe('ShellPanes first agent', () => {
+  // Opening the workspace from another task asks for the first agent.
+  beforeEach(() => {
+    useViewStore.setState({ shellRequest: { taskId: 'T-0001', name: null, at: 1 } })
+  })
+  afterEach(() => {
+    useViewStore.setState({ shellRequest: null })
+    layout.phone = false
+  })
+
+  const tokenOf = (name: string) =>
+    within(screen.getByRole('region', { name }))
+      .getByText('Terminal stand-in')
+      .getAttribute('data-focus-token')
+  const answered = () => waitFor(() => expect(useViewStore.getState().shellRequest).toBeNull())
+
+  it('focuses the lowest shell where an agent runs', async () => {
+    shells('claude-code', ['1', '2', '3'], ['2', '3'])
+    await agentShown('Shell 3')
+    await answered()
+    expect(tokenOf('Shell 2')).not.toBe('')
+    expect(tokenOf('Shell 1')).toBe('')
+    expect(tokenOf('Shell 3')).toBe('')
+  })
+
+  it('focuses Shell 1 when no shell runs an agent', async () => {
+    shells(null, ['1', '2'], [])
+    await screen.findByRole('region', { name: 'Shell 2' })
+    await answered()
+    expect(tokenOf('Shell 1')).not.toBe('')
+    expect(tokenOf('Shell 2')).toBe('')
+  })
+
+  it('focuses the first agent, not the shell that waits for the user', async () => {
+    renderShells(
+      {
+        id: 'T-0001',
+        state: 'needs-input',
+        stage: 'build',
+        lanes: { 'test-spec': 'running', docs: 'needs-input' },
+        agent: 'claude-code',
+      },
+      ['1', '2', '3'],
+      {
+        '2': { stage: 'test-spec', state: 'running' },
+        '3': { stage: 'docs', state: 'needs-input' },
+      },
+    )
+    await agentShown('Shell 3')
+    await answered()
+    expect(tokenOf('Shell 2')).not.toBe('')
+    expect(tokenOf('Shell 3')).toBe('')
+  })
+
+  it('leaves a request for another task alone', async () => {
+    useViewStore.setState({ shellRequest: { taskId: 'T-0002', name: null, at: 1 } })
+    shells('claude-code', ['1'], ['1'])
+    await agentShown('Shell 1')
+    expect(tokenOf('Shell 1')).toBe('')
+    expect(useViewStore.getState().shellRequest).not.toBeNull()
+  })
+
+  it('takes no keyboard on a phone', async () => {
+    layout.phone = true
+    shells('claude-code', ['1'], ['1'])
+    await agentShown('Shell 1')
+    await answered()
+    expect(tokenOf('Shell 1')).toBe('')
   })
 })
 
@@ -432,6 +597,30 @@ describe('ShellPanes stage shells', () => {
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2', 'Shell 3'])
   })
 
+  it('follows the agent of a shell from poll to poll', async () => {
+    const claude: TerminalLane = { ...NO_LANE, agent: 'claude-code' }
+    const codex: TerminalLane = { ...NO_LANE, agent: 'codex' }
+    const shell1: TerminalLane = { ...IMPLEMENT, agent: 'claude-code' }
+    const { state, view } = daemon(['1', '2'], { '1': shell1 })
+    render(view(implementing))
+    await agentShown('Shell 1')
+    expect(agentIcons('Shell 2')).toHaveLength(0)
+
+    state.lanes = { '1': shell1, '2': codex }
+    await poll()
+    await within(header('Shell 2')).findByText('Codex')
+
+    // Codex quit: only the shell runs, so the daemon lists no agent there.
+    state.lanes = { '1': shell1 }
+    await poll()
+    await waitFor(() => expect(agentIcons('Shell 2')).toHaveLength(0))
+
+    state.lanes = { '1': shell1, '2': claude }
+    await poll()
+    await within(header('Shell 2')).findByText('Claude Code')
+    expect(within(header('Shell 2')).queryByText('Codex')).toBeNull()
+  })
+
   it('shows a plain shell until its agent is listed, then follows its state', async () => {
     const { state, view } = daemon(['1', '2'], { '1': IMPLEMENT })
     const { rerender } = render(view(building))
@@ -510,6 +699,23 @@ describe('ShellPanes stage shells', () => {
     expect(noPane('Shell 2')).toBeNull()
     expect(pane('Shell 1')).toBeTruthy()
     expect(state.terminals).toEqual(['1'])
+  })
+
+  it('gives each shell a cache key, and a closed shell leaves the cache (AC 5)', async () => {
+    const { view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const user = typist()
+    vi.mocked(disposeTerminal).mockClear()
+    render(view(building))
+    await agentShown('Shell 2')
+    const keyOf = (name: string) =>
+      within(pane(name)).getByText('Terminal stand-in').getAttribute('data-cache-key')
+    expect(keyOf('Shell 1')).toBe('T-0001/1')
+    expect(keyOf('Shell 2')).toBe('T-0001/2')
+
+    await user.click(screen.getByRole('button', { name: 'Close Shell 2' }))
+    expect(vi.mocked(disposeTerminal)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(disposeTerminal)).toHaveBeenCalledWith('T-0001/2')
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
   })
 
   it('brings back a closed shell when the daemon opens it again', async () => {

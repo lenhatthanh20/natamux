@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { PermissionMode } from '@natamux/core'
+import { SHELLS } from './terminal-service.js'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
 export const LAUNCHABLE_AGENTS = ['claude-code', 'codex', 'gemini', 'copilot', 'cursor'] as const
@@ -19,6 +20,29 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
   gemini: 'gemini',
   copilot: 'copilot',
   cursor: 'cursor-agent',
+}
+
+// Programs that run the script of an agent: one installed with npm runs as `node <path>/codex`.
+const RUNTIMES = ['node', 'bun', 'deno', ...SHELLS]
+
+// `/usr/lib/node_modules/@openai/codex/bin/codex.js` names the program `codex`.
+const programName = (word: string) => basename(word).replace(/\.[cm]?js$|\.exe$/, '')
+
+// The agent a command line runs, by its program: the one configured for an agent or the default.
+// After a runtime, the script counts.
+export function agentOfCommand(
+  line: string,
+  programOf: (agent: LaunchableAgent) => string,
+): LaunchableAgent | undefined {
+  const words = line.trim().split(/\s+/)
+  const first = programName(words[0] ?? '')
+  const script = words.slice(1).find((word) => !word.startsWith('-'))
+  const name = RUNTIMES.includes(first) && script !== undefined ? programName(script) : first
+  return LAUNCHABLE_AGENTS.find((agent) =>
+    [DEFAULT_PROGRAMS[agent], programOf(agent).trim().split(/\s+/)[0] ?? '']
+      .map(programName)
+      .includes(name),
+  )
 }
 
 // The flags of the `auto` permission mode. Only Claude Code checks each action in its auto mode;
@@ -142,6 +166,8 @@ export type LaunchOptions = {
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
+  // A Claude Code session to go on with. Other agents start a new one.
+  session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
   geminiSettingsPath: string
@@ -163,6 +189,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
+        ...(options.session === undefined ? [] : ['--resume', quote(options.session)]),
         ...extra,
         ...prompt,
       ].join(' ')
