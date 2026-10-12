@@ -722,17 +722,7 @@
   border-top: 1px solid var(--line);
 }
 
-/* The terminal's scrollbar shows when the pointer is over the pane. */
-.hm-terminal .xterm-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.hm-terminal:hover .xterm-viewport,
-.hm-terminal:focus-within .xterm-viewport {
-  scrollbar-color: var(--scroll-hover) transparent;
-}
-
+/* xterm 6 draws its own scrollbar, which shows on hover and while scrolling. */
 .hm-terminal .xterm-scrollable-element > .scrollbar > .slider {
   border-radius: 9999px;
 }
