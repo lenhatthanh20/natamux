@@ -135,7 +135,9 @@ test('dims the selection of a terminal without the focus (C15)', async ({ page }
   const first = pane(page, 'Shell 1')
   await runIn(page, first, 'clear; echo selectme')
   await expect(rows(first)).toContainText('selectme')
-  await rows(first).getByText('selectme', { exact: true }).dblclick()
+  // Playwright never finds xterm's text element ready for a click, so the mouse goes to its place.
+  const word = await rows(first).getByText('selectme', { exact: true }).boundingBox()
+  await page.mouse.dblclick((word?.x ?? 0) + 10, (word?.y ?? 0) + (word?.height ?? 0) / 2)
   const selection = first.locator('.xterm-selection div').first()
   await expect(selection).toBeVisible()
   const focused = await selection.evaluate((element) => getComputedStyle(element).backgroundColor)
