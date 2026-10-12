@@ -75,7 +75,7 @@ describe('PipelinePreview', () => {
     expect(spec.getAttribute('aria-pressed')).toBe('true')
     const review = within(chart).getByRole('button', { name: /^Review/ })
     expect(review.hasAttribute('data-error')).toBe(true)
-    expect(review.getAttribute('data-tip')).toBe('Agent · Moves on by itself')
+    expect(review.getAttribute('data-tip')).toBe('Agent · Moves on by itself · Output: review.md')
   })
 
   it('C19: draws one stage as one node, without a fork', () => {
