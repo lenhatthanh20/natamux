@@ -53,8 +53,6 @@ export class TerminalLimitError extends Error {
 
 export const MAX_SESSIONS = 20
 export const TICKET_TTL_MS = 30_000
-// The history goes to a new dashboard in messages of this size, so no frame is megabytes long.
-export const REPLAY_CHUNK_CHARS = 64 * 1024
 // Output is sent in batches. A chunk that comes after a quiet moment and is small (typing echo)
 // goes out on the next turn; anything else waits this long for more.
 export const OUTPUT_COALESCE_MS = 4
@@ -102,10 +100,6 @@ export const SHELLS = [
   'powershell.exe',
   'cmd.exe',
 ]
-
-function isHighSurrogate(code: number): boolean {
-  return code >= 0xd800 && code <= 0xdbff
-}
 
 // What a snapshot of the screen asks its owner to do, see ScreenState.snapshot.
 export type SnapshotSteps = {
@@ -377,21 +371,6 @@ function charBorder(bytes: Buffer, start: number, end: number): number {
 
 function sameSize(a: TerminalSize, b: TerminalSize): boolean {
   return a.cols === b.cols && a.rows === b.rows
-}
-
-// `text` in pieces of at most `size` chars, none of them ending inside a surrogate pair.
-export function replayChunks(text: string, size = REPLAY_CHUNK_CHARS): string[] {
-  const chunks: string[] = []
-  let start = 0
-  while (start < text.length) {
-    let end = Math.min(start + size, text.length)
-    if (end < text.length && end - 1 > start && isHighSurrogate(text.charCodeAt(end - 1))) {
-      end -= 1
-    }
-    chunks.push(text.slice(start, end))
-    start = end
-  }
-  return chunks
 }
 
 function sessionKey(taskId: string, terminal: string): string {

@@ -21,7 +21,6 @@ import {
   OUTPUT_FRAME_BYTES,
   OUTPUT_IDLE_BYTES,
   OUTPUT_RING_BYTES,
-  replayChunks,
   SNAPSHOT_SYNC_WAIT_MS,
   sliceEnd,
   splitFrames,
@@ -862,19 +861,6 @@ describe('the size of a shell shown in several places', () => {
   })
 })
 
-describe('replayChunks', () => {
-  it('splits a text into pieces of at most the given size', () => {
-    expect(replayChunks('abcdefg', 3)).toEqual(['abc', 'def', 'g'])
-    expect(replayChunks('', 3)).toEqual([])
-  })
-
-  it('never splits a surrogate pair', () => {
-    const chunks = replayChunks('ab😀cd', 3)
-    expect(chunks).toEqual(['ab', '😀c', 'd'])
-    expect(chunks.join('')).toBe('ab😀cd')
-  })
-})
-
 describe('onOutput', () => {
   it('hears every piece of output, with the terminal name', () => {
     const { spawn, ptys } = fakeSpawner()
@@ -1153,7 +1139,10 @@ describe('splitFrames', () => {
 })
 
 describe('sliceEnd', () => {
-  const wrappedAt = (...rows: number[]) => (row: number) => rows.includes(row)
+  const wrappedAt =
+    (...rows: number[]) =>
+    (row: number) =>
+      rows.includes(row)
 
   it('ends a slice after the given rows, or at the end', () => {
     expect(sliceEnd(wrappedAt(), 0, 100, 30)).toBe(30)
