@@ -20,11 +20,12 @@ describe('agentIcon', () => {
 
 describe('every known agent', () => {
   it.each(AGENT_CHOICES.map((choice) => [choice.id, choice]))(
-    '%s has a label and its own icon entry',
+    '%s has a label and an icon of its own, not the generic one',
     (id, choice) => {
       expect(choice.label.trim()).not.toBe('')
       expect(agentLabel(id)).toBe(choice.label)
       expect(agentIcon(id)).toBe(choice.icon)
+      expect(agentIcon(id)).toBeDefined()
     },
   )
 

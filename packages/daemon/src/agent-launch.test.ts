@@ -190,6 +190,10 @@ describe('agentOfCommand', () => {
     ['node /opt/homebrew/bin/gemini -i Fix it', 'gemini'],
     ['node /opt/homebrew/bin/copilot', 'copilot'],
     ['/bin/bash /Users/me/.local/bin/cursor-agent --force', 'cursor'],
+    ['codex --model x', 'codex'],
+    ['claude -p hi', 'claude-code'],
+    ['/usr/local/bin/codex', 'codex'],
+    ['cursor-agent', 'cursor'],
   ])('finds the agent of %s', (line, agent) => {
     expect(agentOfCommand(line, defaults)).toBe(agent)
   })
@@ -200,6 +204,20 @@ describe('agentOfCommand', () => {
     'bash ./build.sh',
     'sleep 60',
     '',
+    // Only the name of an agent counts, not a name that holds one.
+    'claude-foo',
+    'my-codex',
+    // Node.js itself, or a tool that runs on it.
+    'node',
+    'node /usr/local/bin/pnpm dev',
+    'node /usr/local/bin/npm run dev',
+    'node /home/u/codex-notes/server.js',
+    'bash',
+    'htop',
+    'less codex.log',
+    // An agent on another machine is not in this shell.
+    'ssh dev codex',
+    'docker exec -it box claude',
   ])('finds no agent in %s', (line) => {
     expect(agentOfCommand(line, defaults)).toBeUndefined()
   })

@@ -578,7 +578,8 @@ export class StageRunner {
   // platform does not list them, or just after the launch, the one this daemon started there. Null
   // for a program that is no agent Natamux knows.
   async agentIn(taskId: string, terminal: string): Promise<string | null> {
-    const commands = await this.terminals.commands(taskId, terminal)
+    // A process that ends while `ps` runs must not fail the request.
+    const commands = await this.terminals.commands(taskId, terminal).catch(() => undefined)
     const programOf = (agent: LaunchableAgent) => this.agents.programOf(agent)
     for (const line of commands ?? []) {
       const agent = agentOfCommand(line, programOf)

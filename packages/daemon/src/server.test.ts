@@ -1262,6 +1262,17 @@ describe('terminal', () => {
     expect(ptys[0]?.written).toEqual(['pwd\r', 'done'])
   })
 
+  it('lists no terminals for a task that has none', async () => {
+    await taskWithWorkspace()
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(listed.statusCode).toBe(200)
+    expect(listed.json()).toEqual({ terminals: [], agents: [], lanes: {} })
+  })
+
   it('opens a second terminal, lists the terminals and closes one', async () => {
     await taskWithWorkspace()
     await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
@@ -1301,6 +1312,17 @@ describe('terminal', () => {
       headers: authorization,
     })
     expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null, agent: 'codex' })
+    // Reading the processes fails: the shell names no agent, and the list still comes.
+    ;(ptys[1] as FakePty).commands = async () => {
+      throw new Error('ps failed')
+    }
+    const unread = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(unread.statusCode).toBe(200)
+    expect(unread.json().lanes['2']).toEqual({ stage: null, state: null, agent: null })
 
     const closed = closeCode(second)
     const removed = await app.inject({

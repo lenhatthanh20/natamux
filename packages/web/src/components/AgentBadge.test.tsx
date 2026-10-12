@@ -37,6 +37,13 @@ describe('AgentBadge', () => {
     },
   )
 
+  it('draws Codex with its own image, not the generic icon', () => {
+    render(<AgentBadge agent="codex" />)
+    expect(badge().textContent).toBe('Codex')
+    expect(badge().querySelector('img')?.getAttribute('src')).toBeTruthy()
+    expect(genericIcon()).toBeNull()
+  })
+
   it('gives each agent with an icon its own image', () => {
     const sources = AGENT_CHOICES.filter((choice) => choice.icon !== undefined).map((choice) => {
       const view = render(<AgentBadge agent={choice.id} />)

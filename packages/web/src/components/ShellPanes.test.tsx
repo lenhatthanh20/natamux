@@ -128,15 +128,32 @@ describe('ShellPanes agent badge', () => {
   it('shows the agent that runs in each shell, not the agent of the task', async () => {
     renderShells(
       { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
-      ['1', '2'],
+      ['1', '2', '3'],
       {
         '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
         '2': { ...NO_LANE, agent: 'codex' },
+        '3': { ...NO_LANE, agent: 'codex' },
       },
     )
-    await within(header('Shell 2')).findByText('Codex')
-    expect(within(header('Shell 2')).queryByText('Claude Code')).toBeNull()
+    for (const name of ['Shell 2', 'Shell 3']) {
+      await within(header(name)).findByText('Codex')
+      expect(within(header(name)).queryByText('Claude Code')).toBeNull()
+      expect(agentIcons(name)).toHaveLength(1)
+    }
     expect(within(header('Shell 1')).getByText('Claude Code')).toBeTruthy()
+  })
+
+  it('shows an agent typed by hand when the task has another agent', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'gemini' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'gemini' },
+        '2': { ...NO_LANE, agent: 'claude-code' },
+      },
+    )
+    await within(header('Shell 2')).findByText('Claude Code')
+    expect(within(header('Shell 1')).getByText('Gemini CLI')).toBeTruthy()
   })
 
   it('shows no badge on a shell whose program is no agent Natamux knows', async () => {
@@ -409,6 +426,30 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
     await agentShown('Shell 3')
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2', 'Shell 3'])
+  })
+
+  it('follows the agent of a shell from poll to poll', async () => {
+    const claude: TerminalLane = { ...NO_LANE, agent: 'claude-code' }
+    const codex: TerminalLane = { ...NO_LANE, agent: 'codex' }
+    const shell1: TerminalLane = { ...IMPLEMENT, agent: 'claude-code' }
+    const { state, view } = daemon(['1', '2'], { '1': shell1 })
+    render(view(implementing))
+    await agentShown('Shell 1')
+    expect(agentIcons('Shell 2')).toHaveLength(0)
+
+    state.lanes = { '1': shell1, '2': codex }
+    await poll()
+    await within(header('Shell 2')).findByText('Codex')
+
+    // Codex quit: only the shell runs, so the daemon lists no agent there.
+    state.lanes = { '1': shell1 }
+    await poll()
+    await waitFor(() => expect(agentIcons('Shell 2')).toHaveLength(0))
+
+    state.lanes = { '1': shell1, '2': claude }
+    await poll()
+    await within(header('Shell 2')).findByText('Claude Code')
+    expect(within(header('Shell 2')).queryByText('Codex')).toBeNull()
   })
 
   it('shows a plain shell until its agent is listed, then follows its state', async () => {
