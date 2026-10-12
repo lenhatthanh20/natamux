@@ -16,7 +16,7 @@ import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
 import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
-import { effectiveSidebarWidth } from '../lib/layout-mode'
+import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { removeEach, removeSummary } from '../lib/remove-finished'
@@ -459,8 +459,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
   const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
-  const sidebar = useStoredWidth('natamux.sidebar-width', 272, 220, 440)
-  const details = useStoredWidth('natamux.details-width', 360, 320, 560)
+  const sidebar = useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)
+  const details = useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)
   const viewportWidth = useViewportWidth()
   const sidebarWidth = effectiveSidebarWidth(sidebar.width, viewportWidth)
   const shellLayout = useLayoutMode({
@@ -788,7 +788,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           )
         }
         sidebar={{
-          sizing: { ...sidebar, width: sidebarWidth, defaultWidth: 272 },
+          sizing: { ...sidebar, width: sidebarWidth, defaultWidth: PANEL_WIDTH },
           open: sidebarOpen,
           drawerOpen,
           onCollapse: () => setSidebarOpen(false),
@@ -892,7 +892,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         details={
           detailOpen && detailTask
             ? {
-                sizing: { ...details, defaultWidth: 360 },
+                sizing: { ...details, defaultWidth: PANEL_WIDTH },
                 onClose: () => setDetailOpen(detailTask.id, false),
                 render: (mode) => (
                   <TaskDetail

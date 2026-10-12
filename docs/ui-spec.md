@@ -287,7 +287,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | Title bar 36                                                     |
 +-----------+------------------------------------+-----------------+
 | Sidebar   | Main                               | Details         |
-| 272       | view header 44 / workspace hdr 44  | 360             |
+| 320       | view header 44 / workspace hdr 44  | 320             |
 | (220-440) | tabs 36                            | (320-560)       |
 |           | content                            |                 |
 +-----------+------------------------------------+-----------------+
@@ -305,7 +305,7 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 - Electron: whole bar is `-webkit-app-region: drag`; every control `no-drag`. Window inactive (`:root[data-window="inactive"]`): title bar text and icons use `--muted`.
 - Moves out of the sidebar header: "Natamux" title and the "Start a task" button (the sidebar keeps the filter field and lists).
 
-**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 272, min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
+**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 320 (the same as the details), min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
 2. Nav rows (28px): All tasks + count, Agents + count.
 3. Needs you section (compact, see 4.12).
@@ -315,7 +315,7 @@ Only part 5 scrolls (fixes NAV-16).
 
 **Main** (`<main id="main">`), `bg-canvas`, `container-type: inline-size; container-name: main`. Min widths: terminal content 480, diff 560, table 360 (card list below 560).
 
-**Details** (`<aside>`), `bg-surface`, default 360, min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
+**Details** (`<aside>`), `bg-surface`, default 320 (the same as the sidebar), min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
 
 **Status bar** (`components/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
@@ -331,8 +331,8 @@ Extra rule at every width: details dock only if main stays >= 640 after docking;
 
 | Width | Sidebar | Details | Main content | Title bar | Status bar |
 |---|---|---|---|---|---|
-| >= 1440 | docked 272 | docked 360 when open | table all columns; diff side by side; agents auto-fill | full | full |
-| 1280-1439 | docked 272 | docked if main >= 640, else sheet | table drops Branch | full | full |
+| >= 1440 | docked 320 | docked 320 when open | table all columns; diff side by side; agents auto-fill | full | full |
+| 1280-1439 | docked 320 | docked if main >= 640, else sheet | table drops Branch | full | full |
 | 1024-1279 | docked, default 248, max 30vw | sheet: slides over main from the right, 360, `--shadow-2`, no scrim, stays until Esc / close / toggle | table drops Branch + PR; diff inline if diff width < 720; agents max 2 columns | wordmark hidden | Projects / Import become icon-only with tooltips |
 | 768-1023 | drawer: 300 (max 85vw), slides from left over a scrim, opened by the title bar toggle or Mod+B, closes on pick / Esc / scrim click | sheet with scrim, 360 (max 90vw) | table: Id, Task, State, Last activity; diff inline only, file list collapses to a file picker above the diff; terminal panes stack when < 320 each; workspace header actions: Push stays, PR becomes icon+"PR" | breadcrumb shortened to task id | only Live dot, running, needs-you, `?`, account |
 | < 768 (design at 390) | drawer full height, width min(360, 100vw) | full page with a Back button (`ArrowLeft`), replaces main | table becomes a card list; board shows one column at a time with a state segmented control on top; workspace: title wraps to 2 lines, Push/PR go into a "..." menu, tabs scroll, ONE terminal at a time with a pane switcher (Shell 1 / Shell 2 chips); agents: 1 column, each pane `min-height: 60vh`, scroll; diff inline + wrap on; dialogs become bottom sheets; toasts full width | 44px: menu, view title, needs-you pill, `+`; command center becomes a `Search` icon button | hidden; Live state is a 6px dot on the title bar menu button; status items move to the drawer footer |

@@ -2929,6 +2929,29 @@ describe('App', () => {
     expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
   })
 
+  it('starts the sidebar and the docked details at the same width', async () => {
+    stubWindowWidth(1280)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    openWorkspace('T-0001')
+    await screen.findByRole('complementary', { name: 'Details of T-0001' })
+    const sidebarHandle = screen.getByRole('separator', { name: 'Resize the sidebar' })
+    const detailsHandle = screen.getByRole('separator', { name: 'Resize the details' })
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('320')
+    expect(detailsHandle.getAttribute('aria-valuenow')).toBe('320')
+
+    // Each panel still resizes on its own, and Enter brings it back to the shared width.
+    sidebarHandle.focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('304')
+    expect(detailsHandle.getAttribute('aria-valuenow')).toBe('320')
+    await user.keyboard('{Enter}')
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('320')
+  })
+
   it('opens the details once a workspace is made from the empty workspace view', async () => {
     installDaemon([reviewTask])
     const user = userEvent.setup()
