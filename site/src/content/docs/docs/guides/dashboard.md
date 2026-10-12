@@ -59,7 +59,7 @@ Pick a view with the **Layout** switch above the list.
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
-The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
+The default order puts what needs you first: Needs your input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
@@ -114,7 +114,7 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 | Draft | A task in the backlog. |
 | Ready | Marked ready to start. |
 | Running | An agent works on it. |
-| Needs input | The agent asked a question. |
+| Needs your input | The agent asked a question, or ended its turn without `natamux done`. |
 | In review | Work is ready for you to review. |
 | Blocked | You or Natamux blocked it. |
 | Failed | The agent or a stage failed. |
@@ -125,7 +125,7 @@ See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 ## Needs you
 
-A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
+A task needs you when it is in Needs your input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
 - The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage and what the agent asks, or why the task failed, with how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
 - The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks.

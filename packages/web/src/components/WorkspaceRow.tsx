@@ -26,7 +26,7 @@ type WorkspaceRowProps = {
   stat?: DiffStat
   // What the agent does now, for a running task.
   activity?: string
-  // What the agent asked, or why the task failed. Null while it is not known.
+  // Why the task failed. Null while it is not known. The Needs you section has the question.
   question?: string | null
   // The state changed since the user last opened this workspace.
   unseen: boolean
@@ -184,11 +184,6 @@ export function WorkspaceRow({
       </span>
       {task.state === 'running' && activity !== undefined && activity !== '' && (
         <span className={`block h-4 w-full truncate pl-6 ${metaColor}`}>{activity}</span>
-      )}
-      {task.state === 'needs-input' && (
-        <span data-tip-overflow className="block h-4 w-full truncate pl-6 text-signal">
-          {question ?? 'Waiting for your answer'}
-        </span>
       )}
       {/* Why it failed, so the user need not open each failed task to find out. */}
       {task.state === 'failed' && typeof question === 'string' && (

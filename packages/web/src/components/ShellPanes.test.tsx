@@ -123,9 +123,9 @@ async function agentShown(name: string) {
 const glyphState = (name: string) =>
   header(name).querySelector('[data-state]')?.getAttribute('data-state') ?? null
 
-// The bar at the top of a pane whose agent waits for the user.
-const needsInputBar = (name: string) =>
-  screen.getByRole('region', { name }).querySelector('.bg-signal')
+// The amber parts of a pane. A waiting pane has one: its state text.
+const AMBER = '.bg-signal, .bg-signal-soft, .text-signal'
+const amber = (name: string) => [...screen.getByRole('region', { name }).querySelectorAll(AMBER)]
 
 const focusOnOpen = async (name: string) => {
   const pane = screen.getByRole('region', { name })
@@ -259,8 +259,28 @@ describe('ShellPanes agent state', () => {
     await agentShown('Shell 2')
     expect(stateLine('Shell 2')).toBe('Needs your input')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
-    expect(needsInputBar('Shell 2')).toBeTruthy()
-    expect(needsInputBar('Shell 1')).toBeNull()
+    expect(amber('Shell 2').map((element) => element.textContent)).toEqual(['Needs your input'])
+    expect(amber('Shell 1')).toEqual([])
+
+    // Maximized, it is the only agent shell on the screen, so the banner is enough.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Maximize Shell 2' }))
+    expect(amber('Shell 2')).toEqual([])
+  })
+
+  // The banner over the tabs already says it, so the only agent shell adds nothing.
+  it('does not mark the only agent shell when it waits', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'needs-input', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      { '1': { stage: 'implement', state: 'running' } },
+    )
+    await agentShown('Shell 1')
+    await screen.findByRole('region', { name: 'Shell 2' })
+    expect(glyphState('Shell 1')).toBe('needs-input')
+    expect(stateLine('Shell 1')).toBeUndefined()
+    expect(amber('Shell 1')).toEqual([])
+    // The glyph still says the state to screen readers.
+    expect(header('Shell 1').querySelector('.sr-only')?.textContent).toBe('Needs your input')
   })
 
   it('keeps the activity of each shell apart', async () => {
@@ -363,6 +383,19 @@ describe('ShellPanes answer in terminal', () => {
     expect(await tokenOf('Shell 2')).toBe('')
     update({ implement: 'needs-input', 'test-spec': 'running' }, 1)
     expect(await tokenOf('Shell 1')).toBe(token)
+  })
+
+  it('marks each shell that waits, and drops the mark when it runs again', async () => {
+    const { update } = answerable({ implement: 'needs-input', 'test-spec': 'needs-input' })
+    await agentShown('Shell 2')
+    for (const name of ['Shell 1', 'Shell 2']) {
+      expect(amber(name).map((element) => element.textContent)).toEqual(['Needs your input'])
+    }
+
+    update({ implement: 'running', 'test-spec': 'needs-input' }, 0)
+    expect(amber('Shell 1')).toEqual([])
+    expect(stateLine('Shell 1')).toBe('Running')
+    expect(amber('Shell 2')).toHaveLength(1)
   })
 
   it('puts the keyboard in the waiting shell, with no stop in Shell 1, on open', async () => {
@@ -595,6 +628,20 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
     await agentShown('Shell 3')
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2', 'Shell 3'])
+  })
+
+  it('adds no mark when the only agent shell starts waiting', async () => {
+    const { view } = daemon(['1', '2'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    expect(stateLine('Shell 1')).toBe('Running')
+
+    rerender(view({ ...implementing, state: 'needs-input' }))
+    expect(stateLine('Shell 1')).toBeUndefined()
+    expect(amber('Shell 1')).toEqual([])
+
+    rerender(view(implementing))
+    expect(stateLine('Shell 1')).toBe('Running')
   })
 
   it('follows the agent of a shell from poll to poll', async () => {

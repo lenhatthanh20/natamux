@@ -422,7 +422,8 @@ describe('after the removal', () => {
 })
 
 describe('the line under a waiting or failed task', () => {
-  it('says why a task failed, in the failed color', () => {
+  // The Needs you section has the question, so the tree row shows only the glyph.
+  it('says why a task failed, in the failed color, and leaves the question out', () => {
     const failed = makeTask({ id: 'T-0006', title: 'Broken', state: 'failed' })
     const asks = makeTask({ id: 'T-0007', title: 'Asking', state: 'needs-input' })
     render(
@@ -435,6 +436,9 @@ describe('the line under a waiting or failed task', () => {
     const reason = screen.getByText('claude: command not found')
     expect(reason.getAttribute('data-state')).toBe('failed')
     expect(reason.className).toContain('text-(--chip-fg)')
-    expect(screen.getByText('Which test runner?').className).toContain('text-signal')
+    expect(screen.queryByText('Which test runner?')).toBeNull()
+    expect(screen.queryByText('Waiting for your answer')).toBeNull()
+    const row = screen.getByRole('button', { name: /^Asking,/ })
+    expect(row.querySelector('[data-state="needs-input"]')).toBeTruthy()
   })
 })

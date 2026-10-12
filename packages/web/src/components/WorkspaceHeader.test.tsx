@@ -198,4 +198,13 @@ describe('WorkspaceHeader', () => {
     header({ ahead: 1, push: tracked(1) })
     expect(pullRequest().dataset.variant).toBe('primary')
   })
+
+  it('shows the state chip, but not while the agent waits: the banner says it', () => {
+    header({})
+    expect(document.querySelector('.state-chip')?.textContent).toBe('Running')
+    cleanup()
+
+    header({ task: { ...TASK, state: 'needs-input' } })
+    expect(document.querySelector('.state-chip')).toBeNull()
+  })
 })

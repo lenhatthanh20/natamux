@@ -18,6 +18,7 @@ import {
   needsMeReason,
   needsMeTasks,
   nextSort,
+  rowLabel,
   STATE_LABEL,
   sortByRecent,
   sortTasks,
@@ -130,7 +131,12 @@ describe('stage labels', () => {
   it('names the stage of a task that is in progress', () => {
     const task = makeTask({ stage: 'test-spec', state: 'needs-input' })
     expect(stageLabel(task)).toBe('Test spec')
-    expect(stageStateLabel(task)).toBe('Test spec · Needs input')
+    expect(stageStateLabel(task)).toBe('Test spec · Needs your input')
+  })
+
+  it('names the waiting state the same way for screen readers', () => {
+    const task = makeTask({ state: 'needs-input', updatedAt: '2026-10-08T09:00:00.000Z' })
+    expect(rowLabel(task, new Date('2026-10-08T09:00:00.000Z'))).toContain(', Needs your input, ')
   })
 
   it('has no stage for a draft or a finished task', () => {

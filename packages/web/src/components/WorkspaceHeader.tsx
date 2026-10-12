@@ -93,7 +93,8 @@ export function WorkspaceHeader({
       >
         {task.title}
       </h2>
-      <StateBadge state={task.state} lanes={laneSummary(task)} />
+      {/* While the agent waits, the banner under the header says it. One amber place is enough. */}
+      {task.state !== 'needs-input' && <StateBadge state={task.state} lanes={laneSummary(task)} />}
       {/* In a narrow header the title needs the room more. The sidebar row and the details show
           the branch too. */}
       {task.branch !== null && !compact && (
