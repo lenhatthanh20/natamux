@@ -78,13 +78,14 @@ function subscribe(onChange: () => void): () => void {
   return () => observer.disconnect()
 }
 
-function snapshot(): ResolvedTheme {
+// The theme the page shows now, read outside React (a cached terminal takes it when shown).
+export function pageTheme(): ResolvedTheme {
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
 // The theme the page shows now, for things that cannot read CSS variables (Monaco, xterm).
 export function useResolvedTheme(): ResolvedTheme {
-  return useSyncExternalStore(subscribe, snapshot, () => 'dark')
+  return useSyncExternalStore(subscribe, pageTheme, () => 'dark')
 }
 
 // The UI size factor on <html>, for fonts that are set in px (xterm, Monaco).

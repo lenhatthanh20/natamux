@@ -23,3 +23,16 @@ export function descendants(psOutput: string, root: number): number[] {
   visit(root)
   return found
 }
+
+// The command lines of the processes under `root`, parents first. Reads
+// `ps -A -o pid=,ppid=,args=` output.
+export function commandsUnder(psOutput: string, root: number): string[] {
+  const args = new Map<number, string>()
+  for (const line of psOutput.split('\n')) {
+    const match = /^\s*(\d+)\s+\d+\s+(.*)$/.exec(line)
+    if (match?.[1] !== undefined && match[2] !== undefined) {
+      args.set(Number(match[1]), match[2])
+    }
+  }
+  return descendants(psOutput, root).flatMap((pid) => args.get(pid) ?? [])
+}

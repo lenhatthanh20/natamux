@@ -16,7 +16,7 @@ import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
-import { TaskService } from './task-service.js'
+import { isTaskEnded, TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
@@ -72,15 +72,7 @@ const terminals = new TerminalService({
     stages.onOutput(taskId, terminal, data)
     genericSignals.onOutput(taskId, terminal, data)
   },
-  isEnded: (taskId) => {
-    try {
-      const { state } = service.getTask(taskId)
-      return state === 'done' || state === 'cancelled'
-    } catch {
-      // A task that is gone needs its shells no more either.
-      return true
-    }
-  },
+  isEnded: (taskId) => isTaskEnded(service, taskId),
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')

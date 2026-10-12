@@ -4,11 +4,16 @@ import websocket from '@fastify/websocket'
 import {
   attachmentUploadsSchema,
   base64Length,
+  CLOSE_GONE,
+  CLOSE_REFUSED,
+  CLOSE_UNAUTHORIZED,
   IMAGE_SIDES,
   issueLinkSchema,
   MAX_TASK_ATTACHMENT_SIZE,
   previewTypeOf,
   repoIdSchema,
+  SILENT_CLOSE_MS,
+  shellIdSchema,
   TASK_ID_HEADER,
   TERMINAL_HEADER,
   type TerminalServerMessage,
@@ -75,6 +80,8 @@ import { TemplateNotFoundError, type TemplateService } from './template-service.
 import {
   MAIN_TERMINAL,
   NoTerminalError,
+  ShellGoneError,
+  type TerminalClient,
   TerminalLimitError,
   type TerminalService,
 } from './terminal-service.js'
@@ -171,13 +178,14 @@ const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is nam
 const terminalQuerySchema = terminalSizeSchema.extend({
   ticket: z.string().min(1).max(256),
   terminal: terminalNameSchema.default(MAIN_TERMINAL),
+  // Whether the terminal is on screen when it connects. Only then it takes the shell's size.
+  visible: z.enum(['0', '1']).default('1'),
+  // A client that lost its socket resumes its shell, from `offset` when the ring still has it.
+  shellId: shellIdSchema.optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 })
 const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
-
-// Close codes of the terminal socket, in the range that applications may use.
-const CLOSE_UNAUTHORIZED = 4401
-const CLOSE_REFUSED = 4409
 
 export function isAuthorized(provided: string | undefined, token: string): boolean {
   if (provided === undefined) {
@@ -636,9 +644,15 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const terminals = options.terminals.list(id)
     // The shells where an agent runs now, so a shell left after a restart is not called the agent's.
     const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
-    // Each agent shows the state of its own stage, not the state of the whole task.
+    // Each agent shows the state of its own stage, not the state of the whole task, and the agent
+    // that runs there, which may not be the task's.
     const lanes = Object.fromEntries(
-      agents.map((name) => [name, options.stages.laneOfTerminal(task, name)]),
+      await Promise.all(
+        agents.map(async (name) => {
+          const agent = await options.stages.agentIn(id, name)
+          return [name, { ...options.stages.laneOfTerminal(task, name), agent }] as const
+        }),
+      ),
     )
     return { terminals, agents, lanes }
   })
@@ -654,7 +668,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { ticket: options.terminals.issueTicket(id) }
   })
 
-  // A shell in the task's workspace. Frames are JSON, see terminal.ts in @natamux/core.
+  // A shell in the task's workspace. Output is binary, control messages are JSON, see terminal.ts
+  // in @natamux/core.
   app.get('/tasks/:id/terminal', { websocket: true }, (socket, request) => {
     const params = taskParamsSchema.safeParse(request.params)
     const query = terminalQuerySchema.safeParse(request.query)
@@ -667,11 +682,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
     const taskId = params.data.id
-    const { terminal } = query.data
-    const client = {
-      send: (message: TerminalServerMessage) => {
-        socket.send(JSON.stringify(message))
-        if (message.type === 'exit') {
+    const { cols, rows, terminal, shellId, offset } = query.data
+    const attachOptions = { visible: query.data.visible === '1', shellId, offset }
+    const client: TerminalClient = {
+      send: (frame) => {
+        // ws sends a Buffer as a binary frame and a string as a text frame.
+        if (frame instanceof Uint8Array) {
+          socket.send(frame)
+          return
+        }
+        socket.send(JSON.stringify(frame))
+        if (frame.type === 'exit') {
           socket.close()
         }
       },
@@ -679,33 +700,63 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     let detach: () => void
     try {
-      detach = options.terminals.attach(taskId, client, query.data, terminal)
+      detach = options.terminals.attach(taskId, client, { cols, rows }, terminal, attachOptions)
     } catch (error) {
+      if (error instanceof ShellGoneError) {
+        socket.close(CLOSE_GONE, 'gone')
+        return
+      }
       const message = error instanceof Error ? error.message : 'The terminal could not start.'
       socket.send(JSON.stringify({ type: 'error', message } satisfies TerminalServerMessage))
       socket.close(CLOSE_REFUSED, 'refused')
       return
     }
 
-    socket.on('message', (raw: { toString: () => string }) => {
+    // A client that sent nothing for this long is gone or asleep. A silent peer may never answer
+    // a close frame, so the socket is dropped at once.
+    let silent: ReturnType<typeof setTimeout> | undefined
+    const heard = () => {
+      clearTimeout(silent)
+      silent = setTimeout(() => socket.terminate(), SILENT_CLOSE_MS)
+    }
+    heard()
+
+    socket.on('message', (raw: { toString: () => string }, isBinary: boolean) => {
+      heard()
+      // The dashboard sends only JSON.
+      if (isBinary) {
+        return
+      }
       let data: unknown
       try {
         data = JSON.parse(raw.toString())
       } catch {
         return
       }
-      const message = terminalClientMessageSchema.safeParse(data)
-      if (!message.success) {
+      const parsed = terminalClientMessageSchema.safeParse(data)
+      if (!parsed.success) {
         return
       }
-      if (message.data.type === 'input') {
-        options.terminals.input(taskId, message.data.data, terminal, client)
-      } else {
-        options.terminals.resize(taskId, message.data, terminal, client)
+      const message = parsed.data
+      if (message.type === 'input') {
+        options.terminals.input(taskId, message.data, terminal, client)
+      } else if (message.type === 'resize') {
+        const size = { cols: message.cols, rows: message.rows }
+        options.terminals.resize(taskId, size, terminal, client)
+      } else if (message.type === 'visible') {
+        options.terminals.visible(taskId, message, terminal, client)
+      } else if (message.type === 'ack') {
+        options.terminals.ack(taskId, message.offset, terminal, client)
+      } else if (message.type === 'ping') {
+        client.send({ type: 'pong' })
       }
     })
-    socket.on('close', () => detach())
-    socket.on('error', () => detach())
+    const end = () => {
+      clearTimeout(silent)
+      detach()
+    }
+    socket.on('close', end)
+    socket.on('error', end)
   })
 
   app.get('/events', { websocket: true }, (socket) => {

@@ -10,6 +10,7 @@ import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
+import { windowOptions } from './window-options.js'
 
 type Done = (error: Error | null, stdout: string, stderr: string) => void
 
@@ -372,5 +373,24 @@ describe('navigation', () => {
     expect(opensInBrowser('mailto:a@b.c')).toBe(true)
     expect(opensInBrowser('file:///etc/passwd')).toBe(false)
     expect(opensInBrowser('vscode://open')).toBe(false)
+  })
+})
+
+describe('the window', () => {
+  it('lets the click that brings the app to the front reach the page', () => {
+    // Without it, on macOS a click on a terminal from another app only activates the window.
+    expect(windowOptions('/app/preload.cjs', false).acceptFirstMouse).toBe(true)
+  })
+
+  it('keeps the page isolated from Node', () => {
+    expect(windowOptions('/app/preload.cjs', true)).toMatchObject({
+      backgroundColor: '#18181b',
+      webPreferences: {
+        preload: '/app/preload.cjs',
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+      },
+    })
   })
 })

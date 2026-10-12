@@ -8,8 +8,13 @@ const SOURCES: Record<string, string> = Object.fromEntries(
       query: '?raw',
       import: 'default',
     }),
-  ).map(([file, text]) => [file.replace(/^\.\.\//, ''), text]),
+  ).map(([file, text]) => [srcPath(file), text]),
 )
+
+// Vite names the files of this test's own folder "./x.ts", not "../lib/x.ts".
+function srcPath(file: string): string {
+  return file.startsWith('./') ? `lib/${file.slice(2)}` : file.replace(/^\.\.\//, '')
+}
 
 // Libraries the dashboard must load only when a view needs them, not on the first screen.
 const HEAVY = /^(monaco-editor|react-markdown|remark-gfm|@xterm\/)/
@@ -116,9 +121,17 @@ describe('the first load of the dashboard', () => {
       'components/MonacoFile.tsx',
       'components/MarkdownBody.tsx',
       'lib/monaco-setup.ts',
+      'lib/terminal-session.ts',
     ]) {
       expect(files).not.toContain(file)
     }
+  })
+
+  // The panes and the dashboard use the cache, so it must not import xterm (see the test above).
+  it('counts the terminal cache and the prefetch in the first load', () => {
+    const { files } = firstLoad()
+    expect(files).toContain('lib/terminal-cache.ts')
+    expect(files).toContain('lib/prefetch.ts')
   })
 
   it('skips type imports and dynamic imports', () => {

@@ -120,4 +120,11 @@ monaco.editor.defineTheme(DARK_THEME, {
   },
 })
 
+// Monaco measures a font once. JetBrains Mono may still be loading when the first code view opens,
+// and characters measured with the fallback font put the cursor and selections off.
+document.fonts
+  ?.load('12px "JetBrains Mono Variable"')
+  .then(() => monaco.editor.remeasureFonts())
+  .catch(() => undefined)
+
 export { monaco }

@@ -69,9 +69,11 @@ Full reference: `docs/e2e.md`.
 - `openTask(page, title)` switches to Table, double-clicks the row, and returns the tab list "View" (use `exact: true`, because "View of the details" also exists).
 - Task rows and cards are named `"<title>, <state>, <id>, <age>"`. Match them with `taskNamed(title)`, and scope to `taskTable(page)` to avoid strict-mode clashes with the sidebar and Needs you.
 - Terminal:
-  - The browser runs without WebGL, so text is in `.xterm-rows` inside the region "Terminal screen".
+  - The browser runs without WebGL, so text is in `.xterm-rows` inside the region "Terminal screen". Only `terminal-gpu.spec.ts` turns WebGL on (SwiftShader) and counts drawn pixels instead.
   - Wait for `$` before typing.
   - Only the visible rows are in the DOM, so wait for steady output, not for a line that scrolls away.
+  - Hidden terminals sit in `#terminal-holder` with their own rows. Use `rows(pane(page, 'Shell 1'))` from `terminal-helpers.ts`, never a page-wide `.xterm-rows`.
+  - Terminal numbers: `terminal-measures.spec.ts` and `terminal-cache.spec.ts` record through `measures.ts` into `e2e/test-results/terminal-measures.json` (artifact `e2e-measures`, every run). `daemon-rss.ts` samples the daemon's memory. Assert limits on a median of `RUNS`, never on one sample. See `docs/e2e.md` "Terminal measures".
 - The tests share one daemon and run one at a time. Give any data a test adds a unique name (`Date.now()`).
 - `phone.spec.ts` runs on Pixel 7. The other files run on desktop at 1440×900.
 - Selectors are accessible names. If a UI change renames a control, update the tests in the same PR.
@@ -81,6 +83,7 @@ Full reference: `docs/e2e.md`.
 ```sh
 gh run view <run-id> --log-failed | grep -E "Error|Expected|Received|✘|›" | head -40
 gh run download <run-id> -n e2e-report -D <scratchpad>/e2e-report
+gh run download <run-id> -n e2e-measures -D <scratchpad>/e2e-measures
 ```
 
 - The artifact has `test-failed-*.png`, `video.webm`, `trace.zip` and `error-context.md` (an aria snapshot of the page).

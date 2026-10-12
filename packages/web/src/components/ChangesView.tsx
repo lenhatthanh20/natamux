@@ -6,7 +6,6 @@ import type {
   ImageSide,
   Task,
   TerminalLane,
-  TerminalSize,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
@@ -14,6 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentId } from '../lib/agents'
 import type { StageFile, StoredEvent } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
 import { nextGitStep, waitReason } from '../lib/workspace'
@@ -48,7 +48,7 @@ type ChangesViewProps = {
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
   loadGraph: () => Promise<GitGraphData>
   loadEvents: () => Promise<StoredEvent[]>
-  connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
+  connectTerminal: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
   loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
   closeTerminal: (terminal: string) => Promise<string[]>

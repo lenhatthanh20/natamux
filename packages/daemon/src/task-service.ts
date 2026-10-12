@@ -111,6 +111,19 @@ export class TaskNotFoundError extends Error {
 
 export type SettingsOf = (repo: string | null) => ProjectSettings
 
+// A done or cancelled task needs its shells no more. Neither does a task that is gone.
+export function isTaskEnded(
+  tasks: { getTask(taskId: string): Pick<Task, 'state'> },
+  taskId: string,
+): boolean {
+  try {
+    const { state } = tasks.getTask(taskId)
+    return state === 'done' || state === 'cancelled'
+  } catch {
+    return true
+  }
+}
+
 // The flow tasks had before stages: implement, review, release. The daemon passes the settings of
 // each repository instead.
 const LEGACY_SETTINGS: ProjectSettings = { ...DEFAULT_PROJECT_SETTINGS, stages: LEGACY_PIPELINE }

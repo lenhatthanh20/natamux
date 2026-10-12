@@ -5,11 +5,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AUTO_FLAGS,
+  agentOfCommand,
   codexHookArgs,
   copilotHookFile,
   cursorHookFile,
+  DEFAULT_PROGRAMS,
   geminiHookSettings,
   LAUNCHABLE_AGENTS,
+  type LaunchableAgent,
   type LaunchOptions,
   launchCommand,
   prepareWorkspace,
@@ -171,6 +174,61 @@ describe('launchCommand', () => {
     expect(
       launchCommand('gemini', { ...base, program: 'gemini', platform: 'win32', prompt: '' }),
     ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini")
+  })
+})
+
+describe('agentOfCommand', () => {
+  const defaults = (agent: LaunchableAgent) => DEFAULT_PROGRAMS[agent]
+
+  it.each([
+    ['claude --settings /data/claude.json Fix it', 'claude-code'],
+    ['/Users/me/.local/bin/claude', 'claude-code'],
+    ['codex --sandbox workspace-write', 'codex'],
+    // Installed with npm: the program is Node.js, the agent is its script.
+    ['node /usr/local/bin/codex', 'codex'],
+    ['/usr/local/bin/node --no-warnings /opt/lib/node_modules/@openai/codex/bin/codex.js', 'codex'],
+    ['node /opt/homebrew/bin/gemini -i Fix it', 'gemini'],
+    ['node /opt/homebrew/bin/copilot', 'copilot'],
+    ['/bin/bash /Users/me/.local/bin/cursor-agent --force', 'cursor'],
+    ['codex --model x', 'codex'],
+    ['claude -p hi', 'claude-code'],
+    ['/usr/local/bin/codex', 'codex'],
+    ['cursor-agent', 'cursor'],
+  ])('finds the agent of %s', (line, agent) => {
+    expect(agentOfCommand(line, defaults)).toBe(agent)
+  })
+
+  it.each([
+    'vim codex.md',
+    'node server.js',
+    'bash ./build.sh',
+    'sleep 60',
+    '',
+    // Only the name of an agent counts, not a name that holds one.
+    'claude-foo',
+    'my-codex',
+    // Node.js itself, or a tool that runs on it.
+    'node',
+    'node /usr/local/bin/pnpm dev',
+    'node /usr/local/bin/npm run dev',
+    'node /home/u/codex-notes/server.js',
+    'bash',
+    'htop',
+    'less codex.log',
+    // An agent on another machine is not in this shell.
+    'ssh dev codex',
+    'docker exec -it box claude',
+  ])('finds no agent in %s', (line) => {
+    expect(agentOfCommand(line, defaults)).toBeUndefined()
+  })
+
+  it('knows an agent by the program configured for it', () => {
+    const programs = { ...DEFAULT_PROGRAMS, 'claude-code': '/opt/tools/my-claude --verbose' }
+    const programOf = (agent: LaunchableAgent) => programs[agent]
+    expect(agentOfCommand('/opt/tools/my-claude --verbose', programOf)).toBe('claude-code')
+    expect(agentOfCommand('node /opt/tools/my-claude', programOf)).toBe('claude-code')
+    // The default name still counts, for an agent the user starts by hand.
+    expect(agentOfCommand('claude', programOf)).toBe('claude-code')
   })
 })
 

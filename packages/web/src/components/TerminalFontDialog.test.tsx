@@ -35,6 +35,16 @@ describe('TerminalFontDialog', () => {
     expect(terminalFont()).toMatchObject({ family: 'JetBrains Mono', size: 14, source: 'ghostty' })
   })
 
+  it('names JetBrains Mono as the built-in font, in the text and as the placeholder', () => {
+    render(<TerminalFontDialog onClose={() => undefined} />)
+
+    expect(screen.getByText(/built-in font, JetBrains Mono, 13px/)).toBeDefined()
+    expect(screen.getByRole('textbox', { name: 'Font family' })).toHaveProperty(
+      'placeholder',
+      'JetBrains Mono',
+    )
+  })
+
   it('does not save a size out of range', async () => {
     render(<TerminalFontDialog onClose={() => undefined} />)
     const user = userEvent.setup()
