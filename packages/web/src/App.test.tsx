@@ -2248,6 +2248,60 @@ describe('App', () => {
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
   })
 
+  it.each([
+    ['a cancelled task', { state: 'cancelled' as const, workspace: '/work/T-0001' }],
+    ['a task with no workspace', { state: 'review' as const, workspace: null }],
+  ])('drops the cached terminals of %s when the task list comes', async (_name, ended) => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Gone', ...ended }),
+      makeTask({ id: 'T-0002', title: 'Open', state: 'review', workspace: '/work/T-0002' }),
+    ])
+    const gone = { hide: vi.fn(), dispose: vi.fn() }
+    const inReview = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0001/1', () => gone).release()
+    acquireTerminal('T-0002/1', () => inReview).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    await waitFor(() => expect(gone.dispose).toHaveBeenCalledTimes(1))
+    expect(inReview.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
+  it('keeps the cached terminal of a task while one with no workspace is open (C2)', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    // The real view is mocked here, so the terminal is put in the cache as a pane that left the
+    // screen would leave it.
+    const shell = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0002/1', () => shell).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+
+    expect(shell.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
   it("loads the terminal's code when the page is idle after the task list", async () => {
     const idle = vi.fn((_callback: () => void) => 1)
     vi.stubGlobal('requestIdleCallback', idle)

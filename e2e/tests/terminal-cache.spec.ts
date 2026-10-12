@@ -18,6 +18,7 @@ import {
   percentile,
   preparePrompt,
   RUNS,
+  readCols,
   removeTasks,
   rows,
   runIn,
@@ -68,6 +69,18 @@ async function lastRowOf(shell: Locator): Promise<string> {
   })
 }
 
+// Scrolls the shell up until "Jump to latest" shows, then a bit more, so the view is not the bottom.
+async function scrollUp(page: Page, shell: Locator): Promise<void> {
+  const jump = page.getByRole('button', { name: 'Jump to latest' })
+  await shell.getByRole('region', { name: 'Terminal screen' }).hover()
+  for (let step = 0; step < 20 && !(await jump.isVisible()); step++) {
+    await page.mouse.wheel(0, -300)
+    await page.waitForTimeout(100)
+  }
+  await page.mouse.wheel(0, -300)
+  await expect(jump).toBeVisible()
+}
+
 async function holderCount(page: Page): Promise<number> {
   return page.locator('#terminal-holder').evaluate((holder) => holder.children.length)
 }
@@ -85,15 +98,8 @@ test('shows the terminal again at once after Changes, with the same screen', asy
   await runIn(page, shell, "seq -f 'row %g' 1 200")
   await expect(rows(shell)).toContainText('row 200')
 
-  // Scroll up until "Jump to latest" shows, then a bit more, so the view is not the bottom.
   const jump = page.getByRole('button', { name: 'Jump to latest' })
-  await shell.getByRole('region', { name: 'Terminal screen' }).hover()
-  for (let step = 0; step < 20 && !(await jump.isVisible()); step++) {
-    await page.mouse.wheel(0, -300)
-    await page.waitForTimeout(100)
-  }
-  await page.mouse.wheel(0, -300)
-  await expect(jump).toBeVisible()
+  await scrollUp(page, shell)
   const saved = await rows(shell).textContent()
   const lastRow = await lastRowOf(shell)
   expect(lastRow).toMatch(/^row \d+$/)
@@ -129,7 +135,22 @@ test('shows the terminal again at once after Changes, with the same screen', asy
     await tabs.getByRole('tab', { name: 'Terminal' }).click()
   }
   await expect(rows(shell)).toContainText(lastRow)
-  expect(await holderCount(page)).toBeLessThanOrEqual(KEEP_ALIVE)
+  // The only terminal is on screen, so the holder keeps none.
+  await expect.poll(() => holderCount(page)).toBe(0)
+  expect(sockets.opened).toHaveLength(socketCount)
+
+  // Output that arrives while on Changes keeps the place of a user who scrolled up.
+  await runIn(page, shell, "sleep 4; seq -f 'late %g' 1 50")
+  await expect(jump).toBeHidden()
+  await scrollUp(page, shell)
+  const scrolled = await rows(shell).textContent()
+  await tabs.getByRole('tab', { name: 'Changes' }).click()
+  await page.waitForTimeout(8_000)
+  await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  await expect(jump).toBeVisible()
+  expect(await rows(shell).textContent()).toBe(scrolled)
+  await jump.click()
+  await expect(rows(shell)).toContainText('late 50')
   expect(sockets.opened).toHaveLength(socketCount)
 })
 
@@ -142,7 +163,16 @@ test('shows task A again at once after task B, without a new socket', async ({ p
 
   const idA = Date.now()
   await openTerminal(page, taskA.title)
-  const textA = await say(page, pane(page, 'Shell 1'), 'ALPHA', idA)
+  const shellA = pane(page, 'Shell 1')
+  await runIn(page, shellA, "seq -f 'row %g' 1 200")
+  await expect(rows(shellA)).toContainText('row 200')
+  await say(page, shellA, 'ALPHA', idA)
+  // Task A is scrolled up, so its last visible row is the text to wait for.
+  const jump = page.getByRole('button', { name: 'Jump to latest' })
+  await scrollUp(page, shellA)
+  const savedA = await rows(shellA).textContent()
+  const textA = await lastRowOf(shellA)
+  expect(textA).toMatch(/^row \d+$/)
   await goToAllTasks(page)
   await openTerminal(page, taskB.title)
   const textB = await say(page, pane(page, 'Shell 1'), 'BRAVO', idA + 1)
@@ -158,6 +188,10 @@ test('shows task A again at once after task B, without a new socket', async ({ p
       times.push(
         await timeToShow(page, { label: 'Shell 1', text }, () => openTask(page, task.title)),
       )
+      if (task === taskA) {
+        expect(await rows(pane(page, 'Shell 1')).textContent()).toBe(savedA)
+        await expect(jump).toBeVisible()
+      }
       await goToAllTasks(page)
     }
   }
@@ -246,21 +280,39 @@ test('closes the oldest hidden terminal when more than the limit are hidden', as
   expect(sockets.opened).toHaveLength(before + 1)
 })
 
-test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => {
-  test.setTimeout(900_000)
-  const taskC = await newTask(request, 'heap C')
-  const taskA = await newTask(request, 'heap A')
-  const taskB = await newTask(request, 'heap B')
+type HeapRun = {
+  // Added to the measure names, empty for the plain run.
+  tag: string
+  viewport?: { width: number; height: number }
+  // Shells of the two tasks that are hidden next to the one shell of the first task.
+  shellsPerTask: number
+}
+
+const DISPOSED_HEAP_MARGIN_MB = 5
+
+// Fills the shells of three tasks, shows them all on a fresh page, and measures the heap with one
+// terminal and with the others hidden. Then the tasks end, so the cache drops its terminals, and
+// the heap must fall back near the one-terminal number.
+async function measureHeap(page: Page, request: APIRequestContext, run: HeapRun): Promise<void> {
+  const { tag, shellsPerTask } = run
+  const hidden = shellsPerTask * 2
+  const taskC = await newTask(request, `heap C${tag}`)
+  const taskA = await newTask(request, `heap A${tag}`)
+  const taskB = await newTask(request, `heap B${tag}`)
   const shellCounts = [
     { task: taskC, shells: 1 },
-    { task: taskA, shells: 4 },
-    { task: taskB, shells: 4 },
+    { task: taskA, shells: shellsPerTask },
+    { task: taskB, shells: shellsPerTask },
   ]
   const markers = new Map<string, string[]>()
+  if (run.viewport !== undefined) {
+    await page.setViewportSize(run.viewport)
+  }
 
   // Fill every shell with a full history on one page, then measure on a fresh one.
   await signIn(page)
   let id = 10
+  let cols = 0
   for (const { task, shells } of shellCounts) {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
@@ -270,6 +322,9 @@ test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => 
     for (let index = 1; index <= shells; index++) {
       const shell = pane(page, `Shell ${index}`)
       await preparePrompt(page, shell)
+      if (task === taskC) {
+        cols = await readCols(page, shell)
+      }
       found.push(await fillHistory(page, shell, { lines: 10_000, sgr: false, id: id++ }))
     }
     markers.set(task.id, found)
@@ -292,24 +347,78 @@ test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => 
   await showAll(taskA)
   await goToAllTasks(page)
   await showAll(taskB)
-  // Hiding B makes 9 hidden terminals, so C, hidden longest, is closed. Shown again, C loads its
-  // history on a new socket. Then A and B (8 terminals) are hidden and C is on screen: heap1 plus
-  // 8 hidden terminals.
+  // Hiding B makes the hidden terminals of A and B, and of C. With 8 hidden the oldest, C, is
+  // closed and loads its history again on a new socket. Then C is on screen with the others
+  // hidden: heap1 plus `hidden` terminals.
   await goToAllTasks(page)
   await showAll(taskC)
-  const heap9 = await heapMb(page)
+  const heapAll = await heapMb(page)
 
-  const perTerminal = (heap9 - heap1) / 8
+  const perTerminal = (heapAll - heap1) / hidden
   expect(perTerminal).toBeLessThanOrEqual(HEAP_PER_TERMINAL_MB)
-  recordMeasure({ name: 'cache-heap-one-terminal', value: heap1, unit: 'MB', ac: '7', pr: 2 })
-  recordMeasure({ name: 'cache-heap-nine-terminals', value: heap9, unit: 'MB', ac: '7', pr: 2 })
+  const note = `${cols} cols`
   recordMeasure({
-    name: 'cache-heap-per-hidden-terminal',
+    name: `cache-heap-one-terminal${tag}`,
+    value: heap1,
+    unit: 'MB',
+    ac: '7',
+    pr: 2,
+    note,
+  })
+  recordMeasure({
+    name: `cache-heap-${hidden === 8 ? 'nine' : hidden + 1}-terminals${tag}`,
+    value: heapAll,
+    unit: 'MB',
+    ac: '7',
+    pr: 2,
+    note,
+  })
+  recordMeasure({
+    name: `cache-heap-per-hidden-terminal${tag}`,
     value: perTerminal,
     unit: 'MB',
     ac: '7',
     pr: 2,
-    note: `limit ${HEAP_PER_TERMINAL_MB} MB`,
+    note: `limit ${HEAP_PER_TERMINAL_MB} MB, ${note}`,
+  })
+
+  // The tasks end: the cache drops every terminal, and the heap goes back near the base.
+  await goToAllTasks(page)
+  await removeTasks(request, shellCounts.map(({ task }) => task.id))
+  await expect.poll(() => holderCount(page), { timeout: 60_000 }).toBe(0)
+  await expect
+    .poll(() => heapMb(page), { timeout: 30_000 })
+    .toBeLessThanOrEqual(heap1 + DISPOSED_HEAP_MARGIN_MB)
+  recordMeasure({
+    name: `cache-heap-after-dispose${tag}`,
+    value: await heapMb(page),
+    unit: 'MB',
+    ac: '7',
+    pr: 2,
+    note: `limit one terminal + ${DISPOSED_HEAP_MARGIN_MB} MB, ${note}`,
+  })
+}
+
+test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => {
+  test.setTimeout(900_000)
+  await measureHeap(page, request, { tag: '', shellsPerTask: 4 })
+})
+
+// The width of the terminal sets the size of its rows, so the heap is measured at both ends.
+test('keeps the heap of hidden terminals small at 80 and 200 columns', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(900_000)
+  await measureHeap(page, request, {
+    tag: '-narrow',
+    viewport: { width: 900, height: 800 },
+    shellsPerTask: 2,
+  })
+  await measureHeap(page, request, {
+    tag: '-wide',
+    viewport: { width: 1920, height: 800 },
+    shellsPerTask: 2,
   })
 })
 
@@ -331,18 +440,38 @@ test('records the echo in task Y while the hidden shells of task X flood', async
 
   await openTerminal(page, taskX.title)
   await addShells(page, 3)
+  const pageStart = await pageNow(page)
   for (let index = 1; index <= 4; index++) {
     await runIn(page, pane(page, `Shell ${index}`), 'sleep 3; seq 1 1000000')
   }
   await goToAllTasks(page)
 
-  const pageStart = await pageNow(page)
   await openTask(page, taskY.title)
   // Without flow control the page draws all the hidden output too, so the echoes can wait long.
   const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 180_000)
   const longTasks = await longTasksSince(page, pageStart)
 
-  expect(echoes.length).toBeGreaterThan(0)
+  expect(echoes).toHaveLength(KEY_SAMPLES)
+
+  // One hidden shell really flooded: its screen shows the last number, on a row of its own.
+  await goToAllTasks(page)
+  await openTask(page, taskX.title)
+  await expect
+    .poll(
+      async () => {
+        for (let index = 1; index <= 4; index++) {
+          const done = await rows(pane(page, `Shell ${index}`)).evaluate((element) =>
+            Array.from(element.children).some((row) => (row.textContent ?? '').trim() === '1000000'),
+          )
+          if (done) {
+            return true
+          }
+        }
+        return false
+      },
+      { timeout: 180_000 },
+    )
+    .toBe(true)
   recordMeasure({
     name: 'cache-echo-hidden-flood-p50',
     value: percentile(echoes, 50),

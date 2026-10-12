@@ -107,6 +107,14 @@ export async function addShells(page: Page, count: number): Promise<void> {
   }
 }
 
+// The width of the shell's terminal in columns, as the shell's tty reports it.
+export async function readCols(page: Page, shell: Locator): Promise<number> {
+  await runIn(page, shell, "echo COLS-$(stty size | cut -d' ' -f2)")
+  await expect(rows(shell)).toContainText(/COLS-\d+/)
+  const text = (await rows(shell).textContent()) ?? ''
+  return Number(/COLS-(\d+)/.exec(text)?.[1])
+}
+
 export async function goToAllTasks(page: Page): Promise<void> {
   await page
     .getByRole('navigation', { name: 'Workspaces' })

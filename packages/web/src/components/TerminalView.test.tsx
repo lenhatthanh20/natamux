@@ -108,6 +108,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   resetTerminalCache()
   vi.unstubAllGlobals()
   vi.useRealTimers()
@@ -189,6 +190,35 @@ describe('TerminalView in the cache', () => {
     expect(resizes).toEqual([])
   })
 
+  it('moves the terminal from the agents grid to the task view in one commit (C2)', async () => {
+    const { made, connect } = sockets(2)
+    const view = render(
+      <section aria-label="Agents">
+        <TerminalView connect={connect} cacheKey={KEY} />
+      </section>,
+    )
+    await flush()
+    act(() => made[0]?.open())
+    const terminal = lastTerminal()
+
+    // Another parent, as when the grid closes and the task view opens with the same shell.
+    view.rerender(
+      <main>
+        <section aria-label="Shells">
+          <TerminalView connect={connect} cacheKey={KEY} />
+        </section>
+      </main>,
+    )
+    await flush()
+
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(fakes.terminals).toHaveLength(1)
+    expect(made[0]?.closed).toBe(false)
+    const shells = screen.getByRole('region', { name: 'Shells' })
+    expect(shells.contains(terminal.element ?? null)).toBe(true)
+    expect(cachedTerminalCount()).toEqual({ mounted: 1, hidden: 0 })
+  })
+
   it('gives two views of the same key their own terminal and socket', async () => {
     const { made, connect } = sockets(2)
     render(
@@ -253,11 +283,48 @@ describe('TerminalView in the cache', () => {
     expect(cachedTerminalCount()).toEqual({ mounted: 1, hidden: 0 })
   })
 
+  it('starts one new shell when "Start a new shell" is clicked twice at once (C6)', async () => {
+    const { made, connect } = sockets(3)
+    render(<TerminalView connect={connect} cacheKey={KEY} />)
+    await flush()
+    act(() => made[0]?.open())
+    const old = lastTerminal()
+    const disposeOld = vi.spyOn(old, 'dispose')
+    act(() => made[0]?.message({ type: 'exit', code: 0 }))
+    const errors = vi.spyOn(console, 'error')
+
+    const button = screen.getByRole('button', { name: 'Start a new shell' })
+    act(() => {
+      fireEvent.click(button)
+      fireEvent.click(button)
+    })
+    await flush()
+
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(fakes.terminals).toHaveLength(2)
+    expect(made[0]?.closed).toBe(true)
+    act(() => vi.advanceTimersByTime(DISPOSE_DELAY_MS))
+    expect(disposeOld).toHaveBeenCalledTimes(1)
+    expect(errors).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 1, hidden: 0 })
+  })
+
   it('disposes a hidden terminal at once when its shell ends', async () => {
     const { socket, terminal, view } = await openTerminal(KEY)
     view.unmount()
 
     act(() => socket.message({ type: 'exit', code: 0 }))
+    expect(socket.closed).toBe(true)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
+    act(() => vi.advanceTimersByTime(DISPOSE_DELAY_MS))
+    expect(terminal.disposed).toBe(true)
+  })
+
+  it('disposes a hidden terminal at once when its shell reports an error (C6)', async () => {
+    const { socket, terminal, view } = await openTerminal(KEY)
+    view.unmount()
+
+    act(() => socket.message({ type: 'error', message: 'No shell.' }))
     expect(socket.closed).toBe(true)
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
     act(() => vi.advanceTimersByTime(DISPOSE_DELAY_MS))

@@ -17,6 +17,7 @@ import {
   percentile,
   preparePrompt,
   RUNS,
+  readCols,
   removeTasks,
   rows,
   runIn,
@@ -56,7 +57,7 @@ test('records the time to show a terminal with a long history', async ({ page, r
     { name: 'plain', sgr: false, id: 1 },
     { name: 'sgr', sgr: true, id: 2 },
   ]
-  const tasks: { name: string; title: string; marker: string }[] = []
+  const tasks: { name: string; title: string; marker: string; cols: number }[] = []
   await signIn(page)
   for (const kind of kinds) {
     const task = await makeShellTask(request, `Terminal e2e history ${kind.name} ${Date.now()}`)
@@ -66,17 +67,26 @@ test('records the time to show a terminal with a long history', async ({ page, r
     await openTerminal(page, task.title)
     const shell = pane(page, 'Shell 1')
     await preparePrompt(page, shell)
+    const cols = await readCols(page, shell)
     const marker = await fillHistory(page, shell, { lines: 10_000, sgr: kind.sgr, id: kind.id })
-    tasks.push({ name: kind.name, title: task.title, marker })
+    tasks.push({ name: kind.name, title: task.title, marker, cols })
   }
 
   for (const task of tasks) {
     const times: number[] = []
     const longest: number[] = []
+    let chunkLoaded = 0
     for (let run = 0; run < RUNS; run++) {
       // A fresh page, so the page has no cached terminal and loads the whole screen again.
       await page.goto('/')
       await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
+      // Whether the page fetched the terminal code before the click, for example on a hint.
+      const loaded = await page.evaluate(() =>
+        performance
+          .getEntriesByType('resource')
+          .some((entry) => entry.name.includes('TerminalView-')),
+      )
+      chunkLoaded += loaded ? 1 : 0
       const start = await pageNow(page)
       const ms = await timeToShow(page, { label: 'Shell 1', text: task.marker }, () =>
         openTask(page, task.title),
@@ -93,7 +103,7 @@ test('records the time to show a terminal with a long history', async ({ page, r
       ac: '8',
       pr: 1,
       samples: times,
-      note: '10,000 lines, median of 5 fresh page loads',
+      note: `10,000 lines, ${task.cols} cols, median of ${RUNS} fresh page loads`,
     })
     recordMeasure({
       name: `longtask-attach-${task.name}`,
@@ -102,9 +112,48 @@ test('records the time to show a terminal with a long history', async ({ page, r
       ac: '8',
       pr: 1,
       samples: longest,
-      note: 'longest long task while the terminal attaches',
+      note: `longest long task while the terminal attaches, ${task.cols} cols, TerminalView chunk loaded before the click in ${chunkLoaded} of ${RUNS} loads`,
     })
   }
+})
+
+// Correctness of the PR 1 baseline: a full-screen program survives a page load.
+test('shows the alternate screen again after a reload, and the shell after it ends', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(180_000)
+  const task = await makeShellTask(request, `Terminal e2e alt screen ${Date.now()}`)
+  made.push(task.id)
+  await signIn(page)
+  await openTerminal(page, task.title)
+  const shell = pane(page, 'Shell 1')
+  await preparePrompt(page, shell)
+  const marker = await fillHistory(page, shell, { lines: 200, sgr: false, id: 5 })
+
+  // The image has no less. This enters the alternate screen, waits for one key, and leaves it.
+  // The number is only in the output, not in the command line.
+  await runIn(
+    page,
+    shell,
+    "printf '\\033[?1049hALT-SCREEN-%s' $((1+1)); stty raw -echo; head -c1 >/dev/null; " +
+      "stty sane; printf '\\033[?1049l'",
+  )
+  await expect(rows(shell)).toContainText('ALT-SCREEN-2')
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
+  // The default prompt is not on the screen, so openTerminal would wait for it in vain.
+  const tabs = await openTask(page, task.title)
+  await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  await expect(rows(shell)).toContainText('ALT-SCREEN-2')
+  await expect(rows(shell)).not.toContainText(PROMPT.trim())
+
+  await shell.getByRole('region', { name: 'Terminal screen' }).click()
+  await page.keyboard.press('q')
+  await expect(rows(shell)).not.toContainText('ALT-SCREEN-2')
+  await expect(rows(shell)).toContainText(PROMPT.trim())
+  await expect(rows(shell)).toContainText(marker)
 })
 
 test('records the terminal sockets of Terminal, Changes, Terminal', async ({ page, request }) => {

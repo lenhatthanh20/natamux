@@ -99,6 +99,18 @@ describe('the terminal cache', () => {
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: KEEP_ALIVE_TERMINALS })
   })
 
+  it('keeps all of exactly 8 hidden terminals, and gives the first one back (C2)', async () => {
+    const sessions = hideInOrder(KEEP_ALIVE_TERMINALS)
+    await afterMicrotasks()
+    expect(sessions.every((session) => session.disposed === 0)).toBe(true)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: KEEP_ALIVE_TERMINALS })
+
+    const create = vi.fn(fakeSession)
+    const back = acquireTerminal(terminalKey('T-0', '1'), create)
+    expect(back.session).toBe(sessions[0])
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it('counts a terminal shown again as the newest (AC 3)', async () => {
     const sessions = hideInOrder(KEEP_ALIVE_TERMINALS + 1)
     await afterMicrotasks()

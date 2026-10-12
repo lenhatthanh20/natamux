@@ -1,7 +1,7 @@
 import type { TerminalSize } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { gpuBudget } from './gpu-renderer'
-import { fontStack, saveTerminalFont } from './terminal-font'
+import { GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
+import { fontStack, saveTerminalFont, terminalFont } from './terminal-font'
 import {
   createTerminalSession,
   DISPOSE_DELAY_MS,
@@ -10,6 +10,7 @@ import {
 } from './terminal-session'
 import { terminalTheme } from './terminal-theme'
 import { uiZoom } from './theme'
+import { applyUiSize, uiSizeZoom } from './ui-size'
 import { type FakeTerminal, fakeSocket, fakes, resetFakes } from './xterm-fake.fixture'
 
 vi.mock('@xterm/xterm', async () => ({
@@ -77,6 +78,29 @@ async function shown(onEnd?: (session: TerminalSession) => void) {
 
 const fitsOf = () => fakes.fits[0]?.fits ?? 0
 
+// Records every option the code sets from now on, in order.
+function recordOptions(terminal: FakeTerminal): [string, unknown][] {
+  const sets: [string, unknown][] = []
+  terminal.options = new Proxy(terminal.options, {
+    set(target, key, value) {
+      sets.push([String(key), value])
+      return Reflect.set(target, key, value)
+    },
+  })
+  return sets
+}
+
+// jsdom has no document.fonts. Each load waits until the test resolves it.
+function stubFontLoads(): (() => void)[] {
+  const loads: (() => void)[] = []
+  const load = () =>
+    new Promise<void>((resolve) => {
+      loads.push(resolve)
+    })
+  Object.defineProperty(document, 'fonts', { value: { load }, configurable: true })
+  return loads
+}
+
 beforeEach(() => {
   resetFakes()
   gpuBudget.reset()
@@ -116,6 +140,9 @@ afterEach(() => {
   vi.useRealTimers()
   saveTerminalFont(null)
   document.documentElement.removeAttribute('data-theme')
+  document.documentElement.style.removeProperty('--ui-zoom')
+  window.localStorage.clear()
+  Reflect.deleteProperty(document, 'fonts')
   document.body.replaceChildren()
 })
 
@@ -214,6 +241,48 @@ describe('showing a terminal session', () => {
     expect(connect).toHaveBeenCalledTimes(1)
     expect(socket.closed).toBe(false)
     expect(socket.sent).toEqual([])
+  })
+
+  it('takes the focus when shown again while another control has it (C1)', async () => {
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    const focuses = terminal.focuses
+
+    session.show(box())
+    expect(terminal.focuses).toBe(focuses + 1)
+  })
+
+  it('leaves the focus on the tab that shows it again (C1)', async () => {
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const tab = document.createElement('button')
+    tab.setAttribute('role', 'tab')
+    document.body.append(tab)
+    tab.focus()
+    expect(document.activeElement).toBe(tab)
+    const focuses = terminal.focuses
+
+    session.show(box())
+    expect(terminal.focuses).toBe(focuses)
+  })
+
+  it('fits once and sends one resize after a drag of 60 steps (C38)', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    const fits = fitsOf()
+    for (let step = 1; step <= 60; step += 1) {
+      terminal.fitSize = { cols: 80 + step, rows: 24 }
+      observer?.callback()
+      vi.advanceTimersByTime(16)
+    }
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+
+    expect(fitsOf()).toBe(fits + 1)
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 140, rows: 24 }])
   })
 
   it('sends what the user types', async () => {
@@ -434,6 +503,117 @@ describe('settings of a hidden terminal (AC 6)', () => {
     session.applySettings()
     expect(fitsOf()).toBe(fits + 1)
   })
+
+  it('applies a new UI size on screen at once, with one fit (C7)', async () => {
+    const { session, terminal } = await shown()
+    const fits = fitsOf()
+    applyUiSize('large')
+    expect(uiZoom()).toBe(uiSizeZoom('large'))
+
+    session.applySettings()
+    expect(terminal.options.fontSize).toBe(terminalFont().size * uiZoom())
+    expect(fitsOf()).toBe(fits + 1)
+  })
+
+  it('takes a UI size changed while hidden at the next show, with one fit (C7)', async () => {
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const fits = fitsOf()
+    const size = terminal.options.fontSize
+
+    applyUiSize('large')
+    session.applySettings()
+    expect(terminal.options.fontSize).toBe(size)
+    expect(fitsOf()).toBe(fits)
+
+    session.show(box())
+    expect(terminal.options.fontSize).toBe(terminalFont().size * uiSizeZoom('large'))
+    expect(fitsOf()).toBe(fits + 1)
+  })
+
+  it('takes only the last of several changes made while hidden, with one fit (C7)', async () => {
+    document.documentElement.dataset.theme = 'light'
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const fits = fitsOf()
+    const sets = recordOptions(terminal)
+
+    document.documentElement.dataset.theme = 'dark'
+    session.applySettings()
+    saveTerminalFont({ family: 'Fira Code', size: 15 })
+    session.applySettings()
+    document.documentElement.dataset.theme = 'light'
+    session.applySettings()
+    saveTerminalFont({ family: 'JetBrains Mono', size: 17 })
+    session.applySettings()
+    // The theme needs no measuring, so it changes at once. The font waits for the show.
+    expect(sets).toEqual([
+      ['theme', terminalTheme('dark')],
+      ['theme', terminalTheme('light')],
+    ])
+    expect(fitsOf()).toBe(fits)
+
+    sets.length = 0
+    session.show(box())
+    expect(terminal.options.theme).toEqual(terminalTheme('light'))
+    expect(terminal.options.fontFamily).toBe(fontStack('JetBrains Mono'))
+    expect(terminal.options.fontSize).toBe(17 * uiZoom())
+    expect(sets.filter(([key]) => key === 'fontSize')).toEqual([['fontSize', 17 * uiZoom()]])
+    expect(sets.some(([key]) => key === 'theme')).toBe(false)
+    expect(fitsOf()).toBe(fits + 1)
+  })
+})
+
+describe('a web font that loads after the terminal opened (C7)', () => {
+  it('measures again and fits when it loads on screen', async () => {
+    const loads = stubFontLoads()
+    const { terminal } = await shown()
+    expect(loads).toHaveLength(1)
+    const fits = fitsOf()
+    const sets = recordOptions(terminal)
+
+    loads[0]?.()
+    await flush()
+    expect(sets).toEqual([
+      ['fontFamily', 'monospace'],
+      ['fontFamily', terminalFont().stack],
+    ])
+    expect(fitsOf()).toBe(fits + 1)
+  })
+
+  it('waits for the next show when it loads while hidden', async () => {
+    const loads = stubFontLoads()
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const fits = fitsOf()
+    const sets = recordOptions(terminal)
+
+    loads[0]?.()
+    await flush()
+    expect(sets).toEqual([])
+    expect(fitsOf()).toBe(fits)
+
+    session.show(box())
+    expect(sets).toEqual([
+      ['fontFamily', 'monospace'],
+      ['fontFamily', terminalFont().stack],
+      ['fontSize', terminalFont().size * uiZoom()],
+    ])
+    expect(fitsOf()).toBe(fits + 1)
+  })
+
+  it('does nothing when it loads after the dispose', async () => {
+    const loads = stubFontLoads()
+    const { session, terminal } = await shown()
+    session.dispose()
+    const fits = fitsOf()
+    const sets = recordOptions(terminal)
+
+    loads[0]?.()
+    await flush()
+    expect(sets).toEqual([])
+    expect(fitsOf()).toBe(fits)
+  })
 })
 
 describe('visibility', () => {
@@ -447,6 +627,21 @@ describe('visibility', () => {
 
     session.setOnScreen(true)
     expect(fakes.webgl).toHaveLength(1)
+  })
+
+  it('fits a hidden terminal that gave its renderer back at its next show (C36)', async () => {
+    const { session } = await shown()
+    session.hide(box())
+    const fits = fitsOf()
+    // The others fill the budget, and the last one takes the renderer of the hidden terminal.
+    for (let count = 0; count < GPU_CONTEXTS; count += 1) {
+      await shown()
+    }
+    expect(fakes.webgl[0]?.disposed).toBe(true)
+    expect(fitsOf()).toBe(fits)
+
+    session.show(box())
+    expect(fitsOf()).toBe(fits + 1)
   })
 
   it('fits again when the renderer changes', async () => {
