@@ -75,6 +75,7 @@ import { TemplateNotFoundError, type TemplateService } from './template-service.
 import {
   MAIN_TERMINAL,
   NoTerminalError,
+  type TerminalClient,
   TerminalLimitError,
   type TerminalService,
 } from './terminal-service.js'
@@ -171,6 +172,8 @@ const terminalNameSchema = z.string().regex(/^[1-9]\d{0,2}$/, 'A terminal is nam
 const terminalQuerySchema = terminalSizeSchema.extend({
   ticket: z.string().min(1).max(256),
   terminal: terminalNameSchema.default(MAIN_TERMINAL),
+  // Whether the terminal is on screen when it connects. Only then it takes the shell's size.
+  visible: z.enum(['0', '1']).default('1'),
 })
 const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
@@ -654,7 +657,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { ticket: options.terminals.issueTicket(id) }
   })
 
-  // A shell in the task's workspace. Frames are JSON, see terminal.ts in @natamux/core.
+  // A shell in the task's workspace. Output is binary, control messages are JSON, see terminal.ts
+  // in @natamux/core.
   app.get('/tasks/:id/terminal', { websocket: true }, (socket, request) => {
     const params = taskParamsSchema.safeParse(request.params)
     const query = terminalQuerySchema.safeParse(request.query)
@@ -667,11 +671,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
     const taskId = params.data.id
-    const { terminal } = query.data
-    const client = {
-      send: (message: TerminalServerMessage) => {
-        socket.send(JSON.stringify(message))
-        if (message.type === 'exit') {
+    const { cols, rows, terminal } = query.data
+    const attachOptions = { visible: query.data.visible === '1' }
+    const client: TerminalClient = {
+      send: (frame) => {
+        // ws sends a Buffer as a binary frame and a string as a text frame.
+        if (frame instanceof Uint8Array) {
+          socket.send(frame)
+          return
+        }
+        socket.send(JSON.stringify(frame))
+        if (frame.type === 'exit') {
           socket.close()
         }
       },
@@ -679,7 +689,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     let detach: () => void
     try {
-      detach = options.terminals.attach(taskId, client, query.data, terminal)
+      detach = options.terminals.attach(taskId, client, { cols, rows }, terminal, attachOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The terminal could not start.'
       socket.send(JSON.stringify({ type: 'error', message } satisfies TerminalServerMessage))
@@ -687,22 +697,31 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
 
-    socket.on('message', (raw: { toString: () => string }) => {
+    socket.on('message', (raw: { toString: () => string }, isBinary: boolean) => {
+      // The dashboard sends only JSON.
+      if (isBinary) {
+        return
+      }
       let data: unknown
       try {
         data = JSON.parse(raw.toString())
       } catch {
         return
       }
-      const message = terminalClientMessageSchema.safeParse(data)
-      if (!message.success) {
+      const parsed = terminalClientMessageSchema.safeParse(data)
+      if (!parsed.success) {
         return
       }
-      if (message.data.type === 'input') {
-        options.terminals.input(taskId, message.data.data, terminal, client)
-      } else {
-        options.terminals.resize(taskId, message.data, terminal, client)
+      const message = parsed.data
+      if (message.type === 'input') {
+        options.terminals.input(taskId, message.data, terminal, client)
+      } else if (message.type === 'resize') {
+        const size = { cols: message.cols, rows: message.rows }
+        options.terminals.resize(taskId, size, terminal, client)
+      } else if (message.type === 'visible') {
+        options.terminals.visible(taskId, message, terminal, client)
       }
+      // An `ack` needs no answer yet: flow control will act on it.
     })
     socket.on('close', () => detach())
     socket.on('error', () => detach())

@@ -1,9 +1,9 @@
-import type { TerminalSize } from '@natamux/core'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowDown } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { watchVisible } from '../lib/gpu-renderer'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { acquireTerminal, discardTerminal } from '../lib/terminal-cache'
 import { useTerminalFont } from '../lib/terminal-font'
 import {
@@ -16,9 +16,10 @@ import { useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
 import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
+import { Skeleton } from './ui/Skeleton'
 
 type TerminalViewProps = {
-  connect: (size: TerminalSize) => Promise<WebSocket>
+  connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
   focusToken?: number
   // `${taskId}/${terminal}`: the terminal stays alive in the cache while no view shows it.
@@ -33,7 +34,12 @@ const STATUS_TEXT: Record<TerminalStatus, string> = {
   error: 'The terminal could not start.',
 }
 
-const CONNECTING: TerminalSessionState = { status: 'connecting', error: null, scrolledUp: false }
+const CONNECTING: TerminalSessionState = {
+  status: 'connecting',
+  error: null,
+  scrolledUp: false,
+  catchingUp: false,
+}
 const noSubscribe = () => () => undefined
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
@@ -51,7 +57,7 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
   const font = useTerminalFont()
   const subscribe = session?.subscribe ?? noSubscribe
   const snapshot = () => session?.state() ?? CONNECTING
-  const { status, error, scrolledUp } = useSyncExternalStore(subscribe, snapshot)
+  const { status, error, scrolledUp, catchingUp } = useSyncExternalStore(subscribe, snapshot)
 
   // Layout effects, so a cached terminal is back in place before the browser paints.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
@@ -144,6 +150,17 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
           {/* The session's own element, which moves between views, goes in here. */}
           <div ref={container} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
         </section>
+        {/* The screen is hidden while a catch-up is written, so no history scrolls by. The same
+            skeleton as while the terminal's code loads. */}
+        {catchingUp && (
+          <div
+            role="status"
+            aria-label="Loading the terminal"
+            className="pointer-events-none absolute inset-0"
+          >
+            <Skeleton className="m-3" width="30%" />
+          </div>
+        )}
         {findOpen && session !== null && (
           <TerminalFind search={session.search} onClose={closeFind} />
         )}

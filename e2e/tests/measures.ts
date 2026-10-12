@@ -8,7 +8,7 @@ export type Measure = {
   unit: string
   // The acceptance criterion of the spec that the number belongs to.
   ac: string
-  pr: 1 | 2
+  pr: 1 | 2 | 3
   samples?: number[]
   note?: string
 }

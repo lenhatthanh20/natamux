@@ -35,7 +35,14 @@ export class FakeTerminal {
   buffer = { active: { viewportY: 0, baseY: 0 } }
   element: HTMLElement | undefined = undefined
   textarea: HTMLTextAreaElement | undefined = undefined
+  // Each write as text (bytes decoded), and as the code passed it.
   written: string[] = []
+  writes: (string | Uint8Array)[] = []
+  // Write callbacks that wait for parse().
+  callbacks: (() => void)[] = []
+  resets = 0
+  // What xterm's own keydown listener emits as data, or null for a key that gives none.
+  keyData: string | null = null
   refreshes = 0
   focuses = 0
   disposed = false
@@ -60,10 +67,31 @@ export class FakeTerminal {
     parent.append(element)
     this.element = element
     this.textarea = textarea
+    // Stands for xterm's listener, which it adds in open(), before any listener of the code.
+    textarea.addEventListener('keydown', () => {
+      if (this.keyData !== null) {
+        this.fire('data', this.keyData)
+      }
+    })
   }
 
-  write(data: string): void {
-    this.written.push(data)
+  write(data: string | Uint8Array, callback?: () => void): void {
+    this.written.push(typeof data === 'string' ? data : new TextDecoder().decode(data))
+    this.writes.push(data)
+    if (callback !== undefined) {
+      this.callbacks.push(callback)
+    }
+  }
+
+  // What xterm does once it parsed the writes so far: it runs their callbacks in order.
+  parse(): void {
+    while (this.callbacks.length > 0) {
+      this.callbacks.shift()?.()
+    }
+  }
+
+  reset(): void {
+    this.resets += 1
   }
 
   refresh(): void {
@@ -199,14 +227,15 @@ export class FakeWebglAddon {
 
 export type FakeSocket = ReturnType<typeof fakeSocket>
 
-// A WebSocket that a test drives from the daemon's side: open, message, drop.
+// A WebSocket that a test drives from the daemon's side: open, message, bytes, drop.
 export function fakeSocket() {
   const socket = {
     readyState: 0,
     closed: false,
+    binaryType: 'blob' as string,
     sent: [] as unknown[],
     onopen: null as null | (() => void),
-    onmessage: null as null | ((event: { data: string }) => void),
+    onmessage: null as null | ((event: { data: string | ArrayBuffer }) => void),
     onclose: null as null | (() => void),
     onerror: null as null | (() => void),
     send(data: string) {
@@ -222,6 +251,11 @@ export function fakeSocket() {
     },
     message(message: object) {
       socket.onmessage?.({ data: JSON.stringify(message) })
+    },
+    // A binary frame, as the socket gives it with binaryType 'arraybuffer': a fresh buffer.
+    bytes(data: string | Uint8Array) {
+      const view = typeof data === 'string' ? new TextEncoder().encode(data) : data
+      socket.onmessage?.({ data: new Uint8Array(view).buffer })
     },
     // The connection ends without the client asking.
     drop() {

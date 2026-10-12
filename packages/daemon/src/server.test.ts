@@ -1221,10 +1221,43 @@ describe('terminal', () => {
 
   type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
 
-  function nextMessage(socket: Socket): Promise<unknown> {
-    return new Promise((resolve) => {
-      socket.once('message', (data: Buffer) => resolve(JSON.parse(data.toString())))
-    })
+  type Frame = { binary: boolean; text: string }
+
+  // The listener is set at init: `hello` is sent while the socket opens, before injectWS returns.
+  async function open(query: string): Promise<{ socket: Socket; frames: Frame[] }> {
+    const frames: Frame[] = []
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(await ticket())}&${query}`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer, isBinary: boolean) => {
+            frames.push({ binary: isBinary, text: data.toString('utf8') })
+          })
+        },
+      },
+    )
+    return { socket, frames }
+  }
+
+  function controls(frames: Frame[]): { type: string }[] {
+    return frames.filter((frame) => !frame.binary).map((frame) => JSON.parse(frame.text))
+  }
+
+  async function replayed(frames: Frame[]): Promise<void> {
+    await vi.waitFor(() =>
+      expect(controls(frames).map((frame) => frame.type)).toContain('replayed'),
+    )
+  }
+
+  // The live output: the binary frames after the snapshot is replayed.
+  function output(frames: Frame[]): string {
+    const end = frames.findIndex((frame) => !frame.binary && frame.text.includes('"replayed"'))
+    return frames
+      .slice(end + 1)
+      .filter((frame) => frame.binary)
+      .map((frame) => frame.text)
+      .join('')
   }
 
   function closeCode(socket: Socket): Promise<number> {
@@ -1235,31 +1268,117 @@ describe('terminal', () => {
 
   it('runs a shell in the workspace and passes input and output', async () => {
     await taskWithWorkspace()
-    const socket = await app.injectWS(
-      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(await ticket())}&cols=100&rows=30`,
-    )
+    const { socket, frames } = await open('cols=100&rows=30')
     expect(ptys[0]?.options).toMatchObject({ cols: 100, rows: 30 })
     expect(ptys[0]?.options.cwd).toContain('T-0001')
+    await replayed(frames)
 
-    const echoed = nextMessage(socket)
     socket.send(JSON.stringify({ type: 'input', data: 'pwd\r' }))
-    expect(await echoed).toEqual({ type: 'output', data: 'pwd\r' })
+    await vi.waitFor(() => expect(output(frames)).toBe('pwd\r'))
 
     socket.send(JSON.stringify({ type: 'resize', cols: 120, rows: 40 }))
     socket.send('not json')
     socket.send(JSON.stringify({ type: 'input', data: 42 }))
     // Frames arrive in order, so once this one is echoed, the ones before it were handled.
-    const marker = nextMessage(socket)
     socket.send(JSON.stringify({ type: 'input', data: 'done' }))
-    expect(await marker).toEqual({ type: 'output', data: 'done' })
+    await vi.waitFor(() => expect(output(frames)).toBe('pwd\rdone'))
 
-    const exited = nextMessage(socket)
     const closed = closeCode(socket)
     ptys[0]?.exit(0)
-    expect(await exited).toEqual({ type: 'exit', code: 0 })
+    await vi.waitFor(() => expect(controls(frames).at(-1)).toEqual({ type: 'exit', code: 0 }))
     await closed
     expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
     expect(ptys[0]?.written).toEqual(['pwd\r', 'done'])
+  })
+
+  it('sends hello first, then the snapshot and replayed, with output as binary frames', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+
+    const types = controls(frames).map((frame) => frame.type)
+    expect(types.slice(0, 3)).toEqual(['hello', 'snapshot', 'replayed'])
+    expect(frames[0]?.binary).toBe(false)
+    expect(controls(frames)[0]).toMatchObject({ type: 'hello', shellId: expect.any(String) })
+    expect(controls(frames)[1]).toEqual({ type: 'snapshot', cols: 80, rows: 24 })
+    expect(controls(frames)[2]).toMatchObject({ type: 'replayed', offset: expect.any(Number) })
+
+    socket.send(JSON.stringify({ type: 'input', data: 'ls\r' }))
+    await vi.waitFor(() => expect(output(frames)).toBe('ls\r'))
+    // Control frames are text, the rest is binary.
+    expect(frames.at(-1)?.binary).toBe(true)
+    expect(controls(frames).length).toBeLessThan(frames.length)
+  })
+
+  it('gives the shell the size of a visible client only', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+
+    const hidden = await open('cols=100&rows=30&visible=0')
+    await replayed(hidden.frames)
+    expect(ptys[0]?.sizes).toEqual([])
+
+    const shown = await open('cols=120&rows=40&visible=1')
+    await replayed(shown.frames)
+    expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
+  })
+
+  it('claims the size with a visible message only when it has cols and rows', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    const hidden = await open('cols=100&rows=30&visible=0')
+    await replayed(hidden.frames)
+
+    hidden.socket.send(JSON.stringify({ type: 'visible', visible: true }))
+    // The marker comes from the client that has the shell's size, so it changes nothing itself.
+    first.socket.send(JSON.stringify({ type: 'input', data: 'marker' }))
+    await vi.waitFor(() => expect(output(first.frames)).toBe('marker'))
+    expect(ptys[0]?.sizes).toEqual([])
+
+    hidden.socket.send(JSON.stringify({ type: 'visible', visible: true, cols: 90, rows: 20 }))
+    await vi.waitFor(() => expect(ptys[0]?.sizes).toEqual([{ cols: 90, rows: 20 }]))
+  })
+
+  it('ignores an ack and a binary frame from the client', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+
+    socket.send(JSON.stringify({ type: 'ack', offset: 5 }))
+    socket.send(Buffer.from(JSON.stringify({ type: 'input', data: 'binary' })), { binary: true })
+    socket.send(JSON.stringify({ type: 'input', data: 'after' }))
+    await vi.waitFor(() => expect(output(frames)).toBe('after'))
+
+    expect(ptys[0]?.written).toEqual(['after'])
+    expect(socket.readyState).toBe(socket.OPEN)
+  })
+
+  it('answers an error and closes when the shell cannot start, without hello', async () => {
+    await taskWithWorkspace()
+    const used = await ticket()
+    await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const frames: Frame[] = []
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(used)}&cols=80&rows=24`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer, isBinary: boolean) => {
+            frames.push({ binary: isBinary, text: data.toString('utf8') })
+          })
+        },
+      },
+    )
+
+    expect(await closeCode(socket)).toBe(4409)
+    expect(controls(frames).map((frame) => frame.type)).toEqual(['error'])
+    expect(ptys).toHaveLength(0)
   })
 
   it('opens a second terminal, lists the terminals and closes one', async () => {

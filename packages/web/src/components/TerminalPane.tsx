@@ -1,8 +1,8 @@
-import type { TerminalSize } from '@natamux/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
 import { type CSSProperties, lazy, type ReactNode, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import { shortcutOf } from '../lib/commands'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { AgentBadge } from './AgentBadge'
 import { IconButton } from './ui/IconButton'
 import { LazyView } from './ui/LazyView'
@@ -26,7 +26,7 @@ type TerminalPaneProps = {
   needsInput?: boolean
   // Another agent of the task needs the user, such as "Shell 2 needs your input".
   hint?: string
-  connect: (size: TerminalSize) => Promise<WebSocket>
+  connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   focusToken?: number
   // Keeps the terminal alive while the pane is gone, see lib/terminal-cache.ts.
   cacheKey?: string
