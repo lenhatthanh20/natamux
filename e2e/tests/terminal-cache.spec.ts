@@ -407,15 +407,16 @@ test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => 
   await measureHeap(page, request, { tag: '', shellsPerTask: 4 })
 })
 
-// The width of the terminal sets the size of its rows, so the heap is measured at both ends.
-test('keeps the heap of hidden terminals small at 80 and 200 columns', async ({
+// The width of the terminal sets the size of its rows, so the heap is measured at both ends. Below
+// 1024 px the dashboard has another layout, so the narrow window is 1024; the notes keep the cols.
+test('keeps the heap of hidden terminals small in a narrow and a wide window', async ({
   page,
   request,
 }) => {
   test.setTimeout(900_000)
   await measureHeap(page, request, {
     tag: '-narrow',
-    viewport: { width: 900, height: 800 },
+    viewport: { width: 1024, height: 800 },
     shellsPerTask: 2,
   })
   await measureHeap(page, request, {
