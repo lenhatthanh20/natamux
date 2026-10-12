@@ -7,6 +7,7 @@ import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
+import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
 import { useViewStore } from '../lib/view-store'
@@ -134,6 +135,8 @@ export function ShellPanes({
   }
 
   const closeShell = async (name: string) => {
+    // The pane is still mounted, so its terminal is disposed when the pane leaves, not cached.
+    disposeTerminal(terminalKey(taskId, name))
     setClosing((current) => [...current, name])
     setAdded((current) => current.filter((item) => item !== name))
     if (maximized === name) {
@@ -255,6 +258,7 @@ export function ShellPanes({
               }
               needsInput={own === 'needs-input'}
               connect={(size) => connect(size, name)}
+              cacheKey={terminalKey(taskId, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}

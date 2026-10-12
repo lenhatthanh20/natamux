@@ -19,6 +19,7 @@ import { focusKind } from '../lib/dispatch'
 import { effectiveSidebarWidth } from '../lib/layout-mode'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
+import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import {
@@ -31,6 +32,7 @@ import {
   upsertTask,
 } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
+import { syncTaskTerminals } from '../lib/terminal-cache'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { detailsOpenFor, detailsViewFor, useViewStore } from '../lib/view-store'
@@ -55,6 +57,7 @@ import { StatusBar } from './StatusBar'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
+import { loadTerminalView } from './TerminalPane'
 import { TitleBar } from './TitleBar'
 import { Button } from './ui/Button'
 import { CountBadge } from './ui/CountBadge'
@@ -191,6 +194,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       onUnauthorized()
     }
   }, [tasksQuery.error, onUnauthorized])
+
+  // Cached terminals of a done, cancelled or deleted task, or of a removed workspace, are dropped.
+  useEffect(() => {
+    if (tasksQuery.data !== undefined) {
+      syncTaskTerminals(tasksQuery.data)
+    }
+  }, [tasksQuery.data])
+
+  // The first terminal then does not wait for xterm's code.
+  useEffect(() => {
+    if (!tasksQuery.isSuccess) {
+      return
+    }
+    return prefetchWhenIdle(loadTerminalView)
+  }, [tasksQuery.isSuccess])
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
   const repos = reposQuery.data ?? []

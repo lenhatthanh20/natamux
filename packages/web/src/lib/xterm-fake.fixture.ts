@@ -1,0 +1,236 @@
+// Stand-ins for xterm and its addons, for tests: jsdom has no canvas. A test file mocks each
+// package with this file, for example:
+//   vi.mock('@xterm/xterm', async () => ({
+//     Terminal: (await import('../lib/xterm-fake.fixture')).FakeTerminal,
+//   }))
+// The fakes register themselves in `fakes`, so a test can reach the ones the code made.
+
+export type FakeEvent = 'data' | 'resize' | 'scroll' | 'writeParsed'
+type Listener = (value: unknown) => void
+type Activates = { activate?: (terminal: FakeTerminal) => void }
+
+export const fakes = {
+  terminals: [] as FakeTerminal[],
+  fits: [] as FakeFitAddon[],
+  searches: [] as FakeSearchAddon[],
+  webgl: [] as FakeWebglAddon[],
+}
+
+export function resetFakes(): void {
+  fakes.terminals.length = 0
+  fakes.fits.length = 0
+  fakes.searches.length = 0
+  fakes.webgl.length = 0
+}
+
+const noop = { dispose: () => undefined }
+
+export class FakeTerminal {
+  options: Record<string, unknown>
+  cols = 80
+  rows = 24
+  // The size the next fit gives, as if the pane had that room.
+  fitSize = { cols: 80, rows: 24 }
+  unicode = { activeVersion: '' }
+  buffer = { active: { viewportY: 0, baseY: 0 } }
+  element: HTMLElement | undefined = undefined
+  textarea: HTMLTextAreaElement | undefined = undefined
+  written: string[] = []
+  refreshes = 0
+  focuses = 0
+  disposed = false
+  private readonly listeners = new Map<FakeEvent, Set<Listener>>()
+
+  constructor(options: Record<string, unknown> = {}) {
+    this.options = { ...options }
+    fakes.terminals.push(this)
+  }
+
+  loadAddon(addon: Activates): void {
+    addon.activate?.(this)
+  }
+
+  attachCustomKeyEventHandler = () => undefined
+
+  open(parent: HTMLElement): void {
+    const element = document.createElement('div')
+    element.className = 'xterm'
+    const textarea = document.createElement('textarea')
+    element.append(textarea)
+    parent.append(element)
+    this.element = element
+    this.textarea = textarea
+  }
+
+  write(data: string): void {
+    this.written.push(data)
+  }
+
+  refresh(): void {
+    this.refreshes += 1
+  }
+
+  focus(): void {
+    this.focuses += 1
+  }
+
+  scrollToBottom(): void {
+    this.buffer.active = { ...this.buffer.active, viewportY: this.buffer.active.baseY }
+  }
+
+  resize(cols: number, rows: number): void {
+    if (cols === this.cols && rows === this.rows) {
+      return
+    }
+    this.cols = cols
+    this.rows = rows
+    this.fire('resize', { cols, rows })
+  }
+
+  onData(listener: Listener) {
+    return this.listen('data', listener)
+  }
+
+  onResize(listener: Listener) {
+    return this.listen('resize', listener)
+  }
+
+  onScroll(listener: Listener) {
+    return this.listen('scroll', listener)
+  }
+
+  onWriteParsed(listener: Listener) {
+    return this.listen('writeParsed', listener)
+  }
+
+  // What xterm would emit: typed data, a new size, a scroll, a parsed write.
+  fire(event: FakeEvent, value?: unknown): void {
+    for (const listener of [...(this.listeners.get(event) ?? [])]) {
+      listener(value)
+    }
+  }
+
+  // How many listeners an event has now, to check that dispose removed them.
+  listenerCount(event: FakeEvent): number {
+    return this.listeners.get(event)?.size ?? 0
+  }
+
+  dispose(): void {
+    this.disposed = true
+  }
+
+  private listen(event: FakeEvent, listener: Listener) {
+    const set = this.listeners.get(event) ?? new Set<Listener>()
+    this.listeners.set(event, set)
+    set.add(listener)
+    return { dispose: () => set.delete(listener) }
+  }
+}
+
+export class FakeFitAddon {
+  fits = 0
+  private terminal: FakeTerminal | null = null
+
+  constructor() {
+    fakes.fits.push(this)
+  }
+
+  activate(terminal: FakeTerminal): void {
+    this.terminal = terminal
+  }
+
+  // As the real addon, a terminal that is not open has nothing to measure.
+  fit(): void {
+    this.fits += 1
+    const terminal = this.terminal
+    if (terminal?.element !== undefined) {
+      terminal.resize(terminal.fitSize.cols, terminal.fitSize.rows)
+    }
+  }
+
+  dispose = () => undefined
+}
+
+export class FakeSearchAddon {
+  constructor() {
+    fakes.searches.push(this)
+  }
+
+  activate = () => undefined
+  findNext(): boolean {
+    return false
+  }
+  findPrevious(): boolean {
+    return false
+  }
+  clearDecorations = () => undefined
+  onDidChangeResults() {
+    return noop
+  }
+  dispose = () => undefined
+}
+
+// Unicode 11 and web links: nothing to fake but the addon shape.
+export class FakeAddon {
+  activate = () => undefined
+  dispose = () => undefined
+}
+
+export class FakeWebglAddon {
+  disposed = false
+  // Calls the code's context-loss listener, as a GPU that drops the context.
+  loseContext: () => void = () => undefined
+
+  constructor() {
+    fakes.webgl.push(this)
+  }
+
+  activate = () => undefined
+
+  onContextLoss(listener: () => void) {
+    this.loseContext = listener
+    return noop
+  }
+
+  dispose(): void {
+    this.disposed = true
+  }
+}
+
+export type FakeSocket = ReturnType<typeof fakeSocket>
+
+// A WebSocket that a test drives from the daemon's side: open, message, drop.
+export function fakeSocket() {
+  const socket = {
+    readyState: 0,
+    closed: false,
+    sent: [] as unknown[],
+    onopen: null as null | (() => void),
+    onmessage: null as null | ((event: { data: string }) => void),
+    onclose: null as null | (() => void),
+    onerror: null as null | (() => void),
+    send(data: string) {
+      socket.sent.push(JSON.parse(data))
+    },
+    close() {
+      socket.closed = true
+      socket.readyState = 3
+    },
+    open() {
+      socket.readyState = 1
+      socket.onopen?.()
+    },
+    message(message: object) {
+      socket.onmessage?.({ data: JSON.stringify(message) })
+    },
+    // The connection ends without the client asking.
+    drop() {
+      socket.readyState = 3
+      socket.onclose?.()
+    },
+    asWebSocket(): WebSocket {
+      return socket as unknown as WebSocket
+    },
+  }
+  return socket
+}

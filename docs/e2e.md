@@ -21,7 +21,7 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact.
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, the run stops there, and the test job stops after 20 minutes.
 
 The workflow has three jobs:
 
@@ -63,6 +63,24 @@ playwright-cli reload
 
 - The tests share one daemon and run one after the other. A test that adds data gives it a name of its own, for example with `Date.now()`.
 - `signIn(page)` in `e2e/tests/helpers.ts` puts the token in `localStorage`, so a test starts on the dashboard.
-- The browser starts without WebGL, so the terminal draws its text into the page, where `.xterm-rows` shows it.
+- The browser starts without WebGL, so the terminal draws its text into the page, where `.xterm-rows` shows it. Only `terminal-gpu.spec.ts` turns WebGL on (SwiftShader): it checks the GPU budget, renderer changes while a terminal is hidden, and lost contexts, and it counts drawn pixels in screenshots, as a canvas has no text to read.
 - `phone.spec.ts` runs with a phone screen; the other files with a desktop one.
 - The images have no real agent. A test that needs one uses the fake agent of the demo data.
+- Terminals the page keeps for later sit in the hidden `#terminal-holder` with their own `.xterm-rows`. Find rows inside a pane region (`rows(pane(page, 'Shell 1'))` in `terminal-helpers.ts`), never on the whole page.
+
+## Terminal measures
+
+Two spec files time the terminal, so a change can show its effect with numbers.
+
+| File | What |
+|---|---|
+| `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It records numbers and checks none of them |
+| `terminal-cache.spec.ts` | The terminal cache: showing a terminal again within 100 ms with no new socket, the limit of 8 hidden terminals, the heap of hidden terminals. It also records the echo while hidden shells flood |
+| `terminal-helpers.ts` | Shell tasks, panes, history, and timing in the page (`timeToShow`, `typeAndMeasure`). Times come from the page's clock (`event.timeStamp`, `requestAnimationFrame`), so the runner's delay does not count |
+| `measures.ts` | `recordMeasure` writes `e2e/test-results/terminal-measures.json` and prints a `MEASURE` line. `writeSummary` adds a table to the job summary |
+| `daemon-rss.ts` | Samples the memory (`VmRSS`) of the daemon process every 0.5 s through one `docker compose exec`. Its shells are not counted |
+
+- Limits are checked on the median of 5 runs, not on one sample.
+- Each test deletes its tasks, so their shells end.
+- The flood tests have long timeouts: without flow control, the page draws all the output before the prompt or an echo shows.
+- To compare two branches, download `e2e-measures` from both runs: `gh run download <run-id> -n e2e-measures`.

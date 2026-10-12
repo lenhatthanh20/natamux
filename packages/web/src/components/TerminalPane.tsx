@@ -8,8 +8,9 @@ import { IconButton } from './ui/IconButton'
 import { LazyView } from './ui/LazyView'
 import { Skeleton } from './ui/Skeleton'
 
-// xterm.js is loaded the first time a terminal is shown.
-const TerminalView = lazy(() => import('./TerminalView'))
+// xterm.js is loaded the first time a terminal is shown, or earlier when the page is idle.
+export const loadTerminalView = () => import('./TerminalView')
+const TerminalView = lazy(loadTerminalView)
 
 type TerminalPaneProps = {
   // The pane's name for screen readers, for example "Shell 2".
@@ -27,6 +28,8 @@ type TerminalPaneProps = {
   hint?: string
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
+  // Keeps the terminal alive while the pane is gone, see lib/terminal-cache.ts.
+  cacheKey?: string
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -51,6 +54,7 @@ export function TerminalPane({
   hint,
   connect,
   focusToken,
+  cacheKey,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -129,7 +133,7 @@ export function TerminalPane({
         )}
       </header>
       <LazyView label="terminal" fallback={<Skeleton className="m-3" width="30%" />}>
-        <TerminalView connect={connect} focusToken={focusToken} />
+        <TerminalView connect={connect} focusToken={focusToken} cacheKey={cacheKey} />
       </LazyView>
     </section>
   )

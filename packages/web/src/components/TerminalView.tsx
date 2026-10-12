@@ -1,290 +1,92 @@
-import { scrollbackLines, type TerminalSize } from '@natamux/core'
-import { FitAddon } from '@xterm/addon-fit'
-import { SearchAddon } from '@xterm/addon-search'
-import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
-import { Terminal } from '@xterm/xterm'
+import type { TerminalSize } from '@natamux/core'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowDown } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppEvent } from '../lib/app-events'
-import { keyBelongsToShell } from '../lib/dispatch'
-import { gpuRenderer, watchVisible } from '../lib/gpu-renderer'
-import { closeSocket } from '../lib/live'
-import { parseTerminalMessage, takesFocusOnOpen } from '../lib/terminal'
-import { terminalFont, useTerminalFont } from '../lib/terminal-font'
+import { watchVisible } from '../lib/gpu-renderer'
+import { acquireTerminal, discardTerminal } from '../lib/terminal-cache'
+import { useTerminalFont } from '../lib/terminal-font'
 import {
-  MIN_CONTRAST_RATIO,
-  TERMINAL_LINE_HEIGHT,
-  TERMINAL_SCROLLBAR_WIDTH,
-  terminalTheme,
-} from '../lib/terminal-theme'
-import { uiZoom, useResolvedTheme } from '../lib/theme'
+  createTerminalSession,
+  type TerminalSession,
+  type TerminalSessionState,
+  type TerminalStatus,
+} from '../lib/terminal-session'
+import { useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
 import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
-
-type Status = 'connecting' | 'open' | 'ended' | 'error'
-
-// A burst of resizes (dragging a divider) fits the terminal once, when it settles.
-const FIT_DELAY_MS = 100
-const DISPOSE_DELAY_MS = 200
 
 type TerminalViewProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   // A new number takes the keyboard focus into the terminal, for "Answer in terminal".
   focusToken?: number
+  // `${taskId}/${terminal}`: the terminal stays alive in the cache while no view shows it.
+  // Without it, the terminal belongs to this view and ends with it.
+  cacheKey?: string
 }
 
-// A terminal that is hidden, not open yet or already disposed has no size, and xterm throws
-// ("reading 'dimensions'") while it measures nothing. The next resize fits it.
-function safeFit(fit: FitAddon | null): void {
-  try {
-    fit?.fit()
-  } catch {
-    // Nothing to fit yet.
-  }
-}
-
-// Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
-// drops the context, the terminal keeps or goes back to drawing with the DOM.
-function loadWebgl(terminal: Terminal, onLost: () => void): WebglAddon | null {
-  try {
-    const webgl = new WebglAddon()
-    webgl.onContextLoss(onLost)
-    terminal.loadAddon(webgl)
-    return webgl
-  } catch {
-    return null
-  }
-}
-
-const STATUS_TEXT: Record<Status, string> = {
+const STATUS_TEXT: Record<TerminalStatus, string> = {
   connecting: 'Connecting.',
   open: 'Connected.',
   ended: 'The shell ended.',
   error: 'The terminal could not start.',
 }
 
+const CONNECTING: TerminalSessionState = { status: 'connecting', error: null, scrolledUp: false }
+const noSubscribe = () => () => undefined
+
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.
-export default function TerminalView({ connect, focusToken }: TerminalViewProps) {
+export default function TerminalView({ connect, focusToken, cacheKey }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
-  const [status, setStatus] = useState<Status>('connecting')
-  const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const [search, setSearch] = useState<SearchAddon | null>(null)
+  const [session, setSession] = useState<TerminalSession | null>(null)
+  // Set before paint, so effects and handlers of this commit already see the session.
+  const sessionRef = useRef<TerminalSession | null>(null)
   const [findOpen, setFindOpen] = useState(false)
-  const [scrolledUp, setScrolledUp] = useState(false)
   const theme = useResolvedTheme()
-  const themeRef = useRef(theme)
-  themeRef.current = theme
-  const terminalRef = useRef<Terminal | null>(null)
-  const fitRef = useRef<FitAddon | null>(null)
   const uiSize = useUiSize()
   const font = useTerminalFont()
+  const subscribe = session?.subscribe ?? noSubscribe
+  const snapshot = () => session?.state() ?? CONNECTING
+  const { status, error, scrolledUp } = useSyncExternalStore(subscribe, snapshot)
 
+  // Layout effects, so a cached terminal is back in place before the browser paints.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.
-  useEffect(() => {
-    const element = container.current
-    if (!element) {
-      return
-    }
-    const start = terminalFont()
-    const terminal = new Terminal({
-      // The search addon marks its matches with decorations, and Unicode 11 widths are set
-      // through terminal.unicode: both are proposed APIs.
-      allowProposedApi: true,
-      cursorBlink: true,
-      fontFamily: start.stack,
-      fontSize: start.size * uiZoom(),
-      lineHeight: TERMINAL_LINE_HEIGHT,
-      minimumContrastRatio: MIN_CONTRAST_RATIO,
-      overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
-      scrollback: scrollbackLines(80),
-      theme: terminalTheme(themeRef.current),
-    })
-    terminalRef.current = terminal
-    const fit = new FitAddon()
-    terminal.loadAddon(fit)
-    fitRef.current = fit
-    const searchAddon = new SearchAddon()
-    terminal.loadAddon(searchAddon)
-    setSearch(searchAddon)
-    // Only web addresses become links, and they open in a new tab.
-    terminal.loadAddon(
-      new WebLinksAddon((event, uri) => {
-        event.preventDefault()
-        window.open(uri, '_blank', 'noopener,noreferrer')
-      }),
-    )
-    // The keys of the app (F6, Cmd chords on a Mac, Ctrl+Shift chords elsewhere) are not for the
-    // shell. Returning false lets the key event go on to the page, see lib/dispatch.ts.
-    terminal.attachCustomKeyEventHandler((event) => keyBelongsToShell(event))
-    // Emoji and wide signs take two cells, as in the daemon's screen (terminal-service.ts).
-    terminal.loadAddon(new Unicode11Addon())
-    terminal.unicode.activeVersion = '11'
-    terminal.open(element)
-    const gpu = gpuRenderer((onLost) => loadWebgl(terminal, onLost))
-    const stopWatching = watchVisible(element, gpu.setVisible)
-    safeFit(fit)
-    terminal.options.scrollback = scrollbackLines(terminal.cols)
-
-    let socket: WebSocket | null = null
-    let disposed = false
-    const send = (message: object) => {
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(message))
-      }
-    }
-    // The size that this screen sent last. It sends a size when it changes, and again when the
-    // screen takes the focus: another screen of the same shell may have set its own size since.
-    let sentSize = { cols: terminal.cols, rows: terminal.rows }
-    const sendSize = (always = false) => {
-      if (always || terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
-        sentSize = { cols: terminal.cols, rows: terminal.rows }
-        send({ type: 'resize', ...sentSize })
-      }
-    }
-    const claimSize = () => sendSize(true)
-    terminal.textarea?.addEventListener('focus', claimSize)
-
-    setStatus('connecting')
-    setError(null)
-    connectRef
-      .current({ cols: terminal.cols, rows: terminal.rows })
-      .then((opened) => {
-        if (disposed) {
-          closeSocket(opened)
-          return
-        }
-        socket = opened
-        let wasOpen = false
-        opened.onopen = () => {
-          wasOpen = true
-          setStatus('open')
-          // The terminal may have been fitted while the socket was opening.
-          sendSize()
-        }
-        opened.onmessage = (event) => {
-          const message = parseTerminalMessage(String(event.data))
-          if (message?.type === 'output') {
-            terminal.write(message.data)
-          } else if (message?.type === 'exit') {
-            terminal.write('\r\n')
-            setStatus('ended')
-          } else if (message?.type === 'error') {
-            setError(message.message)
-            setStatus('error')
-          }
-        }
-        opened.onclose = () => {
-          if (disposed) {
-            return
-          }
-          // A close before the open is a failed handshake, not a shell that ended.
-          if (!wasOpen) {
-            setError((current) => current ?? 'Could not connect to the terminal.')
-            setStatus('error')
-            return
-          }
-          setStatus((current) => (current === 'error' ? current : 'ended'))
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!disposed) {
-          setError(reason instanceof Error ? reason.message : String(reason))
-          setStatus('error')
-        }
-      })
-
-    const input = terminal.onData((data) => send({ type: 'input', data }))
-    const resized = terminal.onResize(() => {
-      // The history keeps the same memory at any width, as the daemon's screen does.
-      terminal.options.scrollback = scrollbackLines(terminal.cols)
-      sendSize()
-    })
-    const updateScrolled = () => {
-      const buffer = terminal.buffer.active
-      setScrolledUp(buffer.viewportY < buffer.baseY)
-    }
-    const scrolled = terminal.onScroll(updateScrolled)
-    const written = terminal.onWriteParsed(updateScrolled)
-
-    let fitTimer: ReturnType<typeof setTimeout> | undefined
-    const observer = new ResizeObserver(() => {
-      clearTimeout(fitTimer)
-      fitTimer = setTimeout(() => {
-        safeFit(fit)
-      }, FIT_DELAY_MS)
-    })
-    observer.observe(element)
-    if (takesFocusOnOpen(document.activeElement, document.body)) {
-      terminal.focus()
-    }
-
-    // The web font may still be loading when the terminal measures its cells. Setting the font
-    // again makes it measure with the loaded one.
-    document.fonts
-      ?.load(`${Math.round(start.size)}px ${start.stack}`)
-      .then(() => {
-        if (!disposed) {
-          terminal.options.fontFamily = 'monospace'
-          terminal.options.fontFamily = terminalFont().stack
-          safeFit(fit)
-        }
-      })
-      .catch(() => undefined)
-
+  useLayoutEffect(() => {
+    const create = () =>
+      createTerminalSession({ connect: connectRef.current, onEnd: discardTerminal })
+    const lease = acquireTerminal(cacheKey, create)
+    sessionRef.current = lease.session
+    setSession(lease.session)
     return () => {
-      disposed = true
-      clearTimeout(fitTimer)
-      observer.disconnect()
-      stopWatching()
-      terminal.textarea?.removeEventListener('focus', claimSize)
-      input.dispose()
-      resized.dispose()
-      scrolled.dispose()
-      written.dispose()
-      if (socket !== null) {
-        closeSocket(socket)
-      }
-      // xterm still has a frame of work queued that reads its size ("reading 'dimensions'"), so it
-      // is taken off the page now and disposed of a moment later.
-      terminal.element?.remove()
-      setTimeout(() => {
-        gpu.dispose()
-        terminal.dispose()
-      }, DISPOSE_DELAY_MS)
-      terminalRef.current = null
-      fitRef.current = null
-      setSearch(null)
+      lease.release()
+      sessionRef.current = null
+      setSession(null)
       setFindOpen(false)
     }
-  }, [attempt])
+  }, [attempt, cacheKey])
 
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.options.theme = terminalTheme(theme)
+  // Shown only after the render that has the session's status. Before it, the status strip of
+  // "connecting" takes room, so a cached open terminal would fit a smaller box and send two
+  // resizes: one now, and one back when the strip goes.
+  useLayoutEffect(() => {
+    const element = container.current
+    if (!element || session === null) {
+      return
     }
-  }, [theme])
+    session.show(element)
+    return watchVisible(element, session.setOnScreen)
+  }, [session])
 
-  // The UI size and the terminal font change the cells, and then the number of columns.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: uiSize is a trigger; uiZoom() reads the page.
+  // Theme, font and UI size change the colors and the cells. A hidden terminal takes them when
+  // it is shown again.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the settings are triggers.
   useEffect(() => {
-    const terminal = terminalRef.current
-    if (terminal) {
-      terminal.options.fontFamily = font.stack
-      terminal.options.fontSize = font.size * uiZoom()
-      safeFit(fitRef.current)
-      document.fonts
-        ?.load(`${Math.round(font.size)}px ${font.stack}`)
-        .then(() => safeFit(fitRef.current))
-        .catch(() => undefined)
-    }
-  }, [uiSize, font.stack, font.size])
+    session?.applySettings()
+  }, [session, theme, font.stack, font.size, uiSize])
 
   // A new token is the trigger. Token 0 is "no request", so a terminal that only opens does not
   // take the focus from the tab that opened it.
@@ -293,7 +95,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
     const changed = lastToken.current !== focusToken
     lastToken.current = focusToken
     if (changed && focusToken) {
-      terminalRef.current?.focus()
+      sessionRef.current?.terminal.focus()
     }
   }, [focusToken])
 
@@ -306,7 +108,15 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
 
   const closeFind = () => {
     setFindOpen(false)
-    terminalRef.current?.focus()
+    sessionRef.current?.terminal.focus()
+  }
+
+  // The old terminal is dropped from the cache, so the next run makes a fresh one.
+  const startNewShell = () => {
+    if (sessionRef.current !== null) {
+      discardTerminal(sessionRef.current)
+    }
+    setAttempt((value) => value + 1)
   }
 
   return (
@@ -318,7 +128,7 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
             {error !== null && ` ${error}`}
           </p>
           {(status === 'ended' || status === 'error') && (
-            <Button variant="link" onClick={() => setAttempt((value) => value + 1)}>
+            <Button variant="link" onClick={startNewShell}>
               Start a new shell
             </Button>
           )}
@@ -331,14 +141,17 @@ export default function TerminalView({ connect, focusToken }: TerminalViewProps)
           aria-label="Terminal screen"
           className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-2.5"
         >
-          <div ref={container} className="min-h-0 flex-1 overflow-hidden" />
+          {/* The session's own element, which moves between views, goes in here. */}
+          <div ref={container} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
         </section>
-        {findOpen && search !== null && <TerminalFind search={search} onClose={closeFind} />}
+        {findOpen && session !== null && (
+          <TerminalFind search={session.search} onClose={closeFind} />
+        )}
         {scrolledUp && (
           <Button
             icon={ArrowDown}
             size="xs"
-            onClick={() => terminalRef.current?.scrollToBottom()}
+            onClick={() => sessionRef.current?.terminal.scrollToBottom()}
             className="absolute right-4 bottom-3 z-10 rounded-full! shadow-pop"
           >
             Jump to latest
