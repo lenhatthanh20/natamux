@@ -5,24 +5,36 @@ import userEvent from '@testing-library/user-event'
 import { createElement, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_PANES } from '../lib/panes'
+import { disposeTerminal } from '../lib/terminal-cache'
 import { ShellPanes } from './ShellPanes'
 
 type StandInProps = {
   connect: (size: TerminalSize) => Promise<WebSocket>
   focusToken?: number
+  cacheKey?: string
 }
 
-// The stand-in shows the focus token it gets, which makes the real terminal take the keyboard.
-// It connects once when it mounts, as the real terminal does, so a test can count the mounts.
+// The stand-in shows the focus token it gets, which makes the real terminal take the keyboard,
+// and its cache key. It connects once when it mounts, as the real terminal does, so a test can
+// count the mounts.
 vi.mock('./TerminalView', () => ({
-  default: ({ connect, focusToken }: StandInProps) => {
+  default: ({ connect, focusToken, cacheKey }: StandInProps) => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: the real terminal connects once per mount.
     useEffect(() => {
       void connect({ cols: 80, rows: 24 })
     }, [])
-    return createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in')
+    return createElement(
+      'p',
+      { 'data-focus-token': focusToken ?? '', 'data-cache-key': cacheKey ?? '' },
+      'Terminal stand-in',
+    )
   },
 }))
+
+vi.mock('../lib/terminal-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/terminal-cache')>()
+  return { ...actual, disposeTerminal: vi.fn(actual.disposeTerminal) }
+})
 
 const layout = vi.hoisted(() => ({ phone: false }))
 vi.mock('../hooks/useLayoutMode', async (importOriginal) => ({
@@ -460,6 +472,23 @@ describe('ShellPanes stage shells', () => {
     expect(noPane('Shell 2')).toBeNull()
     expect(pane('Shell 1')).toBeTruthy()
     expect(state.terminals).toEqual(['1'])
+  })
+
+  it('gives each shell a cache key, and a closed shell leaves the cache (AC 5)', async () => {
+    const { view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const user = typist()
+    vi.mocked(disposeTerminal).mockClear()
+    render(view(building))
+    await agentShown('Shell 2')
+    const keyOf = (name: string) =>
+      within(pane(name)).getByText('Terminal stand-in').getAttribute('data-cache-key')
+    expect(keyOf('Shell 1')).toBe('T-0001/1')
+    expect(keyOf('Shell 2')).toBe('T-0001/2')
+
+    await user.click(screen.getByRole('button', { name: 'Close Shell 2' }))
+    expect(vi.mocked(disposeTerminal)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(disposeTerminal)).toHaveBeenCalledWith('T-0001/2')
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
   })
 
   it('brings back a closed shell when the daemon opens it again', async () => {

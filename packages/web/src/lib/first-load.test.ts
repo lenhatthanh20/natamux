@@ -116,9 +116,17 @@ describe('the first load of the dashboard', () => {
       'components/MonacoFile.tsx',
       'components/MarkdownBody.tsx',
       'lib/monaco-setup.ts',
+      'lib/terminal-session.ts',
     ]) {
       expect(files).not.toContain(file)
     }
+  })
+
+  // The panes and the dashboard use the cache, so it must not import xterm (see the test above).
+  it('counts the terminal cache and the prefetch in the first load', () => {
+    const { files } = firstLoad()
+    expect(files).toContain('lib/terminal-cache.ts')
+    expect(files).toContain('lib/prefetch.ts')
   })
 
   it('skips type imports and dynamic imports', () => {

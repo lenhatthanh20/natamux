@@ -11,6 +11,7 @@ import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { routeOf } from './lib/route'
+import { acquireTerminal, cachedTerminalCount, resetTerminalCache } from './lib/terminal-cache'
 import { useToasts } from './lib/toasts'
 import { initialViewData, useViewStore } from './lib/view-store'
 
@@ -74,6 +75,13 @@ class FakeSocket {
   close(): void {
     this.onclose?.()
   }
+}
+
+// Puts a terminal in the cache, as a TerminalView on screen would; the real view is mocked here.
+function cacheTerminal(key: string) {
+  const session = { hide: vi.fn(), dispose: vi.fn() }
+  acquireTerminal(key, () => session)
+  return session
 }
 
 type Call = { method: string; path: string; authorization: string | null; body: string | null }
@@ -464,6 +472,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // The cache and the task list it knows are module state, kept from one test to the next.
+  resetTerminalCache()
   vi.unstubAllGlobals()
 })
 
@@ -507,11 +517,14 @@ describe('App', () => {
     )
     const user = userEvent.setup()
     render(<App />)
+    const cached = cacheTerminal('T-0001/1')
 
     await signIn(user)
 
     expect(await screen.findByText(/rejected that token/)).toBeTruthy()
     expect(window.localStorage.length).toBe(0)
+    expect(cached.dispose).toHaveBeenCalledTimes(1)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
   })
 
   it('approves a task in review from its details', async () => {
@@ -2208,9 +2221,46 @@ describe('App', () => {
     expect(screen.getByRole('table')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Account' }))
+    const cached = cacheTerminal('T-0001/1')
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
     expect(await screen.findByLabelText('Daemon token')).toBeTruthy()
+    // A cached terminal would keep its socket and shell alive for the next sign-in.
+    expect(cached.dispose).toHaveBeenCalledTimes(1)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
+  })
+
+  it('drops the cached terminals of a done task when the task list comes', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Shipped', state: 'done', workspace: '/work/T-0001' }),
+      makeTask({ id: 'T-0002', title: 'Open', state: 'review', workspace: '/work/T-0002' }),
+    ])
+    const shipped = { hide: vi.fn(), dispose: vi.fn() }
+    const inReview = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0001/1', () => shipped).release()
+    acquireTerminal('T-0002/1', () => inReview).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    await waitFor(() => expect(shipped.dispose).toHaveBeenCalledTimes(1))
+    expect(inReview.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
+  it("loads the terminal's code when the page is idle after the task list", async () => {
+    const idle = vi.fn((_callback: () => void) => 1)
+    vi.stubGlobal('requestIdleCallback', idle)
+    vi.stubGlobal('cancelIdleCallback', vi.fn())
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    expect(idle).not.toHaveBeenCalled()
+
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await waitFor(() => expect(idle).toHaveBeenCalledTimes(1))
   })
 
   it('opens the shortcut list with the question mark key', async () => {

@@ -5,8 +5,10 @@ import { type ComponentProps, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentPanes } from './AgentPanes'
 
+// The stand-in shows its cache key.
 vi.mock('./TerminalView', () => ({
-  default: () => createElement('p', null, 'Terminal stand-in'),
+  default: ({ cacheKey }: { cacheKey?: string }) =>
+    createElement('p', { 'data-cache-key': cacheKey ?? '' }, 'Terminal stand-in'),
 }))
 
 afterEach(() => {
@@ -288,6 +290,17 @@ describe('AgentPanes keys', () => {
     expect(order()).toEqual(['Agent of T-0012', 'Agent of T-0007'])
     expect(region('T-0012')).toBe(picked)
     expect(region('T-0007')).toBe(added)
+  })
+})
+
+describe('AgentPanes cache keys', () => {
+  it('gives each pane the key of Shell 1 of its task, as the task view does', async () => {
+    grid([makeTask('T-0001'), makeTask('T-0002')])
+    for (const id of ['T-0001', 'T-0002']) {
+      const pane = screen.getByRole('region', { name: `Agent of ${id}` })
+      const terminal = await within(pane).findByText('Terminal stand-in')
+      expect(terminal.getAttribute('data-cache-key')).toBe(`${id}/1`)
+    }
   })
 })
 
