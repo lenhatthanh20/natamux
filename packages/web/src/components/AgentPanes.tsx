@@ -1,4 +1,4 @@
-import type { Task, TerminalLane, TerminalSize } from '@natamux/core'
+import type { Task, TerminalLane } from '@natamux/core'
 import { LayoutGrid } from 'lucide-react'
 import { useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
@@ -13,6 +13,8 @@ import {
   paneStateText,
   terminalState,
 } from '../lib/panes'
+import type { TerminalConnectQuery } from '../lib/terminal'
+import { terminalKey } from '../lib/terminal-cache'
 import { StatusGlyph } from './StatusGlyph'
 import { TerminalPane } from './TerminalPane'
 import { Button } from './ui/Button'
@@ -32,7 +34,7 @@ type AgentPanesProps = {
   activity?: Readonly<Record<string, Readonly<Record<string, string>>>>
   // The shells of each task where an agent runs, with the stage each one works on.
   terminals?: Readonly<Record<string, Readonly<Record<string, TerminalLane>>>>
-  connect: (taskId: string, size: TerminalSize) => Promise<WebSocket>
+  connect: (taskId: string, query: TerminalConnectQuery) => Promise<WebSocket>
   onOpenTask: (id: string) => void
 }
 
@@ -160,6 +162,8 @@ export function AgentPanes({
                 hint={otherTerminalHint(task, terminals?.[task.id])}
                 needsInput={state === 'needs-input'}
                 connect={(size) => connect(task.id, size)}
+                // The same key as Shell 1 in the task view: the terminal moves, no second socket.
+                cacheKey={terminalKey(task.id, '1')}
                 maximized={focused === task.id}
                 onToggleMaximize={() => setMaximized(focused === task.id ? null : task.id)}
                 openWorkspace={{

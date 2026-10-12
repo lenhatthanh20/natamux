@@ -38,6 +38,8 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
     },
     write: (data) => pty.write(data),
     resize: (cols, rows) => pty.resize(cols, rows),
+    pause: () => pty.pause(),
+    resume: () => pty.resume(),
     // Windows has no signals; the shell and what runs in it are ended outright there.
     kill: (signal) => {
       if (process.platform !== 'win32') {

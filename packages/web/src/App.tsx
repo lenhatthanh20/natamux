@@ -4,6 +4,7 @@ import { Dashboard } from './components/Dashboard'
 import { SignIn } from './components/SignIn'
 import { isUnauthorized } from './lib/api'
 import { clearToken, loadToken, saveToken } from './lib/auth-storage'
+import { disposeAllTerminals } from './lib/terminal-cache'
 
 export function App() {
   const [queryClient] = useState(
@@ -30,12 +31,14 @@ export function App() {
   const signOut = useCallback(() => {
     clearToken()
     queryClient.clear()
+    disposeAllTerminals()
     setToken(null)
   }, [queryClient])
 
   const rejectToken = useCallback(() => {
     clearToken()
     queryClient.clear()
+    disposeAllTerminals()
     setMessage('The daemon rejected that token. Paste the token it printed when it started.')
     setToken(null)
   }, [queryClient])
