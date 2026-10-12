@@ -30,6 +30,8 @@ jobs:
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm test
+        env:
+          NATAMUX_BENCH: "1"
       - run: scripts/fake-agent.test.sh
       - run: scripts/release.test.sh
 

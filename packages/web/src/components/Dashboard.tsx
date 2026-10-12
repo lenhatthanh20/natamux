@@ -16,9 +16,10 @@ import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
 import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
-import { effectiveSidebarWidth } from '../lib/layout-mode'
+import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
+import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
 import { sidebarGroups } from '../lib/sidebar-groups'
 import {
@@ -31,6 +32,7 @@ import {
   upsertTask,
 } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
+import { syncTaskTerminals } from '../lib/terminal-cache'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { detailsOpenFor, detailsViewFor, useViewStore } from '../lib/view-store'
@@ -55,6 +57,7 @@ import { StatusBar } from './StatusBar'
 import { TaskBoard } from './TaskBoard'
 import { TaskDetail } from './TaskDetail'
 import { TaskTable } from './TaskTable'
+import { loadTerminalView } from './TerminalPane'
 import { TitleBar } from './TitleBar'
 import { Button } from './ui/Button'
 import { CountBadge } from './ui/CountBadge'
@@ -191,6 +194,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       onUnauthorized()
     }
   }, [tasksQuery.error, onUnauthorized])
+
+  // Cached terminals of a done, cancelled or deleted task, or of a removed workspace, are dropped.
+  useEffect(() => {
+    if (tasksQuery.data !== undefined) {
+      syncTaskTerminals(tasksQuery.data)
+    }
+  }, [tasksQuery.data])
+
+  // The first terminal then does not wait for xterm's code.
+  useEffect(() => {
+    if (!tasksQuery.isSuccess) {
+      return
+    }
+    return prefetchWhenIdle(loadTerminalView)
+  }, [tasksQuery.isSuccess])
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
   const repos = reposQuery.data ?? []
@@ -459,8 +477,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
   const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
-  const sidebar = useStoredWidth('natamux.sidebar-width', 272, 220, 440)
-  const details = useStoredWidth('natamux.details-width', 360, 320, 560)
+  const sidebar = useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)
+  const details = useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)
   const viewportWidth = useViewportWidth()
   const sidebarWidth = effectiveSidebarWidth(sidebar.width, viewportWidth)
   const shellLayout = useLayoutMode({
@@ -788,7 +806,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           )
         }
         sidebar={{
-          sizing: { ...sidebar, width: sidebarWidth, defaultWidth: 272 },
+          sizing: { ...sidebar, width: sidebarWidth, defaultWidth: PANEL_WIDTH },
           open: sidebarOpen,
           drawerOpen,
           onCollapse: () => setSidebarOpen(false),
@@ -892,7 +910,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         details={
           detailOpen && detailTask
             ? {
-                sizing: { ...details, defaultWidth: 360 },
+                sizing: { ...details, defaultWidth: PANEL_WIDTH },
                 onClose: () => setDetailOpen(detailTask.id, false),
                 render: (mode) => (
                   <TaskDetail

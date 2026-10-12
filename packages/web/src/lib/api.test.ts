@@ -301,15 +301,15 @@ describe('createApi', () => {
         terminals: ['1', '2', '3'],
         agents: ['1', '2'],
         lanes: {
-          '1': { stage: 'implement', state: 'running' },
-          '2': { stage: 'test-spec', state: 'review' },
+          '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+          '2': { stage: 'test-spec', state: 'review', agent: null },
         },
       }),
     )
 
     expect(await createApi('secret', fetchFunction).listAgentTerminals('T-0001')).toEqual({
-      '1': { stage: 'implement', state: 'running' },
-      '2': { stage: 'test-spec', state: 'review' },
+      '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+      '2': { stage: 'test-spec', state: 'review', agent: null },
     })
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/terminals')
   })

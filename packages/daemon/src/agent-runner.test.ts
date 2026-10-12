@@ -11,7 +11,7 @@ import { ProjectSettingsService } from './project-settings.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
-import { TerminalService } from './terminal-service.js'
+import { type TerminalFrame, TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
@@ -113,7 +113,9 @@ describe('AgentRunner', () => {
     // Wide enough for the long temp path of macOS and Windows: on a resize, xterm keeps the line
     // with the cursor as it is, so a narrower screen would cut it.
     const wide = { cols: 200, rows: 40 }
-    terminals.attach(task.id, { send: (message) => seen.push(JSON.stringify(message)) }, wide)
+    const send = (frame: TerminalFrame) =>
+      seen.push(frame instanceof Uint8Array ? Buffer.from(frame).toString() : JSON.stringify(frame))
+    terminals.attach(task.id, { send }, wide)
     await terminals.settled(task.id)
 
     const text = seen.join('')

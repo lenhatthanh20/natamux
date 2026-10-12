@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideLayout, effectiveSidebarWidth } from './layout-mode'
+import { decideLayout, effectiveSidebarWidth, PANEL_WIDTH } from './layout-mode'
 
 const base = { sidebarWidth: 272, detailsWidth: 360, coarse: false }
 
@@ -22,6 +22,16 @@ describe('decideLayout', () => {
   it('docks the details at 1280 only while the main area keeps 640', () => {
     expect(decideLayout({ ...base, width: 1280 }).details).toBe('docked')
     expect(decideLayout({ ...base, width: 1280, sidebarWidth: 320 }).details).toBe('sheet')
+  })
+
+  it('docks the details at 1280 when both panels have the default width', () => {
+    const layout = decideLayout({
+      ...base,
+      width: 1280,
+      sidebarWidth: PANEL_WIDTH,
+      detailsWidth: PANEL_WIDTH,
+    })
+    expect(layout.details).toBe('docked')
   })
 
   it('counts a collapsed sidebar as no width', () => {
