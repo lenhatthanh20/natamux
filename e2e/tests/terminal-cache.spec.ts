@@ -384,7 +384,10 @@ async function measureHeap(page: Page, request: APIRequestContext, run: HeapRun)
 
   // The tasks end: the cache drops every terminal, and the heap goes back near the base.
   await goToAllTasks(page)
-  await removeTasks(request, shellCounts.map(({ task }) => task.id))
+  await removeTasks(
+    request,
+    shellCounts.map(({ task }) => task.id),
+  )
   await expect.poll(() => holderCount(page), { timeout: 60_000 }).toBe(0)
   await expect
     .poll(() => heapMb(page), { timeout: 30_000 })
@@ -461,7 +464,9 @@ test('records the echo in task Y while the hidden shells of task X flood', async
       async () => {
         for (let index = 1; index <= 4; index++) {
           const done = await rows(pane(page, `Shell ${index}`)).evaluate((element) =>
-            Array.from(element.children).some((row) => (row.textContent ?? '').trim() === '1000000'),
+            Array.from(element.children).some(
+              (row) => (row.textContent ?? '').trim() === '1000000',
+            ),
           )
           if (done) {
             return true
