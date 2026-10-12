@@ -202,7 +202,7 @@ describe('createTask with stages that are off', () => {
       'spec',
       { id: 'build', parallel: ['test-spec', 'implement'] },
       'testing',
-      'review',
+      'agent-review',
       'release',
     ])
     expect(task.stage).toBe('spec')
@@ -827,7 +827,7 @@ describe('setWorkflow', () => {
     service.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
-      payload: { to: 'review', stage: 'review' },
+      payload: { to: 'review', stage: 'agent-review' },
     })
     expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual(['plan'])
   })

@@ -396,9 +396,9 @@ describe('positions', () => {
   })
 
   it('starts a review stage waiting for you, and a group with a state per stage', () => {
-    const review = DEFAULT_PIPELINE[4]
+    const review: Step = { id: 'review', kind: 'review', gate: 'manual' }
     const build = DEFAULT_PIPELINE[3]
-    if (review === undefined || build === undefined) {
+    if (build === undefined) {
       throw new Error('The default pipeline changed')
     }
     expect(enterStep(review)).toEqual({ stage: 'review', state: 'review', lanes: {} })

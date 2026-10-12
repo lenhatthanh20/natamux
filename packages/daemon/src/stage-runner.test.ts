@@ -149,6 +149,17 @@ async function expectSubmitted(pty: FakePty | undefined, start: string): Promise
   })
 }
 
+// The default pipeline with a person's review in place of the agent's, for the cases about it.
+function withManualReview(): void {
+  const manual: Stage = { id: 'review', kind: 'review', gate: 'manual' }
+  settings = {
+    ...DEFAULT_PROJECT_SETTINGS,
+    stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+      step.id === 'agent-review' ? manual : step,
+    ),
+  }
+}
+
 // Test spec starts Codex with its own words, beside Claude Code in Shell 1.
 function withOwnAgent(): void {
   const own = (stage: Stage) =>
@@ -1448,6 +1459,8 @@ describe('the agent in each terminal', () => {
 })
 
 describe('a send back', () => {
+  beforeEach(withManualReview)
+
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
     tasks.applyEvent(task.id, {
