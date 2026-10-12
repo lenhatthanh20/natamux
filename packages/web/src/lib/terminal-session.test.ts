@@ -7,6 +7,7 @@ import {
   type TerminalSize,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ICON_FONT } from './fonts'
 import { GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
 import type { TerminalConnectQuery } from './terminal'
 import { fontStack, saveTerminalFont, terminalFont } from './terminal-font'
@@ -18,7 +19,6 @@ import {
   HIDDEN_RESUME_BYTES,
   type TerminalSession,
 } from './terminal-session'
-import { ICON_FONT } from './fonts'
 import { TERMINAL_LOOK, terminalTheme } from './terminal-theme'
 import { uiZoom } from './theme'
 import { applyUiSize, uiSizeZoom } from './ui-size'

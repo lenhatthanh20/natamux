@@ -26,10 +26,7 @@ import {
 } from './terminal'
 import type { CachedTerminal } from './terminal-cache'
 import { type ResolvedTerminalFont, terminalFont } from './terminal-font'
-import {
-  TERMINAL_LOOK,
-  terminalTheme,
-} from './terminal-theme'
+import { TERMINAL_LOOK, terminalTheme } from './terminal-theme'
 import { pageTheme, uiZoom } from './theme'
 
 // One live terminal: xterm, its addons, its socket and its element. It lives outside React, so
