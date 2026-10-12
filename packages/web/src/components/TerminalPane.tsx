@@ -29,6 +29,7 @@ type TerminalPaneProps = {
   hint?: string
   connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   focusToken?: number
+  focusOnOpen?: boolean
   // Keeps the terminal alive while the pane is gone, see lib/terminal-cache.ts.
   cacheKey?: string
   // The task's state, so an ended shell can say the task was done or cancelled.
@@ -57,6 +58,7 @@ export function TerminalPane({
   hint,
   connect,
   focusToken,
+  focusOnOpen,
   cacheKey,
   taskState,
   maximized,
@@ -133,6 +135,7 @@ export function TerminalPane({
         <TerminalView
           connect={connect}
           focusToken={focusToken}
+          focusOnOpen={focusOnOpen}
           cacheKey={cacheKey}
           taskState={taskState}
         />

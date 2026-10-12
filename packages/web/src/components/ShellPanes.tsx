@@ -200,6 +200,11 @@ export function ShellPanes({
   // shell that starts or stops waiting later must not take the keyboard. It is shown in the same
   // render, as a hidden terminal cannot take the focus.
   const answered = useRef(0)
+  // While a shell is asked for, no shell takes the keyboard on open: the asked one takes it once
+  // it is known, with no stop in Shell 1 first.
+  const asked =
+    (focusToken !== undefined && focusToken !== 0 && focusToken !== answered.current) ||
+    request?.taskId === taskId
   useEffect(() => {
     if (shellsRead && focusToken && focusToken !== answered.current) {
       answered.current = focusToken
@@ -286,6 +291,7 @@ export function ShellPanes({
               connect={(size) => connect(size, name)}
               cacheKey={terminalKey(taskId, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
+              focusOnOpen={!asked && name === visible[0]}
               taskState={task.state}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}

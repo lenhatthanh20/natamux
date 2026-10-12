@@ -72,7 +72,9 @@ export type TerminalSession = CachedTerminal & {
   // The same object until something changes, for useSyncExternalStore.
   state(): TerminalSessionState
   subscribe(listener: () => void): () => void
-  show(container: HTMLElement): void
+  // takeFocus false keeps the keyboard where it is: of several shells side by side, only one may
+  // take it, or the focus jumps from shell to shell as they show.
+  show(container: HTMLElement, takeFocus?: boolean): void
   setOnScreen(onScreen: boolean): void
   applySettings(): void
 }
@@ -763,7 +765,7 @@ export function createTerminalSession(options: {
     fitTimer = undefined
   }
 
-  const show = (container: HTMLElement) => {
+  const show = (container: HTMLElement, takeFocus = true) => {
     if (disposed) {
       return
     }
@@ -786,7 +788,7 @@ export function createTerminalSession(options: {
       // The element moved; draw it fresh.
       terminal.refresh(0, terminal.rows - 1)
     }
-    if (takesFocusOnOpen(document.activeElement, document.body)) {
+    if (takeFocus && takesFocusOnOpen(document.activeElement, document.body)) {
       terminal.focus()
     }
   }

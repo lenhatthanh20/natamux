@@ -29,6 +29,8 @@ type TerminalViewProps = {
   cacheKey?: string
   // The state of the shell's task. Done and cancelled tasks say so when the shell ends.
   taskState?: TaskState
+  // False: the terminal does not take the keyboard when it is shown.
+  focusOnOpen?: boolean
 }
 
 const STATUS_TEXT: Record<TerminalStatus, string> = {
@@ -65,10 +67,13 @@ export default function TerminalView({
   focusToken,
   cacheKey,
   taskState,
+  focusOnOpen = true,
 }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
   connectRef.current = connect
+  const focusOnOpenRef = useRef(focusOnOpen)
+  focusOnOpenRef.current = focusOnOpen
   const [attempt, setAttempt] = useState(0)
   const [session, setSession] = useState<TerminalSession | null>(null)
   // Set before paint, so effects and handlers of this commit already see the session.
@@ -108,7 +113,7 @@ export default function TerminalView({
     if (!element || session === null) {
       return
     }
-    session.show(element)
+    session.show(element, focusOnOpenRef.current)
     return watchVisible(element, session.setOnScreen)
   }, [session])
 
