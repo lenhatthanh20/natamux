@@ -39,6 +39,15 @@ export const stageSchema = z.object({
   enabled: z.boolean().optional(),
   // The stage offers its tasks a checkbox to run it as a workflow (agent stages only).
   workflow: z.boolean().optional(),
+  // Another agent, and words added to its command line, for a stage that starts its own agent
+  // beside the stage in Shell 1. That one keeps the task's agent, so its session goes on.
+  agent: z.string().trim().min(1).optional(),
+  args: z.string().trim().min(1).optional(),
+  // The stage offers its tasks a checkbox to check the work on CI before the stage passes.
+  ci: z.boolean().optional(),
+  // A stage that only writes a report, such as a review, runs in its own shell with a new session:
+  // it sees the work with fresh eyes, and may use another agent.
+  ownShell: z.boolean().optional(),
 })
 
 export type Stage = z.infer<typeof stageSchema>
@@ -108,7 +117,31 @@ export const pipelineSchema = z
         }
         seen.add(id)
       }
+      stagesOf(step).forEach((stage, lane) => {
+        if (stage.ownShell === true && (stage.kind !== 'agent' || stage.output === undefined)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Only an agent stage with an output file can run in its own shell, and "${stage.id}" cannot`,
+            path: isGroup(step) ? [index, 'parallel', lane] : [index],
+          })
+        }
+        const ownAgent = stage.agent !== undefined || stage.args !== undefined
+        if (ownAgent && !canHaveOwnAgent(step, stage)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Only a stage that runs in its own shell can have its own agent or arguments, and "${stage.id}" cannot`,
+            path: isGroup(step) ? [index, 'parallel', lane] : [index],
+          })
+        }
+      })
       for (const stage of stagesOf(step)) {
+        if (stage.ci === true && !checksOnCi(stage)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Only a stage that changes code or runs tests can be checked on CI, and "${stage.id}" cannot`,
+            path: [index],
+          })
+        }
         if (stage.workflow === true && stage.kind !== 'agent') {
           context.addIssue({
             code: 'custom',
@@ -184,8 +217,10 @@ export const DEFAULT_PIPELINE: Step[] = [
     name: 'Test spec and Implement',
     parallel: [catalogStage('test-spec'), catalogStage('implement')],
   },
-  catalogStage('review'),
+  // Tests run before the review, and an agent reviews; it sends the task back to Implement on its
+  // own. Manual review, by a person, is in the catalog.
   catalogStage('testing'),
+  catalogStage('agent-review'),
   catalogStage('release'),
 ]
 
@@ -248,6 +283,17 @@ export function canRunWorkflow(agent: string | null): boolean {
 // The project settings let tasks run this stage as a workflow.
 export function offersWorkflow(stage: Pick<Stage, 'kind' | 'workflow'>): boolean {
   return stage.kind === 'agent' && stage.workflow === true
+}
+
+// CI checks code, so only a stage that changes it (an agent stage without an output file) or a
+// testing stage can wait for CI.
+export function checksOnCi(stage: Pick<Stage, 'kind' | 'output'>): boolean {
+  return stage.kind === 'testing' || (stage.kind === 'agent' && stage.output === undefined)
+}
+
+// The project settings let tasks check this stage on CI.
+export function offersCi(stage: Pick<Stage, 'kind' | 'output' | 'ci'>): boolean {
+  return checksOnCi(stage) && stage.ci === true
 }
 
 // Whether the next start of the stage asks the agent for a workflow: the settings offer it, the
@@ -376,9 +422,13 @@ export function codeStage(step: Step): Stage {
   return agents.find((stage) => stage.output === undefined) ?? agents[0] ?? (stages[0] as Stage)
 }
 
+// The shell of a stage that runs on its own apart from Shell 1. Shells 2 to 4 go to the stages of
+// a group, so it does not take over the agent of one.
+export const OWN_SHELL = '5'
+
 export function terminalOfStage(step: Step, stageId: string): string {
   if (!isGroup(step)) {
-    return '1'
+    return step.ownShell === true ? OWN_SHELL : '1'
   }
   const main = codeStage(step)
   if (main.id === stageId) {
@@ -386,6 +436,34 @@ export function terminalOfStage(step: Step, stageId: string): string {
   }
   const others = step.parallel.filter((stage) => stage.id !== main.id)
   return String(others.findIndex((stage) => stage.id === stageId) + 2)
+}
+
+// A stage that starts its own agent may use another one: an agent stage of a group that does not
+// keep Shell 1 (that goes to the code stage of the stages that are on), or one in its own shell.
+export function canHaveOwnAgent(
+  step: Step,
+  stage: Pick<Stage, 'id' | 'kind' | 'ownShell'>,
+): boolean {
+  if (stage.kind !== 'agent') {
+    return false
+  }
+  if (!isGroup(step)) {
+    return stage.ownShell === true
+  }
+  const on = step.parallel.filter(isOn)
+  return codeStage({ ...step, parallel: on.length > 0 ? on : step.parallel }).id !== stage.id
+}
+
+// The agent and words of a stage that starts its own agent. A stage in Shell 1 pastes into the
+// task's agent, so it has none.
+export function stageAgent(step: Step, stage: Stage): Pick<Stage, 'agent' | 'args'> {
+  if (terminalOfStage(step, stage.id) === '1') {
+    return {}
+  }
+  return {
+    ...(stage.agent === undefined ? {} : { agent: stage.agent }),
+    ...(stage.args === undefined ? {} : { args: stage.args }),
+  }
 }
 
 export function stageOfTerminal(step: Step, terminal: string): Stage | undefined {
@@ -414,7 +492,8 @@ export function terminalLane(
 ): TerminalLane {
   if (step === undefined || !isGroup(step)) {
     const stage = step?.id ?? position.stage
-    return terminal === '1' ? { stage, state: position.state } : NO_LANE
+    const shell = step === undefined ? '1' : terminalOfStage(step, step.id)
+    return terminal === shell ? { stage, state: position.state } : NO_LANE
   }
   const stage = stageOfTerminal(step, terminal)
   if (stage === undefined) {

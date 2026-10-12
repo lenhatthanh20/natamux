@@ -1,6 +1,8 @@
-import { stageName, type Task, type TaskState, type TerminalLane } from '@natamux/core'
+import { stageName, type Task, type TaskState } from '@natamux/core'
+import { agentLabel } from './agents'
+import type { TaskShells } from './api'
 import { terminalState } from './panes'
-import { stageLabel } from './tasks'
+import { STATE_LABEL, stageLabel } from './tasks'
 
 export const FOLDS_KEY = 'natamux.sidebar-folds'
 // Old groups and tasks do not need a remembered fold forever.
@@ -96,40 +98,147 @@ export function withParents(shown: readonly Task[], all: readonly Task[]): Task[
   return result
 }
 
-export type AgentChild = {
+// A row under a task: one of its shells, or a parallel stage that has no shell yet.
+export type ShellRow = {
   key: string
-  // "Shell 2", or the name of a parallel stage that has no terminal yet.
-  name: string
-  // The stage a shell works on, by name. Null for a stage row, whose name is the stage.
-  stage: string | null
-  state: TaskState
+  // The stage the agent works on, "Shell 2" for an agent on no stage, or the program of a shell
+  // with no agent.
+  label: string
+  agent: string | null
+  // Null: no state to show, as for a shell with no agent.
+  state: TaskState | null
   // The terminal to focus. Null: the task's first shell.
   shell: string | null
+  // A shell with no agent in it.
+  plain: boolean
 }
 
-// The agents of a task: its agent terminals, then the parallel stages no terminal works on yet.
-export function agentChildren(
+// The rows under a task: each open shell in shell order, then the parallel stages no shell works
+// on yet. Before the shells are read, only the stages.
+export function shellRows(
   task: Pick<Task, 'stage' | 'state' | 'lanes'>,
-  terminals: Readonly<Record<string, TerminalLane>> = {},
-): AgentChild[] {
-  const shells = Object.entries(terminals)
-    .sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b))
-    .map(([name, lane]) => ({
+  shells?: TaskShells,
+): ShellRow[] {
+  const terminals = [...(shells?.terminals ?? [])].sort(
+    (a, b) => Number(a) - Number(b) || a.localeCompare(b),
+  )
+  const rows = terminals.map((name): ShellRow => {
+    const lane = shells?.lanes[name]
+    if (lane === undefined) {
+      const program = shells?.programs[name] ?? null
+      return {
+        key: `shell:${name}`,
+        label: program ?? 'Shell',
+        agent: null,
+        state: null,
+        shell: name,
+        plain: true,
+      }
+    }
+    return {
       key: `shell:${name}`,
-      name: `Shell ${name}`,
-      stage: lane.stage === null ? null : stageName({ id: lane.stage }),
-      state: terminalState(task, lane) ?? task.state,
+      label: lane.stage === null ? `Shell ${name}` : stageName({ id: lane.stage }),
+      agent: lane.agent ?? null,
+      state: terminalState(task, lane),
       shell: name,
-    }))
-  const covered = new Set(Object.values(terminals).map((lane) => lane.stage))
+      plain: false,
+    }
+  })
+  const covered = new Set(Object.values(shells?.lanes ?? {}).map((lane) => lane.stage))
   const lanes = Object.entries(task.lanes)
     .filter(([stage]) => !covered.has(stage))
     .map(([stage, state]) => ({
       key: `lane:${stage}`,
-      name: stageName({ id: stage }),
-      stage: null,
+      label: stageName({ id: stage }),
+      agent: null,
       state,
       shell: null,
+      plain: false,
     }))
-  return [...shells, ...lanes]
+  return [...rows, ...lanes]
+}
+
+// "Implement, Claude Code, Shell 1, Running"; "Shell 2, zsh" for a shell with no agent.
+export function shellRowName(row: ShellRow): string {
+  if (row.plain) {
+    return `Shell ${row.shell}, ${row.label}`
+  }
+  const named = row.shell === null || row.label === `Shell ${row.shell}`
+  const shell = named ? null : `Shell ${row.shell}`
+  const agent = row.agent === null ? null : agentLabel(row.agent)
+  const state = row.state === null ? null : STATE_LABEL[row.state]
+  return [row.label, agent, shell, state].filter((part) => part !== null).join(', ')
+}
+
+// "S1" at the right of a row, where its name does not already say the shell.
+export function shellTag(row: ShellRow): string | null {
+  return row.shell === null || row.label === `Shell ${row.shell}` ? null : `S${row.shell}`
+}
+
+// The task glyph spins while any of its agents works, also when the task waits on another one.
+export function taskGlyphState(task: Pick<Task, 'state' | 'lanes'>, rows: ShellRow[]): TaskState {
+  const states = [...rows.map((row) => row.state), ...Object.values(task.lanes)]
+  return states.includes('running') ? 'running' : task.state
+}
+
+export type Comet = {
+  // From 0 to 1: the steps done, and the current one.
+  progress: number
+  at: number
+  of: number
+  // The state of the current stage, which colors the comet.
+  state: TaskState
+  // The current stage by name. Null for a finished task.
+  stage: string | null
+  // Every step and its state, for the tooltip and screen readers.
+  summary: string
+}
+
+const lower = (state: TaskState) => STATE_LABEL[state].toLowerCase()
+
+// How far a task is through its own steps. A group is one step; its most urgent stage speaks
+// for it.
+export function cometOf(task: Pick<Task, 'stage' | 'stages' | 'state' | 'lanes'>): Comet {
+  const steps = task.stages
+  const finished = task.state === 'done' || task.state === 'cancelled'
+  const found = steps.findIndex((step) =>
+    typeof step === 'string'
+      ? step === task.stage
+      : step.id === task.stage || step.parallel.includes(task.stage),
+  )
+  const index = finished && task.state === 'done' ? steps.length - 1 : Math.max(0, found)
+  const current = steps[index]
+  const lanes = current === undefined || typeof current === 'string' ? [] : current.parallel
+  const open = lanes.filter((id) => task.lanes[id] !== 'done')
+  const laneState = urgentState(open.map((id) => task.lanes[id] ?? 'ready'))
+  const urgentLane = open.find((id) => task.lanes[id] === laneState)
+  const state = finished ? task.state : (laneState ?? task.state)
+  const mark = (at: number, lane: string | null): string => {
+    if (at < index || task.state === 'done') {
+      return 'done'
+    }
+    if (at > index) {
+      return 'not started'
+    }
+    return lower(lane === null ? task.state : (task.lanes[lane] ?? task.state))
+  }
+  const names = (step: (typeof steps)[number], at: number) =>
+    typeof step === 'string'
+      ? [`${stageName({ id: step })} ${mark(at, null)}`]
+      : step.parallel.map((id) => `${stageName({ id })} ${mark(at, id)}`)
+  return {
+    progress: steps.length === 0 || task.state === 'done' ? 1 : (index + 1) / steps.length,
+    at: index + 1,
+    of: steps.length,
+    state,
+    stage: finished
+      ? null
+      : stageName({ id: urgentLane ?? (typeof current === 'string' ? current : task.stage) }),
+    summary: steps.flatMap(names).join(', '),
+  }
+}
+
+// The x of the comet's head on its 24-wide track, kept off the ends.
+export function cometHead(progress: number): number {
+  return Math.min(21.6, Math.max(2.4, progress * 24))
 }

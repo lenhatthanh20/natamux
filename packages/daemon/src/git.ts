@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, rmSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
@@ -47,13 +49,18 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-// Runs git with an argument list. Never builds a shell command.
-async function git(cwd: string, args: readonly string[]): Promise<string> {
+// Runs git with an argument list. Never builds a shell command. A timeout of 0 waits forever.
+async function git(
+  cwd: string,
+  args: readonly string[],
+  { timeout = 0, env = {} }: { timeout?: number; env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', [...args], {
       cwd,
       maxBuffer: MAX_OUTPUT_BYTES,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...env },
+      timeout,
     })
     return stdout
   } catch (error) {
@@ -62,7 +69,8 @@ async function git(cwd: string, args: readonly string[]): Promise<string> {
 }
 
 // Makes a new branch for the worktree, from `baseRef` or HEAD. With `existing`, checks out the
-// branch that is there instead, with the work it has.
+// branch that is there instead, with the work it has. A new branch follows no branch: started
+// from `origin/main`, it must not push to main.
 export async function addWorktree(
   repoDir: string,
   worktreePath: string,
@@ -75,7 +83,7 @@ export async function addWorktree(
     repoDir,
     existing
       ? ['worktree', 'add', worktreePath, branch]
-      : ['worktree', 'add', '-b', branch, worktreePath, ...base],
+      : ['worktree', 'add', '--no-track', '-b', branch, worktreePath, ...base],
   )
 }
 
@@ -505,6 +513,60 @@ export async function currentBranch(cwd: string): Promise<string | null> {
   }
 }
 
+// The remote branch that the checkout's branch follows, such as "origin/main". Null without one.
+async function upstreamOf(repoDir: string): Promise<string | null> {
+  try {
+    const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']
+    const name = (await git(repoDir, args)).trim()
+    return name === '' ? null : name
+  } catch (error) {
+    if (error instanceof GitError) {
+      return null
+    }
+    throw error
+  }
+}
+
+// Where new work starts: the remote branch of the checkout when the local branch is behind it,
+// so a checkout that was not pulled does not start tasks from old code. Local commits that are
+// not pushed win. Null: the checkout's HEAD.
+export async function startRef(repoDir: string): Promise<string | null> {
+  const upstream = await upstreamOf(repoDir)
+  if (upstream === null) {
+    return null
+  }
+  try {
+    await git(repoDir, ['merge-base', '--is-ancestor', 'HEAD', upstream])
+    return upstream
+  } catch (error) {
+    if (error instanceof GitError) {
+      return null
+    }
+    throw error
+  }
+}
+
+// A fetch that hangs (no network) must not hold up a new workspace for long.
+const FETCH_TIMEOUT_MS = 20_000
+
+// Brings the remote branch of the checkout up to date. Without a network, or a remote, the work
+// starts from what is known, so a failure is not an error.
+export async function fetchUpstream(repoDir: string): Promise<void> {
+  const branch = await currentBranch(repoDir)
+  if (branch === null) {
+    return
+  }
+  try {
+    const remote = (await git(repoDir, ['config', '--get', `branch.${branch}.remote`])).trim()
+    const merge = (await git(repoDir, ['config', '--get', `branch.${branch}.merge`])).trim()
+    await git(repoDir, ['fetch', '--quiet', remote, merge], { timeout: FETCH_TIMEOUT_MS })
+  } catch (error) {
+    if (!(error instanceof GitError)) {
+      throw error
+    }
+  }
+}
+
 // "HEAD -> natamux/t-0001, tag: v1, main" becomes ["natamux/t-0001", "tag: v1", "main"].
 // "origin/HEAD" is left out: it only repeats the default branch of the remote.
 export function parseRefs(decoration: string): string[] {
@@ -676,17 +738,50 @@ const GITHUB_CREDENTIALS: [string, string][] = [
   ['credential.https://github.com.helper', '!gh auth git-credential'],
 ]
 
-export async function pushBranch(worktreePath: string, branch: string): Promise<void> {
-  const args = ['push', '--set-upstream', 'origin', branch]
+// A push can take a while, but one that hangs must not hold the stage forever.
+const PUSH_TIMEOUT_MS = 2 * 60 * 1000
+
+async function push(worktreePath: string, args: readonly string[]): Promise<void> {
   try {
-    await execFileAsync('git', args, {
+    await execFileAsync('git', [...args], {
       cwd: worktreePath,
       maxBuffer: MAX_OUTPUT_BYTES,
       env: withGitConfig({ ...process.env, GIT_TERMINAL_PROMPT: '0' }, GITHUB_CREDENTIALS),
+      timeout: PUSH_TIMEOUT_MS,
     })
   } catch (error) {
     throw new GitError(args, errorText(error))
   }
+}
+
+export async function pushBranch(worktreePath: string, branch: string): Promise<void> {
+  await push(worktreePath, ['push', '--set-upstream', 'origin', branch])
+}
+
+// A commit of the worktree as it is now, with the files that are not committed, made without
+// touching its branch, its index or its files. Ignored files stay out.
+export async function snapshotCommit(worktreePath: string, message: string): Promise<string> {
+  const env = { GIT_INDEX_FILE: join(tmpdir(), `natamux-index-${randomUUID()}`) }
+  try {
+    await git(worktreePath, ['read-tree', 'HEAD'], { env })
+    await git(worktreePath, ['add', '--all'], { env })
+    const tree = (await git(worktreePath, ['write-tree'], { env })).trim()
+    // A throwaway commit, so it needs no identity of the user's.
+    const identity = ['-c', 'user.name=Natamux', '-c', 'user.email=natamux@localhost']
+    const commit = [...identity, 'commit-tree', tree, '-p', 'HEAD', '-m', message]
+    return (await git(worktreePath, commit)).trim()
+  } finally {
+    rmSync(env.GIT_INDEX_FILE, { force: true })
+  }
+}
+
+// Puts a commit on a branch of origin, in place of what is there.
+export async function pushRef(worktreePath: string, sha: string, ref: string): Promise<void> {
+  await push(worktreePath, ['push', '--force', '--quiet', 'origin', `${sha}:refs/heads/${ref}`])
+}
+
+export async function deleteRemoteRef(worktreePath: string, ref: string): Promise<void> {
+  await push(worktreePath, ['push', '--quiet', 'origin', '--delete', ref])
 }
 
 export class GitHubError extends Error {

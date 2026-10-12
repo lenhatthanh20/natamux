@@ -8,7 +8,8 @@ name: E2E
 # test job cannot push images that other machines then run.
 on:
   push:
-    branches: [main]
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
+    branches: [main, 'natamux-ci/**']
   pull_request:
   workflow_dispatch:
 

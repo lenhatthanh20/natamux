@@ -30,6 +30,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `done` | For an agent: say the stage is done, so the daemon checks it |
 | `stage <command> <id>` | `approve`, `back`, `skip`, `pass`, `fail` or `start` the task's stage |
 | `stage workflow <id> on\|off` | Run a stage as a workflow the next time it starts (needs `--stage`) |
+| `stage ci <id> on\|off` | Check a stage on CI before it passes (needs `--stage`) |
 | `event <id> <type>` | Send an event to a task |
 | `events <id>` | Show the event log of a task |
 | `workspace create <id>` | Create a git worktree and a branch for a task |
@@ -53,7 +54,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--attach <path>` | `task create` | A file for the agents to read, such as a document or a screenshot. Repeat for more. At most 20 files, 20 MB each and 50 MB together |
 | `--prompt <text>` | `agent start` | First prompt. Default: the task title and notes |
 | `--task <id>` | `ask`, `done` | The task. Default: `NATAMUX_TASK_ID` |
-| `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side. For `stage workflow`: the stage to change |
+| `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side. For `stage workflow` and `stage ci`: the stage to change |
 | `--to <id>` | `stage back` | The stage to go back to. Default: the last agent stage |
 | `--reason <text>` | `stage back`, `stage fail` | Why, for the agent and the log |
 | `--issue <key>` | `task link` | The issue or ticket, such as `#42` or `ABC-123` |
@@ -62,7 +63,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--state <state>` | `task list` | Only tasks in this state: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` |
 | `--source <name>` | `event` | `agent`, `human`, `git`, `ci` or `system`. Default: `human` |
 | `--payload <json>` | `event` | A JSON object sent with the event |
-| `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: `HEAD` |
+| `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the checkout's branch as its remote has it now, or `HEAD` (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
 | `--yes` | `workspace remove` | Confirm that the worktree folder is deleted |
 | `--delete-branch` | `workspace remove` | Also delete the branch, when it is merged |
 | `--json` | most commands | Print JSON instead of text |
@@ -126,6 +127,12 @@ natamux stage workflow T-42 off --stage implement
 ```
 
 `workflow` chooses whether a stage runs as a workflow the next time it starts. The project settings must offer it on the stage, and the agent of the task must be Claude Code. Turning it off always works. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).
+
+```sh
+natamux stage ci T-42 on --stage implement
+```
+
+`ci` chooses whether a stage waits for CI before it passes: Natamux pushes the work to `natamux-ci/<branch>` and waits for its runs. The project settings must offer it on the stage. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
 
 ## event and events
 

@@ -201,8 +201,8 @@ describe('createTask with stages that are off', () => {
     expect(task.stages).toEqual([
       'spec',
       { id: 'build', parallel: ['test-spec', 'implement'] },
-      'review',
       'testing',
+      'agent-review',
       'release',
     ])
     expect(task.stage).toBe('spec')
@@ -743,6 +743,29 @@ describe('setWorkflow', () => {
     ])
   })
 
+  it('turns the check on CI on and off for a stage that offers it, and logs each change', () => {
+    const task = service.createTask({ title: 'Export' })
+    expect(task.ciStages).toBeUndefined()
+
+    const on = service.setCi(task.id, 'implement', true)
+    expect(on.ciStages).toEqual(['implement'])
+    expect(readTaskFile(dataDir, task.id)?.ciStages).toEqual(['implement'])
+    expect(service.setCi(task.id, 'testing', true).ciStages).toEqual(['implement', 'testing'])
+    expect(service.setCi(task.id, 'implement', false).ciStages).toEqual(['testing'])
+    expect(
+      service
+        .listEvents(task.id)
+        .filter((entry) => entry.event.type === 'stage.ci-set')
+        .map((entry) => entry.event.payload),
+    ).toEqual([
+      { stage: 'implement', on: true },
+      { stage: 'testing', on: true },
+      { stage: 'implement', on: false },
+    ])
+    expect(() => service.setCi(task.id, 'spec', true)).toThrow(/project settings/)
+    expect(() => service.setCi(task.id, 'nope', true)).toThrow(TaskEditError)
+  })
+
   it('logs nothing when the choice does not change', () => {
     const task = service.createTask({ title: 'Export' })
     service.setWorkflow(task.id, 'implement', true)
@@ -804,7 +827,7 @@ describe('setWorkflow', () => {
     service.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
-      payload: { to: 'review', stage: 'review' },
+      payload: { to: 'review', stage: 'agent-review' },
     })
     expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual(['plan'])
   })

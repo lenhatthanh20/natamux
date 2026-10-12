@@ -69,14 +69,15 @@ export function paneStateText(state: TaskState, activity: string | null | undefi
   return state === 'running' && activity ? `${label} · ${activity}` : label
 }
 
-// The state an agent terminal shows, or null for one that works on no stage. The daemon names the
-// stage of each terminal; the state comes from the task, which live updates keep fresh.
+// The state an agent terminal shows. The daemon names the stage of each terminal; the state comes
+// from the task, which live updates keep fresh. An agent on no stage has the state its hooks gave,
+// or none.
 export function terminalState(
   task: Pick<Task, 'stage' | 'state' | 'lanes'>,
   lane: TerminalLane,
 ): TaskState | null {
   if (lane.stage === null) {
-    return null
+    return lane.state
   }
   return task.lanes[lane.stage] ?? (lane.stage === task.stage ? task.state : lane.state)
 }

@@ -6,6 +6,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  fetchUpstream,
   hasSubmodules,
   listBranches,
   listChanges,
@@ -17,6 +18,7 @@ import {
   readGitGraph,
   removeWorktree,
   runGh,
+  startRef,
   worktreeState,
 } from './git.js'
 import { mapLimit } from './map-limit.js'
@@ -61,6 +63,11 @@ export type RemoveWorkspaceResult = {
 
 const MAX_SLUG_LENGTH = 40
 const DIFF_STAT_READS = 4
+
+// What the diff of a workspace counts from: where a new workspace starts, by name.
+async function baseForDiff(repoDir: string): Promise<string | null> {
+  return (await startRef(repoDir)) ?? currentBranch(repoDir)
+}
 
 export function slugify(text: string): string {
   const slug = text
@@ -124,7 +131,8 @@ export class WorkspaceService {
     return listBranches(this.repoDirOf(repo))
   }
 
-  // Makes the worktree from `base` when given (a local branch), or from the checkout's HEAD.
+  // Makes the worktree from `base` when given (a local branch). Otherwise from the checkout's
+  // branch as its remote has it now, or its HEAD when that is newer or there is no remote.
   async create(taskId: string, base?: string): Promise<Task> {
     return this.exclusive(taskId, async () => {
       const task = this.tasks.getTask(taskId)
@@ -145,7 +153,11 @@ export class WorkspaceService {
       const worktreePath = this.worktreePathFor(taskId)
       const branch = kept ?? branchNameFor(task)
       if (kept === null) {
-        await addWorktree(repoDir, worktreePath, branch, base)
+        if (base === undefined) {
+          await fetchUpstream(repoDir)
+        }
+        const start = base ?? (await startRef(repoDir)) ?? undefined
+        await addWorktree(repoDir, worktreePath, branch, start)
       } else {
         await addWorktree(repoDir, worktreePath, branch, undefined, true)
       }
@@ -269,7 +281,8 @@ export class WorkspaceService {
   private async readDiffStats(): Promise<Record<string, DiffStat>> {
     const bases = new Map<string | null, Promise<string | null>>()
     const baseOf = (repo: string | null) => {
-      const known = bases.get(repo) ?? currentBranch(this.repoDirOf(repo))
+      // Where a new workspace starts, so the commits the checkout did not pull do not count.
+      const known = bases.get(repo) ?? baseForDiff(this.repoDirOf(repo))
       bases.set(repo, known)
       return known
     }

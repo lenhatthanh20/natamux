@@ -44,6 +44,14 @@ describe('taskSchema', () => {
     }
   })
 
+  it('reads the stages checked on CI, and a bad value as none', () => {
+    expect(taskSchema.parse({ ...minimalTask, ciStages: ['implement'] }).ciStages).toEqual([
+      'implement',
+    ])
+    expect(taskSchema.parse(minimalTask).ciStages).toBeUndefined()
+    expect(taskSchema.parse({ ...minimalTask, ciStages: 'implement' }).ciStages).toBeUndefined()
+  })
+
   it('trims the title', () => {
     expect(taskSchema.parse({ ...minimalTask, title: '  Fix it  ' }).title).toBe('Fix it')
   })

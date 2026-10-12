@@ -135,6 +135,36 @@ describe('AgentHookService', () => {
     expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
 
+  it('gives an agent in a shell that no stage uses a state of its own, and leaves the task alone', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    const shells = new AgentHookService(tasks, {
+      laneFor: (current, terminal) =>
+        terminal === '2' ? null : { stage: current.stage, state: current.state },
+      takeReport: () => false,
+    })
+    const events = tasks.listEvents(task.id).length
+
+    const prompt = shells.handle('cursor', { hook_event_name: 'beforeSubmitPrompt' }, task.id, '2')
+    expect(prompt).toEqual({ taskId: task.id, applied: [] })
+    expect(shells.shellState(task.id, '2')).toBe('running')
+    expect(shells.activity()[task.id]?.['2']?.text).toBe('Reading the prompt')
+
+    // The turn ends: the agent waits for the user, as the task's own agent does.
+    shells.handle('cursor', { hook_event_name: 'stop', status: 'completed' }, task.id, '2')
+    expect(shells.shellState(task.id, '2')).toBe('needs-input')
+    shells.handle('cursor', { hook_event_name: 'stop', status: 'error' }, task.id, '2')
+    expect(shells.shellState(task.id, '2')).toBe('failed')
+
+    expect(tasks.listEvents(task.id)).toHaveLength(events)
+    expect(tasks.getTask(task.id).state).toBe(task.state)
+    expect(shells.shellState(task.id, '1')).toBeUndefined()
+
+    // The agent left the shell: a new one there starts with no state.
+    shells.forgetShellsExcept(task.id, ['1'])
+    expect(shells.shellState(task.id, '2')).toBeUndefined()
+  })
+
   it('drops the turn end that follows a report, and names the stage of the terminal', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })

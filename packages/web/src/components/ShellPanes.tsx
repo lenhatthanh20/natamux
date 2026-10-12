@@ -264,6 +264,7 @@ export function ShellPanes({
           // The agent the daemon found in this shell; the task's when the daemon does not say.
           const lane = agentShells.data?.[name]
           const shellAgent = lane?.agent === undefined ? agent : (lane.agent ?? undefined)
+          const knowsAgent = agent !== null || typeof shellAgent === 'string'
           const index = visible.indexOf(name)
           return (
             <TerminalPane
@@ -279,7 +280,7 @@ export function ShellPanes({
               title={`Shell ${name}`}
               agent={isAgent ? shellAgent : undefined}
               stateText={
-                own !== null && agent !== null && (own !== 'needs-input' || markWaiting)
+                own !== null && knowsAgent && (own !== 'needs-input' || markWaiting)
                   ? paneStateText(own, activity?.[name])
                   : undefined
               }

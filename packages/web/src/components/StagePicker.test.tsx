@@ -59,7 +59,7 @@ describe('StagePicker', () => {
   it('adds the stage that is picked', async () => {
     const { onAddCatalog, user } = picker()
 
-    await user.click(screen.getByRole('button', { name: /^Manual QA/ }))
+    await user.click(screen.getByRole('button', { name: /^Manual testing/ }))
 
     expect(onAddCatalog).toHaveBeenCalledWith('qa')
   })

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { claudeCodeHookSettings } from '@natamux/core'
-import { geminiHookSettings, LAUNCHABLE_AGENTS } from './agent-launch.js'
+import { geminiHookSettings, LAUNCHABLE_AGENTS, prepareAgentHooks } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
@@ -65,7 +65,11 @@ const workspaces = new WorkspaceService({
 const daemonUrl = `http://127.0.0.1:${config.port}`
 const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
-  spawn: spawnShell,
+  // An agent the user starts by hand in the shell finds its hooks there.
+  spawn: (options) => {
+    prepareAgentHooks(options.cwd)
+    return spawnShell(options)
+  },
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
   onOutput: (taskId, terminal, data) => {

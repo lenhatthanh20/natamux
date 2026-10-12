@@ -212,6 +212,35 @@ describe('ShellPanes agent badge', () => {
     expect(within(header('Shell 1')).getByText('Gemini CLI')).toBeTruthy()
   })
 
+  it('shows Cursor started by hand in a new shell, with its own state', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'needs-input', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'needs-input', agent: 'claude-code' },
+        '2': { stage: null, state: 'running', agent: 'cursor' },
+      },
+      { '2': 'Reading the prompt' },
+    )
+    await screen.findByRole('region', { name: 'Shell 2' })
+    await within(header('Shell 2')).findByText('Cursor')
+    expect(within(header('Shell 2')).queryByText('Claude Code')).toBeNull()
+    expect(stateLine('Shell 2')).toBe('Running · Reading the prompt')
+    expect(glyphState('Shell 2')).toBe('running')
+    expect(glyphState('Shell 1')).toBe('needs-input')
+  })
+
+  it('shows an agent in a shell of a task without an agent', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: null },
+      ['1', '2'],
+      { '2': { stage: null, state: 'running', agent: 'cursor' } },
+    )
+    await screen.findByRole('region', { name: 'Shell 2' })
+    await within(header('Shell 2')).findByText('Cursor')
+    expect(stateLine('Shell 2')).toBe('Running')
+  })
+
   it('shows no badge on a shell whose program is no agent Natamux knows', async () => {
     renderShells(
       { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },

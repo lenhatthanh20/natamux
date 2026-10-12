@@ -1478,7 +1478,7 @@ describe('terminal', () => {
       headers: authorization,
     })
     expect(listed.statusCode).toBe(200)
-    expect(listed.json()).toEqual({ terminals: [], agents: [], lanes: {} })
+    expect(listed.json()).toEqual({ terminals: [], agents: [], lanes: {}, programs: {} })
   })
 
   it('opens a second terminal, lists the terminals and closes one', async () => {
@@ -1494,7 +1494,13 @@ describe('terminal', () => {
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [], lanes: {} })
+    // The program in the foreground of each shell, for the rows of a plain shell.
+    expect(listed.json()).toEqual({
+      terminals: ['1', '2'],
+      agents: [],
+      lanes: {},
+      programs: { '1': 'bash', '2': 'bash' },
+    })
     // A program that is not a shell runs in the first one: an agent, as far as Natamux can tell.
     ;(ptys[0] as FakePty).program = 'node'
     const withAgent = await app.inject({
@@ -1510,6 +1516,7 @@ describe('terminal', () => {
       terminals: ['1', '2'],
       agents: ['1'],
       lanes: { '1': { stage: task.stage, state: task.state, agent: null } },
+      programs: { '1': 'node', '2': 'bash' },
     })
     // An agent in an extra shell outside a group works on no stage. Its processes name it.
     ;(ptys[1] as FakePty).program = 'node'
@@ -1531,6 +1538,37 @@ describe('terminal', () => {
     })
     expect(unread.statusCode).toBe(200)
     expect(unread.json().lanes['2']).toEqual({ stage: null, state: null, agent: null })
+
+    // Cursor started by hand as `agent`. Its hooks give the shell a state of its own and leave
+    // the task as it was.
+    ;(ptys[1] as FakePty).commands = async () => [
+      '/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js',
+    ]
+    const hooked = await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001', 'x-natamux-terminal': '2' },
+      payload: { hook_event_name: 'beforeSubmitPrompt' },
+    })
+    expect(hooked.statusCode).toBe(200)
+    const cursor = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(cursor.json().lanes['2']).toEqual({ stage: null, state: 'running', agent: 'cursor' })
+    const after = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(after.json().task.state).toBe(task.state)
+    // Cursor quits: the shell has no agent and no state, also when the next one starts.
+    ;(ptys[1] as FakePty).program = 'bash'
+    await app.inject({ method: 'GET', url: '/tasks/T-0001/terminals', headers: authorization })
+    ;(ptys[1] as FakePty).program = 'node'
+    const next = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(next.json().lanes['2']).toEqual({ stage: null, state: null, agent: 'cursor' })
 
     const closed = closeCode(second)
     const removed = await app.inject({

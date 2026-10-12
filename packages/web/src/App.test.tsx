@@ -2551,7 +2551,7 @@ describe('App', () => {
     const progressTab = within(details).getByRole('tab', { name: 'Progress' })
     expect(progressTab.getAttribute('aria-selected')).toBe('true')
 
-    const review = await within(details).findByRole('article', { name: 'Review' })
+    const review = await within(details).findByRole('article', { name: 'Manual review' })
     await user.click(within(review).getByRole('button', { name: 'Approve' }))
     await waitFor(() =>
       expect(
@@ -3353,6 +3353,8 @@ describe('App', () => {
     expect(group?.getAttribute('aria-expanded')).toBe('true')
     await user.keyboard('{ArrowRight}')
     expect(document.activeElement?.getAttribute('data-roving')).toBe('task:T-0002')
+    // Once its shells are read, the running task is open, so Left first folds it.
+    await user.keyboard('{ArrowLeft}')
     await user.keyboard('{ArrowLeft}')
     expect(document.activeElement).toBe(group)
   })

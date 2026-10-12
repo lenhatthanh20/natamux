@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { type ComponentProps, type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TaskShells } from '../lib/api'
 import { ContextMenuHost } from './ui/Menu'
 import { WorkspaceList } from './WorkspaceList'
 
@@ -140,6 +141,12 @@ function list(options: Options = {}) {
     rerender: (next: Options) =>
       view.rerender(withHost(<WorkspaceList {...props(next, handlers)} />)),
   }
+}
+
+// What the daemon says of the shells of a task: the agent lanes, and the program of each shell.
+function shells(lanes: TaskShells['lanes'], programs: TaskShells['programs'] = {}): TaskShells {
+  const terminals = [...new Set([...Object.keys(lanes), ...Object.keys(programs)])]
+  return { terminals, lanes, programs }
 }
 
 const removeButton = (repo: string) =>
@@ -495,12 +502,17 @@ describe('subtasks under their parent', () => {
     expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
     const parentItem = rowOf('Parent').closest('li') as HTMLElement
     expect(within(parentItem).getByRole('button', { name: /^Child,/ })).toBeTruthy()
-    expect(disclosure('T-0001').textContent).toContain('1 open subtask')
   })
 
-  it('stays folded when no child works, waits or failed, and opens on a click', async () => {
+  it('stays folded when nothing works, waits or failed, and opens on a click', async () => {
     const user = userEvent.setup()
-    list({ tasks: [parent, { ...child, state: 'review' }], pinnedIds: [] })
+    list({
+      tasks: [
+        { ...parent, state: 'review' },
+        { ...child, state: 'review' },
+      ],
+      pinnedIds: [],
+    })
 
     expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
@@ -508,9 +520,13 @@ describe('subtasks under their parent', () => {
     expect(rowOf('Child')).toBeTruthy()
   })
 
-  it('shows the most urgent child state on the parent', () => {
+  it('shows the most urgent child state on the chevron while the row is folded', async () => {
+    const user = userEvent.setup()
     const failed = makeTask({ id: 'T-0003', title: 'Broken', parentId: 'T-0001', state: 'failed' })
     list({ tasks: [{ ...parent, state: 'review' }, child, failed], pinnedIds: [] })
+    expect(disclosure('T-0001').querySelector('[data-state]')).toBeNull()
+
+    await user.click(disclosure('T-0001'))
 
     const dot = disclosure('T-0001').querySelector('[data-state]')
     expect(dot?.getAttribute('data-state')).toBe('failed')
@@ -576,13 +592,12 @@ describe('the agents of a task', () => {
 
   it('names the terminal of each stage once they are loaded, and focuses it on a pick', async () => {
     const user = userEvent.setup()
-    const loadTerminals = vi.fn(async () => ({
-      '1': { stage: 'alpha', state: null },
-      '2': { stage: 'beta', state: null },
-    }))
+    const loadTerminals = vi.fn(async () =>
+      shells({ '1': { stage: 'alpha', state: null }, '2': { stage: 'beta', state: null } }),
+    )
     const { onOpenShell } = list({ tasks: [lanes], pinnedIds: [], loadTerminals })
 
-    const shell = await screen.findByRole('button', { name: 'Shell 2, Beta, Needs your input' })
+    const shell = await screen.findByRole('button', { name: 'Beta, Shell 2, Needs your input' })
     expect(screen.queryByRole('button', { name: 'Beta, Needs your input' })).toBeNull()
     await user.click(shell)
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', '2')
@@ -596,11 +611,38 @@ describe('the agents of a task', () => {
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', null)
   })
 
+  // The task spins while one of its agents works, also when another waits, folded or open.
+  it('spins the task glyph while one of its rows runs', async () => {
+    const user = userEvent.setup()
+    const loadTerminals = vi.fn(async () =>
+      shells({
+        '1': { stage: 'alpha', state: null, agent: 'claude-code' },
+        '2': { stage: 'beta', state: null, agent: 'claude-code' },
+      }),
+    )
+    const both = { ...lanes, lanes: { alpha: 'needs-input' as const, beta: 'running' as const } }
+    const { rerender } = list({ tasks: [both], pinnedIds: [], loadTerminals })
+    const taskGlyph = () =>
+      screen.getByRole('button', { name: /^Checks,/ }).querySelector('[data-state]')
+
+    await screen.findByRole('button', { name: 'Beta, Claude Code, Shell 2, Running' })
+    expect(taskGlyph()?.getAttribute('data-state')).toBe('running')
+    await user.click(disclosure('T-0001'))
+    expect(taskGlyph()?.getAttribute('data-state')).toBe('running')
+
+    rerender({
+      tasks: [{ ...both, lanes: { alpha: 'needs-input', beta: 'done' } }],
+      pinnedIds: [],
+      loadTerminals,
+    })
+    expect(taskGlyph()?.getAttribute('data-state')).toBe('needs-input')
+  })
+
   it('loads the terminals only while the row is open, and stops asking when it folds', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const quiet = { ...lanes, state: 'review' as const, lanes: { alpha: 'review' as const } }
-    const loadTerminals = vi.fn(async () => ({ '1': { stage: 'alpha', state: null } }))
+    const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     list({ tasks: [quiet], pinnedIds: [], loadTerminals })
 
     await act(() => vi.advanceTimersByTimeAsync(6000))
@@ -614,6 +656,54 @@ describe('the agents of a task', () => {
     await user.click(disclosure('T-0001'))
     await act(() => vi.advanceTimersByTimeAsync(15000))
     expect(loadTerminals).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('one row per shell', () => {
+  const plain = makeTask({ title: 'Plain', agent: 'claude-code', stage: 'spec', stages: ['spec'] })
+  const claude = { stage: 'spec', state: 'running' as const, agent: 'claude-code' }
+
+  it('shows the one agent of a task under it, and spins with it', async () => {
+    const loadTerminals = vi.fn(async () => shells({ '1': claude }))
+    list({ tasks: [plain], pinnedIds: [], loadTerminals })
+
+    const shell = await screen.findByRole('button', { name: 'Spec, Claude Code, Shell 1, Running' })
+    expect(shell.textContent).toContain('S1')
+    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('shows a shell with no agent by its program, and an agent started there by hand', async () => {
+    const user = userEvent.setup()
+    let lanes: TaskShells['lanes'] = { '1': claude }
+    const loadTerminals = vi.fn(async () => shells(lanes, { '1': 'node', '2': 'zsh' }))
+    const { onOpenShell } = list({
+      tasks: [plain],
+      pinnedIds: [],
+      currentId: 'T-0001',
+      loadTerminals,
+    })
+
+    const zsh = await screen.findByRole('button', { name: 'Shell 2, zsh' })
+    expect(zsh.textContent).toContain('S2')
+    expect(zsh.querySelector('.lucide-square-terminal')).toBeTruthy()
+    await user.click(zsh)
+    expect(onOpenShell).toHaveBeenCalledWith('T-0001', '2')
+
+    lanes = { ...lanes, '2': { stage: null, state: 'needs-input', agent: 'cursor' } }
+    await act(() => queryClient.refetchQueries())
+    const cursor = await screen.findByRole('button', { name: 'Shell 2, Cursor, Needs your input' })
+    expect(cursor.querySelector('[data-tip="Cursor"]')).toBeTruthy()
+  })
+
+  it('reads the shells of the open workspace even when it rests, and keeps it folded', async () => {
+    const user = userEvent.setup()
+    const resting = { ...plain, state: 'review' as const }
+    const loadTerminals = vi.fn(async () => shells({}, { '1': 'bash' }))
+    list({ tasks: [resting], pinnedIds: [], currentId: 'T-0001', loadTerminals })
+
+    await waitFor(() => expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false'))
+    await user.click(disclosure('T-0001'))
+    expect(screen.getByRole('button', { name: 'Shell 1, bash' })).toBeTruthy()
   })
 })
 
@@ -671,7 +761,13 @@ describe('a task row', () => {
       'natamux/t-0001-parent-work',
     )
     expect(row.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
-    expect(within(row).getByText('Review 3/4')).toBeTruthy()
+    expect(within(row).getByText('Manual review')).toBeTruthy()
+    expect(within(row).getByText('3/4')).toBeTruthy()
+    const comet = row.querySelector('.comet')
+    expect(comet?.getAttribute('data-state')).toBe('running')
+    expect(comet?.getAttribute('data-tip')).toBe(
+      'Spec done, Implement done, Manual review running, Release not started',
+    )
     expect(within(row).getByText('#12')).toBeTruthy()
     expect(within(row).getByText('1/2')).toBeTruthy()
     expect(within(row).queryByText(/parent-work/)).toBeNull()
@@ -778,7 +874,7 @@ describe('test spec cases', () => {
   it('stops reading the terminals when the list goes', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
-    const loadTerminals = vi.fn(async () => ({ '1': { stage: 'alpha', state: null } }))
+    const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     const { unmount } = list({ tasks: [checks], pinnedIds: [], loadTerminals })
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
 
@@ -790,7 +886,7 @@ describe('test spec cases', () => {
   it('pauses while the tab is hidden', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
-    const loadTerminals = vi.fn(async () => ({ '1': { stage: 'alpha', state: null } }))
+    const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     list({ tasks: [checks], pinnedIds: [], loadTerminals })
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
     let state: DocumentVisibilityState = 'hidden'
@@ -832,18 +928,17 @@ describe('test spec cases', () => {
       withHost(
         <WorkspaceList
           {...props({ tasks: [checks], pinnedIds: [] }, handlers)}
-          loadTerminals={async () => ({
-            '1': { stage: 'alpha', state: null },
-            '2': { stage: 'beta', state: null },
-          })}
+          loadTerminals={async () =>
+            shells({ '1': { stage: 'alpha', state: null }, '2': { stage: 'beta', state: null } })
+          }
           terminalActivity={{ 'T-0001': { '1': 'Edit src/app.ts' } }}
         />,
       ),
     )
 
-    const first = await screen.findByRole('button', { name: 'Shell 1, Alpha, Running' })
+    const first = await screen.findByRole('button', { name: 'Alpha, Shell 1, Running' })
     expect(within(first).getByText('Edit src/app.ts')).toBeTruthy()
-    const second = screen.getByRole('button', { name: 'Shell 2, Beta, Running' })
+    const second = screen.getByRole('button', { name: 'Beta, Shell 2, Running' })
     expect(second.textContent).not.toContain('Edit')
     act(() => second.focus())
     await user.keyboard('{Enter}')
@@ -871,14 +966,15 @@ describe('test spec cases', () => {
   it('slides in rows and unfolded lists that come after the first paint only', async () => {
     const user = userEvent.setup()
     const quiet = { ...child, state: 'review' as const }
-    const { rerender } = list({ tasks: [parent, quiet], pinnedIds: [] })
+    const resting = { ...parent, state: 'review' as const }
+    const { rerender } = list({ tasks: [resting, quiet], pinnedIds: [] })
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
 
     await user.click(disclosure('T-0001'))
     expect(rowOf('Child').closest('ul')?.className).toContain('sb-unfold')
 
     const added = makeTask({ id: 'T-0005', title: 'Added', createdAt: '2026-10-10T08:30:00.000Z' })
-    rerender({ tasks: [parent, quiet, added], pinnedIds: [] })
+    rerender({ tasks: [resting, quiet, added], pinnedIds: [] })
     expect(rowOf('Added').closest('li')?.className).toContain('hm-pop')
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
   })

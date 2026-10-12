@@ -15,6 +15,7 @@ import {
   type LaunchableAgent,
   type LaunchOptions,
   launchCommand,
+  prepareAgentHooks,
   prepareWorkspace,
   quoteArgument,
 } from './agent-launch.js'
@@ -216,6 +217,12 @@ describe('agentOfCommand', () => {
     ['claude -p hi', 'claude-code'],
     ['/usr/local/bin/codex', 'codex'],
     ['cursor-agent', 'cursor'],
+    // Cursor's own launcher keeps the name it was called by, `agent`, in front of Node.js.
+    [
+      '/Users/me/.local/bin/agent --use-system-ca /Users/me/.local/share/cursor-agent/versions/1/index.js',
+      'cursor',
+    ],
+    ['agent', 'cursor'],
   ])('finds the agent of %s', (line, agent) => {
     expect(agentOfCommand(line, defaults)).toBe(agent)
   })
@@ -310,6 +317,13 @@ describe('prepareWorkspace', () => {
     )
     expect(prepareWorkspace('cursor', repo)).toBe(false)
     expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toContain('say done')
+  })
+
+  it('writes the hook files of all agents, for an agent started by hand in a shell', () => {
+    prepareAgentHooks(repo)
+    expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toContain('natamux hook cursor')
+    expect(existsSync(join(repo, '.github/hooks/natamux.json'))).toBe(true)
+    expect(execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' })).toBe('')
   })
 
   it('needs no file for agents that take their hooks another way', () => {

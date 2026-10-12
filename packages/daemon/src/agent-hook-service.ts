@@ -1,7 +1,7 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import { type EventType, type Task, type TaskState, taskIdSchema } from '@natamux/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
-import { type NormalizedHook, planSignalEvents } from './agent-signals.js'
+import { type AgentSignal, type NormalizedHook, planSignalEvents } from './agent-signals.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
 import { MAIN_TERMINAL } from './terminal-service.js'
 
@@ -28,11 +28,22 @@ function isInside(folder: string, path: string): boolean {
 
 export type AgentActivity = { text: string; at: string }
 
-// What the hook service needs to know about stages: which stage a terminal works on, and whether
-// a turn end in a terminal follows a report (see StageRunner).
+// What the hook service needs to know about stages: which stage a terminal works on (null for
+// none), and whether a turn end in a terminal follows a report (see StageRunner).
 export type StageLookup = {
-  laneFor: (task: Task, terminal: string | undefined) => { stage: string; state: TaskState }
+  laneFor: (task: Task, terminal: string | undefined) => { stage: string; state: TaskState } | null
   takeReport: (taskId: string, terminal: string) => boolean
+}
+
+// The state of an agent in a shell that no stage uses. A turn end waits for the user, as it does
+// for the task's own agent.
+const SHELL_STATES: Record<AgentSignal, TaskState> = {
+  prompt: 'running',
+  activity: 'running',
+  asking: 'needs-input',
+  'turn-paused': 'running',
+  'turn-ended': 'needs-input',
+  failed: 'failed',
 }
 
 const NO_STAGES: StageLookup = {
@@ -46,6 +57,9 @@ export class AgentHookService {
   // What the agent in each terminal of each task does now, by task id, then terminal. Kept in
   // memory only: it is gone after a restart, and a new hook fills it again.
   private readonly activities = new Map<string, Map<string, AgentActivity>>()
+  // The state of each agent in a shell that no stage uses, by task id, then terminal. In memory
+  // only, like the activities.
+  private readonly shellStates = new Map<string, Map<string, TaskState>>()
 
   constructor(tasks: TaskService, stages: StageLookup = NO_STAGES) {
     this.tasks = tasks
@@ -109,13 +123,21 @@ export class AgentHookService {
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
 
     const lane = this.stages.laneFor(task, terminal)
-    // The turn in which the agent ran `natamux done` ends as planned, not "stopped early", even
-    // when background work is still running.
+    // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned, not
+    // "stopped early", even when background work is still running.
     const reportedTurn =
       (hook.signal === 'turn-ended' || hook.signal === 'turn-paused') &&
       this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
     if (reportedTurn) {
       this.forgetActivity(task.id, terminal ?? MAIN_TERMINAL)
+      return { taskId: task.id, applied: [] }
+    }
+    if (lane === null) {
+      // An agent on no stage of the step: one the user started by hand, or a reviewer that sent
+      // the task back. It has a state of its own and leaves the task alone.
+      const states = this.shellStates.get(task.id) ?? new Map<string, TaskState>()
+      states.set(terminal ?? MAIN_TERMINAL, SHELL_STATES[hook.signal])
+      this.shellStates.set(task.id, states)
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []
@@ -133,6 +155,24 @@ export class AgentHookService {
       this.tasks.recordActivity(task.id)
     }
     return { taskId: task.id, applied }
+  }
+
+  shellState(taskId: string, terminal: string): TaskState | undefined {
+    return this.shellStates.get(taskId)?.get(terminal)
+  }
+
+  // Called with the shells where an agent runs now. An agent started later in another shell must
+  // not show the state of one that ended there.
+  forgetShellsExcept(taskId: string, running: readonly string[]): void {
+    const states = this.shellStates.get(taskId)
+    for (const terminal of states?.keys() ?? []) {
+      if (!running.includes(terminal)) {
+        states?.delete(terminal)
+      }
+    }
+    if (states?.size === 0) {
+      this.shellStates.delete(taskId)
+    }
   }
 
   // Each terminal keeps its own line, so the end of a turn in one does not clear the other.

@@ -366,4 +366,18 @@ describe('more commands', () => {
       parseCommand(['stage', 'workflow', 'T-1', 'on', 'more', '--stage', 'plan']),
     ).toThrow(UsageError)
   })
+
+  it('reads stage ci with its stage and on or off', () => {
+    expect(parseCommand(['stage', 'ci', 'T-1', 'on', '--stage', 'implement'])).toEqual({
+      name: 'stage.ci',
+      id: 'T-1',
+      stage: 'implement',
+      on: true,
+      json: false,
+    })
+    expect(() => parseCommand(['stage', 'ci', 'T-1', 'on'])).toThrow(/--stage/)
+    expect(() => parseCommand(['stage', 'ci', 'T-1', 'maybe', '--stage', 'testing'])).toThrow(
+      /natamux stage ci T-42 on --stage implement/,
+    )
+  })
 })

@@ -22,6 +22,9 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
   cursor: 'cursor-agent',
 }
 
+// Other names an agent is installed under. Cursor's installer adds `agent` next to `cursor-agent`.
+const OTHER_PROGRAMS: Partial<Record<LaunchableAgent, string[]>> = { cursor: ['agent'] }
+
 // Programs that run the script of an agent: one installed with npm runs as `node <path>/codex`.
 const RUNTIMES = ['node', 'bun', 'deno', ...SHELLS]
 
@@ -39,7 +42,11 @@ export function agentOfCommand(
   const script = words.slice(1).find((word) => !word.startsWith('-'))
   const name = RUNTIMES.includes(first) && script !== undefined ? programName(script) : first
   return LAUNCHABLE_AGENTS.find((agent) =>
-    [DEFAULT_PROGRAMS[agent], programOf(agent).trim().split(/\s+/)[0] ?? '']
+    [
+      DEFAULT_PROGRAMS[agent],
+      ...(OTHER_PROGRAMS[agent] ?? []),
+      programOf(agent).trim().split(/\s+/)[0] ?? '',
+    ]
       .map(programName)
       .includes(name),
   )
@@ -250,6 +257,14 @@ export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boo
   }
   excludeFromGit(workspace, `/${file.path}`)
   return true
+}
+
+// The hook files of all agents that read them from the workspace, so an agent the user starts by
+// hand in any shell reports to the daemon too.
+export function prepareAgentHooks(workspace: string): void {
+  for (const agent of LAUNCHABLE_AGENTS) {
+    prepareWorkspace(agent, workspace)
+  }
 }
 
 // Adds a line to the repository's own ignore list, which all its worktrees share.

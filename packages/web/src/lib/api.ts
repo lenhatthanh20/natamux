@@ -89,6 +89,14 @@ export type AgentActivity = {
   byTerminal: Record<string, Record<string, string>>
 }
 
+// The open shells of a task: the lane of each one where an agent runs, and the program in front
+// of each one, or null where the platform does not tell.
+export type TaskShells = {
+  terminals: string[]
+  lanes: Record<string, TerminalLane>
+  programs: Record<string, string | null>
+}
+
 export type RemoveWorkspaceResult = {
   task: Task
   branchDeleted: boolean
@@ -460,6 +468,28 @@ export function createApi(
       )
     },
 
+    async listShells(taskId: string): Promise<TaskShells> {
+      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/terminals`))
+      const lanes = body.lanes === undefined ? {} : asRecord(body.lanes)
+      const programs = body.programs === undefined ? {} : asRecord(body.programs)
+      const terminals = stringList(body.terminals)
+      return {
+        terminals,
+        lanes: Object.fromEntries(
+          stringList(body.agents).map((name) => [
+            name,
+            terminalLaneSchema.parse(lanes[name] ?? { stage: null, state: null }),
+          ]),
+        ),
+        programs: Object.fromEntries(
+          terminals.map((name) => {
+            const program = programs[name]
+            return [name, typeof program === 'string' ? program : null]
+          }),
+        ),
+      }
+    },
+
     async closeTerminal(taskId: string, terminal: string): Promise<string[]> {
       const body = asRecord(
         await request(
@@ -509,6 +539,13 @@ export function createApi(
     ): Promise<Task> {
       const body = asRecord(
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/stage`, { action, ...input }),
+      )
+      return taskSchema.parse(body.task)
+    },
+
+    async setCi(taskId: string, stage: string, on: boolean): Promise<Task> {
+      const body = asRecord(
+        await request('PUT', `/tasks/${encodeURIComponent(taskId)}/ci`, { stage, on }),
       )
       return taskSchema.parse(body.task)
     },

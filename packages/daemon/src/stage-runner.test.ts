@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { decodeAttachments } from './attachments.js'
+import type { CiResult } from './ci-check.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import type { RunCommand } from './stage-checks.js'
@@ -45,6 +46,7 @@ let index: TaskIndex
 let tasks: TaskService
 let workspaces: WorkspaceService
 let runner: StageRunner
+let agents: AgentRunner
 let ptys: FakePty[]
 let ghCalls: string[][]
 let settings: ProjectSettings
@@ -52,6 +54,9 @@ let clock: number
 let runCommand: RunCommand
 let terminals: TerminalService
 let bus: EventBus
+// The CI checks asked for, and the way to end the last one.
+let ciCalls: { worktree: string; branch: string }[]
+let finishCi: (result: CiResult) => void
 
 beforeEach(() => {
   repo = createTestRepo()
@@ -62,6 +67,8 @@ beforeEach(() => {
   settings = DEFAULT_PROJECT_SETTINGS
   clock = Date.parse('2026-10-09T09:00:00.000Z')
   runCommand = async () => ({ code: 0, output: '' })
+  ciCalls = []
+  finishCi = () => undefined
   tasks = new TaskService({ dataDir, index, bus, settingsOf: () => settings })
   workspaces = new WorkspaceService({
     tasks,
@@ -74,14 +81,19 @@ beforeEach(() => {
     spawn: spawner.spawn,
     workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   })
-  const agents = new AgentRunner({
+  agents = new AgentRunner({
     tasks,
     terminals,
     claudeSettingsPath: join(dataDir, 'settings.json'),
     platform: 'linux',
   })
   ghCalls = []
-  runner = new StageRunner({
+  runner = makeRunner(agents)
+  runner.start()
+})
+
+function makeRunner(agents: AgentRunner): StageRunner {
+  return new StageRunner({
     tasks,
     terminals,
     agents,
@@ -97,9 +109,14 @@ beforeEach(() => {
     platform: 'linux',
     // The skills of the machine that runs the tests must not count.
     home: join(repo.root, 'home'),
+    checkCi: (input) => {
+      ciCalls.push(input)
+      return new Promise((resolve) => {
+        finishCi = resolve
+      })
+    },
   })
-  runner.start()
-})
+}
 
 afterEach(() => {
   runner.stop()
@@ -135,6 +152,40 @@ async function expectSubmitted(pty: FakePty | undefined, start: string): Promise
     expect(written[at]?.endsWith('\x1b[201~')).toBe(true)
     expect(written[at + 1]).toBe('\r')
   })
+}
+
+// A task of a pipeline that starts with Implement, ready and in its workspace, so Implement runs.
+async function implementing(): Promise<Task> {
+  const task = await created({ title: 'Export', agent: 'claude-code' })
+  tasks.applyEvent(task.id, {
+    source: 'human',
+    type: 'state.overridden',
+    payload: { to: 'ready', stage: 'implement' },
+  })
+  return withWorkspace(task.id)
+}
+
+// The default pipeline with a person's review in place of the agent's, for the cases about it.
+function withManualReview(): void {
+  const manual: Stage = { id: 'review', kind: 'review', gate: 'manual' }
+  settings = {
+    ...DEFAULT_PROJECT_SETTINGS,
+    stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+      step.id === 'agent-review' ? manual : step,
+    ),
+  }
+}
+
+// Test spec starts Codex with its own words, beside Claude Code in Shell 1.
+function withOwnAgent(): void {
+  const own = (stage: Stage) =>
+    stage.id === 'test-spec' ? { ...stage, agent: 'codex', args: '--model gpt-5' } : stage
+  settings = {
+    ...DEFAULT_PROJECT_SETTINGS,
+    stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+      'parallel' in step ? { ...step, parallel: step.parallel.map(own) } : step,
+    ),
+  }
 }
 
 function writeWorking(task: Task, name: string, text: string): void {
@@ -390,7 +441,7 @@ describe('settings from the Stages screen', () => {
     writeWorking(
       task,
       'spec.md',
-      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n',
+      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n# Code map\nx\n',
     )
 
     await runner.act(task.id, 'report', { terminal: '1' })
@@ -433,6 +484,13 @@ describe('agent stages', () => {
     )
   })
 
+  it('gives an extra shell no stage, so an agent started there by hand leaves the task alone', async () => {
+    const task = await withWorkspace((await atSpec()).id)
+    expect(runner.laneFor(task, '1')).toEqual({ stage: 'spec', state: 'running' })
+    expect(runner.laneFor(task, undefined)).toEqual({ stage: 'spec', state: 'running' })
+    expect(runner.laneFor(task, '2')).toBeNull()
+  })
+
   it('sends failed checks back to the agent once, then waits for you', async () => {
     const task = await withWorkspace((await atSpec()).id)
 
@@ -450,7 +508,7 @@ describe('agent stages', () => {
     writeWorking(
       task,
       'spec.md',
-      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n',
+      '# Goal\nx\n# Scope\nx\n# Out of scope\nx\n# Acceptance criteria\nx\n# Code map\nx\n',
     )
 
     await runner.act(task.id, 'report', { terminal: '1' })
@@ -467,8 +525,159 @@ describe('agent stages', () => {
     const failed = tasks.listEvents(task.id).at(-1)?.event
     expect(failed?.type).toBe('stage.check-failed')
     expect(failed?.payload.reasons).toEqual([
-      'spec.md has no Scope, Out of scope, Acceptance criteria section',
+      'spec.md has no Scope, Out of scope, Acceptance criteria, Code map section',
     ])
+  })
+})
+
+describe('an agent review', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        {
+          id: 'agent-review',
+          kind: 'agent',
+          gate: 'auto',
+          output: 'review.md',
+          sections: ['Findings'],
+          ownShell: true,
+        },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  })
+
+  async function atReview(): Promise<Task> {
+    const task = await implementing()
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    return tasks.getTask(task.id)
+  }
+
+  it('starts its own agent in Shell 5 when Implement is done', async () => {
+    const task = await atReview()
+
+    expect(task).toMatchObject({ stage: 'agent-review', state: 'running' })
+    expect(launchScript(task.id, '5')).toContain('review.md')
+    expect(launchScript(task.id, '5')).toContain('natamux stage back')
+  })
+
+  it('sends the task back to Implement with its findings, twice, then waits for you', async () => {
+    const task = await atReview()
+
+    await runner.act(task.id, 'reopen', { terminal: '5', reason: 'Fix the dates' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys[0]?.written.join('')).toContain('Fix the dates')
+    // The turn of the reviewer ends after it sent the task back, as after natamux done.
+    expect(runner.takeReport(task.id, '5')).toBe(true)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('agent-review')
+    await runner.act(task.id, 'reopen', { terminal: '5', reason: 'Still wrong' })
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    await expect(runner.act(task.id, 'reopen', { terminal: '5', reason: 'Again' })).rejects.toThrow(
+      /waits for the user/,
+    )
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'needs-input' })
+  })
+
+  it('lets a person send it back any number of times', async () => {
+    const task = await atReview()
+    for (const reason of ['one', 'two', 'three']) {
+      await runner.act(task.id, 'reopen', { reason })
+      await runner.act(task.id, 'report', { terminal: '1' })
+      await runner.settle()
+    }
+    expect(tasks.getTask(task.id).stage).toBe('agent-review')
+  })
+})
+
+describe('a check on CI', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', kind: 'agent', gate: 'manual', ci: true }],
+    }
+  })
+
+  async function reported(ci: boolean): Promise<Task> {
+    const task = await implementing()
+    if (ci) {
+      tasks.setCi(task.id, 'implement', true)
+    }
+    await runner.act(task.id, 'report', { terminal: '1' })
+    return task
+  }
+
+  const lastOf = (id: string, type: EventType) =>
+    tasks
+      .listEvents(id)
+      .filter((entry) => entry.event.type === type)
+      .at(-1)?.event
+
+  it('waits for CI after the local checks, then passes the stage', async () => {
+    const task = await reported(true)
+
+    expect(ciCalls).toEqual([{ worktree: task.workspace, branch: task.branch }])
+    expect(lastOf(task.id, 'stage.ci-started')?.payload).toMatchObject({
+      stage: 'implement',
+      branch: `natamux-ci/${task.branch}`,
+    })
+    expect(tasks.getTask(task.id).state).toBe('running')
+
+    finishCi({ passed: true, reasons: [], passes: ['CI passed: CI u'], final: false })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('review')
+    expect(lastOf(task.id, 'stage.checked')?.payload.passes).toContain('CI passed: CI u')
+  })
+
+  it('gives a CI failure to the agent once', async () => {
+    const task = await reported(true)
+
+    finishCi({ passed: false, reasons: ['CI E2E failure: u\nError'], passes: [], final: false })
+    await runner.settle()
+
+    expect(lastOf(task.id, 'stage.check-failed')?.payload).toMatchObject({ final: false })
+    await expectSubmitted(ptys[0], 'The checks of this stage failed')
+    expect(ptys[0]?.written.join('')).toContain('CI E2E failure')
+  })
+
+  it('waits for you when the agent cannot fix it', async () => {
+    const task = await reported(true)
+
+    finishCi({ passed: false, reasons: ['No CI run started'], passes: [], final: true })
+    await runner.settle()
+
+    expect(lastOf(task.id, 'stage.check-failed')?.payload).toMatchObject({ final: true })
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+  })
+
+  it('goes on with a CI check after a restart, and runs one at a time', async () => {
+    const task = await reported(true)
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(ciCalls).toHaveLength(1)
+
+    runner.stop()
+    runner = makeRunner(agents)
+    runner.start()
+    expect(ciCalls).toHaveLength(2)
+    finishCi({ passed: true, reasons: [], passes: ['CI passed: CI u'], final: false })
+    await runner.settle()
+    expect(tasks.getTask(task.id).state).toBe('review')
+  })
+
+  it('does not wait for CI when the task did not ask for it', async () => {
+    const task = await reported(false)
+
+    expect(ciCalls).toEqual([])
+    expect(tasks.getTask(task.id).state).toBe('review')
   })
 })
 
@@ -492,6 +701,23 @@ describe('a group', () => {
     expect(launchScript(task.id, '2')).toContain('test-spec.md')
     expect(runner.laneFor(task, '2')).toEqual({ stage: 'test-spec', state: 'running' })
     expect(runner.laneFor(task, '1')).toEqual({ stage: 'implement', state: 'running' })
+    // An agent the user started in another shell works on no stage of the group.
+    expect(runner.laneFor(task, '3')).toBeNull()
+  })
+
+  it('starts the agent and the words of a stage in its own shell, and keeps the task agent', async () => {
+    withOwnAgent()
+    const task = await atBuild()
+
+    expect(launchScript(task.id)).toMatch(/^claude /)
+    expect(launchScript(task.id, '2')).toMatch(/^codex /)
+    expect(launchScript(task.id, '2')).toContain('--model gpt-5')
+    expect(tasks.getTask(task.id).agent).toBe('claude-code')
+    const launches = tasks
+      .listEvents(task.id)
+      .filter((entry) => entry.event.type === 'agent.launched')
+      .map((entry) => entry.event.payload)
+    expect(launches).toContainEqual(expect.objectContaining({ agent: 'codex', stage: 'test-spec' }))
   })
 
   it('finishes implement with changes that are not committed, and leaves them so', async () => {
@@ -932,6 +1158,18 @@ describe('a resume after a restart', () => {
     return tasks.getTask(task.id)
   }
 
+  it('keeps the Claude Code session of a stage after another stage started its own agent', async () => {
+    withOwnAgent()
+    const task = await buildAfterRestart()
+    await resume(task.id, { stage: 'test-spec' })
+    expect(launchScript(task.id, '2')).toMatch(/^codex /)
+    terminals.close(task.id)
+
+    await resume(task.id, { stage: 'implement' })
+
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
+  })
+
   it('goes on with the last Claude Code session of the stage, with no new prompt', async () => {
     const task = await waitingAfterRestart({ sessionId: 's-1' })
     expect(task.state).toBe('needs-input')
@@ -1251,6 +1489,8 @@ describe('the agent in each terminal', () => {
 })
 
 describe('a send back', () => {
+  beforeEach(withManualReview)
+
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })
     tasks.applyEvent(task.id, {

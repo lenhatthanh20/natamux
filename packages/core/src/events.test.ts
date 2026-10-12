@@ -7,7 +7,16 @@ import {
   type TaskEvent,
   taskEventSchema,
 } from './events.js'
-import { DEFAULT_PIPELINE, LEGACY_PIPELINE, type StagePosition } from './stage.js'
+import { DEFAULT_PIPELINE, LEGACY_PIPELINE, type StagePosition, type Step } from './stage.js'
+
+// The pipeline these cases were written for: a person reviews, then the tests run. The default
+// pipeline has an agent review after the tests instead.
+const PIPELINE: Step[] = DEFAULT_PIPELINE.flatMap((step): Step[] => {
+  if (step.id === 'agent-review') {
+    return []
+  }
+  return step.id === 'testing' ? [{ id: 'review', kind: 'review', gate: 'manual' }, step] : [step]
+})
 
 function event(type: EventType, payload: Record<string, unknown> = {}): TaskEvent {
   return { taskId: 'T-1', source: 'system', type, at: '2026-10-08T09:00:00Z', payload }
@@ -21,7 +30,7 @@ function run(position: StagePosition, ...events: TaskEvent[]) {
   let current = position
   const accepted: boolean[] = []
   for (const next of events) {
-    const applied = applyTaskEvent(current, next, DEFAULT_PIPELINE)
+    const applied = applyTaskEvent(current, next, PIPELINE)
     current = applied.position
     accepted.push(applied.accepted)
   }
@@ -119,7 +128,7 @@ describe('deriveTaskState with the legacy pipeline', () => {
   })
 })
 
-describe('applyTaskEvent with the default pipeline', () => {
+describe('applyTaskEvent with a manual review', () => {
   it('accepts record-only events in any state without a change', () => {
     const types = [
       'task.created',
@@ -146,7 +155,7 @@ describe('applyTaskEvent with the default pipeline', () => {
     expect(position).toEqual(at('spec', 'review'))
     expect(accepted).toEqual([true, true, true])
 
-    const approved = applyTaskEvent(position, event('stage.approved'), DEFAULT_PIPELINE)
+    const approved = applyTaskEvent(position, event('stage.approved'), PIPELINE)
     expect(approved).toEqual({ position: at('plan', 'ready'), accepted: true, moved: true })
   })
 
@@ -183,7 +192,7 @@ describe('applyTaskEvent with the default pipeline', () => {
     const approved = applyTaskEvent(
       implemented,
       event('stage.approved', { stage: 'test-spec' }),
-      DEFAULT_PIPELINE,
+      PIPELINE,
     )
     expect(approved).toEqual({ position: at('review', 'review'), accepted: true, moved: true })
   })
@@ -338,9 +347,9 @@ describe('applyTaskEvent with the default pipeline', () => {
 describe('completeEvent', () => {
   it('names the stage an event is about when the sender left it out', () => {
     const group = at('build', 'review', { 'test-spec': 'review', implement: 'running' })
-    const inGroup = completeEvent(group, event('review.approved'), DEFAULT_PIPELINE)
+    const inGroup = completeEvent(group, event('review.approved'), PIPELINE)
     expect(inGroup.payload).toEqual({ stage: 'test-spec' })
-    const alone = completeEvent(at('plan', 'review'), event('review.approved'), DEFAULT_PIPELINE)
+    const alone = completeEvent(at('plan', 'review'), event('review.approved'), PIPELINE)
     expect(alone.payload).toEqual({ stage: 'plan' })
   })
 
@@ -348,17 +357,17 @@ describe('completeEvent', () => {
     const sent = completeEvent(
       at('review', 'review'),
       event('review.changes-requested', { reason: 'Fix it' }),
-      DEFAULT_PIPELINE,
+      PIPELINE,
     )
     expect(sent.payload).toEqual({ reason: 'Fix it', to: 'implement' })
   })
 
   it('leaves an event that names its stage, or fits no stage, as it is', () => {
     const named = event('stage.checked', { stage: 'spec' })
-    expect(completeEvent(at('plan', 'running'), named, DEFAULT_PIPELINE)).toBe(named)
+    expect(completeEvent(at('plan', 'running'), named, PIPELINE)).toBe(named)
     const group = at('build', 'running', { 'test-spec': 'running', implement: 'running' })
     const unclear = event('agent.asked')
-    expect(completeEvent(group, unclear, DEFAULT_PIPELINE)).toBe(unclear)
+    expect(completeEvent(group, unclear, PIPELINE)).toBe(unclear)
   })
 })
 
