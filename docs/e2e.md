@@ -21,7 +21,7 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)).
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, the run stops there, and the test job stops after 20 minutes.
 
 The workflow has three jobs:
 
