@@ -980,8 +980,8 @@ function CiBox({ choice }: { choice: CiChoice }) {
         Check on CI
       </label>
       <span className="pl-5.5 text-xs text-muted">
-        When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes
-        once CI passes. A failure goes back to the agent.
+        When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes once
+        CI passes. A failure goes back to the agent.
       </span>
     </div>
   )

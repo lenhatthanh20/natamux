@@ -426,8 +426,8 @@ function CiOption({
         />
       </div>
       <p id={noteId} className="m-0 text-xs text-muted">
-        Each task gets a Check on CI checkbox on this stage, off by default. The work is pushed to
-        a natamux-ci branch, so the CI workflows must run on a push to natamux-ci/**.
+        Each task gets a Check on CI checkbox on this stage, off by default. The work is pushed to a
+        natamux-ci branch, so the CI workflows must run on a push to natamux-ci/**.
       </p>
     </fieldset>
   )

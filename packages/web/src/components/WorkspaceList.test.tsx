@@ -506,7 +506,13 @@ describe('subtasks under their parent', () => {
 
   it('stays folded when nothing works, waits or failed, and opens on a click', async () => {
     const user = userEvent.setup()
-    list({ tasks: [{ ...parent, state: 'review' }, { ...child, state: 'review' }], pinnedIds: [] })
+    list({
+      tasks: [
+        { ...parent, state: 'review' },
+        { ...child, state: 'review' },
+      ],
+      pinnedIds: [],
+    })
 
     expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()

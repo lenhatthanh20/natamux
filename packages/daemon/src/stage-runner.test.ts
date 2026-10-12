@@ -554,9 +554,9 @@ describe('an agent review', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
 
-    await expect(
-      runner.act(task.id, 'reopen', { terminal: '5', reason: 'Again' }),
-    ).rejects.toThrow(/waits for the user/)
+    await expect(runner.act(task.id, 'reopen', { terminal: '5', reason: 'Again' })).rejects.toThrow(
+      /waits for the user/,
+    )
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'needs-input' })
   })
 
