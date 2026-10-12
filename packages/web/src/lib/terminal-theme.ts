@@ -67,7 +67,9 @@ export function terminalTheme(theme: ResolvedTheme): ITheme {
 // Any program color is pushed to a readable one on the terminal background.
 export const MIN_CONTRAST_RATIO = 4.5
 export const TERMINAL_FONT_SIZE = 13
-export const TERMINAL_LINE_HEIGHT = 1.2
+// xterm multiplies the font's own line height (about 1.3 em for JetBrains Mono), not the font size.
+// 1 gives the rows of Ghostty and VS Code: about 17px at 13px.
+export const TERMINAL_LINE_HEIGHT = 1
 // xterm sizes its scrollbar by the overview ruler width, so the ruler sets it. 8px matches
 // the code editor's scrollbar.
 export const TERMINAL_SCROLLBAR_WIDTH = 8
@@ -81,8 +83,9 @@ export const TERMINAL_LOOK = {
   cursorInactiveStyle: 'outline',
   // Bold text keeps its color and only gets heavier, as in most modern themes.
   drawBoldTextInBrightColors: false,
+  // The weights of Ghostty, VS Code and JetBrains IDEs.
   fontWeight: 'normal',
-  fontWeightBold: '600',
+  fontWeightBold: 'bold',
   lineHeight: TERMINAL_LINE_HEIGHT,
   minimumContrastRatio: MIN_CONTRAST_RATIO,
   fastScrollSensitivity: 5,
