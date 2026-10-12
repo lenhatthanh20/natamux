@@ -95,17 +95,27 @@ function numberedLines(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `line ${index + 1}`)
 }
 
+function isSnapshot(
+  message: TerminalServerMessage,
+): message is Extract<TerminalServerMessage, { type: 'snapshot' }> {
+  return message.type === 'snapshot'
+}
+
 // What a dashboard of this size shows after the output a client got: every row, history first,
-// without the empty rows at the end.
+// without the empty rows at the end. Like the dashboard, it draws a snapshot at the size the
+// snapshot names, then fits back to its own size.
 async function screenOf(frames: TerminalFrame[], screen: TerminalSize = size): Promise<string[]> {
+  const snapshot = controls(frames).filter(isSnapshot).at(-1)
   const terminal = new xtermHeadless.Terminal({
-    ...screen,
+    cols: snapshot?.cols ?? screen.cols,
+    rows: snapshot?.rows ?? screen.rows,
     scrollback: TERMINAL_SCROLLBACK_MAX_LINES,
     allowProposedApi: true,
   })
   terminal.loadAddon(new Unicode11Addon())
   terminal.unicode.activeVersion = '11'
   await new Promise<void>((resolve) => terminal.write(outputOf(frames), resolve))
+  terminal.resize(screen.cols, screen.rows)
   const buffer = terminal.buffer.active
   const rows: string[] = []
   for (let index = 0; index < buffer.length; index += 1) {
@@ -1864,7 +1874,7 @@ describe('a snapshot during a synchronized frame', () => {
     await vi.advanceTimersByTimeAsync(50)
     expect(types()).toEqual(['hello'])
     ptys[0]?.emit('drawn\x1b[?2026l')
-    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(2)
 
     expect(types()).toEqual(['hello', 'snapshot', 'replayed'])
     expect(outputOf(later.frames)).not.toContain('\x1b[?2026')
@@ -1877,7 +1887,9 @@ describe('a snapshot during a synchronized frame', () => {
 
     await vi.advanceTimersByTimeAsync(SNAPSHOT_SYNC_WAIT_MS - 1)
     expect(types()).toEqual(['hello'])
-    await vi.advanceTimersByTimeAsync(1)
+    // The cut is at 150 ms. Fake timers run a 0 ms timer set inside a tick 1 ms later, and xterm
+    // parses on such a timer, so the snapshot is out 1 ms after that.
+    await vi.advanceTimersByTimeAsync(2)
 
     expect(types()).toEqual(['hello', 'snapshot', 'replayed'])
     expect(outputOf(later.frames)).not.toContain('\x1b[?2026')
