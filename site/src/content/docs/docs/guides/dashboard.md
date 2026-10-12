@@ -32,13 +32,14 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 - **All tasks** shows the task list in the main area. The number is every task.
 - **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto.
 - **Needs you** lists the tasks that wait for you. See [Needs you](#needs-you).
-- **Workspaces** lists workspaces in folders, one per project. A workspace row shows its state, title, age, branch, the size of its diff, and what the agent does now or asks.
+- **Workspaces** lists workspaces in folders, one per project. A workspace row shows its state, title and age. The line under the title shows the agent, the task id, the stage and its step (such as "Review 3/5"), the pull request, how many subtasks are done, and the size of the diff. Hover the id to see the branch. A third line says what the agent does now, or why the task failed. A blue dot marks a change you have not seen yet.
 
 In the workspace list:
 
 - Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
+- A task with open subtasks, or with stages that run side by side, has a line under it such as "2 open subtasks · 2 parallel stages". Click it, or press `Right` and `Left` on the row, to show or hide the work under the task: its agent shells (**Shell 1**, **Shell 2**, with their stage and what they do) and its subtasks. Click a shell to open the task's terminal on it. The line opens by itself while something under it works, waits or failed; the dot on it has the color of the most urgent one. Natamux remembers what you fold.
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path**, **Remove workspace** and **Delete task**. **Remove workspace** deletes the worktree and keeps the task. **Delete task** deletes the task, its notes and its history, and the worktree when there is one. Both ask first. Pinned workspaces move to a **Pinned** section at the top.
 - Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.

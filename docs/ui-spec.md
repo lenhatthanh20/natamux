@@ -273,8 +273,9 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 
 - What moves: opacity; menus and tooltips +4px slide from the anchor side; dialog and palette scale 0.98 to 1; drawer and sheet slide on X. Never animate panel width while dragging. No bounce.
 - Spinner (running glyph) 900ms linear rotation. Remove the opacity pulse on chips (calm).
+- Sidebar (`.sb-*` in `styles.css`): the current-row bar grows on Y over `--dur-pop`; chevrons turn over `--dur-hover`; an unfolded list slides in 4px over `--dur-modal`; a row added after the first paint slides in (`hm-pop`); a row that starts to need input flashes `--signal-soft` once over 600ms; a state glyph changes color over `--dur-modal`. The first paint does not move.
 - Skeleton shimmer 1.5s linear.
-- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`.
+- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`. Every `.sb-*` class is listed there too (a test checks it): unfold is an 80ms fade, the bar and chevrons do not move, no flash.
 - Feedback by wait time: under 100ms nothing; 100ms-1s the control is busy (disabled + label kept); 1-3s spinner in the control; over 3s a stage label ("Creating worktree...", "Pushing..."). Skeletons appear only after 200ms and stay at least 300ms (no flash, RA-29).
 
 ---------------------------------------------------------------------
@@ -396,23 +397,29 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 ### 4.9 Tree row: workspace row (`components/WorkspaceRow.tsx`)
 Anatomy (44px, pad 6/8, radius 6):
 ```
-[glyph16] Title (13/500, ink, truncate)                 [age 12 muted | ... on hover]
-          branch-slug (mono 12 muted, truncate)         [+12 -3 mono 12]
+[glyph16] Title (13/500, ink, truncate)          [unseen dot] [age 12 muted | ... on hover]
+          [agent] T-0018 Review 3/5 [PR #12] [subtasks 1/3]   [+12 -3 mono 12]
           (running only) Edit notes/T-0018.md (12 muted, truncate)   -> +16px
           (failed) "claude: command not found" (12 failed, truncate)  -> +16px
+          (with work under it) > [dot] 2 open subtasks · 2 parallel stages  -> +20px
 ```
 - Text column starts at 32px (8 pad + 16 glyph + 8 gap).
+- Line 2: agent icon (tooltip: agent name), task id in mono (tooltip: branch), stage and its step `n/m` from the task's own steps (a parallel group is one step), pull request number in the checks color, subtasks `done/all`, diff size at the right. The branch is mostly the title, so it is only in the tooltip and the menu ("Copy branch name").
+- Work under a row: open subtasks whose parent is shown in the same project, and the stages of a parallel group. A 20px disclosure line under the row (`Work under T-0018`, `aria-expanded`, not a tab stop: Right and Left on the row do the same) shows a chevron, a 6px dot in the most urgent child state (needs-input > failed > blocked > review > running > ready) and what is under it. It opens by itself while a child works, waits or failed; a click or Left/Right is the user's choice and wins.
+- Under an open row, inside a 16px indent with a 1px `--line` guide: first the agents, then the subtask rows (full rows, one level only). Agent rows are 26px (40 on touch): glyph, "Shell 2", stage name, what the agent does now. They come from `GET /tasks/<id>/terminals`, read only while the row is open and the tab is visible, every 5 s; until then (or for a stage with no shell yet) a row per parallel stage stands in. A pick opens the task's terminal on that shell (`requestShell`).
+- A finished or pinned subtask stays where it was (finished list, pinned group). A subtask whose parent is not shown stays at the top level. A filter that matches a subtask keeps its parent in view.
+- Folds of groups, "N finished" lists and rows are kept per browser in `natamux.sidebar-folds` (only what the user picked; the newest 300).
 - A needs-input row has no third line: the `?` glyph says it, and the Needs you section (4.12) has the question. One place per area (T-0015).
 - Age moves to line 1 and swaps with the "..." button on hover/focus, so the slug gets the full line 2 (fixes NAV-27 truncation) and nothing overlaps.
-- States: hover bg-hover; current (open in main) bg-selected + `inset 0 0 0 1px var(--line-strong)`; keyboard focus ring inset; selected + focused list bg-selection-active.
+- States: hover bg-hover; current (open in main) bg-selected + a 2px `--accent` bar at the left (`.sb-row`); keyboard focus ring inset; selected + focused list bg-selection-active.
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
-- Unseen change (agent finished or asked since the user last opened it): title weight 600 (P2).
+- Unseen change (agent finished or asked since the user last opened it): title weight 600 and a 6px accent dot before the age; the row name ends with ", unseen" (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (row keeps 44px, line 2 stays), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
 - Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (for every project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
 - "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32. Hover `FolderMinus` button (24) "Remove finished workspaces in <project>": asks first, listing the task ids; removes the workspaces one after the other, skips any with changes that are not committed, and ends with one toast. Pinned workspaces are not part of it.
 - No projects: one 12 muted line "No projects yet" and an "Add project" text button that opens the projects panel. "Add task" is off with "Add a project first"; "Start a task" opens the projects panel with the toast "Add a project first."
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
-- Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
+- Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group or a row with work under it / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
 
 ### 4.10 Status glyphs (`components/StatusGlyph.tsx`)
 16px box, 14px icon, stroke 2.25, color `--chip-fg` of the state. Every glyph has a different shape, so color is never the only cue (fixes WS-33, WS-35).
@@ -446,6 +453,7 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
   - Line 2, 12px, indented 24 to start under the title: stage muted (when there is one), reason in `--signal` ("asks", "review", "failed", "blocked", "quiet"), age muted at the right.
 - Cap at 3 rows + "Show all 5" link row. Ordered by longest wait. Rows here are not highlighted again in the tree below. The section is the one place in the sidebar with the question or reason as text; the tree row shows only the glyph (4.9, T-0015).
 - When 0: one muted line "Nothing needs you" (28px), so the section never jumps.
+- A polite live region (`role="status"`, sr-only) says "<title> needs you" when a task starts to wait. The tasks that wait when the page opens are not said.
 - The section ignores the sidebar filter on purpose (must stay in sight); a caps note "Not filtered" appears when a filter is active (NAV-15 count mismatch explained).
 
 ### 4.13 Menu (`ui/Menu.tsx`)

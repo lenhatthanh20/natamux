@@ -379,3 +379,26 @@ describe('the reason text on line 2', () => {
     expect(within(rowOf(failed)).queryByText('failed')).toBeNull()
   })
 })
+
+describe('the announcement', () => {
+  const strip = (waiting: Task[]) => (
+    <NeedsMeStrip waiting={waiting} now={NOW} currentId={null} filtered={false} onOpen={vi.fn()} />
+  )
+
+  it('says nothing for the tasks that wait when the page opens', () => {
+    render(strip([makeTask()]))
+
+    expect(screen.getByRole('status').textContent).toBe('')
+  })
+
+  it('names a task that starts to wait, politely', () => {
+    const first = makeTask()
+    const view = render(strip([first]))
+
+    view.rerender(strip([first, makeTask({ id: 'T-0002', title: 'Add CSV export' })]))
+
+    const status = screen.getByRole('status')
+    expect(status.textContent).toBe('Add CSV export needs you')
+    expect(status.getAttribute('aria-live')).toBe('polite')
+  })
+})

@@ -92,6 +92,56 @@ describe('workspaceGroups', () => {
   })
 })
 
+describe('subtasks', () => {
+  const parent = makeTask({ id: 'T-0001', createdAt: '2026-10-08T09:00:00.000Z' })
+  const later = makeTask({
+    id: 'T-0003',
+    parentId: 'T-0001',
+    createdAt: '2026-10-08T11:00:00.000Z',
+  })
+  const first = makeTask({
+    id: 'T-0002',
+    parentId: 'T-0001',
+    createdAt: '2026-10-08T10:00:00.000Z',
+  })
+
+  it('nests open subtasks under their parent, the oldest first, and not at the top', () => {
+    const result = workspaceGroups(repos, [parent, later, first], [])
+
+    expect(result.groups[0]?.open.map((task) => task.id)).toEqual(['T-0001'])
+    expect(result.children['T-0001']?.map((task) => task.id)).toEqual(['T-0002', 'T-0003'])
+    expect(result.groups[0]?.nested.map((task) => task.id)).toEqual(['T-0002', 'T-0003'])
+  })
+
+  it('nests under a pinned parent too', () => {
+    const result = workspaceGroups(repos, [parent, first], ['T-0001'])
+
+    expect(result.pinned).toEqual([parent])
+    expect(result.children['T-0001']).toEqual([first])
+    expect(result.groups[0]?.open).toEqual([])
+  })
+
+  it('keeps a subtask at the top when its parent is not shown or is in another repository', () => {
+    const noWorkspace = { ...parent, workspace: null }
+    const elsewhere = { ...parent, repo: 'web' }
+    for (const shownParent of [noWorkspace, elsewhere]) {
+      const result = workspaceGroups(repos, [shownParent, first], [])
+      expect(result.groups[0]?.open).toEqual([first])
+      expect(result.children).toEqual({})
+    }
+    expect(workspaceGroups(repos, [first], []).groups[0]?.open).toEqual([first])
+  })
+
+  it('keeps finished and pinned subtasks where they were', () => {
+    const done = { ...first, state: 'done' as const }
+    const result = workspaceGroups(repos, [parent, done, later], ['T-0003'])
+
+    expect(result.groups[0]?.finished).toEqual([done])
+    expect(result.pinned).toEqual([later])
+    expect(result.children).toEqual({})
+  })
+})
+
 describe('knownRepos', () => {
   it('adds the repositories that only tasks name, "default" for tasks without one', () => {
     const tasks = [makeTask({ id: 'T-0001' }), makeTask({ id: 'T-0002', repo: 'api' })]
