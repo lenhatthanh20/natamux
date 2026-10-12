@@ -731,7 +731,7 @@
    file loads the first time an icon is drawn. U+26A1 is left out: it is an emoji, two cells wide. */
 @font-face {
   font-family: "Symbols Nerd Font Mono";
-  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
   font-display: swap;
   unicode-range: U+23FB-23FE, U+2630, U+2665, U+276C-2771, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }

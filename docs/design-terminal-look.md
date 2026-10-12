@@ -42,7 +42,7 @@ Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/
 - The Mono variant keeps each icon in one cell.
 - `unicode-range` holds only the icon code points: both Private Use Areas, plus the few code points the font has outside them (read from its `cmap`). U+26A1 is left out: it is an emoji, two cells wide. So the browser downloads the file only when an icon is drawn.
 - The GPU renderer caches a glyph before the font arrives, as an empty box. The session clears the texture atlas when `document.fonts` reports the icon font loaded.
-- The file is a 2.5 MB TTF. A woff2 would be about 1 MB, but the conversion needs a tool that cannot run on the local machine. See open items.
+- The file is a 1.2 MB woff2 (2.5 MB as TTF), converted in CI with fontTools; see `src/assets/fonts/README.md`.
 
 ## Palettes
 
@@ -155,7 +155,5 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 ## Open items
 
-- Convert the icon font to woff2 in CI, to cut the download from 2.5 MB to about 1 MB.
 - Check in Chrome with WebGL that icons appear without a reload. E2E runs with the DOM renderer; if WebGL never starts the font load, load the font when a terminal opens instead.
-- `.hm-terminal .xterm-viewport` rules in `styles.css` may be dead in xterm 6 (the `terminal` skill says so). Not removed until checked in a browser.
 - Before and after screenshots (dark and light, one and several panes, 1440×900 and 390×844) for the owner's approval before merge.
