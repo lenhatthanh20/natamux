@@ -10,9 +10,12 @@ test('draws UI text in Inter at 13px, and code in mono fonts', async ({ page }) 
   })
   expect(body.family.startsWith('"Inter Variable"')).toBe(true)
   expect(body.size).toBe('13px')
-  await expect
-    .poll(() => page.evaluate(() => document.fonts.check('13px "Inter Variable"', 'Tiếng Việt')))
-    .toBe(true)
+  // The Vietnamese subset loads only when such text shows, and the dashboard has none, so load it.
+  const faces = await page.evaluate(async () => {
+    const loaded = await document.fonts.load('13px "Inter Variable"', 'Tiếng Việt')
+    return loaded.map((face) => face.unicodeRange)
+  })
+  expect(faces.some((range) => range.toUpperCase().includes('U+1EA0'))).toBe(true)
 
   const mono = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim(),
