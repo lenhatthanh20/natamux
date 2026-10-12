@@ -8,7 +8,7 @@ import {
   type LineChange,
   stepChange,
 } from '../lib/changes'
-import { MONO_FONT } from '../lib/fonts'
+import { TERMINAL_FONT } from '../lib/fonts'
 import { languageForPath } from '../lib/language'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
 import { type ResolvedTheme, uiZoom, useResolvedTheme } from '../lib/theme'
@@ -184,7 +184,7 @@ export default function MonacoDiff({
       scrollBeyondLastLine: false,
       lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
       scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
-      fontFamily: MONO_FONT,
+      fontFamily: TERMINAL_FONT,
       fontSize: 12 * uiZoom(),
       lineHeight: 18 * uiZoom(),
       theme: monacoTheme(themeRef.current),
