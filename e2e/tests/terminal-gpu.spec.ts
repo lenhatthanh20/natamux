@@ -124,14 +124,16 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   test.setTimeout(300_000)
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
+  const taskA = await newTask(request, 'A')
+  const taskB = await newTask(request, 'B')
+  await signIn(page)
+  // Console errors count from here: the first load logs a CSP note that has nothing to do with
+  // terminals.
   page.on('console', (message) => {
     if (message.type() === 'error') {
       errors.push(message.text())
     }
   })
-  const taskA = await newTask(request, 'A')
-  const taskB = await newTask(request, 'B')
-  await signIn(page)
   const hasWebgl = await page.evaluate(
     () => document.createElement('canvas').getContext('webgl2') !== null,
   )
@@ -183,5 +185,5 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   await expectAllDrawn(page)
   expect(await rendererOf(pane(page, 'Shell 1'))).toBe('dom')
 
-  expect(errors.filter((text) => !text.includes('WebGL context was lost'))).toEqual([])
+  expect(errors).toEqual([])
 })
