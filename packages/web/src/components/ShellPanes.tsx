@@ -1,4 +1,4 @@
-import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
+import type { Task, TaskState, TerminalLane } from '@natamux/core'
 import { useQuery } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -7,6 +7,8 @@ import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
+import type { TerminalConnectQuery } from '../lib/terminal'
+import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
 import { useViewStore } from '../lib/view-store'
@@ -20,7 +22,7 @@ type ShellPanesProps = {
   task: Pick<Task, 'id' | 'state' | 'stage' | 'lanes' | 'agent'>
   // What the agent in each shell does now, by shell name, for example "Edit a.ts".
   activity?: Readonly<Record<string, string>>
-  connect: (size: TerminalSize, terminal: string) => Promise<WebSocket>
+  connect: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
   // The shells where an agent runs now, with the stage each one works on. Without it, Shell 1
   // counts as the agent's and has the task state.
@@ -137,6 +139,8 @@ export function ShellPanes({
   }
 
   const closeShell = async (name: string) => {
+    // The pane is still mounted, so its terminal is disposed when the pane leaves, not cached.
+    disposeTerminal(terminalKey(taskId, name))
     setClosing((current) => [...current, name])
     setAdded((current) => current.filter((item) => item !== name))
     if (maximized === name) {
@@ -160,10 +164,31 @@ export function ShellPanes({
   // The shell that gets the keyboard, and a new number each time it is asked for.
   const [focusing, setFocusing] = useState<{ name: string; at: number } | null>(null)
 
-  // The jump palette can ask for one shell of the workspace.
+  // The shells and their agents are read, so the first agent and the waiting shell are known.
+  const shellsRead =
+    !open.isPending &&
+    !open.isFetching &&
+    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
+
+  // The jump palette can ask for one shell of the workspace, and opening the workspace asks for
+  // the first agent. On a phone the first agent takes no keyboard, so no keyboard pops up.
   const request = useViewStore((state) => state.shellRequest)
   useEffect(() => {
-    if (request !== null && request.taskId === taskId && names.includes(request.name)) {
+    if (request === null || request.taskId !== taskId) {
+      return
+    }
+    if (request.name === null) {
+      if (!shellsRead) {
+        return
+      }
+      useViewStore.getState().clearShellRequest()
+      if (!phone) {
+        const first = names.find((name) => agentState(name) !== undefined) ?? '1'
+        setShown(first)
+        setMaximized(null)
+        setFocusing({ name: first, at: request.at })
+      }
+    } else if (names.includes(request.name)) {
       setShown(request.name)
       setMaximized(null)
       setFocusing({ name: request.name, at: request.at })
@@ -175,10 +200,6 @@ export function ShellPanes({
   // shell that starts or stops waiting later must not take the keyboard. It is shown in the same
   // render, as a hidden terminal cannot take the focus.
   const answered = useRef(0)
-  const shellsRead =
-    !open.isPending &&
-    !open.isFetching &&
-    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
   useEffect(() => {
     if (shellsRead && focusToken && focusToken !== answered.current) {
       answered.current = focusToken
@@ -232,13 +253,16 @@ export function ShellPanes({
       <div
         ref={gridRef}
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-        className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
+        className="hm-panes grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
         {names.map((name) => {
           const state = agentState(name)
           const isAgent = state !== undefined
           const own = state ?? null
           const glyph = own === null ? null : <StatusGlyph state={own} />
+          // The agent the daemon found in this shell; the task's when the daemon does not say.
+          const lane = agentShells.data?.[name]
+          const shellAgent = lane?.agent === undefined ? agent : (lane.agent ?? undefined)
           const index = visible.indexOf(name)
           return (
             <TerminalPane
@@ -252,7 +276,7 @@ export function ShellPanes({
               label={`Shell ${name}`}
               icon={glyph ?? <SquareTerminal size={14} aria-hidden />}
               title={`Shell ${name}`}
-              agent={isAgent ? agent : undefined}
+              agent={isAgent ? shellAgent : undefined}
               stateText={
                 own !== null && agent !== null && (own !== 'needs-input' || markWaiting)
                   ? paneStateText(own, activity?.[name])
@@ -260,7 +284,9 @@ export function ShellPanes({
               }
               needsInput={own === 'needs-input' && markWaiting}
               connect={(size) => connect(size, name)}
+              cacheKey={terminalKey(taskId, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
+              taskState={task.state}
               maximized={focused === name}
               onToggleMaximize={() => setMaximized(focused === name ? null : name)}
               onClose={name === '1' ? undefined : () => void closeShell(name)}
