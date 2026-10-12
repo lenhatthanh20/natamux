@@ -22,11 +22,11 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs, flow control. `splitFrames`, `sliceEnd` |
 | `packages/daemon/src/pty.ts` | node-pty spawn. `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell |
 | `packages/daemon/src/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
-| `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers |
+| `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
 | `packages/daemon/src/agent-runner.ts`, `stage-runner.ts` | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
-| `packages/core/src/terminal.ts` | Message schemas. `ACK_EVERY_BYTES` (64 KB). `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
+| `packages/core/src/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
 | `packages/web/src/components/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one (after the render without the "Connecting." strip, so a cached terminal fits once and sends no resize), shows status, find, "Jump to latest" |
-| `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load |
+| `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load |
 | `packages/web/src/lib/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
 | `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (6), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
 | `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle |
@@ -53,7 +53,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - Key `taskId/terminal` (`terminalKey`). Shell 1 in the agents grid and in the task view share a key, so the terminal moves between them.
   - A pane that unmounts hides its terminal in `#terminal-holder` (hidden, `aria-hidden`). The socket stays open and output is still written.
   - At most 8 hidden. The one hidden longest is disposed. The count runs in a microtask, because React runs the old view's cleanup before the new view's effect: task A → B → A with 8 others hidden keeps A.
-  - Disposed at once (or when it leaves the screen, if shown): exit, error or failed connect (`onEnd`), a shell the user closes (`disposeTerminal`), "Start a new shell", a done or cancelled task, a task gone from the list, a removed workspace (`syncTaskTerminals`), sign-out or a rejected token (`disposeAllTerminals`). A hidden client would keep the daemon's idle close from ending the shell.
+  - Disposed at once (or when it leaves the screen, if shown): exit, error, failed first connect or a final close code such as `CLOSE_GONE` (`onEnd`), a shell the user closes (`disposeTerminal`), "Start a new shell", a done or cancelled task, a task gone from the list, a removed workspace (`syncTaskTerminals`), sign-out or a rejected token (`disposeAllTerminals`). A hidden client would keep the daemon's idle close from ending the shell.
   - A discard never starts a new shell by itself.
   - The same key on screen twice: the second mount gets its own terminal, disposed with it.
   - Settings (theme, font, UI size) reach a hidden terminal at its next `show`, not at once: it cannot measure cells while hidden.
@@ -67,7 +67,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 
 ## Protocol
 
-Output is binary. Everything else is one JSON text frame. Schemas: `packages/core/src/terminal.ts`. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`). The daemon ignores binary frames from the client.
+Output is binary. Everything else is one JSON text frame. Schemas: `packages/core/src/terminal.ts`. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`, and for a resume `&shellId[&offset]`). The daemon ignores binary frames from the client.
 
 | Message | Dir | Meaning |
 |---|---|---|
@@ -76,15 +76,20 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 | `snapshot` `{cols, rows}` | to client | Starts a catch-up. Binary frames follow: the snapshot, then output after the cut. `cols`/`rows` = shell size at the cut |
 | `resume` `{offset}` | to client | Starts a catch-up from the ring: the frames from `offset` follow. No reset |
 | `replayed` `{offset}` | to client | Ends a catch-up. `offset` = bytes of output sent so far |
+| `pong` | to client | Answers `ping` |
 | `exit` `{code}` | to client | Shell ended. The server closes the socket |
 | `error` `{message}` | to client | Could not start |
 | `input` `{data}` | to daemon | Typing, up to 64 K chars |
 | `resize` `{cols, rows}` | to daemon | The client's size. Claims the shell's size |
 | `visible` `{visible, cols?, rows?}` | to daemon | On or off screen. Size only when the terminal itself came on screen: that claims |
 | `ack` `{offset}` | to daemon | Output parsed so far, every `ACK_EVERY_BYTES` and after each catch-up. Drives flow control |
+| `ping` | to daemon | Heartbeat, every `HEARTBEAT_MS` while the page is visible |
+
+Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFUSED` 4409 (after `error`: the shell could not start), `CLOSE_GONE` 4410 (a resume whose shell no longer runs). The dashboard never reconnects after them.
 
 - Query `visible=0` (page hidden at connect): the client does not claim the size.
 - Attach order: `hello`, then `snapshot`, snapshot frames, frames that waited, `replayed`, then live frames.
+- Resume order (offset in the ring): `hello`, `resume {offset}`, the ring frames from it, `replayed`, then live frames.
 
 ## Offsets and the ring
 
@@ -140,11 +145,32 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 - **How.** `behindFrom` still in the ring: `resume`, ring frames, `replayed`. Else a snapshot (`requestSnapshot`, shared like any other).
 - **Snapshot limit, only while the shell floods.** A catch-up started by the max wait gets at most one snapshot per `RESYNC_MAX_WAIT_MS` (counting the attach snapshot). A catch-up started because the shell is quiet goes at once, so the prompt after Ctrl+C shows fast (deviation from the spec, which limits every snapshot; a quiet shell cannot loop).
 
+## Reconnect
+
+A dropped socket does not end the shell. The dashboard comes back by itself and gets only what it missed.
+
+| Constant (core) | Value | Meaning |
+|---|---|---|
+| `HEARTBEAT_MS` | 15,000 ms | Ping interval while the page is visible. No `pong` for 2 × this: close and reconnect |
+| `SILENT_CLOSE_MS` | 90,000 ms | The daemon drops (`terminate`) a socket that sent nothing for this long. Any message counts |
+| `RECONNECT_BASE_MS` / `RECONNECT_MAX_MS` / `RECONNECT_JITTER` | 500 ms / 10,000 ms / 0.2 | Delay of try n: `reconnectDelay(n, random)` = min(10 s, 0.5 s × 2^n) ± 20%, whole ms |
+
+- **Daemon.** `attach(…, { shellId, offset })` is a resume. It never starts a shell: no shell of that name, or another `shellId`, throws `ShellGoneError` and `server.ts` closes with `CLOSE_GONE`. It never claims the size and goes first in `session.clients`. With `offset` in the ring (`resume()`: flush, then `ringSince`): `resume`, the frames, `replayed`, phase `live`. Otherwise (no offset, too old, in the future, inside a frame) the normal snapshot path.
+- **When the client reconnects** (`onclose`): the socket had opened once in this session (`everOpened`), no `exit` or `error` came, and the code is not one of the three above. Then `lost()`: status `reconnecting` ("Reconnecting." in the pane's strip), heartbeat off, the catch-up timer off (a catch-up cut short stays, so its typing queue waits for the next one), `planRetry()`.
+- **First socket.** A close before it ever opened, or a failed first `connect()`, is still an error ("Could not connect"), as before.
+- **Schedule.** `planRetry` sets the timer for try `tries` and counts it. No timer while the page is hidden. `retry()` runs at once on `online` and when the page becomes visible, and does nothing while an attempt is on its way (`connecting`) or the page is hidden. A failed `connect()` or a socket that closes before `hello` plans the next try. `hello` resets `tries`.
+- **What it asks for.** `shellId` comes from `hello` and stays. `offsetKnown` is set by `replayed` and cleared when a catch-up starts. So: never got `hello` → plain attach (may start the shell, as the first attach does); `hello` but the socket died before `replayed` → `shellId` only → snapshot; after `replayed` → `shellId` + `offset` → resume. A socket lost before `hello` after an earlier one got `replayed` resumes with what the earlier one taught.
+- **Size.** A resume does not claim (`claimed = false`), so after its catch-up it sends no resize; its first input, focus or `visible` with a size claims. `sendSize` keeps `sentSize` only when the resize really went out, so the strip's fit during the outage does not make a resize after it.
+- **Old catch-up.** The `replayed` write callback ends only its own catch-up (`catchUp === current`): a late callback never ends the catch-up of the next socket. `finishCatchUp` sends the typing queue only on an open socket.
+- **Heartbeat.** `ping` sets the 2 × `HEARTBEAT_MS` deadline before it sends; `pong` clears it. Off while the page is hidden. `stale()` detaches the old socket's handlers, closes it and calls `lost()`.
+- **Hidden cached terminals** reconnect too, with `visible=0`.
+- **After a daemon restart** the resume finds no shell: `CLOSE_GONE`, "The shell ended." and "Start a new shell", and the cache drops the terminal.
+
 ## Size claims
 
 - One shell has one size. A client that **claims** sets it; `claimed` is on its `ClientState`.
 - Who claims: a visible attach (`visible=1`), `input`, `resize`, and `visible` with a size (via `touch`). The client used last is last in the map.
-- Who does not: a client attached with `visible=0` (put first in the map, as used least), a `visible` message without a size (page back to the front, or hidden).
+- Who does not: a client attached with `visible=0` or a resume (`shellId`), both put first in the map as used least, and a `visible` message without a size (page back to the front, or hidden).
 - Detach: the last client in the map that claimed gives its size back. No claiming client left: size stays; with no client at all, the idle close may start.
 - `setSize` tells the pty only when the size really changes (a resize makes programs redraw).
 - Client side: `claimed` starts as the page visibility at `start`. `sendSize` sets it when a resize goes out. `sendInput` claims first when not claimed. A textarea focus claims (`claimSize`). `sendVisible(true)` claims with the size.
@@ -185,11 +211,13 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - **Web:**
   - `xterm-fake.fixture.ts`: a fake xterm, addons and socket. Mock `@xterm/*` with it (see `terminal-session.test.ts`).
   - `terminal-session.test.ts`: show, hide, fit, dispose, scroll state, settings, GPU, catch-up. Uses fake timers and stubs `ResizeObserver` and `requestAnimationFrame`. Helpers: `shown()` (session on screen, socket open), `snapshotOf(socket, size, chunks, offset?)` (the daemon's side of an attach; no `replayed` without an offset), `setPageHidden`.
-  - `fakeSocket()` (`xterm-fake.fixture.ts`): `message(obj)`, `bytes(text)` (a fresh `ArrayBuffer`, as with `binaryType = 'arraybuffer'`), `open`, `drop`, `sent`. `FakeTerminal`: `write` records `written`/`writes`; write callbacks wait for `parse()`; `fire('data', x)`, `keyData`, `fitSize`, `resets`.
+  - `fakeSocket()` (`xterm-fake.fixture.ts`): `message(obj)`, `bytes(text)` (a fresh `ArrayBuffer`, as with `binaryType = 'arraybuffer'`), `open`, `drop(code = 1006)`, `sent`. Pings are not in `sent`: they count in `pings` and get a `pong` at once while `answerPings` is true. `FakeTerminal`: `write` records `written`/`writes`; write callbacks wait for `parse()`; `fire('data', x)`, `keyData`, `fitSize`, `resets`.
+  - Reconnect tests: `reconnecting(random?)` gives a new socket per connect (`last()`), `attached()` is that session on screen and caught up at offset 6, `wait(ms)` advances fake time and lets `connect()` resolve. `random` fixes the jitter (0.5: none).
   - `terminal-cache.test.ts`: limits, eviction order, dispose rules. Call `resetTerminalCache()` in `afterEach`.
   - `gpu-renderer.test.ts`: make a budget with `createGpuBudget()`, or call `gpuBudget.reset()`.
   - Other components mock TerminalView.
-- **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `terminal-gpu.spec.ts` runs with WebGL (SwiftShader) for the GPU budget and lost contexts. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
+- **Daemon resume:** `describe('a client that comes back')` in `terminal-service.test.ts` (`lost()`: a client that saw the screen, then detached). `server.test.ts` covers the query, `CLOSE_GONE`, `pong` and the silent close (fake `setTimeout` only after the first socket opened, so its timer stays real).
+- **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-protocol.spec.ts` drops and blocks sockets with `controlTerminalSockets` (`routeWebSocket`): reconnect, exit, and query replies in a resume. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `terminal-gpu.spec.ts` runs with WebGL (SwiftShader) for the GPU budget and lost contexts. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
 
 ## Pitfalls
 

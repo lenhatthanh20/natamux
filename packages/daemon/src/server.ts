@@ -4,11 +4,16 @@ import websocket from '@fastify/websocket'
 import {
   attachmentUploadsSchema,
   base64Length,
+  CLOSE_GONE,
+  CLOSE_REFUSED,
+  CLOSE_UNAUTHORIZED,
   IMAGE_SIDES,
   issueLinkSchema,
   MAX_TASK_ATTACHMENT_SIZE,
   previewTypeOf,
   repoIdSchema,
+  SILENT_CLOSE_MS,
+  shellIdSchema,
   TASK_ID_HEADER,
   TERMINAL_HEADER,
   type TerminalServerMessage,
@@ -75,6 +80,7 @@ import { TemplateNotFoundError, type TemplateService } from './template-service.
 import {
   MAIN_TERMINAL,
   NoTerminalError,
+  ShellGoneError,
   type TerminalClient,
   TerminalLimitError,
   type TerminalService,
@@ -174,13 +180,12 @@ const terminalQuerySchema = terminalSizeSchema.extend({
   terminal: terminalNameSchema.default(MAIN_TERMINAL),
   // Whether the terminal is on screen when it connects. Only then it takes the shell's size.
   visible: z.enum(['0', '1']).default('1'),
+  // A client that lost its socket resumes its shell, from `offset` when the ring still has it.
+  shellId: shellIdSchema.optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 })
 const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
-
-// Close codes of the terminal socket, in the range that applications may use.
-const CLOSE_UNAUTHORIZED = 4401
-const CLOSE_REFUSED = 4409
 
 export function isAuthorized(provided: string | undefined, token: string): boolean {
   if (provided === undefined) {
@@ -671,8 +676,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       return
     }
     const taskId = params.data.id
-    const { cols, rows, terminal } = query.data
-    const attachOptions = { visible: query.data.visible === '1' }
+    const { cols, rows, terminal, shellId, offset } = query.data
+    const attachOptions = { visible: query.data.visible === '1', shellId, offset }
     const client: TerminalClient = {
       send: (frame) => {
         // ws sends a Buffer as a binary frame and a string as a text frame.
@@ -691,13 +696,27 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     try {
       detach = options.terminals.attach(taskId, client, { cols, rows }, terminal, attachOptions)
     } catch (error) {
+      if (error instanceof ShellGoneError) {
+        socket.close(CLOSE_GONE, 'gone')
+        return
+      }
       const message = error instanceof Error ? error.message : 'The terminal could not start.'
       socket.send(JSON.stringify({ type: 'error', message } satisfies TerminalServerMessage))
       socket.close(CLOSE_REFUSED, 'refused')
       return
     }
 
+    // A client that sent nothing for this long is gone or asleep. A silent peer may never answer
+    // a close frame, so the socket is dropped at once.
+    let silent: ReturnType<typeof setTimeout> | undefined
+    const heard = () => {
+      clearTimeout(silent)
+      silent = setTimeout(() => socket.terminate(), SILENT_CLOSE_MS)
+    }
+    heard()
+
     socket.on('message', (raw: { toString: () => string }, isBinary: boolean) => {
+      heard()
       // The dashboard sends only JSON.
       if (isBinary) {
         return
@@ -722,10 +741,16 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         options.terminals.visible(taskId, message, terminal, client)
       } else if (message.type === 'ack') {
         options.terminals.ack(taskId, message.offset, terminal, client)
+      } else if (message.type === 'ping') {
+        client.send({ type: 'pong' })
       }
     })
-    socket.on('close', () => detach())
-    socket.on('error', () => detach())
+    const end = () => {
+      clearTimeout(silent)
+      detach()
+    }
+    socket.on('close', end)
+    socket.on('error', end)
   })
 
   app.get('/events', { websocket: true }, (socket) => {

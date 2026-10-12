@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { openTask, signIn } from './helpers'
 import {
+  controlTerminalSockets,
   fillHistory,
   holdReplayed,
   installScreenSampler,
@@ -12,6 +13,8 @@ import {
   rows,
   runIn,
   screenFrames,
+  shellPid,
+  watchReconnecting,
 } from './terminal-helpers'
 
 const made: string[] = []
@@ -97,4 +100,128 @@ test('sends keys typed while a snapshot is held once, after it, in order', async
     .map((frame) => frame.data)
     .join('')
   expect(typed).toBe('\x1b[1;2Rxy')
+})
+
+// The numbers of the TICK lines on the screen, in order.
+function ticksOn(text: string): number[] {
+  return [...text.matchAll(/TICK-(\d+)/g)].map((match) => Number(match[1]))
+}
+
+// AC 27, C29: a socket closed by the network comes back by itself, to the same shell, with only
+// the output it missed.
+test('reconnects a lost socket and resumes the same shell in place', async ({ page, request }) => {
+  test.setTimeout(120_000)
+  const task = await makeShellTask(request, `Terminal e2e reconnect ${Date.now()}`)
+  made.push(task.id)
+  const control = await controlTerminalSockets(page)
+  await signIn(page)
+  await openTerminal(page, task.title, '$')
+  const shell = pane(page, 'Shell 1')
+  await preparePrompt(page, shell)
+  const pid = await shellPid(page, shell, 'PIDA')
+  await runIn(page, shell, 'for i in $(seq 1 600); do echo TICK-$i; sleep 0.1; done')
+  await expect(rows(shell)).toContainText('TICK-5')
+  const reconnecting = await watchReconnecting(page)
+
+  const lost = control.last()
+  const dropped = Date.now()
+  await lost.close()
+  await expect.poll(() => control.sockets.length, { timeout: 10_000 }).toBeGreaterThan(1)
+  const back = control.last()
+  await expect
+    .poll(() => back.got.find((message) => message.type === 'replayed'), { timeout: 10_000 })
+    .toBeDefined()
+
+  expect(await reconnecting()).toBe(true)
+  // The same shell, resumed from the ring: no snapshot, so no reset.
+  expect(back.got.slice(0, 2).map((message) => message.type)).toEqual(['hello', 'resume'])
+  expect(back.got[0]?.shellId).toBe(lost.got[0]?.shellId)
+  expect(back.got.map((message) => message.type)).not.toContain('snapshot')
+  const replayedAt = back.got.find((message) => message.type === 'replayed')?.at ?? 0
+  expect(replayedAt - dropped).toBeLessThan(2_000)
+  await expect(shell.getByText('Reconnecting.')).toHaveCount(0)
+
+  // The ticks printed while the socket was closed are on the screen, with no gap.
+  const seen = ticksOn((await rows(shell).textContent()) ?? '').at(-1) ?? 0
+  await expect(rows(shell)).toContainText(`TICK-${seen + 5}`)
+  const ticks = ticksOn((await rows(shell).textContent()) ?? '')
+  expect(ticks.length).toBeGreaterThan(5)
+  expect(ticks).toEqual(ticks.map((_, index) => (ticks[0] ?? 0) + index))
+
+  await shell.getByRole('region', { name: 'Terminal screen' }).click()
+  await page.keyboard.press('Control+C')
+  await expect(rows(shell)).toContainText(PROMPT.trim())
+  expect(await shellPid(page, shell, 'PIDB')).toBe(pid)
+})
+
+// AC 30, C32
+test('shows "The shell ended." after exit, and opens no new socket', async ({ page, request }) => {
+  test.setTimeout(90_000)
+  const task = await makeShellTask(request, `Terminal e2e exit ${Date.now()}`)
+  made.push(task.id)
+  const control = await controlTerminalSockets(page)
+  await signIn(page)
+  await openTerminal(page, task.title, '$')
+  const shell = pane(page, 'Shell 1')
+  await preparePrompt(page, shell)
+  const count = control.sockets.length
+
+  await runIn(page, shell, 'exit')
+  await expect(shell.getByText('The shell ended.')).toBeVisible()
+  await expect(shell.getByRole('button', { name: 'Start a new shell' })).toBeVisible()
+  // Longer than the first retry delays would be.
+  await page.waitForTimeout(3_000)
+  expect(control.sockets.length).toBe(count)
+  expect(control.last().got.at(-1)?.type).toBe('exit')
+})
+
+// AC 12, the part with a resume (C14): replies to queries printed while the socket was closed are
+// never sent, and a real Shift+F3 typed during the resume is, once.
+test('drops replies to queries replayed by a resume, and keeps a real Shift+F3', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000)
+  const task = await makeShellTask(request, `Terminal e2e resume queries ${Date.now()}`)
+  made.push(task.id)
+  const control = await controlTerminalSockets(page)
+  await signIn(page)
+  await openTerminal(page, task.title, '$')
+  const shell = pane(page, 'Shell 1')
+  await preparePrompt(page, shell)
+  // A job prints a DA1 and a CPR query in 5 s, while the socket is closed. Raw mode with no echo:
+  // cat -v shows each byte it gets, so the screen shows what the page sent.
+  await runIn(
+    page,
+    shell,
+    "(sleep 5; printf '\\033[c\\033[6n') & stty raw -echo; echo READY-$((1+1)); exec cat -v",
+  )
+  await expect(rows(shell)).toContainText('READY-2')
+
+  control.block(true)
+  await control.last().close()
+  const hold = control.holdNextReplayed()
+  // Past the job's printf.
+  await page.waitForTimeout(6_500)
+  control.block(false)
+  await expect.poll(hold.isHeld, { timeout: 30_000 }).toBe(true)
+  const back = control.last()
+  expect(back.got.map((message) => message.type).slice(0, 2)).toEqual(['hello', 'resume'])
+
+  await shell.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.press('Shift+F3')
+  // Nothing is sent while the catch-up runs: no reply, and the key waits.
+  expect(back.sent.filter((frame) => frame.type === 'input')).toEqual([])
+
+  hold.release()
+  await expect(rows(shell)).toContainText('^[[1;2R')
+  const text = (await rows(shell).textContent()) ?? ''
+  // No DA reply (^[[?…c) and no CPR with the real cursor position.
+  expect(text).not.toContain('^[[?')
+  expect(text.match(/\^\[\[\d+;\d+R/g)).toEqual(['^[[1;2R'])
+  const typed = back.sent
+    .filter((frame) => frame.type === 'input')
+    .map((frame) => frame.data)
+    .join('')
+  expect(typed).toBe('\x1b[1;2R')
 })

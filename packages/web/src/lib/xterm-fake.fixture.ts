@@ -228,18 +228,30 @@ export class FakeWebglAddon {
 export type FakeSocket = ReturnType<typeof fakeSocket>
 
 // A WebSocket that a test drives from the daemon's side: open, message, bytes, drop.
+// Pings are counted in `pings`, not kept in `sent`, and answered at once while `answerPings` is
+// set, as the daemon does: tests that do not look at the heartbeat need not know about it.
 export function fakeSocket() {
   const socket = {
     readyState: 0,
     closed: false,
     binaryType: 'blob' as string,
     sent: [] as unknown[],
+    pings: 0,
+    answerPings: true,
     onopen: null as null | (() => void),
     onmessage: null as null | ((event: { data: string | ArrayBuffer }) => void),
-    onclose: null as null | (() => void),
+    onclose: null as null | ((event: { code: number }) => void),
     onerror: null as null | (() => void),
     send(data: string) {
-      socket.sent.push(JSON.parse(data))
+      const message = JSON.parse(data)
+      if (message.type === 'ping') {
+        socket.pings += 1
+        if (socket.answerPings) {
+          socket.message({ type: 'pong' })
+        }
+        return
+      }
+      socket.sent.push(message)
     },
     close() {
       socket.closed = true
@@ -257,10 +269,10 @@ export function fakeSocket() {
       const view = typeof data === 'string' ? new TextEncoder().encode(data) : data
       socket.onmessage?.({ data: new Uint8Array(view).buffer })
     },
-    // The connection ends without the client asking.
-    drop() {
+    // The connection ends without the client asking: 1006 when the network drops it.
+    drop(code = 1006) {
       socket.readyState = 3
-      socket.onclose?.()
+      socket.onclose?.({ code })
     },
     asWebSocket(): WebSocket {
       return socket as unknown as WebSocket

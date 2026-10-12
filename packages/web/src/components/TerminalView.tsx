@@ -30,6 +30,8 @@ type TerminalViewProps = {
 const STATUS_TEXT: Record<TerminalStatus, string> = {
   connecting: 'Connecting.',
   open: 'Connected.',
+  // The socket dropped while the shell runs. The screen stays; the missed output follows.
+  reconnecting: 'Reconnecting.',
   ended: 'The shell ended.',
   error: 'The terminal could not start.',
 }
