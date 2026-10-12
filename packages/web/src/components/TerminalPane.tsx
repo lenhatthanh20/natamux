@@ -77,7 +77,7 @@ export function TerminalPane({
       aria-label={label}
       hidden={hidden}
       style={style}
-      className="group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
+      className="hm-pane group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
     >
       {needsInput && (
         <span aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 bg-signal" />

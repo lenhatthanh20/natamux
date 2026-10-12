@@ -126,7 +126,7 @@ export function AgentPanes({
         <div
           ref={gridRef}
           style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-          className="grid min-h-0 flex-1 auto-rows-[minmax(14rem,1fr)] gap-2 overflow-auto p-2 max-md:auto-rows-[60vh]"
+          className="hm-panes grid min-h-0 flex-1 auto-rows-[minmax(14rem,1fr)] gap-2 overflow-auto p-2 max-md:auto-rows-[60vh]"
         >
           {shown.map((task) => {
             const index = visible.findIndex((item) => item.id === task.id)

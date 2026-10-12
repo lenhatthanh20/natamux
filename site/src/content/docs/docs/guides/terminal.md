@@ -69,7 +69,11 @@ Terminals draw with the GPU (WebGL), as native terminals do, and fall back to th
 
 To change the font, open the **Account** menu at the bottom right and click **Terminal font…**. Type a font family that is installed on your machine and a size in pixels. Leave a field empty to use the default.
 
-In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Natamux reads `font-family` and `font-size` from Ghostty's config file each time the dashboard loads. Without a Ghostty config, the default is Geist Mono at 13px.
+In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Natamux reads `font-family` and `font-size` from Ghostty's config file each time the dashboard loads. Without a Ghostty config, the default is JetBrains Mono at 13px.
+
+Natamux bundles the [Nerd Font](https://www.nerdfonts.com) icons, as Ghostty does. Prompt themes such as Starship or Powerlevel10k and `eza --icons` show their icons with any font, without installing a Nerd Font.
+
+When several panes show, the panes that do not have the focus are dimmed. Click one to type in it.
 
 ### Keys that belong to the shell
 

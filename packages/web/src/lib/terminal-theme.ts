@@ -1,60 +1,63 @@
 import type { ISearchOptions } from '@xterm/addon-search'
-import type { ITheme } from '@xterm/xterm'
+import type { ITerminalOptions, ITheme } from '@xterm/xterm'
 import type { ResolvedTheme } from './theme'
 
 // xterm needs real colors, not CSS variables. Values match the terminal palette in the UI spec.
+// The "Night" palette, picked from four designs in docs/design-terminal-look.md.
 const DARK: ITheme = {
-  background: '#0b0c0e',
-  foreground: '#e6e7ea',
+  background: '#0f1219',
+  foreground: '#d6dcf0',
   cursor: '#7aa2ff',
-  cursorAccent: '#0b0c0e',
-  selectionBackground: '#7aa2ff4d',
+  cursorAccent: '#0f1219',
+  selectionBackground: '#7aa2ff47',
+  selectionInactiveBackground: '#7aa2ff21',
   scrollbarSliderBackground: '#ffffff24',
   scrollbarSliderHoverBackground: '#ffffff42',
   scrollbarSliderActiveBackground: '#ffffff5c',
-  black: '#3a3f4b',
-  brightBlack: '#7d828c',
-  red: '#ff7b72',
-  brightRed: '#ffa198',
-  green: '#6fd19a',
-  brightGreen: '#8fe0b0',
-  yellow: '#e8c15a',
-  brightYellow: '#f5d47a',
+  black: '#343b52',
+  brightBlack: '#7c86a8',
+  red: '#f7768e',
+  brightRed: '#ff9bae',
+  green: '#8fd694',
+  brightGreen: '#aee6b2',
+  yellow: '#e6c07b',
+  brightYellow: '#f0d39d',
   blue: '#7aa2ff',
-  brightBlue: '#a5c0ff',
-  magenta: '#d09bff',
-  brightMagenta: '#e2bcff',
-  cyan: '#6cc4d6',
-  brightCyan: '#97dbe8',
-  white: '#c9ccd2',
-  brightWhite: '#f2f3f5',
+  brightBlue: '#a6c1ff',
+  magenta: '#bb9af7',
+  brightMagenta: '#d2bbfa',
+  cyan: '#6fd0e0',
+  brightCyan: '#9ce0eb',
+  white: '#b8c0dc',
+  brightWhite: '#e8ecf8',
 }
 
 const LIGHT: ITheme = {
-  background: '#fbfbfc',
-  foreground: '#17191d',
+  background: '#f7f9fd',
+  foreground: '#1b2238',
   cursor: '#2f5fe0',
-  cursorAccent: '#fbfbfc',
-  selectionBackground: '#2f5fe033',
+  cursorAccent: '#f7f9fd',
+  selectionBackground: '#2f5fe030',
+  selectionInactiveBackground: '#2f5fe018',
   scrollbarSliderBackground: '#14181f33',
   scrollbarSliderHoverBackground: '#14181f5c',
   scrollbarSliderActiveBackground: '#14181f7a',
-  black: '#24272d',
-  brightBlack: '#5f6570',
-  red: '#c0362c',
-  brightRed: '#b93a30',
-  green: '#1c7442',
-  brightGreen: '#237a48',
-  yellow: '#8a5a00',
-  brightYellow: '#8f6000',
-  blue: '#2448b8',
-  brightBlue: '#2f5fe0',
-  magenta: '#8a3fb8',
-  brightMagenta: '#8f45c2',
-  cyan: '#0b6274',
-  brightCyan: '#0f7489',
-  white: '#5f6570',
-  brightWhite: '#17191d',
+  black: '#262d45',
+  brightBlack: '#5d6684',
+  red: '#c4304f',
+  brightRed: '#b02a46',
+  green: '#2c7a3a',
+  brightGreen: '#256c33',
+  yellow: '#8c5f00',
+  brightYellow: '#7b5300',
+  blue: '#2f5fe0',
+  brightBlue: '#2448b8',
+  magenta: '#7c4dd6',
+  brightMagenta: '#6a3ec2',
+  cyan: '#0b6a80',
+  brightCyan: '#095c6f',
+  white: '#5d6684',
+  brightWhite: '#1b2238',
 }
 
 export function terminalTheme(theme: ResolvedTheme): ITheme {
@@ -64,10 +67,27 @@ export function terminalTheme(theme: ResolvedTheme): ITheme {
 // Any program color is pushed to a readable one on the terminal background.
 export const MIN_CONTRAST_RATIO = 4.5
 export const TERMINAL_FONT_SIZE = 13
-export const TERMINAL_LINE_HEIGHT = 1.3
+export const TERMINAL_LINE_HEIGHT = 1.2
 // xterm sizes its scrollbar by the overview ruler width, so the ruler sets it. 8px matches
 // the code editor's scrollbar.
 export const TERMINAL_SCROLLBAR_WIDTH = 8
+
+// The look of every terminal, close to Ghostty and VS Code. Ligatures, transparency and smooth
+// scrolling stay off: each one costs drawing time.
+export const TERMINAL_LOOK = {
+  cursorBlink: true,
+  cursorStyle: 'block',
+  // An unfocused terminal shows where its cursor is without looking like it takes keys.
+  cursorInactiveStyle: 'outline',
+  // Bold text keeps its color and only gets heavier, as in most modern themes.
+  drawBoldTextInBrightColors: false,
+  fontWeight: 'normal',
+  fontWeightBold: '600',
+  lineHeight: TERMINAL_LINE_HEIGHT,
+  minimumContrastRatio: MIN_CONTRAST_RATIO,
+  fastScrollSensitivity: 5,
+  overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
+} satisfies ITerminalOptions
 
 type FindDecorations = NonNullable<ISearchOptions['decorations']>
 

@@ -18,7 +18,8 @@ import {
   HIDDEN_RESUME_BYTES,
   type TerminalSession,
 } from './terminal-session'
-import { terminalTheme } from './terminal-theme'
+import { ICON_FONT } from './fonts'
+import { TERMINAL_LOOK, terminalTheme } from './terminal-theme'
 import { uiZoom } from './theme'
 import { applyUiSize, uiSizeZoom } from './ui-size'
 import {
@@ -135,8 +136,17 @@ function stubFontLoads(): (() => void)[] {
     new Promise<void>((resolve) => {
       loads.push(resolve)
     })
-  Object.defineProperty(document, 'fonts', { value: { load }, configurable: true })
+  const fonts = Object.assign(new EventTarget(), { load })
+  Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
   return loads
+}
+
+// What the browser fires when font faces finished loading.
+function fontsLoaded(...families: string[]): void {
+  const event = Object.assign(new Event('loadingdone'), {
+    fontfaces: families.map((family) => ({ family })),
+  })
+  document.fonts.dispatchEvent(event)
 }
 
 beforeEach(() => {
@@ -664,6 +674,35 @@ describe('a web font that loads after the terminal opened (C7)', () => {
     await flush()
     expect(sets).toEqual([])
     expect(fitsOf()).toBe(fits)
+  })
+})
+
+describe('the look of a terminal (spec 1, 3, 4, 8)', () => {
+  it('opens xterm with the shared look', () => {
+    const { terminal } = make()
+    expect(terminal.options).toMatchObject(TERMINAL_LOOK)
+  })
+})
+
+describe('the icon font, which loads on the first icon (spec 2)', () => {
+  it('draws the glyphs again when it loads, so icons replace empty boxes', async () => {
+    stubFontLoads()
+    const { terminal } = await shown()
+
+    fontsLoaded('"JetBrains Mono Variable"')
+    expect(terminal.atlasClears).toBe(0)
+
+    fontsLoaded(`"${ICON_FONT}"`)
+    expect(terminal.atlasClears).toBe(1)
+  })
+
+  it('stops listening after the dispose', async () => {
+    stubFontLoads()
+    const { session, terminal } = await shown()
+    session.dispose()
+
+    fontsLoaded(`"${ICON_FONT}"`)
+    expect(terminal.atlasClears).toBe(0)
   })
 })
 
