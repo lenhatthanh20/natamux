@@ -1,8 +1,11 @@
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
+import { promisify } from 'node:util'
 import { spawn } from 'node-pty'
-import { descendants } from './process-tree.js'
+import { commandsUnder, descendants } from './process-tree.js'
 import { shellCommand } from './shell-command.js'
 import type { SpawnPty } from './terminal-service.js'
+
+const execFileAsync = promisify(execFile)
 
 // An agent runs as a job of the shell. Ending only the shell leaves it running with no terminal,
 // so every process under the shell gets the signal too.
@@ -43,5 +46,17 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
       pty.kill(process.platform === 'win32' ? undefined : signal)
     },
     foreground: () => pty.process,
+    // Windows has no `ps`.
+    commands: async () => {
+      if (process.platform === 'win32') {
+        return undefined
+      }
+      try {
+        const { stdout } = await execFileAsync('ps', ['-ww', '-A', '-o', 'pid=,ppid=,args='])
+        return commandsUnder(stdout, pty.pid)
+      } catch {
+        return undefined
+      }
+    },
   }
 }

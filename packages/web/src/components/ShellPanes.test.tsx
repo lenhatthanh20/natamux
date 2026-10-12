@@ -125,6 +125,35 @@ describe('ShellPanes agent badge', () => {
     expect(within(header('Shell 2')).getByText('Shell 2')).toBeTruthy()
   })
 
+  it('shows the agent that runs in each shell, not the agent of the task', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+        '2': { ...NO_LANE, agent: 'codex' },
+      },
+    )
+    await within(header('Shell 2')).findByText('Codex')
+    expect(within(header('Shell 2')).queryByText('Claude Code')).toBeNull()
+    expect(within(header('Shell 1')).getByText('Claude Code')).toBeTruthy()
+  })
+
+  it('shows no badge on a shell whose program is no agent Natamux knows', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      {
+        '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+        '2': { ...NO_LANE, agent: null },
+      },
+    )
+    await within(header('Shell 1')).findByText('Claude Code')
+    expect(within(header('Shell 2')).queryByText('Claude Code')).toBeNull()
+    expect(within(header('Shell 2')).queryByText('Agent')).toBeNull()
+    expect(agentIcons('Shell 2')).toHaveLength(0)
+  })
+
   it('shows no badge when the task has no agent and only plain shells', async () => {
     shells(null, ['1', '2'], [])
     expect(await screen.findByRole('region', { name: 'Shell 2' })).toBeTruthy()

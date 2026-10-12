@@ -155,7 +155,7 @@ export function AgentPanes({
                     </button>
                   </>
                 }
-                agent={task.agent || undefined}
+                agent={(lane?.agent === undefined ? task.agent : lane.agent) || undefined}
                 stateText={paneStateText(state, activity?.[task.id]?.['1'])}
                 hint={otherTerminalHint(task, terminals?.[task.id])}
                 needsInput={state === 'needs-input'}

@@ -13,6 +13,9 @@ export class FakePty implements PtyProcess {
   stubborn = false
   // The program in the foreground; tests set it to pretend an agent runs.
   program = 'bash'
+  // The command lines of the processes under the shell; undefined where the platform cannot list
+  // them.
+  commandLines: string[] | undefined = undefined
   private dataListeners: ((data: string) => void)[] = []
   private exitListeners: ((code: number | null) => void)[] = []
 
@@ -28,6 +31,10 @@ export class FakePty implements PtyProcess {
 
   foreground(): string {
     return this.program
+  }
+
+  async commands(): Promise<string[] | undefined> {
+    return this.commandLines
   }
 
   write(data: string): void {

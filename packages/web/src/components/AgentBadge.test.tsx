@@ -86,7 +86,7 @@ describe('AgentBadge', () => {
   })
 
   it('hides the generic icon from screen readers too', () => {
-    render(<AgentBadge agent="codex" />)
+    render(<AgentBadge agent="my-agent" />)
     expect(genericIcon()?.getAttribute('aria-hidden')).toBe('true')
   })
 

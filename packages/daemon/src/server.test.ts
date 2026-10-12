@@ -1286,19 +1286,21 @@ describe('terminal', () => {
     const read = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
     const task = read.json().task
     // The first terminal has the task's stage and state; the second has no agent, so no lane.
+    // Natamux did not start the program and cannot list its processes, so it names no agent.
     expect(withAgent.json()).toEqual({
       terminals: ['1', '2'],
       agents: ['1'],
-      lanes: { '1': { stage: task.stage, state: task.state } },
+      lanes: { '1': { stage: task.stage, state: task.state, agent: null } },
     })
-    // An agent in an extra shell outside a group works on no stage.
+    // An agent in an extra shell outside a group works on no stage. Its processes name it.
     ;(ptys[1] as FakePty).program = 'node'
+    ;(ptys[1] as FakePty).commandLines = ['node /usr/local/bin/codex']
     const twoAgents = await app.inject({
       method: 'GET',
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null })
+    expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null, agent: 'codex' })
 
     const closed = closeCode(second)
     const removed = await app.inject({

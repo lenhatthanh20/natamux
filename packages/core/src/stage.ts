@@ -397,6 +397,9 @@ export function stageOfTerminal(step: Step, terminal: string): Stage | undefined
 export const terminalLaneSchema = z.object({
   stage: z.string().min(1).nullable(),
   state: taskStateSchema.nullable(),
+  // The agent that runs in the terminal, which may differ from the task's. Null: a program that is
+  // no agent Natamux knows. Missing: not known.
+  agent: z.string().min(1).nullable().optional(),
 })
 
 export type TerminalLane = z.infer<typeof terminalLaneSchema>

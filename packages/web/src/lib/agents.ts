@@ -1,8 +1,8 @@
 // The agents Natamux can start, in the order the pickers show them. The ids are the daemon's.
-// The icon is a material-icon-theme name; Codex has none there, so it gets the generic icon.
+// The icon is a material-icon-theme name, or one of src/icons for an agent the theme does not draw.
 export const AGENT_CHOICES = [
   { id: 'claude-code', label: 'Claude Code', icon: 'claude' },
-  { id: 'codex', label: 'Codex', icon: undefined },
+  { id: 'codex', label: 'Codex', icon: 'codex' },
   { id: 'gemini', label: 'Gemini CLI', icon: 'gemini-ai' },
   { id: 'copilot', label: 'GitHub Copilot', icon: 'copilot' },
   { id: 'cursor', label: 'Cursor', icon: 'cursor' },

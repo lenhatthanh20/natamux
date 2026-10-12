@@ -883,6 +883,52 @@ describe('a prompt for a running agent', () => {
   })
 })
 
+describe('the agent in each terminal', () => {
+  it('names the agent a person typed into an extra shell, not the agent of the task', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    pty.commandLines = ['node /usr/local/bin/codex', '/usr/local/lib/codex/vendor/codex']
+
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+  })
+
+  it('names no agent for a program that is not one', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'vim notes.md', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'vim'
+    pty.commandLines = ['vim notes.md']
+
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+    expect(await runner.agentIn(task.id, '3')).toBeNull()
+  })
+
+  it('names the agent it started where the processes cannot be listed', async () => {
+    const task = await created({ title: 'Export tasks' })
+    await workspaces.create(task.id)
+    await runner.startByHand(task.id, 'gemini')
+    await runner.settle()
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    pty.commandLines = undefined
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Just after the launch the agent may not be up yet.
+    pty.commandLines = []
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Later, the processes tell: the agent ended and another program runs.
+    clock += LAUNCH_GRACE_MS + 1
+    pty.commandLines = ['vim notes.md']
+    expect(await runner.agentIn(task.id, '1')).toBeNull()
+    pty.commandLines = ['codex']
+    expect(await runner.agentIn(task.id, '1')).toBe('codex')
+  })
+})
+
 describe('a send back', () => {
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })

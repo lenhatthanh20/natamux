@@ -21,6 +21,7 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
+import { agentOfCommand, type LaunchableAgent } from './agent-launch.js'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
@@ -208,8 +209,8 @@ export class StageRunner {
   private readonly waitingForWorkspace = new Set<string>()
   // Tasks whose agent stage waits for the tasks it depends on to be done.
   private readonly waitingForTasks = new Set<string>()
-  // Terminals where this daemon started an agent, and when.
-  private readonly launched = new Map<string, number>()
+  // Terminals where this daemon started an agent: which one, and when.
+  private readonly launched = new Map<string, { agent: string; at: number }>()
   // The end of the output of those terminals, on Windows.
   private readonly outputTails = new Map<string, string>()
   // The agent a person picked, while the stage it starts is starting.
@@ -496,7 +497,7 @@ export class StageRunner {
         this.terminals.paste(task.id, prompt.text, terminal)
       } else {
         this.agents.start(task.id, agent, prompt.text, terminal)
-        this.launched.set(`${task.id}/${terminal}`, this.now())
+        this.launched.set(`${task.id}/${terminal}`, { agent, at: this.now() })
       }
     } catch (error) {
       this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
@@ -542,7 +543,7 @@ export class StageRunner {
       return this.tasks.getTask(taskId)
     }
     const task = this.agents.start(taskId, agent, prompt)
-    this.launched.set(`${taskId}/${MAIN_TERMINAL}`, this.now())
+    this.launched.set(`${taskId}/${MAIN_TERMINAL}`, { agent, at: this.now() })
     return task
   }
 
@@ -557,7 +558,7 @@ export class StageRunner {
       this.outputTails.delete(key)
       return false
     }
-    const launchedAt = this.launched.get(key)
+    const launchedAt = this.launched.get(key)?.at
     const program = this.terminals.foreground(taskId, terminal)
     if (program !== undefined && !SHELLS.includes(basename(program))) {
       return true
@@ -571,6 +572,28 @@ export class StageRunner {
       this.platform === 'win32' ||
       this.now() - launchedAt < LAUNCH_GRACE_MS
     )
+  }
+
+  // The agent that runs in a terminal, for its pane header: the one its processes show. Where the
+  // platform does not list them, or just after the launch, the one this daemon started there. Null
+  // for a program that is no agent Natamux knows.
+  async agentIn(taskId: string, terminal: string): Promise<string | null> {
+    const commands = await this.terminals.commands(taskId, terminal)
+    const programOf = (agent: LaunchableAgent) => this.agents.programOf(agent)
+    for (const line of commands ?? []) {
+      const agent = agentOfCommand(line, programOf)
+      if (agent !== undefined) {
+        return agent
+      }
+    }
+    const launched = this.launched.get(`${taskId}/${terminal}`)
+    if (
+      launched !== undefined &&
+      (commands === undefined || this.now() - launched.at < LAUNCH_GRACE_MS)
+    ) {
+      return launched.agent
+    }
+    return null
   }
 
   // Output of a terminal of a task. On Windows an agent started here counts as running until its
