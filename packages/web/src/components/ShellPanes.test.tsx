@@ -148,6 +148,7 @@ describe('ShellPanes agent badge', () => {
       },
     )
     for (const name of ['Shell 2', 'Shell 3']) {
+      await screen.findByRole('region', { name })
       await within(header(name)).findByText('Codex')
       expect(within(header(name)).queryByText('Claude Code')).toBeNull()
       expect(agentIcons(name)).toHaveLength(1)
@@ -164,6 +165,7 @@ describe('ShellPanes agent badge', () => {
         '2': { ...NO_LANE, agent: 'claude-code' },
       },
     )
+    await screen.findByRole('region', { name: 'Shell 2' })
     await within(header('Shell 2')).findByText('Claude Code')
     expect(within(header('Shell 1')).getByText('Gemini CLI')).toBeTruthy()
   })

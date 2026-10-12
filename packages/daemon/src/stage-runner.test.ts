@@ -964,8 +964,8 @@ describe('the agent in each terminal', () => {
 
   it('names the agent it started where the processes cannot be listed', async () => {
     const task = await created({ title: 'Export tasks' })
-    await workspaces.create(task.id)
-    await runner.startByHand(task.id, 'gemini')
+    // The new workspace starts the stage with the agent picked here, not the default one.
+    await runner.startByHand(task.id, 'gemini', undefined, () => workspaces.create(task.id))
     await runner.settle()
     const pty = ptys[0] as FakePty
     pty.program = 'node'
