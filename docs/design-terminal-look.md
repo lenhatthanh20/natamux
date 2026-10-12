@@ -11,7 +11,7 @@ The terminal pane looks and feels like a top native terminal (Ghostty, iTerm2, V
 | Topic | Common practice | Examples |
 |---|---|---|
 | Font | JetBrains Mono is the most common default. Ghostty also bundles Nerd Font icons | Ghostty, WezTerm, JetBrains IDEs: JetBrains Mono. Windows Terminal: Cascadia Mono. Warp: Hack. Zed: Lilex |
-| Cell | 12 to 14 px, line height 1.0 to 1.2 | Ghostty 13 (macOS), Warp 1.2 |
+| Cell | 12 to 14 px, rows at the font's own height | Ghostty 13 (macOS, natural cell height). VS Code 12 on macOS, 14 elsewhere, `lineHeight` 1 (1.1 on Linux). JetBrains IDEs: line height 1.2 of the point size |
 | Ligatures | Off, and they cost drawing time | VS Code, Warp. iTerm2 drops its GPU path with them |
 | Cursor | Block. Hollow or outline when unfocused | VS Code `cursorStyleInactive: outline` |
 | Padding | Small, the same on all sides | Ghostty 2 px, Windows Terminal 8 px |
@@ -19,7 +19,7 @@ The terminal pane looks and feels like a top native terminal (Ghostty, iTerm2, V
 | Contrast | Minimum contrast 4.5 (VS Code) or off (Ghostty) | |
 | Fast scroll | Alt + wheel, 5× | VS Code `fastScrollSensitivity` |
 
-Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/appearance, learn.microsoft.com/windows/terminal/customize-settings/profile-appearance, wezterm.org/config/lua/config/window_padding.html, iterm2.com/documentation-preferences-appearance.html, docs.warp.dev/appearance/text-fonts-cursor, zed.dev/docs/reference/all-settings.
+Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/appearance, VS Code `terminalConfiguration.ts` and `terminal.ts` (`DEFAULT_LINE_HEIGHT`, `DEFAULT_BOLD_FONT_WEIGHT`), jetbrains.com/help/idea/settings-editor-font.html, learn.microsoft.com/windows/terminal/customize-settings/profile-appearance, wezterm.org/config/lua/config/window_padding.html, iterm2.com/documentation-preferences-appearance.html, docs.warp.dev/appearance/text-fonts-cursor, zed.dev/docs/reference/all-settings.
 
 ## Decisions
 
@@ -27,8 +27,8 @@ Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/
 |---|---|---|---|
 | Font | Geist Mono 13 px | JetBrains Mono 13 px (`@fontsource-variable/jetbrains-mono`, normal and italic). The rest of the UI and Monaco keep Geist Mono | `lib/fonts.ts` `TERMINAL_FONT`, `main.tsx` |
 | Icons | Empty boxes without a Nerd Font | Bundled Symbols Nerd Font Mono v3.4.0, right after the main font, also behind a font the user picks | `src/assets/fonts/`, `@font-face` in `styles.css` |
-| Line height | 1.3 | 1.2 | `TERMINAL_LOOK` in `lib/terminal-theme.ts` |
-| Bold | Bright color, weight 700 | Own color, weight 600 | `TERMINAL_LOOK` |
+| Line height | 1.3 (22px rows) | 1 (about 17px rows at 13px, as Ghostty and VS Code). xterm multiplies the font's own line height, about 1.3 em for JetBrains Mono, so 1.2 gave 20px rows, looser than any native terminal | `TERMINAL_LOOK` in `lib/terminal-theme.ts` |
+| Bold | Bright color, weight 700 | Own color, weight 700 (`bold`, as Ghostty, VS Code and JetBrains IDEs) | `TERMINAL_LOOK` |
 | Cursor | Block, blinks | Block, blinks while focused, outline when unfocused | `TERMINAL_LOOK` |
 | Fast scroll | xterm default | Alt + wheel 5× (set on purpose) | `TERMINAL_LOOK` |
 | Padding | 8 top/bottom, 10 left, 0 right | 8 top/bottom, 10 left, 2 right. xterm keeps 8 px for its scrollbar, so text has 10 px on both sides and the scrollbar sits in the right padding | `TerminalView.tsx` |
