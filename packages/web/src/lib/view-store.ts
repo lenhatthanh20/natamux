@@ -286,8 +286,9 @@ type ViewData = {
   changesFile: string | null
   // The workspaces that were opened, newest first.
   recent: string[]
-  // A shell that the next view of a workspace should focus, asked for by the jump palette.
-  shellRequest: { taskId: string; name: string; at: number } | null
+  // A shell that the next view of a workspace should focus, asked for by the jump palette. Null
+  // name: the first agent shell, asked for when the user opens another workspace.
+  shellRequest: { taskId: string; name: string | null; at: number } | null
   // The tab the user picked last in each workspace.
   tabByTask: Record<string, WorkspaceTab>
   // Columns of the agents grid.
@@ -412,12 +413,20 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
     set((current) => {
       const recent = withRecent(current.recent, taskId)
       saveRecent(recent)
+      // The same workspace again keeps the keyboard where it is. On another tab no shell shows.
+      const switched = current.changesTaskId !== taskId
+      const shellRequest = !switched
+        ? current.shellRequest
+        : tab === 'terminal'
+          ? { taskId, name: null, at: Date.now() }
+          : null
       return {
         changesTaskId: taskId,
         changesTab: tab,
         changesFile: null,
         agentsOpen: false,
         recent,
+        shellRequest,
       }
     }),
   setChangesFile: (changesFile) => set({ changesFile }),

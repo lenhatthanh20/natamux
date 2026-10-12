@@ -527,6 +527,7 @@ Shared shell:
 - Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); role chip "Agent" only when an agent runs in it (WS-13); state text 12 muted truncate ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
+- Opening another task's workspace on its Terminal tab puts the keyboard in its first agent shell (the lowest-numbered shell that runs an agent, else Shell 1), once the shells are read. Not on a phone, not when opened from an address, and a shell picked in the jump palette wins.
 - Needs-input pane: 2px top bar `--signal`, header bg signal-soft, state text "Needs your input" in signal (WS-21).
 - Body: bg terminal, pad 8 10. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body.
 
