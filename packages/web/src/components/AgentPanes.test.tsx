@@ -159,6 +159,14 @@ describe('AgentPanes header around the badge', () => {
     expect(within(header('T-0001')).getByText('Claude Code')).toBeTruthy()
   })
 
+  // The grid has no banner, so even a lone waiting pane keeps its mark.
+  it('keeps the mark on a lone waiting pane', () => {
+    grid([makeTask('T-0001', { state: 'needs-input' })])
+    const line = header('T-0001').querySelector('[data-tip-overflow]') as HTMLElement
+    expect(line.textContent).toBe('Needs your input')
+    expect(line.className).toMatch(/text-signal/)
+  })
+
   it('keeps the badge while the state changes', () => {
     const view = grid([makeTask('T-0001')])
     for (const state of ['needs-input', 'running'] as const) {

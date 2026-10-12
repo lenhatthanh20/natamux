@@ -211,6 +211,7 @@ describe('waitReason and bannerText', () => {
     expect(bannerText({ kind: 'stopped' })).toBe(
       'The agent ended its turn. Reply in the terminal, or resume it.',
     )
+    expect(rowText({ kind: 'stopped' })).toBe(bannerText({ kind: 'stopped' }))
   })
 })
 

@@ -177,6 +177,8 @@ describe('ShellPanes agent state', () => {
     expect(glyphState('Shell 1')).toBe('needs-input')
     expect(stateLine('Shell 1')).toBeUndefined()
     expect(amber('Shell 1')).toEqual([])
+    // The glyph still says the state to screen readers.
+    expect(header('Shell 1').querySelector('.sr-only')?.textContent).toBe('Needs your input')
   })
 
   it('keeps the activity of each shell apart', async () => {
@@ -246,6 +248,19 @@ describe('ShellPanes answer in terminal', () => {
     expect(await tokenOf('Shell 2')).toBe('')
     update({ implement: 'needs-input', 'test-spec': 'running' }, 1)
     expect(await tokenOf('Shell 1')).toBe(token)
+  })
+
+  it('marks each shell that waits, and drops the mark when it runs again', async () => {
+    const { update } = answerable({ implement: 'needs-input', 'test-spec': 'needs-input' })
+    await agentShown('Shell 2')
+    for (const name of ['Shell 1', 'Shell 2']) {
+      expect(amber(name).map((element) => element.textContent)).toEqual(['Needs your input'])
+    }
+
+    update({ implement: 'running', 'test-spec': 'needs-input' }, 0)
+    expect(amber('Shell 1')).toEqual([])
+    expect(stateLine('Shell 1')).toBe('Running')
+    expect(amber('Shell 2')).toHaveLength(1)
   })
 
   it('shows the waiting shell when another one is maximized', async () => {
@@ -398,6 +413,20 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
     await agentShown('Shell 3')
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2', 'Shell 3'])
+  })
+
+  it('adds no mark when the only agent shell starts waiting', async () => {
+    const { view } = daemon(['1', '2'], { '1': IMPLEMENT })
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    expect(stateLine('Shell 1')).toBe('Running')
+
+    rerender(view({ ...implementing, state: 'needs-input' }))
+    expect(stateLine('Shell 1')).toBeUndefined()
+    expect(amber('Shell 1')).toEqual([])
+
+    rerender(view(implementing))
+    expect(stateLine('Shell 1')).toBe('Running')
   })
 
   it('shows a plain shell until its agent is listed, then follows its state', async () => {

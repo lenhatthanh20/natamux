@@ -438,5 +438,7 @@ describe('the line under a waiting or failed task', () => {
     expect(reason.className).toContain('text-(--chip-fg)')
     expect(screen.queryByText('Which test runner?')).toBeNull()
     expect(screen.queryByText('Waiting for your answer')).toBeNull()
+    const row = screen.getByRole('button', { name: /^Asking,/ })
+    expect(row.querySelector('[data-state="needs-input"]')).toBeTruthy()
   })
 })
