@@ -29,7 +29,7 @@ All tokens live in `packages/web/src/styles.css`. Raw values on `:root` (light) 
 
 | Token | Value | Use |
 |---|---|---|
-| `--font-sans` | `"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text |
+| `--font-sans` | `"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text. Inter at 13px is the UI font of JetBrains IDEs |
 | `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd |
 | terminal (`TERMINAL_FONT` in `lib/fonts.ts`) | `"JetBrains Mono Variable", "Symbols Nerd Font Mono"`, then the `--font-mono` stack | terminals and code views (Monaco diff and file). The icon font is bundled (`src/assets/fonts`) and loads on the first icon |
 | body features | `font-feature-settings: "ss01", "cv11"; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased` | already set, keep |
