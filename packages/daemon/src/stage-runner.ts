@@ -326,6 +326,9 @@ export class StageRunner {
     }
     if (message.moved === true) {
       this.startInBackground(task.id, ['ready'], event)
+    } else if (event.type === 'agent.resumed' && event.source !== 'agent') {
+      // After this message has reached every listener, so its events come in order.
+      this.background(Promise.resolve().then(() => this.resumeStage(task.id, event)))
     }
     const ended = task.state === 'done' || task.state === 'cancelled'
     if (ended && !RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
@@ -394,28 +397,18 @@ export class StageRunner {
     this.starting.add(key)
     try {
       const task = this.tasks.getTask(taskId)
-      const reason = sendBackReason(cause)
       switch (stage.kind) {
         case 'context':
           await this.startContext(task, step, stage)
           return
         case 'agent': {
-          const prompt: PromptFor = (agent) => {
-            const workflow = runsWorkflow(stage, task.workflowStages, agent)
-            const filled = this.withSkills(stagePrompt(stage, task, { workflow }), task, agent)
-            const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
-            return { ...filled, text, workflow }
-          }
-          // A prompt typed to the agent took the stage up again: the agent has its prompt.
           const resumed = cause?.type === 'agent.resumed'
-          await this.startAgent(task, step, stage, resumed ? undefined : prompt)
+          await this.startAgent(task, step, stage, this.promptOf(task, stage, cause), resumed)
           return
         }
         case 'testing':
           if (stage.command === undefined) {
-            await this.startAgent(task, step, stage, (agent) =>
-              this.withSkills(stagePrompt(stage, task), task, agent),
-            )
+            await this.startAgent(task, step, stage, this.promptOf(task, stage))
           } else {
             await this.startCommand(task, step, stage, stage.command)
           }
@@ -457,11 +450,27 @@ export class StageRunner {
     return fillSkills(text, this.skillContext(task, agent))
   }
 
+  // The prompt of a stage that an agent works on: an agent stage, or a testing stage with no
+  // command.
+  private promptOf(task: Task, stage: Stage, cause?: TaskEvent): PromptFor {
+    if (stage.kind !== 'agent') {
+      return (agent) => this.withSkills(stagePrompt(stage, task), task, agent)
+    }
+    const reason = sendBackReason(cause)
+    return (agent) => {
+      const workflow = runsWorkflow(stage, task.workflowStages, agent)
+      const filled = this.withSkills(stagePrompt(stage, task, { workflow }), task, agent)
+      const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
+      return { ...filled, text, workflow }
+    }
+  }
+
   private async startAgent(
     task: Task,
     step: Step,
     stage: Stage,
-    promptFor: PromptFor | undefined,
+    promptFor: PromptFor,
+    resumed = false,
   ): Promise<void> {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
@@ -479,27 +488,80 @@ export class StageRunner {
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
     const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
-    const prompt = promptFor?.(agent)
+    const terminal = terminalOfStage(step, stage.id)
+    // A prompt typed to the agent took the stage up again: the agent has its prompt. With no
+    // agent left (the app restarted), Claude Code goes on with its last session of the stage.
+    const running = resumed && this.agentRuns(task.id, terminal)
+    const session = resumed && !running ? this.lastSession(task.id, stage.id, agent) : undefined
+    const prompt = running || session !== undefined ? undefined : promptFor(agent)
     // The stage card says which skills of the prompt the agent did not get, and whether it asked
     // for a workflow.
     const missing = prompt?.missing.length ? { missingSkills: prompt.missing, agent } : {}
     const workflow = prompt?.workflow === true ? { workflow: true } : {}
-    if (
-      !this.markStarted(task, step, stage, { head, ...missing, ...workflow }) ||
-      prompt === undefined
-    ) {
+    if (!this.markStarted(task, step, stage, { head, ...missing, ...workflow }) || running) {
+      return
+    }
+    this.launch(task.id, stage.id, agent, terminal, prompt?.text ?? '', session)
+  }
+
+  // A person resumed a stage that waited for them. Its agent may be gone, for example after a
+  // restart, and then starts again.
+  private resumeStage(taskId: string, event: TaskEvent): void {
+    const task = this.tasks.getTask(taskId)
+    const step = this.stepOf(task)
+    const stage = stagesOf(step).find((candidate) => candidate.id === event.payload.stage)
+    const byAgent =
+      stage?.kind === 'agent' || (stage?.kind === 'testing' && stage.command === undefined)
+    if (stage === undefined || !byAgent || task.workspace === null) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)
+    if (this.agentRuns(task.id, terminal)) {
+      return
+    }
+    const agent = task.agent ?? 'claude-code'
+    const session = this.lastSession(task.id, stage.id, agent)
+    const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''
+    this.launch(task.id, stage.id, agent, terminal, text, session)
+  }
+
+  // The last session that Claude Code reported from this stage. Other agents start new ones.
+  private lastSession(taskId: string, stageId: string, agent: string): string | undefined {
+    if (agent !== 'claude-code') {
+      return undefined
+    }
+    for (const { event } of [...this.tasks.listEvents(taskId)].reverse()) {
+      // A session from before another agent was started is not this agent's.
+      if (event.type === 'agent.launched' && event.payload.agent !== agent) {
+        return undefined
+      }
+      const session = event.payload.sessionId
+      const fromStage = event.source === 'agent' && event.payload.stage === stageId
+      if (fromStage && typeof session === 'string' && session !== '') {
+        return session
+      }
+    }
+    return undefined
+  }
+
+  // Gives the prompt to the agent that runs in the terminal, else starts the agent there.
+  private launch(
+    taskId: string,
+    stageId: string,
+    agent: string,
+    terminal: string,
+    text: string,
+    session?: string,
+  ): void {
     try {
-      if (this.agentRuns(task.id, terminal)) {
-        this.terminals.paste(task.id, prompt.text, terminal)
+      if (session === undefined && this.agentRuns(taskId, terminal)) {
+        this.terminals.paste(taskId, text, terminal)
       } else {
-        this.agents.start(task.id, agent, prompt.text, terminal)
-        this.launched.set(`${task.id}/${terminal}`, this.now())
+        this.agents.start(taskId, agent, text, terminal, session)
+        this.launched.set(`${taskId}/${terminal}`, this.now())
       }
     } catch (error) {
-      this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
+      this.failStage(taskId, stageId, error instanceof Error ? error.message : String(error))
     }
   }
 
