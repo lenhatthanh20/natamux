@@ -89,7 +89,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
   - `terminal-cache.test.ts`: limits, eviction order, dispose rules. Call `resetTerminalCache()` in `afterEach`.
   - `gpu-renderer.test.ts`: make a budget with `createGpuBudget()`, or call `gpuBudget.reset()`.
   - Other components mock TerminalView.
-- **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
+- **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `terminal-gpu.spec.ts` runs with WebGL (SwiftShader) for the GPU budget and lost contexts. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
 
 ## Pitfalls
 

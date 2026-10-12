@@ -63,7 +63,7 @@ playwright-cli reload
 
 - The tests share one daemon and run one after the other. A test that adds data gives it a name of its own, for example with `Date.now()`.
 - `signIn(page)` in `e2e/tests/helpers.ts` puts the token in `localStorage`, so a test starts on the dashboard.
-- The browser starts without WebGL, so the terminal draws its text into the page, where `.xterm-rows` shows it.
+- The browser starts without WebGL, so the terminal draws its text into the page, where `.xterm-rows` shows it. Only `terminal-gpu.spec.ts` turns WebGL on (SwiftShader): it checks the GPU budget, renderer changes while a terminal is hidden, and lost contexts, and it counts drawn pixels in screenshots, as a canvas has no text to read.
 - `phone.spec.ts` runs with a phone screen; the other files with a desktop one.
 - The images have no real agent. A test that needs one uses the fake agent of the demo data.
 - Terminals the page keeps for later sit in the hidden `#terminal-holder` with their own `.xterm-rows`. Find rows inside a pane region (`rows(pane(page, 'Shell 1'))` in `terminal-helpers.ts`), never on the whole page.
