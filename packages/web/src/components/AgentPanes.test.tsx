@@ -142,9 +142,20 @@ describe('AgentPanes header around the badge', () => {
     },
   )
 
-  it('keeps the needs-input tint with the badge on top', () => {
-    grid([makeTask('T-0001', { state: 'needs-input' })])
-    expect(header('T-0001').className).toMatch(/bg-signal-soft/)
+  // One amber mark per pane: the state text. No bar and no tint, so it stays calm.
+  it('marks a waiting pane with its state text only, and a running pane not at all', () => {
+    grid([
+      makeTask('T-0001', { state: 'needs-input' }),
+      makeTask('T-0002', { state: 'running' }),
+    ])
+    const line = (id: string) => header(id).querySelector('[data-tip-overflow]') as HTMLElement
+    expect(line('T-0001').className).toMatch(/text-signal/)
+    expect(line('T-0002').className).not.toMatch(/text-signal/)
+    for (const id of ['T-0001', 'T-0002']) {
+      const region = screen.getByRole('region', { name: `Agent of ${id}` })
+      expect(region.querySelector('.bg-signal')).toBeNull()
+      expect(header(id).className).not.toMatch(/bg-signal-soft/)
+    }
     expect(within(header('T-0001')).getByText('Claude Code')).toBeTruthy()
   })
 

@@ -101,9 +101,9 @@ async function agentShown(name: string) {
 const glyphState = (name: string) =>
   header(name).querySelector('[data-state]')?.getAttribute('data-state') ?? null
 
-// The bar at the top of a pane whose agent waits for the user.
-const needsInputBar = (name: string) =>
-  screen.getByRole('region', { name }).querySelector('.bg-signal')
+// The amber parts of a pane. A waiting pane has one: its state text.
+const AMBER = '.bg-signal, .bg-signal-soft, .text-signal'
+const amber = (name: string) => [...screen.getByRole('region', { name }).querySelectorAll(AMBER)]
 
 describe('ShellPanes agent badge', () => {
   it('shows the same badge on every agent shell and none on a plain shell', async () => {
@@ -157,8 +157,26 @@ describe('ShellPanes agent state', () => {
     await agentShown('Shell 2')
     expect(stateLine('Shell 2')).toBe('Needs your input')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
-    expect(needsInputBar('Shell 2')).toBeTruthy()
-    expect(needsInputBar('Shell 1')).toBeNull()
+    expect(amber('Shell 2').map((element) => element.textContent)).toEqual(['Needs your input'])
+    expect(amber('Shell 1')).toEqual([])
+
+    // Maximized, it is the only agent shell on the screen, so the banner is enough.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Maximize Shell 2' }))
+    expect(amber('Shell 2')).toEqual([])
+  })
+
+  // The banner over the tabs already says it, so the only agent shell adds nothing.
+  it('does not mark the only agent shell when it waits', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'needs-input', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '2'],
+      { '1': { stage: 'implement', state: 'running' } },
+    )
+    await agentShown('Shell 1')
+    await screen.findByRole('region', { name: 'Shell 2' })
+    expect(glyphState('Shell 1')).toBe('needs-input')
+    expect(stateLine('Shell 1')).toBeUndefined()
+    expect(amber('Shell 1')).toEqual([])
   })
 
   it('keeps the activity of each shell apart', async () => {

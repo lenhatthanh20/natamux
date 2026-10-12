@@ -65,9 +65,6 @@ export function paneSpan(index: number, count: number, columns: number): number 
 
 // The line under a pane's title: the state, and what the agent does now.
 export function paneStateText(state: TaskState, activity: string | null | undefined): string {
-  if (state === 'needs-input') {
-    return 'Needs your input'
-  }
   const label = STATE_LABEL[state]
   return state === 'running' && activity ? `${label} · ${activity}` : label
 }

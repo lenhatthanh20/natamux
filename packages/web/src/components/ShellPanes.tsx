@@ -121,6 +121,9 @@ export function ShellPanes({
     return lane === undefined ? undefined : terminalState(task, lane)
   }
   const waiting = names.find((name) => agentState(name) === 'needs-input') ?? '1'
+  // The banner over the tabs says the agent waits. Only with two agent shells on the screen does
+  // a pane need to say which one.
+  const markWaiting = visible.filter((name) => agentState(name) !== undefined).length > 1
 
   const addShell = () => {
     if (full) {
@@ -251,9 +254,11 @@ export function ShellPanes({
               title={`Shell ${name}`}
               agent={isAgent ? agent : undefined}
               stateText={
-                own !== null && agent !== null ? paneStateText(own, activity?.[name]) : undefined
+                own !== null && agent !== null && (own !== 'needs-input' || markWaiting)
+                  ? paneStateText(own, activity?.[name])
+                  : undefined
               }
-              needsInput={own === 'needs-input'}
+              needsInput={own === 'needs-input' && markWaiting}
               connect={(size) => connect(size, name)}
               focusToken={focusing?.name === name ? focusing.at : undefined}
               maximized={focused === name}

@@ -194,7 +194,7 @@ export function bannerText(reason: WaitReason): string {
     case 'failed':
       return reason.reason ?? 'The agent failed.'
     case 'stopped':
-      return 'The agent stopped without saying it is done.'
+      return 'The agent ended its turn. Reply in the terminal, or resume it.'
   }
 }
 

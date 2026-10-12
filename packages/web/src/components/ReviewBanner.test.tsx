@@ -20,7 +20,11 @@ describe('ReviewBanner', () => {
     const user = userEvent.setup()
 
     expect(screen.getByRole('status').textContent).toContain('Ready for review: Plan')
-    await user.click(screen.getByRole('button', { name: /^Approve/ }))
+    // The key is in the tooltip, not on the button.
+    const approve = screen.getByRole('button', { name: 'Approve' })
+    expect(approve.textContent).toBe('Approve')
+    expect(approve.dataset.tipKbd).toBe('a')
+    await user.click(approve)
     expect(onApprove).toHaveBeenCalledWith('plan')
 
     await user.click(screen.getByRole('button', { name: 'Send back' }))

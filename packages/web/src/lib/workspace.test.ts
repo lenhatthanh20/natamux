@@ -208,7 +208,9 @@ describe('waitReason and bannerText', () => {
       kind: 'stopped',
     })
     expect(waitReason([])).toEqual({ kind: 'stopped' })
-    expect(bannerText({ kind: 'stopped' })).toBe('The agent stopped without saying it is done.')
+    expect(bannerText({ kind: 'stopped' })).toBe(
+      'The agent ended its turn. Reply in the terminal, or resume it.',
+    )
   })
 })
 

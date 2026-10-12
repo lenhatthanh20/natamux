@@ -130,7 +130,7 @@ describe('stage labels', () => {
   it('names the stage of a task that is in progress', () => {
     const task = makeTask({ stage: 'test-spec', state: 'needs-input' })
     expect(stageLabel(task)).toBe('Test spec')
-    expect(stageStateLabel(task)).toBe('Test spec · Needs input')
+    expect(stageStateLabel(task)).toBe('Test spec · Needs your input')
   })
 
   it('has no stage for a draft or a finished task', () => {
