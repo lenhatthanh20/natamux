@@ -72,7 +72,13 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
 
   // The reason: once in Needs you, once in the banner, and not in the tree row.
   await expect(view.getByRole('status').filter({ hasText: STOPPED })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Needs you' }).getByText(STOPPED)).toBeVisible()
+  // The demo tasks wait longer, so the new one can be past the cap of 3 rows.
+  const needsYou = page.getByRole('region', { name: 'Needs you' })
+  const showAll = needsYou.getByRole('button', { name: /^Show all/ })
+  if ((await showAll.count()) > 0) {
+    await showAll.click()
+  }
+  await expect(needsYou.getByText(STOPPED)).toBeVisible()
   await expect(page.getByText(STOPPED)).toHaveCount(2)
 
   // The banner stands for the state chip, and the only agent shell has no mark.
