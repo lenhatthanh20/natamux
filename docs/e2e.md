@@ -74,8 +74,9 @@ Two spec files time the terminal, so a change can show its effect with numbers.
 
 | File | What |
 |---|---|
-| `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It records numbers and checks none of them |
+| `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It records numbers; since PR 3 it also checks that a 10,000-line plain history shows within 500 ms (median of 5) |
 | `terminal-cache.spec.ts` | The terminal cache: showing a terminal again within 100 ms with no new socket, the limit of 8 hidden terminals, the heap of hidden terminals. It also records the echo while hidden shells flood |
+| `terminal-protocol.spec.ts` | The catch-up of a new connection: no history scrolls by while the snapshot is written (the skeleton shows instead), and keys typed while `replayed` is held back (`page.routeWebSocket`) reach the shell once, after it, in order |
 | `terminal-helpers.ts` | Shell tasks, panes, history, and timing in the page (`timeToShow`, `typeAndMeasure`). Times come from the page's clock (`event.timeStamp`, `requestAnimationFrame`), so the runner's delay does not count |
 | `measures.ts` | `recordMeasure` writes `e2e/test-results/terminal-measures.json` and prints a `MEASURE` line. `writeSummary` adds a table to the job summary |
 | `daemon-rss.ts` | Samples the memory (`VmRSS`) of the daemon process every 0.5 s through one `docker compose exec`. Its shells are not counted |

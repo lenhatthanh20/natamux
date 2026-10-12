@@ -1,4 +1,4 @@
-import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
+import type { Task, TaskState, TerminalLane } from '@natamux/core'
 import { useQuery } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -7,6 +7,7 @@ import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
@@ -21,7 +22,7 @@ type ShellPanesProps = {
   task: Pick<Task, 'id' | 'state' | 'stage' | 'lanes' | 'agent'>
   // What the agent in each shell does now, by shell name, for example "Edit a.ts".
   activity?: Readonly<Record<string, string>>
-  connect: (size: TerminalSize, terminal: string) => Promise<WebSocket>
+  connect: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
   // The shells where an agent runs now, with the stage each one works on. Without it, Shell 1
   // counts as the agent's and has the task state.

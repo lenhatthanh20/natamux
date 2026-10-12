@@ -1,12 +1,12 @@
 import { appendFileSync } from 'node:fs'
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
-import { scrollbackLines, type TerminalServerMessage } from '@natamux/core'
+import { scrollbackLines } from '@natamux/core'
 import { afterAll, describe, expect, it } from 'vitest'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
-import { TerminalService } from './terminal-service.js'
+import { type TerminalFrame, TerminalService } from './terminal-service.js'
 
-// Baseline numbers for the terminal path of the daemon. They are only recorded, never compared,
-// so the later PRs can show their effect on the same cases. It runs only with NATAMUX_BENCH=1,
+// Numbers for the terminal path of the daemon, recorded so each PR can show its effect on the same
+// cases. Only the event loop delay of a snapshot is a limit. It runs only with NATAMUX_BENCH=1,
 // which the CI build job sets: every other test run, the coverage run too, stays fast.
 const BENCH_TEST_MS = 120_000
 const HISTORY_LINES = 10_000
@@ -18,6 +18,8 @@ const FLOOD_LINES = 300_000
 const FLOOD_PIECES_PER_TURN = 8
 const TUI_REDRAWS = 300
 const TASK = 'T-0001'
+// A snapshot is serialized in slices, so it must not block the daemon longer than this.
+const MAX_LOOP_DELAY_MS = 50
 
 type Style = 'plain' | 'sgr'
 
@@ -33,8 +35,17 @@ function setup() {
   return { service, ptys }
 }
 
-// Does the same JSON work as the WebSocket route, so the wire bytes are the real ones.
+// The header ws puts before an unmasked binary frame of this length (no compression).
+function frameHeaderBytes(length: number): number {
+  if (length < 126) {
+    return 2
+  }
+  return length < 65_536 ? 4 : 10
+}
+
+// Records the binary frames, the output; the wire bytes are the frame bytes plus their headers.
 function timedClient() {
+  const decoder = new TextDecoder()
   const stats = {
     frames: 0,
     wireBytes: 0,
@@ -45,20 +56,20 @@ function timedClient() {
   }
   return {
     stats,
-    send: (message: TerminalServerMessage) => {
-      if (message.type !== 'output') {
+    send: (frame: TerminalFrame) => {
+      if (!(frame instanceof Uint8Array)) {
         return
       }
-      const json = JSON.stringify(message)
       const now = performance.now()
       if (stats.frames === 0) {
         stats.firstAt = now
       }
       stats.lastAt = now
       stats.frames += 1
-      stats.wireBytes += Buffer.byteLength(json)
-      stats.rawBytes += Buffer.byteLength(message.data)
-      stats.text += message.data
+      stats.wireBytes += frame.byteLength + frameHeaderBytes(frame.byteLength)
+      stats.rawBytes += frame.byteLength
+      // Frames end at character borders, so each one decodes on its own.
+      stats.text += decoder.decode(frame)
     },
   }
 }
@@ -187,6 +198,7 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
         })
         expect(stats.frames).toBeGreaterThan(0)
         expect(stats.text).toContain(`END-${cols}-${style}`)
+        expect(delay.max / 1e6).toBeLessThanOrEqual(MAX_LOOP_DELAY_MS)
       },
       BENCH_TEST_MS,
     )

@@ -1,4 +1,4 @@
-import { scrollbackLines, type TerminalSize } from '@natamux/core'
+import { ACK_EVERY_BYTES, scrollbackLines, type TerminalClientMessage } from '@natamux/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -8,7 +8,12 @@ import { Terminal } from '@xterm/xterm'
 import { keyBelongsToShell } from './dispatch'
 import { type GpuRenderer, gpuRenderer } from './gpu-renderer'
 import { closeSocket } from './live'
-import { parseTerminalMessage, takesFocusOnOpen } from './terminal'
+import {
+  isQueryReply,
+  parseTerminalMessage,
+  type TerminalConnectQuery,
+  takesFocusOnOpen,
+} from './terminal'
 import type { CachedTerminal } from './terminal-cache'
 import { type ResolvedTerminalFont, terminalFont } from './terminal-font'
 import {
@@ -26,12 +31,27 @@ import { pageTheme, uiZoom } from './theme'
 // A burst of resizes (dragging a divider) fits the terminal once, when it settles.
 export const FIT_DELAY_MS = 100
 export const DISPOSE_DELAY_MS = 200
+// A catch-up whose `replayed` never comes ends after this, so a daemon bug never leaves a blank
+// pane (spec 6).
+export const CATCH_UP_TIMEOUT_MS = 10_000
+// A resume up to this size is drawn in place. A larger one stays hidden until it ends, as a
+// snapshot does.
+export const HIDDEN_RESUME_BYTES = 64 * 1024
 
 export type TerminalStatus = 'connecting' | 'open' | 'ended' | 'error'
 export type TerminalSessionState = {
   status: TerminalStatus
   error: string | null
   scrolledUp: boolean
+  // The screen is hidden while a large catch-up is written, and the view shows a skeleton.
+  catchingUp: boolean
+}
+
+// From `snapshot` or `resume` until xterm parsed the last chunk before `replayed` (spec 6).
+type CatchUp = {
+  kind: 'snapshot' | 'resume'
+  bytes: number
+  timer: ReturnType<typeof setTimeout>
 }
 
 export type TerminalSession = CachedTerminal & {
@@ -73,7 +93,7 @@ function fontKey(font: ResolvedTerminalFont, zoom: number): string {
 }
 
 export function createTerminalSession(options: {
-  connect: (size: TerminalSize) => Promise<WebSocket>
+  connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   onEnd?: (session: TerminalSession) => void
 }): TerminalSession {
   const { connect, onEnd } = options
@@ -117,14 +137,20 @@ export function createTerminalSession(options: {
   const host = document.createElement('div')
   host.className = 'min-h-0 flex-1 overflow-hidden'
 
-  let state: TerminalSessionState = { status: 'connecting', error: null, scrolledUp: false }
+  let state: TerminalSessionState = {
+    status: 'connecting',
+    error: null,
+    scrolledUp: false,
+    catchingUp: false,
+  }
   const listeners = new Set<() => void>()
   const update = (change: Partial<TerminalSessionState>) => {
     const next = { ...state, ...change }
     if (
       next.status === state.status &&
       next.error === state.error &&
-      next.scrolledUp === state.scrolledUp
+      next.scrolledUp === state.scrolledUp &&
+      next.catchingUp === state.catchingUp
     ) {
       return
     }
@@ -144,22 +170,58 @@ export function createTerminalSession(options: {
   let fitTimer: ReturnType<typeof setTimeout> | undefined
   let frame: number | null = null
   const subscriptions: { dispose(): void }[] = []
+  let catchUp: CatchUp | null = null
+  // Bytes of output received outside catch-ups. `replayed` sets it.
+  let offset = 0
+  let acked = 0
+  // What the user typed during a catch-up, sent after it in order.
+  const typed: string[] = []
+  // Set while a real key is dispatched, so its data is never taken for a query reply.
+  let fromUser = false
+  let userTimer: ReturnType<typeof setTimeout> | undefined
+  // This client took the shell's size (spec 2.1). One that did not sends its size first when it
+  // claims, so the daemon never takes its old size from the attach.
+  let claimed = false
+  // The visibility the daemon knows.
+  let sentVisible = true
+  // The terminal came on screen during a catch-up. It claims once its own size is back.
+  let claimAfterCatchUp = false
 
-  const send = (message: object) => {
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message))
+  // Returns false when the socket is not open and nothing went out.
+  const send = (message: TerminalClientMessage): boolean => {
+    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+      return false
     }
+    socket.send(JSON.stringify(message))
+    return true
   }
   // The size that this screen sent last. It sends a size when it changes, and again when the
   // screen takes the focus: another screen of the same shell may have set its own size since.
+  // Never during a catch-up: the local resizes to the snapshot size and back are not the user's.
   let sentSize = { cols: terminal.cols, rows: terminal.rows }
   const sendSize = (always = false) => {
+    if (catchUp !== null) {
+      return
+    }
     if (always || terminal.cols !== sentSize.cols || terminal.rows !== sentSize.rows) {
       sentSize = { cols: terminal.cols, rows: terminal.rows }
-      send({ type: 'resize', ...sentSize })
+      if (send({ type: 'resize', ...sentSize })) {
+        claimed = true
+      }
     }
   }
   const claimSize = () => sendSize(true)
+  const sendInput = (data: string) => {
+    if (!claimed) {
+      claimSize()
+    }
+    send({ type: 'input', data })
+  }
+  // Flow control on the daemon reads it (PR 4).
+  const ack = (at: number) => {
+    acked = at
+    send({ type: 'ack', offset: at })
+  }
 
   // The cache drops a session whose shell ended or failed, so the next show starts fresh.
   const end = () => {
@@ -172,7 +234,7 @@ export function createTerminalSession(options: {
   // Scroll state goes to React at most once per frame, and never while hidden: output of a
   // hidden terminal would re-render a view for nothing.
   const updateScrolled = () => {
-    if (!onScreen || frame !== null) {
+    if (!onScreen || frame !== null || catchUp !== null) {
       return
     }
     frame = requestAnimationFrame(() => {
@@ -180,6 +242,132 @@ export function createTerminalSession(options: {
       const buffer = terminal.buffer.active
       update({ scrolledUp: buffer.viewportY < buffer.baseY })
     })
+  }
+
+  // claim: the terminal itself came on screen in the page, so the message carries its size and
+  // takes the shell's size. The page coming back never claims (spec 2.1).
+  const sendVisible = (claim: boolean) => {
+    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+    const visible = onScreen && document.visibilityState !== 'hidden'
+    if (claim && visible && catchUp !== null) {
+      // Its size is the snapshot's until the catch-up ends.
+      claimAfterCatchUp = true
+    } else if (claim && visible) {
+      sentVisible = true
+      claimed = true
+      sentSize = { cols: terminal.cols, rows: terminal.rows }
+      send({ type: 'visible', visible: true, ...sentSize })
+      return
+    }
+    if (visible !== sentVisible) {
+      sentVisible = visible
+      send({ type: 'visible', visible })
+    }
+  }
+  const onPageVisibility = () => sendVisible(false)
+
+  // The textarea stays visible, so it keeps the focus and typed keys are queued, not lost.
+  const hideScreen = () => {
+    host.style.visibility = 'hidden'
+    if (terminal.textarea !== undefined) {
+      terminal.textarea.style.visibility = 'visible'
+    }
+    update({ catchingUp: true })
+  }
+  const showScreen = () => {
+    host.style.visibility = ''
+    if (terminal.textarea !== undefined) {
+      terminal.textarea.style.visibility = ''
+    }
+    update({ catchingUp: false })
+  }
+
+  // at is the offset from `replayed`, or null when the catch-up failed or the shell ended.
+  const finishCatchUp = (at: number | null) => {
+    if (disposed) {
+      return
+    }
+    if (at !== null) {
+      offset = at
+      ack(at)
+    }
+    if (catchUp === null) {
+      return
+    }
+    clearTimeout(catchUp.timer)
+    const kind = catchUp.kind
+    // Back to the pane's size. Its resize sends nothing: the catch-up is still on.
+    if (onScreen) {
+      safeFit(fit)
+    }
+    catchUp = null
+    if (kind === 'snapshot') {
+      terminal.scrollToBottom()
+    }
+    showScreen()
+    if (claimed) {
+      sendSize()
+    } else {
+      sentSize = { cols: terminal.cols, rows: terminal.rows }
+    }
+    if (claimAfterCatchUp) {
+      claimAfterCatchUp = false
+      sendVisible(true)
+    }
+    for (const data of typed.splice(0)) {
+      sendInput(data)
+    }
+    updateScrolled()
+  }
+
+  const beginCatchUp = (kind: CatchUp['kind']) => {
+    if (catchUp !== null) {
+      clearTimeout(catchUp.timer)
+    }
+    catchUp = { kind, bytes: 0, timer: setTimeout(() => finishCatchUp(null), CATCH_UP_TIMEOUT_MS) }
+  }
+
+  const output = (bytes: Uint8Array) => {
+    if (catchUp !== null) {
+      // Not counted: snapshot and live bytes come mixed, and `replayed` gives the offset.
+      catchUp.bytes += bytes.byteLength
+      if (catchUp.kind === 'resume' && catchUp.bytes > HIDDEN_RESUME_BYTES) {
+        hideScreen()
+      }
+      terminal.write(bytes)
+      return
+    }
+    offset += bytes.byteLength
+    const at = offset
+    terminal.write(bytes, () => {
+      if (!disposed && at - acked >= ACK_EVERY_BYTES) {
+        ack(at)
+      }
+    })
+  }
+
+  // During a snapshot the xterm keeps the snapshot's size; it fits back when the catch-up ends.
+  const fitNow = () => {
+    if (onScreen && catchUp?.kind !== 'snapshot') {
+      safeFit(fit)
+    }
+  }
+
+  // A key's data comes inside xterm's keydown listener on the textarea. The capture listener on
+  // the element runs before it, and the textarea listener of the code after it (spec 6).
+  const markUser = () => {
+    fromUser = true
+    clearTimeout(userTimer)
+    // A task, never a microtask: it runs after the whole dispatch, in case a later xterm stops
+    // the event before the textarea listener.
+    userTimer = setTimeout(() => {
+      fromUser = false
+    }, 0)
+  }
+  const clearUser = () => {
+    fromUser = false
   }
 
   // Setting another family first makes xterm measure the cells again, even for the same family.
@@ -199,7 +387,7 @@ export function createTerminalSession(options: {
         }
         if (onScreen) {
           remeasure(terminalFont().stack)
-          safeFit(fit)
+          fitNow()
         } else {
           measuredFont = ''
         }
@@ -238,7 +426,7 @@ export function createTerminalSession(options: {
     }
     applyTheme()
     if (onScreen && applyFont()) {
-      safeFit(fit)
+      fitNow()
     }
   }
 
@@ -251,32 +439,66 @@ export function createTerminalSession(options: {
     if (value) {
       applyTheme()
       applyFont()
-      safeFit(fit)
+      fitNow()
+      sendVisible(true)
       updateScrolled()
-    } else if (frame !== null) {
-      cancelAnimationFrame(frame)
-      frame = null
+    } else {
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+        frame = null
+      }
+      sendVisible(false)
     }
   }
 
   const listen = (opened: WebSocket) => {
     socket = opened
+    // Output comes in binary frames. An ArrayBuffer can be written at once, a Blob cannot.
+    opened.binaryType = 'arraybuffer'
     let wasOpen = false
     opened.onopen = () => {
       wasOpen = true
       update({ status: 'open' })
+      // The page may have been hidden or shown while the socket was opening.
+      sendVisible(false)
       // The terminal may have been fitted while the socket was opening.
-      sendSize()
+      if (claimed) {
+        sendSize()
+      }
     }
     opened.onmessage = (event) => {
-      const message = parseTerminalMessage(String(event.data))
-      if (message?.type === 'output') {
-        terminal.write(message.data)
+      // typeof, not instanceof: a buffer from another realm (jsdom in tests) fails instanceof.
+      if (typeof event.data !== 'string') {
+        output(new Uint8Array(event.data))
+        return
+      }
+      const message = parseTerminalMessage(event.data)
+      if (message?.type === 'snapshot') {
+        beginCatchUp('snapshot')
+        hideScreen()
+        const { cols, rows } = message
+        // In xterm's write queue: the bytes before are parsed first, the snapshot after. The
+        // resize is local only (sendSize sends nothing during a catch-up).
+        terminal.write('', () => {
+          if (!disposed) {
+            terminal.reset()
+            terminal.resize(cols, rows)
+          }
+        })
+      } else if (message?.type === 'resume') {
+        beginCatchUp('resume')
+      } else if (message?.type === 'replayed') {
+        const at = message.offset
+        // Once xterm parsed the last chunk: the screen stays hidden until then, and an ack means
+        // parsed. After the 10 s failure path this only takes the offset.
+        terminal.write('', () => finishCatchUp(at))
       } else if (message?.type === 'exit') {
+        finishCatchUp(null)
         terminal.write('\r\n')
         update({ status: 'ended' })
         end()
       } else if (message?.type === 'error') {
+        finishCatchUp(null)
         update({ status: 'error', error: message.message })
         end()
       }
@@ -298,21 +520,24 @@ export function createTerminalSession(options: {
   // The first show opens xterm and connects, at the size of the pane it shows in.
   const start = () => {
     terminal.open(host)
+    // After open(), so the textarea listener runs after xterm's own one.
+    terminal.element?.addEventListener('keydown', markUser, true)
+    terminal.textarea?.addEventListener('keydown', clearUser)
     const load = (onLost: () => void) => loadWebgl(terminal, onLost)
     // A renderer switch can change the cell size, so it fits again. A hidden terminal that gives
     // its renderer back fits at its next show instead.
-    const onSwitch = () => {
-      if (onScreen) {
-        safeFit(fit)
-      }
-    }
-    gpu = gpuRenderer(load, { onSwitch })
+    gpu = gpuRenderer(load, { onSwitch: fitNow })
     safeFit(fit)
     terminal.options.scrollback = scrollbackLines(terminal.cols)
     sentSize = { cols: terminal.cols, rows: terminal.rows }
     terminal.textarea?.addEventListener('focus', claimSize)
 
-    connect({ cols: terminal.cols, rows: terminal.rows })
+    // start() runs from show(), so the terminal is about to be on screen. With the page hidden,
+    // it does not take the shell's size (spec 2.1).
+    const visible = document.visibilityState !== 'hidden'
+    claimed = visible
+    sentVisible = visible
+    connect({ cols: terminal.cols, rows: terminal.rows, visible })
       .then((opened) => {
         if (disposed) {
           closeSocket(opened)
@@ -331,7 +556,15 @@ export function createTerminalSession(options: {
       })
 
     subscriptions.push(
-      terminal.onData((data) => send({ type: 'input', data })),
+      terminal.onData((data) => {
+        if (catchUp === null) {
+          sendInput(data)
+        } else if (fromUser || !isQueryReply(data)) {
+          // Sent after the catch-up. A reply to a replayed query is dropped: it is not the user's,
+          // and the program asked long ago.
+          typed.push(data)
+        }
+      }),
       terminal.onResize(() => {
         // The history keeps the same memory at any width, as the daemon's screen does.
         terminal.options.scrollback = scrollbackLines(terminal.cols)
@@ -363,11 +596,7 @@ export function createTerminalSession(options: {
     stopObserving()
     observer = new ResizeObserver(() => {
       clearTimeout(fitTimer)
-      fitTimer = setTimeout(() => {
-        if (onScreen) {
-          safeFit(fit)
-        }
-      }, FIT_DELAY_MS)
+      fitTimer = setTimeout(fitNow, FIT_DELAY_MS)
     })
     observer.observe(container)
     // Takes the settings changed while hidden, and fits once. The fit sends a resize only when
@@ -404,6 +633,14 @@ export function createTerminalSession(options: {
       subscription.dispose()
     }
     terminal.textarea?.removeEventListener('focus', claimSize)
+    terminal.element?.removeEventListener('keydown', markUser, true)
+    terminal.textarea?.removeEventListener('keydown', clearUser)
+    document.removeEventListener('visibilitychange', onPageVisibility)
+    if (catchUp !== null) {
+      clearTimeout(catchUp.timer)
+      catchUp = null
+    }
+    clearTimeout(userTimer)
     if (socket !== null) {
       closeSocket(socket)
     }
@@ -416,6 +653,8 @@ export function createTerminalSession(options: {
       terminal.dispose()
     }, DISPOSE_DELAY_MS)
   }
+
+  document.addEventListener('visibilitychange', onPageVisibility)
 
   const session: TerminalSession = {
     terminal,

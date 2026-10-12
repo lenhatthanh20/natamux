@@ -21,13 +21,19 @@ import {
   removeTasks,
   rows,
   runIn,
+  SHOW_HISTORY_LIMIT_MS,
   timeToShow,
   typeAndMeasure,
   watchTerminalSockets,
 } from './terminal-helpers'
 
-// These tests only record numbers, for the baseline that the next PRs are compared with. They
-// check that a number was measured, never how big it is. See docs/e2e.md.
+// These tests record numbers, for the table that compares a PR with the PR 1 baseline. They check
+// that a number was measured; only the time to show a history has a limit (AC 8). See docs/e2e.md.
+
+const PR = 3
+// PR 1 numbers on the CI runner, for the notes of the table.
+const BASELINE_SHOW_MS = { plain: 318, sgr: 540 }
+const BASELINE_ECHO_P95_MS = 49
 
 // main has no flow control: the page draws the whole backlog of a flood before the prompt or an
 // echo shows, so these waits are long. A timeout would fail the baseline instead of recording it.
@@ -40,7 +46,7 @@ test.afterEach(async ({ request }) => {
 })
 
 test.afterAll(() => {
-  writeSummary('Terminal baseline (PR 1)')
+  writeSummary('Terminal measures (PR 3)')
 })
 
 async function openTerminal(page: Page, title: string): Promise<void> {
@@ -101,16 +107,23 @@ test('records the time to show a terminal with a long history', async ({ page, r
       value: median(times),
       unit: 'ms',
       ac: '8',
-      pr: 1,
+      pr: PR,
       samples: times,
-      note: `10,000 lines, ${task.cols} cols, median of ${RUNS} fresh page loads`,
+      note: `10,000 lines, ${task.cols} cols, median of ${RUNS} fresh page loads, PR 1: ${
+        BASELINE_SHOW_MS[task.name as 'plain' | 'sgr']
+      } ms`,
     })
+    // AC 8 for plain history. The SGR run only records (C9 edge). Under the limit passes; the
+    // baseline was already under it, so it must not be slower either: see the PR table.
+    if (task.name === 'plain') {
+      expect(median(times)).toBeLessThanOrEqual(SHOW_HISTORY_LIMIT_MS)
+    }
     recordMeasure({
       name: `longtask-attach-${task.name}`,
       value: Math.max(...longest),
       unit: 'ms',
       ac: '8',
-      pr: 1,
+      pr: PR,
       samples: longest,
       note: `longest long task while the terminal attaches, ${task.cols} cols, TerminalView chunk loaded before the click in ${chunkLoaded} of ${RUNS} loads`,
     })
@@ -177,7 +190,7 @@ test('records the terminal sockets of Terminal, Changes, Terminal', async ({ pag
     value: sockets.opened.length,
     unit: 'sockets',
     ac: '1',
-    pr: 1,
+    pr: PR,
     note: 'open the terminal, then Changes and back 3 times',
   })
 })
@@ -200,14 +213,14 @@ test('records the JS heap with one terminal at full history', async ({ page, req
   const after = await heapMb(page)
 
   expect(after).toBeGreaterThan(0)
-  recordMeasure({ name: 'heap-before-terminal', value: before, unit: 'MB', ac: '7', pr: 1 })
-  recordMeasure({ name: 'heap-one-terminal', value: after, unit: 'MB', ac: '7', pr: 1 })
+  recordMeasure({ name: 'heap-before-terminal', value: before, unit: 'MB', ac: '7', pr: PR })
+  recordMeasure({ name: 'heap-one-terminal', value: after, unit: 'MB', ac: '7', pr: PR })
   recordMeasure({
     name: 'heap-per-terminal',
     value: after - before,
     unit: 'MB',
     ac: '7',
-    pr: 1,
+    pr: PR,
     note: 'one terminal with 10,000 lines',
   })
 })
@@ -229,7 +242,7 @@ test('records the keypress to paint time in an idle shell', async ({ page, reque
     value: percentile(latencies, 50),
     unit: 'ms',
     ac: '19',
-    pr: 1,
+    pr: PR,
     samples: latencies,
   })
   recordMeasure({
@@ -237,7 +250,8 @@ test('records the keypress to paint time in an idle shell', async ({ page, reque
     value: percentile(latencies, 95),
     unit: 'ms',
     ac: '19',
-    pr: 1,
+    pr: PR,
+    note: `PR 1: ${BASELINE_ECHO_P95_MS} ms`,
   })
 })
 
@@ -279,7 +293,7 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
       value: percentile(echoes, 50),
       unit: 'ms',
       ac: '25',
-      pr: 1,
+      pr: PR,
       samples: echoes,
       note: 'shell 2, while shell 1 prints 5,000,000 lines',
     })
@@ -288,17 +302,17 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
       value: percentile(echoes, 95),
       unit: 'ms',
       ac: '25',
-      pr: 1,
+      pr: PR,
     })
     recordMeasure({
       name: 'longtask-flood-max',
       value: Math.max(0, ...longTasks),
       unit: 'ms',
       ac: '25',
-      pr: 1,
+      pr: PR,
       samples: longTasks,
     })
-    const rss = { unit: 'MB', ac: '26', pr: 1 } as const
+    const rss = { unit: 'MB', ac: '26', pr: PR } as const
     recordMeasure({ name: 'daemon-rss-before', value: growth.beforeMb, ...rss })
     recordMeasure({ name: 'daemon-rss-peak', value: growth.peakMb, ...rss })
     recordMeasure({
@@ -306,7 +320,7 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
       value: growth.growthMb,
       unit: 'MB',
       ac: '26',
-      pr: 1,
+      pr: PR,
       note: 'peak until 5 s after the prompt is back, minus the median before',
     })
   } finally {
@@ -336,7 +350,7 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
     value: median(times),
     unit: 'ms',
     ac: '25',
-    pr: 1,
+    pr: PR,
     samples: times,
     note: 'median of 5, 1 s into a flood of 5,000,000 lines',
   })

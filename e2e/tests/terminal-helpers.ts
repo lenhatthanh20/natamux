@@ -5,6 +5,8 @@ export const KEY_SAMPLES = 200
 export const KEY_GAP_MS = 50
 export const RUNS = 5
 export const SHOW_LIMIT_MS = 100
+// AC 8: the final screen of a 10,000 line history shows within this time of the click.
+export const SHOW_HISTORY_LIMIT_MS = 500
 export const HEAP_PER_TERMINAL_MB = 15
 // KEEP_ALIVE_TERMINALS of packages/web/src/lib/terminal-cache.ts. e2e cannot import web code.
 export const KEEP_ALIVE = 8
@@ -12,10 +14,18 @@ export const PROMPT = 'e2e> '
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 
+export type ScreenFrame = {
+  visible: boolean
+  hasText: boolean
+  hasMarker: boolean
+  skeleton: boolean
+}
+
 type Probes = {
   __e2eLongTasks?: { start: number; duration: number }[]
   __e2eShow?: { clicked: number | null; shown: number | null; stop: () => void }
   __e2eKeys?: { latencies: number[]; landed: number; stop: () => void }
+  __e2eFrames?: ScreenFrame[]
 }
 
 export function median(values: number[]): number {
@@ -335,4 +345,77 @@ export async function heapMb(page: Page): Promise<number> {
   } finally {
     await cdp.detach()
   }
+}
+
+// Call before the first goto of the page: the init script runs at every navigation. Records, for
+// each animation frame in which the pane's screen exists, whether it is drawn and what it holds,
+// and whether the skeleton shows.
+export async function installScreenSampler(
+  page: Page,
+  target: { label: string; marker: string },
+): Promise<void> {
+  await page.addInitScript(({ label, marker }) => {
+    const frames: ScreenFrame[] = []
+    const probes = window as unknown as Probes
+    probes.__e2eFrames = frames
+    const pane = `section[aria-label="${label}"]`
+    const selector = `${pane} section[aria-label="Terminal screen"] .xterm-rows`
+    const skeleton = '[role="status"][aria-label="Loading the terminal"]'
+    const look = () => {
+      const element = document.querySelector(selector)
+      if (element !== null && frames.length < 20_000) {
+        const text = element.textContent ?? ''
+        frames.push({
+          visible: getComputedStyle(element).visibility === 'visible',
+          hasText: text.trim() !== '',
+          hasMarker: text.includes(marker),
+          skeleton: document.querySelector(skeleton) !== null,
+        })
+      }
+      requestAnimationFrame(look)
+    }
+    requestAnimationFrame(look)
+  }, target)
+}
+
+export async function screenFrames(page: Page): Promise<ScreenFrame[]> {
+  return page.evaluate(() => (window as unknown as Probes).__e2eFrames ?? [])
+}
+
+export type ClientFrame = { type: string; data?: string }
+
+// Holds the first `replayed` message of the terminal sockets that open after this call: the page
+// does not get it until release(). Everything else passes through both ways. clientFrames lists
+// the JSON messages the page sent, in order.
+export async function holdReplayed(page: Page): Promise<{
+  held: Promise<void>
+  release: () => void
+  clientFrames: ClientFrame[]
+}> {
+  const clientFrames: ClientFrame[] = []
+  let release = () => {}
+  let markHeld = () => {}
+  const held = new Promise<void>((resolve) => {
+    markHeld = resolve
+  })
+  let taken = false
+  await page.routeWebSocket(/\/terminal\?/, (ws) => {
+    const server = ws.connectToServer()
+    ws.onMessage((message) => {
+      if (typeof message === 'string') {
+        clientFrames.push(JSON.parse(message) as ClientFrame)
+      }
+      server.send(message)
+    })
+    server.onMessage((message) => {
+      if (!taken && typeof message === 'string' && JSON.parse(message).type === 'replayed') {
+        taken = true
+        release = () => ws.send(message)
+        markHeld()
+        return
+      }
+      ws.send(message)
+    })
+  })
+  return { held, release: () => release(), clientFrames }
 }

@@ -1,7 +1,7 @@
-import type { TerminalSize } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { gpuBudget } from '../lib/gpu-renderer'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../lib/terminal-cache'
 import { fontStack, saveTerminalFont } from '../lib/terminal-font'
 import { DISPOSE_DELAY_MS } from '../lib/terminal-session'
@@ -52,7 +52,7 @@ const setVisible = (visible: boolean) => act(() => reportVisible([{ isIntersecti
 function sockets(count: number) {
   const made: FakeSocket[] = Array.from({ length: count }, fakeSocket)
   let next = 0
-  const connect = vi.fn(async (_size: TerminalSize) => {
+  const connect = vi.fn(async (_query: TerminalConnectQuery) => {
     const socket = made[next]
     next += 1
     if (socket === undefined) {
@@ -146,11 +146,28 @@ describe('TerminalView resources', () => {
     view.unmount()
 
     for (const data of ['one ', 'two ', 'three']) {
-      act(() => socket.message({ type: 'output', data }))
+      act(() => socket.bytes(data))
     }
     render(<TerminalView connect={connect} cacheKey={KEY} />)
 
     expect(terminal.written).toEqual(['one ', 'two ', 'three'])
+  })
+
+  it('shows the skeleton while a catch-up is written, and the screen after it (AC 9)', async () => {
+    const { socket, terminal } = await openTerminal()
+    const loading = () => screen.queryByRole('status', { name: 'Loading the terminal' })
+    expect(loading()).toBeNull()
+
+    act(() => socket.message({ type: 'snapshot', cols: 80, rows: 24 }))
+    expect(loading()).not.toBeNull()
+    act(() => {
+      socket.bytes('screen')
+      socket.message({ type: 'replayed', offset: 6 })
+    })
+    expect(loading()).not.toBeNull()
+
+    act(() => terminal.parse())
+    expect(loading()).toBeNull()
   })
 })
 

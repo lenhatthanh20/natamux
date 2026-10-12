@@ -1,17 +1,26 @@
-import type { TerminalSize } from '@natamux/core'
+import { ACK_EVERY_BYTES, type TerminalSize } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
+import type { TerminalConnectQuery } from './terminal'
 import { fontStack, saveTerminalFont, terminalFont } from './terminal-font'
 import {
+  CATCH_UP_TIMEOUT_MS,
   createTerminalSession,
   DISPOSE_DELAY_MS,
   FIT_DELAY_MS,
+  HIDDEN_RESUME_BYTES,
   type TerminalSession,
 } from './terminal-session'
 import { terminalTheme } from './terminal-theme'
 import { uiZoom } from './theme'
 import { applyUiSize, uiSizeZoom } from './ui-size'
-import { type FakeTerminal, fakeSocket, fakes, resetFakes } from './xterm-fake.fixture'
+import {
+  type FakeSocket,
+  type FakeTerminal,
+  fakeSocket,
+  fakes,
+  resetFakes,
+} from './xterm-fake.fixture'
 
 vi.mock('@xterm/xterm', async () => ({
   Terminal: (await import('./xterm-fake.fixture')).FakeTerminal,
@@ -54,7 +63,7 @@ const flush = async () => {
 
 function make(onEnd?: (session: TerminalSession) => void) {
   const socket = fakeSocket()
-  const connect = vi.fn(async (_size: TerminalSize) => socket.asWebSocket())
+  const connect = vi.fn(async (_query: TerminalConnectQuery) => socket.asWebSocket())
   const session = createTerminalSession({ connect, onEnd })
   const terminal = session.terminal as unknown as FakeTerminal
   return { session, socket, connect, terminal }
@@ -77,6 +86,28 @@ async function shown(onEnd?: (session: TerminalSession) => void) {
 }
 
 const fitsOf = () => fakes.fits[0]?.fits ?? 0
+
+// The daemon's side of an attach: hello, snapshot and its chunks. `replayed` comes only with an
+// offset, so a test can hold it back.
+function snapshotOf(socket: FakeSocket, size: TerminalSize, chunks: string[], offset?: number) {
+  socket.message({ type: 'hello', shellId: 'shell-1' })
+  socket.message({ type: 'snapshot', ...size })
+  for (const chunk of chunks) {
+    socket.bytes(chunk)
+  }
+  if (offset !== undefined) {
+    socket.message({ type: 'replayed', offset })
+  }
+}
+
+// jsdom's page is always visible; this sets it and tells the page, as a browser does.
+function setPageHidden(hidden: boolean) {
+  Object.defineProperty(document, 'visibilityState', {
+    value: hidden ? 'hidden' : 'visible',
+    configurable: true,
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
 
 // Records every option the code sets from now on, in order.
 function recordOptions(terminal: FakeTerminal): [string, unknown][] {
@@ -137,12 +168,14 @@ beforeEach(() => {
 afterEach(() => {
   // Stubs first: they were made after the fake timers, so they restore the fakes.
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   saveTerminalFont(null)
   document.documentElement.removeAttribute('data-theme')
   document.documentElement.style.removeProperty('--ui-zoom')
   window.localStorage.clear()
   Reflect.deleteProperty(document, 'fonts')
+  Reflect.deleteProperty(document, 'visibilityState')
   document.body.replaceChildren()
 })
 
@@ -156,7 +189,7 @@ describe('showing a terminal session', () => {
     const host = terminal.element?.parentElement
     expect(host?.parentElement).toBe(container)
     expect(connect).toHaveBeenCalledTimes(1)
-    expect(connect).toHaveBeenCalledWith({ cols: 100, rows: 30 })
+    expect(connect).toHaveBeenCalledWith({ cols: 100, rows: 30, visible: true })
     expect(observers.at(-1)?.observed).toEqual([container])
     expect(session.state().status).toBe('connecting')
   })
@@ -176,7 +209,7 @@ describe('showing a terminal session', () => {
     observer?.callback()
     vi.advanceTimersByTime(FIT_DELAY_MS * 2)
     expect(fitsOf()).toBe(fits)
-    expect(socket.sent).toEqual([])
+    expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
   })
 
   it('shows again with no new connection, one fit and a fresh draw (AC 1)', async () => {
@@ -192,13 +225,20 @@ describe('showing a terminal session', () => {
     expect(connect).toHaveBeenCalledTimes(1)
     expect(fitsOf()).toBe(fits + 1)
     expect(terminal.refreshes).toBe(refreshes + 1)
-    // Same size as before: nothing to tell the daemon.
-    expect(socket.sent).toEqual([])
+    // Same size as before: no resize, only that it is on screen again with its size.
+    expect(socket.sent).toEqual([
+      { type: 'visible', visible: false },
+      { type: 'visible', visible: true, cols: 80, rows: 24 },
+    ])
 
     session.hide(holder)
+    socket.sent.length = 0
     terminal.fitSize = { cols: 90, rows: 24 }
     session.show(box())
-    expect(socket.sent).toEqual([{ type: 'resize', cols: 90, rows: 24 }])
+    expect(socket.sent).toEqual([
+      { type: 'resize', cols: 90, rows: 24 },
+      { type: 'visible', visible: true, cols: 90, rows: 24 },
+    ])
   })
 
   it('fits once after the container settles on a new size', async () => {
@@ -219,7 +259,7 @@ describe('showing a terminal session', () => {
     const { session, socket, terminal } = await shown()
     session.hide(box())
     for (const data of ['one ', 'two ', 'three']) {
-      socket.message({ type: 'output', data })
+      socket.bytes(data)
     }
     session.show(box())
     expect(terminal.written).toEqual(['one ', 'two ', 'three'])
@@ -232,7 +272,7 @@ describe('showing a terminal session', () => {
     for (let second = 0; second < 600; second += 1) {
       const data = `${String(second).padStart(4, '0')}${'x'.repeat(2044)}`
       chunks.push(data)
-      socket.message({ type: 'output', data })
+      socket.bytes(data)
       vi.advanceTimersByTime(1000)
     }
     session.show(box())
@@ -240,7 +280,10 @@ describe('showing a terminal session', () => {
     expect(terminal.written).toEqual(chunks)
     expect(connect).toHaveBeenCalledTimes(1)
     expect(socket.closed).toBe(false)
-    expect(socket.sent).toEqual([])
+    expect(socket.sent).toEqual([
+      { type: 'visible', visible: false },
+      { type: 'visible', visible: true, cols: 80, rows: 24 },
+    ])
   })
 
   it('takes the focus when shown again while another control has it (C1)', async () => {
@@ -649,5 +692,409 @@ describe('visibility', () => {
     const fits = fitsOf()
     fakes.webgl[0]?.loseContext()
     expect(fitsOf()).toBe(fits + 1)
+  })
+})
+
+describe('binary output and JSON control (AC 14, C16)', () => {
+  it('writes a binary frame to xterm as bytes, with no JSON step', async () => {
+    const { session, socket, terminal } = await shown()
+    expect(socket.binaryType).toBe('arraybuffer')
+    const parse = vi.spyOn(JSON, 'parse')
+    const text = 'héllo {"type":"exit","code":0}'
+
+    socket.bytes(text)
+    expect(parse).not.toHaveBeenCalled()
+    const written = terminal.writes.at(-1)
+    expect(typeof written).not.toBe('string')
+    expect(ArrayBuffer.isView(written)).toBe(true)
+    expect(terminal.written.at(-1)).toBe(text)
+    expect(session.state().status).toBe('open')
+  })
+
+  it('ignores hello, an old output message and an unknown type', async () => {
+    const { session, socket, terminal } = await shown()
+    socket.message({ type: 'hello', shellId: 'shell-1' })
+    socket.message({ type: 'output', data: 'old' })
+    socket.message({ type: 'pong' })
+
+    expect(terminal.written).toEqual([])
+    expect(session.state()).toMatchObject({ status: 'open', catchingUp: false })
+    expect(socket.sent).toEqual([])
+  })
+})
+
+describe('connecting (spec 2.1)', () => {
+  it('connects as visible, and as not visible when the page is hidden', () => {
+    const first = make()
+    first.session.show(box())
+    expect(first.connect).toHaveBeenCalledWith({ cols: 80, rows: 24, visible: true })
+
+    setPageHidden(true)
+    const second = make()
+    second.session.show(box())
+    expect(second.connect).toHaveBeenCalledWith({ cols: 80, rows: 24, visible: false })
+  })
+})
+
+describe('a snapshot catch-up (AC 9, C10)', () => {
+  it('hides the screen, writes the snapshot at its size, and shows it at the bottom', async () => {
+    const { session, socket, terminal } = await shown()
+    const host = terminal.element?.parentElement
+    socket.message({ type: 'hello', shellId: 'shell-1' })
+    socket.message({ type: 'snapshot', cols: 100, rows: 30 })
+    expect(session.state().catchingUp).toBe(true)
+    expect(host?.style.visibility).toBe('hidden')
+    // The textarea keeps the focus, so keys typed now are kept.
+    expect(terminal.textarea?.style.visibility).toBe('visible')
+    // The reset waits for the bytes written before it.
+    expect(terminal.resets).toBe(0)
+
+    terminal.parse()
+    expect(terminal.resets).toBe(1)
+    expect([terminal.cols, terminal.rows]).toEqual([100, 30])
+    socket.bytes('history\r\n')
+    socket.bytes('screen')
+    terminal.buffer.active = { viewportY: 0, baseY: 10 }
+    socket.message({ type: 'replayed', offset: 500 })
+    // Still hidden: xterm has not parsed the last chunk yet.
+    expect(session.state().catchingUp).toBe(true)
+    expect(socket.sent).toEqual([])
+
+    terminal.parse()
+    expect(terminal.written).toEqual(['', 'history\r\n', 'screen', ''])
+    expect([terminal.cols, terminal.rows]).toEqual([80, 24])
+    expect(terminal.buffer.active.viewportY).toBe(10)
+    expect(session.state().catchingUp).toBe(false)
+    expect(host?.style.visibility).toBe('')
+    expect(terminal.textarea?.style.visibility).toBe('')
+    // Fitted back to the size it attached with: no resize.
+    expect(socket.sent).toEqual([{ type: 'ack', offset: 500 }])
+  })
+
+  it('draws a small resume in place and hides a large one until its end (C10)', async () => {
+    const { session, socket, terminal } = await shown()
+    terminal.buffer.active = { viewportY: 0, baseY: 10 }
+    socket.message({ type: 'resume', offset: 0 })
+    socket.bytes('x'.repeat(HIDDEN_RESUME_BYTES))
+    expect(session.state().catchingUp).toBe(false)
+    socket.message({ type: 'replayed', offset: HIDDEN_RESUME_BYTES })
+    terminal.parse()
+    expect(terminal.resets).toBe(0)
+    expect(terminal.buffer.active.viewportY).toBe(0)
+
+    socket.message({ type: 'resume', offset: HIDDEN_RESUME_BYTES })
+    socket.bytes('x'.repeat(HIDDEN_RESUME_BYTES))
+    expect(session.state().catchingUp).toBe(false)
+    socket.bytes('y')
+    expect(session.state().catchingUp).toBe(true)
+    expect(terminal.element?.parentElement?.style.visibility).toBe('hidden')
+    socket.message({ type: 'replayed', offset: 2 * HIDDEN_RESUME_BYTES + 1 })
+    terminal.parse()
+    expect(session.state().catchingUp).toBe(false)
+    expect(terminal.element?.parentElement?.style.visibility).toBe('')
+    expect(terminal.resets).toBe(0)
+    expect(terminal.buffer.active.viewportY).toBe(0)
+  })
+})
+
+// Typed text, Vietnamese input (a, DEL, á), a paste that looks like a reply, a mouse report.
+const KEYS = ['l', 'a', '\x7f', 'á', 'abc\x1b[1;2R', '\x1b[<0;3;4M']
+
+const CATCH_UPS: [string, (socket: FakeSocket) => void][] = [
+  ['a snapshot', (socket) => snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])],
+  [
+    'a small resume',
+    (socket) => {
+      socket.message({ type: 'resume', offset: 10 })
+      socket.bytes('more')
+    },
+  ],
+  [
+    'a large resume',
+    (socket) => {
+      socket.message({ type: 'resume', offset: 10 })
+      socket.bytes('x'.repeat(HIDDEN_RESUME_BYTES + 1))
+    },
+  ],
+]
+
+const REPLIES = [
+  '\x1b[?1;2c',
+  '\x1b[>0;276;0c',
+  '\x1b[12;5R',
+  '\x1b[0n',
+  '\x1b[?2026;2$y',
+  '\x1b[8;24;80t',
+  '\x1bP1$r0m\x1b\\',
+  '\x1b]11;rgb:0000/0000/0000\x1b\\',
+  '\x1b]10;rgb:ffff/ffff/ffff\x07',
+]
+
+describe('input and size during a catch-up (AC 12, C14)', () => {
+  it.each(CATCH_UPS)('keeps input and size until the end of %s', async (_, begin) => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    begin(socket)
+    terminal.parse()
+    for (const data of KEYS) {
+      terminal.fire('data', data)
+    }
+    terminal.fitSize = { cols: 120, rows: 40 }
+    observer?.callback()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    terminal.textarea?.dispatchEvent(new Event('focus'))
+    expect(socket.sent).toEqual([])
+
+    socket.message({ type: 'replayed', offset: 100 })
+    terminal.parse()
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 100 },
+      { type: 'resize', cols: 120, rows: 40 },
+      ...KEYS.map((data) => ({ type: 'input', data })),
+    ])
+  })
+
+  it('never sends the replies xterm gives to replayed queries', async () => {
+    const { socket, terminal } = await shown()
+    socket.message({ type: 'resume', offset: 0 })
+    socket.bytes('\x1b[c\x1b[6n')
+    for (const reply of REPLIES) {
+      terminal.fire('data', reply)
+    }
+    socket.message({ type: 'replayed', offset: 8 })
+    terminal.parse()
+
+    expect(socket.sent).toEqual([{ type: 'ack', offset: 8 }])
+  })
+
+  it('keeps a reply form typed with a key, and drops a reply right after it', async () => {
+    const { socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    // Shift+F3 gives the same bytes as a cursor position report.
+    terminal.keyData = '\x1b[1;2R'
+    terminal.textarea?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+    terminal.fire('data', '\x1b[1;2R')
+    socket.message({ type: 'replayed', offset: 6 })
+    terminal.parse()
+
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 6 },
+      { type: 'input', data: '\x1b[1;2R' },
+    ])
+  })
+
+  it('keeps the key flag past a microtask and clears it with a task', async () => {
+    const { socket, terminal } = await shown()
+    socket.message({ type: 'resume', offset: 0 })
+    // A keydown that never reaches the textarea listener, as if xterm stopped it.
+    terminal.element?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+    terminal.fire('data', '\x1b[2;3R')
+    await Promise.resolve()
+    terminal.fire('data', '\x1b[3;4R')
+    vi.advanceTimersByTime(0)
+    terminal.fire('data', '\x1b[4;5R')
+    socket.message({ type: 'replayed', offset: 0 })
+    terminal.parse()
+
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 0 },
+      { type: 'input', data: '\x1b[2;3R' },
+      { type: 'input', data: '\x1b[3;4R' },
+    ])
+  })
+
+  it('sends one resize with the final size after a drag during a catch-up (C38)', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    for (let step = 1; step <= 60; step += 1) {
+      terminal.fitSize = { cols: 80 + step, rows: 24 }
+      observer?.callback()
+      vi.advanceTimersByTime(16)
+    }
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([])
+
+    socket.message({ type: 'replayed', offset: 6 })
+    terminal.parse()
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 6 },
+      { type: 'resize', cols: 140, rows: 24 },
+    ])
+  })
+})
+
+describe('a catch-up whose replayed does not come (AC 13, C15)', () => {
+  it('shows the screen after 10 s, sends the kept keys, then input at once', async () => {
+    const { session, socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    terminal.fire('data', 'a')
+    terminal.fire('data', 'b')
+    vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS - 1)
+    expect(session.state().catchingUp).toBe(true)
+    expect(socket.sent).toEqual([])
+
+    vi.advanceTimersByTime(1)
+    expect(session.state().catchingUp).toBe(false)
+    expect(terminal.element?.parentElement?.style.visibility).toBe('')
+    expect(socket.sent).toEqual([
+      { type: 'input', data: 'a' },
+      { type: 'input', data: 'b' },
+    ])
+    terminal.fire('data', 'c')
+    expect(socket.sent.at(-1)).toEqual({ type: 'input', data: 'c' })
+  })
+
+  it('ends normally on replayed at 9.9 s, with no second send at 10 s', async () => {
+    const { session, socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.fire('data', 'a')
+    vi.advanceTimersByTime(9_900)
+    socket.message({ type: 'replayed', offset: 6 })
+    terminal.parse()
+    expect(session.state().catchingUp).toBe(false)
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 6 },
+      { type: 'input', data: 'a' },
+    ])
+
+    vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
+    expect(socket.sent).toHaveLength(2)
+  })
+
+  it('only takes the offset of a replayed after 10 s: no reset, no second show', async () => {
+    const { session, socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
+    expect(session.state().catchingUp).toBe(false)
+    const changes = vi.fn()
+    session.subscribe(changes)
+    terminal.buffer.active = { viewportY: 0, baseY: 10 }
+
+    socket.bytes('late')
+    socket.message({ type: 'replayed', offset: 200 })
+    terminal.parse()
+    expect(terminal.resets).toBe(1)
+    expect(terminal.buffer.active.viewportY).toBe(0)
+    expect(changes).not.toHaveBeenCalled()
+    expect(socket.sent).toEqual([{ type: 'ack', offset: 200 }])
+  })
+})
+
+describe('the offset and acks (AC 44, C46)', () => {
+  it('takes the offset from replayed, then acks every ACK_EVERY_BYTES parsed', async () => {
+    const { socket, terminal } = await shown()
+    // Snapshot and waiting output past the ack size: no ack during the catch-up.
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['x'.repeat(ACK_EVERY_BYTES), 'y'.repeat(100)])
+    terminal.parse()
+    expect(socket.sent).toEqual([])
+    socket.message({ type: 'replayed', offset: 100 })
+    terminal.parse()
+    expect(socket.sent).toEqual([{ type: 'ack', offset: 100 }])
+
+    socket.bytes('a'.repeat(40 * 1024))
+    terminal.parse()
+    expect(socket.sent).toHaveLength(1)
+    socket.bytes('b'.repeat(30 * 1024))
+    terminal.parse()
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 100 },
+      { type: 'ack', offset: 100 + 70 * 1024 },
+    ])
+  })
+})
+
+describe('size claims (AC 42, C44)', () => {
+  it('sends no resize after the catch-up of a client that did not claim', async () => {
+    setPageHidden(true)
+    const { socket, connect, terminal } = await shown()
+    expect(connect).toHaveBeenCalledWith({ cols: 80, rows: 24, visible: false })
+    // The shell has another size; the snapshot comes at that size.
+    snapshotOf(socket, { cols: 100, rows: 30 }, ['screen'], 6)
+    terminal.parse()
+    expect([terminal.cols, terminal.rows]).toEqual([80, 24])
+    expect(socket.sent).toEqual([{ type: 'ack', offset: 6 }])
+
+    // Its first input claims, with its own size first.
+    terminal.fire('data', 'l')
+    terminal.fire('data', 's')
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 6 },
+      { type: 'resize', cols: 80, rows: 24 },
+      { type: 'input', data: 'l' },
+      { type: 'input', data: 's' },
+    ])
+  })
+})
+
+describe('visible messages (AC 46, C48)', () => {
+  it('claims with its size when it comes on screen, never when the page comes back', async () => {
+    const { session, socket, terminal } = await shown()
+    session.setOnScreen(false)
+    expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
+    terminal.fitSize = { cols: 90, rows: 24 }
+    session.setOnScreen(true)
+    expect(socket.sent.slice(1)).toEqual([
+      { type: 'resize', cols: 90, rows: 24 },
+      { type: 'visible', visible: true, cols: 90, rows: 24 },
+    ])
+
+    socket.sent.length = 0
+    setPageHidden(true)
+    expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
+    setPageHidden(false)
+    expect(socket.sent).toEqual([
+      { type: 'visible', visible: false },
+      { type: 'visible', visible: true },
+    ])
+  })
+
+  it('claims only after the catch-up when it comes on screen during one', async () => {
+    const { session, socket, terminal } = await shown()
+    session.setOnScreen(false)
+    snapshotOf(socket, { cols: 100, rows: 30 }, ['screen'])
+    terminal.parse()
+    socket.sent.length = 0
+
+    session.setOnScreen(true)
+    expect(socket.sent).toEqual([{ type: 'visible', visible: true }])
+    socket.message({ type: 'replayed', offset: 6 })
+    terminal.parse()
+    expect(socket.sent).toEqual([
+      { type: 'visible', visible: true },
+      { type: 'ack', offset: 6 },
+      { type: 'visible', visible: true, cols: 80, rows: 24 },
+    ])
+  })
+})
+
+describe('the end of a catch-up by exit or dispose (C4)', () => {
+  it('shows the screen when the shell exits during a catch-up', async () => {
+    const onEnd = vi.fn()
+    const { session, socket, terminal } = await shown(onEnd)
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    socket.message({ type: 'exit', code: 0 })
+
+    expect(session.state()).toMatchObject({ status: 'ended', catchingUp: false })
+    expect(terminal.element?.parentElement?.style.visibility).toBe('')
+    expect(onEnd).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves no timer and does nothing after a dispose during a catch-up', async () => {
+    const { session, socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 100, rows: 30 }, ['screen'])
+    terminal.element?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+    socket.message({ type: 'replayed', offset: 6 })
+    session.dispose()
+    // Only the one that frees xterm.
+    expect(vi.getTimerCount()).toBe(1)
+
+    terminal.parse()
+    vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
+    expect(terminal.resets).toBe(0)
+    expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
   })
 })
