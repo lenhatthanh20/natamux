@@ -1,9 +1,9 @@
 import { appendFileSync } from 'node:fs'
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
-import { scrollbackLines } from '@natamux/core'
+import { ACK_EVERY_BYTES, scrollbackLines } from '@natamux/core'
 import { afterAll, describe, expect, it } from 'vitest'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
-import { type TerminalFrame, TerminalService } from './terminal-service.js'
+import { MAIN_TERMINAL, type TerminalFrame, TerminalService } from './terminal-service.js'
 
 // Numbers for the terminal path of the daemon, recorded so each PR can show its effect on the same
 // cases. Only the event loop delay of a snapshot is a limit. It runs only with NATAMUX_BENCH=1,
@@ -44,7 +44,8 @@ function frameHeaderBytes(length: number): number {
 }
 
 // Records the binary frames, the output; the wire bytes are the frame bytes plus their headers.
-function timedClient() {
+// With a service, it acks as the dashboard does, so flow control never puts it behind.
+function timedClient(service?: TerminalService) {
   const decoder = new TextDecoder()
   const stats = {
     frames: 0,
@@ -54,11 +55,27 @@ function timedClient() {
     lastAt: 0,
     text: '',
   }
-  return {
+  let offset = 0
+  let acked = 0
+  let live = false
+  const client = {
     stats,
     send: (frame: TerminalFrame) => {
       if (!(frame instanceof Uint8Array)) {
+        if (frame.type === 'replayed') {
+          live = true
+          offset = frame.offset
+          acked = offset
+        }
         return
+      }
+      if (live && service) {
+        offset += frame.byteLength
+        if (offset - acked >= ACK_EVERY_BYTES) {
+          const at = offset
+          acked = at
+          queueMicrotask(() => service.ack(TASK, at, MAIN_TERMINAL, client))
+        }
       }
       const now = performance.now()
       if (stats.frames === 0) {
@@ -72,6 +89,7 @@ function timedClient() {
       stats.text += decoder.decode(frame)
     },
   }
+  return client
 }
 
 function shellOf(ptys: FakePty[]): FakePty {
@@ -167,12 +185,15 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
       'attach after $cols columns of $style history',
       async ({ cols, style }) => {
         const { service, ptys } = setup()
-        service.attach(TASK, timedClient(), { cols, rows: SCREEN_ROWS })
+        const detach = service.attach(TASK, timedClient(), { cols, rows: SCREEN_ROWS })
         const pty = shellOf(ptys)
         for (const part of pieces(historyText(cols, style), PIECE_CHARS)) {
           pty.emit(part)
         }
         await service.settled(TASK)
+        // It fell behind while the history was printed; its catch-up must not run during the
+        // measure.
+        detach()
 
         const delay = monitorEventLoopDelay({ resolution: 1 })
         delay.enable()
@@ -251,7 +272,7 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
   describe('live output frames', () => {
     async function measureLive(measure: string, chunks: string[], turnEvery: number) {
       const { service, ptys } = setup()
-      const client = timedClient()
+      const client = timedClient(service)
       service.attach(TASK, client, { cols: 120, rows: SCREEN_ROWS })
       const pty = shellOf(ptys)
       await service.settled(TASK)

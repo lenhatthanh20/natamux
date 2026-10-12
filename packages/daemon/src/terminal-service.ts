@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { basename } from 'node:path'
 import {
+  ACK_EVERY_BYTES,
   portRange,
   scrollbackLines,
   TERMINAL_SCROLLBACK_MAX_LINES,
@@ -20,6 +21,9 @@ export type PtyProcess = {
   onExit: (listener: (code: number | null) => void) => void
   write: (data: string) => void
   resize: (cols: number, rows: number) => void
+  // Stop and go on reading output. Input still goes in while paused.
+  pause: () => void
+  resume: () => void
   // A signal name such as 'SIGHUP'. Without one, the default of the platform.
   kill: (signal?: string) => void
   // The name of the program in the foreground, such as "bash" or "node".
@@ -69,6 +73,20 @@ export const SNAPSHOT_FIRST_SLICE_ROWS = 250
 export const SNAPSHOT_MIN_SLICE_ROWS = 50
 // A snapshot waits at most this long for a program to finish drawing a frame (mode 2026).
 export const SNAPSHOT_SYNC_WAIT_MS = 150
+// Chars the daemon's screen has not parsed yet, the freeze queue of a snapshot included. Above the
+// high mark the shell is paused; it goes on below the low mark.
+export const SCREEN_HIGH_WATER = 1_000_000
+export const SCREEN_LOW_WATER = 250_000
+// A client with more output not acked than this is behind: its live output is dropped.
+export const CLIENT_HIGH_WATER = 512 * 1024
+// A hidden client gets at most this much live output per window, counted from when it hid.
+export const HIDDEN_BUDGET_BYTES = 256 * 1024
+export const HIDDEN_BUDGET_WINDOW_MS = 1000
+// A behind client is caught up once the shell wrote less than cols * rows / 8 bytes in the last
+// RESYNC_QUIET_WINDOW_MS, or once it has been behind RESYNC_MAX_WAIT_MS. It gets at most one
+// snapshot per RESYNC_MAX_WAIT_MS.
+export const RESYNC_QUIET_WINDOW_MS = 100
+export const RESYNC_MAX_WAIT_MS = 2000
 // A shell gets this long to end after SIGHUP, then it is killed.
 export const KILL_GRACE_MS = 2000
 // How long a killed shell may take to end before closeAndWait stops waiting for it.
@@ -128,9 +146,19 @@ export class ScreenState {
   private queue: Queued[] = []
   // Rows serialized per turn, learned from the last turn so one takes about SERIALIZE_SLICE_MS.
   private sliceRows = SNAPSHOT_FIRST_SLICE_ROWS
+  // Chars written but not parsed yet, the queue included, see SCREEN_HIGH_WATER.
+  private unparsed = 0
+  private full = false
+  private readonly onFull: (full: boolean) => void
 
-  constructor(size: TerminalSize, now: () => number = Date.now) {
+  // onFull(true) when the screen falls too far behind, onFull(false) when it has caught up.
+  constructor(
+    size: TerminalSize,
+    now: () => number = Date.now,
+    onFull: (full: boolean) => void = () => undefined,
+  ) {
     this.now = now
+    this.onFull = onFull
     this.terminal = new xtermHeadless.Terminal({
       ...size,
       scrollback: scrollbackLines(size.cols),
@@ -146,10 +174,11 @@ export class ScreenState {
     if (this.disposed) {
       return
     }
+    this.count(data.length)
     if (this.frozen) {
       this.queue.push({ data })
     } else {
-      this.terminal.write(data)
+      this.feed(data)
     }
   }
 
@@ -209,6 +238,26 @@ export class ScreenState {
     this.terminal.dispose()
   }
 
+  private feed(data: string): void {
+    this.terminal.write(data, () => {
+      if (!this.disposed) {
+        this.count(-data.length)
+      }
+    })
+  }
+
+  // Two marks, so a backlog near one of them does not pause and resume the shell over and over.
+  private count(chars: number): void {
+    this.unparsed += chars
+    if (!this.full && this.unparsed > SCREEN_HIGH_WATER) {
+      this.full = true
+      this.onFull(true)
+    } else if (this.full && this.unparsed < SCREEN_LOW_WATER) {
+      this.full = false
+      this.onFull(false)
+    }
+  }
+
   private whenParsed(run: () => void): void {
     if (this.disposed) {
       return
@@ -232,7 +281,7 @@ export class ScreenState {
     this.queue = []
     for (const item of queue) {
       if ('data' in item) {
-        this.terminal.write(item.data)
+        this.feed(item.data)
       } else {
         this.whenParsed(item.run)
       }
@@ -385,9 +434,22 @@ type ClientState = {
   // Its last `visible` message, or the `visible` query.
   visible: boolean
   // 'snapshot' until its replayed is sent. Before the cut its output is dropped (the snapshot has
-  // it); from the cut on it waits in `waiting`.
-  phase: 'snapshot' | 'live'
+  // it); from the cut on it waits in `waiting`. 'behind' while its live output is dropped.
+  phase: 'snapshot' | 'live' | 'behind'
   waiting: Buffer[] | null
+  waitingBytes: number
+  // Offsets: the end of the output sent to it, and of the output it acked.
+  sent: number
+  acked: number
+  // The first byte it missed, and when. Also set in the snapshot phase once `waiting` passed its
+  // cap: the client then gets the snapshot alone and is behind from the cut.
+  behindFrom: number | null
+  behindSince: number
+  // When it last asked for a snapshot.
+  snapshotAt: number
+  // The window of the hidden budget it is in, and the live output it got in it.
+  budgetFrom: number
+  budgetBytes: number
 }
 
 type SnapshotJob = {
@@ -425,6 +487,13 @@ type Session = {
   // The snapshot that runs, and the clients that wait for the next one.
   snapshot?: SnapshotJob
   nextSnapshot: Set<TerminalClient>
+  // Set while the pty is paused because the screen is too far behind.
+  paused: boolean
+  // Output of the last RESYNC_QUIET_WINDOW_MS, to tell when the shell is quiet.
+  recent: { at: number; bytes: number }[]
+  recentBytes: number
+  // The next look at the clients that are behind.
+  resyncTimer?: NodeJS.Timeout
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
   stopKillTimer?: () => void
   // Set while the shell of an ended task waits, with no client, to be closed.
@@ -523,7 +592,22 @@ export class TerminalService {
     const visible = options.visible ?? true
     const existed = this.sessions.has(sessionKey(taskId, terminal))
     const session = this.ensure(taskId, terminal, size)
-    const state: ClientState = { size, claimed: visible, visible, phase: 'snapshot', waiting: null }
+    const now = this.now()
+    const state: ClientState = {
+      size,
+      claimed: visible,
+      visible,
+      phase: 'snapshot',
+      waiting: null,
+      waitingBytes: 0,
+      sent: session.offset,
+      acked: session.offset,
+      behindFrom: null,
+      behindSince: now,
+      snapshotAt: now,
+      budgetFrom: now,
+      budgetBytes: 0,
+    }
     if (visible) {
       session.clients.set(client, state)
       if (existed) {
@@ -568,11 +652,32 @@ export class TerminalService {
     if (!session || !state || !client) {
       return
     }
+    if (state.visible && !message.visible) {
+      state.budgetFrom = this.now()
+      state.budgetBytes = 0
+    }
     state.visible = message.visible
     if (message.visible && message.cols !== undefined && message.rows !== undefined) {
       this.touch(session, client)
       state.size = { cols: message.cols, rows: message.rows }
       this.setSize(session, state.size)
+    }
+    if (message.visible && state.phase === 'behind') {
+      this.catchUpBehind(session)
+    }
+  }
+
+  // The client parsed its output up to `offset`. An offset past what it was sent counts as all of
+  // it, and an older one changes nothing.
+  ack(taskId: string, offset: number, terminal = MAIN_TERMINAL, client?: TerminalClient): void {
+    const session = this.sessions.get(sessionKey(taskId, terminal))
+    const state = client ? session?.clients.get(client) : undefined
+    if (!session || !state) {
+      return
+    }
+    state.acked = Math.min(Math.max(state.acked, offset), state.sent)
+    if (state.phase === 'behind') {
+      this.catchUpBehind(session)
     }
   }
 
@@ -580,7 +685,11 @@ export class TerminalService {
   // in the future, or inside a frame).
   outputSince(taskId: string, offset: number, terminal = MAIN_TERMINAL): Buffer[] | undefined {
     const session = this.sessions.get(sessionKey(taskId, terminal))
-    if (!session || offset < session.ringStart || offset > session.offset) {
+    return session ? this.ringSince(session, offset) : undefined
+  }
+
+  private ringSince(session: Session, offset: number): Buffer[] | undefined {
+    if (offset < session.ringStart || offset > session.offset) {
       return undefined
     }
     let at = session.ringStart
@@ -633,6 +742,8 @@ export class TerminalService {
           const state = session.clients.get(client)
           if (state) {
             state.waiting = []
+            state.waitingBytes = 0
+            state.behindFrom = null
           }
         }
       },
@@ -668,15 +779,94 @@ export class TerminalService {
       for (const frame of state.waiting ?? []) {
         client.send(frame)
       }
-      client.send({ type: 'replayed', offset: session.offset })
+      const offset = state.behindFrom ?? session.offset
+      client.send({ type: 'replayed', offset })
       state.waiting = null
-      state.phase = 'live'
+      state.waitingBytes = 0
+      // A catch-up does not count as unacked: the client acks its end once it is parsed.
+      state.sent = offset
+      state.acked = offset
+      state.phase = state.behindFrom === null ? 'live' : 'behind'
     }
     job.finish()
     if (session.nextSnapshot.size > 0) {
       const next = new Set(session.nextSnapshot)
       session.nextSnapshot.clear()
       this.startSnapshot(session, next)
+    }
+    this.catchUpBehind(session)
+  }
+
+  // Catches up the clients that are behind once they can take it (spec 4.3): they acked what they
+  // got, they are visible, and the shell is quiet or they waited RESYNC_MAX_WAIT_MS. From the ring
+  // when it still has what they missed, else with a snapshot. Otherwise it looks again at the
+  // earliest time one of them could be ready.
+  private catchUpBehind(session: Session): void {
+    clearTimeout(session.resyncTimer)
+    session.resyncTimer = undefined
+    const now = this.now()
+    let next = Number.POSITIVE_INFINITY
+    for (const [client, state] of session.clients) {
+      // The dashboard acks every ACK_EVERY_BYTES, so a smaller rest is all it can have parsed.
+      if (
+        state.phase !== 'behind' ||
+        state.behindFrom === null ||
+        !state.visible ||
+        state.sent - state.acked >= ACK_EVERY_BYTES
+      ) {
+        continue
+      }
+      const ready = Math.min(state.behindSince + RESYNC_MAX_WAIT_MS, this.quietAt(session, now))
+      if (ready > now) {
+        next = Math.min(next, ready)
+        continue
+      }
+      this.flushOutput(session)
+      const missed = this.ringSince(session, state.behindFrom)
+      if (missed) {
+        client.send({ type: 'resume', offset: state.behindFrom })
+        for (const frame of missed) {
+          client.send(frame)
+        }
+        client.send({ type: 'replayed', offset: session.offset })
+        state.sent = session.offset
+        state.acked = session.offset
+        state.behindFrom = null
+        state.phase = 'live'
+      } else if (now >= state.snapshotAt + RESYNC_MAX_WAIT_MS) {
+        state.behindFrom = null
+        state.phase = 'snapshot'
+        state.snapshotAt = now
+        this.requestSnapshot(session, client, state)
+      } else {
+        next = Math.min(next, state.snapshotAt + RESYNC_MAX_WAIT_MS)
+      }
+    }
+    if (next < Number.POSITIVE_INFINITY) {
+      session.resyncTimer = setTimeout(() => this.catchUpBehind(session), next - now)
+    }
+  }
+
+  // When the shell counts as quiet if it prints nothing more: less than cols * rows / 8 bytes in
+  // the last RESYNC_QUIET_WINDOW_MS.
+  private quietAt(session: Session, now: number): number {
+    this.dropOldOutput(session, now)
+    const limit = (session.size.cols * session.size.rows) / 8
+    let left = session.recentBytes
+    let at = now
+    for (const entry of session.recent) {
+      if (left < limit) {
+        break
+      }
+      left -= entry.bytes
+      at = entry.at + RESYNC_QUIET_WINDOW_MS
+    }
+    return at
+  }
+
+  private dropOldOutput(session: Session, now: number): void {
+    while ((session.recent[0]?.at ?? now) <= now - RESYNC_QUIET_WINDOW_MS) {
+      session.recentBytes -= session.recent.shift()?.bytes ?? 0
     }
   }
 
@@ -692,6 +882,10 @@ export class TerminalService {
     if (bytes.length === 0) {
       return
     }
+    const now = this.now()
+    session.recent.push({ at: now, bytes: bytes.length })
+    session.recentBytes += bytes.length
+    this.dropOldOutput(session, now)
     session.batch.push(bytes)
     session.batchBytes += bytes.length
     if (session.batchBytes >= OUTPUT_FRAME_BYTES) {
@@ -704,7 +898,7 @@ export class TerminalService {
     ) {
       return
     }
-    const idle = this.now() - session.lastFlushAt >= OUTPUT_COALESCE_MS
+    const idle = now - session.lastFlushAt >= OUTPUT_COALESCE_MS
     if (idle && session.batchBytes < OUTPUT_IDLE_BYTES) {
       session.flushImmediate = setImmediate(() => this.flushOutput(session))
     } else {
@@ -745,6 +939,7 @@ export class TerminalService {
   }
 
   private sendFrame(session: Session, frame: Buffer): void {
+    const start = session.offset
     session.offset += frame.length
     session.ring.push(frame)
     session.ringBytes += frame.length
@@ -755,11 +950,49 @@ export class TerminalService {
     }
     for (const [client, state] of session.clients) {
       if (state.phase === 'live') {
-        client.send(frame)
+        if (this.admits(state, frame.length)) {
+          client.send(frame)
+          state.sent = session.offset
+        } else {
+          // Dropped, not queued, so a slow or hidden client costs no memory.
+          state.phase = 'behind'
+          state.behindFrom = start
+          state.behindSince = this.now()
+        }
       } else if (state.waiting !== null) {
-        state.waiting.push(frame)
+        if (state.waitingBytes + frame.length > CLIENT_HIGH_WATER) {
+          state.behindFrom = start - state.waitingBytes
+          state.behindSince = this.now()
+          state.waiting = null
+          state.waitingBytes = 0
+        } else {
+          state.waiting.push(frame)
+          state.waitingBytes += frame.length
+        }
       }
     }
+  }
+
+  // A live client takes a frame while it is within CLIENT_HIGH_WATER of its acks and, when hidden,
+  // while the frame fits the budget of the current window.
+  private admits(state: ClientState, bytes: number): boolean {
+    if (state.sent + bytes - state.acked > CLIENT_HIGH_WATER) {
+      return false
+    }
+    if (state.visible) {
+      return true
+    }
+    const now = this.now()
+    if (now - state.budgetFrom >= HIDDEN_BUDGET_WINDOW_MS) {
+      const windows = Math.floor((now - state.budgetFrom) / HIDDEN_BUDGET_WINDOW_MS)
+      state.budgetFrom += windows * HIDDEN_BUDGET_WINDOW_MS
+      state.budgetBytes = 0
+    }
+    if (state.budgetBytes + bytes > HIDDEN_BUDGET_BYTES) {
+      return false
+    }
+    state.budgetBytes += bytes
+    return true
   }
 
   // An ended task needs no shell that nobody looks at. One that runs a program, such as a dev
@@ -902,6 +1135,19 @@ export class TerminalService {
     return state
   }
 
+  // Only the daemon's screen pauses a shell; a slow client never does.
+  private setPaused(session: Session, paused: boolean): void {
+    if (session.paused === paused) {
+      return
+    }
+    session.paused = paused
+    if (paused) {
+      session.pty.pause()
+    } else {
+      session.pty.resume()
+    }
+  }
+
   // The shell is told only when the size really changes. Output drawn for the old size goes out
   // first.
   private setSize(session: Session, size: TerminalSize): void {
@@ -924,6 +1170,7 @@ export class TerminalService {
     this.sessions.delete(key)
     clearTimeout(session.idleTimer)
     clearTimeout(session.writeTimer)
+    clearTimeout(session.resyncTimer)
     this.flushOutput(session)
     this.endSnapshots(session)
     session.screen.dispose()
@@ -936,6 +1183,8 @@ export class TerminalService {
     const timer = setTimeout(() => session.pty.kill('SIGKILL'), KILL_GRACE_MS)
     timer.unref()
     session.stopKillTimer = () => clearTimeout(timer)
+    // A paused shell blocks on its output and might never get to end.
+    this.setPaused(session, false)
     session.pty.kill('SIGHUP')
   }
 
@@ -1000,7 +1249,7 @@ export class TerminalService {
       shellId: randomBytes(16).toString('base64url'),
       pty,
       size,
-      screen: new ScreenState(size, this.now),
+      screen: new ScreenState(size, this.now, (full) => this.setPaused(session, full)),
       clients: new Map(),
       offset: 0,
       batch: [],
@@ -1010,6 +1259,9 @@ export class TerminalService {
       ringBytes: 0,
       ringStart: 0,
       nextSnapshot: new Set(),
+      paused: false,
+      recent: [],
+      recentBytes: 0,
       pending: [],
     }
     this.sessions.set(key, session)
@@ -1031,6 +1283,7 @@ export class TerminalService {
       session.stopKillTimer?.()
       clearTimeout(session.idleTimer)
       clearTimeout(session.writeTimer)
+      clearTimeout(session.resyncTimer)
       // After closeOne, nothing is pending and no client is left, so nothing goes out twice.
       this.flushOutput(session)
       this.endSnapshots(session)
@@ -1038,6 +1291,7 @@ export class TerminalService {
         this.sessions.delete(key)
         session.screen.dispose()
       }
+      this.setPaused(session, false)
       for (const client of session.clients.keys()) {
         client.send({ type: 'exit', code })
       }

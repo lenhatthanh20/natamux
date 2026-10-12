@@ -13,6 +13,9 @@ export class FakePty implements PtyProcess {
   stubborn = false
   // The program in the foreground; tests set it to pretend an agent runs.
   program = 'bash'
+  // pause() and resume() calls, in order. emit() still delivers output while paused.
+  readonly flow: ('pause' | 'resume')[] = []
+  paused = false
   private dataListeners: ((data: string) => void)[] = []
   private exitListeners: ((code: number | null) => void)[] = []
 
@@ -37,6 +40,16 @@ export class FakePty implements PtyProcess {
 
   resize(cols: number, rows: number): void {
     this.sizes.push({ cols, rows })
+  }
+
+  pause(): void {
+    this.paused = true
+    this.flow.push('pause')
+  }
+
+  resume(): void {
+    this.paused = false
+    this.flow.push('resume')
   }
 
   kill(signal?: string): void {

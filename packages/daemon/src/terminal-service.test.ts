@@ -1,4 +1,5 @@
 import {
+  ACK_EVERY_BYTES,
   scrollbackLines,
   TERMINAL_SCROLLBACK_MAX_LINES,
   type TerminalServerMessage,
@@ -8,10 +9,13 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fakeSpawner } from './terminal-fake.fixture.js'
+import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import {
+  CLIENT_HIGH_WATER,
   ENDED_IDLE_MS,
   ENTER_AFTER_PASTE_MS,
+  HIDDEN_BUDGET_BYTES,
+  HIDDEN_BUDGET_WINDOW_MS,
   INPUT_GAP_MS,
   KILL_GRACE_MS,
   MAIN_TERMINAL,
@@ -21,6 +25,10 @@ import {
   OUTPUT_FRAME_BYTES,
   OUTPUT_IDLE_BYTES,
   OUTPUT_RING_BYTES,
+  RESYNC_MAX_WAIT_MS,
+  RESYNC_QUIET_WINDOW_MS,
+  SCREEN_HIGH_WATER,
+  SCREEN_LOW_WATER,
   SNAPSHOT_SYNC_WAIT_MS,
   sliceEnd,
   splitFrames,
@@ -41,6 +49,15 @@ type SetupOptions = {
   onOutput?: (taskId: string, terminal: string, data: string) => void
 }
 
+// Shells of a test must not run timers or snapshots during the next one.
+const services: TerminalService[] = []
+
+afterEach(() => {
+  for (const service of services.splice(0)) {
+    service.closeAll()
+  }
+})
+
 function setup(options: SetupOptions = {}) {
   const { spawn, ptys } = fakeSpawner()
   const service = new TerminalService({
@@ -56,6 +73,7 @@ function setup(options: SetupOptions = {}) {
     isEnded: options.isEnded,
     onOutput: options.onOutput,
   })
+  services.push(service)
   return { service, ptys }
 }
 
@@ -208,6 +226,89 @@ function onEachSlice(between: () => void) {
 
 function nextTurn(): Promise<void> {
   return new Promise((resolve) => setImmediate(() => resolve()))
+}
+
+// One full output frame of numbered lines, 64 bytes each.
+function frameOf(index: number): string {
+  const lines = OUTPUT_FRAME_BYTES / 64
+  return Array.from(
+    { length: lines },
+    (_, line) => `${String(index * lines + line).padStart(62, '.')}\r\n`,
+  ).join('')
+}
+
+// A dashboard that parses at once. Like the real one, it acks every ACK_EVERY_BYTES and at the end
+// of a catch-up, a moment later as through a socket. `arrivals` is its live output and when.
+function ackingClient(service: TerminalService, terminal = MAIN_TERMINAL) {
+  const frames: TerminalFrame[] = []
+  const arrivals: { at: number; bytes: number }[] = []
+  let offset = 0
+  let acked = 0
+  let live = false
+  const ack = (at: number) => {
+    acked = at
+    queueMicrotask(() => service.ack('T-0001', at, terminal, acking))
+  }
+  const acking = {
+    frames,
+    arrivals,
+    send: (frame: TerminalFrame) => {
+      frames.push(frame)
+      if (!isBytes(frame)) {
+        if (frame.type === 'snapshot' || frame.type === 'resume') {
+          live = false
+        } else if (frame.type === 'replayed') {
+          live = true
+          offset = frame.offset
+          ack(offset)
+        }
+        return
+      }
+      if (live) {
+        offset += frame.byteLength
+        arrivals.push({ at: Date.now(), bytes: frame.byteLength })
+        if (offset - acked >= ACK_EVERY_BYTES) {
+          ack(offset)
+        }
+      }
+    },
+  }
+  return acking
+}
+
+// The catch-ups a client got after the snapshot of its attach.
+function catchUps(frames: TerminalFrame[]): TerminalServerMessage[] {
+  return controls(frames)
+    .filter((message) => message.type === 'snapshot' || message.type === 'resume')
+    .slice(1)
+}
+
+// Output of `bytes` every 10 ms, for `ms`, as a program that keeps printing.
+async function flood(pty: FakePty, ms: number, bytes = 1000): Promise<void> {
+  for (let spent = 0; spent < ms; spent += 10) {
+    pty.emit(`${'f'.repeat(bytes - 2)}\r\n`)
+    await vi.advanceTimersByTimeAsync(10)
+  }
+}
+
+function first<T>(items: T[]): T {
+  const item = items[0]
+  if (item === undefined) {
+    throw new Error('Nothing was started.')
+  }
+  return item
+}
+
+// The client's screen equals the daemon's, as deep as the history the daemon keeps.
+async function expectSameScreen(frames: TerminalFrame[], daemon: TerminalFrame[]): Promise<void> {
+  const expected = await screenOf(daemon)
+  expect((await screenOf(frames)).slice(-expected.length)).toEqual(expected)
+}
+
+// The frames from the last snapshot on: what the client's screen holds after it.
+function sinceSnapshot(frames: TerminalFrame[]): TerminalFrame[] {
+  const starts = frames.map((frame) => !isBytes(frame) && frame.type === 'snapshot')
+  return frames.slice(starts.lastIndexOf(true))
 }
 
 describe('TerminalService', () => {
@@ -1905,5 +2006,507 @@ describe('a snapshot during a synchronized frame', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(types()).toEqual(['hello', 'snapshot', 'replayed'])
+  })
+})
+
+describe('the screen of a shell under a flood', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  type Headless = InstanceType<typeof xtermHeadless.Terminal>
+
+  async function shell() {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    await service.settled('T-0001')
+    return { service, pty: first(ptys) }
+  }
+
+  it('pauses the shell when its screen falls behind, and resumes it once parsed', async () => {
+    const { service, pty } = await shell()
+
+    // Chars, not bytes: these are 1.5 MB.
+    pty.emit('中'.repeat(SCREEN_HIGH_WATER / 2))
+    pty.emit('a'.repeat(SCREEN_HIGH_WATER / 2))
+    expect(pty.flow).toEqual([])
+    pty.emit('b')
+    expect(pty.flow).toEqual(['pause'])
+
+    // Ctrl+C still reaches the program.
+    service.input('T-0001', '\x03')
+    expect(pty.written).toEqual(['\x03'])
+
+    await service.settled('T-0001')
+    expect(pty.flow).toEqual(['pause', 'resume'])
+    expect(pty.paused).toBe(false)
+  })
+
+  it('does not pause or resume again while the backlog stays between the marks', async () => {
+    const { pty } = await shell()
+    const firstChunk = 'h'.repeat(SCREEN_HIGH_WATER - SCREEN_LOW_WATER)
+    const flows: string[][] = []
+    const write = xtermHeadless.Terminal.prototype.write
+    const spy = vi.spyOn(xtermHeadless.Terminal.prototype, 'write')
+    spy.mockImplementation(function (this: Headless, data, callback) {
+      if (data !== firstChunk) {
+        write.call(this, data, callback)
+        return
+      }
+      // Once it is parsed, the rest is just above the low mark, and more output comes.
+      write.call(this, data, () => {
+        callback?.()
+        flows.push([...pty.flow])
+        pty.emit('m'.repeat(SCREEN_HIGH_WATER))
+      })
+    })
+
+    pty.emit(firstChunk)
+    pty.emit('i'.repeat(SCREEN_LOW_WATER + 1))
+
+    await vi.waitFor(() => expect(pty.flow).toEqual(['pause', 'resume']), { timeout: 5000 })
+    expect(flows).toEqual([['pause']])
+  })
+
+  it('resumes a paused shell before it sends SIGHUP', async () => {
+    const { service, pty } = await shell()
+    pty.emit('a'.repeat(SCREEN_HIGH_WATER + 1))
+    const pausedAtKill: boolean[] = []
+    const kill = pty.kill.bind(pty)
+    pty.kill = (signal) => {
+      pausedAtKill.push(pty.paused)
+      kill(signal)
+    }
+
+    service.closeOne('T-0001', MAIN_TERMINAL)
+
+    expect(pausedAtKill).toEqual([false])
+    expect(pty.flow).toEqual(['pause', 'resume'])
+    expect(pty.signals).toEqual(['SIGHUP'])
+  })
+
+  it('leaves no paused shell behind when the shell ends', async () => {
+    const { pty } = await shell()
+    pty.emit('a'.repeat(SCREEN_HIGH_WATER + 1))
+
+    pty.exit(0)
+
+    expect(pty.flow).toEqual(['pause', 'resume'])
+  })
+
+  it('counts the output that waits during a snapshot, so a long one pauses the shell', async () => {
+    const { service, pty } = await shell()
+    pty.emit(numbered(3000))
+    await service.settled('T-0001')
+    const paused: boolean[] = []
+    onEachSlice(() => {
+      if (paused.length === 0) {
+        pty.emit('z'.repeat(SCREEN_HIGH_WATER + 1))
+        paused.push(pty.paused)
+      }
+    })
+
+    service.attach('T-0001', client(), size)
+
+    await vi.waitFor(() => expect(pty.flow).toEqual(['pause', 'resume']), { timeout: 5000 })
+    expect(paused).toEqual([true])
+  })
+})
+
+describe('a client that falls behind', () => {
+  async function shell() {
+    const { service, ptys } = setup()
+    const slow = client()
+    const detach = service.attach('T-0001', slow, size)
+    await service.settled('T-0001')
+    return { service, pty: first(ptys), slow, detach }
+  }
+
+  // Frames from `from` on, a few at a time, so the screen parses them and stays under its mark.
+  async function print(service: TerminalService, pty: FakePty, from: number, count: number) {
+    for (let index = from; index < from + count; index += 1) {
+      pty.emit(frameOf(index))
+      if (index % 4 === 3) {
+        await service.settled('T-0001')
+      }
+    }
+    await service.settled('T-0001')
+  }
+
+  function frames(from: number, count: number): string {
+    return Array.from({ length: count }, (_, index) => frameOf(from + index)).join('')
+  }
+
+  it(
+    'drops the live output of a client past CLIENT_HIGH_WATER unacked, and only of that one',
+    async () => {
+      const { service, pty, slow } = await shell()
+      const fast = ackingClient(service)
+      service.attach('T-0001', fast, size)
+      await service.settled('T-0001')
+      const start = { slow: slow.frames.length, fast: fast.frames.length }
+
+      await print(service, pty, 0, CLIENT_HIGH_WATER / OUTPUT_FRAME_BYTES)
+      expect(bytesOf(slow.frames.slice(start.slow))).toHaveLength(CLIENT_HIGH_WATER)
+      pty.emit('!')
+      await print(service, pty, 8, 48)
+
+      // Nothing more for the slow one: no queue grows for it.
+      expect(bytesOf(slow.frames.slice(start.slow))).toHaveLength(CLIENT_HIGH_WATER)
+      expect(outputOf(fast.frames.slice(start.fast))).toBe(`${frames(0, 8)}!${frames(8, 48)}`)
+      expect(catchUps(fast.frames)).toEqual([])
+      expect(pty.flow).toEqual([])
+    },
+    LONG_TEST_MS,
+  )
+
+  it('does not count a snapshot, or the output that waited, as unacked', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)()
+    const pty = first(ptys)
+    const history = `${'s'.repeat(78)}\r\n`.repeat(8000)
+    pty.emit(history)
+    await service.settled('T-0001')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    pty.emit('during\r\n')
+    await service.settled('T-0001')
+    const offset = Buffer.byteLength(`${history}during\r\n`)
+    expect(bytesOf(later.frames).byteLength).toBeGreaterThan(CLIENT_HIGH_WATER)
+    expect(later.frames.at(-1)).toEqual({ type: 'replayed', offset })
+    service.ack('T-0001', offset, MAIN_TERMINAL, later)
+    const caughtUp = later.frames.length
+
+    await print(service, pty, 0, 8)
+    pty.emit('!')
+    await service.settled('T-0001')
+
+    expect(bytesOf(later.frames.slice(caughtUp))).toHaveLength(CLIENT_HIGH_WATER)
+  })
+
+  it('takes an ack past what was sent as all of it, and ignores an older one', async () => {
+    const { service, pty, slow } = await shell()
+    const start = slow.frames.length
+
+    service.ack('T-0001', 10 * CLIENT_HIGH_WATER, MAIN_TERMINAL, slow)
+    await print(service, pty, 0, 4)
+    service.ack('T-0001', 4 * OUTPUT_FRAME_BYTES, MAIN_TERMINAL, slow)
+    service.ack('T-0001', OUTPUT_FRAME_BYTES, MAIN_TERMINAL, slow)
+    await print(service, pty, 4, 9)
+
+    // 8 frames past the ack fit CLIENT_HIGH_WATER; the 9th does not.
+    expect(bytesOf(slow.frames.slice(start))).toHaveLength(12 * OUTPUT_FRAME_BYTES)
+  })
+
+  it('forgets a client that leaves while behind', async () => {
+    const { service, pty, slow, detach } = await shell()
+    await print(service, pty, 0, 9)
+    service.ack('T-0001', CLIENT_HIGH_WATER, MAIN_TERMINAL, slow)
+
+    detach()
+    const count = slow.frames.length
+    pty.emit('after\r\n')
+    await service.settled('T-0001')
+    await new Promise((resolve) => setTimeout(resolve, 2 * RESYNC_QUIET_WINDOW_MS))
+
+    expect(slow.frames).toHaveLength(count)
+  })
+})
+
+describe('a hidden client', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function hidden(terminals = [MAIN_TERMINAL]) {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const clients = terminals.map((terminal) => {
+      const each = ackingClient(service, terminal)
+      service.attach('T-0001', each, size, terminal, { visible: false })
+      return each
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    return { service, ptys, clients, hiddenAt: Date.now() }
+  }
+
+  it(
+    'stays current through 10 minutes of a status line redrawn at 2 KB/s',
+    async () => {
+      const { ptys, clients } = await hidden()
+      const pty = first(ptys)
+      const redraw = `\r\x1b[2K${'status '.repeat(27)}`
+      let printed = ''
+
+      for (let step = 0; step < 6000; step += 1) {
+        pty.emit(redraw)
+        printed += redraw
+        await vi.advanceTimersByTimeAsync(100)
+      }
+
+      const watching = first(clients)
+      expect(outputOf(watching.frames)).toBe(printed)
+      expect(catchUps(watching.frames)).toEqual([])
+    },
+    LONG_TEST_MS,
+  )
+
+  it('takes its whole budget in one window, and a burst split by a window border', async () => {
+    const { ptys, clients } = await hidden()
+    const pty = first(ptys)
+    const watching = first(clients)
+    const budget = HIDDEN_BUDGET_BYTES / OUTPUT_FRAME_BYTES
+
+    for (let index = 0; index < budget; index += 1) {
+      pty.emit(frameOf(index))
+    }
+    await vi.advanceTimersByTimeAsync(2 * HIDDEN_BUDGET_WINDOW_MS - 100)
+    pty.emit(frameOf(budget))
+    pty.emit(frameOf(budget + 1))
+    await vi.advanceTimersByTimeAsync(100)
+    for (let index = 0; index < budget; index += 1) {
+      pty.emit(frameOf(budget + 2 + index))
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+
+    // One byte past the budget of this window: behind, and not caught up while hidden.
+    pty.emit('!')
+    await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS)
+    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+    expect(catchUps(watching.frames)).toEqual([])
+  })
+
+  it('is not caught up while hidden, and is once the page is back', async () => {
+    const { service, ptys, clients } = await hidden()
+    const pty = first(ptys)
+    const watching = first(clients)
+    for (let index = 0; index <= HIDDEN_BUDGET_BYTES / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await vi.advanceTimersByTimeAsync(5 * RESYNC_MAX_WAIT_MS)
+    expect(catchUps(watching.frames)).toEqual([])
+
+    // Without cols and rows: the page came back, which is visible enough.
+    service.visible('T-0001', { visible: true }, MAIN_TERMINAL, watching)
+    expect(catchUps(watching.frames)).toEqual([{ type: 'resume', offset: HIDDEN_BUDGET_BYTES }])
+    expect(controls(watching.frames).at(-1)).toEqual({
+      type: 'replayed',
+      offset: HIDDEN_BUDGET_BYTES + OUTPUT_FRAME_BYTES,
+    })
+  })
+
+  it('waits again when it hides before its catch-up starts', async () => {
+    const { service, ptys, clients } = await hidden()
+    const pty = first(ptys)
+    const watching = first(clients)
+    for (let index = 0; index <= HIDDEN_BUDGET_BYTES / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await flood(pty, 500, 100)
+    service.visible('T-0001', { visible: true }, MAIN_TERMINAL, watching)
+    await flood(pty, 100, 100)
+    service.visible('T-0001', { visible: false }, MAIN_TERMINAL, watching)
+    await flood(pty, 2 * RESYNC_MAX_WAIT_MS, 100)
+    expect(catchUps(watching.frames)).toEqual([])
+
+    // Behind for longer than RESYNC_MAX_WAIT_MS: caught up at once, flood or not.
+    service.visible('T-0001', { visible: true }, MAIN_TERMINAL, watching)
+    expect(catchUps(watching.frames)).toEqual([{ type: 'resume', offset: HIDDEN_BUDGET_BYTES }])
+  })
+
+  it(
+    'gives each of several hidden clients at most HIDDEN_BUDGET_BYTES per window',
+    async () => {
+      const { service, ptys, clients, hiddenAt } = await hidden(['1', '2', '3', '4'])
+
+      // A flood in every shell, 640 KB/s each.
+      for (let step = 0; step < 25; step += 1) {
+        for (const pty of ptys) {
+          pty.emit(frameOf(step))
+        }
+        await vi.advanceTimersByTimeAsync(100)
+      }
+
+      for (const each of clients) {
+        const windows = new Map<number, number>()
+        for (const { at, bytes } of each.arrivals) {
+          const slot = Math.floor((at - hiddenAt) / HIDDEN_BUDGET_WINDOW_MS)
+          windows.set(slot, (windows.get(slot) ?? 0) + bytes)
+        }
+        for (const bytes of windows.values()) {
+          expect(bytes).toBeLessThanOrEqual(HIDDEN_BUDGET_BYTES)
+        }
+        expect(bytesOf(each.frames).byteLength).toBeLessThan(25 * OUTPUT_FRAME_BYTES)
+        expect(catchUps(each.frames)).toEqual([])
+      }
+
+      // Shown again: what it missed left the ring, so it gets a snapshot.
+      const shown = first(clients)
+      service.visible('T-0001', { visible: true }, MAIN_TERMINAL, shown)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(catchUps(shown.frames)).toEqual([{ type: 'snapshot', ...size }])
+      expect(controls(shown.frames).at(-1)).toMatchObject({ type: 'replayed' })
+    },
+    LONG_TEST_MS,
+  )
+})
+
+describe('catching up a client that is behind', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  // A visible client that got the first 8 of `count` frames, missed the rest, and acked what it
+  // got.
+  async function behind(count = 9) {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const slow = client()
+    service.attach('T-0001', slow, size)
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    for (let index = 0; index < count; index += 1) {
+      pty.emit(frameOf(index))
+    }
+    service.ack('T-0001', CLIENT_HIGH_WATER, MAIN_TERMINAL, slow)
+    return { service, pty, slow }
+  }
+
+  // What a client attached now gets, once its snapshot is done.
+  async function daemonScreen(service: TerminalService): Promise<TerminalFrame[]> {
+    const fresh = client()
+    service.attach('T-0001', fresh, size)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(controls(fresh.frames).at(-1)).toMatchObject({ type: 'replayed' })
+    return fresh.frames
+  }
+
+  it('waits while the shell floods, until it has been behind RESYNC_MAX_WAIT_MS', async () => {
+    const { pty, slow } = await behind()
+
+    // 1000 bytes per 10 ms is more than cols * rows / 8 per RESYNC_QUIET_WINDOW_MS.
+    await flood(pty, RESYNC_MAX_WAIT_MS - 10)
+    expect(catchUps(slow.frames)).toEqual([])
+    await flood(pty, 20)
+    expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+    await flood(pty, RESYNC_MAX_WAIT_MS)
+    expect(catchUps(slow.frames)).toHaveLength(1)
+  })
+
+  it('starts one quiet RESYNC_QUIET_WINDOW_MS after the flood stops', async () => {
+    const { pty, slow } = await behind()
+
+    await flood(pty, 500)
+    // The last output was 10 ms ago.
+    await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS - 11)
+    expect(catchUps(slow.frames)).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+  })
+
+  it('takes output of exactly cols * rows / 8 in the window as not quiet', async () => {
+    const { pty, slow } = await behind()
+
+    await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS / 2)
+    pty.emit('q'.repeat((size.cols * size.rows) / 8))
+    await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS - 1)
+    expect(catchUps(slow.frames)).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+  })
+
+  it('measures quiet against the size the shell has now', async () => {
+    const { service, pty, slow } = await behind()
+
+    await flood(pty, 500, 100)
+    expect(catchUps(slow.frames)).toEqual([])
+    // 1000 bytes per window is less than 200 * 50 / 8.
+    service.resize('T-0001', { cols: 200, rows: 50 }, MAIN_TERMINAL, slow)
+    await flood(pty, RESYNC_QUIET_WINDOW_MS, 100)
+
+    expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+  })
+
+  it(
+    'resumes from the ring while it still has what the client missed, even from its first byte',
+    async () => {
+      // The ring holds the last 16 frames, so the client's first missed byte starts it.
+      const { service, slow } = await behind(8 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES)
+
+      await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS)
+
+      expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+      expect(controls(slow.frames).at(-1)).toEqual({
+        type: 'replayed',
+        offset: 24 * OUTPUT_FRAME_BYTES,
+      })
+      const daemon = await daemonScreen(service)
+      vi.useRealTimers()
+      await expectSameScreen(slow.frames, daemon)
+    },
+    LONG_TEST_MS,
+  )
+
+  it(
+    'takes a snapshot once the ring lost what the client missed, one per RESYNC_MAX_WAIT_MS',
+    async () => {
+      const { service, slow } = await behind(9 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES)
+
+      // Quiet soon, but the snapshot of its attach was just now.
+      await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS - 1)
+      expect(catchUps(slow.frames)).toEqual([])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(catchUps(slow.frames)).toEqual([{ type: 'snapshot', ...size }])
+      expect(controls(slow.frames).at(-1)).toEqual({
+        type: 'replayed',
+        offset: 25 * OUTPUT_FRAME_BYTES,
+      })
+      const daemon = await daemonScreen(service)
+      vi.useRealTimers()
+      await expectSameScreen(sinceSnapshot(slow.frames), daemon)
+    },
+    LONG_TEST_MS,
+  )
+
+  it('sends the snapshot alone when too much output waited, then catches up', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)()
+    const pty = first(ptys)
+    const history = numbered(3000)
+    pty.emit(history)
+    await service.settled('T-0001')
+    let index = 0
+    onEachSlice(() => {
+      if (index < 9) {
+        pty.emit(frameOf(index))
+        index += 1
+      }
+    })
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+
+    // The screen at the cut, none of the output that waited, and behind from the cut.
+    const cut = Buffer.byteLength(history)
+    expect(controls(later.frames).slice(0, 3)).toEqual([
+      hello,
+      { type: 'snapshot', ...size },
+      { type: 'replayed', offset: cut },
+    ])
+    vi.restoreAllMocks()
+    await vi.waitFor(() =>
+      expect(catchUps(later.frames)).toEqual([{ type: 'resume', offset: cut }]),
+    )
+    const fresh = client()
+    service.attach('T-0001', fresh, size)
+    await service.settled('T-0001')
+    await expectSameScreen(sinceSnapshot(later.frames), fresh.frames)
   })
 })

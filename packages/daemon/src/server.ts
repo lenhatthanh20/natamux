@@ -720,8 +720,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
         options.terminals.resize(taskId, size, terminal, client)
       } else if (message.type === 'visible') {
         options.terminals.visible(taskId, message, terminal, client)
+      } else if (message.type === 'ack') {
+        options.terminals.ack(taskId, message.offset, terminal, client)
       }
-      // An `ack` needs no answer yet: flow control will act on it.
     })
     socket.on('close', () => detach())
     socket.on('error', () => detach())

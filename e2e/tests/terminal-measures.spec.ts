@@ -27,17 +27,21 @@ import {
   watchTerminalSockets,
 } from './terminal-helpers'
 
-// These tests record numbers, for the table that compares a PR with the PR 1 baseline. They check
-// that a number was measured; only the time to show a history has a limit (AC 8). See docs/e2e.md.
+// These tests record numbers, for the table that compares a PR with the PR 1 baseline. Most only
+// check that a number was measured. Limits: the time to show a history (AC 8), and the flood test
+// (AC 25, 26). See docs/e2e.md.
 
-const PR = 3
+const PR = 4
+const ECHO_FLOOD_P95_LIMIT_MS = 100
+const CTRL_C_LIMIT_MS = 500
+const LONG_TASK_LIMIT_MS = 100
+const DAEMON_GROWTH_LIMIT_MB = 100
 // PR 1 numbers on the CI runner, for the notes of the table.
 const BASELINE_SHOW_MS = { plain: 318, sgr: 540 }
 const BASELINE_ECHO_P95_MS = 49
 
-// main has no flow control: the page draws the whole backlog of a flood before the prompt or an
-// echo shows, so these waits are long. A timeout would fail the baseline instead of recording it.
-const FLOOD_WAIT_MS = 60_000
+// Generous: with flow control the waits are short, so a long wait means the limits are missed.
+const FLOOD_WAIT_MS = 30_000
 
 const made: string[] = []
 
@@ -46,7 +50,7 @@ test.afterEach(async ({ request }) => {
 })
 
 test.afterAll(() => {
-  writeSummary('Terminal measures (PR 3)')
+  writeSummary('Terminal measures (PR 4)')
 })
 
 async function openTerminal(page: Page, title: string): Promise<void> {
@@ -255,7 +259,7 @@ test('records the keypress to paint time in an idle shell', async ({ page, reque
   })
 })
 
-test('records the echo, the Ctrl+C time and the daemon memory in a flood', async ({
+test('keeps the echo, the Ctrl+C time and the daemon memory in check in a flood', async ({
   page,
   request,
 }) => {
@@ -271,6 +275,9 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
   await preparePrompt(page, flooded)
   await preparePrompt(page, quiet)
 
+  // The tasks of earlier tests are removed. Let the daemon settle, so the baseline taken right
+  // before the flood is not a falling number. The limit is on the growth, not the absolute size.
+  await page.waitForTimeout(3_000)
   const sampler = startRssSampler()
   try {
     await expect.poll(() => sampler.samples.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(5)
@@ -279,11 +286,12 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
     const pageStart = await pageNow(page)
     await runIn(page, flooded, 'seq 1 5000000')
     const echoes = await typeAndMeasure(page, quiet, KEY_SAMPLES, FLOOD_WAIT_MS)
-    const longTasks = await longTasksSince(page, pageStart)
 
     await flooded.getByRole('region', { name: 'Terminal screen' }).click()
     await page.keyboard.press('Control+C')
     await expect(rows(flooded)).toContainText(PROMPT.trim(), { timeout: FLOOD_WAIT_MS })
+    // The window covers the flood until the prompt is back.
+    const longTasks = await longTasksSince(page, pageStart)
     await page.waitForTimeout(5_000)
     const growth = rssGrowth(sampler.samples, floodStart, Date.now())
 
@@ -321,8 +329,12 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
       unit: 'MB',
       ac: '26',
       pr: PR,
-      note: 'peak until 5 s after the prompt is back, minus the median before',
+      note: `peak until 5 s after the prompt is back, minus the median before, limit ${DAEMON_GROWTH_LIMIT_MB} MB`,
     })
+    // AC 25 and AC 26.
+    expect(percentile(echoes, 95)).toBeLessThanOrEqual(ECHO_FLOOD_P95_LIMIT_MS)
+    expect(Math.max(0, ...longTasks)).toBeLessThanOrEqual(LONG_TASK_LIMIT_MS)
+    expect(growth.growthMb).toBeLessThanOrEqual(DAEMON_GROWTH_LIMIT_MB)
   } finally {
     await sampler.stop()
   }
@@ -352,6 +364,7 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
     ac: '25',
     pr: PR,
     samples: times,
-    note: 'median of 5, 1 s into a flood of 5,000,000 lines',
+    note: `median of 5, 1 s into a flood of 5,000,000 lines, limit ${CTRL_C_LIMIT_MS} ms`,
   })
+  expect(median(times)).toBeLessThanOrEqual(CTRL_C_LIMIT_MS)
 })
