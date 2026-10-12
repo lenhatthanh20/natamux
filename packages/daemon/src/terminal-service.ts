@@ -801,6 +801,9 @@ export class TerminalService {
   // got, they are visible, and the shell is quiet or they waited RESYNC_MAX_WAIT_MS. From the ring
   // when it still has what they missed, else with a snapshot. Otherwise it looks again at the
   // earliest time one of them could be ready.
+  // A snapshot for a shell that still floods comes at most once per RESYNC_MAX_WAIT_MS, so it
+  // cannot loop. A quiet shell cannot loop, so its snapshot goes at once: the prompt after a
+  // Ctrl+C shows without waiting.
   private catchUpBehind(session: Session): void {
     clearTimeout(session.resyncTimer)
     session.resyncTimer = undefined
@@ -816,7 +819,8 @@ export class TerminalService {
       ) {
         continue
       }
-      const ready = Math.min(state.behindSince + RESYNC_MAX_WAIT_MS, this.quietAt(session, now))
+      const quietAt = this.quietAt(session, now)
+      const ready = Math.min(state.behindSince + RESYNC_MAX_WAIT_MS, quietAt)
       if (ready > now) {
         next = Math.min(next, ready)
         continue
@@ -833,13 +837,13 @@ export class TerminalService {
         state.acked = session.offset
         state.behindFrom = null
         state.phase = 'live'
-      } else if (now >= state.snapshotAt + RESYNC_MAX_WAIT_MS) {
+      } else if (quietAt <= now || now >= state.snapshotAt + RESYNC_MAX_WAIT_MS) {
         state.behindFrom = null
         state.phase = 'snapshot'
         state.snapshotAt = now
         this.requestSnapshot(session, client, state)
       } else {
-        next = Math.min(next, state.snapshotAt + RESYNC_MAX_WAIT_MS)
+        next = Math.min(next, quietAt, state.snapshotAt + RESYNC_MAX_WAIT_MS)
       }
     }
     if (next < Number.POSITIVE_INFINITY) {

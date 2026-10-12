@@ -305,6 +305,15 @@ async function expectSameScreen(frames: TerminalFrame[], daemon: TerminalFrame[]
   expect((await screenOf(frames)).slice(-expected.length)).toEqual(expected)
 }
 
+// The end offset of the output a client got: its last replayed, then the live bytes after it.
+function sentTo(frames: TerminalFrame[]): number {
+  const ends = frames.map((frame) => !isBytes(frame) && frame.type === 'replayed')
+  const at = ends.lastIndexOf(true)
+  const last = frames[at]
+  const base = last !== undefined && !isBytes(last) && last.type === 'replayed' ? last.offset : 0
+  return base + bytesOf(frames.slice(at + 1)).byteLength
+}
+
 // The frames from the last snapshot on: what the client's screen holds after it.
 function sinceSnapshot(frames: TerminalFrame[]): TerminalFrame[] {
   const starts = frames.map((frame) => !isBytes(frame) && frame.type === 'snapshot')
@@ -2453,14 +2462,14 @@ describe('catching up a client that is behind', () => {
   )
 
   it(
-    'takes a snapshot once the ring lost what the client missed, one per RESYNC_MAX_WAIT_MS',
+    'takes a snapshot once the ring lost what the client missed',
     async () => {
       const { service, slow } = await behind(9 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES)
 
-      // Quiet soon, but the snapshot of its attach was just now.
-      await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS - 1)
+      // The shell is quiet: no wait, though the snapshot of its attach was just now.
+      await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS - 1)
       expect(catchUps(slow.frames)).toEqual([])
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(500)
 
       expect(catchUps(slow.frames)).toEqual([{ type: 'snapshot', ...size }])
       expect(controls(slow.frames).at(-1)).toEqual({
@@ -2470,6 +2479,54 @@ describe('catching up a client that is behind', () => {
       const daemon = await daemonScreen(service)
       vi.useRealTimers()
       await expectSameScreen(sinceSnapshot(slow.frames), daemon)
+    },
+    LONG_TEST_MS,
+  )
+
+  // Behind again right after a catch-up snapshot, with a gap the ring lost.
+  function fallBehindAgain(
+    service: TerminalService,
+    pty: FakePty,
+    slow: ReturnType<typeof client>,
+  ) {
+    for (let index = 0; index < 9 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+    }
+    service.ack('T-0001', sentTo(slow.frames), MAIN_TERMINAL, slow)
+  }
+
+  it(
+    'sends a shell that keeps flooding at most one snapshot per RESYNC_MAX_WAIT_MS',
+    async () => {
+      const { service, pty, slow } = await behind(9 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES)
+      await flood(pty, RESYNC_MAX_WAIT_MS + 50)
+      expect(catchUps(slow.frames)).toEqual([{ type: 'snapshot', ...size }])
+
+      fallBehindAgain(service, pty, slow)
+      await flood(pty, RESYNC_MAX_WAIT_MS - 100)
+      expect(catchUps(slow.frames)).toHaveLength(1)
+      await flood(pty, 200)
+      expect(catchUps(slow.frames)).toHaveLength(2)
+    },
+    LONG_TEST_MS,
+  )
+
+  it(
+    'sends the snapshot at once when the flood stops, as after a Ctrl+C',
+    async () => {
+      const { service, pty, slow } = await behind(9 + OUTPUT_RING_BYTES / OUTPUT_FRAME_BYTES)
+      await flood(pty, RESYNC_MAX_WAIT_MS + 50)
+      expect(catchUps(slow.frames)).toHaveLength(1)
+
+      // The last snapshot was 50 ms ago; the shell is quiet from here on.
+      fallBehindAgain(service, pty, slow)
+      await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS - 1)
+      expect(catchUps(slow.frames)).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(catchUps(slow.frames)).toEqual([
+        { type: 'snapshot', ...size },
+        { type: 'snapshot', ...size },
+      ])
     },
     LONG_TEST_MS,
   )

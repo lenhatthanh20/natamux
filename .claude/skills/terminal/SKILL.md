@@ -19,8 +19,8 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 
 | File | What |
 |---|---|
-| `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs. `splitFrames`, `sliceEnd` |
-| `packages/daemon/src/pty.ts` | node-pty spawn. `kill` signals the whole process tree (needs `ps`), then the shell |
+| `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs, flow control. `splitFrames`, `sliceEnd` |
+| `packages/daemon/src/pty.ts` | node-pty spawn. `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell |
 | `packages/daemon/src/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
 | `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers |
 | `packages/daemon/src/agent-runner.ts`, `stage-runner.ts` | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
@@ -74,14 +74,14 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 | binary frame | daemon to client | Raw UTF-8 output for xterm. Never larger than `OUTPUT_FRAME_BYTES`, never cut inside a character |
 | `hello` `{shellId}` | to client | Always first. A new `shellId` means a new shell |
 | `snapshot` `{cols, rows}` | to client | Starts a catch-up. Binary frames follow: the snapshot, then output after the cut. `cols`/`rows` = shell size at the cut |
-| `resume` `{offset}` | to client | Starts a catch-up from the ring. The client handles it; the daemon sends it from PR 4 (`outputSince` is not used yet) |
+| `resume` `{offset}` | to client | Starts a catch-up from the ring: the frames from `offset` follow. No reset |
 | `replayed` `{offset}` | to client | Ends a catch-up. `offset` = bytes of output sent so far |
 | `exit` `{code}` | to client | Shell ended. The server closes the socket |
 | `error` `{message}` | to client | Could not start |
 | `input` `{data}` | to daemon | Typing, up to 64 K chars |
 | `resize` `{cols, rows}` | to daemon | The client's size. Claims the shell's size |
 | `visible` `{visible, cols?, rows?}` | to daemon | On or off screen. Size only when the terminal itself came on screen: that claims |
-| `ack` `{offset}` | to daemon | Output parsed so far. The daemon ignores it until PR 4 (flow control) |
+| `ack` `{offset}` | to daemon | Output parsed so far, every `ACK_EVERY_BYTES` and after each catch-up. Drives flow control |
 
 - Query `visible=0` (page hidden at connect): the client does not claim the size.
 - Attach order: `hello`, then `snapshot`, snapshot frames, frames that waited, `replayed`, then live frames.
@@ -90,7 +90,7 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 
 - `session.offset` = bytes of all output frames sent so far. `replayed.offset` and `ack.offset` use it.
 - The ring keeps the last frames sent: `OUTPUT_RING_BYTES` (1 MB), at least one frame. `ringStart` = offset of its first byte.
-- `outputSince(taskId, offset)` returns the frames from `offset`, or `undefined` when the offset is too old, in the future, or inside a frame. Used by PR 4 (resume).
+- `outputSince(taskId, offset)` (private `ringSince`) returns the frames from `offset`, or `undefined` when the offset is too old, in the future, or inside a frame. A behind client is resumed from it.
 
 ## Batching (daemon)
 
@@ -113,6 +113,30 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 - **Shared snapshot.** `SnapshotJob` has the clients and the cut offset. A new client joins the running job when `cut === -1` (still waiting for a frame), or when nothing was sent since the cut (`cut === session.offset`, empty batch) and the shell size is the same. Otherwise it goes to `nextSnapshot`; its output is dropped until that cut. `sendSnapshot` starts the next job with all of them.
 - **Send.** Per client: `snapshot`, the frames (`splitFrames`), its `waiting` frames, `replayed {offset}`; then phase `live`.
 - `settled()` waits for the screen, the running job and the flush. Tests use it.
+
+## Flow control (daemon)
+
+Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidden dashboard never does.
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `SCREEN_HIGH_WATER` / `SCREEN_LOW_WATER` | 1,000,000 / 250,000 chars | Pause the pty above, resume below |
+| `CLIENT_HIGH_WATER` | 512 KiB | Unacked bytes a live client may have |
+| `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 256 KiB / 1000 ms | Live output a hidden client gets per window |
+| `RESYNC_QUIET_WINDOW_MS` | 100 ms | Quiet = less than `cols * rows / 8` bytes in this window |
+| `RESYNC_MAX_WAIT_MS` | 2000 ms | Catch up anyway after this long behind; at most one snapshot per this long during a flood |
+
+- **Screen marks.** `ScreenState` counts chars (string `.length`) from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
+- **Unacked** = `sent - acked` per client, in stream offsets. An ack above `sent` is clamped, an older one is ignored. Bytes of a catch-up (snapshot, waiting frames, ring frames of a resume) never count: at `replayed`, `sent = acked = offset`.
+- **Behind.** A live frame that would take a client past `CLIENT_HIGH_WATER`, or a hidden client past its window's budget, is dropped, not queued. The client becomes `behind` with `behindFrom` (first missed byte) and `behindSince`. Other clients are not affected.
+- **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does.
+- **`waiting` cap.** Output during a snapshot waits up to `CLIENT_HIGH_WATER`. Past it, `waiting` is dropped: the client still gets the snapshot, then `replayed{cut}`, and is behind from the cut.
+- **Catch-up** (`catchUpBehind`, run on `ack`, on `visible: true`, after a snapshot, and on a timer at the earliest time a client could be ready). All of:
+  1. Acked everything: `sent - acked < ACK_EVERY_BYTES`. The dashboard acks only every 64 KB, so a smaller rest is all it can have parsed.
+  2. Visible (last `visible` true; one without a size counts).
+  3. The shell is quiet, or the client has been behind `RESYNC_MAX_WAIT_MS`.
+- **How.** `behindFrom` still in the ring: `resume`, ring frames, `replayed`. Else a snapshot (`requestSnapshot`, shared like any other).
+- **Snapshot limit, only while the shell floods.** A catch-up started by the max wait gets at most one snapshot per `RESYNC_MAX_WAIT_MS` (counting the attach snapshot). A catch-up started because the shell is quiet goes at once, so the prompt after Ctrl+C shows fast (deviation from the spec, which limits every snapshot; a quiet shell cannot loop).
 
 ## Size claims
 
@@ -149,7 +173,9 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - **Daemon:** `terminal-service.test.ts`.
   - Clients are `client()`: `frames` holds binary and control frames. Helpers: `bytesOf`, `outputOf`, `controls`, `isBytes`, `numbered(count)`, `screenOf(frames, size)`, `headless(size)`, `mixedLines(cols, count)` (colors, wide, emoji, wraps, Vietnamese), `nextTurn()`.
   - `onEachSlice(between)` spies on `SerializeAddon.serialize` and calls `between` on every history slice: use it to send output or resize while a sliced snapshot runs.
-  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes` and `signals`. Set `program` to fake the foreground, and `stubborn` to ignore SIGHUP.
+  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` still delivers while paused. Set `program` to fake the foreground, and `stubborn` to ignore SIGHUP.
+  - Flow control helpers: `frameOf(i)` (one full 64 KB frame of numbered lines), `ackingClient(service, terminal?)` (acks like the dashboard, a microtask later; `arrivals` has live bytes and times), `catchUps(frames)` (catch-ups after the attach snapshot), `sinceSnapshot(frames)`, `sentTo(frames)`, `expectSameScreen(frames, daemonFrames)` (compares as deep as the daemon's history), `flood(pty, ms, bytes?)` (fake timers), `first(items)`.
+  - A file-level `afterEach` runs `closeAll()` on every service made by `setup()`, so resync timers and snapshots of one test never run in the next.
   - `screenOf()` replays a client's output into a headless xterm to compare screens. Use Unicode 11, as the code does.
   - Timers (idle close, input gap, kill grace): `vi.useFakeTimers()` before `setup()`, and `vi.useRealTimers()` in `afterEach`.
   - Use `LONG_TEST_MS` for tests that print thousands of lines.
@@ -168,7 +194,8 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
 - `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.
 - Add a resize only where the size really changes. Each one costs a redraw, and in Claude Code's classic renderer a duplicate block.
-- Hidden terminals still parse their output on the main thread. A flood in a hidden shell can slow typing in the visible one, until the daemon gets flow control.
+- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 256 KB per second per terminal; past it the terminal is behind until shown.
+- A test client that never acks goes behind after 512 KB of live output, or past 512 KB of output during its snapshot. Use `ackingClient` when a test needs all the bytes.
 - In tests, find `.xterm-rows` inside a pane region. The holder has rows of the hidden terminals too.
 - Client code checks `typeof event.data !== 'string'`, not `instanceof ArrayBuffer`: a buffer from another realm (jsdom in tests) fails `instanceof`.
 - A hidden parent (`visibility: hidden`) unfocuses the textarea. `hideScreen` hides the host and sets the textarea back to `visible`; `showScreen` undoes both.
