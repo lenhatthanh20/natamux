@@ -1597,7 +1597,11 @@ describe('one snapshot for several clients', () => {
     service.attach('T-0001', client(), size)
     ptys[0]?.emit('quiet\r\n')
     await service.settled('T-0001')
-    const serialize = vi.spyOn(SerializeAddon.prototype, 'serialize')
+    const spy = vi.spyOn(SerializeAddon.prototype, 'serialize')
+    // The spy is on the prototype, so it also sees shells of earlier tests that still finish a
+    // snapshot (slower under coverage). Only this shell's screen holds "quiet".
+    const serialize = () =>
+      spy.mock.results.filter((result) => String(result.value).includes('quiet'))
     return { service, ptys, serialize }
   }
 
@@ -1609,7 +1613,7 @@ describe('one snapshot for several clients', () => {
     detaches[3]?.()
     await service.settled('T-0001')
 
-    expect(serialize).toHaveBeenCalledTimes(1)
+    expect(serialize()).toHaveLength(1)
     const [first, second, third, gone] = clients
     expect(await screenOf(first?.frames ?? [])).toEqual(['quiet'])
     expect(bytesOf(second?.frames ?? [])).toEqual(bytesOf(first?.frames ?? []))
@@ -1632,7 +1636,7 @@ describe('one snapshot for several clients', () => {
     service.attach('T-0001', otherSize, wide)
     await service.settled('T-0001')
 
-    expect(serialize).toHaveBeenCalledTimes(2)
+    expect(serialize()).toHaveLength(2)
     for (const each of [first, joiner]) {
       expect(await screenOf(each.frames)).toEqual(['quiet', 'more'])
       expect(outputOf(each.frames).split('more')).toHaveLength(2)
