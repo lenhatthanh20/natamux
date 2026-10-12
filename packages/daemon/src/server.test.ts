@@ -1341,16 +1341,19 @@ describe('terminal', () => {
     await vi.waitFor(() => expect(ptys[0]?.sizes).toEqual([{ cols: 90, rows: 20 }]))
   })
 
-  it('ignores an ack and a binary frame from the client', async () => {
+  it('passes an ack to flow control, and ignores a binary frame from the client', async () => {
     await taskWithWorkspace()
     const { socket, frames } = await open('cols=80&rows=24')
     await replayed(frames)
+    const ack = vi.spyOn(TerminalService.prototype, 'ack')
 
     socket.send(JSON.stringify({ type: 'ack', offset: 5 }))
     socket.send(Buffer.from(JSON.stringify({ type: 'input', data: 'binary' })), { binary: true })
     socket.send(JSON.stringify({ type: 'input', data: 'after' }))
     await vi.waitFor(() => expect(output(frames)).toBe('after'))
 
+    expect(ack).toHaveBeenCalledWith('T-0001', 5, '1', expect.anything())
+    ack.mockRestore()
     expect(ptys[0]?.written).toEqual(['after'])
     expect(socket.readyState).toBe(socket.OPEN)
   })

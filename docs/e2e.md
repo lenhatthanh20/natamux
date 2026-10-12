@@ -74,8 +74,8 @@ Two spec files time the terminal, so a change can show its effect with numbers.
 
 | File | What |
 |---|---|
-| `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It records numbers; since PR 3 it also checks that a 10,000-line plain history shows within 500 ms (median of 5) |
-| `terminal-cache.spec.ts` | The terminal cache: showing a terminal again within 100 ms with no new socket, the limit of 8 hidden terminals, the heap of hidden terminals. It also records the echo while hidden shells flood |
+| `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It mostly records numbers. Limits: a 10,000-line plain history shows within 500 ms (median of 5, AC 8); in a flood of 5,000,000 lines in another shell, the echo p95 is at most 100 ms, no long task passes 100 ms until the prompt is back, Ctrl+C reaches the prompt within 500 ms (median of 5), and the daemon memory grows by at most 100 MB (peak minus the median just before the flood; AC 25, 26) |
+| `terminal-cache.spec.ts` | The terminal cache: showing a terminal again within 100 ms with no new socket, the limit of 8 hidden terminals, the heap of hidden terminals. While the hidden shells of another task flood, the echo is at most 100 ms (p95) with no long task over 100 ms, and the flooded task catches up when shown again (AC 45) |
 | `terminal-protocol.spec.ts` | The catch-up of a new connection: no history scrolls by while the snapshot is written (the skeleton shows instead), and keys typed while `replayed` is held back (`page.routeWebSocket`) reach the shell once, after it, in order |
 | `terminal-helpers.ts` | Shell tasks, panes, history, and timing in the page (`timeToShow`, `typeAndMeasure`). Times come from the page's clock (`event.timeStamp`, `requestAnimationFrame`), so the runner's delay does not count |
 | `measures.ts` | `recordMeasure` writes `e2e/test-results/terminal-measures.json` and prints a `MEASURE` line. `writeSummary` adds a table to the job summary |
@@ -83,5 +83,5 @@ Two spec files time the terminal, so a change can show its effect with numbers.
 
 - Limits are checked on the median of 5 runs, not on one sample.
 - Each test deletes its tasks, so their shells end.
-- The flood tests have long timeouts: without flow control, the page draws all the output before the prompt or an echo shows.
+- The flood tests wait at most 30 s for a prompt or an echo: with flow control these are quick, so a long wait is a failure.
 - To compare two branches, download `e2e-measures` from both runs: `gh run download <run-id> -n e2e-measures`.

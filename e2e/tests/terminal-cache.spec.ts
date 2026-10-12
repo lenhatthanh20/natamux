@@ -426,13 +426,16 @@ test('keeps the heap of hidden terminals small in a narrow and a wide window', a
   })
 })
 
-// Recorded only. The daemon still sends every byte of a hidden terminal to the page until the
-// next PRs add flow control, so this number is a known risk of PR 2.
-test('records the echo in task Y while the hidden shells of task X flood', async ({
+// AC 45: a hidden terminal gets at most 256 KiB of live output per second, so task Y stays quick,
+// and task X catches up when it is shown again.
+const ECHO_P95_LIMIT_MS = 100
+const LONG_TASK_LIMIT_MS = 100
+
+test('keeps the echo in task Y while the hidden shells of task X flood', async ({
   page,
   request,
 }) => {
-  test.setTimeout(150_000)
+  test.setTimeout(120_000)
   const taskX = await newTask(request, 'flood X')
   const taskY = await newTask(request, 'flood Y')
   await installProbes(page)
@@ -451,11 +454,12 @@ test('records the echo in task Y while the hidden shells of task X flood', async
   await goToAllTasks(page)
 
   await openTask(page, taskY.title)
-  // Without flow control the page draws all the hidden output too, so the echoes can wait long.
-  const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 60_000)
+  const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 30_000)
   const longTasks = await longTasksSince(page, pageStart)
 
   expect(echoes).toHaveLength(KEY_SAMPLES)
+  expect(percentile(echoes, 95)).toBeLessThanOrEqual(ECHO_P95_LIMIT_MS)
+  expect(Math.max(0, ...longTasks)).toBeLessThanOrEqual(LONG_TASK_LIMIT_MS)
 
   // One hidden shell really flooded: its screen shows the last number, on a row of its own.
   await goToAllTasks(page)
