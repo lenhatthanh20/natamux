@@ -20,8 +20,8 @@ async function taskOf(request: APIRequestContext, id: string) {
   return (await (await request.get(`/api/tasks/${id}`, { headers })).json()).task
 }
 
-// A task whose fake agent writes the spec and ends its turn without `natamux done` ([no-done]),
-// so it waits for the user with the "stopped" reason.
+// A task with a workspace whose agent ended its turn without `natamux done`, so it waits for the
+// user with the "stopped" reason. [no-done] keeps the fake agent from reporting.
 async function waitingTask(request: APIRequestContext): Promise<string> {
   const repos = await (await request.get('/api/repos', { headers })).json()
   const title = `[no-done] Calm signals ${Date.now()}`
@@ -40,7 +40,20 @@ async function waitingTask(request: APIRequestContext): Promise<string> {
   })
   await request.post(`/api/tasks/${task.id}/workspace`, { headers })
   await expect
-    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 60_000 })
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toBe('running')
+  // The images have no natamux CLI, so the agent's turn end is set through the API. No question
+  // follows the start, so the reason is "stopped".
+  await request.post(`/api/tasks/${task.id}/events`, {
+    headers,
+    data: {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'needs-input', stage: 'spec' },
+    },
+  })
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
     .toBe('needs-input')
   return title
 }
