@@ -11,6 +11,7 @@ import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import {
+  ACK_STALL_MS,
   CLIENT_HIGH_WATER,
   ENDED_IDLE_MS,
   ENTER_AFTER_PASTE_MS,
@@ -29,6 +30,7 @@ import {
   RESYNC_QUIET_WINDOW_MS,
   SCREEN_HIGH_WATER,
   SCREEN_LOW_WATER,
+  SNAPSHOT_SEND_BYTES,
   SNAPSHOT_SYNC_WAIT_MS,
   sliceEnd,
   splitFrames,
@@ -1965,6 +1967,73 @@ describe('a sliced snapshot', () => {
   })
 })
 
+describe('sending a large snapshot', () => {
+  it('sends it over several turns, with the output that came meanwhile after it', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)()
+    const pty = first(ptys)
+    const history = `${'s'.repeat(78)}\r\n`.repeat(8000)
+    pty.emit(history)
+    const log: string[] = []
+    const other = {
+      send: (frame: TerminalFrame) => {
+        if (isBytes(frame)) {
+          log.push('2: output')
+        }
+      },
+    }
+    service.attach('T-0001', other, size, '2')
+    await service.settled('T-0001')
+    await service.settled('T-0001', '2')
+
+    const later = client()
+    let snapshotFrames = 0
+    const watching = {
+      send: (frame: TerminalFrame) => {
+        later.send(frame)
+        if (isBytes(frame)) {
+          snapshotFrames += 1
+          if (snapshotFrames === 1) {
+            ptys[1]?.emit('b')
+            pty.emit('during\r\n')
+          }
+        } else if (frame.type === 'replayed') {
+          log.push('1: replayed')
+        }
+      },
+    }
+    const joiner = client()
+    const leaving = client()
+    let detachLeaving = (): void => undefined
+    const leavingClient = {
+      send: (frame: TerminalFrame) => {
+        leaving.send(frame)
+        if (isBytes(frame)) {
+          detachLeaving()
+        }
+      },
+    }
+    service.attach('T-0001', watching, size)
+    service.attach('T-0001', joiner, size)
+    detachLeaving = service.attach('T-0001', leavingClient, size)
+    await service.settled('T-0001')
+
+    // The other shell's output went out between the frames of the snapshot.
+    expect(log).toEqual(['2: output', '1: replayed'])
+    expect(bytesOf(later.frames).byteLength).toBeGreaterThan(2 * SNAPSHOT_SEND_BYTES)
+    expect(controls(later.frames)).toEqual([
+      hello,
+      { type: 'snapshot', ...size },
+      { type: 'replayed', offset: Buffer.byteLength(`${history}during\r\n`) },
+    ])
+    expect(outputOf(later.frames.slice(-2, -1))).toBe('during\r\n')
+    expect(bytesOf(joiner.frames)).toEqual(bytesOf(later.frames))
+    // It left after its first frame and got nothing more.
+    expect(leaving.frames).toHaveLength(3)
+    expect(leaving.frames.at(-1)).toBeInstanceOf(Uint8Array)
+  })
+})
+
 describe('a snapshot during a synchronized frame', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -2146,6 +2215,18 @@ describe('a client that falls behind', () => {
     return Array.from({ length: count }, (_, index) => frameOf(from + index)).join('')
   }
 
+  // The live bytes a client got, up to a catch-up (one for stalled acks comes in a slow run).
+  function liveBytes(received: TerminalFrame[]): number {
+    let bytes = 0
+    for (const frame of received) {
+      if (!isBytes(frame)) {
+        break
+      }
+      bytes += frame.byteLength
+    }
+    return bytes
+  }
+
   it(
     'drops the live output of a client past CLIENT_HIGH_WATER unacked, and only of that one',
     async () => {
@@ -2156,12 +2237,12 @@ describe('a client that falls behind', () => {
       const start = { slow: slow.frames.length, fast: fast.frames.length }
 
       await print(service, pty, 0, CLIENT_HIGH_WATER / OUTPUT_FRAME_BYTES)
-      expect(bytesOf(slow.frames.slice(start.slow))).toHaveLength(CLIENT_HIGH_WATER)
+      expect(liveBytes(slow.frames.slice(start.slow))).toBe(CLIENT_HIGH_WATER)
       pty.emit('!')
       await print(service, pty, 8, 48)
 
       // Nothing more for the slow one: no queue grows for it.
-      expect(bytesOf(slow.frames.slice(start.slow))).toHaveLength(CLIENT_HIGH_WATER)
+      expect(liveBytes(slow.frames.slice(start.slow))).toBe(CLIENT_HIGH_WATER)
       expect(outputOf(fast.frames.slice(start.fast))).toBe(`${frames(0, 8)}!${frames(8, 48)}`)
       expect(catchUps(fast.frames)).toEqual([])
       expect(pty.flow).toEqual([])
@@ -2416,6 +2497,64 @@ describe('catching up a client that is behind', () => {
     expect(catchUps(slow.frames)).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
     expect(catchUps(slow.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+  })
+
+  it('catches up an acking client once the flood stops, with no output after it', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const watching = ackingClient(service)
+    service.attach('T-0001', watching, size)
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    // More at once than it may have unacked.
+    for (let index = 0; index < 9; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await flood(pty, 500)
+    expect(catchUps(watching.frames)).toEqual([])
+    await vi.advanceTimersByTimeAsync(RESYNC_QUIET_WINDOW_MS)
+
+    expect(catchUps(watching.frames)).toEqual([{ type: 'resume', offset: CLIENT_HIGH_WATER }])
+  })
+
+  it('gives a client whose acks stopped a snapshot after ACK_STALL_MS of quiet', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const stuck = client()
+    service.attach('T-0001', stuck, size)
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    // Behind with 512 KB unacked, and it never acks again.
+    for (let index = 0; index < 9; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await vi.advanceTimersByTimeAsync(ACK_STALL_MS - 1)
+    expect(catchUps(stuck.frames)).toEqual([])
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(catchUps(stuck.frames)).toEqual([{ type: 'snapshot', ...size }])
+    expect(controls(stuck.frames).at(-1)).toEqual({
+      type: 'replayed',
+      offset: 9 * OUTPUT_FRAME_BYTES,
+    })
+  })
+
+  it('does not give a hidden client whose acks stopped a snapshot', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const stuck = client()
+    service.attach('T-0001', stuck, size, MAIN_TERMINAL, { visible: false })
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    for (let index = 0; index <= HIDDEN_BUDGET_BYTES / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await vi.advanceTimersByTimeAsync(3 * ACK_STALL_MS)
+
+    expect(catchUps(stuck.frames)).toEqual([])
   })
 
   it('takes output of exactly cols * rows / 8 in the window as not quiet', async () => {

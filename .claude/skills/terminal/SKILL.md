@@ -110,8 +110,8 @@ Output is binary. Everything else is one JSON text frame. Schemas: `packages/cor
 - **Join (`historyJoin(count, rows)`).** The serializer writes each piece as if from the top of an empty screen. A terminal that scrolls fills the new row with the current background, and the serializer expects that only from the second screen of a piece on. So each piece is at most `rows` rows (`sliceEnd` never cuts a wrapped line; a wrapped line longer than `rows` stays whole), and between pieces: reset style, move to the last row, `count` newlines (scrolls the piece into history), cursor home.
 - **k.** The last part starts at a row that is not the rest of a wrapped line. `k` = rows of the history that go into the last part (can be 0). It is serialized with `serialize({ scrollback: k })`: those rows, the screen, the cursor, the alternate screen and the modes.
 - **Short history** (`history <= sliceRows`, or the whole history is one wrapped line): one `serialize()` call, no join.
-- **Shared snapshot.** `SnapshotJob` has the clients and the cut offset. A new client joins the running job when `cut === -1` (still waiting for a frame), or when nothing was sent since the cut (`cut === session.offset`, empty batch) and the shell size is the same. Otherwise it goes to `nextSnapshot`; its output is dropped until that cut. `sendSnapshot` starts the next job with all of them.
-- **Send.** Per client: `snapshot`, the frames (`splitFrames`), its `waiting` frames, `replayed {offset}`; then phase `live`.
+- **Shared snapshot.** `SnapshotJob` has the clients and the cut offset. A new client joins the running job, unless its frames are being sent, when `cut === -1` (still waiting for a frame), or when nothing was sent since the cut (`cut === session.offset`, empty batch) and the shell size is the same. Otherwise it goes to `nextSnapshot`; its output is dropped until that cut. When the job ends (`endSnapshot`), the next job starts with all of them.
+- **Send.** `snapshot` to every client of the job, then the frames (`splitFrames`) over several turns: at most `SNAPSHOT_SEND_BYTES` (256 KB) or `SERIALIZE_SLICE_MS` per turn, then `setImmediate`. Meanwhile the clients stay in the snapshot phase (new output goes to `waiting`), the job is `sending` (a new client waits for the next job instead of joining), and a client that leaves gets nothing more. Then per client: its `waiting` frames, `replayed {offset}`; then phase `live`.
 - `settled()` waits for the screen, the running job and the flush. Tests use it.
 
 ## Flow control (daemon)
@@ -125,6 +125,7 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 | `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 256 KiB / 1000 ms | Live output a hidden client gets per window |
 | `RESYNC_QUIET_WINDOW_MS` | 100 ms | Quiet = less than `cols * rows / 8` bytes in this window |
 | `RESYNC_MAX_WAIT_MS` | 2000 ms | Catch up anyway after this long behind; at most one snapshot per this long during a flood |
+| `ACK_STALL_MS` | 5000 ms | A behind client whose acks made no progress this long gets a snapshot once the shell is quiet |
 
 - **Screen marks.** `ScreenState` counts chars (string `.length`) from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
 - **Unacked** = `sent - acked` per client, in stream offsets. An ack above `sent` is clamped, an older one is ignored. Bytes of a catch-up (snapshot, waiting frames, ring frames of a resume) never count: at `replayed`, `sent = acked = offset`.
@@ -135,6 +136,7 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
   1. Acked everything: `sent - acked < ACK_EVERY_BYTES`. The dashboard acks only every 64 KB, so a smaller rest is all it can have parsed.
   2. Visible (last `visible` true; one without a size counts).
   3. The shell is quiet, or the client has been behind `RESYNC_MAX_WAIT_MS`.
+- **Stalled acks.** A behind, visible client with `ACK_EVERY_BYTES` or more unacked and no ack progress for `ACK_STALL_MS` (`ackedAt`) gets a snapshot once the shell is quiet, still at most one per `RESYNC_MAX_WAIT_MS`: its offset cannot be trusted, so never a resume. Hidden clients wait for `visible`. Going behind plans a look on a 0 ms timer, so this works with no ack at all.
 - **How.** `behindFrom` still in the ring: `resume`, ring frames, `replayed`. Else a snapshot (`requestSnapshot`, shared like any other).
 - **Snapshot limit, only while the shell floods.** A catch-up started by the max wait gets at most one snapshot per `RESYNC_MAX_WAIT_MS` (counting the attach snapshot). A catch-up started because the shell is quiet goes at once, so the prompt after Ctrl+C shows fast (deviation from the spec, which limits every snapshot; a quiet shell cannot loop).
 
@@ -154,8 +156,8 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 - **Resume.** Drawn in place; hidden only when it is larger than `HIDDEN_RESUME_BYTES` (64 KB).
 - **No resize during it.** `sendSize` returns while `catchUp !== null`; `fitNow` does not fit during a snapshot. The local resizes are not the user's.
 - **Typing queue.** `onData` during a catch-up pushes to `typed`, sent in order after it. Exception: query replies. `isQueryReply(data)` (DA, CPR, DSR, DECRQM, window size, DCS, OSC) is dropped unless `fromUser` is set: the program asked long ago. `fromUser` is set by a capture `keydown` on the xterm element (`markUser`) and cleared by the textarea listener or a 0 ms timer.
-- **End.** `replayed` writes `''` and finishes in its callback, so the last chunk is parsed first. `finishCatchUp(at)`: set `offset = at` and `ack(at)`; `safeFit` back to the pane size (sends nothing, still in catch-up); `scrollToBottom` for a snapshot; show the screen; send the size if claimed; claim if the terminal came on screen meanwhile (`claimAfterCatchUp`); send `typed`.
-- **Acks.** Outside a catch-up, `offset` counts bytes; after a write is parsed, `ack(offset)` when `offset - acked >= ACK_EVERY_BYTES` (64 KB). Bytes during a catch-up are not counted.
+- **End.** `replayed` sets `offset = at` at once (in frame order) and marks the catch-up `replayed`, then writes `''` and finishes in its callback, so the last chunk is parsed first. `finishCatchUp(at)`: `ack(at)`; `safeFit` back to the pane size (sends nothing, still in catch-up); `scrollToBottom` for a snapshot; show the screen; send the size if claimed; claim if the terminal came on screen meanwhile (`claimAfterCatchUp`); send `typed`.
+- **Acks.** Outside a catch-up, `offset` counts bytes; after a write is parsed, `ack(offset)` when `offset - acked >= ACK_EVERY_BYTES` (64 KB). Bytes during a catch-up are not counted, but bytes after `replayed` are, even before xterm parsed the catch-up: live output comes right after `replayed`, and leaving it out made the client ack too little forever, so the daemon never caught it up once behind (the e2e flood froze on this).
 - `exit` and `error` end a catch-up without an offset.
 
 ## Known issues that are not Natamux bugs

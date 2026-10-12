@@ -73,6 +73,9 @@ export const SNAPSHOT_FIRST_SLICE_ROWS = 250
 export const SNAPSHOT_MIN_SLICE_ROWS = 50
 // A snapshot waits at most this long for a program to finish drawing a frame (mode 2026).
 export const SNAPSHOT_SYNC_WAIT_MS = 150
+// A snapshot is sent at most this much per turn (or SERIALIZE_SLICE_MS of sending), so a large one
+// does not block other shells either.
+export const SNAPSHOT_SEND_BYTES = 256 * 1024
 // Chars the daemon's screen has not parsed yet, the freeze queue of a snapshot included. Above the
 // high mark the shell is paused; it goes on below the low mark.
 export const SCREEN_HIGH_WATER = 1_000_000
@@ -87,6 +90,9 @@ export const HIDDEN_BUDGET_WINDOW_MS = 1000
 // snapshot per RESYNC_MAX_WAIT_MS.
 export const RESYNC_QUIET_WINDOW_MS = 100
 export const RESYNC_MAX_WAIT_MS = 2000
+// A behind client whose acks made no progress for this long, while the shell is quiet, gets a
+// snapshot anyway: a stuck tab or a client bug must not freeze its screen for good.
+export const ACK_STALL_MS = 5000
 // A shell gets this long to end after SIGHUP, then it is killed.
 export const KILL_GRACE_MS = 2000
 // How long a killed shell may take to end before closeAndWait stops waiting for it.
@@ -438,9 +444,11 @@ type ClientState = {
   phase: 'snapshot' | 'live' | 'behind'
   waiting: Buffer[] | null
   waitingBytes: number
-  // Offsets: the end of the output sent to it, and of the output it acked.
+  // Offsets: the end of the output sent to it, and of the output it acked. `ackedAt` is when its
+  // acks last moved on (or it was caught up).
   sent: number
   acked: number
+  ackedAt: number
   // The first byte it missed, and when. Also set in the snapshot phase once `waiting` passed its
   // cap: the client then gets the snapshot alone and is behind from the cut.
   behindFrom: number | null
@@ -458,6 +466,8 @@ type SnapshotJob = {
   cut: number
   // The shell size at the cut.
   size: TerminalSize
+  // Set once its frames are being sent: a client that comes then would miss the first ones.
+  sending: boolean
   done: Promise<void>
   finish: () => void
 }
@@ -602,6 +612,7 @@ export class TerminalService {
       waitingBytes: 0,
       sent: session.offset,
       acked: session.offset,
+      ackedAt: now,
       behindFrom: null,
       behindSince: now,
       snapshotAt: now,
@@ -675,7 +686,11 @@ export class TerminalService {
     if (!session || !state) {
       return
     }
-    state.acked = Math.min(Math.max(state.acked, offset), state.sent)
+    const acked = Math.min(Math.max(state.acked, offset), state.sent)
+    if (acked > state.acked) {
+      state.acked = acked
+      state.ackedAt = this.now()
+    }
     if (state.phase === 'behind') {
       this.catchUpBehind(session)
     }
@@ -706,15 +721,17 @@ export class TerminalService {
   }
 
   // A new client gets the running snapshot when its cut is right for it too: no output since the
-  // cut, and the same size. Otherwise it takes the next one, which all such clients share.
+  // cut, the same size, and no frame sent yet. Otherwise it takes the next one, which all such
+  // clients share.
   private requestSnapshot(session: Session, client: TerminalClient, state: ClientState): void {
     const job = session.snapshot
     if (job === undefined) {
       this.startSnapshot(session, new Set([client]))
-    } else if (
-      job.cut === -1 ||
-      (job.cut === session.offset && session.batchBytes === 0 && sameSize(job.size, session.size))
-    ) {
+      return
+    }
+    const sameCut =
+      job.cut === session.offset && session.batchBytes === 0 && sameSize(job.size, session.size)
+    if (!job.sending && (job.cut === -1 || sameCut)) {
       job.clients.add(client)
       if (job.cut !== -1) {
         state.waiting = []
@@ -730,7 +747,7 @@ export class TerminalService {
     const done = new Promise<void>((resolve) => {
       finish = () => resolve()
     })
-    const job: SnapshotJob = { clients, cut: -1, size: session.size, done, finish }
+    const job: SnapshotJob = { clients, cut: -1, size: session.size, sending: false, done, finish }
     session.snapshot = job
     session.screen.snapshot({
       cut: () => {
@@ -763,18 +780,47 @@ export class TerminalService {
     if (session.snapshot !== job) {
       return
     }
+    // Over several turns. The clients stay in the snapshot phase meanwhile, so new output waits in
+    // their `waiting` lists, and a client that leaves is no longer in the job.
+    job.sending = true
+    this.flushOutput(session)
+    for (const client of job.clients) {
+      client.send({ type: 'snapshot', cols: size.cols, rows: size.rows })
+    }
+    const frames = splitFrames(bytes)
+    const turn = () => {
+      if (session.snapshot !== job) {
+        return
+      }
+      const began = performance.now()
+      let sent = 0
+      while (sent < SNAPSHOT_SEND_BYTES && performance.now() - began < SERIALIZE_SLICE_MS) {
+        const frame = frames.shift()
+        if (frame === undefined) {
+          break
+        }
+        sent += frame.length
+        for (const client of job.clients) {
+          client.send(frame)
+        }
+      }
+      if (frames.length > 0) {
+        setImmediate(turn)
+      } else {
+        this.endSnapshot(session, job)
+      }
+    }
+    turn()
+  }
+
+  private endSnapshot(session: Session, job: SnapshotJob): void {
     session.snapshot = undefined
     // Output pending now goes to the waiting lists, so replayed covers it.
     this.flushOutput(session)
-    const frames = splitFrames(bytes)
     for (const client of job.clients) {
       const state = session.clients.get(client)
       if (!state) {
         continue
-      }
-      client.send({ type: 'snapshot', cols: size.cols, rows: size.rows })
-      for (const frame of frames) {
-        client.send(frame)
       }
       for (const frame of state.waiting ?? []) {
         client.send(frame)
@@ -786,6 +832,7 @@ export class TerminalService {
       // A catch-up does not count as unacked: the client acks its end once it is parsed.
       state.sent = offset
       state.acked = offset
+      state.ackedAt = this.now()
       state.phase = state.behindFrom === null ? 'live' : 'behind'
     }
     job.finish()
@@ -810,16 +857,25 @@ export class TerminalService {
     const now = this.now()
     let next = Number.POSITIVE_INFINITY
     for (const [client, state] of session.clients) {
-      // The dashboard acks every ACK_EVERY_BYTES, so a smaller rest is all it can have parsed.
-      if (
-        state.phase !== 'behind' ||
-        state.behindFrom === null ||
-        !state.visible ||
-        state.sent - state.acked >= ACK_EVERY_BYTES
-      ) {
+      if (state.phase !== 'behind' || state.behindFrom === null || !state.visible) {
         continue
       }
       const quietAt = this.quietAt(session, now)
+      // The dashboard acks every ACK_EVERY_BYTES, so a smaller rest is all it can have parsed.
+      if (state.sent - state.acked >= ACK_EVERY_BYTES) {
+        // Its acks stopped: its offset cannot be trusted, so only a snapshot fixes it.
+        const stalled = Math.max(
+          quietAt,
+          state.ackedAt + ACK_STALL_MS,
+          state.snapshotAt + RESYNC_MAX_WAIT_MS,
+        )
+        if (stalled > now) {
+          next = Math.min(next, stalled)
+        } else {
+          this.snapshotCatchUp(session, client, state, now)
+        }
+        continue
+      }
       const ready = Math.min(state.behindSince + RESYNC_MAX_WAIT_MS, quietAt)
       if (ready > now) {
         next = Math.min(next, ready)
@@ -835,13 +891,11 @@ export class TerminalService {
         client.send({ type: 'replayed', offset: session.offset })
         state.sent = session.offset
         state.acked = session.offset
+        state.ackedAt = now
         state.behindFrom = null
         state.phase = 'live'
       } else if (quietAt <= now || now >= state.snapshotAt + RESYNC_MAX_WAIT_MS) {
-        state.behindFrom = null
-        state.phase = 'snapshot'
-        state.snapshotAt = now
-        this.requestSnapshot(session, client, state)
+        this.snapshotCatchUp(session, client, state, now)
       } else {
         next = Math.min(next, quietAt, state.snapshotAt + RESYNC_MAX_WAIT_MS)
       }
@@ -849,6 +903,18 @@ export class TerminalService {
     if (next < Number.POSITIVE_INFINITY) {
       session.resyncTimer = setTimeout(() => this.catchUpBehind(session), next - now)
     }
+  }
+
+  private snapshotCatchUp(
+    session: Session,
+    client: TerminalClient,
+    state: ClientState,
+    now: number,
+  ): void {
+    state.behindFrom = null
+    state.phase = 'snapshot'
+    state.snapshotAt = now
+    this.requestSnapshot(session, client, state)
   }
 
   // When the shell counts as quiet if it prints nothing more: less than cols * rows / 8 bytes in
@@ -962,6 +1028,8 @@ export class TerminalService {
           state.phase = 'behind'
           state.behindFrom = start
           state.behindSince = this.now()
+          // A look soon, not now (this runs inside a flush): one whose acks stop needs a timer.
+          session.resyncTimer ??= setTimeout(() => this.catchUpBehind(session), 0)
         }
       } else if (state.waiting !== null) {
         if (state.waitingBytes + frame.length > CLIENT_HIGH_WATER) {

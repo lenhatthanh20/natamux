@@ -51,6 +51,9 @@ export type TerminalSessionState = {
 type CatchUp = {
   kind: 'snapshot' | 'resume'
   bytes: number
+  // `replayed` came: later frames are live output, counted, though xterm may not have parsed the
+  // catch-up yet.
+  replayed: boolean
   timer: ReturnType<typeof setTimeout>
 }
 
@@ -284,13 +287,13 @@ export function createTerminalSession(options: {
     update({ catchingUp: false })
   }
 
-  // at is the offset from `replayed`, or null when the catch-up failed or the shell ended.
+  // at is the offset from `replayed`, or null when the catch-up failed or the shell ended. The
+  // offset itself was taken when `replayed` came.
   const finishCatchUp = (at: number | null) => {
     if (disposed) {
       return
     }
     if (at !== null) {
-      offset = at
       ack(at)
     }
     if (catchUp === null) {
@@ -326,11 +329,12 @@ export function createTerminalSession(options: {
     if (catchUp !== null) {
       clearTimeout(catchUp.timer)
     }
-    catchUp = { kind, bytes: 0, timer: setTimeout(() => finishCatchUp(null), CATCH_UP_TIMEOUT_MS) }
+    const timer = setTimeout(() => finishCatchUp(null), CATCH_UP_TIMEOUT_MS)
+    catchUp = { kind, bytes: 0, replayed: false, timer }
   }
 
   const output = (bytes: Uint8Array) => {
-    if (catchUp !== null) {
+    if (catchUp !== null && !catchUp.replayed) {
       // Not counted: snapshot and live bytes come mixed, and `replayed` gives the offset.
       catchUp.bytes += bytes.byteLength
       if (catchUp.kind === 'resume' && catchUp.bytes > HIDDEN_RESUME_BYTES) {
@@ -489,8 +493,15 @@ export function createTerminalSession(options: {
         beginCatchUp('resume')
       } else if (message?.type === 'replayed') {
         const at = message.offset
-        // Once xterm parsed the last chunk: the screen stays hidden until then, and an ack means
-        // parsed. After the 10 s failure path this only takes the offset.
+        // The offset now, in the order of the frames: live output that comes before xterm parsed
+        // the catch-up counts from here. Left uncounted, the client would ack too little forever,
+        // and the daemon would never catch it up again once it is behind.
+        offset = at
+        if (catchUp !== null) {
+          catchUp.replayed = true
+        }
+        // The catch-up ends once xterm parsed the last chunk: the screen stays hidden until then,
+        // and an ack means parsed. After the 10 s failure path this only acks.
         terminal.write('', () => finishCatchUp(at))
       } else if (message?.type === 'exit') {
         finishCatchUp(null)

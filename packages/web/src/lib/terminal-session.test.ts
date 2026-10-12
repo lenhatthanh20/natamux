@@ -1005,6 +1005,22 @@ describe('the offset and acks (AC 44, C46)', () => {
       { type: 'ack', offset: 100 + 70 * 1024 },
     ])
   })
+
+  // A flood goes on while xterm parses a large snapshot. Uncounted, this output made the client
+  // ack too little forever, so the daemon never caught it up again once it was behind.
+  it('counts live output that comes after replayed, before the catch-up is parsed', async () => {
+    const { socket, terminal } = await shown()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'], 100)
+    socket.bytes('a'.repeat(ACK_EVERY_BYTES))
+    expect(socket.sent).toEqual([])
+
+    terminal.parse()
+
+    expect(socket.sent).toEqual([
+      { type: 'ack', offset: 100 },
+      { type: 'ack', offset: 100 + ACK_EVERY_BYTES },
+    ])
+  })
 })
 
 describe('size claims (AC 42, C44)', () => {
