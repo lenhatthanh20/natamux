@@ -148,8 +148,10 @@ export default function TerminalView({ connect, focusToken, taskState }: Termina
 
     let socket: WebSocket | null = null
     let disposed = false
+    // Keys typed before xterm stops taking them must not reach the daemon after the end.
+    let ended = false
     const send = (message: object) => {
-      if (socket?.readyState === WebSocket.OPEN) {
+      if (!ended && socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(message))
       }
     }
@@ -188,6 +190,7 @@ export default function TerminalView({ connect, focusToken, taskState }: Termina
           if (message?.type === 'output') {
             terminal.write(message.data)
           } else if (message?.type === 'exit') {
+            ended = true
             terminal.write('\r\n')
             setExitCode(message.code)
             setStatus('ended')
@@ -206,6 +209,7 @@ export default function TerminalView({ connect, focusToken, taskState }: Termina
             setStatus('error')
             return
           }
+          ended = true
           setStatus((current) => (current === 'error' ? current : 'ended'))
         }
       })
