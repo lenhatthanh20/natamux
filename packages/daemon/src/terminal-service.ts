@@ -131,7 +131,8 @@ export type SnapshotSteps = {
   cut: () => void
   // The screen went on parsing to let a frame of a program end, so the last cut is no longer valid.
   uncut: () => void
-  done: (bytes: Buffer, size: TerminalSize) => void
+  // The serialized parts, in order. Not joined: a copy of megabytes would block a turn.
+  done: (parts: Buffer[], size: TerminalSize) => void
 }
 
 type Queued = { data: string } | { run: () => void }
@@ -223,11 +224,11 @@ export class ScreenState {
         this.waitForFrameEnd(deadline, attempt)
         return
       }
-      this.serializeSliced((bytes) => {
+      this.serializeSliced((parts) => {
         const size = { cols: this.terminal.cols, rows: this.terminal.rows }
         // Before done, which may start the next snapshot and freeze again.
         this.thaw()
-        steps.done(bytes, size)
+        steps.done(parts, size)
       })
     }
     attempt()
@@ -315,7 +316,7 @@ export class ScreenState {
   // A short history is serialized in one call. A long one is serialized a slice of rows at a
   // time, a turn of SERIALIZE_SLICE_MS each, and the last part adds the screen, the cursor, the
   // alternate screen and the modes.
-  private serializeSliced(done: (bytes: Buffer) => void): void {
+  private serializeSliced(done: (parts: Buffer[]) => void): void {
     const buffer = this.terminal.buffer.normal
     const rows = this.terminal.rows
     // The history rows: `serialize({ scrollback })` counts back from the end of the buffer.
@@ -327,7 +328,7 @@ export class ScreenState {
       k += 1
     }
     if (history <= this.sliceRows || wrapped(history - k)) {
-      done(Buffer.from(this.serializer.serialize()))
+      done([Buffer.from(this.serializer.serialize())])
       return
     }
     const historyEnd = history - k
@@ -341,8 +342,9 @@ export class ScreenState {
       const first = start
       const stop = Math.min(start + this.sliceRows, historyEnd)
       let text = ''
-      // Each piece fits on one screen, see historyJoin.
-      while (start < stop) {
+      // Each piece fits on one screen, see historyJoin. The turn also ends once it took
+      // SERIALIZE_SLICE_MS, when rows cost more than sliceRows assumed (a cold first turn).
+      while (start < stop && (start === first || performance.now() - began < SERIALIZE_SLICE_MS)) {
         const end = sliceEnd(wrapped, start, historyEnd, rows)
         const range = { start, end: end - 1 }
         text += this.serializer.serialize({ range, excludeAltBuffer: true, excludeModes: true })
@@ -363,7 +365,7 @@ export class ScreenState {
         return
       }
       parts.push(Buffer.from(this.serializer.serialize({ scrollback: k })))
-      done(Buffer.concat(parts))
+      done(parts)
     }
     turn()
   }
@@ -767,14 +769,14 @@ export class TerminalService {
       uncut: () => {
         job.cut = -1
       },
-      done: (bytes, size) => this.sendSnapshot(session, job, bytes, size),
+      done: (parts, size) => this.sendSnapshot(session, job, parts, size),
     })
   }
 
   private sendSnapshot(
     session: Session,
     job: SnapshotJob,
-    bytes: Buffer,
+    parts: Buffer[],
     size: TerminalSize,
   ): void {
     if (session.snapshot !== job) {
@@ -787,8 +789,8 @@ export class TerminalService {
     for (const client of job.clients) {
       client.send({ type: 'snapshot', cols: size.cols, rows: size.rows })
     }
-    const frames = splitFrames(bytes)
-    const turn = () => {
+    const frames = parts.flatMap((part) => splitFrames(part))
+    const sendTurn = () => {
       if (session.snapshot !== job) {
         return
       }
@@ -805,12 +807,12 @@ export class TerminalService {
         }
       }
       if (frames.length > 0) {
-        setImmediate(turn)
+        setImmediate(sendTurn)
       } else {
         this.endSnapshot(session, job)
       }
     }
-    turn()
+    sendTurn()
   }
 
   private endSnapshot(session: Session, job: SnapshotJob): void {

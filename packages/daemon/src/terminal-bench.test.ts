@@ -1,7 +1,7 @@
 import { appendFileSync } from 'node:fs'
-import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
+import { monitorEventLoopDelay, PerformanceObserver, performance } from 'node:perf_hooks'
 import { ACK_EVERY_BYTES, scrollbackLines } from '@natamux/core'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { MAIN_TERMINAL, type TerminalFrame, TerminalService } from './terminal-service.js'
 
@@ -24,6 +24,8 @@ const MAX_LOOP_DELAY_MS = 50
 type Style = 'plain' | 'sgr'
 
 const results: Record<string, unknown>[] = []
+// Closed after each case, so the screens of one case are not in the heap (and its GC) of the next.
+const services: TerminalService[] = []
 
 function setup() {
   const { spawn, ptys } = fakeSpawner()
@@ -32,7 +34,57 @@ function setup() {
     workspaceOf: (taskId) => `/work/${taskId}`,
     env: { PATH: '/bin' },
   })
+  services.push(service)
   return { service, ptys }
+}
+
+type Callback = (...args: unknown[]) => void
+
+// The longest synchronous run of each kind of callback while it runs, by function name: `turn`
+// (a slice of the snapshot), `last` (its last part and first send turn), `sendTurn`, `timer`
+// (setTimeout: xterm's parse, and the first slice inside it), `immediate` (others). And the
+// longest GC pause. It wraps the global timers, so it is for the bench only.
+function phaseTimes() {
+  const longest = new Map<string, number>()
+  const timed = (label: string, run: Callback): Callback => {
+    return (...args) => {
+      const began = performance.now()
+      try {
+        run(...args)
+      } finally {
+        longest.set(label, Math.max(longest.get(label) ?? 0, performance.now() - began))
+      }
+    }
+  }
+  const immediate = globalThis.setImmediate
+  const timeout = globalThis.setTimeout
+  const timedImmediate = (run: Callback, ...args: unknown[]) =>
+    immediate(timed(run.name || 'immediate', run), ...args)
+  const timedTimeout = (run: Callback, ms?: number, ...args: unknown[]) =>
+    timeout(timed('timer', run), ms, ...args)
+  globalThis.setImmediate = timedImmediate as unknown as typeof setImmediate
+  globalThis.setTimeout = timedTimeout as unknown as typeof setTimeout
+  let gcMs = 0
+  const gc = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      gcMs = Math.max(gcMs, entry.duration)
+    }
+  })
+  gc.observe({ entryTypes: ['gc'] })
+  return () => {
+    globalThis.setImmediate = immediate
+    globalThis.setTimeout = timeout
+    gc.disconnect()
+    const ms = (label: string) => round(longest.get(label) ?? 0)
+    return {
+      sliceMs: ms('turn'),
+      lastPartMs: ms('last'),
+      sendTurnMs: ms('sendTurn'),
+      timerMs: ms('timer'),
+      otherMs: ms('immediate'),
+      gcMs: round(gcMs),
+    }
+  }
 }
 
 // The header ws puts before an unmasked binary frame of this length (no compression).
@@ -53,7 +105,8 @@ function timedClient(service?: TerminalService) {
     rawBytes: 0,
     firstAt: 0,
     lastAt: 0,
-    text: '',
+    // The end of the output only: a copy of megabytes would weigh on the heap of the measure.
+    tail: '',
   }
   let offset = 0
   let acked = 0
@@ -86,7 +139,7 @@ function timedClient(service?: TerminalService) {
       stats.wireBytes += frame.byteLength + frameHeaderBytes(frame.byteLength)
       stats.rawBytes += frame.byteLength
       // Frames end at character borders, so each one decodes on its own.
-      stats.text += decoder.decode(frame)
+      stats.tail = (stats.tail + decoder.decode(frame)).slice(-1024)
     },
   }
   return client
@@ -176,6 +229,11 @@ function report(): void {
 
 describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
   afterAll(report)
+  afterEach(() => {
+    for (const service of services.splice(0)) {
+      service.closeAll()
+    }
+  })
 
   describe('snapshot', () => {
     const cases = [80, 120, 200].flatMap((cols) =>
@@ -185,24 +243,27 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
       'attach after $cols columns of $style history',
       async ({ cols, style }) => {
         const { service, ptys } = setup()
-        const detach = service.attach(TASK, timedClient(), { cols, rows: SCREEN_ROWS })
+        // No client while the history is printed, as a shell that ran with no dashboard: one
+        // would fall behind, take a catch-up snapshot of its own, and leave megabytes of garbage
+        // for a GC inside the measure.
+        service.attach(TASK, timedClient(), { cols, rows: SCREEN_ROWS })()
         const pty = shellOf(ptys)
         for (const part of pieces(historyText(cols, style), PIECE_CHARS)) {
           pty.emit(part)
         }
         await service.settled(TASK)
-        // It fell behind while the history was printed; its catch-up must not run during the
-        // measure.
-        detach()
+        await tick()
 
         const delay = monitorEventLoopDelay({ resolution: 1 })
         delay.enable()
+        const stop = phaseTimes()
         const client = timedClient()
         const t0 = performance.now()
         service.attach(TASK, client, { cols, rows: SCREEN_ROWS })
         await service.settled(TASK)
         await tick()
         delay.disable()
+        const phases = stop()
 
         const { stats } = client
         results.push({
@@ -216,9 +277,10 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
           serializeMs: round(stats.firstAt - t0),
           attachMs: round(stats.lastAt - t0),
           maxLoopDelayMs: round(delay.max / 1e6),
+          ...phases,
         })
         expect(stats.frames).toBeGreaterThan(0)
-        expect(stats.text).toContain(`END-${cols}-${style}`)
+        expect(stats.tail).toContain(`END-${cols}-${style}`)
         expect(delay.max / 1e6).toBeLessThanOrEqual(MAX_LOOP_DELAY_MS)
       },
       BENCH_TEST_MS,

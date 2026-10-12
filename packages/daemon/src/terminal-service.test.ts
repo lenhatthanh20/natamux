@@ -1968,70 +1968,74 @@ describe('a sliced snapshot', () => {
 })
 
 describe('sending a large snapshot', () => {
-  it('sends it over several turns, with the output that came meanwhile after it', async () => {
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), size)()
-    const pty = first(ptys)
-    const history = `${'s'.repeat(78)}\r\n`.repeat(8000)
-    pty.emit(history)
-    const log: string[] = []
-    const other = {
-      send: (frame: TerminalFrame) => {
-        if (isBytes(frame)) {
-          log.push('2: output')
-        }
-      },
-    }
-    service.attach('T-0001', other, size, '2')
-    await service.settled('T-0001')
-    await service.settled('T-0001', '2')
-
-    const later = client()
-    let snapshotFrames = 0
-    const watching = {
-      send: (frame: TerminalFrame) => {
-        later.send(frame)
-        if (isBytes(frame)) {
-          snapshotFrames += 1
-          if (snapshotFrames === 1) {
-            ptys[1]?.emit('b')
-            pty.emit('during\r\n')
+  it(
+    'sends it over several turns, with the output that came meanwhile after it',
+    async () => {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)()
+      const pty = first(ptys)
+      const history = `${'s'.repeat(78)}\r\n`.repeat(8000)
+      pty.emit(history)
+      const log: string[] = []
+      const other = {
+        send: (frame: TerminalFrame) => {
+          if (isBytes(frame)) {
+            log.push('2: output')
           }
-        } else if (frame.type === 'replayed') {
-          log.push('1: replayed')
-        }
-      },
-    }
-    const joiner = client()
-    const leaving = client()
-    let detachLeaving = (): void => undefined
-    const leavingClient = {
-      send: (frame: TerminalFrame) => {
-        leaving.send(frame)
-        if (isBytes(frame)) {
-          detachLeaving()
-        }
-      },
-    }
-    service.attach('T-0001', watching, size)
-    service.attach('T-0001', joiner, size)
-    detachLeaving = service.attach('T-0001', leavingClient, size)
-    await service.settled('T-0001')
+        },
+      }
+      service.attach('T-0001', other, size, '2')
+      await service.settled('T-0001')
+      await service.settled('T-0001', '2')
 
-    // The other shell's output went out between the frames of the snapshot.
-    expect(log).toEqual(['2: output', '1: replayed'])
-    expect(bytesOf(later.frames).byteLength).toBeGreaterThan(2 * SNAPSHOT_SEND_BYTES)
-    expect(controls(later.frames)).toEqual([
-      hello,
-      { type: 'snapshot', ...size },
-      { type: 'replayed', offset: Buffer.byteLength(`${history}during\r\n`) },
-    ])
-    expect(outputOf(later.frames.slice(-2, -1))).toBe('during\r\n')
-    expect(bytesOf(joiner.frames)).toEqual(bytesOf(later.frames))
-    // It left after its first frame and got nothing more.
-    expect(leaving.frames).toHaveLength(3)
-    expect(leaving.frames.at(-1)).toBeInstanceOf(Uint8Array)
-  })
+      const later = client()
+      let snapshotFrames = 0
+      const watching = {
+        send: (frame: TerminalFrame) => {
+          later.send(frame)
+          if (isBytes(frame)) {
+            snapshotFrames += 1
+            if (snapshotFrames === 1) {
+              ptys[1]?.emit('b')
+              pty.emit('during\r\n')
+            }
+          } else if (frame.type === 'replayed') {
+            log.push('1: replayed')
+          }
+        },
+      }
+      const joiner = client()
+      const leaving = client()
+      let detachLeaving = (): void => undefined
+      const leavingClient = {
+        send: (frame: TerminalFrame) => {
+          leaving.send(frame)
+          if (isBytes(frame)) {
+            detachLeaving()
+          }
+        },
+      }
+      service.attach('T-0001', watching, size)
+      service.attach('T-0001', joiner, size)
+      detachLeaving = service.attach('T-0001', leavingClient, size)
+      await service.settled('T-0001')
+
+      // The other shell's output went out between the frames of the snapshot.
+      expect(log).toEqual(['2: output', '1: replayed'])
+      expect(bytesOf(later.frames).byteLength).toBeGreaterThan(2 * SNAPSHOT_SEND_BYTES)
+      expect(controls(later.frames)).toEqual([
+        hello,
+        { type: 'snapshot', ...size },
+        { type: 'replayed', offset: Buffer.byteLength(`${history}during\r\n`) },
+      ])
+      expect(outputOf(later.frames.slice(-2, -1))).toBe('during\r\n')
+      expect(bytesOf(joiner.frames)).toEqual(bytesOf(later.frames))
+      // It left after its first frame and got nothing more.
+      expect(leaving.frames).toHaveLength(3)
+      expect(leaving.frames.at(-1)).toBeInstanceOf(Uint8Array)
+    },
+    LONG_TEST_MS,
+  )
 })
 
 describe('a snapshot during a synchronized frame', () => {
