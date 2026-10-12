@@ -8,8 +8,13 @@ const SOURCES: Record<string, string> = Object.fromEntries(
       query: '?raw',
       import: 'default',
     }),
-  ).map(([file, text]) => [file.replace(/^\.\.\//, ''), text]),
+  ).map(([file, text]) => [srcPath(file), text]),
 )
+
+// Vite names the files of this test's own folder "./x.ts", not "../lib/x.ts".
+function srcPath(file: string): string {
+  return file.startsWith('./') ? `lib/${file.slice(2)}` : file.replace(/^\.\.\//, '')
+}
 
 // Libraries the dashboard must load only when a view needs them, not on the first screen.
 const HEAVY = /^(monaco-editor|react-markdown|remark-gfm|@xterm\/)/
