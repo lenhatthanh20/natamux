@@ -26,5 +26,7 @@ export default defineConfig({
     // The longest App tests walk through a whole view. With coverage on in CI they took over the
     // 5 s default now and then.
     testTimeout: 20_000,
+    // Vitest turns CSS into an empty string; a test reads the motion rules of this file.
+    css: { include: [/src\/styles\.css/] },
   },
 })

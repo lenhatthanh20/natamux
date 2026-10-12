@@ -4,7 +4,7 @@ import { useResolvedTheme } from '../lib/theme'
 import { iconUrl } from './FileIcon'
 
 // The icon of an agent at 12px, or a generic bot for an agent with no icon of its own.
-function AgentIcon({ agent }: { agent: string | null }) {
+export function AgentIcon({ agent }: { agent: string | null }) {
   const theme = useResolvedTheme()
   const icon = agentIcon(agent)
   const url = icon === undefined ? undefined : iconUrl(icon, theme)

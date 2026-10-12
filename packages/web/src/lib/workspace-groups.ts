@@ -10,16 +10,23 @@ export type RepoGroup = {
   open: Task[]
   // Done or cancelled, with the worktree still on disk.
   finished: Task[]
+  // Open subtasks shown under a row of this group instead of on their own.
+  nested: Task[]
 }
 
 export type WorkspaceGroups = {
   pinned: Task[]
   groups: RepoGroup[]
+  // The open subtasks under each shown parent, by parent id, the oldest first.
+  children: Record<string, Task[]>
 }
 
 function newestFirst(a: Task, b: Task): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
 }
+
+const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
+const repoOf = (task: Task) => task.repo ?? DEFAULT_REPO_ID
 
 // The repositories, then the ones only tasks still name (removed ones). Their id is their name.
 export function knownRepos(
@@ -47,18 +54,39 @@ export function workspaceGroups(
   const pinned = pinnedIds
     .map((id) => withWorkspace.find((task) => task.id === id))
     .filter((task): task is Task => task !== undefined)
-  const rest = withWorkspace.filter((task) => !pinnedIds.includes(task.id)).sort(newestFirst)
+  // A finished or pinned subtask stays where the user expects it. An open one stays out of a
+  // finished parent, which is folded away in "N finished". One level only.
+  const parentOf = (task: Task) =>
+    task.parentId === null || isFinished(task) || pinnedIds.includes(task.id)
+      ? undefined
+      : withWorkspace.find(
+          (other) =>
+            other.id === task.parentId &&
+            other.parentId === null &&
+            !isFinished(other) &&
+            repoOf(other) === repoOf(task),
+        )
+  const children: Record<string, Task[]> = {}
+  for (const task of [...withWorkspace].sort(newestFirst).reverse()) {
+    const parent = parentOf(task)
+    if (parent !== undefined) {
+      children[parent.id] = [...(children[parent.id] ?? []), task]
+    }
+  }
+  const rest = withWorkspace
+    .filter((task) => !pinnedIds.includes(task.id) && parentOf(task) === undefined)
+    .sort(newestFirst)
 
   const groups = knownRepos(repos, rest).map((repo) => {
-    const own = rest.filter((task) => (task.repo ?? DEFAULT_REPO_ID) === repo.id)
-    const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
+    const own = rest.filter((task) => repoOf(task) === repo.id)
     return {
       repo,
       open: own.filter((task) => !isFinished(task)),
       finished: own.filter(isFinished),
+      nested: own.flatMap((task) => children[task.id] ?? []),
     }
   })
-  return { pinned, groups }
+  return { pinned, groups, children }
 }
 
 // The branch without the "natamux/t-0001-" part, which the row shows already.
@@ -73,14 +101,15 @@ export function shortBranch(task: Pick<Task, 'id' | 'branch'>): string {
 // What a folded group hides that the user should still see: a workspace that needs them, else the
 // workspace that is open. The state of that workspace is the color of the dot. Null: nothing.
 export function collapsedHint(
-  group: Pick<RepoGroup, 'open' | 'finished'>,
+  group: Pick<RepoGroup, 'open' | 'finished'> & Partial<Pick<RepoGroup, 'nested'>>,
   currentId: string | null,
   now: Date,
 ): TaskState | null {
-  const waiting = group.open.find((task) => needsMe(task.state) || isQuiet(task, now))
+  const open = [...group.open, ...(group.nested ?? [])]
+  const waiting = open.find((task) => needsMe(task.state) || isQuiet(task, now))
   if (waiting !== undefined) {
     return needsMe(waiting.state) ? waiting.state : 'needs-input'
   }
-  const current = [...group.open, ...group.finished].find((task) => task.id === currentId)
+  const current = [...open, ...group.finished].find((task) => task.id === currentId)
   return current?.state ?? null
 }

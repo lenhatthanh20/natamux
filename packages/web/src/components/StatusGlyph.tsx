@@ -63,7 +63,7 @@ export function StatusGlyph({
     <span
       data-state={quiet ? 'needs-input' : state}
       data-tip={tip === undefined ? label : `${label} · ${tip}`}
-      className="inline-flex size-4 shrink-0 items-center justify-center text-[var(--chip-fg)]"
+      className="inline-flex size-4 shrink-0 items-center justify-center text-[var(--chip-fg)] transition-colors duration-(--dur-modal)"
     >
       <Icon
         size={14}

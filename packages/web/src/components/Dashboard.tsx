@@ -859,8 +859,19 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     pinnedIds={pinned}
                     diffStats={diffStatsQuery.data}
                     activity={activityQuery.data?.byTask}
+                    loadTerminals={(id) => api.listAgentTerminals(id)}
+                    terminalActivity={activityQuery.data?.byTerminal}
                     onOpen={(id) => {
                       openTask(id)
+                      afterPick()
+                    }}
+                    onOpenShell={(id, shell) => {
+                      // Only the Terminal tab shows the shells; on another tab the request waits.
+                      select(id)
+                      openChanges(id, 'terminal')
+                      if (shell !== null) {
+                        requestShell(id, shell)
+                      }
                       afterPick()
                     }}
                     onViewChanges={(id) => {

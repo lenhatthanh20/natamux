@@ -496,6 +496,47 @@
   animation: hm-dialog var(--dur-modal) var(--ease-out);
 }
 
+/* Sidebar rows. A bar marks the open workspace; a row that starts to wait flashes once. */
+.sb-row {
+  position: relative;
+}
+
+.sb-row::before {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  left: 0;
+  width: 2px;
+  border-radius: 9999px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.sb-row[aria-current="true"]::before {
+  transform: scaleY(1);
+}
+
+.sb-chevron {
+  transition: transform var(--dur-hover) var(--ease-out);
+}
+
+.sb-unfold {
+  animation: hm-pop var(--dur-modal) var(--ease-out);
+}
+
+@keyframes sb-flash {
+  to {
+    opacity: 0;
+  }
+}
+
+.sb-flash {
+  background: var(--signal-soft);
+  box-shadow: inset 0 0 0 1px var(--signal-line);
+  animation: sb-flash 600ms var(--ease-out) forwards;
+}
+
 .hm-scrim {
   animation: hm-fade var(--dur-modal) var(--ease-out);
 }
@@ -767,8 +808,18 @@
   .hm-dialog,
   .hm-scrim,
   .hm-slide-left,
-  .hm-slide-right {
+  .hm-slide-right,
+  .sb-unfold {
     animation: hm-fade 80ms linear;
+  }
+
+  .sb-row::before,
+  .sb-chevron {
+    transition: none;
+  }
+
+  .sb-flash {
+    display: none;
   }
 
   .hm-skeleton {
