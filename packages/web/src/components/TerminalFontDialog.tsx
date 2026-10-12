@@ -26,7 +26,7 @@ export function TerminalFontDialog({ onClose }: TerminalFontDialogProps) {
   const saved = current.source === 'custom' ? current.saved : undefined
   const [family, setFamily] = useState(saved?.family ?? '')
   const [size, setSize] = useState(saved?.size === undefined ? '' : String(saved.size))
-  const fallbackFamily = ghostty?.family ?? 'Geist Mono'
+  const fallbackFamily = ghostty?.family ?? 'JetBrains Mono'
   const fallbackSize = ghostty?.size ?? TERMINAL_FONT_SIZE
   const sizeNumber = size.trim() === '' ? fallbackSize : Number(size)
   const sizeValid =
@@ -53,7 +53,7 @@ export function TerminalFontDialog({ onClose }: TerminalFontDialogProps) {
       description={
         ghostty
           ? `Empty fields use your Ghostty font: ${fallbackFamily}, ${fallbackSize}px.`
-          : 'Empty fields use the built-in font. A font that is not installed falls back to it.'
+          : `Empty fields use the built-in font, ${fallbackFamily}, ${fallbackSize}px. A font that is not installed falls back to it.`
       }
       size="sm"
       onClose={onClose}

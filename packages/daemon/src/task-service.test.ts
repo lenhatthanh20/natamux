@@ -1,14 +1,20 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings } from '@natamux/core'
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type TaskState } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
-import { type SettingsOf, TaskEditError, TaskNotFoundError, TaskService } from './task-service.js'
+import {
+  isTaskEnded,
+  type SettingsOf,
+  TaskEditError,
+  TaskNotFoundError,
+  TaskService,
+} from './task-service.js'
 
 let dataDir: string
 let index: TaskIndex
@@ -828,5 +834,23 @@ describe('setWorkflow', () => {
     expect(fresh.listTasks()[0]?.workflowStages).toEqual(['implement'])
     expect(fresh.listEvents(task.id).at(-1)?.event.type).toBe('stage.workflow-set')
     freshIndex.close()
+  })
+})
+
+describe('isTaskEnded', () => {
+  const withState = (state: TaskState) => ({ getTask: () => ({ state }) })
+
+  it('ends the shells of a done or cancelled task', () => {
+    expect(isTaskEnded(withState('done'), 'T-0001')).toBe(true)
+    expect(isTaskEnded(withState('cancelled'), 'T-0001')).toBe(true)
+  })
+
+  it('keeps the shells of a task that is still active', () => {
+    expect(isTaskEnded(withState('running'), 'T-0001')).toBe(false)
+    expect(isTaskEnded(service, service.createTask({ title: 'Export' }).id)).toBe(false)
+  })
+
+  it('ends the shells of a task that is gone', () => {
+    expect(isTaskEnded(service, 'T-9999')).toBe(true)
   })
 })

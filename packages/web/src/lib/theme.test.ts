@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { parseTheme, resolveTheme } from './theme'
+import { afterEach, describe, expect, it } from 'vitest'
+import { pageTheme, parseTheme, resolveTheme } from './theme'
 
 describe('parseTheme', () => {
   it('keeps light and dark and treats anything else as system', () => {
@@ -16,5 +16,20 @@ describe('resolveTheme', () => {
     expect(resolveTheme('system', false)).toBe('light')
     expect(resolveTheme('light', true)).toBe('light')
     expect(resolveTheme('dark', false)).toBe('dark')
+  })
+})
+
+describe('pageTheme', () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('follows data-theme on the page', () => {
+    document.documentElement.dataset.theme = 'dark'
+    expect(pageTheme()).toBe('dark')
+    document.documentElement.dataset.theme = 'light'
+    expect(pageTheme()).toBe('light')
+    document.documentElement.removeAttribute('data-theme')
+    expect(pageTheme()).toBe('light')
   })
 })

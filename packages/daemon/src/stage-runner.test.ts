@@ -1146,6 +1146,107 @@ describe('a resume after a restart', () => {
   })
 })
 
+describe('the agent in each terminal', () => {
+  it('names the agent a person typed into an extra shell, not the agent of the task', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    pty.commandLines = ['node /usr/local/bin/codex', '/usr/local/lib/codex/vendor/codex']
+
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+  })
+
+  it('names an agent typed by hand when the task has another agent', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'gemini' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'claude', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'claude'
+    pty.commandLines = ['claude']
+
+    expect(await runner.agentIn(task.id, '2')).toBe('claude-code')
+    expect(tasks.getTask(task.id).agent).toBe('gemini')
+  })
+
+  it('names an agent that a wrapper such as npx starts', async () => {
+    const task = await created({ title: 'Export tasks' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'npx @openai/codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    pty.commandLines = [
+      'node /usr/local/bin/npx @openai/codex',
+      'node /home/u/.npm/_npx/1a2b/node_modules/.bin/codex',
+    ]
+
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+  })
+
+  it('follows the agents a person starts and quits in an extra shell', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'claude', '2')
+    const pty = ptys.at(-1) as FakePty
+
+    pty.commandLines = ['claude']
+    expect(await runner.agentIn(task.id, '2')).toBe('claude-code')
+    pty.commandLines = []
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+    pty.commandLines = ['node /usr/local/bin/codex']
+    expect(await runner.agentIn(task.id, '2')).toBe('codex')
+    // The shell itself ended.
+    terminals.closeOne(task.id, '2')
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+  })
+
+  it('names no agent when the processes cannot be read', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'codex', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.commands = async () => {
+      throw new Error('ps failed')
+    }
+
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+  })
+
+  it('names no agent for a program that is not one', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    terminals.run(task.id, 'vim notes.md', '2')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'vim'
+    pty.commandLines = ['vim notes.md']
+
+    expect(await runner.agentIn(task.id, '2')).toBeNull()
+    expect(await runner.agentIn(task.id, '3')).toBeNull()
+  })
+
+  it('names the agent it started where the processes cannot be listed', async () => {
+    const task = await created({ title: 'Export tasks' })
+    // The new workspace starts the stage with the agent picked here, not the default one.
+    await runner.startByHand(task.id, 'gemini', undefined, () => workspaces.create(task.id))
+    await runner.settle()
+    const pty = ptys[0] as FakePty
+    pty.program = 'node'
+
+    pty.commandLines = undefined
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Just after the launch the agent may not be up yet.
+    pty.commandLines = []
+    expect(await runner.agentIn(task.id, '1')).toBe('gemini')
+    // Later, the processes tell: the agent ended and another program runs.
+    clock += LAUNCH_GRACE_MS + 1
+    pty.commandLines = ['vim notes.md']
+    expect(await runner.agentIn(task.id, '1')).toBeNull()
+    pty.commandLines = ['codex']
+    expect(await runner.agentIn(task.id, '1')).toBe('codex')
+  })
+})
+
 describe('a send back', () => {
   async function inReview(): Promise<Task> {
     const task = await created({ title: 'Export tasks', agent: 'claude-code' })

@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.9 (2026-10-12)
+
+- The terminal looks like a native terminal: **JetBrains Mono** at 13px with rows as tall as the font and bold at 700, bundled Nerd Font icons, the **Night** palette, dimmed panes without the focus, an outline cursor and a dimmer selection when a terminal has no focus, and `Alt` + wheel to scroll 5 times faster. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
+- The diff in **Changes** and the file editor use JetBrains Mono, the font of the terminal, so code looks the same in a diff and in a shell.
+- The text of the dashboard is in **Inter** at 13px, the UI font of JetBrains IDEs. Small labels such as ids and branches stay in Geist Mono.
+- Faster terminals: up to 8 hidden terminals stay open, so going back to a terminal or a task shows it at once. A shell that prints a lot no longer slows down the page or the other shells, and `Ctrl+C` shows the prompt quickly. A dropped connection shows **Reconnecting.** and resumes the same shell, with the output you missed. After a daemon restart the pane shows **The shell ended.** with **Start a new shell**. See [Shells](/docs/guides/terminal/#shells).
+- Fix: an agent typed into a new shell, such as `codex`, showed the agent of the task ("Claude Code") in the pane header. Shell panes and the **Agents** grid now show the agent that runs in each shell, and no agent for another program. Codex has its own icon.
+
 ## v0.1.8 (2026-10-11)
 
 - Run a hard stage as a Claude Code workflow: more accurate, but many more tokens. In **Project settings**, an agent stage has **Tasks can run it as a workflow** (`"workflow": true`), on by default for **Plan** and **Implement**. On a task, the stage card in **Progress** has **Run with a workflow**, off by default. Only Claude Code runs workflows. The CLI has `natamux stage workflow <task> on|off --stage <id>`, and the API has `PUT /tasks/:id/workflow`. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).
