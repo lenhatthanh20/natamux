@@ -144,10 +144,12 @@ export default function TerminalView({ connect, focusToken, cacheKey }: Terminal
       )}
       <div className="hm-terminal relative flex min-h-0 flex-1 flex-col">
         {/* The fit addon reads the height of xterm's parent, padding included, so the padding is
-            on a wrapper. With it on the parent, the last row fell under the bottom edge. */}
+            on a wrapper. With it on the parent, the last row fell under the bottom edge.
+            xterm keeps room for its 8px scrollbar on the right, so 2px more there makes the same
+            10px as on the left, with the scrollbar inside it. */}
         <section
           aria-label="Terminal screen"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-2.5"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pr-0.5 pl-2.5"
         >
           {/* The session's own element, which moves between views, goes in here. */}
           <div ref={container} className="flex min-h-0 flex-1 flex-col overflow-hidden" />

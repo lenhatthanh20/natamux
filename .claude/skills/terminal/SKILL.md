@@ -30,7 +30,8 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | `packages/web/src/lib/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
 | `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (6), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
 | `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle |
-| `packages/web/src/lib/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_SCROLLBAR_WIDTH` (set through `overviewRuler.width`) |
+| `packages/web/src/lib/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
+| `packages/web/src/lib/fonts.ts`, `src/assets/fonts/` | `TERMINAL_FONT`: JetBrains Mono, then the bundled Nerd Font icons (`ICON_FONT`, `@font-face` in `styles.css`) |
 | `packages/web/src/lib/terminal-font.ts`, `TerminalFontDialog.tsx` | Font: the user's choice, then Ghostty's, then the default. localStorage `natamux.terminal-font` and `natamux.ghostty-font` |
 | `packages/desktop/src/ghostty-config.ts` | Reads `font-family` and `font-size` from the Ghostty config files |
 
@@ -220,6 +221,10 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - **E2E:** `e2e/tests/workspace.spec.ts` types in a shell and reads `.xterm-rows`, with WebGL off. `terminal-protocol.spec.ts` drops and blocks sockets with `controlTerminalSockets` (`routeWebSocket`): reconnect, exit, and query replies in a resume. `terminal-measures.spec.ts` (baseline) and `terminal-cache.spec.ts` (cache) record numbers through `measures.ts`. `terminal-gpu.spec.ts` runs with WebGL (SwiftShader) for the GPU budget and lost contexts. `daemon-rss.ts` samples the daemon's memory. See `docs/e2e.md` and the `e2e` skill.
 
 ## Pitfalls
+
+- The icon font loads on the first icon drawn (`unicode-range`). WebGL has cached that glyph as an empty box by then, so the session clears the texture atlas on `document.fonts` `loadingdone`.
+- Keep ligatures, `allowTransparency` and `smoothScrollDuration` off. Each one costs drawing time.
+- No CSS `:has()` on an element that holds terminals. The DOM renderer rewrites rows all the time, and a `:has()` dim rule tripled the echo p95 in E2E (T-0005).
 
 - xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
 - `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.

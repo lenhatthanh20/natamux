@@ -30,7 +30,8 @@ All tokens live in `packages/web/src/styles.css`. Raw values on `:root` (light) 
 | Token | Value | Use |
 |---|---|---|
 | `--font-sans` | `"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text |
-| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd, terminal, diff |
+| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd, diff |
+| terminal (`TERMINAL_FONT` in `lib/fonts.ts`) | `"JetBrains Mono Variable", "Symbols Nerd Font Mono"`, then the `--font-mono` stack | terminals. The icon font is bundled (`src/assets/fonts`) and loads on the first icon |
 | body features | `font-feature-settings: "ss01", "cv11"; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased` | already set, keep |
 
 - Both fonts are already installed (`@fontsource-variable/geist`, `geist-mono`). No new font package.
@@ -77,7 +78,7 @@ Contrast = WCAG 2.x ratio, computed with the script in the study folder (`tools/
 | `--raised` | `bg-raised` | `#1c1d21` | `#f6f7f9` | secondary buttons, segmented track, kbd |
 | `--popover` | `bg-popover` | `#1c1d21` | `#ffffff` | menus, tooltips (dark), toasts, dialogs, palette |
 | `--input` | `bg-input` | `#0f1012` | `#ffffff` | text fields, selects, textareas (sunken in dark) |
-| `--terminal` | `bg-terminal` | `#0b0c0e` | `#fbfbfc` | terminal body (sunken) |
+| `--terminal` | `bg-terminal` | `#0f1219` | `#f7f9fd` | terminal body (sunken) |
 | `--scrim` | `bg-scrim` | `rgb(0 0 0 / 0.5)` | `rgb(15 17 20 / 0.32)` | behind dialogs, drawers on small screens |
 | `--skeleton` | `bg-skeleton` | `rgb(255 255 255 / 0.06)` | `rgb(20 24 31 / 0.06)` | loading bars |
 | `--badge` | `bg-badge` | `#2a2c31` | `#e6e8ec` | count badges |
@@ -175,21 +176,21 @@ Running (blue) and needs-input (amber) are far apart in hue, so "working" never 
 
 #### Terminal ANSI palettes (xterm `ITheme`)
 
-Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Black is a background color in practice; its 1.9 is fine because the ratio option lifts it when used as text.
+The "Night" palette, picked from four designs in `docs/design-terminal-look.md` (2026-10-12). Ratios are against the background. Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Dark black is a background color in practice; its 1.7 is fine because the ratio option lifts it when used as text.
 
-| | Dark (on `#0b0c0e`) | Light (on `#fbfbfc`) |
+| | Dark (on `#0f1219`) | Light (on `#f7f9fd`) |
 |---|---|---|
-| background / foreground | `#0b0c0e` / `#e6e7ea` | `#fbfbfc` / `#17191d` |
-| cursor / cursorAccent | `#7aa2ff` / `#0b0c0e` | `#2f5fe0` / `#fbfbfc` |
-| selectionBackground | `#7aa2ff4d` | `#2f5fe033` |
-| black / brightBlack | `#3a3f4b` / `#7d828c` (5.1) | `#24272d` / `#5f6570` (5.7) |
-| red / brightRed | `#ff7b72` (7.8) / `#ffa198` | `#c0362c` (5.3) / `#b93a30` (5.5) |
-| green / brightGreen | `#6fd19a` (10.5) / `#8fe0b0` | `#1c7442` (5.6) / `#237a48` (5.1) |
-| yellow / brightYellow | `#e8c15a` (11.4) / `#f5d47a` | `#8a5a00` (5.7) / `#8f6000` (5.3) |
-| blue / brightBlue | `#7aa2ff` (7.9) / `#a5c0ff` | `#2448b8` (7.5) / `#2f5fe0` (5.3) |
-| magenta / brightMagenta | `#d09bff` (9.2) / `#e2bcff` | `#8a3fb8` (5.8) / `#8f45c2` (5.4) |
-| cyan / brightCyan | `#6cc4d6` (9.8) / `#97dbe8` | `#0b6274` (6.7) / `#0f7489` (5.2) |
-| white / brightWhite | `#c9ccd2` / `#f2f3f5` | `#5f6570` (5.7) / `#17191d` |
+| background / foreground | `#0f1219` / `#d6dcf0` (13.7) | `#f7f9fd` / `#1b2238` (15.0) |
+| cursor / cursorAccent | `#7aa2ff` / `#0f1219` | `#2f5fe0` / `#f7f9fd` |
+| selectionBackground / selectionInactiveBackground | `#7aa2ff47` / `#7aa2ff21` | `#2f5fe030` / `#2f5fe018` |
+| black / brightBlack | `#343b52` (1.7) / `#7c86a8` (5.2) | `#262d45` (12.9) / `#5d6684` (5.4) |
+| red / brightRed | `#f7768e` (7.1) / `#ff9bae` (9.4) | `#c4304f` (5.1) / `#b02a46` (6.1) |
+| green / brightGreen | `#8fd694` (10.9) / `#aee6b2` (13.2) | `#2c7a3a` (5.0) / `#256c33` (6.1) |
+| yellow / brightYellow | `#e6c07b` (10.9) / `#f0d39d` (12.9) | `#8c5f00` (5.3) / `#7b5300` (6.5) |
+| blue / brightBlue | `#7aa2ff` (7.5) / `#a6c1ff` (10.4) | `#2f5fe0` (5.2) / `#2448b8` (7.4) |
+| magenta / brightMagenta | `#bb9af7` (8.1) / `#d2bbfa` (10.9) | `#7c4dd6` (5.1) / `#6a3ec2` (6.5) |
+| cyan / brightCyan | `#6fd0e0` (10.5) / `#9ce0eb` (12.7) | `#0b6a80` (5.9) / `#095c6f` (7.2) |
+| white / brightWhite | `#b8c0dc` (10.4) / `#e8ecf8` (15.9) | `#5d6684` (5.4) / `#1b2238` (15.0) |
 
 The terminal follows the app theme (RA-17). A setting "Terminal: always dark" is P2.
 
@@ -528,7 +529,8 @@ Shared shell:
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
 - Needs-input pane: 2px top bar `--signal`, header bg signal-soft, state text "Needs your input" in signal (WS-21).
-- Body: bg terminal, pad 8 10. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Reconnecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body. "Reconnecting" shows while a dropped connection comes back by itself; it has no button, the screen stays as it was, and the output missed meanwhile follows. If the shell is gone by then (a daemon restart), the strip says "Shell ended". A pane that comes back (another tab, another task) shows the same screen and scroll position at once, with no strip; "Connecting" shows only for a new connection. While a new connection writes the shell's history, the screen stays hidden and the body shows the pane's skeleton; the final screen then shows at once, scrolled to the bottom, so no history scrolls by.
+- Body: bg terminal, pad 8 top and bottom, 10 left, 2 right (xterm keeps 8 for its scrollbar, so text has 10 on both sides). 13px, line height 1.2, bold 600 in its own color (not bright), block cursor, outline cursor when unfocused, Alt + wheel scrolls 5×. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Reconnecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body. "Reconnecting" shows while a dropped connection comes back by itself; it has no button, the screen stays as it was, and the output missed meanwhile follows. If the shell is gone by then (a daemon restart), the strip says "Shell ended". A pane that comes back (another tab, another task) shows the same screen and scroll position at once, with no strip; "Connecting" shows only for a new connection. While a new connection writes the shell's history, the screen stays hidden and the body shows the pane's skeleton; the final screen then shows at once, scrolled to the bottom, so no history scrolls by.
+- With two or more panes, the panes without the focus get a dim layer over the body: `--terminal` at 0.3 opacity, no animation, clicks go through (`.hm-panes` / `.hm-pane` in `styles.css`).
 
 ### 4.24 Diff view chrome (`components/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
 - Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.

@@ -13,7 +13,7 @@
   --raised: #f6f7f9;
   --popover: #ffffff;
   --input: #ffffff;
-  --terminal: #fbfbfc;
+  --terminal: #f7f9fd;
   --scrim: rgb(15 17 20 / 0.32);
   --scrim-palette: rgb(15 17 20 / 0.12);
   --skeleton: rgb(20 24 31 / 0.06);
@@ -105,7 +105,7 @@
   --raised: #1c1d21;
   --popover: #1c1d21;
   --input: #0f1012;
-  --terminal: #0b0c0e;
+  --terminal: #0f1219;
   --scrim: rgb(0 0 0 / 0.5);
   --scrim-palette: rgb(0 0 0 / 0.24);
   --skeleton: rgb(255 255 255 / 0.06);
@@ -722,19 +722,31 @@
   border-top: 1px solid var(--line);
 }
 
-/* The terminal's scrollbar shows when the pointer is over the pane. */
-.hm-terminal .xterm-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.hm-terminal:hover .xterm-viewport,
-.hm-terminal:focus-within .xterm-viewport {
-  scrollbar-color: var(--scroll-hover) transparent;
-}
-
+/* xterm 6 draws its own scrollbar, which shows on hover and while scrolling. */
 .hm-terminal .xterm-scrollable-element > .scrollbar > .slider {
   border-radius: 9999px;
+}
+
+/* Nerd Font icons for terminals (lib/fonts.ts). The unicode-range holds only the icons, so the
+   file loads the first time an icon is drawn. U+26A1 is left out: it is an emoji, two cells wide. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23FB-23FE, U+2630, U+2665, U+276C-2771, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}
+
+/* With several panes, the ones without the focus are dimmed, as in Ghostty. Only the screen is
+   dimmed, so the header and its needs-input bar stay clear. A click goes through to the pane.
+   No :has() here: each row xterm writes inside it would make the browser check it again. */
+.hm-panes:focus-within .hm-pane:not(:focus-within) .hm-terminal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--terminal);
+  opacity: 0.3;
 }
 
 @media (prefers-reduced-motion: reduce) {

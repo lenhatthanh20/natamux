@@ -44,6 +44,7 @@ export class FakeTerminal {
   // What xterm's own keydown listener emits as data, or null for a key that gives none.
   keyData: string | null = null
   refreshes = 0
+  atlasClears = 0
   focuses = 0
   disposed = false
   private readonly listeners = new Map<FakeEvent, Set<Listener>>()
@@ -96,6 +97,10 @@ export class FakeTerminal {
 
   refresh(): void {
     this.refreshes += 1
+  }
+
+  clearTextureAtlas(): void {
+    this.atlasClears += 1
   }
 
   focus(): void {

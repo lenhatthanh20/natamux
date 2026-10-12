@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { MONO_FONT } from './fonts'
+import { TERMINAL_FONT } from './fonts'
 import { TERMINAL_FONT_SIZE } from './terminal-theme'
 
 export type TerminalFont = { family: string; size: number }
@@ -54,10 +54,10 @@ function read(key: string): Partial<TerminalFont> | undefined {
 }
 
 // The family as CSS: the chosen font first, the built-in ones after, for a font that is not
-// installed and for the glyphs it lacks.
+// installed and for the glyphs it lacks, such as icons.
 export function fontStack(family: string | undefined): string {
   const name = family?.replace(/["\\]/g, '').trim()
-  return name ? `"${name}", ${MONO_FONT}` : MONO_FONT
+  return name ? `"${name}", ${TERMINAL_FONT}` : TERMINAL_FONT
 }
 
 export type ResolvedTerminalFont = {

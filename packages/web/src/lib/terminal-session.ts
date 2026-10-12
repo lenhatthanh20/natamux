@@ -14,6 +14,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import { keyBelongsToShell } from './dispatch'
+import { ICON_FONT } from './fonts'
 import { type GpuRenderer, gpuRenderer } from './gpu-renderer'
 import { closeSocket } from './live'
 import {
@@ -25,12 +26,7 @@ import {
 } from './terminal'
 import type { CachedTerminal } from './terminal-cache'
 import { type ResolvedTerminalFont, terminalFont } from './terminal-font'
-import {
-  MIN_CONTRAST_RATIO,
-  TERMINAL_LINE_HEIGHT,
-  TERMINAL_SCROLLBAR_WIDTH,
-  terminalTheme,
-} from './terminal-theme'
+import { TERMINAL_LOOK, terminalTheme } from './terminal-theme'
 import { pageTheme, uiZoom } from './theme'
 
 // One live terminal: xterm, its addons, its socket and its element. It lives outside React, so
@@ -122,12 +118,9 @@ export function createTerminalSession(options: {
     // The search addon marks its matches with decorations, and Unicode 11 widths are set
     // through terminal.unicode: both are proposed APIs.
     allowProposedApi: true,
-    cursorBlink: true,
+    ...TERMINAL_LOOK,
     fontFamily: firstFont.stack,
     fontSize: firstFont.size * firstZoom,
-    lineHeight: TERMINAL_LINE_HEIGHT,
-    minimumContrastRatio: MIN_CONTRAST_RATIO,
-    overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
     scrollback: scrollbackLines(80),
     theme: terminalTheme(theme),
   })
@@ -810,6 +803,7 @@ export function createTerminalSession(options: {
     terminal.textarea?.removeEventListener('keydown', clearUser)
     document.removeEventListener('visibilitychange', onPageVisibility)
     window.removeEventListener('online', retry)
+    document.fonts?.removeEventListener('loadingdone', onFontsLoaded)
     stopHeartbeat()
     clearTimeout(retryTimer)
     if (catchUp !== null) {
@@ -830,8 +824,17 @@ export function createTerminalSession(options: {
     }, DISPOSE_DELAY_MS)
   }
 
+  // The icon font loads when the first icon is drawn (its unicode-range in styles.css). By then
+  // the GPU renderer has cached that glyph as an empty box, so the glyphs are drawn again.
+  const onFontsLoaded = (event: FontFaceSetLoadEvent) => {
+    if (event.fontfaces.some((face) => face.family.includes(ICON_FONT))) {
+      terminal.clearTextureAtlas()
+    }
+  }
+
   document.addEventListener('visibilitychange', onPageVisibility)
   window.addEventListener('online', retry)
+  document.fonts?.addEventListener('loadingdone', onFontsLoaded)
 
   const session: TerminalSession = {
     terminal,
