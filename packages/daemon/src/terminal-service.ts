@@ -28,6 +28,8 @@ export type PtyProcess = {
   kill: (signal?: string) => void
   // The name of the program in the foreground, such as "bash" or "node".
   foreground?: () => string | undefined
+  // The command lines of the processes under the shell, parents first, when the platform tells.
+  commands?: () => Promise<string[] | undefined>
 }
 
 export type SpawnPty = (
@@ -1177,6 +1179,11 @@ export class TerminalService {
   // The program in the foreground of a shell, when the platform tells.
   foreground(taskId: string, terminal = MAIN_TERMINAL): string | undefined {
     return this.sessions.get(sessionKey(taskId, terminal))?.pty.foreground?.()
+  }
+
+  // The command lines of the programs in a shell, when the platform tells.
+  async commands(taskId: string, terminal = MAIN_TERMINAL): Promise<string[] | undefined> {
+    return this.sessions.get(sessionKey(taskId, terminal))?.pty.commands?.()
   }
 
   // Input from a client gives the shell that client's size first: the user types where they look.

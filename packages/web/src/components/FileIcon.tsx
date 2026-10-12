@@ -8,7 +8,16 @@ const ICONS = import.meta.glob<string>(
   { eager: true, query: '?url', import: 'default' },
 )
 
-const urlOf = (name: string) => ICONS[`/node_modules/material-icon-theme/icons/${name}.svg`]
+// Icons the theme does not have.
+const OWN_ICONS = import.meta.glob<string>('/src/icons/*.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+
+const urlOf = (name: string) =>
+  ICONS[`/node_modules/material-icon-theme/icons/${name}.svg`] ??
+  OWN_ICONS[`/src/icons/${name}.svg`]
 
 // Some icons are dark on dark; the theme has a lighter one for them, made for light editors.
 export function iconUrl(name: string, theme: ResolvedTheme): string | undefined {

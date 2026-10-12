@@ -35,6 +35,7 @@ Things to know:
 
 - A task has at most 6 shells. **New shell** is off after that.
 - Shell 1 has no close button. It stays for the agent.
+- You can start an agent yourself in any shell, for example type `codex` in Shell 2. Its pane header then shows that agent, even when the task has another one. A shell that runs another program, such as `vim`, shows no agent. On Windows, a header shows only an agent that Natamux started.
 - New shells are named in order: Shell 2, Shell 3, and so on.
 - Panes sit side by side and fill the width. The last pane takes the rest of its row.
 - On a phone, one shell fills the screen. Chips named **Shell 1**, **Shell 2** switch between them.

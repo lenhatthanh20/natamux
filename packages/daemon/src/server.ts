@@ -644,9 +644,15 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const terminals = options.terminals.list(id)
     // The shells where an agent runs now, so a shell left after a restart is not called the agent's.
     const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
-    // Each agent shows the state of its own stage, not the state of the whole task.
+    // Each agent shows the state of its own stage, not the state of the whole task, and the agent
+    // that runs there, which may not be the task's.
     const lanes = Object.fromEntries(
-      agents.map((name) => [name, options.stages.laneOfTerminal(task, name)]),
+      await Promise.all(
+        agents.map(async (name) => {
+          const agent = await options.stages.agentIn(id, name)
+          return [name, { ...options.stages.laneOfTerminal(task, name), agent }] as const
+        }),
+      ),
     )
     return { terminals, agents, lanes }
   })

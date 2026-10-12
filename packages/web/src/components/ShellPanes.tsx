@@ -240,6 +240,9 @@ export function ShellPanes({
           const isAgent = state !== undefined
           const own = state ?? null
           const glyph = own === null ? null : <StatusGlyph state={own} />
+          // The agent the daemon found in this shell; the task's when the daemon does not say.
+          const lane = agentShells.data?.[name]
+          const shellAgent = lane?.agent === undefined ? agent : (lane.agent ?? undefined)
           const index = visible.indexOf(name)
           return (
             <TerminalPane
@@ -253,7 +256,7 @@ export function ShellPanes({
               label={`Shell ${name}`}
               icon={glyph ?? <SquareTerminal size={14} aria-hidden />}
               title={`Shell ${name}`}
-              agent={isAgent ? agent : undefined}
+              agent={isAgent ? shellAgent : undefined}
               stateText={
                 own !== null && agent !== null ? paneStateText(own, activity?.[name]) : undefined
               }

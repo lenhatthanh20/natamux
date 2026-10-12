@@ -13,6 +13,9 @@ export class FakePty implements PtyProcess {
   stubborn = false
   // The program in the foreground; tests set it to pretend an agent runs.
   program = 'bash'
+  // The command lines of the processes under the shell; undefined where the platform cannot list
+  // them.
+  commandLines: string[] | undefined = undefined
   // pause() and resume() calls, in order. emit() still delivers output while paused.
   readonly flow: ('pause' | 'resume')[] = []
   paused = false
@@ -31,6 +34,10 @@ export class FakePty implements PtyProcess {
 
   foreground(): string {
     return this.program
+  }
+
+  async commands(): Promise<string[] | undefined> {
+    return this.commandLines
   }
 
   write(data: string): void {
