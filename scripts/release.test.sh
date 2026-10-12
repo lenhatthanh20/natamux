@@ -178,11 +178,12 @@ fi
 
 # Case 5: only what users see, and no banned names.
 # "skill" is not on the list: since v0.1.7, skills in stage prompts are a feature users see.
+# "CI" is not either: since v0.1.12, Check on CI is a feature users see.
 for text in notes section; do
   if [ "$text" = notes ]; then body=$(cat "$notes"); else body=$section; fi
   check "no banned names in the $text" '! grep -qiwE "orca|atlas" <<<"$body"'
   check "no developer-only changes in the $text" \
-    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|CI|README|[Bb]enchmarks?|[Ll]anding page" <<<"$body"'
+    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|README|[Bb]enchmarks?|[Ll]anding page" <<<"$body"'
   # A / or - before # is a heading anchor such as /#2-add-a-task, and a backtick is an example such as `#42`.
   check "no PR numbers in the $text" \
     '! grep -qE "(^|[^-/[:alnum:]\`])#[0-9]+|/pull/[0-9]+|\bPR ?[0-9]+" <<<"$body"'
