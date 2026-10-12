@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.12 (2026-10-13)
+
+- The default pipeline is Context, Spec, Plan, Test spec and Implement side by side, **Automated tests**, **Review** and Release. **Review** is an agent stage in its own shell: it writes `review.md` and sends the task back to Implement with the problems, at most twice, then waits for you. The review by a person is **Manual review** in the catalog, and **Manual QA** is now **Manual testing**. See [Review by an agent](/docs/concepts/stages/#review-by-an-agent).
+- **Check on CI**: a checkbox on Implement and Automated tests pushes the work to `natamux-ci/<branch>`, waits for your CI and gives a failure back to the agent. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+- A stage beside Shell 1 or in its own shell can use another agent and arguments, such as a cheaper model. The Spec stage writes a **Code map**. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- A new workspace starts from the branch of your main checkout as its remote has it now. See [Base branch](/docs/concepts/workspaces/#base-branch).
+- The sidebar shows one row per shell under each task, a comet for the progress of the task, and a task icon that spins while any of its agents works. The diff size is no longer on the second line. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- An agent you start yourself in a shell shows in the pane header with its own name and, when its hooks reach Natamux, its own state. Natamux runs at most 30 shells in all. See [Shells](/docs/guides/terminal/#shells).
+- Fix: a shell where you started Cursor with `agent` showed nothing in its header or in the sidebar. Now it shows Cursor and its state.
+
 ## v0.1.11 (2026-10-13)
 
 - Open subtasks sit under their parent task in the sidebar. A line such as "2 open subtasks · 2 parallel stages" shows or hides the task's agent shells and subtasks; click it or press `Right` and `Left`. Click a shell to open the task's terminal on it. The line opens by itself while something under it works, waits or failed, and Natamux remembers what you fold. The line under a workspace title shows the agent, the task id (hover it for the branch), the stage and its step, the pull request, how many subtasks are done, and the size of the diff. A blue dot marks a change you have not seen yet. See [Sidebar](/docs/guides/dashboard/#sidebar).
