@@ -360,7 +360,8 @@ describe('the end of a terminal session (AC 5)', () => {
     socket.drop()
 
     expect(session.state().status).toBe('ended')
-    expect(terminal.written.at(-1)).toBe('\r\n')
+    // A new line after the last output, then the cursor hides: the screen is read-only now.
+    expect(terminal.written.slice(-2)).toEqual(['\r\n', '\x1b[?25l'])
     expect(onEnd).toHaveBeenCalledTimes(1)
     expect(onEnd).toHaveBeenCalledWith(session)
   })
