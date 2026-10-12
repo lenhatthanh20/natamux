@@ -298,3 +298,14 @@ test('loads the icon font once, only when an icon shows (C8, C9)', async ({ page
   expect(iconRequests).toHaveLength(1)
   expect(errors).toEqual([])
 })
+
+test('shows code in the Changes tab with the font of the terminal', async ({ page }) => {
+  await page
+    .getByRole('tablist', { name: 'View', exact: true })
+    .getByRole('tab', { name: 'Changes' })
+    .click()
+  const lines = page.locator('.monaco-editor .view-lines').first()
+  await expect(lines).toBeVisible({ timeout: 30_000 })
+  const font = await lines.evaluate((element) => getComputedStyle(element).fontFamily)
+  expect(font.startsWith(`"${MAIN_FONT}"`)).toBe(true)
+})

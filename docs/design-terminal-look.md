@@ -26,6 +26,7 @@ Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/
 | Part | Before | After | Where |
 |---|---|---|---|
 | Font | Geist Mono 13 px | JetBrains Mono 13 px (`@fontsource-variable/jetbrains-mono`, normal and italic). The rest of the UI and Monaco keep Geist Mono | `lib/fonts.ts` `TERMINAL_FONT`, `main.tsx` |
+| Code views (Monaco diff and file) | Geist Mono | JetBrains Mono, the terminal stack, so code looks the same in a diff and in a shell. Monaco measures the font again once it loads. Small mono labels in the UI keep Geist Mono | `MonacoDiff.tsx`, `MonacoFile.tsx`, `lib/monaco-setup.ts` |
 | Icons | Empty boxes without a Nerd Font | Bundled Symbols Nerd Font Mono v3.4.0, right after the main font, also behind a font the user picks | `src/assets/fonts/`, `@font-face` in `styles.css` |
 | Line height | 1.3 (22px rows) | 1 (about 17px rows at 13px, as Ghostty and VS Code). xterm multiplies the font's own line height, about 1.3 em for JetBrains Mono, so 1.2 gave 20px rows, looser than any native terminal | `TERMINAL_LOOK` in `lib/terminal-theme.ts` |
 | Bold | Bright color, weight 700 | Own color, weight 700 (`bold`, as Ghostty, VS Code and JetBrains IDEs) | `TERMINAL_LOOK` |
