@@ -71,10 +71,10 @@ test('shows a subtask and the agents under their task', async ({ page, request }
   const fold = tree(page).getByRole('button', { name: `Work under ${parentId}` })
   // A child works, so the row opens by itself.
   await expect(fold).toHaveAttribute('aria-expanded', 'true')
-  await expect(fold).toContainText('1 open subtask')
   const childRow = parentItem.getByRole('button', { name: taskNamed(childTitle) })
   await expect(childRow).toBeVisible()
-  const shell = parentItem.getByRole('button', { name: /^Shell 1,/ })
+  // The shell row names its stage first, then its agent and shell: "Spec, …, Shell 1, Running".
+  const shell = parentItem.getByRole('button', { name: /^Spec, (.+, )?Shell 1,/ })
   await expect(shell).toBeVisible()
 
   for (const theme of ['dark', 'light'] as const) {
@@ -131,7 +131,6 @@ test('lists the stages of a parallel group, with reduced motion', async ({ page,
   const agents = row.locator('xpath=ancestor::li[1]').locator('[data-roving^="agent:"]')
   const fold = tree(page).getByRole('button', { name: `Work under ${id}` })
   await expect(fold).toHaveAttribute('aria-expanded', 'true')
-  await expect(fold).toContainText(`${group.parallel.length} parallel stages`)
   // A stage shows as its own row, or as the shell that works on it.
   await expect(agents).toHaveCount(group.parallel.length, { timeout: 10_000 })
 

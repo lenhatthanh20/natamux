@@ -125,6 +125,7 @@ type Options = {
   startAgent?: (agent: AgentId) => Promise<Task>
   startInBanner?: boolean
   setWorkflow?: SetWorkflow
+  setCi?: SetWorkflow
   settings?: LoadedSettings
 }
 
@@ -140,6 +141,7 @@ afterEach(() => {
 function progress(options: Options = {}) {
   const act = vi.fn<Act>(options.act ?? (async () => TASK))
   const setWorkflow = vi.fn<SetWorkflow>(options.setWorkflow ?? (async () => TASK))
+  const setCi = vi.fn<SetWorkflow>(options.setCi ?? (async () => TASK))
   const createIssue = vi.fn(async () => TASK)
   const onOpenFile = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -158,12 +160,13 @@ function progress(options: Options = {}) {
         startAgent={options.startAgent}
         startInBanner={options.startInBanner}
         setWorkflow={setWorkflow}
+        setCi={setCi}
       />
     </QueryClientProvider>
   )
   const { rerender } = render(view(options.task ?? TASK, options.events ?? EVENTS))
   const update = (task: Task, events: StoredEvent[]) => rerender(view(task, events))
-  return { act, createIssue, onOpenFile, setWorkflow, client, update }
+  return { act, createIssue, onOpenFile, setWorkflow, setCi, client, update }
 }
 
 describe('ProgressTab', () => {
@@ -629,6 +632,49 @@ describe('the data of the progress', () => {
     expect(await within(plan).findByRole('button', { name: 'Mark as done' })).toBeTruthy()
     const spec = screen.getByRole('article', { name: 'Spec' })
     expect(within(spec).getByRole('button', { expanded: false })).toBeTruthy()
+  })
+})
+
+describe('ProgressTab check on CI', () => {
+  const box = (card: HTMLElement) => within(card).queryByRole('checkbox', { name: /Check on CI/ })
+
+  it('offers the check on the stages the settings allow, and turns it on', async () => {
+    const { setCi } = progress({ task: FULL_TASK, events: FULL_EVENTS })
+    const user = userEvent.setup()
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect((box(implement) as HTMLInputElement).checked).toBe(false)
+    for (const name of ['Context', 'Spec', 'Plan', 'Test spec', 'Review']) {
+      expect(box(screen.getByRole('article', { name }))).toBeNull()
+    }
+    await user.click(box(implement) as HTMLElement)
+    await waitFor(() => expect(setCi).toHaveBeenCalledWith('implement', true))
+  })
+
+  it('says the stage waits for CI, and on which branch', async () => {
+    const running: Task = {
+      ...TASK,
+      state: 'running',
+      stage: 'implement',
+      stages: ['implement'],
+      ciStages: ['implement'],
+    }
+    progress({
+      task: running,
+      events: [
+        stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'implement' }),
+        stored(2, 'stage.reported', '2026-10-10T08:10:00.000Z', { stage: 'implement' }),
+        stored(3, 'stage.ci-started', '2026-10-10T08:11:00.000Z', {
+          stage: 'implement',
+          branch: 'natamux-ci/natamux/t-0001',
+        }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(card).getByText('Checking on CI')).toBeTruthy()
+    expect(within(card).getByText('natamux-ci/natamux/t-0001')).toBeTruthy()
+    expect((box(card) as HTMLInputElement).checked).toBe(true)
   })
 })
 

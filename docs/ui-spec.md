@@ -395,18 +395,21 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 - Used by: changed-file rows, menu rows, palette rows (32 there), nav rows.
 
 ### 4.9 Tree row: workspace row (`components/WorkspaceRow.tsx`)
-Anatomy (44px, pad 6/8, radius 6):
+Anatomy (44px, pad 6 / 8 right / 24 left for the chevron gutter, radius 6):
 ```
-[glyph16] Title (13/500, ink, truncate)          [unseen dot] [age 12 muted | ... on hover]
-          [agent] T-0018 Review 3/5 [PR #12] [subtasks 1/3]   [+12 -3 mono 12]
-          (running only) Edit notes/T-0018.md (12 muted, truncate)   -> +16px
-          (failed) "claude: command not found" (12 failed, truncate)  -> +16px
-          (with work under it) > [dot] 2 open subtasks · 2 parallel stages  -> +20px
+[>] [glyph16] Title (13/500, ink, truncate)          [unseen dot] [age 12 muted | ... on hover]
+              [agent] T-0018 [comet 36x18] Review    3/5 [PR #12] [subtasks 1/3]
+              (folded, running) Edit notes/T-0018.md (12 muted, truncate)
+              (failed) "claude: command not found" (12 failed, truncate)
+     |  [glyph] [agent12] Implement  Edit a.ts …                 S1
+     |  [term14] zsh                                              S2
 ```
-- Text column starts at 32px (8 pad + 16 glyph + 8 gap).
-- Line 2: agent icon (tooltip: agent name), task id in mono (tooltip: branch), stage and its step `n/m` from the task's own steps (a parallel group is one step), pull request number in the checks color, subtasks `done/all`, diff size at the right. The branch is mostly the title, so it is only in the tooltip and the menu ("Copy branch name").
-- Work under a row: open subtasks whose parent is shown in the same project, and the stages of a parallel group. A 20px disclosure line under the row (`Work under T-0018`, `aria-expanded`, not a tab stop: Right and Left on the row do the same) shows a chevron, a 6px dot in the most urgent child state (needs-input > failed > blocked > review > running > ready) and what is under it. It opens by itself while a child works, waits or failed; a click or Left/Right is the user's choice and wins.
-- Under an open row, inside a 16px indent with a 1px `--line` guide: first the agents, then the subtask rows (full rows, one level only). Agent rows are 26px (40 on touch): glyph, "Shell 2", stage name, what the agent does now. They come from `GET /tasks/<id>/terminals`, read only while the row is open and the tab is visible, every 5 s; until then (or for a stage with no shell yet) a row per parallel stage stands in. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
+- Text column starts at 48px (24 gutter + 16 glyph + 8 gap).
+- Chevron (`ChevronRight` 12 in a 16px box at left 4, top 6): on a row with something under it (shells, a parallel stage, an open subtask). `Work under T-0018`, `aria-expanded`, not a tab stop: Right and Left on the row do the same. Folded, a 6px dot at its corner shows the most urgent state under the row (needs-input > failed > blocked > review > running > ready). The row opens by itself while the task or something under it works, waits or failed; a click or Left/Right is the user's choice and wins. Nested subtask rows have no gutter.
+- Task glyph: `running` (spins) while any row or parallel stage under the task runs, else the task state (`taskGlyphState`).
+- Line 2: agent icon (tooltip: agent name) while the row is folded, task id in mono (tooltip: branch), the comet, the current stage (`--ink-2`, truncate; in a group the most urgent stage), the step `n/m` (only with 2 steps or more; a parallel group is one step), pull request number in the checks color, subtasks `done/all`. No diff size. The branch is mostly the title, so it is only in the tooltip and the menu ("Copy branch name").
+- Comet (`components/Comet.tsx`, `cometOf` and `cometHead` in `lib/sidebar-tree.ts`): SVG 36x18, viewBox 24x12. Dotted track x 2–22 (1px `--line-strong`, dash 0.6/1.8). Tail 2.8 high, gradient from transparent to the stage color mixed 80% with white, 1px glow. Head r 2.1 in the color mixed 72% with white, glows 1.4px and 2.6px, white shine r 0.7. Progress = (steps done + the current one) / steps; head x = clamp(2.4, p×24, 21.6). Color = `--chip-fg` of the current stage state. Head and tail move over 900ms `cubic-bezier(0.22, 1, 0.36, 1)`; a halo (scale 1→3, 1.6s) and two sparks (1.1s, one 0.55s later) only while that stage runs; nothing moves with reduced motion. Tooltip: every step with its state ("Spec done, Implement needs your input, …").
+- Under an open row, inside a 1px `--line` guide under the task glyph (`ml-8`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 26px (40 on touch), glyph lined up with the title: state glyph (empty slot for an agent with no state yet; `SquareTerminal` 14 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read every 5 s while the tab is visible for open rows, tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
 - A finished or pinned subtask stays where it was (finished list, pinned group). An open subtask of a finished parent stays at the top level, so it is never folded away in "N finished". A subtask whose parent is not shown stays at the top level. A filter that matches a subtask keeps its parent in view.
 - Folds of groups, "N finished" lists and rows are kept per browser in `natamux.sidebar-folds` (only what the user picked; the newest 300).
 - A needs-input row has no third line: the `?` glyph says it, and the Needs you section (4.12) has the question. One place per area (T-0015).
@@ -534,7 +537,7 @@ Shared shell:
 
 ### 4.23 Terminal pane header (`components/TerminalPane.tsx`)
 - Height 32 fixed (fixes the 29/30px mismatch, WS-12), pad 0 4 0 10, bg surface, border-bottom line.
-- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); role chip "Agent" only when an agent runs in it (WS-13); state text 12 muted truncate ("Running · Edit notes/T-0018.md", WS-21).
+- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); agent badge only when an agent runs in it, naming the agent the daemon found there, not the task's (WS-13); state text 12 muted truncate; an agent on no stage (started by hand in an extra shell) shows the state its own hooks gave, or none ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
 - Opening another task's workspace on its Terminal tab puts the keyboard in its first agent shell (the lowest-numbered shell that runs an agent, else Shell 1), once the shells are read. Not on a phone, not when opened from an address, and a shell picked in the jump palette wins.

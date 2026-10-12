@@ -17,4 +17,9 @@ describe('sidebar motion', () => {
   it.each(classes)('turns %s down when motion is reduced', (name) => {
     expect(reduced).toContain(name)
   })
+
+  it('stops the halo and the sparks of the comet', () => {
+    expect(reduced).toContain('.comet[data-state="running"] .comet-halo')
+    expect(reduced).toContain('.comet[data-state="running"] .comet-spark')
+  })
 })

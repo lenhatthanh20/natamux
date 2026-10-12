@@ -180,14 +180,14 @@ describe('run side by side', () => {
   })
 
   it('joins the group above, up to 4 stages', () => {
-    let steps = dropStage(DEFAULT_PIPELINE, 'plan', 'review', 'before')
+    let steps = dropStage(DEFAULT_PIPELINE, 'plan', 'testing', 'before')
     steps = joinAbove(steps, 'plan')
     expect(ids(steps)[2]).toEqual({ id: 'build', parallel: ['test-spec', 'implement', 'plan'] })
     steps = addCatalogStage(steps, 'docs')
-    steps = dropStage(steps, 'docs', 'review', 'before')
+    steps = dropStage(steps, 'docs', 'testing', 'before')
     steps = joinAbove(steps, 'docs')
     steps = addCatalogStage(steps, 'refactor')
-    steps = dropStage(steps, 'refactor', 'review', 'before')
+    steps = dropStage(steps, 'refactor', 'testing', 'before')
     expect(joinProblem(steps, 'refactor')).toBe('A group holds 4 stages at most')
   })
 
@@ -358,7 +358,7 @@ describe('stage fields', () => {
 describe('pipelineLabel', () => {
   it('names the stages that are on, in order, with groups side by side', () => {
     expect(pipelineLabel(DEFAULT_PIPELINE)).toBe(
-      'Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Review, then Testing, then Release',
+      'Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Automated tests, then Review, then Release',
     )
     expect(pipelineLabel(setEnabled(DEFAULT_PIPELINE, 'plan', false))).not.toContain('Plan')
   })
@@ -452,7 +452,7 @@ describe('test spec cases', () => {
     expect(ids(removeStage(DEFAULT_PIPELINE, 'implement')).slice(2, 5)).toEqual([
       'plan',
       'test-spec',
-      'review',
+      'testing',
     ])
   })
 

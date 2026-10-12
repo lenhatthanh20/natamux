@@ -306,6 +306,33 @@ describe('AgentRunner', () => {
     expect(readFileSync(script(task.id), 'utf8')).toMatch(/[^ ] 'Only this'\n$/)
   })
 
+  it("starts a stage's own agent with its words after the configured ones, and keeps the task agent", () => {
+    const configured = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+      extraArgs: { codex: '--foo' },
+    })
+    const task = taskWithWorkspace()
+    configured.start(task.id, 'claude-code')
+
+    const updated = configured.start(task.id, 'codex', 'Only this', '2', undefined, {
+      args: '--model gpt-5',
+      stage: 'test-spec',
+    })
+
+    expect(readFileSync(join(dataDir, `agent-launch-${task.id}-2.sh`), 'utf8')).toContain(
+      "--foo --model gpt-5 'Only this'",
+    )
+    expect(updated.agent).toBe('claude-code')
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'agent.launched',
+      payload: { agent: 'codex', stage: 'test-spec' },
+    })
+  })
+
   it('starts the next agent with the mode saved in .natamux.json', () => {
     // Wired as in main.ts: the tasks read the settings of the repository's file.
     const settings = new ProjectSettingsService({ repos: { pathOf: () => dataDir } })

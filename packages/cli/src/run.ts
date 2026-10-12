@@ -237,6 +237,17 @@ async function execute(
       return
     }
 
+    case 'stage.ci': {
+      const task = await client.setCi(command.id, command.stage, command.on)
+      if (command.json) {
+        printJson(io, task)
+      } else {
+        const how = command.on ? 'waits for CI' : 'does not wait for CI'
+        io.stdout(`${command.stage} ${how} before it passes.\n${formatTask(task)}\n`)
+      }
+      return
+    }
+
     case 'task.link': {
       const task = await client.linkIssue(command.id, {
         provider: command.provider,

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { homedir } from 'node:os'
+import { basename } from 'node:path'
 import websocket from '@fastify/websocket'
 import {
   attachmentUploadsSchema,
@@ -437,6 +438,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { task: options.service.setWorkflow(id, stage, on) }
   })
 
+  // Whether a stage waits for CI before it passes.
+  app.put('/tasks/:id/ci', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { stage, on } = workflowBodySchema.parse(request.body)
+    return { task: options.service.setCi(id, stage, on) }
+  })
+
   app.get('/tasks/:id/files', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { files: listStageFiles(options.dataDir, options.service.getTask(id)) }
@@ -644,17 +652,28 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const terminals = options.terminals.list(id)
     // The shells where an agent runs now, so a shell left after a restart is not called the agent's.
     const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
+    hooks.forgetShellsExcept(id, agents)
     // Each agent shows the state of its own stage, not the state of the whole task, and the agent
-    // that runs there, which may not be the task's.
+    // that runs there, which may not be the task's. An agent on no stage has the state its hooks
+    // gave.
     const lanes = Object.fromEntries(
       await Promise.all(
         agents.map(async (name) => {
           const agent = await options.stages.agentIn(id, name)
-          return [name, { ...options.stages.laneOfTerminal(task, name), agent }] as const
+          const lane = options.stages.laneOfTerminal(task, name)
+          const state = lane.stage === null ? (hooks.shellState(id, name) ?? null) : lane.state
+          return [name, { ...lane, state, agent }] as const
         }),
       ),
     )
-    return { terminals, agents, lanes }
+    // A shell with no agent shows the program in its foreground, such as "zsh".
+    const programs = Object.fromEntries(
+      terminals.map((name) => {
+        const program = options.terminals.foreground(id, name)
+        return [name, program === undefined ? null : basename(program)] as const
+      }),
+    )
+    return { terminals, agents, lanes, programs }
   })
 
   app.delete('/tasks/:id/terminals/:terminal', async (request) => {

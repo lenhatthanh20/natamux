@@ -135,6 +135,55 @@ describe('create', () => {
     expect(failure?.status === 'rejected' && failure.reason).toBeInstanceOf(WorkspaceConflictError)
   })
 
+  // The main checkout was not pulled: a new task starts from its remote branch, fetched now.
+  it(
+    'starts a new workspace from the newest remote branch when the checkout is behind',
+    async () => {
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'push', '-u', 'origin', 'main')
+      // Someone else pushes a commit, and the checkout does not pull it.
+      const other = join(repo.root, 'other')
+      runGit(repo.root, 'clone', origin, other)
+      writeFileSync(join(other, 'newer.txt'), 'newer\n')
+      runGit(other, 'add', 'newer.txt')
+      runGit(other, 'commit', '-m', 'newer')
+      runGit(other, 'push', 'origin', 'main')
+      const newer = runGit(other, 'rev-parse', 'HEAD').trim()
+      const before = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+
+      const created = await workspaces.create(tasks.createTask({ title: 'Fresh' }).id)
+
+      expect(runGit(created.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(newer)
+      expect(runGit(repo.dir, 'rev-parse', 'HEAD').trim()).toBe(before)
+      // The task branch follows no branch, so a plain push never goes to main.
+      expect(() => runGit(created.workspace ?? '', 'rev-parse', '@{upstream}')).toThrow()
+      // The diff counts the task's own work, not the commits the checkout did not pull.
+      expect((await workspaces.diffStats())[created.id]).toEqual({ files: 0, added: 0, removed: 0 })
+    },
+    GIT_TEST_MS,
+  )
+
+  it(
+    'keeps local commits that are not pushed, and works without a remote or a network',
+    async () => {
+      // No remote: the checkout's HEAD, as before.
+      const head = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+      const first = await workspaces.create(tasks.createTask({ title: 'No remote' }).id)
+      expect(runGit(first.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(head)
+
+      // A remote that is gone, and a local commit ahead of what was pushed.
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'push', '-u', 'origin', 'main')
+      runGit(repo.dir, 'commit', '--allow-empty', '-m', 'local only')
+      const local = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+      rmSync(origin, { recursive: true, force: true })
+
+      const second = await workspaces.create(tasks.createTask({ title: 'Offline' }).id)
+      expect(runGit(second.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(local)
+    },
+    GIT_TEST_MS,
+  )
+
   it('leaves the task as it was when git fails', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     runGit(repo.dir, 'branch', 'natamux/t-0001-fix-the-bug')

@@ -857,9 +857,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     now={now}
                     currentId={changesTaskId}
                     pinnedIds={pinned}
-                    diffStats={diffStatsQuery.data}
                     activity={activityQuery.data?.byTask}
-                    loadTerminals={(id) => api.listAgentTerminals(id)}
+                    loadTerminals={(id) => api.listShells(id)}
                     terminalActivity={activityQuery.data?.byTerminal}
                     onOpen={(id) => {
                       openTask(id)
@@ -981,6 +980,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         startInBanner={dockedBesideWorkspace}
                         setWorkflow={async (stage, on) => {
                           const updated = await api.setWorkflow(detailTask.id, stage, on)
+                          mergeTask(updated)
+                          return updated
+                        }}
+                        setCi={async (stage, on) => {
+                          const updated = await api.setCi(detailTask.id, stage, on)
                           mergeTask(updated)
                           return updated
                         }}

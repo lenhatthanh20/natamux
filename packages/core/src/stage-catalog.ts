@@ -78,11 +78,14 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       kind: 'agent',
       gate: 'manual',
       output: 'spec.md',
-      sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria'],
+      sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria', 'Code map'],
     },
-    description: 'Writes the goal, the scope and the acceptance criteria.',
+    description:
+      'Writes the goal, the scope, the acceptance criteria and a map of the code to change.',
+    // The code map spares the next stages from reading the code again.
     prompt: prompt(
-      'Read {dir}/context.md. Write {dir}/spec.md with these sections: Goal, Scope, Out of scope, Acceptance criteria.',
+      'Read {dir}/context.md. Write {dir}/spec.md with these sections: Goal, Scope, Out of scope, Acceptance criteria, Code map.',
+      'In Code map, list each file and function the change touches, with one line on why.',
       READ_ONLY,
     ),
   },
@@ -159,6 +162,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       gate: 'manual',
       output: 'test-spec.md',
       sections: ['Cases'],
+      ownShell: true,
     },
     description: 'Writes test cases from the spec, without reading the code.',
     prompt: prompt(
@@ -170,7 +174,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
   {
     phase: 'build',
     // No commit check: the agent leaves its changes for you to read before you commit them.
-    stage: { id: 'implement', kind: 'agent', gate: 'auto', workflow: true },
+    stage: { id: 'implement', kind: 'agent', gate: 'auto', workflow: true, ci: true },
     description: 'Writes the tests first, then the code that makes them pass.',
     prompt: prompt(
       'Read {dir}/spec.md and {dir}/plan.md when they are there.',
@@ -242,6 +246,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       gate: 'manual',
       output: 'security.md',
       sections: ['Findings'],
+      ownShell: true,
     },
     description: 'Checks the diff for security problems.',
     prompt: prompt(
@@ -259,6 +264,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       gate: 'manual',
       output: 'performance.md',
       sections: ['Findings'],
+      ownShell: true,
     },
     description: 'Looks for slow paths in the diff, and measures them when it can.',
     prompt: prompt(
@@ -276,6 +282,7 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
       gate: 'manual',
       output: 'accessibility.md',
       sections: ['Findings'],
+      ownShell: true,
     },
     description: 'Checks UI changes for keyboard, screen reader and contrast problems.',
     prompt: prompt(
@@ -286,13 +293,34 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
   },
   {
     phase: 'check',
-    stage: { id: 'review', kind: 'review', gate: 'manual' },
-    description: 'You read the diff, comment, and approve or send it back.',
+    stage: {
+      id: 'agent-review',
+      name: 'Review',
+      kind: 'agent',
+      gate: 'auto',
+      output: 'review.md',
+      sections: ['Findings'],
+      ownShell: true,
+    },
+    description:
+      'An agent reviews the changes against the spec, and sends the task back to Implement when they need fixes.',
+    // The agent sends the task back itself, so no person has to read the report first.
+    prompt: prompt(
+      'Read {dir}/spec.md, and {dir}/test-spec.md when it is there. Review the changes of this task against them: run git status and git diff, and read the changed files. Do not change any code.',
+      'Write {dir}/review.md with a Findings section: each problem that must be fixed, with its file and why, or "None".',
+      'When a problem must be fixed, run `natamux stage back $NATAMUX_TASK_ID --reason "<the problems, one per line>"` and stop. Do not run natamux done then.',
+    ),
   },
   {
     phase: 'check',
-    stage: { id: 'testing', kind: 'testing', gate: 'auto' },
-    description: 'Adds a test for each case of the test spec, then runs all tests.',
+    stage: { id: 'review', name: 'Manual review', kind: 'review', gate: 'manual' },
+    description: 'A person reads the diff, comments, and approves it or sends it back.',
+  },
+  {
+    phase: 'check',
+    stage: { id: 'testing', name: 'Automated tests', kind: 'testing', gate: 'auto', ci: true },
+    description:
+      'An agent adds a test for each case of the test spec and runs all tests, or a command runs them.',
     prompt: prompt(
       'For each case in {dir}/test-spec.md that has no test yet, add one. Then run all the tests and fix what fails. {commit}',
     ),
@@ -308,8 +336,8 @@ export const STAGE_CATALOG: readonly CatalogStage[] = [
   },
   {
     phase: 'check',
-    stage: { id: 'qa', name: 'Manual QA', kind: 'manual', gate: 'manual' },
-    description: 'You try the change yourself.',
+    stage: { id: 'qa', name: 'Manual testing', kind: 'manual', gate: 'manual' },
+    description: 'A person tries the change by hand.',
   },
   {
     phase: 'check',

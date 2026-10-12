@@ -131,6 +131,23 @@ export function ranWithWorkflow(events: readonly TaskEvent[]): Set<string> {
   return new Set([...last].filter(([, workflow]) => workflow).map(([stage]) => stage))
 }
 
+// The stages whose CI check runs now, with the CI branch it runs on.
+export function waitingForCi(events: readonly TaskEvent[]): Map<string, string> {
+  const waits = new Map<string, string>()
+  for (const event of events) {
+    const stage = event.payload.stage
+    if (typeof stage !== 'string') {
+      continue
+    }
+    if (event.type === 'stage.ci-started') {
+      waits.set(stage, typeof event.payload.branch === 'string' ? event.payload.branch : '')
+    } else if (['stage.started', 'stage.checked', 'stage.check-failed'].includes(event.type)) {
+      waits.delete(stage)
+    }
+  }
+  return waits
+}
+
 export function stepsKey(task: Pick<Task, 'stages'>): string {
   return JSON.stringify(task.stages)
 }

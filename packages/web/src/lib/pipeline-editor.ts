@@ -1,6 +1,7 @@
 import {
   activeSteps,
   type CatalogStage,
+  canHaveOwnAgent,
   catalogEntry,
   commitRule,
   DEFAULT_PIPELINE,
@@ -555,12 +556,28 @@ export function setWorkflow(steps: readonly Step[], id: string, on: boolean): St
   return updateStage(steps, id, (stage) => withField(stage, 'workflow', on ? true : undefined))
 }
 
+export function setCi(steps: readonly Step[], id: string, on: boolean): Step[] {
+  return updateStage(steps, id, (stage) => withField(stage, 'ci', on ? true : undefined))
+}
+
+// The catalog offers CI on Implement and Automated tests; a stage of your own does not.
+export function defaultCi(stage: Pick<Stage, 'id'>): boolean {
+  return catalogEntry(stage.id)?.stage.ci === true
+}
+
 // The catalog offers a workflow on its hard stages; a stage of your own does not.
 export function defaultWorkflow(stage: Pick<Stage, 'id' | 'kind'>): boolean {
   return stage.kind === 'agent' && catalogEntry(stage.id)?.stage.workflow === true
 }
 
-export type TextField = 'name' | 'prompt' | 'command' | 'output' | 'doneWhen'
+export type TextField = 'name' | 'prompt' | 'command' | 'output' | 'doneWhen' | 'agent' | 'args'
+
+// A stage beside the stage in Shell 1 starts its own agent, so it may pick another one.
+export function takesOwnAgent(steps: readonly Step[], id: string): boolean {
+  const step = steps.find((candidate) => stagesOf(candidate).some((stage) => stage.id === id))
+  const stage = step === undefined ? undefined : stagesOf(step).find((item) => item.id === id)
+  return step !== undefined && stage !== undefined && canHaveOwnAgent(step, stage)
+}
 
 // The default prompt as the agent gets it: the daemon puts the commit rule in `{commit}` of a
 // default prompt only (see stage-prompts.ts), so a prompt that starts from this one keeps the rule.

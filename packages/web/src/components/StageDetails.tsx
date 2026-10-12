@@ -1,5 +1,6 @@
 import {
   catalogEntry,
+  checksOnCi,
   type PipelineIssue,
   PROMPT_PLACEHOLDERS,
   type SkillList,
@@ -11,25 +12,30 @@ import {
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ArrowLeft, CircleAlert, Sparkles } from 'lucide-react'
 import { type ChangeEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { AGENT_CHOICES } from '../lib/agents'
 import {
   alwaysWaits,
+  defaultCi,
   defaultGate,
   defaultWorkflow,
   isCatalogStage,
   isDefaultGate,
   KIND_LABEL,
+  setCi,
   setGate,
   setSections,
   setText,
   setWorkflow,
   shownDefaultPrompt,
   type TextField,
+  takesOwnAgent,
   takesPrompt,
 } from '../lib/pipeline-editor'
 import { finishedWhen } from '../lib/stage-view'
 import { KIND_ICON } from './PipelinePreview'
 import { SkillPicker } from './SkillPicker'
 import { Button } from './ui/Button'
+import { Select } from './ui/Select'
 import { ICON, inputLg, textarea } from './ui/styles'
 
 type StageDetailsProps = {
@@ -123,6 +129,7 @@ export function StageDetails({
   const command = useLocalText(stage.command ?? '', write('command'))
   const output = useLocalText(stage.output ?? '', write('output'))
   const doneWhen = useLocalText(stage.doneWhen ?? '', write('doneWhen'))
+  const args = useLocalText(stage.args ?? '', write('args'))
   const sections = useLocalText((stage.sections ?? []).join('\n'), (text) =>
     onChange(setSections(steps, stage.id, text.split('\n'))),
   )
@@ -175,6 +182,46 @@ export function StageDetails({
       <Approval stage={stage} steps={steps} onChange={onChange} />
 
       {stage.kind === 'agent' && <WorkflowOption stage={stage} steps={steps} onChange={onChange} />}
+
+      {checksOnCi(stage) && <CiOption stage={stage} steps={steps} onChange={onChange} />}
+
+      {takesOwnAgent(steps, stage.id) && (
+        <>
+          <Field
+            label="Agent"
+            htmlFor={`${id}-agent`}
+            help="This stage starts its own agent beside the one in Shell 1, so it may use another."
+          >
+            <Select
+              id={`${id}-agent`}
+              value={stage.agent ?? ''}
+              onChange={(event) => onChange(setText(steps, stage.id, 'agent', event.target.value))}
+              fieldSize="md"
+              className="w-full"
+            >
+              <option value="">Task's agent</option>
+              {AGENT_CHOICES.map((choice) => (
+                <option key={choice.id} value={choice.id}>
+                  {choice.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Arguments"
+            htmlFor={`${id}-args`}
+            help="Words added to the agent's command line, such as --model sonnet."
+          >
+            <input
+              id={`${id}-args`}
+              {...args}
+              placeholder="--model sonnet"
+              spellCheck={false}
+              className={`${inputLg} w-full font-mono text-xs`}
+            />
+          </Field>
+        </>
+      )}
 
       {takesPrompt(stage) && (
         <PromptField
@@ -343,6 +390,44 @@ function WorkflowOption({
       <p id={noteId} className="m-0 text-xs text-muted">
         Each task gets a Run with a workflow checkbox on this stage, off by default. Only Claude
         Code runs workflows; they are more accurate and use many more tokens.
+      </p>
+    </fieldset>
+  )
+}
+
+function CiOption({
+  stage,
+  steps,
+  onChange,
+}: {
+  stage: Stage
+  steps: readonly Step[]
+  onChange: (steps: Step[]) => void
+}) {
+  const labelId = useId()
+  const noteId = useId()
+  const on = stage.ci === true
+  return (
+    <fieldset aria-labelledby={labelId} className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-7 flex-wrap items-center gap-2">
+        <label className="flex h-7 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={on}
+            aria-describedby={noteId}
+            onChange={(event) => onChange(setCi(steps, stage.id, event.target.checked))}
+            className="size-3.5 accent-accent"
+          />
+          <span id={labelId}>Tasks can check it on CI</span>
+        </label>
+        <DefaultMark
+          isDefault={on === defaultCi(stage)}
+          onReset={() => onChange(setCi(steps, stage.id, defaultCi(stage)))}
+        />
+      </div>
+      <p id={noteId} className="m-0 text-xs text-muted">
+        Each task gets a Check on CI checkbox on this stage, off by default. The work is pushed to
+        a natamux-ci branch, so the CI workflows must run on a push to natamux-ci/**.
       </p>
     </fieldset>
   )

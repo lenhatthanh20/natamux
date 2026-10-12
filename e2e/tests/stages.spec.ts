@@ -117,9 +117,10 @@ test('moves a stage by keyboard and turns one off for new tasks', async ({ page,
   await expect(list.getByRole('switch')).toHaveCount(8)
   await expect(dialog.getByRole('tab', { name: 'JSON' })).toBeVisible()
 
-  // Review jumps over the Test spec and Implement group.
+  // Review moves above Automated tests, then jumps over the Test spec and Implement group.
   const review = list.getByRole('button', { name: /^Review\b/ })
   await review.focus()
+  await page.keyboard.press('Alt+ArrowUp')
   await page.keyboard.press('Alt+ArrowUp')
   await expect(
     dialog.getByRole('list', {
@@ -139,7 +140,7 @@ test('moves a stage by keyboard and turns one off for new tasks', async ({ page,
   expect(task.stages).toEqual([
     'context',
     'spec',
-    'review',
+    'agent-review',
     { id: 'build', parallel: ['test-spec', 'implement'] },
     'testing',
     'release',

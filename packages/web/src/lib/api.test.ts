@@ -314,6 +314,23 @@ describe('createApi', () => {
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/terminals')
   })
 
+  it('reads every shell of a task: its agent lane, and the program in front', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({
+        terminals: ['1', '2', '3'],
+        agents: ['1'],
+        lanes: { '1': { stage: 'implement', state: 'running', agent: 'claude-code' } },
+        programs: { '1': 'node', '2': 'zsh', '3': 7 },
+      }),
+    )
+
+    expect(await createApi('secret', fetchFunction).listShells('T-0001')).toEqual({
+      terminals: ['1', '2', '3'],
+      lanes: { '1': { stage: 'implement', state: 'running', agent: 'claude-code' } },
+      programs: { '1': 'node', '2': 'zsh', '3': null },
+    })
+  })
+
   it('reads what the agent of each terminal does, and the latest line of each task', async () => {
     const { fetchFunction } = fakeFetch(() =>
       json({

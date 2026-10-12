@@ -9,6 +9,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  deleteRemoteRef,
   GitError,
   GitHubError,
   ImageSideMissingError,
@@ -28,6 +29,7 @@ import {
   parseWorktreeList,
   pullRequestUrl,
   pushBranch,
+  pushRef,
   type RunGh,
   readDiffStat,
   readFileDiff,
@@ -36,6 +38,7 @@ import {
   readPullRequestStatus,
   readPushStatus,
   removeWorktree,
+  snapshotCommit,
   statusFromCodes,
   summarizeChecks,
   withGitConfig,
@@ -1024,6 +1027,44 @@ describe('pushBranch', () => {
   it('fails with a GitError without an origin', async () => {
     await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     await expect(pushBranch(worktreePath, 'natamux/t-0001-example')).rejects.toThrow(GitError)
+  })
+})
+
+describe('the CI snapshot', () => {
+  it('commits the worktree as it is, without touching its branch, index or files', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    writeFileSync(join(worktreePath, '.gitignore'), 'secret.txt\n')
+    runGit(worktreePath, 'add', '.gitignore')
+    runGit(worktreePath, 'commit', '-m', 'ignore')
+    writeFileSync(join(worktreePath, 'a.ts'), 'export {}\n')
+    writeFileSync(join(worktreePath, 'secret.txt'), 'no\n')
+    const head = runGit(worktreePath, 'rev-parse', 'HEAD').trim()
+    const status = runGit(worktreePath, 'status', '--porcelain')
+
+    const sha = await snapshotCommit(worktreePath, 'Natamux CI check')
+
+    expect(runGit(worktreePath, 'rev-parse', `${sha}^`).trim()).toBe(head)
+    const files = runGit(worktreePath, 'ls-tree', '--name-only', sha).split('\n')
+    expect(files).toContain('a.ts')
+    expect(files).not.toContain('secret.txt')
+    expect(runGit(worktreePath, 'rev-parse', 'HEAD').trim()).toBe(head)
+    expect(runGit(worktreePath, 'status', '--porcelain')).toBe(status)
+  })
+
+  it('pushes it to a branch of origin, replaces it, and deletes it', async () => {
+    const remote = addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    const first = await snapshotCommit(worktreePath, 'one')
+    writeFileSync(join(worktreePath, 'b.ts'), 'export {}\n')
+    const second = await snapshotCommit(worktreePath, 'two')
+
+    await pushRef(worktreePath, first, 'natamux-ci/natamux/t-0001-example')
+    await pushRef(worktreePath, second, 'natamux-ci/natamux/t-0001-example')
+    expect(runGit(remote, 'rev-parse', 'natamux-ci/natamux/t-0001-example').trim()).toBe(second)
+
+    await deleteRemoteRef(worktreePath, 'natamux-ci/natamux/t-0001-example')
+    const gone = () => runGit(remote, 'rev-parse', '--verify', 'natamux-ci/natamux/t-0001-example')
+    expect(gone).toThrow()
   })
 })
 

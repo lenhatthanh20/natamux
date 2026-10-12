@@ -9,11 +9,14 @@ import {
   enterStep,
   firstPosition,
   LEGACY_STEP_REFS,
+  offersCi,
   offersWorkflow,
   pipelineSchema,
   resolveSteps,
   runsWorkflow,
+  type Stage,
   type Step,
+  stageAgent,
   stageIdSchema,
   stageName,
   stageOfTerminal,
@@ -149,6 +152,63 @@ describe('pipelineSchema', () => {
     expect(several.error?.issues).toHaveLength(2)
   })
 
+  describe('the agent and arguments of a stage', () => {
+    const own = { agent: 'codex', args: '--model gpt-5' }
+    const build = (testSpec: object, implement: object = {}) => ({
+      id: 'build',
+      parallel: [
+        { id: 'test-spec', kind: 'agent', gate: 'manual', output: 'test-spec.md', ...testSpec },
+        { id: 'implement', kind: 'agent', gate: 'auto', ...implement },
+      ],
+    })
+    const message = (id: string) =>
+      `Only a stage that runs in its own shell can have its own agent or arguments, and "${id}" cannot`
+
+    it('takes them on a stage that runs beside the stage in Shell 1', () => {
+      const parsed = pipelineSchema.parse([build(own)])
+      expect(stagesOf(parsed[0] as Step)[0]).toMatchObject(own)
+      expect(pipelineSchema.safeParse([build({ args: '--model x' })]).success).toBe(true)
+    })
+
+    it('rejects them on the stage in Shell 1, outside a group, and on a manual stage', () => {
+      const issues = (steps: unknown[]) =>
+        pipelineSchema.safeParse(steps).error?.issues.map((issue) => issue.message)
+      expect(issues([build({}, own)])).toEqual([message('implement')])
+      expect(issues([{ id: 'spec', kind: 'agent', gate: 'manual', ...own }])).toEqual([
+        message('spec'),
+      ])
+      expect(
+        issues([
+          {
+            id: 'build',
+            parallel: [
+              { id: 'implement', kind: 'agent', gate: 'auto' },
+              { id: 'sign-off', kind: 'manual', gate: 'manual', agent: 'codex' },
+            ],
+          },
+        ]),
+      ).toEqual([message('sign-off')])
+    })
+
+    it('takes them on a stage that runs in its own shell outside a group', () => {
+      const review = { id: 'agent-review', kind: 'agent', gate: 'auto', output: 'review.md' }
+      expect(pipelineSchema.safeParse([{ ...review, ownShell: true, ...own }]).success).toBe(true)
+      expect(pipelineSchema.safeParse([{ ...review, ...own }]).success).toBe(false)
+    })
+
+    it('rejects empty words', () => {
+      expect(pipelineSchema.safeParse([build({ args: ' ' })]).success).toBe(false)
+      expect(pipelineSchema.safeParse([build({ agent: '' })]).success).toBe(false)
+    })
+
+    it('gives them only to a stage outside Shell 1 when the task runs', () => {
+      const [step] = pipelineSchema.parse([build(own, {})]) as Step[]
+      const [testSpec, implement] = stagesOf(step as Step)
+      expect(stageAgent(step as Step, testSpec as Stage)).toEqual(own)
+      expect(stageAgent(step as Step, implement as Stage)).toEqual({})
+    })
+  })
+
   it('rejects an empty pipeline and a bad stage id', () => {
     expect(pipelineSchema.safeParse([]).success).toBe(false)
     expect(pipelineSchema.safeParse([{ id: 'Spec', kind: 'agent', gate: 'auto' }]).success).toBe(
@@ -204,14 +264,14 @@ describe('stages that are off', () => {
 })
 
 describe('the default pipeline', () => {
-  it('is the same as before the catalog', () => {
+  it('runs the automated tests, then an agent review, and waits for no person', () => {
     expect(stepRefsOf(DEFAULT_PIPELINE)).toEqual([
       'context',
       'spec',
       'plan',
       { id: 'build', parallel: ['test-spec', 'implement'] },
-      'review',
       'testing',
+      'agent-review',
       'release',
     ])
     expect(DEFAULT_PIPELINE[1]).toEqual({
@@ -219,13 +279,17 @@ describe('the default pipeline', () => {
       kind: 'agent',
       gate: 'manual',
       output: 'spec.md',
-      sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria'],
+      sections: ['Goal', 'Scope', 'Out of scope', 'Acceptance criteria', 'Code map'],
     })
     expect(activeSteps(DEFAULT_PIPELINE)).toEqual(DEFAULT_PIPELINE)
   })
 })
 
 describe('defaultPrompt', () => {
+  it('asks the spec for a code map', () => {
+    expect(defaultPrompt({ id: 'spec', kind: 'agent' })).toContain('Code map')
+  })
+
   it('takes the prompt of the catalog', () => {
     expect(defaultPrompt({ id: 'plan', kind: 'agent' })).toContain('Write {dir}/plan.md')
     expect(defaultPrompt({ id: 'security', kind: 'agent' })).toContain('{dir}/security.md')
@@ -294,7 +358,13 @@ describe('resolveSteps', () => {
 
   it('finds a stage of a group for a task that has it on its own', () => {
     const [implement] = resolveSteps(LEGACY_STEP_REFS, DEFAULT_PIPELINE)
-    expect(implement).toEqual({ id: 'implement', kind: 'agent', gate: 'auto', workflow: true })
+    expect(implement).toEqual({
+      id: 'implement',
+      kind: 'agent',
+      gate: 'auto',
+      workflow: true,
+      ci: true,
+    })
   })
 
   it('makes a stage of its own that is gone from the settings a manual one', () => {
@@ -359,6 +429,13 @@ describe('stageName', () => {
     expect(stageName({ id: 'clarify', name: 'Questions' })).toBe('Questions')
   })
 
+  it('names the testing and review stages by who does the work', () => {
+    expect(stageName({ id: 'testing' })).toBe('Automated tests')
+    expect(stageName({ id: 'qa' })).toBe('Manual testing')
+    expect(stageName({ id: 'agent-review' })).toBe('Review')
+    expect(stageName({ id: 'review' })).toBe('Manual review')
+  })
+
   it('uses the name, else the id in words', () => {
     expect(stageName({ id: 'test-spec' })).toBe('Test spec')
     expect(stageName({ id: 'build', name: 'Test spec and Implement' })).toBe(
@@ -377,6 +454,60 @@ describe('terminals of a group', () => {
     expect(terminalOfStage(build, 'test-spec')).toBe('2')
     expect(stageOfTerminal(build, '2')?.id).toBe('test-spec')
     expect(stageOfTerminal(build, '3')).toBeUndefined()
+  })
+})
+
+describe('a check on CI', () => {
+  it('is offered on Implement and Automated tests of the default pipeline', () => {
+    const offered = DEFAULT_PIPELINE.flatMap(stagesOf).filter(offersCi)
+    expect(offered.map((stage) => stage.id)).toEqual(['implement', 'testing'])
+  })
+
+  it('is allowed only on a stage that changes code or runs tests', () => {
+    const issues = (stage: object) =>
+      pipelineSchema.safeParse([{ id: 'x', gate: 'auto', ci: true, ...stage }]).error?.issues
+    expect(issues({ kind: 'agent' })).toBeUndefined()
+    expect(issues({ kind: 'testing' })).toBeUndefined()
+    for (const stage of [
+      { kind: 'agent', output: 'notes.md' },
+      { kind: 'review' },
+      { kind: 'manual' },
+    ]) {
+      expect(issues(stage)?.[0]?.message).toBe(
+        'Only a stage that changes code or runs tests can be checked on CI, and "x" cannot',
+      )
+    }
+    expect(issues({ kind: 'review', ci: false })).toBeUndefined()
+  })
+})
+
+describe('a stage in its own shell', () => {
+  const review: Step = {
+    id: 'agent-review',
+    kind: 'agent',
+    gate: 'auto',
+    output: 'review.md',
+    ownShell: true,
+  }
+
+  it('runs in Shell 5, apart from the agent in Shell 1 and the stages of a group', () => {
+    expect(terminalOfStage(review, 'agent-review')).toBe('5')
+    expect(stageOfTerminal(review, '5')?.id).toBe('agent-review')
+    expect(stageOfTerminal(review, '1')).toBeUndefined()
+    const position = { stage: 'agent-review', state: 'running' as const, lanes: {} }
+    expect(terminalLane(position, review, '5')).toEqual({ stage: 'agent-review', state: 'running' })
+    expect(terminalLane(position, review, '1')).toEqual({ stage: null, state: null })
+    expect(stageAgent(review, { ...review, agent: 'codex' } as Stage)).toEqual({ agent: 'codex' })
+  })
+
+  it('is only for an agent stage that writes a report', () => {
+    const message = (id: string) =>
+      `Only an agent stage with an output file can run in its own shell, and "${id}" cannot`
+    const issues = (stage: object) =>
+      pipelineSchema.safeParse([{ id: 'x', gate: 'auto', ownShell: true, ...stage }]).error?.issues
+    expect(issues({ kind: 'agent', output: 'x.md' })).toBeUndefined()
+    expect(issues({ kind: 'agent' })?.[0]?.message).toBe(message('x'))
+    expect(issues({ kind: 'review' })?.[0]?.message).toBe(message('x'))
   })
 })
 

@@ -120,8 +120,8 @@ describe('ProjectSettingsDialog', () => {
       'Plan',
       'Test spec',
       'Implement',
+      'Automated tests',
       'Review',
-      'Testing',
       'Release',
     ])
     const list = await stageList()
@@ -220,7 +220,8 @@ describe('ProjectSettingsDialog', () => {
 
     const fork = within(preview()).getByRole('list', { name: 'Spec and Plan, side by side' })
     expect(within(fork).getAllByRole('button')).toHaveLength(2)
-    await user.click(within(await stageList()).getByRole('button', { name: 'Actions for Testing' }))
+    const actions = { name: 'Actions for Automated tests' }
+    await user.click(within(await stageList()).getByRole('button', actions))
     expect(screen.queryByRole('menuitem', { name: 'Run alongside the stage above' })).toBeNull()
   })
 
@@ -729,8 +730,8 @@ describe('ProjectSettingsDialog, test spec cases', () => {
       'Plan',
       'Test spec',
       'Implement',
+      'Automated tests',
       'Review',
-      'Testing',
       'Release',
     ])
 
@@ -991,7 +992,7 @@ describe('ProjectSettingsDialog, test spec cases', () => {
       ]),
     )
 
-    for (const name of ['Manual QA', 'Design review', 'Staging check', 'Review']) {
+    for (const name of ['Manual testing', 'Design review', 'Staging check', 'Review']) {
       await user.click(await row(name))
       const stage = details(name)
       const box = within(stage).getByRole('checkbox', { name: 'Wait for my approval' })
@@ -1066,8 +1067,8 @@ describe('ProjectSettingsDialog, test spec cases', () => {
   it('C9: has a prompt on agent and testing stages only', async () => {
     const { user } = open()
 
-    await user.click(await row('Testing'))
-    expect(within(details('Testing')).getByRole('textbox', { name: 'Prompt' })).toBeTruthy()
+    await user.click(await row('Automated tests'))
+    expect(within(details('Automated tests')).getByRole('textbox', { name: 'Prompt' })).toBeTruthy()
     for (const name of ['Context', 'Review', 'Release']) {
       await user.click(await row(name))
       expect(within(details(name)).queryByRole('textbox', { name: 'Prompt' }), name).toBeNull()
@@ -1116,8 +1117,10 @@ describe('ProjectSettingsDialog, test spec cases', () => {
   it('C12: shows a Command field on testing stages only', async () => {
     const { user } = open()
 
-    await user.click(await row('Testing'))
-    expect(within(details('Testing')).getByRole('textbox', { name: 'Command' })).toBeTruthy()
+    await user.click(await row('Automated tests'))
+    expect(
+      within(details('Automated tests')).getByRole('textbox', { name: 'Command' }),
+    ).toBeTruthy()
     await user.click(await row('Spec'))
     expect(within(details('Spec')).queryByRole('textbox', { name: 'Command' })).toBeNull()
   })
@@ -1348,6 +1351,70 @@ describe('ProjectSettingsDialog, test spec cases', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add stage' })),
     )
+  })
+})
+
+describe('ProjectSettingsDialog, agent of a stage', () => {
+  const agentSelect = (name: string) =>
+    within(details(name)).queryByRole('combobox', { name: 'Agent' })
+
+  it('offers an agent and words only on a stage beside the stage in Shell 1, and saves them', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Implement'))
+    expect(agentSelect('Implement')).toBeNull()
+    await user.click(await row('Spec'))
+    expect(agentSelect('Spec')).toBeNull()
+
+    await user.click(await row('Test spec'))
+    await user.selectOptions(agentSelect('Test spec') as HTMLElement, 'codex')
+    await user.type(
+      within(details('Test spec')).getByRole('textbox', { name: 'Arguments' }),
+      '--model gpt-5',
+    )
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    const steps = savedStages(save)
+    expect(stageIn(steps, 'test-spec')).toMatchObject({ agent: 'codex', args: '--model gpt-5' })
+    expect(stageIn(steps, 'implement')).not.toHaveProperty('agent')
+  })
+
+  it("goes back to the task's agent", async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Test spec'))
+    const select = agentSelect('Test spec') as HTMLElement
+    await user.selectOptions(select, 'codex')
+    await user.selectOptions(select, '')
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'test-spec')).not.toHaveProperty('agent')
+  })
+})
+
+describe('ProjectSettingsDialog, CI check', () => {
+  const ciBox = (name: string) =>
+    within(details(name)).queryByRole('checkbox', { name: 'Tasks can check it on CI' })
+
+  it('offers it on stages that change code or run tests, and saves a change', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Implement'))
+    expect(ciBox('Implement')).toHaveProperty('checked', true)
+    await user.click(await row('Automated tests'))
+    expect(ciBox('Automated tests')).toHaveProperty('checked', true)
+    await user.click(await row('Spec'))
+    expect(ciBox('Spec')).toBeNull()
+
+    await user.click(await row('Implement'))
+    await user.click(ciBox('Implement') as HTMLElement)
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'implement')).not.toHaveProperty('ci')
+    expect(stageIn(savedStages(save), 'testing')).toHaveProperty('ci', true)
   })
 })
 

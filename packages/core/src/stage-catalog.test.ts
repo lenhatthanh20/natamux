@@ -4,7 +4,7 @@ import { DEFAULT_PIPELINE, defaultPrompt, GROUP_KINDS, type Step, stageSchema } 
 import { catalogEntry, STAGE_CATALOG, STAGE_PHASES } from './stage-catalog.js'
 
 describe('STAGE_CATALOG', () => {
-  it('holds the 27 stages of the spec, by phase', () => {
+  it('holds the 28 stages of the spec, by phase', () => {
     const byPhase = Object.fromEntries(
       STAGE_PHASES.map((phase) => [
         phase,
@@ -21,6 +21,7 @@ describe('STAGE_CATALOG', () => {
         'security',
         'performance',
         'accessibility',
+        'agent-review',
         'review',
         'testing',
         'e2e',
@@ -107,6 +108,26 @@ describe('pipelineIssues', () => {
     ]
     expect(pipelineIssues(steps)).toEqual([
       { stage: 'ship', message: 'The release stage must come last', level: 'error' },
+    ])
+  })
+
+  it('names the stage that cannot have its own agent', () => {
+    const steps: Step[] = [
+      {
+        id: 'build',
+        parallel: [
+          { id: 'test-spec', kind: 'agent', gate: 'manual', output: 'test-spec.md' },
+          { id: 'implement', kind: 'agent', gate: 'auto', agent: 'codex' },
+        ],
+      },
+    ]
+    expect(pipelineIssues(steps)).toEqual([
+      {
+        stage: 'implement',
+        message:
+          'Only a stage that runs in its own shell can have its own agent or arguments, and "implement" cannot',
+        level: 'error',
+      },
     ])
   })
 

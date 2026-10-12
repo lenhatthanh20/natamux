@@ -8,6 +8,7 @@ import {
   ranWithWorkflow,
   stageCount,
   stepTime,
+  waitingForCi,
 } from './stage-view'
 
 describe('formatDuration', () => {
@@ -104,6 +105,27 @@ describe('missingSkills', () => {
     ])
     expect(missing.get('spec')).toEqual({ names: [], agent: null })
     expect(missing.get('plan')).toEqual({ names: ['c'], agent: 'codex' })
+  })
+})
+
+describe('waitingForCi', () => {
+  const event = (type: TaskEvent['type'], stage: string, extra = {}): TaskEvent => ({
+    taskId: 'T-1',
+    source: 'system',
+    type,
+    at: '2026-10-09T09:00:00.000Z',
+    payload: { stage, ...extra },
+  })
+
+  it('names the stages whose CI check runs now, with their CI branch', () => {
+    const waits = waitingForCi([
+      event('stage.ci-started', 'implement', { branch: 'natamux-ci/a' }),
+      event('stage.checked', 'implement'),
+      event('stage.ci-started', 'testing', { branch: 'natamux-ci/a' }),
+      event('stage.ci-started', 'docs', { branch: 'natamux-ci/a' }),
+      event('stage.check-failed', 'docs'),
+    ])
+    expect([...waits]).toEqual([['testing', 'natamux-ci/a']])
   })
 })
 

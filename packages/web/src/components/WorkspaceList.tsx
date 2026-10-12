@@ -1,4 +1,4 @@
-import type { DiffStat, Repo, Task, TaskState, TerminalLane } from '@natamux/core'
+import type { Repo, Task, TaskState } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import {
   ChevronRight,
@@ -11,15 +11,17 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useRovingFocus } from '../hooks/useRovingFocus'
+import type { TaskShells } from '../lib/api'
 import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import {
-  agentChildren,
   FOLDS_KEY,
   isFoldOpen,
   opensByDefault,
   parseFolds,
+  shellRows,
   subtaskCount,
+  taskGlyphState,
   urgentState,
   withFold,
   withParents,
@@ -44,14 +46,14 @@ type WorkspaceListProps = {
   now: Date
   currentId: string | null
   pinnedIds: readonly string[]
-  diffStats?: Readonly<Record<string, DiffStat>>
   activity?: Readonly<Record<string, string>>
   // What waiting agents asked, or why tasks failed, by task id.
   questions?: Readonly<Record<string, string | null>>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>
-  // The agent terminals of a task, read while its row is open.
-  loadTerminals?: (taskId: string) => Promise<Record<string, TerminalLane>>
+  // The shells of a task, read while its row is open or its agents work, and always for the open
+  // workspace.
+  loadTerminals?: (taskId: string) => Promise<TaskShells>
   // What the agent in each shell does now, by task id and shell name.
   terminalActivity?: Readonly<Record<string, Readonly<Record<string, string>>>>
   onOpen: (id: string) => void
@@ -80,6 +82,11 @@ type Entry = TreeRow & { label: string; open?: boolean; toggle?: () => void }
 // Shells are read again this often while a row shows them, as the agents grid does.
 const TERMINALS_EVERY_MS = 5000
 
+const NO_SHELLS: TaskShells = { terminals: [], lanes: {}, programs: {} }
+
+// A task whose agents work or wait has its shells read, so its rows show without a click.
+const ACTIVE: readonly TaskState[] = ['running', 'needs-input']
+
 function savedFolds(): Record<string, boolean> {
   try {
     return parseFolds(globalThis.localStorage?.getItem(FOLDS_KEY))
@@ -89,10 +96,6 @@ function savedFolds(): Record<string, boolean> {
 }
 
 const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`
-}
 
 // Every workspace, grouped by repository, like folders in an editor's sidebar. The whole tree is
 // one tab stop: arrows move, Left and Right fold and unfold, F2 renames.
@@ -104,7 +107,6 @@ export function WorkspaceList({
   now,
   currentId,
   pinnedIds,
-  diffStats = {},
   activity = {},
   questions = {},
   seenState = {},
@@ -203,15 +205,14 @@ export function WorkspaceList({
   const repoOpen = (id: string) => isFoldOpen(folds, `repo:${id}`, true)
   const finishedShown = (id: string) => isFoldOpen(folds, `finished:${id}`, false)
 
-  // What works under a task row: its open subtasks and its parallel stages, then its agents.
+  // What works under a task row: its open subtasks and its parallel stages, then its shells.
   const childStates = (task: Task) => [
     ...(children[task.id] ?? []).map((child) => child.state),
     ...Object.values(task.lanes),
   ]
-  const canFold = (task: Task) =>
-    (children[task.id]?.length ?? 0) > 0 || Object.keys(task.lanes).length > 0
-  const taskOpen = (task: Task) =>
-    canFold(task) && isFoldOpen(folds, `task:${task.id}`, opensByDefault(childStates(task)))
+  // A row opens by itself while its task, or something under it, works, waits or failed.
+  const wantsOpen = (task: Task) =>
+    isFoldOpen(folds, `task:${task.id}`, opensByDefault([task.state, ...childStates(task)]))
 
   const shownRows = [
     ...pinned,
@@ -219,20 +220,29 @@ export function WorkspaceList({
       repoOpen(repo.id) ? [...open, ...(finishedShown(repo.id) ? finished : [])] : [],
     ),
   ]
-  // A finished task has no agent left to show.
+  // The shells are read while a row is open, while its agents work or wait, and for the open
+  // workspace. A finished task, or one without a workspace, has none left.
+  const readsShells = (task: Task) =>
+    !isFinished(task) &&
+    task.workspace !== null &&
+    (wantsOpen(task) || task.id === currentId || ACTIVE.includes(task.state))
   const loading =
-    loadTerminals === undefined
-      ? []
-      : shownRows.filter((task) => taskOpen(task) && !isFinished(task)).map((task) => task.id)
+    loadTerminals === undefined ? [] : shownRows.filter(readsShells).map((task) => task.id)
   const terminalQueries = useQueries({
     queries: loading.map((id) => ({
-      queryKey: ['agent-terminals', id],
-      queryFn: () => loadTerminals?.(id) ?? Promise.resolve<Record<string, TerminalLane>>({}),
+      queryKey: ['task-shells', id],
+      queryFn: () => loadTerminals?.(id) ?? Promise.resolve(NO_SHELLS),
       refetchInterval: TERMINALS_EVERY_MS,
     })),
   })
-  const agentsOf = (task: Task) =>
-    agentChildren(task, terminalQueries[loading.indexOf(task.id)]?.data)
+  const rowsOf = (task: Task) => shellRows(task, terminalQueries[loading.indexOf(task.id)]?.data)
+  const canFold = (task: Task) => (children[task.id]?.length ?? 0) > 0 || rowsOf(task).length > 0
+  const taskOpen = (task: Task) => canFold(task) && wantsOpen(task)
+  const urgentUnder = (task: Task) =>
+    urgentState([
+      ...childStates(task),
+      ...rowsOf(task).flatMap((shell) => (shell.state === null ? [] : [shell.state])),
+    ])
 
   // The rows as they are on screen, for the keyboard.
   const entries: Entry[] = []
@@ -250,12 +260,12 @@ export function WorkspaceList({
     if (!open) {
       return
     }
-    for (const agent of agentsOf(task)) {
+    for (const shell of rowsOf(task)) {
       entries.push({
-        key: `agent:${task.id}:${agent.key}`,
+        key: `agent:${task.id}:${shell.key}`,
         parent: key,
         expandable: false,
-        label: agent.name,
+        label: shell.label,
       })
     }
     for (const child of children[task.id] ?? []) {
@@ -335,17 +345,6 @@ export function WorkspaceList({
     },
   })
 
-  const foldText = (task: Task) => {
-    const subtasks = children[task.id]?.length ?? 0
-    const lanes = Object.keys(task.lanes).length
-    return [
-      subtasks > 0 ? plural(subtasks, 'open subtask') : null,
-      lanes > 0 ? plural(lanes, 'parallel stage') : null,
-    ]
-      .filter((part) => part !== null)
-      .join(' · ')
-  }
-
   const row = (task: Task, prefix = false, nested = false) => {
     const open = !nested && taskOpen(task)
     return (
@@ -356,21 +355,21 @@ export function WorkspaceList({
         current={task.id === currentId}
         pinned={pinnedIds.includes(task.id)}
         repoName={prefix ? repoName(task) : undefined}
-        stat={diffStats[task.id]}
+        glyph={taskGlyphState(task, rowsOf(task))}
         activity={activity[task.id]}
         question={questions[task.id]}
         unseen={isUnseen(seenState, task)}
         tab={roving.item(`task:${task.id}`)}
         subtasks={subtaskCount(task.id, allTasks)}
         enter={painted.current}
+        gutter={!nested}
         fold={
           nested || !canFold(task)
             ? undefined
             : {
                 open,
                 onToggle: () => setFold(`task:${task.id}`, !open),
-                text: foldText(task),
-                state: urgentState(childStates(task)),
+                state: urgentUnder(task),
               }
         }
         onOpen={onOpen}
@@ -381,18 +380,19 @@ export function WorkspaceList({
         onDelete={onDelete}
       >
         {open && (
+          // The guide sits under the task glyph; the rows' glyphs line up with the title.
           <ul
-            className={`ml-4 flex flex-col border-l border-line pl-1 ${painted.current ? 'sb-unfold' : ''}`}
+            className={`ml-8 flex flex-col border-l border-line pl-[7px] ${painted.current ? 'sb-unfold' : ''}`}
           >
-            {agentsOf(task).map((agent) => (
+            {rowsOf(task).map((shell) => (
               <AgentRow
-                key={agent.key}
-                agent={agent}
+                key={shell.key}
+                row={shell}
                 activity={
-                  agent.shell === null ? undefined : terminalActivity[task.id]?.[agent.shell]
+                  shell.shell === null ? undefined : terminalActivity[task.id]?.[shell.shell]
                 }
-                tab={roving.item(`agent:${task.id}:${agent.key}`)}
-                onOpen={() => onOpenShell(task.id, agent.shell)}
+                tab={roving.item(`agent:${task.id}:${shell.key}`)}
+                onOpen={() => onOpenShell(task.id, shell.shell)}
               />
             ))}
             {(children[task.id] ?? []).map((child) => row(child, false, true))}

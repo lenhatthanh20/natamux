@@ -1,6 +1,7 @@
 import {
   canRunWorkflow,
   isGroup,
+  offersCi,
   offersWorkflow,
   resolveSteps,
   type Stage,
@@ -31,6 +32,7 @@ import {
   sentBackCount,
   stageCount,
   stageTime,
+  waitingForCi,
 } from '../lib/stage-view'
 import { contextText, formatAge, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
@@ -61,6 +63,8 @@ type ProgressTabProps = {
   startInBanner?: boolean
   // Chooses whether a stage runs as a workflow the next time it starts.
   setWorkflow?: (stage: string, on: boolean) => Promise<Task>
+  // Whether a stage waits for CI before it passes.
+  setCi?: (stage: string, on: boolean) => Promise<Task>
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -98,6 +102,7 @@ export function ProgressTab({
   startAgent,
   startInBanner = false,
   setWorkflow,
+  setCi,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -134,6 +139,12 @@ export function ProgressTab({
       setWorkflow?.(stage, on) ?? Promise.resolve(task),
     onError: (error) =>
       toast('Could not change the workflow of the stage.', 'error', { detail: error.message }),
+  })
+  const ci = useMutation({
+    mutationFn: ({ stage, on }: { stage: string; on: boolean }) =>
+      setCi?.(stage, on) ?? Promise.resolve(task),
+    onError: (error) =>
+      toast('Could not change the CI check of the stage.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -173,6 +184,7 @@ export function ProgressTab({
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const missing = missingSkills(accepted)
   const workflowRuns = ranWithWorkflow(accepted)
+  const ciWaits = waitingForCi(accepted)
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
@@ -221,11 +233,22 @@ export function ProgressTab({
             ? undefined
             : {
                 on: task.workflowStages.includes(stage.id),
-                allowed: canRunWorkflow(task.agent),
+                // A stage that starts its own agent runs a workflow only with Claude Code too.
+                allowed: canRunWorkflow(stage.agent ?? task.agent),
                 busy: workflow.isPending,
                 onChange: (on) => workflow.mutate({ stage: stage.id, on }),
               }
         }
+        ci={
+          setCi === undefined || !offersCi(stage)
+            ? undefined
+            : {
+                on: (task.ciStages ?? []).includes(stage.id),
+                busy: ci.isPending,
+                onChange: (on) => ci.mutate({ stage: stage.id, on }),
+              }
+        }
+        ciBranch={ciWaits.get(stage.id)}
         activity={
           entry.status === 'current' &&
           entry.state === 'running' &&
@@ -588,12 +611,18 @@ function StageCard({
   onStartAgent,
   ranWorkflow,
   workflow,
+  ci,
+  ciBranch,
 }: {
   activity?: string
   // The last start of the stage asked the agent for a workflow.
   ranWorkflow: boolean
   // The workflow choice of a stage the settings offer it on.
   workflow?: WorkflowChoice
+  // The CI choice of a stage the settings offer it on.
+  ci?: CiChoice
+  // The CI branch of a check that runs now.
+  ciBranch?: string
   agent: string | null
   // Skills the prompt named that the agent did not get at the latest start.
   missingSkills: readonly string[]
@@ -662,6 +691,7 @@ function StageCard({
   )
   // A stage that started already keeps its prompt; the choice is for its next start.
   const started = current && state !== 'draft' && state !== 'ready'
+  const ciBox = ci !== undefined && !finished && canAct && <CiBox choice={ci} />
   const workflowBox = workflow !== undefined && !finished && canAct && (
     <WorkflowBox choice={workflow} started={started} />
   )
@@ -709,6 +739,7 @@ function StageCard({
         <>
           <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
           {workflowBox}
+          {ciBox}
         </>
       ) : finished && !opened ? null : (
         <>
@@ -721,6 +752,18 @@ function StageCard({
               <span>Now</span>
               <span className="truncate font-mono text-xs text-ink" data-tip={activity}>
                 {activity}
+              </span>
+            </p>
+          )}
+          {ciBranch !== undefined && (
+            <p
+              data-state="running"
+              className="m-0 mt-2.5 flex items-center gap-2 rounded-lg bg-(--chip-bg) px-2.5 py-1.5 text-sm text-(--chip-fg)"
+            >
+              <StageMarker status="current" state="running" size={14} label="Waiting" />
+              <span>Checking on CI</span>
+              <span className="truncate font-mono text-xs text-ink" data-tip={ciBranch}>
+                {ciBranch}
               </span>
             </p>
           )}
@@ -826,6 +869,7 @@ function StageCard({
           )}
 
           {workflowBox}
+          {ciBox}
 
           {current && canAct && (
             <div className="mt-3 flex flex-col gap-2">
@@ -912,6 +956,33 @@ function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boo
         Run with a workflow
       </label>
       <span className="pl-5.5 text-xs text-muted">{hint}</span>
+    </div>
+  )
+}
+
+type CiChoice = {
+  on: boolean
+  busy: boolean
+  onChange: (on: boolean) => void
+}
+
+function CiBox({ choice }: { choice: CiChoice }) {
+  return (
+    <div className="mt-2 flex flex-col gap-0.5">
+      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+        <input
+          type="checkbox"
+          checked={choice.on}
+          disabled={choice.busy}
+          onChange={(event) => choice.onChange(event.target.checked)}
+          className="size-3.5 accent-accent"
+        />
+        Check on CI
+      </label>
+      <span className="pl-5.5 text-xs text-muted">
+        When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes
+        once CI passes. A failure goes back to the agent.
+      </span>
     </div>
   )
 }
