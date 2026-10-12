@@ -232,7 +232,6 @@ test('dims the shells without the focus, and only them (C19)', async ({ page }) 
 })
 
 test('moves the dim with the focus, with no extra resize and no motion (C20)', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' })
   const resizes: string[] = []
   page.on('websocket', (socket) => {
     socket.on('framesent', (frame) => {
@@ -254,6 +253,8 @@ test('moves the dim with the focus, with no extra resize and no motion (C20)', a
   expect(resizes.length).toBeLessThanOrEqual(10)
   await expect.poll(() => dimOf(second)).toBe('0.3')
   expect(await dimOf(first)).toBe('none')
+  // The layer has no transition: it comes and goes at once. With reduced motion the app-wide rule
+  // in styles.css allows 80ms opacity fades, and a layer that is only created runs none.
   const transition = await second
     .locator('.hm-terminal')
     .evaluate((element) => getComputedStyle(element, '::after').transitionDuration)
