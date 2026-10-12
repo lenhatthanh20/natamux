@@ -330,6 +330,19 @@ describe('showing a terminal session', () => {
     expect(terminal.focuses).toBe(focuses)
   })
 
+  it('leaves the focus where it is when shown with takeFocus false', async () => {
+    const { session, terminal } = await shown()
+    session.hide(box())
+    const button = document.createElement('button')
+    document.body.append(button)
+    button.focus()
+    const focuses = terminal.focuses
+
+    session.show(box(), false)
+    expect(terminal.focuses).toBe(focuses)
+    expect(document.activeElement).toBe(button)
+  })
+
   it('fits once and sends one resize after a drag of 60 steps (C38)', async () => {
     const { socket, terminal } = await shown()
     const observer = observers.at(-1)
