@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.11 (2026-10-13)
+
+- Open subtasks sit under their parent task in the sidebar. A line such as "2 open subtasks · 2 parallel stages" shows or hides the task's agent shells and subtasks; click it or press `Right` and `Left`. Click a shell to open the task's terminal on it. The line opens by itself while something under it works, waits or failed, and Natamux remembers what you fold. The line under a workspace title shows the agent, the task id (hover it for the branch), the stage and its step, the pull request, how many subtasks are done, and the size of the diff. A blue dot marks a change you have not seen yet. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- A task that waits for you says so once in **Needs you** and once in the banner of its workspace. The workspace row, the workspace header and the terminal pane no longer repeat it, and terminal panes have no amber bar or tint. With more than one agent pane, the waiting one says **Needs your input** in its header. The state is called **Needs your input** everywhere. When the agent ends its turn without `natamux done`, the banner says **The agent ended its turn. Reply in the terminal, or resume it.** See [Needs you](/docs/guides/dashboard/#needs-you).
+- Fix: when you opened a task with two shells side by side, the keyboard went to Shell 2 first and then jumped to Shell 1. Now Shell 1 gets the keyboard at once. A shell you pick with **Answer in terminal** or **Jump to a workspace** gets it with no stop in Shell 1.
+
 ## v0.1.10 (2026-10-12)
 
 - When a task is done or cancelled, each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.**, and **Open a new shell** opens a plain shell in the workspace without the agent. After a daemon restart, the pane shows **The shell ended.** with the same link. See [Shells](/docs/guides/terminal/#shells).
