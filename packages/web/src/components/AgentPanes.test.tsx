@@ -83,17 +83,25 @@ describe('AgentPanes agent badge', () => {
   })
 
   it('shows the agent that runs in Shell 1, not the agent of the task', () => {
-    grid([makeTask('T-0001')], {}, {
-      terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: 'codex' } } },
-    })
+    grid(
+      [makeTask('T-0001')],
+      {},
+      {
+        terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: 'codex' } } },
+      },
+    )
     expect(within(header('T-0001')).getByText('Codex')).toBeTruthy()
     expect(within(header('T-0001')).queryByText('Claude Code')).toBeNull()
   })
 
   it('shows no badge when Shell 1 runs a program that is no agent', () => {
-    grid([makeTask('T-0001')], {}, {
-      terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: null } } },
-    })
+    grid(
+      [makeTask('T-0001')],
+      {},
+      {
+        terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: null } } },
+      },
+    )
     expect(agentIcons('T-0001')).toHaveLength(0)
   })
 
