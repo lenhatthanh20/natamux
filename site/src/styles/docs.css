@@ -1,9 +1,9 @@
 /* Starlight theme in the Natamux colors: navy, with the three lane colors of the icon. */
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Martian+Mono:wdth,wght@75..100,400..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap');
 
 :root {
-  --sl-font: 'Instrument Sans', system-ui, sans-serif;
-  --sl-font-mono: 'Martian Mono', ui-monospace, monospace;
+  --sl-font: 'Geist', system-ui, sans-serif;
+  --sl-font-mono: 'Geist Mono', ui-monospace, monospace;
   --sl-color-accent-low: #16264a;
   --sl-color-accent: #7fa8ff;
   --sl-color-accent-high: #d6e3ff;
