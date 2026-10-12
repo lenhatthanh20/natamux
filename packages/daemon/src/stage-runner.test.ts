@@ -918,7 +918,10 @@ describe('a resume after a restart', () => {
       payload: { to: 'ready', stage: 'build' },
     })
     await withWorkspace(task.id)
-    for (const [stage, sessionId] of [['implement', 's-1'], ['test-spec', 's-2']]) {
+    for (const [stage, sessionId] of [
+      ['implement', 's-1'],
+      ['test-spec', 's-2'],
+    ]) {
       tasks.applyEvent(task.id, {
         source: 'agent',
         type: 'agent.finished',
