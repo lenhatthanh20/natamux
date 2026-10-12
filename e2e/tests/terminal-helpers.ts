@@ -142,7 +142,7 @@ export async function fillHistory(
   ].join(' ')
   const marker = `END-${id}`
   await runIn(page, target, `${sgr ? colored : plain}; echo END-$((${id}+0))`)
-  await expect(rows(target)).toContainText(marker, { timeout: 120_000 })
+  await expect(rows(target)).toContainText(marker, { timeout: 60_000 })
   return marker
 }
 

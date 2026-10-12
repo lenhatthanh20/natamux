@@ -121,7 +121,7 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   page,
   request,
 }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(120_000)
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   const taskA = await newTask(request, 'A')

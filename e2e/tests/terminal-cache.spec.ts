@@ -89,7 +89,7 @@ test('shows the terminal again at once after Changes, with the same screen', asy
   page,
   request,
 }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(90_000)
   const task = await newTask(request, 'switch tab')
   const sockets = watchTerminalSockets(page)
   await signIn(page)
@@ -155,7 +155,7 @@ test('shows the terminal again at once after Changes, with the same screen', asy
 })
 
 test('shows task A again at once after task B, without a new socket', async ({ page, request }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(90_000)
   const taskA = await newTask(request, 'switch A')
   const taskB = await newTask(request, 'switch B')
   const sockets = watchTerminalSockets(page)
@@ -209,7 +209,7 @@ test('shows task A again at once after task B, without a new socket', async ({ p
 })
 
 test('a hidden terminal keeps receiving a stream of output', async ({ page, request }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(150_000)
   const task = await newTask(request, 'hidden stream')
   const sockets = watchTerminalSockets(page)
   await signIn(page)
@@ -250,7 +250,7 @@ test('closes the oldest hidden terminal when more than the limit are hidden', as
   page,
   request,
 }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(90_000)
   const taskA = await newTask(request, 'limit A')
   const taskB = await newTask(request, 'limit B')
   const sockets = watchTerminalSockets(page)
@@ -403,20 +403,20 @@ async function measureHeap(page: Page, request: APIRequestContext, run: HeapRun)
 }
 
 test('keeps the heap of 8 hidden terminals small', async ({ page, request }) => {
-  test.setTimeout(900_000)
+  test.setTimeout(120_000)
   await measureHeap(page, request, { tag: '', shellsPerTask: 4 })
 })
 
 // The width of the terminal sets the size of its rows, so the heap is measured at both ends. Below
-// 1024 px the dashboard has another layout, so the narrow window is 1024; the notes keep the cols.
+// 1280 px a double click opens the details sheet, not the task view, so the narrow window is 1280.
 test('keeps the heap of hidden terminals small in a narrow and a wide window', async ({
   page,
   request,
 }) => {
-  test.setTimeout(900_000)
+  test.setTimeout(180_000)
   await measureHeap(page, request, {
     tag: '-narrow',
-    viewport: { width: 1024, height: 800 },
+    viewport: { width: 1280, height: 800 },
     shellsPerTask: 2,
   })
   await measureHeap(page, request, {
@@ -432,7 +432,7 @@ test('records the echo in task Y while the hidden shells of task X flood', async
   page,
   request,
 }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(150_000)
   const taskX = await newTask(request, 'flood X')
   const taskY = await newTask(request, 'flood Y')
   await installProbes(page)
@@ -452,7 +452,7 @@ test('records the echo in task Y while the hidden shells of task X flood', async
 
   await openTask(page, taskY.title)
   // Without flow control the page draws all the hidden output too, so the echoes can wait long.
-  const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 180_000)
+  const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 60_000)
   const longTasks = await longTasksSince(page, pageStart)
 
   expect(echoes).toHaveLength(KEY_SAMPLES)
@@ -475,7 +475,7 @@ test('records the echo in task Y while the hidden shells of task X flood', async
         }
         return false
       },
-      { timeout: 180_000 },
+      { timeout: 60_000 },
     )
     .toBe(true)
   recordMeasure({

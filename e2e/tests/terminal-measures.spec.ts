@@ -31,7 +31,7 @@ import {
 
 // main has no flow control: the page draws the whole backlog of a flood before the prompt or an
 // echo shows, so these waits are long. A timeout would fail the baseline instead of recording it.
-const FLOOD_WAIT_MS = 180_000
+const FLOOD_WAIT_MS = 60_000
 
 const made: string[] = []
 
@@ -50,7 +50,7 @@ async function openTerminal(page: Page, title: string): Promise<void> {
 }
 
 test('records the time to show a terminal with a long history', async ({ page, request }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(120_000)
   await installProbes(page)
 
   const kinds = [
@@ -122,7 +122,7 @@ test('shows the alternate screen again after a reload, and the shell after it en
   page,
   request,
 }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(90_000)
   const task = await makeShellTask(request, `Terminal e2e alt screen ${Date.now()}`)
   made.push(task.id)
   await signIn(page)
@@ -183,7 +183,7 @@ test('records the terminal sockets of Terminal, Changes, Terminal', async ({ pag
 })
 
 test('records the JS heap with one terminal at full history', async ({ page, request }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(120_000)
   const task = await makeShellTask(request, `Terminal e2e heap ${Date.now()}`)
   made.push(task.id)
   await signIn(page)
@@ -245,7 +245,7 @@ test('records the echo, the Ctrl+C time and the daemon memory in a flood', async
   page,
   request,
 }) => {
-  test.setTimeout(900_000)
+  test.setTimeout(180_000)
   const task = await makeShellTask(request, `Terminal e2e flood ${Date.now()}`)
   made.push(task.id)
   await installProbes(page)

@@ -53,8 +53,8 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    # The terminal measure specs flood shells and fill long histories, and a retry runs one again.
-    timeout-minutes: 60
+    # The tests take about 6 minutes; a hang must fail the job, not hold it.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
