@@ -93,10 +93,17 @@ The box then says **Sent to the agent.** This needs an agent that runs in Shell 
 
 The commit box is under the file list.
 
-1. Write a **Commit message**.
+1. Write a **Commit message**, or click **Generate** (`Mod+Shift+G`) to get a draft.
 2. Click **Commit all**, or press `Mod+Enter`.
 
 **Commit all** stages every change in the workspace, new files too, and commits them. You cannot pick single files. A toast says **Committed N files.** and has a **Push** action. The button is off until you write a message.
+
+**Generate** asks the task's agent to write a message from the changes. It runs the agent once in the background, not in Shell 1, and puts the answer in the box. Read and change it before you commit; nothing is committed for you.
+
+- The agent is the one the task runs. A task without one uses Claude Code.
+- While the agent writes, **Commit all** is off with the reason **Drafting the message…**. Text you type in that time stays, and the draft is dropped.
+- **Commit…** in the header drafts a message too, when the box is empty.
+- When the agent is missing, fails, or takes more than 60 seconds, the box gets a simple message from the task title and the file names, and a toast says why.
 
 ### Push and open a pull request
 
@@ -105,7 +112,7 @@ The header of the workspace has two buttons.
 - **Push** pushes the task branch to `origin` and sets it as the upstream branch. The label shows how many commits are ahead of the base, such as `Push ↑2`. A toast says **Pushed `<branch>` to origin.** and, while the task has no pull request, has a **Create pull request** action.
 - **Create pull request** pushes the branch first, then opens a pull request on GitHub with the GitHub CLI. In a narrow window the label is **Open PR**. A toast says **Pull request opened.** and has an **Open** action.
 
-Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. When files are not committed yet, the reason is **Commit your N changed files first**, and **Commit…** takes the place of **Push**: it opens the Changes tab with the cursor in the commit message. **Create pull request** is drawn as the main button only when it can be used.
+Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. When files are not committed yet, the reason is **Commit your N changed files first**, and **Commit…** takes the place of **Push**: it opens the Changes tab with the cursor in the commit message, and drafts a message when the box is empty. **Create pull request** is drawn as the main button only when it can be used.
 
 The pull request gets the task title as its title and the task notes as its body. When the task has a linked GitHub issue, the body ends with `Closes #N`. See [GitHub](/docs/guides/github/).
 

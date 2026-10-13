@@ -3,8 +3,10 @@ import {
   type AttachmentUpload,
   attachmentSchema,
   type ChangeEntry,
+  type CommitMessageDraft,
   type ContextSourceType,
   changeEntrySchema,
+  commitMessageDraftSchema,
   type DiffStat,
   diffStatSchema,
   type EventType,
@@ -341,6 +343,13 @@ export function createApi(
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/commit`, { message }),
       )
       return taskSchema.parse(body.task)
+    },
+
+    // A commit message drafted by the task's agent, or a simple one when the agent failed.
+    async generateCommitMessage(taskId: string): Promise<CommitMessageDraft> {
+      return commitMessageDraftSchema.parse(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/commit-message`),
+      )
     },
 
     async pushBranch(taskId: string): Promise<Task> {

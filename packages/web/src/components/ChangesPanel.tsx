@@ -1,7 +1,7 @@
 import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@natamux/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileDiff as FileDiffIcon, RefreshCw } from 'lucide-react'
-import { type KeyboardEvent, lazy, useEffect, useMemo, useState } from 'react'
+import { FileDiff as FileDiffIcon, RefreshCw, Sparkles } from 'lucide-react'
+import { type KeyboardEvent, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFileViewMode } from '../hooks/useFileViewMode'
 import { useStoredFlag } from '../hooks/useStoredFlag'
@@ -45,6 +45,13 @@ type ChangesPanelProps = {
   committing: boolean
   // Another git action is running: commit waits.
   gitBusy: boolean
+  // Asks the agent for a commit message. Null when it failed; the caller says why.
+  onDraft: (() => Promise<string | null>) | undefined
+  // The name of the agent that drafts, as the user knows it.
+  draftAgent?: string
+  // Commit… was picked: draft a message when the box is empty, then call onAutoDraftTaken.
+  autoDraft?: boolean
+  onAutoDraftTaken?: () => void
   // The file of the address bar, and where to report the one that shows.
   file?: string | null
   onFileChange?: (path: string | null) => void
@@ -214,6 +221,10 @@ export function ChangesPanel({
   onCommit,
   committing,
   gitBusy,
+  onDraft,
+  draftAgent = 'the task agent',
+  autoDraft = false,
+  onAutoDraftTaken,
   file: requestedFile = null,
   onFileChange,
 }: ChangesPanelProps) {
@@ -233,6 +244,8 @@ export function ChangesPanel({
   // The SVG file whose image shows instead of its text.
   const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [drafting, setDrafting] = useState(false)
+  const messageBox = useRef<HTMLTextAreaElement>(null)
   const [line, setLine] = useState<number | null>(null)
   const [stats, setStats] = useState<({ path: string } & LineStats) | null>(null)
   const [changeInfo, setChangeInfo] = useState<({ path: string } & ChangeInfo) | null>(null)
@@ -317,9 +330,43 @@ export function ChangesPanel({
   const shownPath = current?.path ?? null
   useEffect(() => onFileChange?.(shownPath), [shownPath, onFileChange])
 
+  const draft = async () => {
+    if (onDraft === undefined || drafting) {
+      return
+    }
+    const before = message
+    setDrafting(true)
+    try {
+      const drafted = await onDraft()
+      if (drafted !== null) {
+        // Text typed while the agent writes wins over the draft.
+        setMessage((now) => (now === before ? drafted : now))
+        requestAnimationFrame(() => {
+          const box = messageBox.current
+          box?.focus()
+          box?.setSelectionRange(box.value.length, box.value.length)
+        })
+      }
+    } finally {
+      setDrafting(false)
+    }
+  }
+  useAppEvent('commit-draft', () => void draft())
+  // Commit… waits for the list, so it knows whether there is anything to draft for.
+  const loaded = changes.data !== undefined
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a request or the list starts it.
+  useEffect(() => {
+    if (autoDraft && loaded) {
+      onAutoDraftTaken?.()
+      if (list.length > 0 && message.trim() === '') {
+        void draft()
+      }
+    }
+  }, [autoDraft, loaded])
+
   const submitCommit = async (event: { preventDefault: () => void }) => {
     event.preventDefault()
-    if (message.trim() === '' || committing || gitBusy) {
+    if (message.trim() === '' || committing || gitBusy || drafting) {
       return
     }
     if (await onCommit(message.trim(), list.length)) {
@@ -341,6 +388,7 @@ export function ChangesPanel({
         Commit message
       </label>
       <textarea
+        ref={messageBox}
         id="commit-message"
         rows={3}
         value={message}
@@ -349,17 +397,38 @@ export function ChangesPanel({
         placeholder="Commit message"
         className={`${textarea} resize-none`}
       />
-      <Button
-        type="submit"
-        variant="primary"
-        size="md"
-        busy={committing}
-        disabled={gitBusy && !committing}
-        disabledReason={message.trim() === '' ? 'Write a commit message first' : undefined}
-        shortcut="Mod+Enter"
-      >
-        Commit all
-      </Button>
+      <div className="flex gap-2">
+        {onDraft !== undefined && (
+          <Button
+            variant="ghost"
+            size="md"
+            icon={Sparkles}
+            busy={drafting}
+            data-tip={`Draft a message with ${draftAgent}`}
+            onClick={() => void draft()}
+          >
+            Generate
+          </Button>
+        )}
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          className="flex-1"
+          busy={committing}
+          disabled={gitBusy && !committing}
+          disabledReason={
+            drafting
+              ? 'Drafting the message…'
+              : message.trim() === ''
+                ? 'Write a commit message first'
+                : undefined
+          }
+          shortcut="Mod+Enter"
+        >
+          Commit all
+        </Button>
+      </div>
     </form>
   )
 

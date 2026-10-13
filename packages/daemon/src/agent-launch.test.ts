@@ -16,6 +16,7 @@ import {
   type LaunchableAgent,
   type LaunchOptions,
   launchCommand,
+  oneShotCommand,
   prepareAgentHooks,
   prepareWorkspace,
   quoteArgument,
@@ -203,6 +204,48 @@ describe('launchCommand', () => {
     expect(
       launchCommand('gemini', { ...base, program: 'gemini', platform: 'win32', prompt: '' }),
     ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini")
+  })
+})
+
+describe('oneShotCommand', () => {
+  it.each([
+    ['claude-code', 'claude -p', 'Write it'],
+    ['codex', 'codex exec -', 'Write it'],
+    ['gemini', "gemini -p 'Answer the request above.'", 'Write it'],
+    ['copilot', "copilot -p 'Write it'", ''],
+    ['cursor', "cursor-agent -p --output-format text 'Write it'", ''],
+  ] as const)('runs %s once, with the prompt on stdin or as a word', (agent, line, stdin) => {
+    expect(oneShotCommand(agent, DEFAULT_PROGRAMS[agent], 'Write it', 'linux')).toEqual({
+      line,
+      stdin,
+    })
+  })
+
+  it.each(LAUNCHABLE_AGENTS)('starts %s with no permission flags, hooks or settings', (agent) => {
+    const { line } = oneShotCommand(agent, DEFAULT_PROGRAMS[agent], 'Write it', 'linux')
+    for (const flag of [...AUTO_FLAGS[agent], '--settings', 'natamux hook', '-i']) {
+      expect(line.split(' '), flag).not.toContain(flag)
+    }
+    expect(line).not.toContain('GEMINI_CLI_SYSTEM_SETTINGS_PATH')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'gives a prompt with quotes, $, backticks, newlines, ; and && as one word, unchanged',
+    () => {
+      const prompt = `it's "$HOME" \`id\` $(id)\nnext; echo x && echo y`
+      const { line } = oneShotCommand('copilot', 'printf %s', prompt, 'linux')
+      const shell = ['-c', line.replace(' -p ', ' ')]
+      expect(execFileSync('/bin/sh', shell, { encoding: 'utf8' })).toBe(prompt)
+    },
+  )
+
+  it('keeps the words of a configured program and quotes the prompt for the shell', () => {
+    expect(oneShotCommand('copilot', 'node /opt/copilot.js', "it's", 'linux').line).toBe(
+      "node /opt/copilot.js -p 'it'\\''s'",
+    )
+    expect(oneShotCommand('cursor', 'agent', "it's", 'win32').line).toBe(
+      "agent -p --output-format text 'it''s'",
+    )
   })
 })
 

@@ -92,7 +92,7 @@ Open the **Changes** tab. It lists the changed files and shows a diff for each o
 
 ## 7. Commit, push and open a pull request
 
-1. In the **Changes** tab, write a commit message and click **Commit all**. It commits every change, new files included.
+1. In the **Changes** tab, write a commit message, or click **Generate** to let the agent draft one. Then click **Commit all**. It commits every change, new files included.
 2. Click **Push** in the task header. The button shows how many commits are ahead, for example **Push ↑2**.
 3. Click **Create pull request**. It needs the `gh` command, logged in. When the pull request exists, the button becomes **Open pull request**.
 

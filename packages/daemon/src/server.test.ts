@@ -40,9 +40,11 @@ let app: FastifyInstance
 let ptys: FakePty[]
 let bus: EventBus
 let webIndexPath: string
+let agentAnswer: () => Promise<string>
 const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
 beforeEach(async () => {
+  agentAnswer = async () => 'Add the fix\n'
   repo = createTestRepo()
   const dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
@@ -66,6 +68,7 @@ beforeEach(async () => {
     worktreesDir: join(repo.root, 'worktrees'),
     repos,
     closeTerminals: (taskId) => terminals.close(taskId),
+    runAgentOnce: () => agentAnswer(),
   })
   const spawner = fakeSpawner()
   ptys = spawner.ptys
@@ -1762,8 +1765,76 @@ describe('commit and push', () => {
     expect(pushed.json().task.id).toBe('T-0001')
   })
 
+  it('drafts a commit message, and answers 409 when nothing changed', async () => {
+    const workspace = await taskWithChange()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      message: 'Add the fix',
+      source: 'agent',
+      agent: 'claude-code',
+    })
+
+    rmSync(join(workspace, 'fix.txt'))
+    const nothing = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+    })
+    expect(nothing.statusCode).toBe(409)
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0099/commit-message',
+      headers: authorization,
+    })
+    expect(unknown.statusCode).toBe(404)
+    expect(unknown.json().error).toBe('not_found')
+  })
+
+  it('ignores a body, and answers 200 with the simple draft when the agent fails', async () => {
+    await taskWithChange()
+    agentAnswer = async () => {
+      throw new Error('claude exited with code 1: boom')
+    }
+    const events = async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/tasks/T-0001/events',
+        headers: authorization,
+      })
+      return response.json().events.length
+    }
+    const before = await events()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      message: 'Add fix.txt',
+      source: 'draft',
+      agent: 'claude-code',
+      reason: 'claude exited with code 1: boom',
+    })
+    expect(await events()).toEqual(before)
+  })
+
   it('needs the token', async () => {
-    const urls = ['/tasks/T-0001/commit', '/tasks/T-0001/push', '/tasks/T-0001/pull-request']
+    const urls = [
+      '/tasks/T-0001/commit',
+      '/tasks/T-0001/commit-message',
+      '/tasks/T-0001/push',
+      '/tasks/T-0001/pull-request',
+    ]
     for (const url of urls) {
       const response = await app.inject({ method: 'POST', url })
       expect(response.statusCode).toBe(401)

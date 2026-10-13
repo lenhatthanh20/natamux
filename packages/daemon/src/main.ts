@@ -52,6 +52,7 @@ const workspaces = new WorkspaceService({
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
   closeTerminals: (taskId) => terminals.closeAndWait(taskId),
+  programOf: (agent) => agents.programOf(agent),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {

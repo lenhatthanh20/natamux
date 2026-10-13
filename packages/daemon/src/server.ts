@@ -630,6 +630,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return options.workspaces.commit(id, message)
   })
 
+  // A draft of the commit message, for the user to read before the commit.
+  app.post('/tasks/:id/commit-message', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return options.workspaces.draftCommitMessage(id)
+  })
+
   app.post('/tasks/:id/push', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { task: await options.workspaces.push(id) }

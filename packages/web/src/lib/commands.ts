@@ -484,6 +484,18 @@ export const COMMANDS: readonly Command[] = [
     when: inWorkspace,
     run: () => fireAppEvent('diff-comment'),
   },
+  {
+    id: 'diff.draftCommit',
+    title: 'Draft the commit message with the agent',
+    category: 'Workspace',
+    shortcuts: ['Mod+Shift+G'],
+    group: 'Diff',
+    // Only in the commit box (#commit-message of ChangesPanel): elsewhere the key would start an
+    // agent run, and its draft could replace text the user did not mean to give up.
+    focus: ['field'],
+    when: (context) => inWorkspace(context) && document.activeElement?.id === 'commit-message',
+    run: () => fireAppEvent('commit-draft'),
+  },
 
   // The palette's own keys
   {
