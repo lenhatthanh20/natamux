@@ -475,7 +475,7 @@ export function ProjectSettingsDialog({
                 className="m-0 flex list-disc flex-col gap-0.5 pl-4 text-xs text-muted"
               >
                 <li>
-                  Opened with <code>gh issue create</code> in the GitHub repository of this project.
+                  Opened with <code>gh issue create</code> on GitHub, in this project.
                 </li>
                 <li>Title: the task title.</li>
                 <li>
