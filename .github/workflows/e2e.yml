@@ -1,8 +1,9 @@
 name: E2E
 
 # Builds the production images, starts them with demo data (scripts/e2e.sh) and runs the
-# Playwright tests in e2e/ against them. On main it then publishes the images to ghcr.io, with
-# build provenance, so scripts/e2e.sh can start them on any machine with Docker. See docs/e2e.md.
+# Playwright tests in e2e/ against them, in groups side by side (e2e/groups.ts). On main it then
+# publishes the images to ghcr.io, with build provenance, so scripts/e2e.sh can start them on any
+# machine with Docker. See docs/e2e.md.
 #
 # Only the publish job can write packages, and it runs no package installs: a bad package in the
 # test job cannot push images that other machines then run.
@@ -54,7 +55,11 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    # The tests take about 6 minutes; a hang must fail the job, not hold it.
+    # Each group has its own daemon and demo data. A red group cancels the others.
+    strategy:
+      matrix:
+        group: [timing, terminal, rest]
+    # The slowest group takes about 4 minutes; a hang must fail the job, not hold it.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -86,11 +91,14 @@ jobs:
 
       - name: Run the tests
         working-directory: e2e
+        env:
+          E2E_GROUP: ${{ matrix.group }}
         run: pnpm e2e
 
       # The terminal numbers of a green run too, so the next PRs can compare with them.
+      # Only the timing group writes them (e2e/groups.ts).
       - name: Terminal measures
-        if: always()
+        if: always() && matrix.group == 'timing'
         uses: actions/upload-artifact@v7
         with:
           name: e2e-measures
@@ -101,7 +109,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-report
+          name: e2e-report-${{ matrix.group }}
           path: |
             e2e/playwright-report
             e2e/test-results
