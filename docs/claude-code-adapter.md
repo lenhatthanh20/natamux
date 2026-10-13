@@ -39,7 +39,7 @@ Everything else is ignored and not logged, so the event log does not fill with c
 
 **Resume after a restart.** Quitting the app ends every agent, but a task keeps its state. The agent of a stage starts again in that stage's terminal in two cases:
 
-- When the daemon starts, after it listens: each stage that is `running` or `needs-input`. The task keeps its state. A task no agent was started for, or whose agent Natamux cannot launch, is left alone.
+- When the daemon starts, after it listens: each stage that is `running`, `needs-input` or `review`. The task keeps its state; a stage in review moves to running only when you type to the agent. A task no agent was started for, or whose agent Natamux cannot launch, is left alone.
 - When a person clicks **Resume** (or sends `agent.resumed` from the CLI or the API) and no agent runs in the stage's terminal.
 
 Claude Code goes on with its last session of that stage: `claude --resume <session_id>`, with no new prompt. The id is the `sessionId` that the hooks of that stage logged. With no id yet (the agent was in its first turn), the start of the daemon uses `claude --continue`, the newest session of the worktree, for a stage outside a group. A stage of a group, and **Resume**, start the agent with the stage prompt instead, since the stages of a group share the folder. Other agents always start with the stage prompt. An `agent.resumed` from a hook never starts an agent, since it comes from one that runs.
