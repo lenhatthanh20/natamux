@@ -17,6 +17,22 @@ test('shows the changes and the history of a workspace', async ({ page }) => {
   await expect(page.getByText('Add demo notes').first()).toBeVisible()
 })
 
+// The diff loads a slim Monaco. An editor part whose service it left out fails as each editor
+// opens, with nothing on screen but an error on the page.
+test('opens a diff and a new file with no error on the page', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  const tabs = await openTask(page, DEMO_TITLE)
+  await tabs.getByRole('tab', { name: 'Changes' }).click()
+
+  await page.getByRole('treeitem', { name: /^notes\.md/ }).click()
+  await expect(page.locator('.monaco-diff-editor .view-lines').first()).toContainText('Notes')
+  await page.getByRole('treeitem', { name: /^todo\.txt/ }).click()
+  await expect(page.locator('.monaco-editor .view-lines').first()).toBeVisible()
+
+  expect(errors).toEqual([])
+})
+
 test('runs a command in a shell of the workspace', async ({ page }) => {
   const tabs = await openTask(page, DEMO_TITLE)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()

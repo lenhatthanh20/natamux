@@ -265,4 +265,41 @@ describe('RepoService', () => {
     withTasks.remove('default')
     expect(withTasks.list()).toEqual([])
   })
+
+  it('reads repos.json once, and again only after its own save', async () => {
+    const file = join(repo.root, 'data', 'repos.json')
+    const before = repos.list()
+    writeFileSync(file, '[]\n')
+
+    expect(repos.list()).toEqual(before)
+    expect(repos.pathOf(null)).toBe(repo.dir)
+
+    const added = await repos.add({ path: gitFolder('web') })
+    expect(repos.list()).toEqual([...before, added])
+    repos.remove('default')
+    expect(repos.list()).toEqual([added])
+  })
+
+  it('gives copies, so a caller cannot change the list it keeps', () => {
+    repos.get(null).name = 'changed'
+    const listed = repos.list()
+    listed.pop()
+
+    expect(repos.list()).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
+  })
+
+  it('keeps the empty list of a missing repos.json, and makes the file on save', async () => {
+    const dataDir = join(repo.root, 'missing-data')
+    const file = join(dataDir, 'repos.json')
+    const empty = new RepoService({ dataDir })
+    expect(empty.list()).toEqual([])
+    mkdirSync(dataDir)
+    writeFileSync(file, JSON.stringify([{ id: 'other', name: 'other', path: repo.dir }]))
+
+    expect(empty.list()).toEqual([])
+
+    const added = await empty.add({ path: gitFolder('web') })
+    expect(empty.list()).toEqual([added])
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([added])
+  })
 })

@@ -3,11 +3,12 @@ import type { TaskChange } from './tasks'
 // A hidden tab draws no frames, so this timer writes the changes there.
 export const BATCH_FALLBACK_MS = 100
 
-// Queues task changes and hands them to `apply` together once per frame, in the order they came.
-// A burst of live events then costs one cache write and one render, not one each. The timer keeps
-// a hidden tab up to date too, so its title still counts the tasks that wait.
-export function createTaskBatch(apply: (changes: TaskChange[]) => void) {
-  let queue: TaskChange[] = []
+// Queues task changes, or other live messages, and hands them to `apply` together once per frame,
+// in the order they came. A burst of live events then costs one cache write and one render, not
+// one each. The timer keeps a hidden tab up to date too, so its title still counts the tasks that
+// wait.
+export function createTaskBatch<Change = TaskChange>(apply: (changes: Change[]) => void) {
+  let queue: Change[] = []
   let frame = 0
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -27,7 +28,7 @@ export function createTaskBatch(apply: (changes: TaskChange[]) => void) {
   }
 
   return {
-    push: (change: TaskChange) => {
+    push: (change: Change) => {
       if (queue.push(change) === 1) {
         frame = requestAnimationFrame(flush)
         timer = setTimeout(flush, BATCH_FALLBACK_MS)

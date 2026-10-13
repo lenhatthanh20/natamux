@@ -12,11 +12,18 @@ import {
 import { RepoNotFoundError } from './repo-service.js'
 
 let folder: string
+let clock: number
 let service: ProjectSettingsService
+
+// The service looks at the file at most once a second.
+const later = (ms = 1000) => {
+  clock += ms
+}
 
 beforeEach(() => {
   folder = mkdtempSync(join(tmpdir(), 'natamux-settings-'))
-  service = new ProjectSettingsService({ repos: { pathOf: () => folder } })
+  clock = 0
+  service = new ProjectSettingsService({ repos: { pathOf: () => folder }, now: () => clock })
 })
 
 afterEach(() => {
@@ -54,6 +61,7 @@ describe('ProjectSettingsService', () => {
 
     writeFileSync(file(), JSON.stringify({ stages: [] }))
     utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    later()
     const loaded = service.load(null)
     expect(loaded.error).toContain('stages')
     expect(loaded.settings).toEqual(DEFAULT_PROJECT_SETTINGS)
@@ -64,7 +72,50 @@ describe('ProjectSettingsService', () => {
     expect(service.get(null).tracker.createIssue).toBe('never')
     writeFileSync(file(), JSON.stringify({ tracker: { createIssue: 'on-pr' } }))
     utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    later()
     expect(service.get(null).tracker.createIssue).toBe('on-pr')
+  })
+
+  it('looks at the file at most once a second, but sees its own save at once', () => {
+    writeFileSync(file(), JSON.stringify({ tracker: { createIssue: 'never' } }))
+    expect(service.get(null).tracker.createIssue).toBe('never')
+    writeFileSync(file(), JSON.stringify({ tracker: { createIssue: 'on-pr' } }))
+    utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+
+    later(999)
+    expect(service.get(null).tracker.createIssue).toBe('never')
+    later(1)
+    expect(service.get(null).tracker.createIssue).toBe('on-pr')
+
+    service.save(null, { tracker: { createIssue: 'never' } })
+    expect(service.get(null).tracker.createIssue).toBe('never')
+  })
+
+  it('sees a file that was added or deleted after a second', () => {
+    expect(service.load(null).found).toBe(false)
+    writeFileSync(file(), '{}\n')
+    expect(service.load(null).found).toBe(false)
+    later()
+    expect(service.load(null).found).toBe(true)
+
+    rmSync(file())
+    later()
+    expect(service.load(null).found).toBe(false)
+  })
+
+  it('keeps a second for each repository on its own', () => {
+    const other = mkdtempSync(join(tmpdir(), 'natamux-settings-'))
+    try {
+      const two = new ProjectSettingsService({
+        repos: { pathOf: (repo) => (repo === 'other' ? other : folder) },
+        now: () => clock,
+      })
+      expect(two.load(null).found).toBe(false)
+      writeFileSync(join(other, SETTINGS_FILE), '{}\n')
+      expect(two.load('other').found).toBe(true)
+    } finally {
+      rmSync(other, { recursive: true, force: true })
+    }
   })
 
   it('saves valid settings as written, and refuses others', () => {
@@ -86,6 +137,7 @@ describe('ProjectSettingsService', () => {
 
     writeFileSync(file(), '{}\n')
     utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    later()
     expect(service.load(null).version).not.toBe(first.version)
   })
 
@@ -124,6 +176,7 @@ describe('ProjectSettingsService', () => {
     expect(service.load(null).error).toContain('is not JSON')
     writeFileSync(file(), '[]')
     utimesSync(file(), new Date(), new Date(Date.now() + 5000))
+    later()
     expect(service.load(null).error).not.toBeNull()
     expect(service.load(null).settings).toEqual(DEFAULT_PROJECT_SETTINGS)
   })

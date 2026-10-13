@@ -18,7 +18,18 @@ import {
   type PushStatus,
 } from '@natamux/core'
 
-const execFileAsync = promisify(execFile)
+const execFileOnce = promisify(execFile)
+let spawns = 0
+
+// How many git and gh processes this daemon started, for the benchmark. Not shown to users.
+export function gitSpawnCount(): number {
+  return spawns
+}
+
+const execFileAsync = ((...args: Parameters<typeof execFileOnce>) => {
+  spawns += 1
+  return execFileOnce(...args)
+}) as unknown as typeof execFileOnce
 
 const MAX_OUTPUT_BYTES = 10 * 1024 * 1024
 
@@ -824,9 +835,13 @@ export async function deleteRemoteRef(worktreePath: string, ref: string): Promis
 }
 
 export class GitHubError extends Error {
-  constructor(detail: string) {
+  // What gh printed before it failed. A GraphQL answer with errors still has its data there.
+  readonly output: string
+
+  constructor(detail: string, output = '') {
     super(`GitHub CLI failed: ${detail}`)
     this.name = 'GitHubError'
+    this.output = output
   }
 }
 
@@ -845,7 +860,9 @@ export const runGh: RunGh = async (cwd, args) => {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
       throw new GitHubError('gh is not installed or not on the PATH')
     }
-    throw new GitHubError(errorText(error))
+    const output =
+      typeof error === 'object' && error !== null && 'stdout' in error ? String(error.stdout) : ''
+    throw new GitHubError(errorText(error), output)
   }
 }
 
@@ -922,13 +939,10 @@ export function summarizeChecks(items: readonly CheckItem[]): PullRequestStatus[
   return waiting ? 'pending' : 'passing'
 }
 
-// Reads the output of `gh pr view --json state,isDraft,statusCheckRollup`.
-export function parsePullRequestView(output: string): PullRequestStatus {
-  const data = JSON.parse(output) as {
-    state?: string
-    isDraft?: boolean
-    statusCheckRollup?: CheckItem[] | null
-  }
+function pullRequestStatusOf(
+  data: { state?: string; isDraft?: boolean },
+  checks: readonly CheckItem[],
+): PullRequestStatus {
   const state =
     data.state === 'MERGED'
       ? 'merged'
@@ -937,7 +951,107 @@ export function parsePullRequestView(output: string): PullRequestStatus {
         : data.isDraft
           ? 'draft'
           : 'open'
-  return { state, checks: summarizeChecks(data.statusCheckRollup ?? []) }
+  return { state, checks: summarizeChecks(checks) }
+}
+
+// Reads the output of `gh pr view --json state,isDraft,statusCheckRollup`.
+export function parsePullRequestView(output: string): PullRequestStatus {
+  const data = JSON.parse(output) as {
+    state?: string
+    isDraft?: boolean
+    statusCheckRollup?: CheckItem[] | null
+  }
+  return pullRequestStatusOf(data, data.statusCheckRollup ?? [])
+}
+
+export type PullRequestRef = { host: string; owner: string; name: string; number: number }
+
+const PULL_REQUEST_PARTS = /^https:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/
+
+// The repository and number of a pull request address, or undefined.
+export function parsePullRequestRef(url: string): PullRequestRef | undefined {
+  const match = PULL_REQUEST_PARTS.exec(url)
+  if (!match) {
+    return undefined
+  }
+  const [, host = '', owner = '', name = '', number = ''] = match
+  return { host, owner, name, number: Number(number) }
+}
+
+// The same as `gh pr view --json state,isDraft,statusCheckRollup` reads.
+const PULL_REQUEST_FIELDS = [
+  'state isDraft commits(last: 1) { nodes { commit { statusCheckRollup {',
+  'contexts(first: 100) { nodes { ... on CheckRun { status conclusion }',
+  '... on StatusContext { state } } } } } } }',
+].join(' ')
+
+type PullRequestNode = {
+  state?: string
+  isDraft?: boolean
+  commits?: {
+    nodes?: { commit?: { statusCheckRollup?: { contexts?: { nodes?: CheckItem[] } } | null } }[]
+  }
+}
+
+// Reads the answer of readPullRequestStatuses. A number GitHub did not find is left out.
+export function parsePullRequestBatch(
+  output: string,
+  numbers: readonly number[],
+): Map<number, PullRequestStatus> {
+  const data = JSON.parse(output) as {
+    data?: { repository?: Record<string, PullRequestNode | null> | null }
+  }
+  const repository = data.data?.repository
+  if (!repository) {
+    throw new Error('no repository in the answer')
+  }
+  const statuses = new Map<number, PullRequestStatus>()
+  for (const number of numbers) {
+    const node = repository[`pr${number}`]
+    if (node) {
+      const rollup = node.commits?.nodes?.[0]?.commit?.statusCheckRollup
+      statuses.set(number, pullRequestStatusOf(node, rollup?.contexts?.nodes ?? []))
+    }
+  }
+  return statuses
+}
+
+// The pull requests of one repository with one gh call, instead of one `gh pr view` each.
+export async function readPullRequestStatuses(
+  cwd: string,
+  repo: Omit<PullRequestRef, 'number'>,
+  numbers: readonly number[],
+  gh: RunGh = runGh,
+): Promise<Map<number, PullRequestStatus>> {
+  const fields = numbers.map(
+    (number) => `pr${number}: pullRequest(number: ${number}) { ${PULL_REQUEST_FIELDS} }`,
+  )
+  const query = [
+    'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {',
+    ...fields,
+    '} }',
+  ].join(' ')
+  const host = repo.host === 'github.com' ? [] : ['--hostname', repo.host]
+  const names = ['-f', `owner=${repo.owner}`, '-f', `name=${repo.name}`]
+  let output: string
+  try {
+    output = await gh(cwd, ['api', 'graphql', ...host, '-f', `query=${query}`, ...names])
+  } catch (error) {
+    // gh fails when one number is not found, and still prints the others.
+    if (!(error instanceof GitHubError) || error.output === '') {
+      throw error
+    }
+    try {
+      return parsePullRequestBatch(error.output, numbers)
+    } catch {
+      throw error
+    }
+  }
+  try {
+    return parsePullRequestBatch(output, numbers)
+  } catch {
+    throw new GitHubError(`could not read the pull requests: ${output.slice(0, 200)}`)
+  }
 }
 
 export async function readPullRequestStatus(

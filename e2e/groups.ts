@@ -2,7 +2,7 @@
 // side by side. A spec file in no group here runs in 'rest'. Both writers of
 // terminal-measures.json stay in 'timing', so the e2e-measures artifact stays one file.
 export const GROUPS: Record<string, string[]> = {
-  timing: ['terminal-cache.spec.ts', 'terminal-measures.spec.ts'],
+  timing: ['dashboard-measures.spec.ts', 'terminal-cache.spec.ts', 'terminal-measures.spec.ts'],
   terminal: ['terminal-gpu.spec.ts', 'terminal-look.spec.ts', 'terminal-protocol.spec.ts'],
 }
 

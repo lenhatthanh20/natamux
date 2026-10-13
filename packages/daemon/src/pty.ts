@@ -39,10 +39,22 @@ function signalTree(root: number, signal: string | undefined): void {
 // The real pseudo terminal. Only main.ts imports this file, so tests never load the native module.
 export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
   const shell = shellCommand(env, process.platform)
-  const pty = spawn(shell.file, shell.args, { name: 'xterm-256color', cols, rows, cwd, env })
+  // Bytes, not text: the screen and the clients take UTF-8 as it is, so nothing decodes and
+  // encodes again.
+  const pty = spawn(shell.file, shell.args, {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd,
+    env,
+    encoding: null,
+  })
   return {
     onData: (listener) => {
-      pty.onData(listener)
+      // Windows gives text whatever the encoding.
+      pty.onData((data: string | Buffer) => {
+        listener(typeof data === 'string' ? Buffer.from(data) : data)
+      })
     },
     onExit: (listener) => {
       pty.onExit(({ exitCode }) => listener(exitCode))

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TaskShells } from './api'
+import { applyLiveMessages } from './live'
 import { agentLanes, SHELLS_EVERY_MS, taskShellsQuery } from './task-shells'
 
 const SHELLS: TaskShells = {
@@ -28,6 +29,45 @@ describe('task shells', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+  })
+
+  it('reads the shells again when the daemon says they changed, not before the poll', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const load = vi.fn(async (_taskId: string) => SHELLS)
+    render(
+      <QueryClientProvider client={client}>
+        <Sidebar load={load} />
+      </QueryClientProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(10_000))
+    expect(load).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }])
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(load).toHaveBeenCalledTimes(2)
+    client.clear()
+  })
+
+  it('reads the shells again after a minute without a message, not sooner', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const load = vi.fn(async (_taskId: string) => SHELLS)
+    render(
+      <QueryClientProvider client={client}>
+        <Sidebar load={load} />
+      </QueryClientProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(load).toHaveBeenCalledTimes(1)
+
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS - 1000))
+    expect(load).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(load).toHaveBeenCalledTimes(2)
+    client.clear()
   })
 
   it('reads a task once per poll however many parts show its shells', async () => {

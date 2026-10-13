@@ -25,6 +25,8 @@ if (!root) {
   throw new Error('The page has no #root element.')
 }
 
+// Read by the E2E measures: the time from the page start to the first render call.
+performance.mark('natamux:first-render')
 createRoot(root).render(
   <StrictMode>
     <App />

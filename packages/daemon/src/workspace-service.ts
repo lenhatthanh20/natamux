@@ -15,6 +15,7 @@ import {
   type RunAgentOnce,
   runAgentOnce,
 } from './commit-drafter.js'
+import type { EventBus } from './event-bus.js'
 import {
   addWorktree,
   commitAll,
@@ -77,6 +78,8 @@ type WorkspaceServiceOptions = {
   // Where a failed draft is written down. Default: console.warn.
   log?: (message: string) => void
   now?: () => number
+  // Dashboards hear when the files of a workspace may have changed.
+  bus?: EventBus
 }
 
 export type RemoveWorkspaceResult = {
@@ -89,6 +92,25 @@ const DIFF_STAT_READS = 4
 // Dashboards ask for the changes, the graph and the diff stats on timers. Within this time they
 // share one read, so git runs less often. A change made through this service is seen at once.
 export const GIT_READ_MS = 5000
+// The diff stat of a workspace is read again when the workspace may have changed (see touch). A
+// change that no hook, shell or commit here saw, such as one in another editor, shows after this.
+export const DIFF_STATS_MAX_AGE_MS = 5 * 60_000
+// Hooks and output come in bursts: dashboards hear of a change in a task this long after it. Each
+// message makes them read git again. A few in a row go out soon, so a user's command in a new shell
+// shows at once; after that, one per DIRTY_MIN_INTERVAL_MS while changes go on, so a busy agent
+// costs no more than the old 10 s poll.
+export const DIRTY_DEBOUNCE_MS = 750
+export const DIRTY_BURST = 3
+export const DIRTY_MIN_INTERVAL_MS = 10_000
+
+// The workspace.dirty messages of one task. `credits`: how many may go out soon; one comes back
+// per DIRTY_MIN_INTERVAL_MS, up to DIRTY_BURST. `again`: a touch came that no message told yet.
+type DirtyState = {
+  credits: number
+  again: boolean
+  tell?: NodeJS.Timeout
+  refill?: NodeJS.Timeout
+}
 
 // What the diff of a workspace counts from: where a new workspace starts, by name.
 async function baseForDiff(repoDir: string): Promise<string | null> {
@@ -126,6 +148,13 @@ export class WorkspaceService {
   private readonly diffStatsReads: TtlCache<Record<string, DiffStat>>
   private readonly changesReads: TtlCache<ChangeEntry[]>
   private readonly graphReads: TtlCache<GitGraph>
+  private readonly now: () => number
+  private readonly bus: EventBus | undefined
+  // The last diff stat of each workspace, and the tasks whose workspace changed since.
+  private readonly stats = new Map<string, { stat: DiffStat; readAt: number; round: number }>()
+  private readonly dirtyStats = new Set<string>()
+  private statsRound = 0
+  private readonly dirty = new Map<string, DirtyState>()
 
   constructor(options: WorkspaceServiceOptions) {
     this.tasks = options.tasks
@@ -141,10 +170,11 @@ export class WorkspaceService {
     this.programOf = options.programOf ?? ((agent) => DEFAULT_PROGRAMS[agent])
     this.runAgentOnce = options.runAgentOnce ?? runAgentOnce
     this.log = options.log ?? ((message) => console.warn(message))
-    const now = options.now ?? Date.now
-    this.diffStatsReads = new TtlCache(GIT_READ_MS, now)
-    this.changesReads = new TtlCache(GIT_READ_MS, now)
-    this.graphReads = new TtlCache(GIT_READ_MS, now)
+    this.now = options.now ?? Date.now
+    this.bus = options.bus
+    this.diffStatsReads = new TtlCache(GIT_READ_MS, this.now)
+    this.changesReads = new TtlCache(GIT_READ_MS, this.now)
+    this.graphReads = new TtlCache(GIT_READ_MS, this.now)
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -327,16 +357,109 @@ export class WorkspaceService {
       return known
     }
     const withWorkspace = this.tasks.listTasks().filter((task) => task.workspace !== null)
+    const readAt = this.now()
+    this.statsRound += 1
+    const round = this.statsRound
+    // A touch during this read starts another one. When that newer read ends first, this one must
+    // not put back its older stat.
+    const newer = (taskId: string) => (this.stats.get(taskId)?.round ?? 0) > round
     // Two git commands per workspace: with many workspaces, all at once would load every core.
     const entries = await mapLimit(withWorkspace, DIFF_STAT_READS, async (task) => {
+      const known = this.stats.get(task.id)
+      if (
+        known !== undefined &&
+        !this.dirtyStats.has(task.id) &&
+        readAt - known.readAt < DIFF_STATS_MAX_AGE_MS
+      ) {
+        return [[task.id, known.stat] as const]
+      }
+      // Before the read: a change while git runs marks the task again.
+      this.dirtyStats.delete(task.id)
       try {
-        const base = await baseOf(task.repo)
-        return [[task.id, await readDiffStat(task.workspace ?? '', base)] as const]
+        const stat = await readDiffStat(task.workspace ?? '', await baseOf(task.repo))
+        if (!newer(task.id)) {
+          this.stats.set(task.id, { stat, readAt, round })
+        }
+        return [[task.id, stat] as const]
       } catch {
+        if (!newer(task.id)) {
+          this.stats.delete(task.id)
+        }
         return []
       }
     })
+    const ids = new Set(withWorkspace.map((task) => task.id))
+    for (const id of this.stats.keys()) {
+      if (!ids.has(id)) {
+        this.stats.delete(id)
+      }
+    }
     return Object.fromEntries(entries.flat())
+  }
+
+  // The workspace of the task may have changed: by its agent, in one of its shells, or here. The
+  // next reads of git see it, and dashboards hear of it (see DIRTY_DEBOUNCE_MS).
+  touch(taskId: string): void {
+    this.dirtyStats.add(taskId)
+    // The diff stats of the other tasks still come from `stats`: only this one runs git again.
+    this.diffStatsReads.forget()
+    this.changesReads.forget(taskId)
+    this.graphReads.forget(taskId)
+    const bus = this.bus
+    if (bus === undefined) {
+      return
+    }
+    const state: DirtyState = this.dirty.get(taskId) ?? { credits: DIRTY_BURST, again: false }
+    this.dirty.set(taskId, state)
+    state.again = true
+    this.planDirty(taskId, state, bus)
+  }
+
+  private planDirty(taskId: string, state: DirtyState, bus: EventBus): void {
+    if (state.tell !== undefined || state.credits === 0 || !state.again) {
+      return
+    }
+    state.tell = setTimeout(() => {
+      state.tell = undefined
+      if (!this.taskExists(taskId)) {
+        clearTimeout(state.refill)
+        this.dirty.delete(taskId)
+        return
+      }
+      state.again = false
+      state.credits -= 1
+      bus.publish({ kind: 'workspace.dirty', taskId })
+      this.refillDirty(taskId, state, bus)
+    }, DIRTY_DEBOUNCE_MS)
+    state.tell.unref()
+  }
+
+  private refillDirty(taskId: string, state: DirtyState, bus: EventBus): void {
+    if (state.refill !== undefined) {
+      return
+    }
+    state.refill = setTimeout(() => {
+      state.refill = undefined
+      state.credits += 1
+      if (state.credits < DIRTY_BURST) {
+        this.refillDirty(taskId, state, bus)
+      } else if (state.tell === undefined && !state.again) {
+        this.dirty.delete(taskId)
+        return
+      }
+      this.planDirty(taskId, state, bus)
+    }, DIRTY_MIN_INTERVAL_MS)
+    state.refill.unref()
+  }
+
+  private taskExists(taskId: string): boolean {
+    try {
+      this.tasks.getTask(taskId)
+      return true
+    } catch {
+      // Deleted meanwhile.
+      return false
+    }
   }
 
   // The history of the task branch next to the branch that the main checkout is on. `fresh` as
@@ -446,9 +569,7 @@ export class WorkspaceService {
     } finally {
       this.busy.delete(taskId)
       // Every change of a workspace runs here, so the next read sees it, even after a failure.
-      this.changesReads.forget(taskId)
-      this.graphReads.forget(taskId)
-      this.diffStatsReads.forget()
+      this.touch(taskId)
     }
   }
 }

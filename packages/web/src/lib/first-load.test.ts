@@ -134,6 +134,12 @@ describe('the first load of the dashboard', () => {
     expect(files).toContain('lib/prefetch.ts')
   })
 
+  it('prefetches the diff when idle, so the first diff does not wait for Monaco', () => {
+    expect(SOURCES['components/Dashboard.tsx']).toContain(
+      "prefetchWhenIdle(() => import('./MonacoDiff'))",
+    )
+  })
+
   it('skips type imports and dynamic imports', () => {
     expect(
       staticImports(

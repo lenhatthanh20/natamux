@@ -32,7 +32,8 @@ export class FakeTerminal {
   // The size the next fit gives, as if the pane had that room.
   fitSize = { cols: 80, rows: 24 }
   unicode = { activeVersion: '' }
-  buffer = { active: { viewportY: 0, baseY: 0 } }
+  // `normal.length`: rows of history and screen, which decides how a resize goes.
+  buffer = { active: { viewportY: 0, baseY: 0 }, normal: { length: 24 } }
   element: HTMLElement | undefined = undefined
   textarea: HTMLTextAreaElement | undefined = undefined
   // Each write as text (bytes decoded), and as the code passed it.
@@ -112,6 +113,10 @@ export class FakeTerminal {
   }
 
   resize(cols: number, rows: number): void {
+    // As xterm's API: a pane with no computed size measures NaN, which xterm refuses.
+    if (!Number.isInteger(cols) || !Number.isInteger(rows)) {
+      throw new Error('This API only accepts integers')
+    }
     if (cols === this.cols && rows === this.rows) {
       return
     }
@@ -173,11 +178,16 @@ export class FakeFitAddon {
   }
 
   // As the real addon, a terminal that is not open has nothing to measure.
+  proposeDimensions(): { cols: number; rows: number } | undefined {
+    const terminal = this.terminal
+    return terminal?.element === undefined ? undefined : { ...terminal.fitSize }
+  }
+
   fit(): void {
     this.fits += 1
-    const terminal = this.terminal
-    if (terminal?.element !== undefined) {
-      terminal.resize(terminal.fitSize.cols, terminal.fitSize.rows)
+    const size = this.proposeDimensions()
+    if (size !== undefined && !Number.isNaN(size.cols) && !Number.isNaN(size.rows)) {
+      this.terminal?.resize(size.cols, size.rows)
     }
   }
 

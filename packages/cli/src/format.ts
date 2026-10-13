@@ -1,6 +1,7 @@
 import { EVENT_SOURCES, TASK_PRIORITIES, TASK_STATES, type Task } from '@natamux/core'
 import type { RemoveWorkspaceResult, SendEventResult, StoredEvent } from './client.js'
 import { SENDABLE_EVENT_TYPES } from './command.js'
+import { DEFAULT_URL } from './default-url.js'
 
 // "jira-ticket (skill) ABC-1": a source with a skill or a name says which one it runs.
 function contextText(context: NonNullable<Task['context']>): string {
@@ -9,7 +10,7 @@ function contextText(context: NonNullable<Task['context']>): string {
   return `${source} ${context.ref}`.trim()
 }
 
-export const DEFAULT_URL = 'http://127.0.0.1:4317'
+export { DEFAULT_URL }
 
 export const USAGE = `Usage: natamux <command> [options]
        nmx <command> [options]   (short name)
