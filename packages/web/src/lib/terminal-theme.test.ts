@@ -44,6 +44,7 @@ describe('terminalTheme', () => {
         'scrollbarSliderBackground',
         'scrollbarSliderHoverBackground',
         'scrollbarSliderActiveBackground',
+        'overviewRulerBorder',
         ...COLORS,
       ] as const) {
         expect(theme[key as keyof ITheme], `${name} ${key}`).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/)
@@ -66,6 +67,14 @@ describe('terminalTheme', () => {
   it('gives the scrollbar the same faint colors as the rest of the app', () => {
     expect(terminalTheme('dark').scrollbarSliderBackground).toBe('#ffffff24')
     expect(terminalTheme('light').scrollbarSliderBackground).toBe('#14181f33')
+  })
+
+  it('draws no border line beside the scrollbar', () => {
+    for (const name of ['dark', 'light'] as const) {
+      expect(terminalTheme(name).overviewRulerBorder, name).toMatch(/^#[0-9a-f]{6}00$/)
+    }
+    const { overviewRulerBorder } = terminalTheme('dark')
+    expect(terminalTheme('light').overviewRulerBorder).toBe(overviewRulerBorder)
   })
 
   it('dims the selection of a terminal that does not have the focus', () => {

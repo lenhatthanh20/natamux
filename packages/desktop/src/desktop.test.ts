@@ -9,6 +9,7 @@ import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
+import { hasSmokeOutput, smokeCommandLine } from './smoke.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { windowOptions } from './window-options.js'
 
@@ -381,7 +382,19 @@ describe('the natamux command', () => {
     const file = writeCliShim(dir, 'C:\\Natamux\\Natamux.exe', 'C:\\cli\\main.js', 'win32')
     expect(file.endsWith('natamux.cmd')).toBe(true)
     expect(readFileSync(file, 'utf8')).toContain('"C:\\Natamux\\Natamux.exe" "C:\\cli\\main.js" %*')
+    expect(readFileSync(file, 'utf8')).toContain('setlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n')
     expect(readFileSync(join(dir, 'nmx.cmd'), 'utf8')).toBe(readFileSync(file, 'utf8'))
+  })
+})
+
+describe('the desktop smoke', () => {
+  it('finds the answer of its command, not the echo of the command itself', () => {
+    for (const platform of ['win32', 'darwin'] as const) {
+      expect(hasSmokeOutput(`> ${smokeCommandLine(platform)}\r\n`)).toBe(false)
+    }
+    expect(hasSmokeOutput('echo "$((6*7))xyz"\r\n42xyz\r\n')).toBe(true)
+    // The Windows console moves the cursor between parts of one line.
+    expect(hasSmokeOutput('\x1b[?25l42\x1b[5;3Hxyz\x1b]0;title\x07')).toBe(true)
   })
 })
 

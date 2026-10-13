@@ -84,9 +84,10 @@ type TaskDetailProps = {
   onViewChange?: (view: DetailsView) => void
 }
 
-// "tries-t-0002" is how the daemon groups tries. People read it as "Tries of T-0002".
+// "tries-t-0002" is how the daemon groups tries. People read it as "Tries of T-0002". A chosen id
+// works the same: "tries-task-0005" is "Tries of TASK-0005".
 export function labelText(label: string): string {
-  const match = /^tries-(t-\d+)$/i.exec(label)
+  const match = /^tries-([a-z]+-\d+)$/i.exec(label)
   return match?.[1] === undefined ? label : `Tries of ${match[1].toUpperCase()}`
 }
 

@@ -6,7 +6,6 @@ import {
   resolveSteps,
   type Stage,
   type StageProgress,
-  type Step,
   stageProgress,
   stagesOf,
   type Task,
@@ -263,13 +262,7 @@ export function ProgressTab({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="flex flex-col gap-3 p-3">
-        <Overview
-          task={task}
-          steps={steps}
-          progress={progress}
-          count={count}
-          sentBack={sentBackCount(accepted)}
-        />
+        <Overview task={task} count={count} sentBack={sentBackCount(accepted)} />
 
         <ol ref={stageList} className="m-0 flex list-none flex-col p-0" aria-label="Stages">
           {steps.map((step, index) => {
@@ -438,35 +431,17 @@ export function ProgressTab({
 
 function Overview({
   task,
-  steps,
-  progress,
   count,
   sentBack,
 }: {
   task: Task
-  steps: readonly Step[]
-  progress: readonly StageProgress[]
   count: { done: number; total: number }
   sentBack: number
 }) {
   const now = useNow()
-  const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const finished = task.state === 'done' || task.state === 'cancelled'
-  const minutes = (entry: StageProgress | undefined) => {
-    if (entry === undefined || entry.startedAt === null) {
-      return 20
-    }
-    // Only a stage in progress grows with the clock.
-    const end =
-      entry.endedAt !== null
-        ? Date.parse(entry.endedAt)
-        : entry.status === 'current'
-          ? now.getTime()
-          : Date.parse(entry.startedAt)
-    return Math.max(8, (end - Date.parse(entry.startedAt)) / 60_000)
-  }
   return (
-    <section aria-label="Overview" className={`${CARD} flex flex-col gap-3 p-3`}>
+    <section aria-label="Overview" className={`${CARD} p-3`}>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Figure value={`${count.done} of ${count.total}`} label="stages done" />
         <Figure
@@ -481,24 +456,6 @@ function Overview({
           label={sentBack === 1 ? 'time sent back' : 'times sent back'}
         />
       </div>
-      {/* The names and times of the steps are in the stage list below. */}
-      <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
-        {steps.map((step) => {
-          const ids = stagesOf(step).map((stage) => stage.id)
-          const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
-          return (
-            <span
-              key={step.id}
-              className="flex min-w-2.5 flex-col gap-0.5"
-              style={{ flex: `${weight} 1 0` }}
-            >
-              {ids.map((id) => (
-                <Segment key={id} entry={byId.get(id)} />
-              ))}
-            </span>
-          )
-        })}
-      </div>
     </section>
   )
 }
@@ -509,39 +466,6 @@ function Figure({ value, label }: { value: string; label: string }) {
       <div className="text-lg font-semibold tracking-tight tabular-nums">{value}</div>
       <div className="text-xs text-muted">{label}</div>
     </div>
-  )
-}
-
-function Segment({ entry }: { entry: StageProgress | undefined }) {
-  if (entry === undefined || entry.status === 'upcoming') {
-    return (
-      <span
-        className="flex-1 rounded-sm"
-        style={{
-          boxShadow: 'inset 0 0 0 1px var(--muted)',
-          backgroundImage:
-            'repeating-linear-gradient(-45deg, transparent 0 4px, var(--line) 4px 5px)',
-        }}
-      />
-    )
-  }
-  if (entry.status === 'current') {
-    return (
-      <span
-        data-state={entry.state ?? 'running'}
-        className={`flex-1 rounded-sm ${entry.state === 'running' ? 'stage-stripes' : ''}`}
-        style={
-          entry.state === 'running' ? undefined : { background: 'var(--chip-fg)', opacity: 0.8 }
-        }
-      />
-    )
-  }
-  return (
-    <span
-      data-state="done"
-      className="flex-1 rounded-sm"
-      style={{ background: 'var(--chip-fg)', opacity: entry.status === 'skipped' ? 0.35 : 0.8 }}
-    />
   )
 }
 
