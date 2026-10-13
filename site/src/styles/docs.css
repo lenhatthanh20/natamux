@@ -137,7 +137,10 @@ header.header::after {
   font-size: var(--sl-text-base);
 }
 .downloads span {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+.downloads .file {
   font-family: var(--sl-font-mono);
   font-size: var(--sl-text-xs);
-  color: var(--sl-color-gray-3);
 }

@@ -19,10 +19,10 @@ Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux,
 Get the file for your system from the [latest release](https://github.com/lenhatthanh20/natamux/releases/latest).
 
 <div class="downloads">
-<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-arm64.dmg"><strong>macOS, Apple silicon</strong><span>Natamux-mac-arm64.dmg</span></a>
-<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-x64.dmg"><strong>macOS, Intel</strong><span>Natamux-mac-x64.dmg</span></a>
-<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-win-x64.exe"><strong>Windows 10 and 11</strong><span>Natamux-win-x64.exe</span></a>
-<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage"><strong>Linux</strong><span>Natamux-linux-x86_64.AppImage</span></a>
+<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-arm64.dmg"><strong>macOS, Apple silicon</strong><span class="file">Natamux-mac-arm64.dmg</span></a>
+<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-x64.dmg"><strong>macOS, Intel</strong><span class="file">Natamux-mac-x64.dmg</span></a>
+<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-win-x64.exe"><strong>Windows 10 and 11</strong><span class="file">Natamux-win-x64.exe</span></a>
+<a href="https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage"><strong>Linux</strong><span class="file">Natamux-linux-x86_64.AppImage</span></a>
 </div>
 
 Every file:
