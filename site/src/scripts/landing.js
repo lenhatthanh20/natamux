@@ -260,8 +260,8 @@ if (hero) {
     if (wanted && onScreen && !document.hidden) {
       v.preload = 'auto'
       v.play().catch((error) => {
-        // Autoplay was blocked: offer the button instead. A pause that cuts a play short is fine.
-        if (error.name !== 'NotAllowedError') return
+        // A pause that cuts a play short is fine. Otherwise nothing plays: offer the button.
+        if (error.name === 'AbortError') return
         wanted = false
         render()
       })

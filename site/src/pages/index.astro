@@ -274,14 +274,14 @@ const extras = [
                     poster={`${base}media/hero-flow-${theme}.webp`}
                     width="2400"
                     height="1500"
-                    aria-label="Screen recording of the Natamux dashboard. You approve the spec. Test spec and Implement start side by side, each agent in its own shell. When both are done, a review agent opens in Shell 5, finds a problem and sends the task back to Implement. Implement runs again, the second review passes, and the task moves on to Release."
+                    aria-label="Screen recording of one task in the Natamux dashboard, from spec approval to a passed review."
                   >
-                    <source src={`${base}media/hero-flow-${theme}.webm`} type="video/webm" />
                     <source src={`${base}media/hero-flow-${theme}.mp4`} type="video/mp4" />
+                    <source src={`${base}media/hero-flow-${theme}.webm`} type="video/webm" />
                   </video>
                 ))
               }
-              <button class="btn small hero-play" type="button" data-hero-play aria-pressed="true" hidden>
+              <button class="btn small hero-play" type="button" data-hero-play hidden>
                 <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
                 <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z" /></svg>
                 <span data-hero-play-label>Play</span>
@@ -290,7 +290,11 @@ const extras = [
             <ol class="hero-steps" aria-hidden="true">
               {heroSteps.map(([at, label]) => <li data-at={at}>{label}</li>)}
             </ol>
-            <figcaption class="sr-only">One task in the dashboard, from spec approval to a passed review.</figcaption>
+            <figcaption class="sr-only">
+              You approve the spec. Test spec and Implement start side by side, each agent in its own shell. When both
+              are done, a review agent opens in Shell 5, finds a problem and sends the task back to Implement. Implement
+              runs again, the second review passes, and the task moves on to Release.
+            </figcaption>
           </figure>
         </div>
       </section>

@@ -201,8 +201,9 @@ h1 .line { display: block; }
 .hero-steps li[aria-current]::after { transform: none; }
 @media (max-width: 560px) {
   .hero-steps { gap: 6px; font-size: 0.75rem; }
-  .hero-play { left: 8px; bottom: 14px; height: 28px; padding: 0 9px; font-size: 0.75rem; }
-  .hero-play svg { width: 12px; height: 12px; }
+  .hero-steps li { min-height: 2.7em; }
+  .hero-shot .hero-play { left: 8px; bottom: 14px; height: 28px; padding: 0 9px; font-size: 0.75rem; }
+  .hero-shot .hero-play svg { width: 12px; height: 12px; }
 }
 
 .pin { position: absolute; left: var(--px); top: var(--py); z-index: 2; pointer-events: none; }
