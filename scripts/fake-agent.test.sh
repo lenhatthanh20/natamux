@@ -64,4 +64,10 @@ Write the tests first, then the code that makes them pass. Commit your work when
 $DONE")
 check "[no-commit] with commit asked: no commit the first time" '[ "$(commits "$r")" = 1 ] && changed "$r"'
 
+draft=$(printf 'Write one git commit message.\nTask: T\n' | bash "$agent" -p 2>/dev/null)
+check "-p: prints one message" '[ "$draft" = "Add fixed message" ]'
+printf 'Task: T [no-draft]\n' | bash "$agent" -p >/dev/null 2>&1
+failed=$?
+check "-p with [no-draft]: fails" '[ "$failed" = 1 ]'
+
 exit "$fails"

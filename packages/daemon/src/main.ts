@@ -52,6 +52,7 @@ const workspaces = new WorkspaceService({
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
   closeTerminals: (taskId) => terminals.closeAndWait(taskId),
+  programOf: (agent) => agents.programOf(agent),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -137,6 +138,8 @@ const app = await buildServer({
   webDir: config.webDir,
 })
 await app.listen({ host: config.host, port: config.port })
+// After the listen, so the hooks of the agents reach the daemon.
+stages.resumeAgents()
 
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)

@@ -236,8 +236,8 @@ export function WorkspaceRow({
       {comet.stage !== null && <span className="min-w-0 shrink truncate">{comet.stage}</span>}
     </>
   )
-  // Open, the rows under it name the agents.
-  const agent = task.agent !== null && !open && (
+  // The agent that drives the task. Open, the rows under it name the agent of each stage.
+  const agent = task.agent !== null && (
     <span data-tip={agentLabel(task.agent)} className="inline-flex shrink-0">
       <AgentIcon agent={task.agent} />
     </span>
@@ -466,7 +466,7 @@ type AgentRowProps = {
   onOpen: () => void
 }
 
-// A shell with no agent shows a terminal; an agent with no state yet, an empty slot.
+// A shell with no agent shows a terminal; an agent with no state yet, a muted ring.
 function RowGlyph({ row }: { row: ShellRow }) {
   if (row.plain) {
     return (
@@ -476,7 +476,17 @@ function RowGlyph({ row }: { row: ShellRow }) {
     )
   }
   if (row.state === null) {
-    return <span className="size-3.5 shrink-0" aria-hidden="true" />
+    return (
+      <span
+        data-tip="State not known yet"
+        className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted"
+      >
+        {/* The ring of the ready state at the size of the other shell glyphs, in muted. */}
+        <svg width={9} height={9} viewBox="-1 -1 9 9" aria-hidden="true">
+          <circle cx={3.5} cy={3.5} r={2.75} fill="none" stroke="currentColor" strokeWidth={1.5} />
+        </svg>
+      </span>
+    )
   }
   return <ShapeGlyph state={row.state} size={7} />
 }

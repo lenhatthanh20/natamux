@@ -168,12 +168,15 @@ const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
   }),
 }
 
+// In place of a session id: the newest Claude Code session of the folder. No id looks like it.
+export const LAST_SESSION = '--continue'
+
 export type LaunchOptions = {
   program: string
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
-  // A Claude Code session to go on with. Other agents start a new one.
+  // A Claude Code session to go on with, or LAST_SESSION. Other agents start a new one.
   session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
@@ -196,7 +199,11 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
-        ...(options.session === undefined ? [] : ['--resume', quote(options.session)]),
+        ...(options.session === undefined
+          ? []
+          : options.session === LAST_SESSION
+            ? [LAST_SESSION]
+            : ['--resume', quote(options.session)]),
         ...extra,
         ...prompt,
       ].join(' ')
@@ -230,6 +237,32 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
       ].join(' ')
     case 'cursor':
       return [options.program, ...mode, ...extra, ...prompt].join(' ')
+  }
+}
+
+// The command line that runs an agent once, without its interactive screen, for a short answer
+// such as a commit message: the prompt goes on stdin where the agent reads it there, so a long
+// prompt does not hit the limit of a command line. No hooks, no permission flags: it needs no
+// tools, and must not move the task.
+export function oneShotCommand(
+  agent: LaunchableAgent,
+  program: string,
+  prompt: string,
+  platform: NodeJS.Platform = process.platform,
+): { line: string; stdin: string } {
+  const quote = (value: string) => quoteArgument(value, platform)
+  switch (agent) {
+    case 'claude-code':
+      return { line: `${program} -p`, stdin: prompt }
+    case 'codex':
+      return { line: `${program} exec -`, stdin: prompt }
+    case 'gemini':
+      // Gemini puts the text of -p after what it reads on stdin.
+      return { line: `${program} -p ${quote('Answer the request above.')}`, stdin: prompt }
+    case 'copilot':
+      return { line: `${program} -p ${quote(prompt)}`, stdin: '' }
+    case 'cursor':
+      return { line: `${program} -p --output-format text ${quote(prompt)}`, stdin: '' }
   }
 }
 

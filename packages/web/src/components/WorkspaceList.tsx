@@ -429,8 +429,9 @@ export function WorkspaceList({
         </div>
       )}
 
-      {groups.map((group) => {
+      {groups.map((group, index) => {
         const { repo, open, finished, nested } = group
+        const count = open.length + nested.length
         const isCollapsed = !repoOpen(repo.id)
         const hint = isCollapsed ? collapsedHint(group, currentId, now) : null
         const shownFinished = finishedShown(repo.id)
@@ -440,9 +441,12 @@ export function WorkspaceList({
         const menuLabel = `Actions for ${repo.name}`
         // A project that is gone takes no new tasks.
         const gone = !repos.some((known) => known.id === repo.id)
+        // With the gap of the list, 8px between projects.
+        const spaced = index > 0 ? 'mt-1' : ''
         return (
-          <div key={repo.id} className="flex flex-col">
-            <div className="group flex h-7 items-center rounded-md pr-0.5 hover:bg-hover">
+          <div key={repo.id} className={`flex flex-col ${spaced}`}>
+            {/* A band, so each project reads as a block above its rows. */}
+            <div className="group flex h-7 items-center rounded-md bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] pr-0.5 hover:bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]">
               <button
                 type="button"
                 {...roving.item(`repo:${repo.id}`)}
@@ -475,9 +479,13 @@ export function WorkspaceList({
                   aria-hidden="true"
                   className={`sb-chevron shrink-0 text-muted ${isCollapsed ? '' : 'rotate-90'}`}
                 />
-                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-muted" />
-                <span className="min-w-0 truncate font-medium">{repo.name}</span>
-                <CountBadge count={open.length + nested.length} />
+                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-ink-2" />
+                <span className="min-w-0 truncate text-sm font-semibold text-ink">{repo.name}</span>
+                <CountBadge
+                  count={count}
+                  tone="accent"
+                  label={`${count} workspace${count === 1 ? '' : 's'}`}
+                />
                 {hint !== null && (
                   <span
                     className="state-dot"
@@ -500,7 +508,7 @@ export function WorkspaceList({
               {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
-              <ul className="flex flex-col">
+              <ul className="mt-0.5 flex flex-col">
                 {open.map((task) => row(task))}
                 {open.length === 0 && !hiddenInGroup && (
                   <li className="py-1 pl-8 text-xs text-muted">

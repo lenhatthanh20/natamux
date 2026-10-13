@@ -95,6 +95,21 @@ describe('the command registry', () => {
     }
   })
 
+  it('drafts the commit message with Mod+Shift+G only from the commit box', () => {
+    document.body.innerHTML = '<textarea id="commit-message"></textarea><input id="other" />'
+    const draft = commandById('diff.draftCommit')
+    const inWorkspace = context({ workspaceOpen: true, focus: 'field' }).context
+    expect(shortcutOf('diff.draftCommit')).toBe('Mod+Shift+G')
+    expect(draft?.focus).toEqual(['field'])
+
+    document.getElementById('other')?.focus()
+    expect(draft && runnable(draft, inWorkspace)).toBe(false)
+    document.getElementById('commit-message')?.focus()
+    expect(draft && runnable(draft, inWorkspace)).toBe(true)
+    expect(draft && runnable(draft, context({ focus: 'field' }).context)).toBe(false)
+    document.body.innerHTML = ''
+  })
+
   it('documents the keys that move a stage in Project settings', () => {
     const move = commandById('stage.move')
     expect(move?.shortcuts).toEqual(['Alt+ArrowUp', 'Alt+ArrowDown'])
