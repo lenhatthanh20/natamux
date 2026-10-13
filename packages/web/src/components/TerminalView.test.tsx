@@ -1,7 +1,7 @@
 import { CLOSE_GONE, type TaskState } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { gpuBudget } from '../lib/gpu-renderer'
+import { GIVE_BACK_DELAY_MS, gpuBudget } from '../lib/gpu-renderer'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../lib/terminal-cache'
 import { fontStack, saveTerminalFont } from '../lib/terminal-font'
@@ -130,16 +130,27 @@ describe('TerminalView resources', () => {
     expect(fakes.webgl.every((webgl) => webgl.disposed)).toBe(true)
   })
 
-  it('keeps the GPU renderer while hidden, with no timer (AC 33)', async () => {
+  it('keeps the GPU renderer when shown again before the give-back delay', async () => {
     await openTerminal()
     expect(fakes.webgl).toHaveLength(1)
 
     setVisible(false)
-    act(() => vi.advanceTimersByTime(60_000))
+    act(() => vi.advanceTimersByTime(GIVE_BACK_DELAY_MS - 1))
+    setVisible(true)
+    act(() => vi.advanceTimersByTime(GIVE_BACK_DELAY_MS))
+    expect(fakes.webgl).toHaveLength(1)
     expect(fakes.webgl[0]?.disposed).toBe(false)
+  })
+
+  it('gives the GPU renderer back while hidden, and takes one again when shown', async () => {
+    await openTerminal()
+    setVisible(false)
+    act(() => vi.advanceTimersByTime(GIVE_BACK_DELAY_MS))
+    expect(fakes.webgl[0]?.disposed).toBe(true)
 
     setVisible(true)
-    expect(fakes.webgl).toHaveLength(1)
+    expect(fakes.webgl).toHaveLength(2)
+    expect(fakes.webgl[1]?.disposed).toBe(false)
   })
 
   it('keeps the output that arrives while hidden, in order', async () => {

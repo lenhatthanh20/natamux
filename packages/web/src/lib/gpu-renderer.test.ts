@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createGpuBudget,
+  GIVE_BACK_DELAY_MS,
   GPU_CONTEXTS,
   type GpuBudget,
   gpuRenderer,
@@ -8,6 +9,7 @@ import {
   type Renderer,
   watchVisible,
 } from './gpu-renderer'
+import { MAX_PANES } from './panes'
 
 type Addon = { disposed: boolean; lose: () => void; dispose(): void }
 
@@ -114,15 +116,59 @@ describe('gpuRenderer', () => {
     expect(budget.inUse()).toBe(0)
   })
 
-  it('keeps the renderer while hidden, for any time, with no timer (AC 33)', () => {
+  it('keeps the renderer when shown again before the give-back delay', () => {
     vi.useFakeTimers()
     const budget = createGpuBudget()
-    const { addons, renderer } = handle(budget)
+    const { addons, load, onSwitch, renderer } = handle(budget)
     renderer.setVisible(false)
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS - 1)
+    renderer.setVisible(true)
     vi.advanceTimersByTime(60 * 60 * 1000)
     expect(addons[0]?.disposed).toBe(false)
     expect(renderer.hasRenderer()).toBe(true)
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(onSwitch).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('gives the renderer back after the delay, and takes one again at the next show', () => {
+    vi.useFakeTimers()
+    const budget = createGpuBudget()
+    const { addons, onSwitch, renderer } = handle(budget)
+    renderer.setVisible(false)
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS)
+    expect(addons[0]?.disposed).toBe(true)
+    expect(renderer.hasRenderer()).toBe(false)
+    expect(budget.inUse()).toBe(0)
+    expect(onSwitch).toHaveBeenCalledTimes(2)
+
+    renderer.setVisible(true)
+    expect(addons).toHaveLength(2)
+    expect(addons[1]?.disposed).toBe(false)
+    expect(renderer.hasRenderer()).toBe(true)
+    expect(budget.inUse()).toBe(1)
+  })
+
+  it('stays on the DOM at the show after a give back when the budget is full of shown ones', () => {
+    vi.useFakeTimers()
+    const budget = createGpuBudget(1)
+    const first = handle(budget)
+    first.renderer.setVisible(false)
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS)
+    const second = handle(budget)
+    first.renderer.setVisible(true)
+    expect(first.renderer.hasRenderer()).toBe(false)
+    expect(second.renderer.hasRenderer()).toBe(true)
+  })
+
+  it('drops the give-back timer on dispose', () => {
+    vi.useFakeTimers()
+    const budget = createGpuBudget()
+    const { onSwitch, renderer } = handle(budget)
+    renderer.setVisible(false)
+    renderer.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(onSwitch).toHaveBeenCalledTimes(1)
   })
 
   it('loads once per terminal when 6 terminals are shown and hidden 10 times (AC 33)', () => {
@@ -365,8 +411,9 @@ describe('gpuRenderer', () => {
     expect(budget.inUse()).toBe(0)
   })
 
-  it('has 6 contexts by default', () => {
+  it('has 6 contexts by default, one per pane of a full grid', () => {
     expect(createGpuBudget().size).toBe(6)
+    expect(GPU_CONTEXTS).toBe(MAX_PANES)
   })
 })
 

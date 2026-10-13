@@ -15,7 +15,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import { keyBelongsToShell } from './dispatch'
 import { ICON_FONT } from './fonts'
-import { type GpuRenderer, gpuRenderer } from './gpu-renderer'
+import { type GpuRenderer, gpuRenderer, type Renderer } from './gpu-renderer'
 import { closeSocket } from './live'
 import {
   isQueryReply,
@@ -91,14 +91,38 @@ function safeFit(fit: FitAddon): void {
 
 // Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
 // drops the context, the terminal keeps or goes back to drawing with the DOM.
-function loadWebgl(terminal: Terminal, onLost: () => void): WebglAddon | null {
+function loadWebgl(terminal: Terminal, onLost: () => void): Renderer | null {
   try {
     const webgl = new WebglAddon()
     webgl.onContextLoss(onLost)
+    // The addon adds one canvas, its own. Asking any other canvas for a context would make one.
+    const before = new Set(terminal.element?.querySelectorAll('canvas'))
     terminal.loadAddon(webgl)
-    return webgl
+    const after = terminal.element?.querySelectorAll('canvas') ?? []
+    const canvas = [...after].find((one) => !before.has(one))
+    return {
+      dispose() {
+        webgl.dispose()
+        // xterm drops the canvas but keeps its context, which holds GPU memory until garbage
+        // collection and counts toward the browser's limit of contexts. The addon's loss
+        // listener went with dispose, so this loss never reaches onLost.
+        const gl = canvas?.getContext('webgl2')
+        if (gl && !gl.isContextLost()) {
+          gl.getExtension('WEBGL_lose_context')?.loseContext()
+        }
+      },
+    }
   } catch {
     return null
+  }
+}
+
+// check() throws on a font string it cannot parse; load() then fails too, and is ignored.
+function fontLoaded(spec: string): boolean {
+  try {
+    return document.fonts?.check(spec) === true
+  } catch {
+    return false
   }
 }
 
@@ -433,8 +457,14 @@ export function createTerminalSession(options: {
   // The web font may still be loading when the terminal measures its cells. Once it is loaded,
   // the terminal measures again; a hidden one at its next show, as it cannot measure now.
   const whenFontLoads = (font: ResolvedTerminalFont) => {
+    const spec = `${Math.round(font.size)}px ${font.stack}`
+    // Already loaded: the cells were measured with it, and measuring again would only redraw
+    // every glyph, a long task when a view opens several terminals at once.
+    if (fontLoaded(spec)) {
+      return
+    }
     document.fonts
-      ?.load(`${Math.round(font.size)}px ${font.stack}`)
+      ?.load(spec)
       .then(() => {
         if (disposed) {
           return
@@ -488,8 +518,10 @@ export function createTerminalSession(options: {
     if (disposed || value === onScreen) {
       return
     }
-    onScreen = value
+    // Before onScreen changes: a renderer taken on show then needs no fit of its own, as the fit
+    // below covers it.
     gpu?.setVisible(value)
+    onScreen = value
     if (value) {
       applyTheme()
       applyFont()
@@ -808,6 +840,9 @@ export function createTerminalSession(options: {
     if (disposed) {
       return
     }
+    // Freed with xterm below. Hidden first, it would only start its give-back timer.
+    const disposing = gpu
+    gpu = null
     setOnScreen(false)
     disposed = true
     stopObserving()
@@ -835,7 +870,7 @@ export function createTerminalSession(options: {
     // is taken off the page now and disposed of a moment later.
     host.remove()
     setTimeout(() => {
-      gpu?.dispose()
+      disposing?.dispose()
       terminal.dispose()
     }, DISPOSE_DELAY_MS)
   }
