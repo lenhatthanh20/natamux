@@ -108,8 +108,9 @@ figure { margin: 0; }
 .nav {
   position: sticky; top: 0; z-index: 40;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: saturate(1.4) blur(14px);
+  /* Prefixed first: the CSS minifier keeps only the last of the pair. */
   -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  backdrop-filter: saturate(1.4) blur(14px);
   border-bottom: 1px solid var(--line);
 }
 .nav-row { display: flex; align-items: center; gap: 28px; height: 60px; }
