@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  plainText,
   scrollbackLines,
   TERMINAL_HISTORY_BYTES,
   TERMINAL_SCROLLBACK_MAX_LINES,
@@ -62,5 +63,30 @@ describe('terminal messages', () => {
     expect(accepts({ type: 'replayed', offset: -1 })).toBe(false)
     expect(accepts({ type: 'output', data: 'a' })).toBe(false)
     expect(accepts({ type: 'ping' })).toBe(false)
+  })
+})
+
+describe('plainText', () => {
+  it.each([
+    ['colors', '\x1b[1;31mred\x1b[0m', 'red'],
+    ['a line erase', 'a\x1b[2Kb', 'ab'],
+    ['the end of a paste', 'a\x1b[201~b', 'ab'],
+    ['a link', '\x1b]8;;https://x\x1b\\x\x1b]8;;\x1b\\', 'x'],
+    ['a title ended by BEL', '\x1b]0;title\x07a', 'a'],
+    ['a lone escape', 'a\x1bb\x1b', 'ab'],
+    ['a sequence cut at the end', 'a\x1b[3', 'a[3'],
+    ['CRLF and a lone CR', 'a\r\nb\rc', 'a\nb\nc'],
+    ['a BOM on each line', '\ufeffa\n\ufeffb', 'a\nb'],
+    ['other control bytes', 'a\x00\x07\x08b\x7f\x9b', 'ab'],
+  ])('takes out %s', (_, text, plain) => {
+    expect(plainText(text)).toBe(plain)
+  })
+
+  it.each([
+    ['tabs, line breaks and letters of any script', 'a\tb\n\nTiếng Việt 日本 ✓ 🚀👩‍💻\n'],
+    ['plain text', 'Run the tests, then fix them.'],
+    ['nothing', ''],
+  ])('keeps %s as it is', (_, text) => {
+    expect(plainText(text)).toBe(text)
   })
 })

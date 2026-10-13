@@ -96,6 +96,33 @@ describe('checkOnCi', () => {
     expect(deps.calls.at(-1)).toEqual(['run', 'view', '9', '--log-failed'])
   })
 
+  it('cleans colors, a BOM and carriage returns out of the log the agent gets', async () => {
+    const failed = run({ workflowName: 'E2E', conclusion: 'failure', url: 'u7' })
+    const log = [
+      '\ufefftest\t\x1b[31mFAIL\x1b[0m a.test.ts\r\n',
+      '\x1b]8;;u\x07link\x1b]8;;\x07\r',
+      'next\x07\n',
+    ].join('')
+
+    const result = await checkOnCi(input, fakes([[failed]], log))
+
+    expect(result.logs).toEqual(['CI E2E failure: u7\ntest\tFAIL a.test.ts\nlink\nnext\n'])
+  })
+
+  it('keeps the end of the log within its limit once the colors are out', async () => {
+    const failed = run({ workflowName: 'E2E', conclusion: 'failure', url: 'u7' })
+    const log = `${'\x1b[32mok\x1b[0m\r\n'.repeat(1000)}\x1b[31mError: 2 tests failed\x1b[0m\n`
+
+    const result = await checkOnCi(input, fakes([[failed]], log))
+
+    const [kept = ''] = result.logs ?? []
+    expect(kept).toMatch(/Error: 2 tests failed\n$/)
+    expect(kept).not.toContain('\x1b')
+    expect(kept).not.toContain('\r')
+    expect(kept.length).toBeLessThanOrEqual('CI E2E failure: u7\n'.length + 3000)
+    expect(kept.length).toBeGreaterThan(2900)
+  })
+
   it('names every failed run in order, and only those', async () => {
     const runs = [
       run({ databaseId: 1, workflowName: 'Build', conclusion: 'failure', url: 'u1' }),
