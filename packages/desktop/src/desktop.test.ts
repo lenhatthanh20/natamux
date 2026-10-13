@@ -211,6 +211,28 @@ describe('startup', () => {
     expect(calls).toBe(3)
   })
 
+  it('stops at the ready message of the daemon, without another look at /health', async () => {
+    let calls = 0
+    const refused = (async () => {
+      calls += 1
+      throw new Error('refused')
+    }) as typeof fetch
+    let ready = (): void => undefined
+    const waiting = waitForHealth('http://x/health', {
+      timeoutMs: 60_000,
+      exited: () => false,
+      ready: new Promise<void>((resolve) => {
+        ready = resolve
+      }),
+      fetch: refused,
+      stepMs: 60_000,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    ready()
+    await waiting
+    expect(calls).toBe(1)
+  })
+
   it('stops waiting when the daemon exited, or after the time', async () => {
     const refused = (async () => {
       throw new Error('refused')

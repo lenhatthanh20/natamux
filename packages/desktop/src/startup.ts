@@ -17,16 +17,31 @@ export function freePort(preferred: number): Promise<number> {
   return tryPort(preferred).catch(() => tryPort(0))
 }
 
-// Waits until the daemon answers /health. Stops early when the daemon has exited.
+// Waits until the daemon says it is ready, or answers /health when that message does not come.
+// Stops early when the daemon has exited.
 export async function waitForHealth(
   url: string,
-  options: { timeoutMs: number; exited: () => boolean; fetch?: typeof fetch; stepMs?: number },
+  options: {
+    timeoutMs: number
+    exited: () => boolean
+    ready?: Promise<void>
+    fetch?: typeof fetch
+    stepMs?: number
+  },
 ): Promise<void> {
   const get = options.fetch ?? fetch
   const until = Date.now() + options.timeoutMs
+  const ready = options.ready ?? new Promise<void>(() => undefined)
+  let isReady = false
+  void ready.then(() => {
+    isReady = true
+  })
   while (Date.now() < until) {
     if (options.exited()) {
       throw new Error('The daemon stopped while it started')
+    }
+    if (isReady) {
+      return
     }
     try {
       const response = await get(url)
@@ -36,7 +51,10 @@ export async function waitForHealth(
     } catch {
       // Not listening yet.
     }
-    await new Promise((resolve) => setTimeout(resolve, options.stepMs ?? 200))
+    await Promise.race([
+      ready,
+      new Promise((resolve) => setTimeout(resolve, options.stepMs ?? 200)),
+    ])
   }
   throw new Error(`The daemon did not answer at ${url} in ${options.timeoutMs / 1000} seconds`)
 }

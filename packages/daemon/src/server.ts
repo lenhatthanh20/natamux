@@ -116,7 +116,29 @@ type ServerOptions = {
   webDir?: string
   // Where agents keep the user's skills. The home folder by default.
   skillsHome?: string
+  // Routes that may run the user's programs wait for it: under the desktop app the PATH of the
+  // login shell comes after the start (see login-path.ts). Ready at once by default.
+  ready?: Promise<unknown>
 }
+
+// GET routes that only read the daemon's memory, files and index, and never run a program, so
+// they answer before the login PATH came. Every other route may run git, gh, a shell or an agent.
+// A list of the safe ones, so a new route waits until someone checks it.
+export const NO_PROGRAM_ROUTES = new Set([
+  '/tasks',
+  '/tasks/:id',
+  '/tasks/:id/events',
+  '/tasks/:id/files',
+  '/tasks/:id/files/:name',
+  '/tasks/:id/attachments',
+  '/tasks/:id/attachments/:name',
+  '/templates',
+  '/activity',
+  '/repos',
+  '/repos/:id/settings',
+  '/repos/:id/skills',
+  '/events',
+])
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
 const hookParamsSchema = z.object({ agent: z.string().min(1) })
@@ -239,6 +261,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const url = new URL(request.url, 'http://localhost')
     if (url.pathname === '/health' || servesPage?.(request) === true) {
       return
+    }
+    if (request.method !== 'GET' || !NO_PROGRAM_ROUTES.has(request.routeOptions.url ?? '')) {
+      await options.ready
     }
     if (
       request.method === 'GET' &&

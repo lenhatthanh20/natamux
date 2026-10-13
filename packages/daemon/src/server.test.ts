@@ -21,7 +21,7 @@ import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
-import { buildServer, isAuthorized } from './server.js'
+import { buildServer, isAuthorized, NO_PROGRAM_ROUTES } from './server.js'
 import { archiveDir } from './stage-files.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
@@ -41,6 +41,7 @@ let ptys: FakePty[]
 let bus: EventBus
 let webIndexPath: string
 let agentAnswer: () => Promise<string>
+let serverOptions: Parameters<typeof buildServer>[0]
 const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
 beforeEach(async () => {
@@ -88,7 +89,7 @@ beforeEach(async () => {
     cwdOf: () => repo.dir,
     gh: async () => JSON.stringify({ state: 'MERGED', isDraft: false, statusCheckRollup: [] }),
   })
-  app = await buildServer({
+  serverOptions = {
     service,
     workspaces,
     terminals,
@@ -121,7 +122,8 @@ beforeEach(async () => {
     webIndexPath,
     webDir: join(repo.root, 'web'),
     skillsHome: join(repo.root, 'home'),
-  })
+  }
+  app = await buildServer(serverOptions)
 })
 
 afterEach(async () => {
@@ -239,6 +241,49 @@ describe('authentication', () => {
   it('does not accept the token in the query string outside /events', async () => {
     const response = await app.inject({ method: 'GET', url: `/tasks?token=${TOKEN}` })
     expect(response.statusCode).toBe(401)
+  })
+})
+
+describe('before the login PATH came', () => {
+  it('answers what runs no program at once, and holds the rest until it came', async () => {
+    let ready = (): void => undefined
+    const waiting = await buildServer({
+      ...serverOptions,
+      ready: new Promise<void>((resolve) => {
+        ready = resolve
+      }),
+    })
+    try {
+      expect((await waiting.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200)
+      const page = await waiting.inject({ method: 'GET', url: '/index.html' })
+      expect(page.body).toBe(PAGE)
+      const tasks = await waiting.inject({ method: 'GET', url: '/tasks', headers: authorization })
+      expect(tasks.json()).toEqual({ tasks: [] })
+      const repos = await waiting.inject({ method: 'GET', url: '/repos', headers: authorization })
+      expect(repos.statusCode).toBe(200)
+      const refused = await waiting.inject({ method: 'GET', url: '/tasks' })
+      expect(refused.statusCode).toBe(401)
+
+      let answered = false
+      const branches = waiting
+        .inject({ method: 'GET', url: '/git/branches', headers: authorization })
+        .then((response) => {
+          answered = true
+          return response
+        })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(answered).toBe(false)
+      ready()
+      expect((await branches).json()).toEqual({ branches: ['main'], current: 'main' })
+    } finally {
+      await waiting.close()
+    }
+  })
+
+  it('lists only GET routes that exist', () => {
+    for (const url of NO_PROGRAM_ROUTES) {
+      expect(app.hasRoute({ method: 'GET', url })).toBe(true)
+    }
   })
 })
 
