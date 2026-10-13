@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.18 (2026-10-14)
+
+- The bar of stages under the **Overview** figures in **Progress** of the details is gone. It redrew every second while a stage ran. The stage list below still shows each stage.
+
 ## v0.1.17 (2026-10-13)
 
 - The app no longer waits for your login shell before it starts. The dashboard shows your tasks at once; changes, branches, terminals and agents start when the shell's `PATH` is read.
