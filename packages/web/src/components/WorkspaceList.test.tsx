@@ -1009,7 +1009,7 @@ describe('a task row', () => {
     for (const [currentId, title] of [
       ['T-0001', 'No agent'],
       ['T-0002', 'Card'],
-    ]) {
+    ] as const) {
       rerender({ tasks: [none, card, done], pinnedIds: ['T-0003'], currentId, loadTerminals })
       await waitFor(() => expect(rowOf(title).getAttribute('aria-expanded')).toBe('true'))
       expect(icons(title)).toHaveLength(0)
