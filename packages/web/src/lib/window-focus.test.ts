@@ -33,7 +33,7 @@ describe('window focus', () => {
   // Every endless animation must stop, or the browser keeps drawing every frame.
   it('stops every endless animation while inactive', () => {
     const endless = [...css.matchAll(/^([^{}@\n][^{}]*)\{[^}]*animation:[^;]*infinite/gm)]
-      .map((match) => match[1].trim().split('\n').at(-1) ?? '')
+      .map((match) => (match[1] ?? '').trim().split('\n').at(-1) ?? '')
       // The skeleton only shows while something loads.
       .filter((selector) => selector !== '.hm-skeleton')
     const inactive = css
