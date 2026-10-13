@@ -325,7 +325,43 @@ describe('the stage cards', () => {
     expect(within(plan).getByText('×2')).toBeTruthy()
     expect(within(plan).getByText(/you approve/)).toBeTruthy()
     expect(within(plan).getByText('Sent back 1×')).toBeTruthy()
-    expect(within(plan).getByText('Add the error cases.')).toBeTruthy()
+    expect(within(plan).queryByText('Add the error cases.')).toBeNull()
+  })
+
+  it('counts each send back but never shows the reason', async () => {
+    const reason = `**Check on CI** <b>x</b> error cases\n${'docs/a.md: no source. '.repeat(90)}`
+    progress({
+      task: FULL_TASK,
+      events: [
+        ...FULL_EVENTS,
+        stored(8, 'stage.reopened', '2026-10-10T08:25:00.000Z', { to: 'plan', reason }),
+        stored(9, 'stage.started', '2026-10-10T08:26:00.000Z', { stage: 'plan' }),
+      ],
+    })
+
+    const plan = await screen.findByRole('article', { name: 'Plan' })
+    expect(within(plan).getByText('Sent back 2×')).toBeTruthy()
+    expect(within(plan).queryByText(/error cases|no source/)).toBeNull()
+  })
+
+  it('shows the send back chip for an empty reason, and none without a send back', async () => {
+    const events = (payload: Record<string, unknown>) => [
+      ...FULL_EVENTS.slice(0, 5),
+      stored(6, 'stage.reopened', '2026-10-10T08:20:00.000Z', { to: 'plan', ...payload }),
+      stored(7, 'stage.started', '2026-10-10T08:21:00.000Z', { stage: 'plan' }),
+    ]
+    const { update } = progress({ task: FULL_TASK, events: events({ reason: '' }) })
+
+    const plan = await screen.findByRole('article', { name: 'Plan' })
+    expect(within(plan).getByText('Sent back 1×')).toBeTruthy()
+
+    // The chip needs a reason in the event, as before this change.
+    update({ ...FULL_TASK, updatedAt: '2026-10-10T08:22:00.000Z' }, events({}))
+    await waitFor(() => expect(within(plan).queryByText(/Sent back/)).toBeNull())
+
+    update({ ...FULL_TASK, updatedAt: '2026-10-10T08:23:00.000Z' }, FULL_EVENTS.slice(0, 5))
+    await waitFor(() => expect(within(plan).queryByText('×2')).toBeNull())
+    expect(within(plan).queryByText(/Sent back/)).toBeNull()
   })
 
   it('shows one line with the finish rule for a stage not reached yet', async () => {

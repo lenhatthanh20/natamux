@@ -214,3 +214,44 @@ test('runs a stage with its own prompt and moves on by itself', async ({ page, r
     .poll(async () => (await taskOf(request, task.id)).stage, { timeout: 30_000 })
     .toBe('release')
 })
+
+// Case 5 of the test spec of T-0029: the agent gets the reason, the card shows only the count.
+test('sends a stage back with a reason the card does not show', async ({ page, request }) => {
+  test.setTimeout(120_000)
+  const title = `Send back e2e ${Date.now()}`
+  const reason = `Add the error cases ${Date.now()}`
+  const task = await newTask(request, title)
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toMatch(/^(ready|review)$/)
+  await request.post(`/api/tasks/${task.id}/events`, {
+    headers,
+    data: { source: 'human', type: 'state.overridden', payload: { to: 'ready', stage: 'spec' } },
+  })
+  await request.post(`/api/tasks/${task.id}/workspace`, { headers })
+
+  const tabs = await openTask(page, title)
+  await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  const rows = page.getByRole('region', { name: 'Terminal screen' }).first().locator('.xterm-rows')
+  await expect(rows).toContainText('Done with this stage.', { timeout: 30_000 })
+
+  // The images have no natamux CLI, so the stage is reported and sent back through the API.
+  await request.post(`/api/tasks/${task.id}/stage`, {
+    headers,
+    data: { action: 'report', stage: 'spec' },
+  })
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toBe('review')
+  await request.post(`/api/tasks/${task.id}/stage`, {
+    headers,
+    data: { action: 'reopen', to: 'spec', reason },
+  })
+  await expect(rows).toContainText(`What to change: ${reason}`, { timeout: 30_000 })
+
+  const details = page.getByRole('complementary', { name: /^Details of T-/ })
+  await details.getByRole('tab', { name: 'Progress' }).click()
+  const spec = details.getByRole('list', { name: 'Stages' }).getByRole('article', { name: 'Spec' })
+  await expect(spec.getByText('Sent back 1×')).toBeVisible()
+  await expect(spec.getByText(reason)).toHaveCount(0)
+})
