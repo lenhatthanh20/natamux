@@ -247,12 +247,13 @@ A hard stage can run as a Claude Code workflow: the agent splits the work across
 |---|---|---|---|
 | `manual` | Nobody; you type it | Text, links | Yes |
 | `github-issue` | The daemon, with `gh issue view --comments` | Issue number or address | Yes |
-| `skill` | The task's agent, with prompt `/<skill> <ref>` | The ticket key or address | Yes |
+| `skill` | The task's agent, with prompt `/<skill> <ref>` | The skill (picked in the dialog or configured), and the record key or address | Yes |
 | `mcp` | The task's agent, told which MCP server to use | The ticket key or address | Yes |
 | `url` | The daemon fetches the page | An address | Later |
 
 Agent sources (`skill`, `mcp`):
 - The agent runs in the task's worktree, with the prompt from the project settings.
+- A skill needs no entry in the project settings. The **Start a task** dialog offers **An agent skill** when `GET /repos/:id/skills` lists one. The user picks the skill with the skill picker; the task stores it in `context.skill`. Start needs an agent: a plain shell cannot run a skill.
 - It writes `context.md`.
 - Natamux does not set up MCP servers or skills. The agent uses the ones it already has (its user settings or the repository's `.mcp.json`).
 
@@ -261,11 +262,12 @@ The `context` stage ends when `context.md` exists. With gate `manual` you read i
 ### 4.2 Task fields
 
 ```ts
-context: { source: 'manual' | 'github-issue' | 'skill' | 'mcp'; ref: string } | null
+context: { source: 'manual' | 'github-issue' | 'skill' | 'mcp'; name?: string; skill?: string; ref: string } | null
 issue: { provider: 'github' | string; key: string; url: string } | null
 ```
 
 - `context` says where the context came from.
+- `name` picks a configured skill or MCP source. `skill` is a skill picked in the dialog; the daemon runs it as `{ type: 'skill', name: skill, skill }` and skips the settings. A task without `skill` works as before.
 - `issue` is the link to the tracker item: `#42` on GitHub, `ABC-123` on Jira.
 - A task imported from an issue gets both. Import now finds earlier imports by `issue.url`, not by the "Imported from" line in the notes. The old line is still read, for tasks made before this change.
 

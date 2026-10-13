@@ -1,4 +1,4 @@
-import { DEFAULT_PROJECT_SETTINGS, type Task } from '@natamux/core'
+import { DEFAULT_PROJECT_SETTINGS, type SkillList, type Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -83,6 +83,20 @@ const TWO_SKILLS: LoadedSettings = {
   },
 }
 
+// One skill that some agents have, so the dialog offers An agent skill.
+const SKILLS: SkillList = {
+  skills: [
+    {
+      name: 'jira-ticket',
+      description: 'Reads a Jira ticket',
+      origin: 'user',
+      agents: ['claude-code'],
+      path: '/home/me/.claude/skills/jira-ticket/SKILL.md',
+    },
+  ],
+  notices: [],
+}
+
 type Repos = { id: string; name: string }[]
 
 const REPOS: Repos = [
@@ -92,6 +106,7 @@ const REPOS: Repos = [
 
 type DialogOptions = {
   loadSettings?: (repo: string) => Promise<LoadedSettings>
+  loadSkills?: (repo: string) => Promise<SkillList>
   create?: (input: NewWorkspaceInput) => Promise<Task>
   initialRepo?: string
   repos?: Repos
@@ -99,6 +114,7 @@ type DialogOptions = {
 
 function dialog({
   loadSettings,
+  loadSkills,
   create: makeTask,
   initialRepo,
   repos = REPOS,
@@ -114,6 +130,7 @@ function dialog({
         onCreated={vi.fn()}
         onClose={vi.fn()}
         {...(loadSettings === undefined ? {} : { loadSettings })}
+        {...(loadSkills === undefined ? {} : { loadSkills })}
         {...(initialRepo === undefined ? {} : { initialRepo })}
       />
     </QueryClientProvider>
@@ -523,6 +540,233 @@ describe('the Start a task dialog', () => {
     await user.click(screen.getByLabelText('Task notes'))
     await user.keyboard('Keep the URL{Meta>}{Enter}{/Meta}{Control>}{Enter}{/Control}')
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe('a skill picked in the Start a task dialog', () => {
+  const sourceOptions = async () =>
+    [
+      ...((await screen.findByLabelText('Where the context comes from')) as HTMLSelectElement)
+        .options,
+    ].map((option) => option.textContent)
+
+  // Picks An agent skill, and the skill when one is named.
+  async function pickSkill(user: ReturnType<typeof userEvent.setup>, skill?: string) {
+    await screen.findByRole('option', { name: 'An agent skill' })
+    await user.selectOptions(
+      screen.getByLabelText('Where the context comes from'),
+      'An agent skill',
+    )
+    if (skill !== undefined) {
+      await user.click(screen.getByRole('button', { name: 'Pick a skill' }))
+      await user.click(
+        within(screen.getByRole('group', { name: 'Skills' })).getByRole('button', { name: skill }),
+      )
+    }
+  }
+
+  it('offers An agent skill when the agents have a skill', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    await screen.findByRole('option', { name: 'An agent skill' })
+    expect(await sourceOptions()).toEqual(['My notes', 'A GitHub issue', 'An agent skill'])
+  })
+
+  it('offers it next to My notes, with no settings', async () => {
+    dialog({ loadSkills: async () => SKILLS })
+    await screen.findByRole('option', { name: 'An agent skill' })
+    expect(await sourceOptions()).toEqual(['My notes', 'An agent skill'])
+  })
+
+  it('does not offer it with no skills, or when the skills fail to load', async () => {
+    dialog({
+      loadSettings: async () => WITH_ISSUES,
+      loadSkills: async () => ({ skills: [], notices: [] }),
+    })
+    expect(await sourceOptions()).toEqual(['My notes', 'A GitHub issue'])
+    cleanup()
+    dialog({
+      loadSettings: async () => WITH_ISSUES,
+      loadSkills: async () => {
+        throw new Error('No daemon')
+      },
+    })
+    await waitFor(() => expect(screen.getByLabelText('Where the context comes from')).toBeTruthy())
+    expect(await sourceOptions()).toEqual(['My notes', 'A GitHub issue'])
+  })
+
+  it('shows the Skill and Reference fields, and hides the notes', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await pickSkill(user)
+
+    expect(fieldLabels(contextGroup())).toEqual([
+      'Title',
+      'Context from',
+      'Skill',
+      'Reference',
+      'Attachments',
+    ])
+    expect(screen.queryByLabelText('Task notes')).toBeNull()
+  })
+
+  it('names the picked skill in the field and the hints', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await pickSkill(user, 'jira-ticket')
+
+    expect(screen.queryByRole('group', { name: 'Skills' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'jira-ticket' })).toBeTruthy()
+    expect(contextHint()).toBe(
+      "The agent runs the jira-ticket skill on the reference, and reads what it finds and the files as the task's context.",
+    )
+    expect(
+      screen.getByRole('textbox', {
+        name: 'Reference of the context',
+        description: 'The key or address of the record. The jira-ticket skill reads it.',
+      }),
+    ).toBeTruthy()
+  })
+
+  it('asks for a skill, a reference and an agent before it starts', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await pickSkill(user)
+    expect(startButton().getAttribute('data-tip')).toBe('Pick a skill')
+
+    await user.click(screen.getByRole('button', { name: 'Pick a skill' }))
+    await user.click(screen.getByRole('button', { name: 'jira-ticket' }))
+    expect(startButton().getAttribute('data-tip')).toBe('Enter the reference of the context')
+
+    await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
+    await user.selectOptions(screen.getByLabelText('Agent'), '')
+    expect(startButton().getAttribute('data-tip')).toBe('Pick an agent to run the skill')
+    expect(startButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('sends the picked skill and the reference, and no notes', async () => {
+    const { create } = dialog({
+      loadSettings: async () => WITH_ISSUES,
+      loadSkills: async () => SKILLS,
+    })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.type(screen.getByLabelText('Task notes'), 'Keep the old URL')
+    await pickSkill(user, 'jira-ticket')
+    await user.type(screen.getByLabelText('Reference of the context'), ' ABC-1 ')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      skill: 'jira-ticket',
+      ref: 'ABC-1',
+    })
+  })
+
+  it('adds the option once the skills arrive, and not before', async () => {
+    let arrive: (list: SkillList) => void = () => {}
+    dialog({
+      loadSettings: async () => WITH_ISSUES,
+      loadSkills: () =>
+        new Promise((resolve) => {
+          arrive = resolve
+        }),
+    })
+    expect(await sourceOptions()).toEqual(['My notes', 'A GitHub issue'])
+    arrive(SKILLS)
+    await screen.findByRole('option', { name: 'An agent skill' })
+  })
+
+  it('does not offer it when no skills are loaded at all', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES })
+    expect(await sourceOptions()).toEqual(['My notes', 'A GitHub issue'])
+  })
+
+  it('goes back to My notes in a project whose agents have no skill', async () => {
+    dialog({
+      loadSettings: async () => WITH_ISSUES,
+      loadSkills: async (repo) => (repo === 'web' ? { skills: [], notices: [] } : SKILLS),
+    })
+    const user = userEvent.setup()
+    await pickSkill(user, 'jira-ticket')
+    await user.selectOptions(screen.getByLabelText('Project'), 'web')
+
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'An agent skill' })).toBeNull())
+    expect(screen.getByLabelText('Task notes')).toBeTruthy()
+    expect(fieldLabels(contextGroup())).not.toContain('Skill')
+  })
+
+  it('says the picked skill reads the reference before a skill is picked', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await pickSkill(user)
+
+    expect(contextHint()).toBe(
+      "The agent runs the picked skill on the reference, and reads what it finds and the files as the task's context.",
+    )
+    expect(
+      screen.getByRole('textbox', {
+        name: 'Reference of the context',
+        description: 'The key or address of the record. The picked skill reads it.',
+      }),
+    ).toBeTruthy()
+  })
+
+  it('sets no skill when the search matches none', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await pickSkill(user)
+    await user.click(screen.getByRole('button', { name: 'Pick a skill' }))
+    await user.type(screen.getByLabelText('Search skills'), 'zzz')
+
+    expect(screen.getByText('No skill matches “zzz”.')).toBeTruthy()
+    expect(startButton().getAttribute('data-tip')).toBe('Pick a skill')
+  })
+
+  it('hides the Skill field and shows the notes again for My notes', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await pickSkill(user, 'jira-ticket')
+    await user.selectOptions(screen.getByLabelText('Where the context comes from'), 'manual')
+
+    expect(fieldLabels(contextGroup())).not.toContain('Skill')
+    expect(screen.getByLabelText('Task notes')).toBeTruthy()
+  })
+
+  it('starts once the skill, the reference and an agent are set', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await pickSkill(user, 'jira-ticket')
+    await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
+
+    expect(startButton().getAttribute('aria-disabled')).not.toBe('true')
+    expect(startButton().hasAttribute('data-tip')).toBe(false)
+  })
+
+  it('keeps a skill from the settings apart from An agent skill', async () => {
+    const { create } = dialog({
+      loadSettings: async () => EVERY_SOURCE,
+      loadSkills: async () => SKILLS,
+    })
+    const user = userEvent.setup()
+    await screen.findByRole('option', { name: 'An agent skill' })
+    expect(await sourceOptions()).toContain('Ticket (skill)')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.selectOptions(screen.getByLabelText('Where the context comes from'), 'skill:Ticket')
+    expect(fieldLabels(contextGroup())).not.toContain('Skill')
+    await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]?.context).toEqual({
+      source: 'skill',
+      name: 'Ticket',
+      ref: 'ABC-1',
+    })
   })
 })
 

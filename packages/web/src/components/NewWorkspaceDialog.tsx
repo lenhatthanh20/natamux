@@ -1,5 +1,6 @@
-import type { ContextSource, ContextSourceType, Repo, Task } from '@natamux/core'
+import type { ContextSource, ContextSourceType, Repo, SkillList, Task } from '@natamux/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { Sparkles } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
 import { AGENT_CHOICES } from '../lib/agents'
 import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
@@ -8,6 +9,7 @@ import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib
 import { createBlockedReason } from '../lib/workspace'
 import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { AttachmentField, useAttachments } from './AttachmentField'
+import { SkillPicker } from './SkillPicker'
 import { Button } from './ui/Button'
 import { Combobox } from './ui/Combobox'
 import { Dialog } from './ui/Dialog'
@@ -26,9 +28,18 @@ type NewWorkspaceDialogProps = {
   onClose: () => void
   // The project settings, for the context sources it offers.
   loadSettings?: (repo: string) => Promise<LoadedSettings>
+  // The skills of the agents, so any of them can be the context source.
+  loadSkills?: (repo: string) => Promise<SkillList>
 }
 
+// Any skill the agents have, picked in the dialog. Its empty name keeps its key apart from the
+// skills in the project settings.
+const AGENT_SKILL: ContextSource = { type: 'skill', name: '', skill: '' }
+
 function sourceLabel(source: ContextSource): string {
+  if (source === AGENT_SKILL) {
+    return 'An agent skill'
+  }
   switch (source.type) {
     case 'manual':
       return 'My notes'
@@ -48,8 +59,23 @@ function sourceKey(source: ContextSource): string {
   return 'name' in source ? `${source.type}:${source.name}` : source.type
 }
 
+// The skill a source runs. An agent skill runs the one picked, when there is one.
+function skillOf(source: Extract<ContextSource, { type: 'skill' }>, skill: string): string {
+  if (source !== AGENT_SKILL) {
+    return source.name
+  }
+  return skill === '' ? 'picked' : skill
+}
+
 // The daemon runs the source with this name, not the first one of its type.
-function contextOf(source: ContextSource, ref: string): NewWorkspaceInput['context'] {
+function contextOf(
+  source: ContextSource,
+  ref: string,
+  skill: string,
+): NewWorkspaceInput['context'] {
+  if (source === AGENT_SKILL) {
+    return { source: 'skill', skill, ref: ref.trim() }
+  }
   return {
     source: source.type,
     ...('name' in source ? { name: source.name } : {}),
@@ -57,14 +83,14 @@ function contextOf(source: ContextSource, ref: string): NewWorkspaceInput['conte
   }
 }
 
-function sourceReads(source: ContextSource): string {
+function sourceReads(source: ContextSource, skill: string): string {
   switch (source.type) {
     case 'manual':
       return 'reads the title, the notes and the files'
     case 'github-issue':
       return 'reads the issue (its title, text, labels and comments) and the files'
     case 'skill':
-      return `runs the ${source.name} skill on the reference, and reads what it finds and the files`
+      return `runs the ${skillOf(source, skill)} skill on the reference, and reads what it finds and the files`
     case 'mcp':
       return `asks the ${source.name} MCP server about the reference, and reads what it finds and the files`
   }
@@ -72,19 +98,21 @@ function sourceReads(source: ContextSource): string {
 
 // What becomes the task's context (context.md, which the stages read), so the user knows what to
 // fill in.
-function contextHint(source: ContextSource): string {
-  return `The agent ${sourceReads(source)} as the task's context.`
+function contextHint(source: ContextSource, skill: string): string {
+  return `The agent ${sourceReads(source, skill)} as the task's context.`
 }
 
 // The placeholder goes away once the user types, so the line under the field keeps saying it.
-function refHint(source: ContextSource): string {
+function refHint(source: ContextSource, skill: string): string {
   switch (source.type) {
     case 'manual':
       return ''
     case 'github-issue':
       return 'The issue number, such as #42, or its address. Natamux reads the issue from GitHub.'
     case 'skill':
-      return `The key or address of the ticket. The ${source.name} skill reads it.`
+      return source === AGENT_SKILL
+        ? `The key or address of the record. The ${skillOf(source, skill)} skill reads it.`
+        : `The key or address of the ticket. The ${source.name} skill reads it.`
     case 'mcp':
       return `The key or address of the ticket. The agent reads it through the ${source.name} MCP server.`
   }
@@ -109,6 +137,7 @@ export function NewWorkspaceDialog({
   onCreated,
   onClose,
   loadSettings,
+  loadSkills,
 }: NewWorkspaceDialogProps) {
   const [title, setTitle] = useState(initialTitle)
   const [pickedRepo, setRepo] = useState(initialRepo ?? repos[0]?.id ?? DEFAULT_REPO_ID)
@@ -120,6 +149,8 @@ export function NewWorkspaceDialog({
   const [notes, setNotes] = useState('')
   const [pickedSource, setSource] = useState('manual')
   const [ref, setRef] = useState('')
+  const [skill, setSkill] = useState('')
+  const [skillsOpen, setSkillsOpen] = useState(false)
   const attachments = useAttachments()
   const contextId = useId()
   const hintId = useId()
@@ -130,7 +161,13 @@ export function NewWorkspaceDialog({
     queryFn: () => loadSettings?.(repo) ?? Promise.reject(new Error('No settings')),
     enabled: loadSettings !== undefined,
   })
-  const sources = settings.data?.settings.context.sources ?? [MANUAL]
+  const skills = useQuery({
+    queryKey: ['skills', repo],
+    queryFn: () => loadSkills?.(repo) ?? Promise.reject(new Error('No skills')),
+    enabled: loadSkills !== undefined,
+  })
+  const configured = settings.data?.settings.context.sources ?? [MANUAL]
+  const sources = skills.data?.skills.length ? [...configured, AGENT_SKILL] : configured
   // Another project may not offer the source picked in the first one.
   const picked = sources.find((item) => sourceKey(item) === pickedSource) ?? MANUAL
   const source = picked.type
@@ -149,7 +186,7 @@ export function NewWorkspaceDialog({
         ...(agent === '' ? {} : { agent }),
         // Only notes typed by hand are the task's context; another source brings its own.
         ...(source !== 'manual' || notes.trim() === '' ? {} : { prompt: notes.trim() }),
-        ...(source === 'manual' ? {} : { context: contextOf(picked, ref) }),
+        ...(source === 'manual' ? {} : { context: contextOf(picked, ref, skill) }),
         ...(uploads.length === 0 ? {} : { attachments: uploads }),
       })
     },
@@ -165,7 +202,13 @@ export function NewWorkspaceDialog({
   const current = branches.data?.current ?? null
   const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo))
 
-  const missing = createBlockedReason(title, source, ref)
+  const missing = createBlockedReason(
+    title,
+    source,
+    ref,
+    picked === AGENT_SKILL ? skill : undefined,
+    agent,
+  )
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -215,7 +258,7 @@ export function NewWorkspaceDialog({
               Context
             </h3>
             <p id={hintId} className="text-xs text-muted">
-              {contextHint(picked)}
+              {contextHint(picked, skill)}
             </p>
           </div>
           <label className="flex flex-col gap-1">
@@ -247,6 +290,29 @@ export function NewWorkspaceDialog({
               </Select>
             </div>
           )}
+          {picked === AGENT_SKILL && (
+            <div className="flex flex-col gap-1">
+              <span className={FIELD_LABEL}>Skill</span>
+              <Button
+                size="md"
+                icon={Sparkles}
+                aria-expanded={skillsOpen}
+                onClick={() => setSkillsOpen(!skillsOpen)}
+              >
+                {skill === '' ? 'Pick a skill' : skill}
+              </Button>
+              {skillsOpen && skills.data !== undefined && (
+                <SkillPicker
+                  list={skills.data}
+                  onClose={() => setSkillsOpen(false)}
+                  onPick={(name) => {
+                    setSkill(name)
+                    setSkillsOpen(false)
+                  }}
+                />
+              )}
+            </div>
+          )}
           {source === 'manual' ? (
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL}>Notes</span>
@@ -271,7 +337,7 @@ export function NewWorkspaceDialog({
                 className={inputLg}
               />
               <span id={refHintId} className="text-xs text-muted">
-                {refHint(picked)}
+                {refHint(picked, skill)}
               </span>
             </label>
           )}

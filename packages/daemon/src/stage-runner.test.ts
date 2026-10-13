@@ -248,6 +248,97 @@ describe('context', () => {
     expect(launchScript(task.id)).not.toContain('jira-ticket')
   })
 
+  it('runs a skill picked for the task, with no source in the settings', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'jira-ticket')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: jira-ticket\n---\n')
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' },
+    })
+
+    const task = await withWorkspace(waiting.id)
+    expect(launchScript(task.id)).toContain('/jira-ticket ABC-1')
+    expect(launchScript(task.id)).toContain('.natamux-task/context.md')
+    writeWorking(task, 'context.md', '# ABC-1\n\nExport as CSV.\n')
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'context', state: 'review' })
+  })
+
+  it('asks for the skill, then context.md, and runs the picked skill over a namesake', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'jira-ticket')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: jira-ticket\n---\n')
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      context: { sources: [{ type: 'skill', name: 'jira-ticket', skill: 'other-skill' }] },
+    }
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' },
+    })
+
+    const script = launchScript((await withWorkspace(waiting.id)).id)
+    const call = script.indexOf('/jira-ticket ABC-1')
+    const write = script.indexOf('Write what you found to .natamux-task/context.md.')
+    expect(call).toBeGreaterThanOrEqual(0)
+    expect(write).toBeGreaterThan(call)
+    expect(script).not.toContain('other-skill')
+    expect(script).not.toContain('list them under an Attachments heading')
+  })
+
+  it('fails the check of a picked skill when the agent wrote no context.md', async () => {
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' },
+    })
+    const task = await withWorkspace(waiting.id)
+    await runner.act(task.id, 'report', { terminal: '1' })
+
+    const failed = tasks
+      .listEvents(task.id)
+      .filter((entry) => entry.event.type === 'stage.check-failed')
+      .at(-1)?.event
+    expect(failed?.payload).toMatchObject({
+      stage: 'context',
+      reasons: expect.arrayContaining(['.natamux-task/context.md is missing']),
+    })
+    expect(tasks.getTask(task.id).state).not.toBe('review')
+  })
+
+  it('gives an agent without a sure call the file of the picked skill', async () => {
+    const skill = join(repo.root, 'home', '.claude', 'skills', 'jira-ticket')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: jira-ticket\n---\n')
+    const waiting = await created({
+      title: 'Export',
+      agent: 'codex',
+      context: { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' },
+    })
+
+    const script = launchScript((await withWorkspace(waiting.id)).id)
+    expect(script).toContain(`Read ${join(skill, 'SKILL.md')} and follow it for ABC-1.`)
+    expect(script).not.toContain('/jira-ticket')
+  })
+
+  it('names a picked skill the agent does not have on the stage', async () => {
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', skill: 'gone', ref: 'ABC-1' },
+    })
+
+    const task = await withWorkspace(waiting.id)
+    const started = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === 'context')
+    expect(started.at(-1)?.payload).toMatchObject({ missingSkills: ['gone'], agent: 'claude-code' })
+  })
+
   it('writes the context into a workspace made while the issue was read', async () => {
     const task = tasks.createTask({
       title: 'Export',

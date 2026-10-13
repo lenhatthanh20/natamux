@@ -1335,6 +1335,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
           loadSettings={(repo) => api.getSettings(repo)}
+          loadSkills={(repo) => api.getSkills(repo)}
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)

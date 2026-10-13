@@ -486,6 +486,33 @@ describe('task events', () => {
     expect(tasks.json().tasks).toEqual([])
   })
 
+  it('keeps the skill picked as the context of a new workspace', async () => {
+    const context = { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' }
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Example', context },
+    })
+    expect(response.statusCode).toBe(201)
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(task.json().task.context).toEqual(context)
+  })
+
+  it('refuses a picked skill that is empty or too long, and stores nothing', async () => {
+    for (const skill of ['', '   ', 'a'.repeat(201)]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/workspaces',
+        headers: authorization,
+        payload: { title: 'Example', context: { source: 'skill', skill, ref: 'ABC-1' } },
+      })
+      expect(response.statusCode).toBe(400)
+    }
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toEqual([])
+  })
+
   it.each(['task.created', 'workspace.created', 'workspace.removed', 'agent.active'])(
     'does not let a client send %s',
     async (type) => {

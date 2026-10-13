@@ -27,4 +27,15 @@ describe('formatTask', () => {
     expect(text).toContain('Issue:      -')
     expect(text).toContain('Context:    -')
   })
+
+  it('names the skill of the context, picked or from the settings', () => {
+    const picked = { source: 'skill' as const, skill: 'jira-ticket', ref: 'ABC-1' }
+    expect(formatTask({ ...task, context: picked })).toContain(
+      'Context:    jira-ticket (skill) ABC-1',
+    )
+    const configured = { source: 'skill' as const, name: 'Linear', ref: 'LIN-7' }
+    expect(formatTask({ ...task, context: configured })).toContain(
+      'Context:    Linear (skill) LIN-7',
+    )
+  })
 })
