@@ -49,6 +49,21 @@ describe('motion ticker', () => {
     expect(spin.currentTime).toBe(1125)
   })
 
+  it('leaves the animations alone while the page is hidden', () => {
+    vi.useFakeTimers()
+    const spin = fakeAnimation(Number.POSITIVE_INFINITY)
+    const target = {
+      visibilityState: 'hidden',
+      getAnimations: () => [spin],
+    } as unknown as Document
+
+    const stop = startMotionTicker(target)
+    vi.advanceTimersByTime(MOTION_TICK_MS * 3)
+    expect(spin.playState).toBe('running')
+    expect(spin.currentTime).toBe(0)
+    stop()
+  })
+
   it('does nothing where the browser has no getAnimations', () => {
     const stop = startMotionTicker({} as Document)
     expect(() => stop()).not.toThrow()

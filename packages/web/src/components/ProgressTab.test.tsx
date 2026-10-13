@@ -7,7 +7,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act as actOn, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
@@ -19,8 +19,6 @@ import type {
 import { fireAppEvent } from '../lib/app-events'
 import { useToasts } from '../lib/toasts'
 import { ProgressTab } from './ProgressTab'
-
-const NOW = new Date('2026-10-10T08:30:00.000Z')
 
 const TASK: Task = {
   id: 'T-0001',
@@ -131,11 +129,17 @@ type Options = {
 
 type SetWorkflow = (stage: string, on: boolean) => Promise<Task>
 
+// Relative times read the clock, so the tests run at a set time.
+beforeEach(() => {
+  vi.setSystemTime(new Date('2026-10-10T08:30:00.000Z'))
+})
+
 afterEach(() => {
   cleanup()
   globalThis.localStorage.clear()
   useToasts.setState({ toasts: [] })
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 function progress(options: Options = {}) {
@@ -149,7 +153,6 @@ function progress(options: Options = {}) {
     <QueryClientProvider client={client}>
       <ProgressTab
         task={task}
-        now={NOW}
         loadSettings={async () => options.settings ?? SETTINGS}
         loadEvents={async () => events}
         loadFiles={options.loadFiles ?? (async () => FILES)}

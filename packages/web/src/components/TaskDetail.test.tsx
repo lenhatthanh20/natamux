@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetailsMode } from '../lib/layout-mode'
 import type { DetailsView } from '../lib/view-store'
 import { TaskDetail } from './TaskDetail'
@@ -35,9 +35,15 @@ const TASK: Task = {
   updatedAt: '2026-10-10T08:00:00.000Z',
 }
 
+// Relative times read the clock, so the tests run at a set time.
+beforeEach(() => {
+  vi.setSystemTime(new Date('2026-10-10T09:00:00.000Z'))
+})
+
 afterEach(() => {
   cleanup()
   globalThis.localStorage.clear()
+  vi.useRealTimers()
 })
 
 type DetailsOptions = { view?: DetailsView; progress?: ReactNode; mode?: DetailsMode }
@@ -50,7 +56,6 @@ function details({ view, progress, mode }: DetailsOptions = {}) {
     <QueryClientProvider client={client}>
       <TaskDetail
         task={TASK}
-        now={new Date('2026-10-10T09:00:00.000Z')}
         busy={false}
         loadEvents={async () => []}
         onAction={vi.fn()}

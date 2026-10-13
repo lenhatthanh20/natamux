@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { useNow } from '../hooks/useNow'
 import { agentLabel } from '../lib/agents'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { cometOf, rowTier, type ShellRow, shellRowName, shellTag } from '../lib/sidebar-tree'
@@ -39,7 +40,6 @@ type RovingTab = {
 
 type WorkspaceRowProps = {
   task: Task
-  now: Date
   current: boolean
   pinned: boolean
   // Pinned rows come from several repositories, so they name theirs.
@@ -97,7 +97,6 @@ const TIER = {
 // Double-click the title, or press F2, to rename it.
 export function WorkspaceRow({
   task,
-  now,
   current,
   pinned,
   repoName,
@@ -131,6 +130,7 @@ export function WorkspaceRow({
   // Focus goes back to the row after a rename, but not on first render.
   const wasRenaming = useRef(false)
   const finished = task.state === 'done' || task.state === 'cancelled'
+  const now = useNow()
   const quiet = isQuiet(task, now)
   // Only rows that come after the first paint slide in; the first paint stays still.
   const [slides] = useState(enter)

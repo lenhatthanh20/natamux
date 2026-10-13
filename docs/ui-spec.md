@@ -277,7 +277,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 - Skeleton shimmer 1.5s linear.
 - `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`. Every `.sb-*` class is listed there too (a test checks it): unfold is an 80ms fade, the bar and chevrons do not move, no flash.
 - Window without focus: `lib/window-focus.ts` sets `data-window="inactive"` on `<html>`, in the app and in a browser tab. Every endless animation stops then (spinners, stage arcs, stripes, breathing glyphs), and the title bar text turns `--muted`. A test checks that each endless animation in `styles.css` is listed, except the loading shimmer, which is short. Endless motion animates `transform` or `opacity` only, never `background-position`.
-- With focus, `lib/motion-ticker.ts` moves every endless CSS animation 8 times a second (125 ms), all on one clock, so the page draws 8 frames a second however many things move. Transitions and one-shot animations run as usual.
+- With focus, `lib/motion-ticker.ts` moves every endless CSS animation 8 times a second (125 ms), all on one clock, so the page draws 8 frames a second however many things move. It does nothing while the page is hidden. Transitions and one-shot animations run as usual.
 - Feedback by wait time: under 100ms nothing; 100ms-1s the control is busy (disabled + label kept); 1-3s spinner in the control; over 3s a stage label ("Creating worktree...", "Pushing..."). Skeletons appear only after 200ms and stay at least 300ms (no flash, RA-29).
 
 ---------------------------------------------------------------------

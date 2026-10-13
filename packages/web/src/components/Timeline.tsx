@@ -1,18 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import type { StoredEvent } from '../lib/api'
 import { describeEvent, groupEvents } from '../lib/events'
-import { formatAge, formatExact } from '../lib/tasks'
+import { formatExact } from '../lib/tasks'
+import { Age } from './Age'
 import { DetailSection } from './DetailSection'
 
 type TimelineProps = {
   taskId: string
   // Changes whenever the task does, so the list is read again.
   updatedAt: string
-  now: Date
   loadEvents: () => Promise<StoredEvent[]>
 }
 
-export function Timeline({ taskId, updatedAt, now, loadEvents }: TimelineProps) {
+export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
   const query = useQuery({
     queryKey: ['events', taskId, updatedAt],
     queryFn: loadEvents,
@@ -54,7 +54,7 @@ export function Timeline({ taskId, updatedAt, now, loadEvents }: TimelineProps) 
                 data-tip={formatExact(line.at)}
                 className="shrink-0 text-xs text-muted"
               >
-                {formatAge(line.at, now, 'long')}
+                <Age at={line.at} style="long" />
               </time>
             </li>
           ))}

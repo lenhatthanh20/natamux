@@ -9,6 +9,10 @@ export function startMotionTicker(target: Document = document): () => void {
     return () => {}
   }
   const tick = () => {
+    // A hidden page draws nothing. The next tick after it shows moves everything again.
+    if (target.visibilityState === 'hidden') {
+      return
+    }
     const now = Math.floor(performance.now() / MOTION_TICK_MS) * MOTION_TICK_MS
     for (const animation of target.getAnimations()) {
       // A CSS transition has no animationName.

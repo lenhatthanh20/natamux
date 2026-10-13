@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { createElement, useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TaskShells } from '../lib/api'
 import { MAX_PANES } from '../lib/panes'
 import { disposeTerminal } from '../lib/terminal-cache'
 import { useViewStore } from '../lib/view-store'
@@ -58,6 +59,13 @@ type ShellTask = Pick<Task, 'id' | 'state' | 'stage' | 'lanes' | 'agent'>
 
 const NO_LANE: TerminalLane = { stage: null, state: null }
 
+// What the daemon says of the shells. ShellPanes reads only the agent lanes from it.
+const withLanes = (lanes: Record<string, TerminalLane>): TaskShells => ({
+  terminals: [],
+  lanes,
+  programs: {},
+})
+
 function renderShells(
   task: ShellTask,
   terminals: string[],
@@ -72,7 +80,7 @@ function renderShells(
         activity={activity}
         connect={() => new Promise<WebSocket>(() => {})}
         loadTerminals={async () => terminals}
-        loadAgentTerminals={async () => lanes}
+        loadShells={async () => withLanes(lanes)}
         closeTerminal={async () => terminals}
         actionsSlot={null}
       />
@@ -349,7 +357,7 @@ describe('ShellPanes task state', () => {
           task={current}
           connect={() => new Promise<WebSocket>(() => {})}
           loadTerminals={async () => ['1', '2', '3']}
-          loadAgentTerminals={async () => ({ '1': { stage: 'implement', state: 'running' } })}
+          loadShells={async () => withLanes({ '1': { stage: 'implement', state: 'running' } })}
           closeTerminal={async () => ['1', '2', '3']}
           actionsSlot={null}
         />
@@ -378,10 +386,12 @@ describe('ShellPanes answer in terminal', () => {
             task={{ id: 'T-0001', state, stage: 'build', lanes: current, agent: 'claude-code' }}
             connect={() => new Promise<WebSocket>(() => {})}
             loadTerminals={async () => ['1', '2']}
-            loadAgentTerminals={async () => ({
-              '1': { stage: 'implement', state: 'running' },
-              '2': { stage: 'test-spec', state: 'running' },
-            })}
+            loadShells={async () =>
+              withLanes({
+                '1': { stage: 'implement', state: 'running' },
+                '2': { stage: 'test-spec', state: 'running' },
+              })
+            }
             closeTerminal={async () => ['1', '2']}
             focusToken={focusToken}
             actionsSlot={null}
@@ -584,7 +594,7 @@ describe('ShellPanes stage shells', () => {
           task={task}
           connect={connect}
           loadTerminals={loadTerminals}
-          loadAgentTerminals={async () => state.lanes}
+          loadShells={async () => withLanes(state.lanes)}
           closeTerminal={async (name) => {
             state.terminals = state.terminals.filter((item) => item !== name)
             return state.terminals

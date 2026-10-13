@@ -15,6 +15,7 @@ import {
 import { useQueries } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
+import { useNow } from '../hooks/useNow'
 import type { LoadedSettings } from '../lib/api'
 import { formatDuration, stepsKey } from '../lib/stage-view'
 import { isQuiet, laneSummary, STATE_LABEL } from '../lib/tasks'
@@ -26,7 +27,6 @@ import { SkeletonList } from './ui/Skeleton'
 type ProgressBoardProps = {
   tasks: readonly Task[]
   repos: readonly Pick<Repo, 'id' | 'name'>[]
-  now: Date
   activity?: Record<string, string>
   loadSettings: (repo: string) => Promise<LoadedSettings>
   onOpenTask: (id: string) => void
@@ -116,11 +116,12 @@ export function boardSections(
 export function ProgressBoard({
   tasks,
   repos,
-  now,
   activity,
   loadSettings,
   onOpenTask,
 }: ProgressBoardProps) {
+  // Quiet tasks sort first, and the times in the rows grow.
+  const now = useNow()
   const settings = useQueries({
     queries: repos.map((repo) => ({
       queryKey: ['settings', repo.id],

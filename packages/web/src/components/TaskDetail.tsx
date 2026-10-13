@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { useNowValue } from '../hooks/useNow'
 import type { StoredEvent, TaskChanges } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
@@ -26,12 +27,12 @@ import {
   actionsFor,
   agentAction,
   deleteTaskDescription,
-  formatAge,
   formatExact,
   isQuiet,
   type TaskAction,
 } from '../lib/tasks'
 import type { DetailsView } from '../lib/view-store'
+import { Age } from './Age'
 import { CompareTries } from './CompareTries'
 import { DetailSection, Field } from './DetailSection'
 import { FanOutDialog } from './FanOutForm'
@@ -51,7 +52,6 @@ import { Tabs, tabPanelProps } from './ui/Tabs'
 
 type TaskDetailProps = {
   task: Task
-  now: Date
   busy: boolean
   // Docked beside the main area, a sheet over it, or a page that replaces it. The parent sizes it.
   mode?: DetailsMode
@@ -92,7 +92,6 @@ export function labelText(label: string): string {
 
 export function TaskDetail({
   task,
-  now,
   busy,
   mode = 'docked',
   loadEvents,
@@ -128,6 +127,7 @@ export function TaskDetail({
   const isFinished = task.state === 'done' || task.state === 'cancelled'
   const ports = portRange(task.id)
   const agentButton = agentAction(task)
+  const quiet = useNowValue((now) => isQuiet(task, now))
   // Copies of a task that works now would run beside its own agent.
   const canFanOut = onFanOut !== undefined && !isFinished && agentButton !== null
   const page = mode === 'page'
@@ -252,14 +252,14 @@ export function TaskDetail({
             </div>
           </div>
 
-          {(isQuiet(task, now) || waitingFor.length > 0) && (
+          {(quiet || waitingFor.length > 0) && (
             <div className="flex flex-col gap-2 px-4 pb-4">
-              {isQuiet(task, now) && (
+              {quiet && (
                 <p
                   role="status"
                   className="rounded-md border border-signal-line bg-signal-soft px-3 py-2.5 text-ink"
                 >
-                  No sign of life for {formatAge(task.updatedAt, now)}. The agent may be stuck.
+                  No sign of life for <Age at={task.updatedAt} />. The agent may be stuck.
                 </p>
               )}
               {waitingFor.length > 0 && (
@@ -468,18 +468,18 @@ export function TaskDetail({
               )}
               <Field label="Created">
                 <span data-tip={formatExact(task.createdAt)}>
-                  {formatAge(task.createdAt, now, 'long')}
+                  <Age at={task.createdAt} style="long" />
                 </span>
               </Field>
               <Field label="Updated">
                 <span data-tip={formatExact(task.updatedAt)}>
-                  {formatAge(task.updatedAt, now, 'long')}
+                  <Age at={task.updatedAt} style="long" />
                 </span>
               </Field>
             </dl>
           </DetailSection>
 
-          <Timeline taskId={task.id} updatedAt={task.updatedAt} now={now} loadEvents={loadEvents} />
+          <Timeline taskId={task.id} updatedAt={task.updatedAt} loadEvents={loadEvents} />
         </div>
       )}
 
