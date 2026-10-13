@@ -50,12 +50,7 @@ type GitGraphProps = {
   onRefresh: () => void
 }
 
-export function GitGraph({
-  graph,
-  uncommitted = null,
-  onShowChanges,
-  onRefresh,
-}: GitGraphProps) {
+export function GitGraph({ graph, uncommitted = null, onShowChanges, onRefresh }: GitGraphProps) {
   const { rows, width } = layoutGraph(graph.commits)
   const svgWidth = Math.max(1, width) * LANE_WIDTH
 

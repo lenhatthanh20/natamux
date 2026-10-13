@@ -397,7 +397,9 @@ export function ProgressTab({
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm empty:hidden">
           {latest.map(({ seq, event }) => (
             <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
-              <span className="text-xs text-muted tabular-nums"><Age at={event.at} /></span>
+              <span className="text-xs text-muted tabular-nums">
+                <Age at={event.at} />
+              </span>
               <span className="truncate">
                 {describeEvent(event.type)}
                 {typeof event.payload.stage === 'string' ? (

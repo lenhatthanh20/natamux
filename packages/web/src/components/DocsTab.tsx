@@ -298,7 +298,9 @@ export function DocsTab({
               {item.name}
               {dirty(item.name) && <span className="text-2xs text-signal">edited</span>}
             </span>
-            <span className="text-2xs text-muted">changed <Age at={item.modifiedAt} /></span>
+            <span className="text-2xs text-muted">
+              changed <Age at={item.modifiedAt} />
+            </span>
           </button>
         ))}
         {attachmentList}
