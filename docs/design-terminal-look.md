@@ -33,7 +33,7 @@ Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/
 | Cursor | Block, blinks | Block, blinks while focused, outline when unfocused | `TERMINAL_LOOK` |
 | Fast scroll | xterm default | Alt + wheel 5× (set on purpose) | `TERMINAL_LOOK` |
 | Padding | 8 top/bottom, 10 left, 0 right | 8 top/bottom, 10 left, 2 right. xterm keeps 8 px for its scrollbar, so text has 10 px on both sides and the scrollbar sits in the right padding | `TerminalView.tsx` |
-| Unfocused panes | Same as the focused one | With two or more panes, the others get a dim layer (`--terminal` at 0.3). No animation. Clicks go through | `.hm-panes` / `.hm-pane` in `styles.css` |
+| Unfocused panes | Same as the focused one | Same as the focused one. T-0005 added a dim layer (`--terminal` at 0.3); T-0032 removed it, so every pane reads at full brightness. The focused pane keeps its focus outline | `TerminalPane.tsx` |
 | Selection | One color | Dimmer color when the terminal does not have the focus | `selectionInactiveBackground` |
 | Colors | See "Current" below | "Night" | `lib/terminal-theme.ts`, `--terminal` in `styles.css` |
 
@@ -123,7 +123,7 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 - WebGL stays the renderer, with the DOM fallback.
 - No ligatures addon, `allowTransparency` off, `smoothScrollDuration` 0. A test keeps them out.
-- The dim layer is one static element per unfocused pane, drawn by the compositor. Focus changes cause no resize. The selector uses `:focus-within` on the grid, not `:has()`. A first version with `.hm-panes:has(.hm-pane:focus-within)` raised the echo p95 of `terminal-cache` E2E from 50 to 123–149 ms; with `:focus-within` it is back to 50 ms.
+- Focus changes between panes cause no resize. If a dim layer comes back, do not select it with `:has()`: a first version with `.hm-panes:has(.hm-pane:focus-within)` raised the echo p95 of `terminal-cache` E2E from 50 to 123–149 ms.
 - The icon font loads once, only when an icon shows. Clearing the atlas happens once per load.
 - CI E2E measures, `main` (3aeb310) and this change (16fbd52), one run each:
 
@@ -151,7 +151,7 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 | xterm opens with `TERMINAL_LOOK` | `lib/terminal-session.test.ts` |
 | Atlas cleared when the icon font loads, not for other fonts, not after dispose | `lib/terminal-session.test.ts` |
 | Font dialog names JetBrains Mono, 13px | `components/TerminalFontDialog.test.tsx` |
-| Unfocused pane dimmed, focused not; a click moves the dim | `e2e/tests/terminal-look.spec.ts` |
+| No pane dimmed; the focused pane has the outline and a click moves it | `e2e/tests/terminal-look.spec.ts` |
 | Icon font not loaded until an icon shows, loaded after | `e2e/tests/terminal-look.spec.ts` |
 
 ## Open items

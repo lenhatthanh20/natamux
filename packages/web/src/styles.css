@@ -884,19 +884,6 @@
   unicode-range: U+23FB-23FE, U+2630, U+2665, U+276C-2771, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }
 
-/* With several panes, the ones without the focus are dimmed, as in Ghostty. Only the screen is
-   dimmed, so the header and its needs-input bar stay clear. A click goes through to the pane.
-   No :has() here: each row xterm writes inside it would make the browser check it again. */
-.hm-panes:focus-within .hm-pane:not(:focus-within) .hm-terminal::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-  background: var(--terminal);
-  opacity: 0.3;
-}
-
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
