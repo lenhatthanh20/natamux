@@ -1,6 +1,7 @@
 export * from './attachments.js'
 export * from './changes.js'
 export * from './claude-code-hooks.js'
+export * from './commit-message.js'
 export * from './dependencies.js'
 export * from './events.js'
 export * from './git-graph.js'

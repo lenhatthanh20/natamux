@@ -95,6 +95,13 @@ describe('the command registry', () => {
     }
   })
 
+  it('drafts the commit message with Mod+Shift+G in an open workspace', () => {
+    const draft = commandById('diff.draftCommit')
+    expect(shortcutOf('diff.draftCommit')).toBe('Mod+Shift+G')
+    expect(draft && runnable(draft, context().context)).toBe(false)
+    expect(draft && runnable(draft, context({ workspaceOpen: true }).context)).toBe(true)
+  })
+
   it('documents the keys that move a stage in Project settings', () => {
     const move = commandById('stage.move')
     expect(move?.shortcuts).toEqual(['Alt+ArrowUp', 'Alt+ArrowDown'])

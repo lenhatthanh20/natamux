@@ -484,6 +484,15 @@ export const COMMANDS: readonly Command[] = [
     when: inWorkspace,
     run: () => fireAppEvent('diff-comment'),
   },
+  {
+    id: 'diff.draftCommit',
+    title: 'Draft the commit message with the agent',
+    category: 'Workspace',
+    shortcuts: ['Mod+Shift+G'],
+    group: 'Diff',
+    when: inWorkspace,
+    run: () => fireAppEvent('commit-draft'),
+  },
 
   // The palette's own keys
   {

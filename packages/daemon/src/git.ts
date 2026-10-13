@@ -775,6 +775,45 @@ export async function snapshotCommit(worktreePath: string, message: string): Pro
   }
 }
 
+// What `commitAll` would commit now: `--stat` in full, then the diff, cut so both fit in
+// `maxChars`. Uses its own index, so the branch, the index and the files of the worktree stay as
+// they are.
+export async function readCommitDiff(worktreePath: string, maxChars: number): Promise<string> {
+  const index = join(tmpdir(), `natamux-index-${randomUUID()}`)
+  // Paths as they are, not in octal escapes, so the agent can read them.
+  const env = withGitConfig({ ...process.env, GIT_INDEX_FILE: index }, [
+    ['core.quotePath', 'false'],
+  ])
+  try {
+    try {
+      await git(worktreePath, ['read-tree', 'HEAD'], { env })
+    } catch (error) {
+      // A repository without a commit has no HEAD: everything is new.
+      if (!(error instanceof GitError)) {
+        throw error
+      }
+      await git(worktreePath, ['read-tree', '--empty'], { env })
+    }
+    await git(worktreePath, ['add', '--all'], { env })
+    // Without HEAD, `diff --cached` shows every staged file.
+    const diff = ['diff', '--cached', '--no-color', '--no-ext-diff', '-M']
+    const stat = await git(worktreePath, [...diff, '--stat'], { env })
+    if (stat.trim() === '') {
+      throw new NothingToCommitError()
+    }
+    const full = await git(worktreePath, diff, { env })
+    const room = Math.max(0, maxChars - stat.length - 1)
+    if (full.length <= room) {
+      return `${stat}\n${full}`
+    }
+    // Half of an emoji is not a character: cut before it.
+    const end = /[\uDC00-\uDFFF]/.test(full[room] ?? '') ? Math.max(0, room - 1) : room
+    return `${stat}\n${full.slice(0, end)}\n[diff cut: ${full.length - end} more characters]`
+  } finally {
+    rmSync(index, { force: true })
+  }
+}
+
 // Puts a commit on a branch of origin, in place of what is there.
 export async function pushRef(worktreePath: string, sha: string, ref: string): Promise<void> {
   await push(worktreePath, ['push', '--force', '--quiet', 'origin', `${sha}:refs/heads/${ref}`])

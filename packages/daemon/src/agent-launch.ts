@@ -233,6 +233,32 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
   }
 }
 
+// The command line that runs an agent once, without its interactive screen, for a short answer
+// such as a commit message: the prompt goes on stdin where the agent reads it there, so a long
+// prompt does not hit the limit of a command line. No hooks, no permission flags: it needs no
+// tools, and must not move the task.
+export function oneShotCommand(
+  agent: LaunchableAgent,
+  program: string,
+  prompt: string,
+  platform: NodeJS.Platform = process.platform,
+): { line: string; stdin: string } {
+  const quote = (value: string) => quoteArgument(value, platform)
+  switch (agent) {
+    case 'claude-code':
+      return { line: `${program} -p`, stdin: prompt }
+    case 'codex':
+      return { line: `${program} exec -`, stdin: prompt }
+    case 'gemini':
+      // Gemini puts the text of -p after what it reads on stdin.
+      return { line: `${program} -p ${quote('Answer the request above.')}`, stdin: prompt }
+    case 'copilot':
+      return { line: `${program} -p ${quote(prompt)}`, stdin: '' }
+    case 'cursor':
+      return { line: `${program} -p --output-format text ${quote(prompt)}`, stdin: '' }
+  }
+}
+
 // Writes the agent's hook file into the workspace and keeps it out of git. A file of the user's
 // own at that place is left alone: the agent then runs without Natamux's hooks, and its terminal
 // still shows that it works. Returns whether Natamux's hooks are in place.

@@ -1058,6 +1058,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               mergeTask(updated)
               return updated
             }}
+            generateCommitMessage={() => api.generateCommitMessage(changesTask.id)}
             push={async () => {
               const updated = await api.pushBranch(changesTask.id)
               mergeTask(updated)

@@ -26,7 +26,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_CURSOR_COMMAND` | `cursor-agent` | Program that starts the Cursor CLI |
 | `NATAMUX_CLAUDE_ARGS`, `NATAMUX_CODEX_ARGS`, `NATAMUX_GEMINI_ARGS`, `NATAMUX_COPILOT_ARGS`, `NATAMUX_CURSOR_ARGS` | none | Words added to that agent's command line |
 
-See [Agents](/docs/agents/claude-code/) for how each agent is started.
+See [Agents](/docs/agents/claude-code/) for how each agent is started. **Generate** in the commit box runs the same program, without the extra words.
 
 ## CLI
 
