@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { type Task, waitingOn } from '@natamux/core'
 import { UnknownAgentError } from './agent-hook-service.js'
@@ -9,6 +10,9 @@ import {
   launchCommand,
   prepareWorkspace,
   quoteArgument,
+  type TrustPaths,
+  trustPaths,
+  trustWorkspace,
 } from './agent-launch.js'
 import type { TaskService } from './task-service.js'
 import { MAIN_TERMINAL, type TerminalService } from './terminal-service.js'
@@ -58,6 +62,8 @@ type AgentRunnerOptions = {
   binDir?: string
   // Told of each start, to watch the terminal for a shell that cannot find the agent.
   onLaunch?: (launch: AgentLaunch) => void
+  // Where the agents keep their trusted folders. Default: from the user's home and environment.
+  trustPaths?: TrustPaths
 }
 
 export type AgentLaunch = {
@@ -80,6 +86,7 @@ export class AgentRunner {
   private readonly launchDir: string
   private readonly binDir: string | undefined
   private readonly onLaunch: ((launch: AgentLaunch) => void) | undefined
+  private readonly trustPaths: TrustPaths
 
   constructor(options: AgentRunnerOptions) {
     this.tasks = options.tasks
@@ -107,6 +114,7 @@ export class AgentRunner {
     this.launchDir = options.launchDir ?? dirname(options.claudeSettingsPath)
     this.binDir = options.binDir?.trim() || undefined
     this.onLaunch = options.onLaunch
+    this.trustPaths = options.trustPaths ?? trustPaths(process.env, homedir())
   }
 
   // The program that starts an agent, as the shell looks it up.
@@ -127,6 +135,7 @@ export class AgentRunner {
     }
     if (task.workspace !== null) {
       prepareWorkspace(agent, task.workspace)
+      trustWorkspace(agent, task.workspace, this.trustPaths)
     }
     const command = launchCommand(agent, {
       program: this.programs[agent],
@@ -137,6 +146,7 @@ export class AgentRunner {
       geminiSettingsPath: this.geminiSettingsPath,
       // Read at each start, so a saved change counts for the next agent.
       permissionMode: this.tasks.settingsOf(task.repo).agents.permissionMode,
+      workspace: task.workspace,
     })
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
