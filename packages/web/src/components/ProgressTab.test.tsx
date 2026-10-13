@@ -248,10 +248,23 @@ describe('ProgressTab', () => {
     expect(expanded('Latest events')).toBe('false')
     expect(screen.queryByRole('complementary')).toBeNull()
   })
+
+  it('keeps a bar per started stage in Time per stage', async () => {
+    progress({ task: { ...TASK, state: 'running' } })
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Time per stage' }))
+
+    const times = screen.getByRole('region', { name: 'Time per stage' })
+    expect(within(times).getByText('Context')).toBeTruthy()
+    expect(within(times).getByText('Spec')).toBeTruthy()
+    expect(times.querySelector('[data-state="done"]')).toBeTruthy()
+    expect(times.querySelector('[data-state="running"]')).toBeTruthy()
+  })
 })
 
 describe('the overview of the progress', () => {
-  it('shows the figures in a grid of two columns and no step names under the bar', async () => {
+  it('shows the figures in a grid of two columns and no step names', async () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
@@ -271,6 +284,106 @@ describe('the overview of the progress', () => {
     expect(within(overview).getByText('from start to finish')).toBeTruthy()
     expect(within(overview).queryByText('in this stage')).toBeNull()
     expect(overview.textContent).not.toContain('NaN')
+  })
+
+  it.each<[string, Options, string]>([
+    ['a side-by-side step', { task: FULL_TASK, events: FULL_EVENTS }, '2 of 6'],
+    [
+      'a running stage',
+      {
+        task: { ...TASK, stage: 'spec', state: 'running' },
+        events: EVENTS,
+      },
+      '1 of 3',
+    ],
+    [
+      'no stage started yet',
+      { task: { ...TASK, stage: 'context', state: 'ready', stageSince: null }, events: [] },
+      '0 of 3',
+    ],
+    ['all stages done', { task: { ...TASK, state: 'done' } }, '3 of 3'],
+    ['a cancelled task', { task: { ...TASK, state: 'cancelled' } }, '1 of 3'],
+    [
+      'only one stage',
+      {
+        task: { ...TASK, stage: 'implement', state: 'running', stages: ['implement'] },
+        events: [stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'implement' })],
+      },
+      '0 of 1',
+    ],
+    ['no stages', { task: { ...TASK, stages: [] }, events: [] }, '0 of 0'],
+  ])('shows no stage bar for a task with %s', async (_, options, done) => {
+    progress(options)
+
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+    expect(overview.querySelector('[data-state]')).toBeNull()
+    expect(overview.querySelector('.stage-stripes')).toBeNull()
+    expect(overview.querySelector('[aria-hidden="true"]')).toBeNull()
+    expect(within(overview).getByText(done)).toBeTruthy()
+    expect(within(overview).getByText('stages done')).toBeTruthy()
+    expect(within(overview).getByText(/times? sent back/)).toBeTruthy()
+  })
+
+  it('moves the open figures with the clock, and adds nothing else to the card', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-10-10T08:30:00.000Z'))
+    progress({ task: { ...TASK, state: 'running' } })
+
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+    expect(within(overview).getByText('30m')).toBeTruthy()
+    expect(within(overview).getByText('19m')).toBeTruthy()
+    const children = overview.querySelectorAll('*').length
+
+    actOn(() => {
+      vi.advanceTimersByTime(30 * 60_000)
+    })
+
+    expect(within(overview).getByText('1h')).toBeTruthy()
+    expect(within(overview).getByText('49m')).toBeTruthy()
+    expect(within(overview).getByText('since the task started')).toBeTruthy()
+    expect(overview.querySelectorAll('*').length).toBe(children)
+  })
+
+  it.each(['done', 'cancelled'] as const)(
+    'keeps the time from start to finish of a %s task still as the clock moves',
+    async (state) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      vi.setSystemTime(new Date('2026-10-10T08:30:00.000Z'))
+      progress({ task: { ...TASK, state } })
+
+      const overview = await screen.findByRole('region', { name: 'Overview' })
+      expect(within(overview).getByText('20m')).toBeTruthy()
+      expect(within(overview).getByText('from start to finish')).toBeTruthy()
+
+      actOn(() => {
+        vi.advanceTimersByTime(30 * 60_000)
+      })
+
+      expect(within(overview).getByText('20m')).toBeTruthy()
+      expect(within(overview).queryByText('in this stage')).toBeNull()
+    },
+  )
+
+  it('shows no time in this stage for a task whose stage has not started', async () => {
+    progress({ task: { ...TASK, stage: 'context', state: 'ready', stageSince: null }, events: [] })
+
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+    expect(within(overview).queryByText('in this stage')).toBeNull()
+    expect(within(overview).getByText('since the task started')).toBeTruthy()
+  })
+
+  it('counts every time the task was sent back', async () => {
+    progress({
+      task: FULL_TASK,
+      events: [
+        ...FULL_EVENTS,
+        stored(8, 'review.changes-requested', '2026-10-10T08:25:00.000Z', { to: 'plan' }),
+      ],
+    })
+
+    const overview = await screen.findByRole('region', { name: 'Overview' })
+    expect(within(overview).getByText('2')).toBeTruthy()
+    expect(within(overview).getByText('times sent back')).toBeTruthy()
   })
 
   it('shows zero times sent back', async () => {
