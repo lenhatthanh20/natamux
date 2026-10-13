@@ -45,6 +45,7 @@ jobs:
           - { name: linux-x64, os: ubuntu-latest, args: --linux --x64 }
           - { name: win-x64, os: windows-latest, args: --win --x64 }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -173,7 +174,7 @@ jobs:
           path: ${{ runner.temp }}/desktop-user/logs
           retention-days: 3
           if-no-files-found: ignore
-      # The release job of the same run takes the files at once; a dry run's stay for a day.
+      # The release job of the same run takes the files at once; they stay three days for a re-run.
       - uses: actions/upload-artifact@v7
         with:
           name: natamux-${{ matrix.name }}
@@ -183,7 +184,7 @@ jobs:
             packages/desktop/release/*.deb
             packages/desktop/release/*.tar.gz
             packages/desktop/release/*.exe
-          retention-days: 1
+          retention-days: 3
           if-no-files-found: error
 
   release:
@@ -199,7 +200,14 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: natamux-*
           merge-multiple: true
+      # A re-run can find package files of an earlier attempt expired; never publish a partial release.
+      - name: Check that every file is there
+        run: |
+          for f in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz; do
+            test -f "artifacts/$f" || { echo "missing $f"; exit 1; }
+          done
       - name: Checksums
         run: cd artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v3

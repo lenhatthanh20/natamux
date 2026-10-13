@@ -13,7 +13,7 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
 - Your data stays on your machine:
   - Tasks, history and stage files: `.natamux/` in each repository.
   - Worktrees: `.natamux/worktrees/`, or the folder you set.
-  - Desktop app token, update setting, downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux).
+  - Desktop app token, update setting, downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
   - Dashboard preferences and the token: your browser's `localStorage`.
 - Data leaves your machine only when you or an agent you start makes it happen:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.

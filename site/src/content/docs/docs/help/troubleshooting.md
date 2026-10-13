@@ -96,6 +96,6 @@ The branch is deleted only when it is fully merged. Otherwise it stays, and you 
 
 | What | Where |
 |---|---|
-| Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Linux: `~/.config/Natamux` |
+| Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Windows: `%APPDATA%\Natamux`. Linux: `~/.config/Natamux` |
 | Docker | `docker compose -f compose.prod.yaml logs` |
 | A task's history | The **Timeline** and events of the task in the dashboard |

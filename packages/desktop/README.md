@@ -44,7 +44,7 @@ It builds the app for the machine it runs on, into `packages/desktop/release`: a
 
 ## Check it without a screen
 
-`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard, then makes a task with a worktree and runs a command in a shell of it (`src/smoke.ts`), and quits: exit code 0 when all of it worked, 1 when not. When `NATAMUX_CLAUDE_COMMAND` names a stand-in agent, that agent must also run the app's own `natamux` command. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main), and on the packaged app of every system (`release.yml`, also on pull requests that change the packaging). On Linux:
+`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard, then makes a task with a worktree and runs a command in a shell of it (`src/smoke.ts`), and quits: exit code 0 when all of it worked, 1 when not. The task, its worktree and its branch stay in the configured project, so use a test repository. When `NATAMUX_CLAUDE_COMMAND` names a stand-in agent, that agent must also run the app's own `natamux` command. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main), and on the packaged app of every system (`release.yml`, also on pull requests that change the packaging). On Linux:
 
 ```sh
 NATAMUX_DESKTOP_SMOKE=1 xvfb-run -a pnpm --filter @natamux/desktop start -- --no-sandbox

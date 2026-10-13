@@ -24,7 +24,7 @@ Natamux is an open-source Agent Development Environment. Each task gets its own 
 2. Install and open Natamux. The apps are not signed yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. The [install guide](https://natamux.github.io/docs/getting-started/install/) has the details.
 3. Add a git repository, create a task, and start an agent. Follow the [quick start](https://natamux.github.io/docs/getting-started/quick-start/) for a complete walkthrough.
 
-Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS and Linux apps update themselves; on Windows the app links the new installer. For real work, you need git and an installed, logged-in coding agent such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, or Cursor. The GitHub CLI (`gh`) is optional for issues, pull requests, and CI status.
+Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS and Linux apps update themselves; on Windows the app opens the release page of the new version. For real work, you need git and an installed, logged-in coding agent such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, or Cursor. The GitHub CLI (`gh`) is optional for issues, pull requests, and CI status.
 
 ### Explore the demo in Codespaces
 

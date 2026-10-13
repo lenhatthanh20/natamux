@@ -38,6 +38,7 @@ As Markdown files with a small header, in `<data folder>/tasks/T-0001.md`. A SQL
 | Setup | Data folder |
 |---|---|
 | Desktop app, macOS | `~/Library/Application Support/Natamux/data` |
+| Desktop app, Windows | `%APPDATA%\Natamux\data` |
 | Desktop app, Linux | `~/.config/Natamux/data` |
 | A daemon started in a repository | `.natamux/` in that folder, unless you set `NATAMUX_DATA_DIR` |
 | Docker | The volume `natamux-data`, at `/data` |
@@ -63,7 +64,7 @@ Yes, from version 0.1.2. The desktop app checks GitHub for a new release, downlo
 ## How do I uninstall it?
 
 1. Quit the app.
-2. macOS: drag Natamux from Applications to the Trash. Windows: **Settings → Apps → Installed apps → Natamux → Uninstall**. Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
+2. macOS: drag Natamux from Applications to the Trash. Windows: **Settings → Apps → Installed apps → Natamux → Uninstall** (Windows 10: **Apps & features**). Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
 3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
 4. Optional: remove worktrees you no longer need. In each repository, `git worktree list` shows them and `git worktree remove <path>` removes one.
 5. Optional: remove the `PATH` line you added for the `natamux` command.

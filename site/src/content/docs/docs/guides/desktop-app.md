@@ -91,7 +91,7 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 
 | Variable | Use |
 |---|---|
-| `NATAMUX_DESKTOP_SMOKE=1` | Loads the dashboard, makes a task with a worktree, runs a command in its shell, and quits. Exit code 0 means all of it worked. For checks, not daily use |
+| `NATAMUX_DESKTOP_SMOKE=1` | Loads the dashboard, makes a task with a worktree, runs a command in its shell, and quits. Exit code 0 means all of it worked. The task, its worktree and its branch stay in the project. For checks, not daily use |
 | `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` | With the smoke check, also saves a picture of the window |
 | `NATAMUX_<AGENT>_COMMAND` | The program that starts an agent, for example `NATAMUX_CLAUDE_COMMAND`. Set it in the environment the app starts from. See [Environment variables](/docs/reference/environment-variables/) |
 
