@@ -1749,9 +1749,9 @@ describe('a resume after a restart', () => {
       ['first', true],
       ['last', false],
     ])('keeps a stage in review when its agent cannot start, %s', async (_name, reviewFirst) => {
-      const [review, running] = reviewFirst
-        ? [await inReviewAfterRestart('s-p'), await runningAfterRestart('s-q')]
-        : [await runningAfterRestart('s-q'), await inReviewAfterRestart('s-p')].reverse()
+      const early = reviewFirst ? undefined : await runningAfterRestart('s-q')
+      const review = await inReviewAfterRestart('s-p')
+      const running = early ?? (await runningAfterRestart('s-q'))
       const run = terminals.run.bind(terminals)
       vi.spyOn(terminals, 'run').mockImplementation((taskId, ...rest) => {
         if (taskId === review.id) {
