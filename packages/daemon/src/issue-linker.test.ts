@@ -59,8 +59,33 @@ function atSpecReview(): Task {
   return tasks.getTask(task.id)
 }
 
+// The project asks for an issue on its own; by default it does not.
+function opensIssues(createIssue: ProjectSettings['tracker']['createIssue']): ProjectSettings {
+  return {
+    ...DEFAULT_PROJECT_SETTINGS,
+    tracker: { ...DEFAULT_PROJECT_SETTINGS.tracker, createIssue },
+  }
+}
+
 describe('IssueLinker', () => {
+  it('opens no issue by default, on spec approval or with the pull request', async () => {
+    const task = atSpecReview()
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'stage.approved',
+      payload: { stage: 'spec' },
+    })
+    await linker.settle()
+    settings = { ...DEFAULT_PROJECT_SETTINGS, stages: LEGACY_PIPELINE }
+    const other = tasks.createTask({ title: 'Export', description: 'Adds a CSV export.' })
+
+    expect(await linker.pullRequestBody(other)).toBe('Adds a CSV export.')
+    expect(ghCalls).toEqual([])
+    expect(tasks.getTask(task.id).issue).toBeNull()
+  })
+
   it('opens an issue with the spec when the spec is approved', async () => {
+    settings = opensIssues('on-spec-approved')
     const task = atSpecReview()
     tasks.applyEvent(task.id, {
       source: 'human',
@@ -71,6 +96,7 @@ describe('IssueLinker', () => {
 
     expect(ghCalls[0]?.slice(0, 4)).toEqual(['issue', 'create', '--title', 'Export tasks'])
     expect(ghCalls[0]?.[5]).toContain('Export tasks as CSV.')
+    expect(ghCalls[0]?.[5]).toContain(`Made by Natamux for ${task.id}.`)
     expect(tasks.getTask(task.id).issue).toEqual({
       provider: 'github',
       key: '#12',
@@ -133,10 +159,48 @@ describe('IssueLinker', () => {
   })
 
   it('opens the issue with the pull request in a pipeline without a spec stage', async () => {
-    settings = { ...DEFAULT_PROJECT_SETTINGS, stages: LEGACY_PIPELINE }
+    settings = { ...opensIssues('on-spec-approved'), stages: LEGACY_PIPELINE }
     const task = tasks.createTask({ title: 'Export', description: 'Adds a CSV export.' })
 
     expect(await linker.pullRequestBody(task)).toBe('Adds a CSV export.\n\nCloses #12')
+  })
+
+  it('opens the issue with the pull request, not on spec approval, for on-pr', async () => {
+    settings = opensIssues('on-pr')
+    const task = atSpecReview()
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'stage.approved',
+      payload: { stage: 'spec' },
+    })
+    await linker.settle()
+    expect(ghCalls).toEqual([])
+
+    tasks.updateTask(task.id, { description: 'Adds a CSV export.' })
+    expect(await linker.pullRequestBody(tasks.getTask(task.id))).toBe(
+      'Adds a CSV export.\n\nCloses #12',
+    )
+    expect(ghCalls).toHaveLength(1)
+    expect(await linker.pullRequestBody(tasks.getTask(task.id))).toBe(
+      'Adds a CSV export.\n\nCloses #12',
+    )
+    expect(ghCalls).toHaveLength(1)
+  })
+
+  it('opens no issue for never, on spec approval or with the pull request', async () => {
+    settings = { ...opensIssues('never'), stages: LEGACY_PIPELINE }
+    const task = tasks.createTask({ title: 'Export', description: 'Adds a CSV export.' })
+
+    expect(await linker.pullRequestBody(task)).toBe('Adds a CSV export.')
+    expect(ghCalls).toEqual([])
+  })
+
+  it('writes the task notes in the body when there is no spec', async () => {
+    const task = tasks.createTask({ title: 'Export', description: 'Adds a CSV export.' })
+
+    await linker.create(task.id)
+
+    expect(ghCalls[0]?.[5]).toBe(`Adds a CSV export.\n\nMade by Natamux for ${task.id}.`)
   })
 })
 

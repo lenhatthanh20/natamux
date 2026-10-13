@@ -113,7 +113,7 @@ Stage files are `context.md`, `spec.md`, `plan.md`, `test-spec.md` and test outp
 - **Editing:** you can edit a stage file in the app before you approve it, for example to fix the spec by hand. This edits the working copy.
 - **Reading:** the daemon reads the working copy while the worktree exists, else the archived copy.
 - **A task without a worktree yet:** stage files are written straight to `<data dir>/tasks/T-0001/`. When the workspace is made, the daemon copies them into `.natamux-task/`.
-- **Leaving the machine:** only `spec.md`, when `createIssue` is `on-spec-approved` (section 5). Nothing else is sent anywhere.
+- **Leaving the machine:** only `spec.md`, as the body of an issue Natamux opens (section 5). Nothing else is sent anywhere.
 
 With the default folders (`<data dir>` = `<repo>/.natamux/`):
 
@@ -280,11 +280,13 @@ issue: { provider: 'github' | string; key: string; url: string } | null
 | Value | When |
 |---|---|
 | `never` | Never |
-| `manual` | You click "Create issue" on the task |
-| `on-spec-approved` (default) | When you approve the `spec` stage. The issue body is `spec.md` |
+| `manual` (default) | You click "Create issue" on the task |
+| `on-spec-approved` | When you approve the `spec` stage. The issue body is `spec.md` |
 | `on-pr` | When the pull request is opened, just before it |
 
 - When the pipeline has no `spec` stage, `on-spec-approved` acts as `on-pr`.
+- The default is `manual`, so no issue opens without the person asking. The **Issues** tab of Project settings edits this value.
+- `never` hides "Create issue".
 - A task that has `issue` already never makes another one. "Create issue" becomes "Open issue".
 
 ### 5.2 Providers
@@ -335,7 +337,7 @@ The name is not `.natamux/project.json`, because `.natamux/` is the daemon's def
       { "type": "skill", "name": "Ticket", "skill": "fetch-ticket" }
     ]
   },
-  "tracker": { "type": "github", "createIssue": "on-spec-approved", "linkInPr": true }
+  "tracker": { "type": "github", "createIssue": "manual", "linkInPr": true }
 }
 ```
 
@@ -354,7 +356,7 @@ Stage fields:
 Other rules:
 - **Custom stages:** a project can drop, reorder or add stages, for example a `security` stage of kind `agent` with its own prompt. It can also group stages, or take a stage out of a group so it runs on its own.
 - **Snapshot:** a new task copies the list of stage ids to the task (`stages` field). Later edits to the list do not move tasks that are on the way. Prompts, gates and commands are read from the current settings, so a better prompt helps tasks that are running already. A stage id that is gone from the settings keeps the default settings of that id (spec, plan, …); a custom stage that is gone acts as kind `manual`.
-- **Editing:** **Settings** in the menu of a project opens **Project settings** with a **Stages** tab and a **JSON** tab. Save writes the file in the repository's main folder. You commit it yourself. **Reset to default** puts the default pipeline in the editor. See "The Stages tab" below.
+- **Editing:** **Settings** in the menu of a project opens **Project settings** with a **Stages** tab, an **Issues** tab and a **JSON** tab. Save writes the file in the repository's main folder. You commit it yourself. **Reset to default** puts the default pipeline in the editor. See "The Stages tab" below.
 - **Stages left out:** when the pipeline equals the default, Save leaves `stages` out of the file, so the project follows later changes of the default. Save changes only `stages`; other fields and unknown keys stay.
 - **Concurrent edits:** `GET /repos/:id/settings` returns a `version` (a hash of the file text, `none` without a file). `PUT` sends it in `If-Match` and gets 409 `conflict` when the file changed. The screen then offers **Reload** or **Overwrite**.
 

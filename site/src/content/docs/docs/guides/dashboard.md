@@ -157,7 +157,7 @@ To remove a project, choose **Remove project** in the menu of its group in the s
 
 ## Project settings
 
-Click **Settings** in the menu of a project to open **Project settings of <repo>**. It has two tabs: **Stages** (the default) and **JSON**. Settings are saved in `.natamux.json` in the repository, so commit the file to share them. For every field of the file, see the [configuration reference](/docs/reference/configuration/).
+Click **Settings** in the menu of a project to open **Project settings of <repo>**. It has three tabs: **Stages** (the default), **Issues** and **JSON**. Settings are saved in `.natamux.json` in the repository, so commit the file to share them. For every field of the file, see the [configuration reference](/docs/reference/configuration/).
 
 ### The Stages tab
 
@@ -186,9 +186,13 @@ Click **Settings** in the menu of a project to open **Project settings of <repo>
 
 Save changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file.
 
+### The Issues tab
+
+The **Issues** tab sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Only when you click Create issue in the task's Progress view**. The tab also says what the issue is made of. With `tracker.type` set to `none` the choice is turned off. See [Open an issue for a task](/docs/guides/github/#open-an-issue-for-a-task).
+
 ### The JSON tab
 
-The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show, such as `requireCommit`, `requireClean` and `check`, and for `context`, `tracker` and `agents`.
+The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show, such as `requireCommit`, `requireClean` and `check`, and for `context`, the rest of `tracker`, and `agents`.
 
 ### The file changed
 

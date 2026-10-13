@@ -189,6 +189,8 @@ export function ProgressTab({
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
   const open = task.state !== 'done' && task.state !== 'cancelled'
+  const { tracker } = loadedSettings.settings
+  const canCreateIssue = open && tracker.type === 'github' && tracker.createIssue !== 'never'
   const run = (name: StageAction, input?: StageActionInput) => action.mutate({ name, input })
   const reviewed =
     progress.find((entry) => entry.status === 'current' && entry.state === 'review') ??
@@ -351,7 +353,7 @@ export function ProgressTab({
           <dt className="text-muted">Issue</dt>
           <dd className="m-0 truncate">
             {task.issue === null ? (
-              loadedSettings.settings.tracker.type === 'github' && open ? (
+              canCreateIssue ? (
                 <Button
                   size="xs"
                   variant="secondary"

@@ -69,14 +69,14 @@ The **Progress** view of the details panel shows the context source and the issu
 
 Natamux can open a GitHub issue for a task that you made in the app, and link the two. The issue has the task title as its title. Its body is the spec (`spec.md`) when there is one, and otherwise the task notes, plus a line `Made by Natamux for T-0001.`
 
-You choose when with `tracker.createIssue` in the `.natamux.json` file at the root of the repository. Open it from **Projects** > **Settings**.
+Natamux opens no issue on its own until you turn it on. Choose when in the **Issues** tab of the project settings (**Projects** > **Settings**). It writes `tracker.createIssue` in the `.natamux.json` file at the root of the repository.
 
 | Value | Natamux opens the issue |
 |---|---|
-| `on-spec-approved` (default) | When you approve the `spec` stage. In a pipeline without a spec stage, when the pull request opens. |
+| `manual` (default) | Only when you click **Create issue** |
+| `on-spec-approved` | When you approve the `spec` stage. In a pipeline without a spec stage, when the pull request opens. |
 | `on-pr` | When the pull request opens |
-| `manual` | Only when you click **Create issue** |
-| `never` | Never |
+| `never` | Never. The **Create issue** button is hidden. |
 
 ```json
 {
@@ -88,7 +88,7 @@ You choose when with `tracker.createIssue` in the `.natamux.json` file at the ro
 }
 ```
 
-To open an issue by hand, open the **Progress** view in the details of the task and click **Create issue** in **Context and issue**. A toast says **Opened issue #N.** The button shows only when the task has no issue yet and the tracker is `github`. Set `tracker.type` to `none` to turn issues off.
+To open an issue by hand, open the **Progress** view in the details of the task and click **Create issue** in **Context and issue**. A toast says **Opened issue #N.** The button shows only when the task has no issue yet, the tracker is `github`, and `createIssue` is not `never`. Set `tracker.type` to `none` to turn issues off.
 
 If opening an issue fails in the background, the task stays without an issue and the daemon logs the error. Click **Create issue** to try again.
 
