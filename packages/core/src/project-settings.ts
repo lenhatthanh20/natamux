@@ -24,10 +24,11 @@ export const contextSourceSchema = z.discriminatedUnion('type', [
 export type ContextSource = z.infer<typeof contextSourceSchema>
 
 export const CREATE_ISSUE_WHEN = ['never', 'manual', 'on-spec-approved', 'on-pr'] as const
+export type CreateIssueWhen = (typeof CREATE_ISSUE_WHEN)[number]
 
 export const trackerSettingsSchema = z.object({
   type: z.enum(['github', 'none']).default('github'),
-  createIssue: z.enum(CREATE_ISSUE_WHEN).default('on-spec-approved'),
+  createIssue: z.enum(CREATE_ISSUE_WHEN).default('manual'),
   linkInPr: z.boolean().default(true),
 })
 
@@ -52,7 +53,7 @@ export const projectSettingsSchema = z.object({
     .default({ sources: [{ type: 'manual' }, { type: 'github-issue' }] }),
   tracker: trackerSettingsSchema.default({
     type: 'github',
-    createIssue: 'on-spec-approved',
+    createIssue: 'manual',
     linkInPr: true,
   }),
   agents: agentSettingsSchema.default({ permissionMode: 'auto' }),

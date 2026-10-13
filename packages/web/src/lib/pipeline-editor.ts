@@ -1,10 +1,12 @@
 import {
   activeSteps,
   type CatalogStage,
+  type CreateIssueWhen,
   canHaveOwnAgent,
   catalogEntry,
   commitRule,
   DEFAULT_PIPELINE,
+  DEFAULT_PROJECT_SETTINGS,
   defaultPrompt,
   GATES,
   type Gate,
@@ -21,6 +23,7 @@ import {
   stageName,
   stageSchema,
   stagesOf,
+  trackerSettingsSchema,
 } from '@natamux/core'
 
 // The logic of the Stages tab of Project settings. The draft is the text of `.natamux.json`; the
@@ -155,6 +158,25 @@ export function withSteps(raw: RawSettings, steps: readonly Step[]): RawSettings
     )
   }
   return { stages: steps, ...raw }
+}
+
+// The tracker of the draft, with the defaults for what it leaves out.
+export function trackerOf(raw: RawSettings) {
+  const parsed = trackerSettingsSchema.safeParse(raw.tracker ?? {})
+  return parsed.success ? parsed.data : DEFAULT_PROJECT_SETTINGS.tracker
+}
+
+// The settings with this `tracker.createIssue`. The default is left out, like the default
+// pipeline, and so is a tracker with nothing left. `tracker` keeps its place among the keys.
+export function withCreateIssue(raw: RawSettings, createIssue: CreateIssueWhen): RawSettings {
+  const old = isRecord(raw.tracker) ? raw.tracker : {}
+  const rest = Object.fromEntries(Object.entries(old).filter(([key]) => key !== 'createIssue'))
+  const tracker =
+    createIssue === DEFAULT_PROJECT_SETTINGS.tracker.createIssue ? rest : { ...rest, createIssue }
+  if (Object.keys(tracker).length === 0) {
+    return Object.fromEntries(Object.entries(raw).filter(([key]) => key !== 'tracker'))
+  }
+  return { ...raw, tracker }
 }
 
 // The settings to save over a file that changed on disk: the keys the person changed since

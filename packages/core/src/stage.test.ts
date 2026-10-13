@@ -319,10 +319,22 @@ describe('projectSettingsSchema', () => {
     expect(DEFAULT_PROJECT_SETTINGS.stages).toEqual(DEFAULT_PIPELINE)
     expect(DEFAULT_PROJECT_SETTINGS.tracker).toEqual({
       type: 'github',
-      createIssue: 'on-spec-approved',
+      createIssue: 'manual',
       linkInPr: true,
     })
     expect(DEFAULT_PROJECT_SETTINGS.agents).toEqual({ permissionMode: 'auto' })
+  })
+
+  it('opens issues only when asked, unless the file says otherwise', () => {
+    const createIssue = (tracker: unknown) =>
+      projectSettingsSchema.parse({ tracker }).tracker.createIssue
+    expect(createIssue({})).toBe('manual')
+    expect(createIssue({ type: 'github' })).toBe('manual')
+    for (const value of ['never', 'manual', 'on-spec-approved', 'on-pr']) {
+      expect(createIssue({ createIssue: value })).toBe(value)
+    }
+    const always = projectSettingsSchema.safeParse({ tracker: { createIssue: 'always' } })
+    expect(always.success).toBe(false)
   })
 
   it('takes auto or ask as the permission mode of the agents', () => {

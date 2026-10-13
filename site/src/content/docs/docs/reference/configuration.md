@@ -17,7 +17,7 @@ Every field is optional. A repository without the file uses the defaults on this
 - Unknown fields are ignored.
 - Each repository that Natamux manages has its own file.
 
-To edit the file in the dashboard, open **Settings** in the menu of the project. The **Stages** tab edits the stages without JSON, and the **JSON** tab edits the whole file. **Save** writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default pipeline in the editor. See [Project settings](/docs/guides/project-settings/).
+To edit the file in the dashboard, open **Settings** in the menu of the project. The **Stages** tab edits the stages without JSON, the **Issues** tab sets when an issue opens, and the **JSON** tab edits the whole file. **Save** writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default pipeline in the editor. See [Project settings](/docs/guides/project-settings/).
 
 - The editor changes only `stages`. Other fields and keys it does not know stay in the file as they are.
 - When the stages equal the default pipeline, the editor leaves `stages` out of the file, so the project follows later changes of the default.
@@ -28,7 +28,7 @@ To edit the file in the dashboard, open **Settings** in the menu of the project.
 |---|---|---|---|
 | `stages` | array of stages and groups | The [default pipeline](#default-pipeline) | The steps of every task, in order. At least one. |
 | `context` | object | `{ "sources": [{ "type": "manual" }, { "type": "github-issue" }] }` | Where task context can come from. |
-| `tracker` | object | `{ "type": "github", "createIssue": "on-spec-approved", "linkInPr": true }` | The issue tracker. |
+| `tracker` | object | `{ "type": "github", "createIssue": "manual", "linkInPr": true }` | The issue tracker. |
 | `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission. |
 
 ## `stages`
@@ -235,15 +235,15 @@ When you create a task, you pick one source with its type, for example `--contex
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `type` | `github` or `none` | `github` | The issue tracker. `none` turns off issue creation. |
-| `createIssue` | string | `on-spec-approved` | When Natamux opens an issue for a task. |
+| `createIssue` | string | `manual` | When Natamux opens an issue for a task. |
 | `linkInPr` | boolean | `true` | Add a closing line to the body of the pull request. |
 
 Values of `createIssue`:
 
 | Value | Natamux opens an issue |
 |---|---|
-| `never` | Never. |
-| `manual` | Only when you ask for it (**Create issue**). |
+| `never` | Never. The **Create issue** button is hidden. |
+| `manual` (default) | Only when you ask for it (**Create issue**). |
 | `on-spec-approved` | When you approve the `spec` stage. In a pipeline with no stage called `spec`, when the pull request is opened. |
 | `on-pr` | When the pull request is opened. |
 

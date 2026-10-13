@@ -1,5 +1,7 @@
 import {
+  type CreateIssueWhen,
   DEFAULT_PIPELINE,
+  DEFAULT_PROJECT_SETTINGS,
   pipelineIssues,
   type Repo,
   type SkillList,
@@ -19,6 +21,8 @@ import {
   parseDraft,
   type RawSettings,
   sameSettings,
+  trackerOf,
+  withCreateIssue,
   withSteps,
 } from '../lib/pipeline-editor'
 import { toast } from '../lib/toasts'
@@ -40,12 +44,24 @@ type ProjectSettingsDialogProps = {
   onClose: () => void
 }
 
-type Tab = 'stages' | 'json'
+type Tab = 'stages' | 'issues' | 'json'
 
 const TABS = [
   { id: 'stages', label: 'Stages' },
+  { id: 'issues', label: 'Issues' },
   { id: 'json', label: 'JSON' },
 ] as const
+
+const CREATE_ISSUE_OPTIONS: readonly { value: CreateIssueWhen; label: string }[] = [
+  { value: 'manual', label: "Only when you click Create issue in the task's Progress view" },
+  {
+    value: 'on-spec-approved',
+    label:
+      'Automatically, when you approve the Spec stage. Without a Spec stage, when the pull request opens',
+  },
+  { value: 'on-pr', label: 'Automatically, just before the pull request opens' },
+  { value: 'never', label: 'Never' },
+]
 
 // What the screen started from: the text of the file and its version. A broken file starts from
 // the defaults.
@@ -122,6 +138,14 @@ export function ProjectSettingsDialog({
   const edit = (next: Step[]) => {
     if (draft.ok) {
       setText(formatSettings(withSteps(draft.raw, next)))
+      setProblem(null)
+    }
+  }
+
+  const tracker = draft.ok ? trackerOf(draft.raw) : DEFAULT_PROJECT_SETTINGS.tracker
+  const setCreateIssue = (value: CreateIssueWhen) => {
+    if (draft.ok) {
+      setText(formatSettings(withCreateIssue(draft.raw, value)))
       setProblem(null)
     }
   }
@@ -257,10 +281,12 @@ export function ProjectSettingsDialog({
       onSubmit={() => submit()}
       footer={
         <div className="flex w-full flex-col gap-2">
-          <p className="m-0 text-xs text-muted">
-            New tasks use this pipeline. Tasks on their way keep their stages, but use the new
-            prompts and approvals.
-          </p>
+          {shownTab !== 'issues' && (
+            <p className="m-0 text-xs text-muted">
+              New tasks use this pipeline. Tasks on their way keep their stages, but use the new
+              prompts and approvals.
+            </p>
+          )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="md" disabled={current === null} onClick={reset}>
               Reset to default
@@ -410,6 +436,53 @@ export function ProjectSettingsDialog({
                   )}
                 </div>
               </div>
+            </div>
+          ) : shownTab === 'issues' ? (
+            <div {...tabPanelProps(prefix, 'issues', 'Issues')} className="flex flex-col gap-3">
+              <fieldset className="flex min-w-0 flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-semibold">
+                  Open a GitHub issue for a task
+                </legend>
+                {CREATE_ISSUE_OPTIONS.map((option) => (
+                  <div key={option.value} className="flex min-h-7 flex-wrap items-center gap-2">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name={`${prefix}-create-issue`}
+                        value={option.value}
+                        checked={tracker.createIssue === option.value}
+                        disabled={tracker.type === 'none'}
+                        onChange={() => setCreateIssue(option.value)}
+                        className="mt-0.5 size-3.5 shrink-0 accent-accent"
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                    {option.value === DEFAULT_PROJECT_SETTINGS.tracker.createIssue && (
+                      <span className="rounded bg-badge px-1.5 text-2xs font-medium text-muted">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
+              {tracker.type === 'none' && (
+                <p className="m-0 text-xs text-signal">
+                  Issues are off: tracker.type is none (JSON tab)
+                </p>
+              )}
+              <ul
+                aria-label="Where the issue comes from"
+                className="m-0 flex list-disc flex-col gap-0.5 pl-4 text-xs text-muted"
+              >
+                <li>
+                  Opened with <code>gh issue create</code> in the GitHub repository of this project.
+                </li>
+                <li>Title: the task title.</li>
+                <li>
+                  Body: the <code>spec.md</code> of the task, or the task notes without one, and a
+                  line "Made by Natamux for T-0001."
+                </li>
+              </ul>
             </div>
           ) : (
             <div {...tabPanelProps(prefix, 'json', 'JSON')} className="flex flex-col gap-2">

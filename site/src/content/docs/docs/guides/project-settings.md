@@ -7,7 +7,7 @@ sidebar:
 
 Each project has its own settings: the [stages](/docs/concepts/stages/) every task goes through, where task context comes from, the issue tracker and how agents ask for permission. Natamux keeps them in `.natamux.json` at the root of the repository, so you can commit the file and share it with your team.
 
-Open them from the sidebar: right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has two tabs, **Stages** (the default) and **JSON**.
+Open them from the sidebar: right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
 
 <figure class="shot">
 <img class="shot-dark" src="/screens/ui/settings-stages-dark.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
@@ -37,10 +37,16 @@ Open them from the sidebar: right-click the project, or click **...** next to it
 | **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
 
 - **Problems.** Each problem shows next to its stage, and **Save** is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
-- **Footer.** **Reset to default** puts the default pipeline in the editor. **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
+- **Footer.** **Reset to default** puts the default pipeline in the editor. **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
 - **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
 
 **Save** changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.
+
+## The Issues tab
+
+The **Issues** tab sets when Natamux opens a GitHub issue for a task (`tracker.createIssue`). By default it opens none: **Only when you click Create issue in the task's Progress view**. The other choices open the issue when you approve the Spec stage, or just before the pull request opens. **Never** also hides the **Create issue** button.
+
+Under the choices, the tab says what the issue is made of. With `tracker.type` set to `none`, the choices are turned off. See [Open an issue for a task](/docs/guides/github/#open-an-issue-for-a-task).
 
 ## The JSON tab
 
@@ -48,7 +54,7 @@ The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON
 
 - `requireCommit`, `requireClean` and `check` on a stage;
 - `context.sources`, such as a skill or MCP source with a name of its own;
-- `tracker`, the issue tracker;
+- `tracker.type` and `tracker.linkInPr`, the rest of the issue tracker;
 - `agents.permissionMode`, `auto` or `ask`.
 
 Every field is in the [configuration reference](/docs/reference/configuration/).

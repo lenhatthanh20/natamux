@@ -695,6 +695,45 @@ describe('the actions of the current stage', () => {
 
     await waitFor(() => expect(createIssue).toHaveBeenCalledTimes(1))
   })
+
+  it('offers no Create issue when the project never wants issues', async () => {
+    const tracker = { ...DEFAULT_PROJECT_SETTINGS.tracker, createIssue: 'never' as const }
+    progress({ settings: { ...SETTINGS, settings: { ...DEFAULT_PROJECT_SETTINGS, tracker } } })
+
+    const context = await screen.findByRole('region', { name: 'Context and issue' })
+    expect(within(context).queryByRole('button', { name: 'Create issue' })).toBeNull()
+    expect(within(context).getByText('None')).toBeTruthy()
+  })
+
+  const TRACKERS = [
+    ['github', 'manual', true],
+    ['github', 'on-spec-approved', true],
+    ['github', 'on-pr', true],
+    ['none', 'manual', false],
+    ['none', 'on-pr', false],
+  ] as const
+
+  it.each(TRACKERS)('tracker %s, %s: offers Create issue %s', async (type, createIssue, offers) => {
+    const tracker = { ...DEFAULT_PROJECT_SETTINGS.tracker, type, createIssue }
+    progress({ settings: { ...SETTINGS, settings: { ...DEFAULT_PROJECT_SETTINGS, tracker } } })
+
+    const context = await screen.findByRole('region', { name: 'Context and issue' })
+    const button = within(context).queryByRole('button', { name: 'Create issue' })
+    expect(button !== null).toBe(offers)
+  })
+
+  it('links the issue of the task, also when the project never wants issues', async () => {
+    const tracker = { ...DEFAULT_PROJECT_SETTINGS.tracker, createIssue: 'never' as const }
+    const issue = { provider: 'github', key: '#7', url: 'https://github.com/o/r/issues/7' }
+    progress({
+      task: { ...TASK, issue },
+      settings: { ...SETTINGS, settings: { ...DEFAULT_PROJECT_SETTINGS, tracker } },
+    })
+
+    const context = await screen.findByRole('region', { name: 'Context and issue' })
+    expect(within(context).getByRole('link', { name: '#7' }).getAttribute('href')).toBe(issue.url)
+    expect(within(context).queryByText('None')).toBeNull()
+  })
 })
 
 describe('the facts below the stages', () => {

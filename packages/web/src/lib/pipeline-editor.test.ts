@@ -29,6 +29,8 @@ import {
   setText,
   setWorkflow,
   shownDefaultPrompt,
+  trackerOf,
+  withCreateIssue,
   withSteps,
 } from './pipeline-editor'
 
@@ -78,6 +80,55 @@ describe('withSteps', () => {
     const steps: Step[] = [{ id: 'implement', kind: 'agent', gate: 'auto' }]
     expect(Object.keys(withSteps({ a: 1, stages: [], b: 2 }, steps))).toEqual(['a', 'stages', 'b'])
     expect(Object.keys(withSteps({ a: 1 }, steps))).toEqual(['stages', 'a'])
+  })
+})
+
+describe('trackerOf', () => {
+  it('reads the tracker of the draft, with the defaults for what it leaves out', () => {
+    expect(trackerOf({})).toEqual({ type: 'github', createIssue: 'manual', linkInPr: true })
+    expect(trackerOf({ tracker: { type: 'none', createIssue: 'on-pr' } })).toEqual({
+      type: 'none',
+      createIssue: 'on-pr',
+      linkInPr: true,
+    })
+  })
+
+  it('falls back to the defaults for a tracker it cannot read', () => {
+    expect(trackerOf({ tracker: { createIssue: 'always' } }).createIssue).toBe('manual')
+    expect(trackerOf({ tracker: 'github' }).type).toBe('github')
+  })
+})
+
+describe('withCreateIssue', () => {
+  it('sets when to open an issue, and keeps every other key', () => {
+    const raw = { team: 'web', tracker: { type: 'github', linkInPr: false }, stages: [] }
+    const next = withCreateIssue(raw, 'on-spec-approved')
+    expect(next).toEqual({
+      team: 'web',
+      tracker: { type: 'github', linkInPr: false, createIssue: 'on-spec-approved' },
+      stages: [],
+    })
+    expect(Object.keys(next)).toEqual(['team', 'tracker', 'stages'])
+    expect(withCreateIssue({ team: 'web' }, 'on-pr')).toEqual({
+      team: 'web',
+      tracker: { createIssue: 'on-pr' },
+    })
+  })
+
+  it('keeps keys of the tracker it does not know', () => {
+    expect(withCreateIssue({ tracker: { foo: 1 } }, 'never')).toEqual({
+      tracker: { foo: 1, createIssue: 'never' },
+    })
+    expect(withCreateIssue({ tracker: { foo: 1, createIssue: 'never' } }, 'manual')).toEqual({
+      tracker: { foo: 1 },
+    })
+  })
+
+  it('leaves the default out, and a tracker with nothing left', () => {
+    const none = { tracker: { type: 'none', createIssue: 'on-pr' } }
+    expect(withCreateIssue(none, 'manual')).toEqual({ tracker: { type: 'none' } })
+    const only = { team: 'web', tracker: { createIssue: 'on-pr' } }
+    expect(withCreateIssue(only, 'manual')).toEqual({ team: 'web' })
   })
 })
 

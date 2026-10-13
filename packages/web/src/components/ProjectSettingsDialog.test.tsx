@@ -1520,3 +1520,180 @@ describe('ProjectSettingsDialog, workflow', () => {
     expect(save).not.toHaveBeenCalled()
   })
 })
+
+describe('ProjectSettingsDialog, Issues tab', () => {
+  const ON_SPEC = /^Automatically, when you approve the Spec stage/
+  const MANUAL = /^Only when you click Create issue/
+
+  const radio = (group: HTMLElement, name: string | RegExp) =>
+    within(group).getByRole('radio', { name }) as HTMLInputElement
+
+  async function issuesTab(user: User) {
+    await user.click(await screen.findByRole('tab', { name: 'Issues' }))
+    return screen.getByRole('group', { name: 'Open a GitHub issue for a task' })
+  }
+
+  it('says when an issue opens and what it is made of, and is off by default', async () => {
+    const { user } = open()
+    const group = await issuesTab(user)
+
+    const radios = within(group).getAllByRole('radio')
+    expect(radios.map((input) => input.closest('label')?.textContent)).toEqual([
+      "Only when you click Create issue in the task's Progress view",
+      'Automatically, when you approve the Spec stage. Without a Spec stage, when the pull request opens',
+      'Automatically, just before the pull request opens',
+      'Never',
+    ])
+    expect(radio(group, MANUAL).checked).toBe(true)
+    expect(within(group).getByText('Default')).toBeTruthy()
+    const source = screen.getByRole('list', { name: 'Where the issue comes from' })
+    expect(source.textContent).toMatch(/gh issue create.*spec\.md/)
+  })
+
+  it('saves the choice in tracker.createIssue, and keeps the other keys', async () => {
+    const file = { 'x-team': 'web', tracker: { type: 'github', linkInPr: false } }
+    const { save, user } = open({
+      loaded: { found: true, text: JSON.stringify(file), version: 'v1' },
+    })
+    const group = await issuesTab(user)
+
+    await user.click(radio(group, ON_SPEC))
+    await user.click(screen.getByRole('tab', { name: 'JSON' }))
+    const json = screen.getByRole('textbox', { name: '.natamux.json' }) as HTMLTextAreaElement
+    expect(json.value).toContain('"createIssue": "on-spec-approved"')
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save.mock.calls[0]?.[0]).toEqual({
+      'x-team': 'web',
+      tracker: { type: 'github', linkInPr: false, createIssue: 'on-spec-approved' },
+    })
+  })
+
+  it('leaves the key out when the default is picked again', async () => {
+    const text = JSON.stringify({ tracker: { createIssue: 'on-pr' } })
+    const { save, user } = open({ loaded: { found: true, text, version: 'v1' } })
+    const group = await issuesTab(user)
+
+    await user.click(radio(group, MANUAL))
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save.mock.calls[0]?.[0]).toEqual({})
+  })
+
+  it('shows a change made on the JSON tab', async () => {
+    const { user } = open()
+    await screen.findByRole('tab', { name: 'Issues' })
+
+    await jsonTab(user, '{ "tracker": { "createIssue": "never" } }')
+    const group = await issuesTab(user)
+
+    expect(radio(group, 'Never').checked).toBe(true)
+  })
+
+  it('turns the choice off when the project has no tracker', async () => {
+    const text = JSON.stringify({ tracker: { type: 'none' } })
+    const { user } = open({ loaded: { found: true, text, version: 'v1' } })
+    const group = await issuesTab(user)
+
+    for (const input of within(group).getAllByRole('radio')) {
+      expect((input as HTMLInputElement).disabled).toBe(true)
+    }
+    expect(screen.getByText('Issues are off: tracker.type is none (JSON tab)')).toBeTruthy()
+  })
+
+  it('puts Issues between Stages and JSON, and drops the pipeline note there', async () => {
+    const { user } = open()
+    await stageList()
+
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent)
+    expect(tabs).toEqual(['Stages', 'Issues', 'JSON'])
+    expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
+    await issuesTab(user)
+    expect(screen.queryByText(/^New tasks use this pipeline\./)).toBeNull()
+  })
+
+  it('checks the value of the file, and keeps Default on Manual', async () => {
+    const text = JSON.stringify({ tracker: { createIssue: 'on-pr' } })
+    const { user } = open({ loaded: { found: true, text, version: 'v1' } })
+    const group = await issuesTab(user)
+
+    expect(radio(group, /^Automatically, just before/).checked).toBe(true)
+    expect(within(group).getAllByText('Default')).toHaveLength(1)
+    expect(radio(group, MANUAL).closest('div')?.textContent).toMatch(/Default$/)
+  })
+
+  it('moves the choice with the arrow keys', async () => {
+    const { user } = open()
+    const group = await issuesTab(user)
+
+    radio(group, MANUAL).focus()
+    await user.keyboard('{ArrowDown}')
+
+    expect(radio(group, ON_SPEC).checked).toBe(true)
+  })
+
+  it('keeps the JSON tab while the JSON is broken', async () => {
+    const { user } = open()
+    await jsonTab(user, '{ "tracker": ')
+
+    await user.click(screen.getByRole('tab', { name: 'Issues' }))
+
+    expect(screen.getByRole('tab', { name: 'JSON', selected: true })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: 'Open a GitHub issue for a task' })).toBeNull()
+  })
+
+  it('keeps the type and linkInPr of the tracker when the default is picked', async () => {
+    const tracker = { type: 'github', linkInPr: false }
+    const text = JSON.stringify({ tracker: { ...tracker, createIssue: 'on-pr' } })
+    const { save, user } = open({ loaded: { found: true, text, version: 'v1' } })
+
+    await user.click(radio(await issuesTab(user), MANUAL))
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save.mock.calls[0]?.[0]).toEqual({ tracker })
+  })
+
+  it('has nothing to save when the choice comes back to the start', async () => {
+    const { user } = open()
+    const group = await issuesTab(user)
+
+    await user.click(radio(group, MANUAL))
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+    await user.click(radio(group, /^Automatically, just before/))
+    await user.click(screen.getByRole('tab', { name: 'JSON' }))
+    const json = screen.getByRole('textbox', { name: '.natamux.json' }) as HTMLTextAreaElement
+    expect(JSON.parse(json.value)).toEqual({ tracker: { createIssue: 'on-pr' } })
+
+    await user.click(radio(await issuesTab(user), MANUAL))
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+  })
+
+  it('saves nothing when closed with Cancel', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { save, onClose, user } = open()
+
+    await user.click(radio(await issuesTab(user), ON_SPEC))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onClose).toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('shows the value of a project without a tracker, and turns on with one', async () => {
+    const text = JSON.stringify({ tracker: { type: 'none', createIssue: 'on-pr' } })
+    const { user } = open({ loaded: { found: true, text, version: 'v1' } })
+    const group = await issuesTab(user)
+
+    const onPr = radio(group, /^Automatically, just before/)
+    expect(onPr.checked).toBe(true)
+    expect(onPr.disabled).toBe(true)
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+
+    await jsonTab(user, '{ "tracker": { "type": "github", "createIssue": "on-pr" } }')
+    expect(radio(await issuesTab(user), MANUAL).disabled).toBe(false)
+    expect(screen.queryByText('Issues are off: tracker.type is none (JSON tab)')).toBeNull()
+  })
+})

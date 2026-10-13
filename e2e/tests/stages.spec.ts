@@ -110,6 +110,23 @@ test('changes the stages of a project in Project settings', async ({ page, reque
   expect(JSON.stringify(task.stages)).toContain('"security"')
 })
 
+test('sets when a project opens issues in the Issues tab', async ({ page, request }) => {
+  const dialog = await openSettings(page, repo)
+  await dialog.getByRole('tab', { name: 'Issues' }).click()
+  const group = dialog.getByRole('group', { name: 'Open a GitHub issue for a task' })
+  await expect(group.getByRole('radio', { name: /^Only when you click/ })).toBeChecked()
+  await expect(dialog.getByRole('list', { name: 'Where the issue comes from' })).toContainText(
+    'gh issue create',
+  )
+
+  await group.getByRole('radio', { name: /^Automatically, when you approve/ }).check()
+  await dialog.getByRole('button', { name: /^Save/ }).click()
+  await expect(dialog).toHaveCount(0)
+
+  const body = await (await request.get(`/api/repos/${repo.id}/settings`, { headers })).json()
+  expect(body.settings.tracker.createIssue).toBe('on-spec-approved')
+})
+
 // C1, C4 and C5 of the test spec.
 test('moves a stage by keyboard and turns one off for new tasks', async ({ page, request }) => {
   const dialog = await openSettings(page, repo)

@@ -187,7 +187,7 @@ To remove a project, choose **Remove project** in the menu of its group in the s
 
 ## Project settings
 
-Click **Settings** in the menu of a project to open **Project settings of &lt;repo&gt;**. The **Stages** tab edits the pipeline of the project: add stages from the catalog, run stages side by side, choose which ones wait for you, and pick the agent of a stage such as **Review**. The **JSON** tab edits the whole `.natamux.json` file. See [Project settings](/docs/guides/project-settings/).
+Click **Settings** in the menu of a project to open **Project settings of &lt;repo&gt;**. The **Stages** tab edits the pipeline of the project: add stages from the catalog, run stages side by side, choose which ones wait for you, and pick the agent of a stage such as **Review**. The **Issues** tab sets when Natamux opens a GitHub issue for a task. The **JSON** tab edits the whole `.natamux.json` file. See [Project settings](/docs/guides/project-settings/).
 
 ## Import issues
 
