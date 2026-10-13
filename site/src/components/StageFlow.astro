@@ -122,29 +122,29 @@ const wide: Layout = {
   view: [864, 300],
   boxes: {
     context: { x: 8, y: 98, w: 92, h: H },
-    spec: { x: 122, y: 98, w: 86, h: H },
-    plan: { x: 230, y: 98, w: 86, h: H },
-    testspec: { x: 350, y: 48, w: 120, h: H },
-    implement: { x: 350, y: 148, w: 120, h: H },
-    tests: { x: 504, y: 98, w: 120, h: H },
-    review: { x: 646, y: 98, w: 96, h: H },
+    spec: { x: 120, y: 98, w: 86, h: H },
+    plan: { x: 226, y: 98, w: 86, h: H },
+    testspec: { x: 344, y: 48, w: 124, h: H },
+    implement: { x: 344, y: 148, w: 124, h: H },
+    tests: { x: 500, y: 98, w: 124, h: H },
+    review: { x: 644, y: 98, w: 100, h: H },
     release: { x: 764, y: 98, w: 92, h: H },
   },
-  frame: { x: 338, y: 30, w: 144, h: 182 },
-  frameLabel: { x: 410, y: 22, anchor: 'middle' },
+  frame: { x: 332, y: 30, w: 148, h: 182 },
+  frameLabel: { x: 406, y: 22, anchor: 'middle' },
   wires: [
-    'M100 120H120',
-    'M208 120H228',
-    'M316 120H327V70H348',
-    'M327 120V170H348',
-    'M470 70H493V120H502',
-    'M470 170H493V120',
-    'M624 120H644',
-    'M742 120H762',
+    'M100 120H118',
+    'M206 120H224',
+    'M312 120H322V70H342',
+    'M322 120V170H342',
+    'M468 70H490V120H498',
+    'M468 170H490V120',
+    'M624 120H642',
+    'M744 120H762',
   ],
-  loop: 'M694 142V246Q694 258 682 258H422Q410 258 410 246V195',
-  loopLabel: { x: 552, y: 284, lines: ['Findings: back to Implement, at most 2 times'] },
-  chip: { x: 410, y: 120 },
+  loop: 'M694 142V246Q694 258 682 258H418Q406 258 406 246V195',
+  loopLabel: { x: 550, y: 284, lines: ['Findings: back to Implement, at most 2 times'] },
+  chip: { x: 406, y: 120 },
 }
 const narrow: Layout = {
   view: [360, 510],
@@ -159,7 +159,7 @@ const narrow: Layout = {
     release: { x: 130, y: 452, w: 120, h: H },
   },
   frame: { x: 28, y: 204, w: 324, h: 86 },
-  frameLabel: { x: 40, y: 220, anchor: 'start' },
+  frameLabel: { x: 34, y: 221, anchor: 'start' },
   wires: [
     'M190 54V76',
     'M190 122V144',
@@ -178,7 +178,7 @@ const narrow: Layout = {
 function textLines(node: Node, box: Box): { x: number; y: number; text: string }[] {
   const x = node.agent ? box.x + 34 + (box.w - 34) / 2 - 4 : box.x + box.w / 2
   const mid = box.y + box.h / 2
-  const lineHeight = 15
+  const lineHeight = 16
   const top = mid - ((node.title.length - 1) * lineHeight) / 2
   return node.title.map((text, i) => ({ x, y: top + i * lineHeight, text }))
 }
@@ -329,7 +329,7 @@ const check = (cx: number, cy: number) =>
             })}
 
             <g class="sf-chip sf-anim" data-k="chip-on">
-              <rect x={l.chip.x - 46} y={l.chip.y - 10} width="92" height="20" rx="10" />
+              <rect x={l.chip.x - 50} y={l.chip.y - 11} width="100" height="22" rx="11" />
               <text x={l.chip.x} y={l.chip.y} text-anchor="middle">
                 Sent back 1×
               </text>
@@ -460,7 +460,7 @@ const check = (cx: number, cy: number) =>
   }
   .sf-frame-label,
   .sf-loop-label {
-    font-size: 11.5px;
+    font-size: 13px;
     fill: var(--sf-muted);
     letter-spacing: 0.02em;
   }
@@ -514,7 +514,7 @@ const check = (cx: number, cy: number) =>
     stroke-dasharray: 3 4;
   }
   .sf-title {
-    font-size: 14px;
+    font-size: 15.5px;
     font-weight: 600;
     fill: var(--sf-text);
     dominant-baseline: central;
@@ -524,7 +524,7 @@ const check = (cx: number, cy: number) =>
     stroke: var(--c);
   }
   .sf-agent text {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     fill: var(--c);
     dominant-baseline: central;
@@ -554,7 +554,7 @@ const check = (cx: number, cy: number) =>
     stroke: var(--sf-bad);
   }
   .sf-chip text {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     fill: var(--sf-bad);
     dominant-baseline: central;
