@@ -27,6 +27,20 @@ export function findRoving(container: ParentNode | null, key: string): HTMLEleme
   )
 }
 
+// The props of one item. A memoized row builds them itself from the `stop` and `activate` that
+// `useRovingFocus` returns, since `item(key)` is a new object on every render.
+export function rovingItem(key: string, isStop: boolean, activate: (key: string) => void) {
+  return {
+    'data-roving': key,
+    tabIndex: isStop ? 0 : -1,
+    onFocus: (event: FocusEvent<HTMLElement>) => {
+      if (event.target === event.currentTarget) {
+        activate(key)
+      }
+    },
+  }
+}
+
 // One tab stop for a whole list or tree. Arrow keys, Home and End move focus between the items;
 // the item with focus is the one that has tabIndex 0. Give `container` to the element around the
 // items, and `item(key)` to each item.
@@ -92,14 +106,9 @@ export function useRovingFocus({ keys, preferred, letters, labels, onKey, onMove
     // Put these on the element around the items.
     containerProps: { onKeyDown },
     // Put these on each item.
-    item: (key: string) => ({
-      'data-roving': key,
-      tabIndex: key === stop ? 0 : -1,
-      onFocus: (event: FocusEvent<HTMLElement>) => {
-        if (event.target === event.currentTarget) {
-          setActive(key)
-        }
-      },
-    }),
+    item: (key: string) => rovingItem(key, key === stop, setActive),
+    // The key of the item with the tab stop.
+    stop,
+    activate: setActive,
   }
 }
