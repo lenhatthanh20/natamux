@@ -5,7 +5,9 @@ import userEvent from '@testing-library/user-event'
 import { type ComponentProps, type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CHOICES } from '../lib/agents'
-import type { TaskShells } from '../lib/api'
+import type { StoredEvent, TaskShells } from '../lib/api'
+import { ACTIVITY_KEY } from '../lib/live'
+import { SHELLS_EVERY_MS } from '../lib/task-shells'
 import { ContextMenuHost } from './ui/Menu'
 import { WorkspaceList } from './WorkspaceList'
 
@@ -153,6 +155,14 @@ const rowOf = (title: string) => screen.getByRole('button', { name: new RegExp(`
 function shells(lanes: TaskShells['lanes'], programs: TaskShells['programs'] = {}): TaskShells {
   const terminals = [...new Set([...Object.keys(lanes), ...Object.keys(programs)])]
   return { terminals, lanes, programs }
+}
+
+function taskEvent(
+  taskId: string,
+  type: StoredEvent['event']['type'],
+  payload: Record<string, unknown>,
+): StoredEvent['event'] {
+  return { taskId, source: 'agent', type, at: '2026-10-10T08:30:00.000Z', payload }
 }
 
 const removeButton = (repo: string) =>
@@ -473,17 +483,24 @@ describe('a task that waits on the user', () => {
     const failed = makeTask({ id: 'T-0006', title: 'Broken', state: 'failed' })
     const asks = makeTask({ id: 'T-0007', title: 'Asking', state: 'needs-input' })
     const handlers = callbacks()
+    // Each row reads the events of its own task.
+    const said: Record<string, StoredEvent['event']> = {
+      'T-0006': taskEvent('T-0006', 'agent.failed', { reason: 'claude: command not found' }),
+      'T-0007': taskEvent('T-0007', 'agent.asked', { message: 'Which test runner?' }),
+    }
+    const loadEvents = vi.fn(async (id: string): Promise<StoredEvent[]> => {
+      const last = said[id]
+      return last === undefined ? [] : [{ seq: 1, accepted: true, event: last }]
+    })
     render(
       withHost(
-        <WorkspaceList
-          {...props({ tasks: [failed, asks] }, handlers)}
-          questions={{ 'T-0006': 'claude: command not found', 'T-0007': 'Which test runner?' }}
-        />,
+        <WorkspaceList {...props({ tasks: [failed, asks] }, handlers)} loadEvents={loadEvents} />,
       ),
     )
 
-    expect(within(rowOf('Broken')).getByText('claude: command not found')).toBeTruthy()
-    expect(within(rowOf('Asking')).getByText('Which test runner?')).toBeTruthy()
+    expect(await within(rowOf('Broken')).findByText('claude: command not found')).toBeTruthy()
+    const asking = within(rowOf('Asking'))
+    expect(await asking.findByText('The agent asks: Which test runner?')).toBeTruthy()
     expect(rowOf('Asking').className).toContain('row-attn')
     expect(rowOf('Asking').getAttribute('data-state')).toBe('needs-input')
     expect(screen.queryByRole('button', { name: 'Answer T-0006' })).toBeNull()
@@ -655,11 +672,11 @@ describe('the agents of a task', () => {
 
     rerender({ tasks: [quiet], pinnedIds: [], currentId: 'T-0001', loadTerminals })
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
-    await act(() => vi.advanceTimersByTimeAsync(5000))
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS))
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(2))
 
     rerender({ tasks: [quiet], pinnedIds: [], currentId: null, loadTerminals })
-    await act(() => vi.advanceTimersByTimeAsync(15000))
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS * 3))
     expect(loadTerminals).toHaveBeenCalledTimes(2)
   })
 })
@@ -1151,7 +1168,7 @@ describe('test spec cases', () => {
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
 
     unmount()
-    await act(() => vi.advanceTimersByTimeAsync(15000))
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS * 3))
     expect(loadTerminals).toHaveBeenCalledTimes(1)
   })
 
@@ -1168,7 +1185,7 @@ describe('test spec cases', () => {
       window.dispatchEvent(new Event('visibilitychange'))
     })
 
-    await act(() => vi.advanceTimersByTimeAsync(15000))
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS * 3))
     expect(loadTerminals).toHaveBeenCalledTimes(1)
 
     state = 'visible'
@@ -1197,6 +1214,11 @@ describe('test spec cases', () => {
     const user = userEvent.setup()
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running', beta: 'running' } })
     const handlers = callbacks()
+    // The dashboard reads the activity; each shell row takes its own line from the cache.
+    queryClient.setQueryData(ACTIVITY_KEY, {
+      byTask: { 'T-0001': 'Edit src/app.ts' },
+      byTerminal: { 'T-0001': { '1': 'Edit src/app.ts' } },
+    })
     render(
       withHost(
         <WorkspaceList
@@ -1204,7 +1226,6 @@ describe('test spec cases', () => {
           loadTerminals={async () =>
             shells({ '1': { stage: 'alpha', state: null }, '2': { stage: 'beta', state: null } })
           }
-          terminalActivity={{ 'T-0001': { '1': 'Edit src/app.ts' } }}
         />,
       ),
     )

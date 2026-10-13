@@ -12,7 +12,8 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { useNowValue } from '../hooks/useNow'
 import { useRovingFocus } from '../hooks/useRovingFocus'
-import type { TaskShells } from '../lib/api'
+import { useStableCallback } from '../hooks/useStableCallback'
+import type { StoredEvent, TaskShells } from '../lib/api'
 import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import {
@@ -51,15 +52,12 @@ type WorkspaceListProps = {
   filter?: string
   currentId: string | null
   pinnedIds: readonly string[]
-  activity?: Readonly<Record<string, string>>
-  // What waiting agents asked, or why tasks failed, by task id.
-  questions?: Readonly<Record<string, string | null>>
+  // A task's events: a row that waits on the user reads what the agent asked, or why it failed.
+  loadEvents?: (taskId: string) => Promise<StoredEvent[]>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>
   // The shells of a task, read while its agents work or wait, and for the open workspace.
   loadTerminals?: (taskId: string) => Promise<TaskShells>
-  // What the agent in each shell does now, by task id and shell name.
-  terminalActivity?: Readonly<Record<string, Readonly<Record<string, string>>>>
   onOpen: (id: string) => void
   // Opens the terminal of a task on this shell. Null: its first shell.
   onOpenShell: (taskId: string, shell: string | null) => void
@@ -100,7 +98,8 @@ const isFinished = (task: Task) => task.state === 'done' || task.state === 'canc
 const GUIDE = 'ml-4 flex flex-col border-l border-line pl-[7px]'
 
 // Every workspace, grouped by repository, like folders in an editor's sidebar. The whole tree is
-// one tab stop: arrows move, Left and Right fold and unfold, F2 renames.
+// one tab stop: arrows move, Left and Right fold and unfold, F2 renames. The rows are memoized and
+// read their activity themselves, so a change of one task renders only its row.
 export function WorkspaceList({
   repos,
   tasks,
@@ -108,11 +107,9 @@ export function WorkspaceList({
   filter = '',
   currentId,
   pinnedIds,
-  activity = {},
-  questions = {},
+  loadEvents,
   seenState = {},
   loadTerminals,
-  terminalActivity = {},
   onOpen,
   onOpenShell,
   onViewChanges,
@@ -128,6 +125,15 @@ export function WorkspaceList({
   onRepoSettings,
   onRemoveRepo,
 }: WorkspaceListProps) {
+  // The same functions on every render, so the memoized rows keep their props.
+  const openTask = useStableCallback(onOpen)
+  const openShell = useStableCallback(onOpenShell)
+  const viewChanges = useStableCallback(onViewChanges)
+  const rename = useStableCallback(onRename)
+  const togglePin = useStableCallback(onTogglePin)
+  const remove = useStableCallback(onRemove)
+  const deleteTask = useStableCallback((id: string) => onDelete?.(id))
+  const readEvents = useStableCallback(async (id: string) => (await loadEvents?.(id)) ?? [])
   const [folds, setFolds] = useState(savedFolds)
   const [removing, setRemoving] = useState<Pick<Repo, 'id' | 'name' | 'path'> | null>(null)
   // The repository whose finished workspaces the user asked to remove.
@@ -342,6 +348,26 @@ export function WorkspaceList({
   const row = (task: Task, prefix = false, nested = false) => {
     const open = !nested && taskOpen(task)
     const waiting = open ? [] : waitingChildren(task)
+    const key = `task:${task.id}`
+    const subtasks = subtaskCount(task.id, allTasks)
+    // Only rows with something under them get children, so the others keep equal props.
+    const under = open ? (
+      <ul className={`${GUIDE} ${painted.current ? 'sb-unfold' : ''}`}>
+        {rowsOf(task).map((shell) => (
+          <AgentRow
+            key={shell.key}
+            taskId={task.id}
+            row={shell}
+            tabStop={roving.stop === `agent:${task.id}:${shell.key}`}
+            activate={roving.activate}
+            onOpenShell={openShell}
+          />
+        ))}
+        {(children[task.id] ?? []).map((child) => row(child, false, true))}
+      </ul>
+    ) : waiting.length > 0 ? (
+      <ul className={GUIDE}>{waiting.map((child) => row(child, false, true))}</ul>
+    ) : undefined
     return (
       <WorkspaceRow
         key={task.id}
@@ -350,46 +376,24 @@ export function WorkspaceList({
         pinned={pinnedIds.includes(task.id)}
         repoName={prefix ? repoName(task) : undefined}
         glyph={taskGlyphState(task, rowsOf(task))}
-        activity={activity[task.id]}
-        question={questions[task.id]}
         unseen={isUnseen(seenState, task)}
-        tab={roving.item(`task:${task.id}`)}
-        subtasks={subtaskCount(task.id, allTasks)}
+        tabStop={roving.stop === key}
+        activate={roving.activate}
+        subtasks={subtasks === null ? null : `${subtasks.done}/${subtasks.total}`}
         enter={painted.current}
         open={open}
         expandable={!nested && canFold(task)}
-        onAnswer={() =>
-          onOpenShell(
-            task.id,
-            rowsOf(task).find((shell) => shell.state === 'needs-input')?.shell ?? null,
-          )
-        }
-        onOpen={onOpen}
-        onViewChanges={onViewChanges}
-        onRename={onRename}
-        onTogglePin={onTogglePin}
-        onRemove={onRemove}
-        onDelete={onDelete}
+        onOpenShell={openShell}
+        answerShell={rowsOf(task).find((shell) => shell.state === 'needs-input')?.shell ?? null}
+        loadEvents={loadEvents === undefined ? undefined : readEvents}
+        onOpen={openTask}
+        onViewChanges={viewChanges}
+        onRename={rename}
+        onTogglePin={togglePin}
+        onRemove={remove}
+        onDelete={onDelete === undefined ? undefined : deleteTask}
       >
-        {open && (
-          <ul className={`${GUIDE} ${painted.current ? 'sb-unfold' : ''}`}>
-            {rowsOf(task).map((shell) => (
-              <AgentRow
-                key={shell.key}
-                row={shell}
-                activity={
-                  shell.shell === null ? undefined : terminalActivity[task.id]?.[shell.shell]
-                }
-                tab={roving.item(`agent:${task.id}:${shell.key}`)}
-                onOpen={() => onOpenShell(task.id, shell.shell)}
-              />
-            ))}
-            {(children[task.id] ?? []).map((child) => row(child, false, true))}
-          </ul>
-        )}
-        {waiting.length > 0 && (
-          <ul className={GUIDE}>{waiting.map((child) => row(child, false, true))}</ul>
-        )}
+        {under}
       </WorkspaceRow>
     )
   }

@@ -1,4 +1,5 @@
 import type { Task, TaskState } from '@natamux/core'
+import { useQuery } from '@tanstack/react-query'
 import {
   Copy,
   FileDiff,
@@ -12,9 +13,12 @@ import {
   SquareTerminal,
   Trash2,
 } from 'lucide-react'
-import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { memo, type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { useActivity } from '../hooks/useActivity'
 import { useNow } from '../hooks/useNow'
+import { rovingItem } from '../hooks/useRovingFocus'
 import { agentLabel } from '../lib/agents'
+import type { StoredEvent } from '../lib/api'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
 import { cometOf, rowTier, type ShellRow, shellRowName, shellTag } from '../lib/sidebar-tree'
 import {
@@ -26,17 +30,12 @@ import {
   rowLabel,
 } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { rowText, waitReason } from '../lib/workspace'
 import { AgentIcon } from './AgentBadge'
 import { ShapeGlyph } from './ShapeGlyph'
 import { ConfirmDialog } from './ui/Dialog'
 import { Menu, type MenuItem, openContextMenu } from './ui/Menu'
 import { ICON } from './ui/styles'
-
-type RovingTab = {
-  tabIndex: number
-  'data-roving': string
-  onFocus: (event: FocusEvent<HTMLElement>) => void
-}
 
 type WorkspaceRowProps = {
   task: Task
@@ -46,22 +45,23 @@ type WorkspaceRowProps = {
   repoName?: string
   // What the task glyph shows: the task state, or running while one of its agents works.
   glyph: TaskState
-  // What the agent does now, for a running task.
-  activity?: string
-  // What the agent asked, or why the task failed. Null while it is not known.
-  question?: string | null
   // The state changed since the user last opened this workspace.
   unseen: boolean
-  // The roving tab stop from the tree: tabIndex, data-roving and onFocus.
-  tab: RovingTab
-  // Done and all subtasks of the task. Null: it has none.
-  subtasks?: { done: number; total: number } | null
+  // The row has the one tab stop of the tree. `activate` is the tree's, to move the stop here.
+  tabStop: boolean
+  activate: (key: string) => void
+  // Done of all subtasks, such as "2/5". Null: it has none.
+  subtasks?: string | null
   // Only the open workspace shows the rows under it: its shells and open subtasks.
   open?: boolean
   // It has rows under it, shown once it is the open workspace.
   expandable?: boolean
-  // Opens the terminal of the agent that asked.
-  onAnswer?: () => void
+  // Opens the terminal of a task on this shell. Null: its first shell. Answer uses it.
+  onOpenShell?: (taskId: string, shell: string | null) => void
+  // The shell of the agent that asked. Null: not known.
+  answerShell?: string | null
+  // The task's events, for what its agent asked or why it failed.
+  loadEvents?: (taskId: string) => Promise<StoredEvent[]>
   // The row was added after the list was first drawn, so it slides in.
   enter?: boolean
   // The rows under it: all of them while open, else only the subtasks that wait on the user.
@@ -92,23 +92,35 @@ const TIER = {
   quiet: 'min-h-6 py-1',
 } as const
 
+// The height a row off screen counts with before it was first drawn, by tier.
+const OFF_SCREEN = {
+  attention: '[--cv-h:4.5rem]',
+  live: '[--cv-h:2.5rem]',
+  quiet: '[--cv-h:1.5rem]',
+} as const
+
+// The line under a card, from the task's events.
+const questionOf = (events: StoredEvent[]) => rowText(waitReason(events))
+
 // One workspace in the sidebar: its state, title and age, then its id, step and what its agent
 // does. A task that waits on the user shows the question; a finished one is a single line.
-// Double-click the title, or press F2, to rename it.
-export function WorkspaceRow({
+// Double-click the title, or press F2, to rename it. Memoized: the tree renders it again only when
+// its own props change, and it reads its activity and question itself.
+export const WorkspaceRow = memo(function WorkspaceRow({
   task,
   current,
   pinned,
   repoName,
   glyph,
-  activity,
-  question,
   unseen,
-  tab,
+  tabStop,
+  activate,
   subtasks = null,
   open = false,
   expandable = false,
-  onAnswer,
+  onOpenShell,
+  answerShell = null,
+  loadEvents,
   enter = false,
   children,
   onOpen,
@@ -118,6 +130,21 @@ export function WorkspaceRow({
   onRemove,
   onDelete,
 }: WorkspaceRowProps) {
+  // What the agent does now, for a running task.
+  const activity = useActivity((all) => all.byTask[task.id])
+  // What the agent asked, or why the task failed. Undefined while it is not known.
+  const asks =
+    (task.state === 'needs-input' || task.state === 'failed') &&
+    task.workspace !== null &&
+    loadEvents !== undefined
+  // Only a row that asks follows each change of its task; the others keep one idle entry.
+  const question = useQuery({
+    queryKey: ['events', task.id, asks ? task.updatedAt : null],
+    queryFn: () => loadEvents?.(task.id) ?? Promise.resolve<StoredEvent[]>([]),
+    enabled: asks,
+    select: questionOf,
+  }).data
+  const tab = rovingItem(`task:${task.id}`, tabStop, activate)
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(task.title)
   const [removing, setRemoving] = useState(false)
@@ -219,7 +246,7 @@ export function WorkspaceRow({
   const tone = finished ? 'text-muted' : tier === 'quiet' ? 'text-ink-2' : 'text-ink'
   const titleClass = `min-w-0 flex-1 truncate ${size} ${tone} ${task.state === 'cancelled' ? 'line-through' : ''}`
   const metaColor = 'text-muted'
-  const answers = task.state === 'needs-input' && onAnswer !== undefined
+  const answers = task.state === 'needs-input' && onOpenShell !== undefined
   const step = comet.of > 1 ? `${comet.at}/${comet.of}` : null
   // What a card says: the question, or why the task failed or waits.
   const said = question ?? (task.state === 'needs-input' ? 'Waiting for your answer' : null)
@@ -282,7 +309,7 @@ export function WorkspaceRow({
           {subtasks !== null && (
             <span data-tip="Subtasks done" className="inline-flex shrink-0 items-center gap-0.5">
               <ListTree size={ICON.xs} aria-hidden="true" />
-              {`${subtasks.done}/${subtasks.total}`}
+              {subtasks}
             </span>
           )}
           {/* Open, each shell row says what its agent does. */}
@@ -323,7 +350,7 @@ export function WorkspaceRow({
 
   return (
     <li className={slides ? 'hm-pop' : undefined}>
-      <div className="group relative">
+      <div className={`group relative cv-row ${OFF_SCREEN[tier]}`}>
         {flash > 0 && (
           <span
             key={flash}
@@ -418,7 +445,7 @@ export function WorkspaceRow({
             tabIndex={-1}
             data-state={task.state}
             aria-label={`Answer ${task.id}`}
-            onClick={onAnswer}
+            onClick={() => onOpenShell?.(task.id, answerShell)}
             className="absolute bottom-2.5 left-8 h-5 rounded-md bg-[color-mix(in_srgb,var(--chip-fg)_15%,transparent)] px-1.5 text-2xs font-medium text-(--chip-fg) hover:bg-[color-mix(in_srgb,var(--chip-fg)_25%,transparent)]"
           >
             Answer
@@ -456,14 +483,15 @@ export function WorkspaceRow({
       )}
     </li>
   )
-}
+})
 
 type AgentRowProps = {
+  taskId: string
   row: ShellRow
-  // What the agent of this shell does now.
-  activity?: string
-  tab: RovingTab
-  onOpen: () => void
+  tabStop: boolean
+  activate: (key: string) => void
+  // Opens the terminal of the task on this shell. Null: its first shell.
+  onOpenShell: (taskId: string, shell: string | null) => void
 }
 
 // A shell with no agent shows a terminal; an agent with no state yet, a muted ring.
@@ -493,15 +521,25 @@ function RowGlyph({ row }: { row: ShellRow }) {
 
 // One shell under a task, or a parallel stage with no shell yet: its state, its agent, what it
 // works on and does, and its shell.
-export function AgentRow({ row, activity, tab, onOpen }: AgentRowProps) {
+export const AgentRow = memo(function AgentRow({
+  taskId,
+  row,
+  tabStop,
+  activate,
+  onOpenShell,
+}: AgentRowProps) {
   const tag = shellTag(row)
+  // What the agent of this shell does now.
+  const activity = useActivity((all) =>
+    row.shell === null ? undefined : all.byTerminal[taskId]?.[row.shell],
+  )
   return (
     <li>
       <button
         type="button"
-        {...tab}
+        {...rovingItem(`agent:${taskId}:${row.key}`, tabStop, activate)}
         aria-label={shellRowName(row)}
-        onClick={onOpen}
+        onClick={() => onOpenShell(taskId, row.shell)}
         className="focus-inset flex h-5.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-hover pointer-coarse:h-10"
       >
         <RowGlyph row={row} />
@@ -522,4 +560,4 @@ export function AgentRow({ row, activity, tab, onOpen }: AgentRowProps) {
       </button>
     </li>
   )
-}
+})

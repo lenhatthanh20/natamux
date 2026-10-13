@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CommandActions, CommandContext } from '../lib/commands'
-import { CommandPalette } from './CommandPalette'
+import { CommandPalette, capRows, MAX_ROWS } from './CommandPalette'
 
 const NOW = new Date('2026-10-09T12:00:00.000Z')
 
@@ -327,5 +327,27 @@ describe('the jump palette', () => {
     await user.click(row as HTMLElement)
     // The first workspace of the list is the one that asks a question.
     expect(on.onOpenTask).toHaveBeenCalledWith('T-0002', '2')
+  })
+})
+
+describe('capRows', () => {
+  const section = (id: string, count: number) => ({
+    id,
+    title: id,
+    rows: Array.from({ length: count }, (_, i) => ({
+      kind: 'create-task' as const,
+      key: `${id}${i}`,
+      title: `${id}${i}`,
+    })),
+  })
+
+  it('keeps the first rows and drops the sections after the cap', () => {
+    const capped = capRows([section('a', 30), section('b', 30), section('c', 5)])
+    expect(capped.map((s) => s.rows.length)).toEqual([30, MAX_ROWS - 30])
+  })
+
+  it('returns short lists as they are', () => {
+    const sections = [section('a', 3)]
+    expect(capRows(sections)).toEqual(sections)
   })
 })

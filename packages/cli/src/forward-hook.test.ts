@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import {
+  TASK_ID_HEADER as CORE_TASK_ID_HEADER,
+  TERMINAL_HEADER as CORE_TERMINAL_HEADER,
+} from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { FetchFunction } from './client.js'
-import { forwardHook } from './forward-hook.js'
+import { forwardHook, TASK_ID_HEADER, TERMINAL_HEADER } from './forward-hook.js'
 import { EXIT_OK, runCli } from './run.js'
 
 type Call = { url: string; method: string; headers: Headers; body: string }
@@ -189,5 +194,75 @@ describe('natamux hook', () => {
     expect(result.stdout).toBe('')
     expect(result.stderr).toContain('agent name is required')
     expect(result.calls).toEqual([])
+  })
+
+  it.each([[['hook', 'Claude Code']], [['hook', 'a/b']], [['hook', '1x']]])(
+    'exits 0 and names the problem for the agent name in %j',
+    async (argv) => {
+      const result = await runHook(argv, { NATAMUX_TOKEN: 'secret' })
+
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.stderr).toContain('agent name is required')
+      expect(result.calls).toEqual([])
+    },
+  )
+
+  it('takes the event of a Copilot hook, and nothing more', async () => {
+    const env = { NATAMUX_TOKEN: 'secret' }
+    for (const argv of [
+      ['hook', 'copilot', 'agentStop', 'extra'],
+      ['hook', 'copilot', 'a/b'],
+    ]) {
+      const result = await runHook(argv, env)
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.stderr).toContain('Unexpected argument')
+      expect(result.calls).toEqual([])
+    }
+  })
+})
+
+describe('the fast hook path', () => {
+  const dir = new URL('.', import.meta.url)
+
+  // Value imports and re-exports of a source file, which is what Node loads at start-up. It also
+  // matches an import that biome breaks over several lines.
+  const VALUE_IMPORT = /^(?:import|export)\s(?!type\s)[^']*?\sfrom\s'([^']+)'/gm
+
+  function valueImports(file: string): string[] {
+    const source = readFileSync(new URL(file, dir), 'utf8')
+    return [...source.matchAll(VALUE_IMPORT)].map((match) => match[1] ?? '')
+  }
+
+  it('finds the imports of a file', () => {
+    expect(valueImports('./forward-hook.ts')).toContain('./default-url.js')
+    expect(valueImports('./forward-hook.test.ts')).toContain('@natamux/core')
+  })
+
+  it('keeps the header names of @natamux/core', () => {
+    expect(TASK_ID_HEADER).toBe(CORE_TASK_ID_HEADER)
+    expect(TERMINAL_HEADER).toBe(CORE_TERMINAL_HEADER)
+  })
+
+  it('loads no package and no command parser, only files that import none', () => {
+    const seen = new Set<string>()
+    const queue = ['./forward-hook.ts']
+    for (const file of queue) {
+      if (seen.has(file)) {
+        continue
+      }
+      seen.add(file)
+      for (const target of valueImports(file)) {
+        expect(target.startsWith('./') || target.startsWith('node:')).toBe(true)
+        if (target.startsWith('./')) {
+          queue.push(target.replace(/\.js$/, '.ts'))
+        }
+      }
+    }
+    expect(seen).not.toContain('./command.ts')
+    expect(seen).not.toContain('./run.ts')
+  })
+
+  it('has main.ts load run.js only on demand', () => {
+    expect(valueImports('./main.ts')).not.toContain('./run.js')
   })
 })

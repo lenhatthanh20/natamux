@@ -21,7 +21,14 @@ import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
-import { buildServer, isAuthorized, NO_PROGRAM_ROUTES } from './server.js'
+import {
+  buildServer,
+  DRAIN_CHECK_MS,
+  EVENTS_HIGH_WATER,
+  eventSender,
+  isAuthorized,
+  NO_PROGRAM_ROUTES,
+} from './server.js'
 import { archiveDir } from './stage-files.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
@@ -2156,6 +2163,132 @@ describe('agent activity', () => {
     const activity = response.json().activity['T-0001']
     expect(activity['1'].text).toBe('Edit a.ts')
     expect(activity['2'].text).toBe('Edit test-spec.md')
+  })
+})
+
+describe('pushed to the dashboards', () => {
+  type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
+
+  async function listen(): Promise<{ socket: Socket; texts: string[] }> {
+    const texts: string[] = []
+    const socket = await app.injectWS(
+      `/events?token=${TOKEN}`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer) => texts.push(data.toString('utf8')))
+        },
+      },
+    )
+    return { socket, texts }
+  }
+
+  it('sends each message to every dashboard, made into text once', async () => {
+    const dashboards = [await listen(), await listen(), await listen()]
+    expect(bus.size()).toBe(3)
+    const message = { kind: 'shells.changed', taskId: 'T-0001' } as const
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      bus.publish(message)
+      expect(stringify.mock.calls.filter(([value]) => value === message)).toHaveLength(1)
+    } finally {
+      stringify.mockRestore()
+    }
+
+    for (const { texts } of dashboards) {
+      await vi.waitFor(() => expect(texts).toEqual([JSON.stringify(message)]))
+    }
+    for (const { socket } of dashboards) {
+      socket.terminate()
+    }
+    await vi.waitFor(() => expect(bus.size()).toBe(0))
+  })
+
+  it('wakes the pull request watcher for the first dashboard only', async () => {
+    const wake = vi.spyOn(serverOptions.pullRequests, 'wake')
+    const first = await listen()
+    const second = await listen()
+
+    expect(wake).toHaveBeenCalledTimes(1)
+    first.socket.terminate()
+    second.socket.terminate()
+  })
+
+  it('sends the activity of a task after a hook, and tells its workspace changed', async () => {
+    const touch = vi.spyOn(serverOptions.workspaces, 'touch')
+    const sent: unknown[] = []
+    bus.subscribe((message) => sent.push(message))
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001' },
+      payload: {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: 'a.ts' },
+      },
+    })
+
+    expect(sent).toContainEqual({
+      kind: 'activity.changed',
+      taskId: 'T-0001',
+      activity: { '1': { text: 'Edit a.ts', at: expect.any(String) } },
+    })
+    expect(touch).toHaveBeenCalledWith('T-0001')
+  })
+})
+
+describe('eventSender', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function fakeSocket() {
+    const sent: string[] = []
+    return { bufferedAmount: 0, readyState: 1, sent, send: (text: string) => sent.push(text) }
+  }
+
+  it('skips a socket that is too far behind, and sends it resync once it drained', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+
+    socket.bufferedAmount = EVENTS_HIGH_WATER
+    sender.send('a')
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('b')
+    socket.bufferedAmount = 0
+    sender.send('c')
+    expect(socket.sent).toEqual(['a'])
+
+    vi.advanceTimersByTime(DRAIN_CHECK_MS)
+    sender.send('d')
+    expect(socket.sent).toEqual(['a', '{"kind":"resync"}', 'd'])
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+    expect(socket.sent).toHaveLength(3)
+  })
+
+  it('sends nothing to a socket that closed while it was skipped', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('a')
+
+    socket.readyState = 3
+    socket.bufferedAmount = 0
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+    sender.send('b')
+
+    expect(socket.sent).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 

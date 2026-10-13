@@ -1,11 +1,11 @@
 import { CLOSE_GONE, type TaskState } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GIVE_BACK_DELAY_MS, gpuBudget } from '../lib/gpu-renderer'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../lib/terminal-cache'
 import { fontStack, saveTerminalFont } from '../lib/terminal-font'
-import { DISPOSE_DELAY_MS } from '../lib/terminal-session'
+import { DISPOSE_DELAY_MS, importWebgl } from '../lib/terminal-session'
 import { terminalTheme } from '../lib/terminal-theme'
 import {
   type FakeSocket,
@@ -83,6 +83,11 @@ async function openTerminal(cacheKey?: string) {
 
 const holder = () => document.getElementById(HOLDER_ID)
 const status = () => screen.queryByRole('status')?.textContent ?? null
+
+// Loaded once, so every GPU renderer starts in the same call, as on a page that had one before.
+beforeAll(async () => {
+  await importWebgl()
+})
 
 beforeEach(() => {
   resetFakes()

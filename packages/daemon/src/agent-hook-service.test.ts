@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
-import { EventBus } from './event-bus.js'
+import { type DaemonMessage, EventBus } from './event-bus.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 
@@ -610,5 +610,132 @@ describe('AgentHookService, sign of life', () => {
     service.handle('claude-code', { hook_event_name: 'SessionEnd' }, task.id)
 
     expect(activityEvents(task.id)).toHaveLength(0)
+  })
+})
+
+type ActivityMessage = Extract<DaemonMessage, { kind: 'activity.changed' }>
+
+describe('AgentHookService, pushed to the dashboards', () => {
+  let root: string
+  let index: TaskIndex
+  let tasks: TaskService
+  let bus: EventBus
+  let sent: DaemonMessage[]
+  let touched: string[]
+
+  const activityMessages = () =>
+    sent.filter((message): message is ActivityMessage => message.kind === 'activity.changed')
+  const edit = (path: string) => ({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Edit',
+    tool_input: { file_path: path },
+  })
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'natamux-push-'))
+    const dataDir = join(root, 'data')
+    mkdirSync(dataDir)
+    index = new TaskIndex(':memory:')
+    bus = new EventBus()
+    tasks = new TaskService({ dataDir, index, bus })
+    sent = []
+    touched = []
+    bus.subscribe((message) => sent.push(message))
+  })
+
+  afterEach(() => {
+    index.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  function hooks(stages?: ConstructorParameters<typeof AgentHookService>[1]): AgentHookService {
+    return new AgentHookService(tasks, stages, {
+      bus,
+      workspaceChanged: (taskId) => touched.push(taskId),
+    })
+  }
+
+  it('sends the whole activity of the task on each change, and {} when it is gone', () => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+
+    service.handle('claude-code', edit('a.ts'), task.id, '1')
+    service.handle('claude-code', edit('b.ts'), task.id, '2')
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id, '2')
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id, '1')
+
+    const messages = activityMessages()
+    expect(messages.map((message) => message.taskId)).toEqual([task.id, task.id, task.id, task.id])
+    const texts = messages.map((message) =>
+      Object.fromEntries(Object.entries(message.activity).map(([name, line]) => [name, line.text])),
+    )
+    expect(texts).toEqual([
+      { '1': 'Edit a.ts' },
+      { '1': 'Edit a.ts', '2': 'Edit b.ts' },
+      { '1': 'Edit a.ts' },
+      {},
+    ])
+  })
+
+  it('sends nothing when the activity did not change', () => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    // No line to clear, and no line to show.
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id)
+    service.handle('claude-code', { hook_event_name: 'SessionEnd' }, task.id)
+
+    expect(activityMessages()).toEqual([])
+  })
+
+  it('sends the cleared activity when a turn ends after a report', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    const service = hooks({
+      laneFor: (current) => ({ stage: current.stage, state: current.state }),
+      takeReport: () => true,
+    })
+    service.handle('claude-code', edit('a.ts'), task.id, '1')
+
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id, '1')
+
+    const last = activityMessages().at(-1)
+    expect(last).toEqual({ kind: 'activity.changed', taskId: task.id, activity: {} })
+  })
+
+  it('sends the cleared activity when a hook comes after the workspace was removed', () => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    service.handle('claude-code', edit('a.ts'), task.id, '1')
+    tasks.recordWorkspace(task.id, { workspace: null, branch: 'b' })
+
+    service.handle('claude-code', edit('b.ts'), task.id, '1')
+    service.handle('claude-code', edit('c.ts'), task.id, '1')
+
+    expect(activityMessages().slice(1)).toEqual([
+      { kind: 'activity.changed', taskId: task.id, activity: {} },
+    ])
+  })
+
+  it('tells that the workspace may have changed after each hook of a task', () => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    service.handle('claude-code', edit('a.ts'), task.id)
+    service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
+    service.handle('claude-code', { hook_event_name: 'Stop', cwd: '/elsewhere' }, undefined)
+
+    expect(touched).toEqual([task.id, task.id])
+  })
+
+  it('sends nothing for a hook of no known task', () => {
+    const service = hooks()
+
+    service.handle('claude-code', edit('a.ts'), 'T-0099')
+
+    expect(activityMessages()).toEqual([])
+    expect(touched).toEqual([])
   })
 })

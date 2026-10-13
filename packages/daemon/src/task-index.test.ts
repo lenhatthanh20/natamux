@@ -101,3 +101,76 @@ describe('TaskIndex events', () => {
     expect(index.listEvents('T-0099')).toEqual([])
   })
 })
+
+describe('TaskIndex record', () => {
+  const event: TaskEvent = {
+    taskId: 'T-0001',
+    source: 'agent',
+    type: 'agent.started',
+    at: '2026-10-08T09:05:00.000Z',
+    payload: {},
+  }
+
+  it('stores the task, its events and the stats of its files together', () => {
+    const task = makeTask({ state: 'running' })
+
+    index.record('T-0001', {
+      task,
+      events: [{ event, accepted: true }],
+      files: { task: { mtimeMs: 1.5, size: 10 }, log: { mtimeMs: 2, size: 20 } },
+    })
+
+    expect(index.listTasks()).toEqual([task])
+    expect(index.listEvents('T-0001').map((entry) => entry.accepted)).toEqual([true])
+    expect(index.taskFiles().get('T-0001')).toEqual({
+      task: { mtimeMs: 1.5, size: 10 },
+      log: { mtimeMs: 2, size: 20 },
+    })
+  })
+
+  it('keeps the stat of a file that a change did not write', () => {
+    index.record('T-0001', { task: makeTask({}), files: { task: { mtimeMs: 1, size: 10 } } })
+    index.record('T-0001', {
+      events: [{ event, accepted: false }],
+      files: { log: { mtimeMs: 2, size: 20 } },
+    })
+
+    expect(index.listEvents('T-0001').map((entry) => entry.accepted)).toEqual([false])
+    expect(index.taskFiles().get('T-0001')).toEqual({
+      task: { mtimeMs: 1, size: 10 },
+      log: { mtimeMs: 2, size: 20 },
+    })
+  })
+
+  it('stores nothing of a change that fails half way', () => {
+    // JSON cannot hold a BigInt, so the event fails after the task row is written.
+    const change = {
+      task: makeTask({}),
+      events: [{ event: { ...event, payload: { size: 1n } }, accepted: true }],
+      files: { task: { mtimeMs: 1, size: 10 } },
+    }
+
+    expect(() => index.record('T-0001', change)).toThrow()
+
+    expect(index.listTasks()).toEqual([])
+    expect(index.listEvents('T-0001')).toEqual([])
+    expect(index.taskFiles().size).toBe(0)
+  })
+
+  it('forgets the files of a deleted task', () => {
+    index.record('T-0001', { task: makeTask({}), files: { task: { mtimeMs: 1, size: 10 } } })
+    index.deleteTask('T-0001')
+    expect(index.taskFiles().size).toBe(0)
+  })
+
+  it('replaces the stats of every file along with the tasks', () => {
+    index.record('T-0001', { task: makeTask({}), files: { task: { mtimeMs: 1, size: 10 } } })
+
+    index.replaceAllTasks(
+      [makeTask({ id: 'T-0005' })],
+      new Map([['T-0005', { task: { mtimeMs: 5, size: 50 } }]]),
+    )
+
+    expect([...index.taskFiles()]).toEqual([['T-0005', { task: { mtimeMs: 5, size: 50 } }]])
+  })
+})

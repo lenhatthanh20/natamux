@@ -9,6 +9,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { type DaemonMessage, EventBus } from './event-bus.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import {
   ACK_STALL_MS,
@@ -39,6 +40,7 @@ import {
   TerminalLimitError,
   TerminalService,
   TICKET_TTL_MS,
+  WORKSPACE_QUIET_MS,
 } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
@@ -49,7 +51,7 @@ const LONG_TEST_MS = 30_000
 type SetupOptions = {
   now?: () => number
   isEnded?: (taskId: string) => boolean
-  onOutput?: (taskId: string, terminal: string, data: string) => void
+  onOutput?: (taskId: string, terminal: string, data: Buffer) => void
 }
 
 // Shells of a test must not run timers or snapshots during the next one.
@@ -617,7 +619,7 @@ describe('closing a shell', () => {
     const service = new TerminalService({
       spawn,
       workspaceOf: (taskId) => `/work/${taskId}`,
-      onOutput: (_task, _terminal, data) => heard.push(data),
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
     })
     service.attach('T-0001', client(), size, '2')
     service.closeOne('T-0001', '2')
@@ -998,6 +1000,92 @@ describe('onOutput', () => {
     ptys[0]?.emit('hi')
 
     expect(heard).toEqual(['T-0001/2:hi'])
+  })
+
+  it('holds the start of a character that a read cut, until the rest comes', async () => {
+    const heard: Buffer[] = []
+    const { service, ptys } = setup({ onOutput: (_task, _terminal, data) => heard.push(data) })
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const text = 'Tiếng Việt 😀 中文\r\n'
+    const bytes = Buffer.from(text)
+    // Inside "ế" (3 bytes) and inside the emoji (4 bytes).
+    const cutA = bytes.indexOf(Buffer.from('ế')) + 1
+    const cutB = bytes.indexOf(Buffer.from('😀')) + 2
+    const pty = first(ptys)
+
+    pty.emit(bytes.subarray(0, cutA))
+    pty.emit(bytes.subarray(cutA, cutB))
+    pty.emit(bytes.subarray(cutB))
+    await service.settled('T-0001')
+
+    const strict = new TextDecoder('utf-8', { fatal: true })
+    for (const piece of [...heard, ...watching.frames.filter(isBytes)]) {
+      expect(() => strict.decode(piece)).not.toThrow()
+    }
+    expect(Buffer.concat(heard).toString()).toBe(text)
+    expect(outputOf(watching.frames)).toContain(text)
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+    expect(await screenOf(later.frames)).toEqual(['Tiếng Việt 😀 中文'])
+  })
+})
+
+describe('telling the dashboards', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function watched() {
+    const { spawn, ptys } = fakeSpawner()
+    const bus = new EventBus()
+    const sent: DaemonMessage[] = []
+    bus.subscribe((message) => sent.push(message))
+    const quiet: string[] = []
+    const service = new TerminalService({
+      spawn,
+      workspaceOf: (taskId) => `/work/${taskId}`,
+      bus,
+      onOutputIdle: (taskId) => quiet.push(taskId),
+    })
+    services.push(service)
+    return { service, ptys, sent, quiet }
+  }
+
+  it('sends shells.changed when a shell starts, is closed or ends', () => {
+    const { service, ptys, sent } = watched()
+    const changed = { kind: 'shells.changed', taskId: 'T-0001' }
+
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    expect(sent).toEqual([changed, changed])
+
+    service.closeOne('T-0001', '2')
+    expect(sent).toHaveLength(3)
+
+    // A shell that crashed ended too.
+    ptys[0]?.exit(1)
+    expect(sent).toEqual([changed, changed, changed, changed])
+  })
+
+  it('tells once when the output of a task stopped for a moment', () => {
+    vi.useFakeTimers()
+    const { service, ptys, quiet } = watched()
+    service.attach('T-0001', client(), size)
+
+    for (let step = 0; step < 10; step += 1) {
+      ptys[0]?.emit('working\r\n')
+      vi.advanceTimersByTime(WORKSPACE_QUIET_MS / 2)
+    }
+    expect(quiet).toEqual([])
+
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(quiet).toEqual(['T-0001'])
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 4)
+    expect(quiet).toEqual(['T-0001'])
   })
 })
 
@@ -1405,7 +1493,7 @@ describe('batching output', () => {
   it('sends a burst of chunks in few frames, in order, with all bytes', async () => {
     const heard: string[] = []
     const { pty, watching } = await watched({
-      onOutput: (_task, _terminal, data) => heard.push(data),
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
     })
     const chunks = Array.from(
       { length: 1000 },
@@ -2113,9 +2201,9 @@ describe('the screen of a shell under a flood', () => {
   it('pauses the shell when its screen falls behind, and resumes it once parsed', async () => {
     const { service, pty } = await shell()
 
-    // Chars, not bytes: these are 1.5 MB.
-    pty.emit('中'.repeat(SCREEN_HIGH_WATER / 2))
-    pty.emit('a'.repeat(SCREEN_HIGH_WATER / 2))
+    // Bytes, not chars: these are 500,000 chars.
+    pty.emit('中'.repeat(SCREEN_HIGH_WATER / 4))
+    pty.emit('a'.repeat(SCREEN_HIGH_WATER / 4))
     expect(pty.flow).toEqual([])
     pty.emit('b')
     expect(pty.flow).toEqual(['pause'])
@@ -2136,7 +2224,8 @@ describe('the screen of a shell under a flood', () => {
     const write = xtermHeadless.Terminal.prototype.write
     const spy = vi.spyOn(xtermHeadless.Terminal.prototype, 'write')
     spy.mockImplementation(function (this: Headless, data, callback) {
-      if (data !== firstChunk) {
+      // The screen gets bytes; only this chunk has this length.
+      if (data.length !== firstChunk.length) {
         write.call(this, data, callback)
         return
       }
@@ -2351,6 +2440,11 @@ describe('a hidden client', () => {
     LONG_TEST_MS,
   )
 
+  it('gets 64 KiB per second', () => {
+    expect(HIDDEN_BUDGET_BYTES).toBe(64 * 1024)
+    expect(HIDDEN_BUDGET_WINDOW_MS).toBe(1000)
+  })
+
   it('takes its whole budget in one window, and a burst split by a window border', async () => {
     const { ptys, clients } = await hidden()
     const pty = first(ptys)
@@ -2360,20 +2454,22 @@ describe('a hidden client', () => {
     for (let index = 0; index < budget; index += 1) {
       pty.emit(frameOf(index))
     }
+    // A full window just before a border, and a full one just after it.
     await vi.advanceTimersByTimeAsync(2 * HIDDEN_BUDGET_WINDOW_MS - 100)
-    pty.emit(frameOf(budget))
-    pty.emit(frameOf(budget + 1))
+    for (let index = 0; index < budget; index += 1) {
+      pty.emit(frameOf(budget + index))
+    }
     await vi.advanceTimersByTimeAsync(100)
     for (let index = 0; index < budget; index += 1) {
-      pty.emit(frameOf(budget + 2 + index))
+      pty.emit(frameOf(2 * budget + index))
     }
     await vi.advanceTimersByTimeAsync(0)
-    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+    expect(bytesOf(watching.frames)).toHaveLength(3 * budget * OUTPUT_FRAME_BYTES)
 
     // One byte past the budget of this window: behind, and not caught up while hidden.
     pty.emit('!')
     await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS)
-    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+    expect(bytesOf(watching.frames)).toHaveLength(3 * budget * OUTPUT_FRAME_BYTES)
     expect(catchUps(watching.frames)).toEqual([])
   })
 

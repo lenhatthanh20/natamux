@@ -238,34 +238,6 @@ describe('parseCommand', () => {
     })
   })
 
-  describe('hook', () => {
-    it('forwards the hook of an agent', () => {
-      expect(parseCommand(['hook', 'claude-code'])).toEqual({
-        name: 'hook.forward',
-        agent: 'claude-code',
-      })
-    })
-
-    it.each([[['hook']], [['hook', 'Claude Code']], [['hook', 'a/b']], [['hook', '1x']]])(
-      'rejects the agent name in %j',
-      (argv) => {
-        expect(() => parseCommand(argv)).toThrow(/agent name is required/)
-      },
-    )
-
-    it('takes the event that a Copilot hook names, and nothing more', () => {
-      expect(parseCommand(['hook', 'copilot', 'agentStop'])).toEqual({
-        name: 'hook.forward',
-        agent: 'copilot',
-        event: 'agentStop',
-      })
-      expect(() => parseCommand(['hook', 'copilot', 'agentStop', 'extra'])).toThrow(
-        /Unexpected argument/,
-      )
-      expect(() => parseCommand(['hook', 'copilot', 'a/b'])).toThrow(/Unexpected argument/)
-    })
-  })
-
   describe('hooks', () => {
     it('prints the Claude Code settings', () => {
       expect(parseCommand(['hooks', 'claude-code'])).toEqual({ name: 'hooks.claude-code' })

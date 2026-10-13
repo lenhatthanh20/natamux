@@ -7,9 +7,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
-import { isDashboardUrl, opensInBrowser } from './navigation.js'
+import { isDashboardUrl, isLoadingPage, loadingPageUrl, opensInBrowser } from './navigation.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
-import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
+import {
+  freePort,
+  loginPathLogLine,
+  loginShellPath,
+  startupMarks,
+  waitForHealth,
+} from './startup.js'
 import { windowOptions } from './window-options.js'
 
 type Done = (error: Error | null, stdout: string, stderr: string) => void
@@ -396,6 +402,23 @@ describe('navigation', () => {
     expect(opensInBrowser('file:///etc/passwd')).toBe(false)
     expect(opensInBrowser('vscode://open')).toBe(false)
   })
+
+  it('accepts the loading page, and only that exact page', () => {
+    const origin = 'http://127.0.0.1:4317'
+    expect(isDashboardUrl(loadingPageUrl(true), origin)).toBe(true)
+    expect(isDashboardUrl(loadingPageUrl(false), origin)).toBe(true)
+    expect(isLoadingPage(loadingPageUrl(true))).toBe(true)
+    expect(isLoadingPage('http://127.0.0.1:4317/')).toBe(false)
+    expect(isDashboardUrl('data:text/html;charset=utf-8,%3Cscript%3E', origin)).toBe(false)
+    expect(isDashboardUrl(`${loadingPageUrl(true)}x`, origin)).toBe(false)
+    expect(isDashboardUrl('http://127.0.0.1:4317/?task=T-0001#changes', origin)).toBe(true)
+    expect(isDashboardUrl('http://127.0.0.1.example.com:4317/', origin)).toBe(false)
+  })
+
+  it('paints the loading page in the theme color', () => {
+    expect(decodeURIComponent(loadingPageUrl(true))).toContain('background:#18181b')
+    expect(decodeURIComponent(loadingPageUrl(false))).toContain('background:#ffffff')
+  })
 })
 
 describe('the window', () => {
@@ -414,5 +437,18 @@ describe('the window', () => {
         nodeIntegration: false,
       },
     })
+  })
+})
+
+describe('startup marks', () => {
+  it('shows each mark as the time since the first one, in one line', () => {
+    const times = [100, 100.4, 160, 400.6]
+    const marks = startupMarks(() => times.shift() ?? 0)
+    for (const name of ['module start', 'whenReady', 'daemon forked', 'did-finish-load']) {
+      marks.mark(name)
+    }
+    expect(marks.line()).toBe(
+      'startup marks: module start 0 ms, whenReady 0 ms, daemon forked 60 ms, did-finish-load 301 ms\n',
+    )
   })
 })

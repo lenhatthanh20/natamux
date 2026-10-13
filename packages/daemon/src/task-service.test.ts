@@ -1,12 +1,20 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type TaskState } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
-import { readTaskFile } from './task-files.js'
+import { readTaskFile, serializeTask, taskFilePath, tasksDir, writeTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
 import {
   isTaskEnded,
@@ -32,6 +40,15 @@ function makeService(existingIndex: TaskIndex, settingsOf?: SettingsOf): TaskSer
     now: () => new Date(Date.UTC(2026, 9, 8, 9, minute++, 0)),
     ...(settingsOf === undefined ? {} : { settingsOf }),
   })
+}
+
+// A service after the start of the daemon. It stops watching the files at once, so a test can
+// remove them; the tests of the watcher keep their own.
+function started(existingIndex: TaskIndex, settingsOf?: SettingsOf): TaskService {
+  const startedService = makeService(existingIndex, settingsOf)
+  startedService.init()
+  startedService.close()
+  return startedService
 }
 
 beforeEach(() => {
@@ -453,6 +470,38 @@ describe('recordActivity', () => {
   it('throws TaskNotFoundError for an unknown task', () => {
     expect(() => activityService.recordActivity('T-0099')).toThrow(TaskNotFoundError)
   })
+
+  it('writes the task file for signs of life once a minute, and for a change at once', () => {
+    const task = startedTask()
+    const inFile = () => readTaskFile(dataDir, task.id)?.updatedAt
+    const startedAt = inFile()
+
+    later(31)
+    expect(activityService.recordActivity(task.id)).toBe(true)
+    expect(activityService.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
+    expect(index.listTasks()[0]?.updatedAt).toBe('2026-10-08T09:00:31.000Z')
+    expect(inFile()).toBe(startedAt)
+
+    later(31)
+    activityService.recordActivity(task.id)
+    expect(inFile()).toBe('2026-10-08T09:01:02.000Z')
+
+    later(31)
+    activityService.recordActivity(task.id)
+    expect(inFile()).toBe('2026-10-08T09:01:02.000Z')
+
+    later(1)
+    activityService.applyEvent(task.id, { source: 'agent', type: 'agent.waiting' })
+    expect(inFile()).toBe('2026-10-08T09:01:34.000Z')
+  })
+
+  it('keeps the time of a sign of life that is not in the file yet over a restart', () => {
+    const task = startedTask()
+    later(31)
+    activityService.recordActivity(task.id)
+
+    expect(started(index).getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
+  })
 })
 
 describe('init', () => {
@@ -465,6 +514,7 @@ describe('init', () => {
     expect(freshService.listTasks()).toEqual([])
 
     freshService.init()
+    freshService.close()
 
     expect(
       freshService
@@ -473,6 +523,202 @@ describe('init', () => {
         .sort(),
     ).toEqual(['First', 'Second'])
     freshIndex.close()
+  })
+})
+
+describe('tasks in memory', () => {
+  it('reads no task file for getTask and listTasks after init', () => {
+    const first = service.createTask({ title: 'First' })
+    const second = service.createTask({ title: 'Second' })
+    const restarted = started(index)
+
+    rmSync(tasksDir(dataDir), { recursive: true })
+
+    expect(restarted.getTask(first.id)).toEqual(first)
+    expect(restarted.listTasks().map((task) => task.id)).toEqual([second.id, first.id])
+    expect(() => restarted.getTask('T-0099')).toThrow(TaskNotFoundError)
+  })
+
+  it('lists the newest updated task first, as the index did', () => {
+    const first = service.createTask({ title: 'First' })
+    const second = service.createTask({ title: 'Second' })
+    service.applyEvent(first.id, { source: 'human', type: 'task.readied' })
+
+    expect(service.listTasks().map((task) => task.id)).toEqual([first.id, second.id])
+    expect(service.listTasks('draft').map((task) => task.id)).toEqual([second.id])
+  })
+
+  it('keeps the task it had before a change as it was', () => {
+    const task = service.createTask({ title: 'First' })
+    const before = service.getTask(task.id)
+
+    service.updateTask(task.id, { title: 'Renamed' })
+
+    expect(before.title).toBe('First')
+    expect(service.getTask(task.id).title).toBe('Renamed')
+  })
+
+  it('forgets a deleted task', () => {
+    const task = service.createTask({ title: 'First' })
+    service.deleteTask(task.id)
+
+    expect(() => service.getTask(task.id)).toThrow(TaskNotFoundError)
+    expect(service.listTasks()).toEqual([])
+  })
+})
+
+describe('init from the index of the last start', () => {
+  it('takes a task from the index while its file has not changed, and reads the others', () => {
+    const kept = service.createTask({ title: 'Kept' })
+    const edited = service.createTask({ title: 'Edited' })
+    // What the index holds, to tell it from what the file holds.
+    index.upsertTask({ ...kept, title: 'From the index' })
+    index.upsertTask({ ...edited, title: 'From the index' })
+    writeFileSync(
+      taskFilePath(dataDir, edited.id),
+      serializeTask({ ...edited, title: 'Edited by hand' }),
+    )
+
+    const restarted = started(index)
+
+    expect(restarted.getTask(kept.id).title).toBe('From the index')
+    expect(restarted.getTask(edited.id).title).toBe('Edited by hand')
+  })
+
+  it('reads an event log only when it changed since', () => {
+    const quiet = service.createTask({ title: 'Quiet' })
+    const busy = service.createTask({ title: 'Busy' })
+    // The index lost the events of both. It trusts a log that it matched last time.
+    index.replaceEvents(quiet.id, [])
+    index.replaceEvents(busy.id, [])
+    const line = {
+      taskId: busy.id,
+      source: 'human',
+      type: 'review.commented',
+      at: '2026-10-08T10:00:00.000Z',
+      payload: { text: 'Looks good' },
+      accepted: true,
+    }
+    appendFileSync(eventLogPath(dataDir, busy.id), `${JSON.stringify(line)}\n`)
+
+    started(index)
+
+    expect(index.listEvents(quiet.id)).toEqual([])
+    expect(index.listEvents(busy.id).map((entry) => entry.event.type)).toEqual([
+      'task.created',
+      'review.commented',
+    ])
+  })
+
+  it('loads a task file added while it was off, and drops one that was removed', () => {
+    const gone = service.createTask({ title: 'Gone' })
+    rmSync(taskFilePath(dataDir, gone.id))
+    writeTaskFile(dataDir, { ...gone, id: 'T-0005', title: 'Added' })
+
+    const restarted = started(index)
+
+    expect(restarted.listTasks().map((task) => task.title)).toEqual(['Added'])
+    expect(index.listTasks().map((task) => task.title)).toEqual(['Added'])
+  })
+
+  it('reads every file with an index from before the file stats', () => {
+    const task = service.createTask({ title: 'First' })
+    const path = join(dataDir, 'old.sqlite')
+    const old = new DatabaseSync(path)
+    old.exec(`
+      create table tasks_index (
+        id text primary key,
+        title text not null,
+        state text not null,
+        priority text not null,
+        updated_at text not null,
+        data text not null
+      )
+    `)
+    const stale = { ...task, title: 'Stale' }
+    const insert = old.prepare('insert into tasks_index values (?, ?, ?, ?, ?, ?)')
+    insert.run(task.id, 'Stale', task.state, task.priority, task.updatedAt, JSON.stringify(stale))
+    old.close()
+
+    const upgraded = new TaskIndex(path)
+    try {
+      expect(started(upgraded).getTask(task.id).title).toBe('First')
+      expect(upgraded.listTasks().map((each) => each.title)).toEqual(['First'])
+    } finally {
+      upgraded.close()
+    }
+  })
+})
+
+describe('task files edited outside Natamux', () => {
+  // The spec asks for 1 s. More here, for slow CI runners.
+  const SEEN = { timeout: 2000 }
+  let watching: TaskService
+
+  beforeEach(() => {
+    watching = makeService(index)
+  })
+
+  afterEach(() => {
+    watching.close()
+  })
+
+  it('sees a task file edited or added, and keeps one removed', async () => {
+    const edited = watching.createTask({ title: 'First' })
+    const removed = watching.createTask({ title: 'Second' })
+    watching.init()
+    messages = []
+
+    writeFileSync(
+      taskFilePath(dataDir, edited.id),
+      serializeTask({ ...edited, title: 'Edited by hand' }),
+    )
+    writeFileSync(
+      taskFilePath(dataDir, 'T-0007'),
+      serializeTask({ ...edited, id: 'T-0007', title: 'Added by hand' }),
+    )
+    rmSync(taskFilePath(dataDir, removed.id))
+
+    await vi.waitFor(() => {
+      expect(watching.getTask(edited.id).title).toBe('Edited by hand')
+      expect(watching.getTask('T-0007').title).toBe('Added by hand')
+    }, SEEN)
+    expect(watching.getTask(removed.id).title).toBe('Second')
+    expect(messages).toContainEqual({ kind: 'task.changed', task: watching.getTask(edited.id) })
+    // A new file does not count as a new task: task.created would start its context stage.
+    expect(messages).toContainEqual({ kind: 'task.changed', task: watching.getTask('T-0007') })
+    expect(messages).not.toContainEqual(expect.objectContaining({ kind: 'task.created' }))
+    // task.deleted would end the task's agents.
+    expect(messages).not.toContainEqual(expect.objectContaining({ kind: 'task.deleted' }))
+  })
+
+  it('does not read back its own writes', async () => {
+    watching.init()
+    const own = watching.createTask({ title: 'Own' })
+    watching.updateTask(own.id, { title: 'Own, renamed' })
+    watching.applyEvent(own.id, { source: 'human', type: 'task.readied' })
+    writeFileSync(
+      taskFilePath(dataDir, 'T-0009'),
+      serializeTask({ ...own, id: 'T-0009', title: 'Marker' }),
+    )
+
+    await vi.waitFor(() => expect(watching.getTask('T-0009').title).toBe('Marker'), SEEN)
+    const changed = messages.filter((message) => message.kind === 'task.changed')
+    expect(changed).toEqual([{ kind: 'task.changed', task: watching.getTask('T-0009') }])
+  })
+
+  it('keeps the last good task while its file cannot be read', async () => {
+    const task = watching.createTask({ title: 'First' })
+    watching.init()
+
+    writeFileSync(taskFilePath(dataDir, task.id), '---\nid: nope\n---\n')
+    writeFileSync(
+      taskFilePath(dataDir, 'T-0009'),
+      serializeTask({ ...task, id: 'T-0009', title: 'Marker' }),
+    )
+
+    await vi.waitFor(() => expect(watching.getTask('T-0009').title).toBe('Marker'), SEEN)
+    expect(watching.getTask(task.id)).toEqual(task)
   })
 })
 
@@ -634,7 +880,7 @@ describe('event log files', () => {
     service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
 
     const fresh = new TaskIndex(':memory:')
-    makeService(fresh).init()
+    started(fresh)
     expect(fresh.listEvents(task.id).map((entry) => entry.event.type)).toEqual([
       'task.created',
       'task.readied',
@@ -646,7 +892,7 @@ describe('event log files', () => {
     const task = service.createTask({ title: 'Fix it' })
     rmSync(eventLogPath(dataDir, task.id))
 
-    makeService(index).init()
+    started(index)
     expect(readEventLog(dataDir, task.id)?.map((entry) => entry.event.type)).toEqual([
       'task.created',
     ])
@@ -837,8 +1083,7 @@ describe('setWorkflow', () => {
     service.recordEvent(task.id, 'stage.workflow-set', { stage: 'nope', on: true }, 'human')
 
     const freshIndex = new TaskIndex(':memory:')
-    const fresh = makeService(freshIndex, () => settings)
-    fresh.init()
+    const fresh = started(freshIndex, () => settings)
 
     expect(fresh.getTask(task.id).workflowStages).toEqual([])
     expect(fresh.listEvents(task.id).at(-1)?.event.payload).toEqual({ stage: 'nope', on: true })
@@ -850,8 +1095,7 @@ describe('setWorkflow', () => {
     service.setWorkflow(task.id, 'implement', true)
 
     const freshIndex = new TaskIndex(':memory:')
-    const fresh = makeService(freshIndex, () => settings)
-    fresh.init()
+    const fresh = started(freshIndex, () => settings)
 
     expect(fresh.getTask(task.id).workflowStages).toEqual(['implement'])
     expect(fresh.listTasks()[0]?.workflowStages).toEqual(['implement'])

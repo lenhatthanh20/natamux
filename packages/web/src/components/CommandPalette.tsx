@@ -150,6 +150,23 @@ function RowBody({ row, now }: { row: PaletteRow; now: Date }) {
   }
 }
 
+// More rows than this are never read; a longer list is for typing to narrow, not for scrolling.
+export const MAX_ROWS = 50
+
+export function capRows(sections: PaletteSection[]): PaletteSection[] {
+  let left = MAX_ROWS
+  const capped: PaletteSection[] = []
+  for (const section of sections) {
+    if (left === 0) {
+      break
+    }
+    const rows = section.rows.slice(0, left)
+    capped.push(rows.length === section.rows.length ? section : { ...section, rows })
+    left -= rows.length
+  }
+  return capped
+}
+
 const TWO_LINE: readonly PaletteRow['kind'][] = ['task', 'shell']
 
 function nextScope(scope: PaletteScope): PaletteScope {
@@ -206,30 +223,33 @@ export function CommandPalette({
           workspaces.map((task, index) => [task.id, shellQueries[index]?.data ?? []]),
         )
       : undefined
-  const terminalKey = JSON.stringify(terminals)
+  // Stands for `terminals` in the memo below: changes only when a shell list is read again.
+  const terminalKey = shellQueries.map((shells) => shells.dataUpdatedAt).join(',')
 
   // The commands' `when` is read as the palette opens, and terminalKey stands for terminals.
   // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
   const sections: PaletteSection[] = useMemo(
     () =>
-      mode === 'jump'
-        ? jumpSections({
-            query,
-            tasks: snapshot.tasks,
-            recent: snapshot.recent,
-            now: snapshot.now,
-            scope,
-            terminals,
-          })
-        : allSections({
-            query,
-            tasks: snapshot.tasks,
-            context,
-            repos,
-            recent: snapshot.recent,
-            now: snapshot.now,
-            scope,
-          }),
+      capRows(
+        mode === 'jump'
+          ? jumpSections({
+              query,
+              tasks: snapshot.tasks,
+              recent: snapshot.recent,
+              now: snapshot.now,
+              scope,
+              terminals,
+            })
+          : allSections({
+              query,
+              tasks: snapshot.tasks,
+              context,
+              repos,
+              recent: snapshot.recent,
+              now: snapshot.now,
+              scope,
+            }),
+      ),
     [mode, query, scope, snapshot, repos, terminalKey],
   )
   const rows = flatRows(sections)

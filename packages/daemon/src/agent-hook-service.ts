@@ -2,6 +2,7 @@ import { isAbsolute, relative, sep } from 'node:path'
 import { type EventType, type Task, type TaskState, taskIdSchema } from '@natamux/core'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
 import { type AgentSignal, type NormalizedHook, planSignalEvents } from './agent-signals.js'
+import type { EventBus } from './event-bus.js'
 import { TaskNotFoundError, type TaskService } from './task-service.js'
 import { MAIN_TERMINAL } from './terminal-service.js'
 
@@ -51,6 +52,13 @@ const NO_STAGES: StageLookup = {
   takeReport: () => false,
 }
 
+type HookServiceOptions = {
+  // Dashboards hear of each change of the activity.
+  bus?: EventBus
+  // Called after each hook of a task: the agent may have changed files in the workspace.
+  workspaceChanged?: (taskId: string) => void
+}
+
 export class AgentHookService {
   private readonly tasks: TaskService
   private readonly stages: StageLookup
@@ -60,10 +68,18 @@ export class AgentHookService {
   // The state of each agent in a shell that no stage uses, by task id, then terminal. In memory
   // only, like the activities.
   private readonly shellStates = new Map<string, Map<string, TaskState>>()
+  private readonly bus: EventBus | undefined
+  private readonly workspaceChanged: (taskId: string) => void
 
-  constructor(tasks: TaskService, stages: StageLookup = NO_STAGES) {
+  constructor(
+    tasks: TaskService,
+    stages: StageLookup = NO_STAGES,
+    options: HookServiceOptions = {},
+  ) {
     this.tasks = tasks
     this.stages = stages
+    this.bus = options.bus
+    this.workspaceChanged = options.workspaceChanged ?? (() => undefined)
   }
 
   // The task comes from the header when it names one, otherwise from the workspace that holds `cwd`.
@@ -116,11 +132,12 @@ export class AgentHookService {
     // Natamux terminals run in the task's workspace only. Without one, the hook comes from an agent
     // that the removal of the workspace ended.
     if (task.workspace === null && terminal !== undefined) {
-      this.activities.delete(task.id)
+      this.keepActivity(task.id, new Map(), this.activities.has(task.id))
       return { taskId: null, applied: [] }
     }
 
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
+    this.workspaceChanged(task.id)
 
     const lane = this.stages.laneFor(task, terminal)
     // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned, not
@@ -178,26 +195,31 @@ export class AgentHookService {
   // Each terminal keeps its own line, so the end of a turn in one does not clear the other.
   private noteActivity(taskId: string, terminal: string, hook: NormalizedHook): void {
     const lines = this.activities.get(taskId) ?? new Map<string, AgentActivity>()
+    let changed = false
     if (hook.summary !== undefined) {
       lines.set(terminal, { text: hook.summary, at: new Date().toISOString() })
+      changed = true
     }
     if (hook.signal === 'turn-ended' || hook.signal === 'failed' || hook.signal === 'asking') {
-      lines.delete(terminal)
+      changed = lines.delete(terminal) || changed
     }
-    this.keepActivity(taskId, lines)
+    this.keepActivity(taskId, lines, changed)
   }
 
   private forgetActivity(taskId: string, terminal: string): void {
     const lines = this.activities.get(taskId) ?? new Map<string, AgentActivity>()
-    lines.delete(terminal)
-    this.keepActivity(taskId, lines)
+    this.keepActivity(taskId, lines, lines.delete(terminal))
   }
 
-  private keepActivity(taskId: string, lines: Map<string, AgentActivity>): void {
+  private keepActivity(taskId: string, lines: Map<string, AgentActivity>, changed: boolean): void {
     if (lines.size === 0) {
       this.activities.delete(taskId)
     } else {
       this.activities.set(taskId, lines)
+    }
+    if (changed) {
+      const activity = Object.fromEntries(lines)
+      this.bus?.publish({ kind: 'activity.changed', taskId, activity })
     }
   }
 }

@@ -768,12 +768,12 @@ export class StageRunner {
 
   // Output of a terminal of a task. On Windows an agent started here counts as running until its
   // launch line sets the window title that says it has ended (/exit, a crash).
-  onOutput(taskId: string, terminal: string, data: string): void {
+  onOutput(taskId: string, terminal: string, data: Buffer): void {
     const key = `${taskId}/${terminal}`
     if (this.platform !== 'win32' || !this.launched.has(key)) {
       return
     }
-    const text = (this.outputTails.get(key) ?? '') + data
+    const text = (this.outputTails.get(key) ?? '') + data.toString()
     if (AGENT_EXITED_MARKS.some((mark) => text.includes(mark))) {
       this.launched.delete(key)
       this.outputTails.delete(key)

@@ -13,11 +13,8 @@ import {
   formatWorkspaceRemoved,
   USAGE,
 } from './format.js'
-import { forwardHook } from './forward-hook.js'
+import { runHookCommand } from './forward-hook.js'
 import { claudeCodeHookSettings } from './hooks.js'
-
-// Agents that read a hook's output as JSON.
-const JSON_ANSWER_AGENTS: readonly string[] = ['cursor', 'gemini']
 
 export type CliIo = {
   stdout: (text: string) => void
@@ -308,38 +305,30 @@ async function execute(
 export async function runCli(argv: readonly string[], options: CliOptions): Promise<number> {
   const { env, io } = options
 
+  // Same code as the fast path in main.ts, which never loads this module.
+  if (argv[0] === 'hook') {
+    return runHookCommand(argv.slice(1), {
+      env,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      readStdin: options.readStdin ?? (async () => ''),
+      fetch: options.fetch ?? fetch,
+    })
+  }
+
   let command: Command
   try {
     command = parseCommand(argv)
   } catch (error) {
     if (error instanceof UsageError) {
       io.stderr(`${error.message}\nRun "natamux help" for usage.\n`)
-      // `natamux hook` runs inside an agent, which treats exit code 2 as "block this action".
-      return argv[0] === 'hook' ? EXIT_OK : EXIT_USAGE
+      return EXIT_USAGE
     }
     throw error
   }
 
   if (command.name === 'help') {
     io.stdout(USAGE)
-    return EXIT_OK
-  }
-
-  // Always exit 0: it runs inside an agent and must never get in its way. It prints an empty JSON
-  // answer for the agents that read one (Cursor blocks a shell command on an answer that is not
-  // JSON), and nothing for the others.
-  if (command.name === 'hook.forward') {
-    if (JSON_ANSWER_AGENTS.includes(command.agent)) {
-      io.stdout('{}\n')
-    }
-    await forwardHook({
-      agent: command.agent,
-      event: command.event,
-      env,
-      readStdin: options.readStdin ?? (async () => ''),
-      fetch: options.fetch ?? fetch,
-      debug: io.stderr,
-    })
     return EXIT_OK
   }
 

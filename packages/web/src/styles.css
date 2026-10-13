@@ -1336,3 +1336,10 @@
 :root[data-window="inactive"] .stage-arc {
   background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
 }
+
+/* Long lists skip layout and paint for rows far off screen. Set --cv-h to the row height when it
+   is not --row-h. Rows with a focus ring outside the box must not use it. */
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--cv-h, var(--row-h));
+}

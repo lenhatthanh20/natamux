@@ -100,7 +100,7 @@ When the task is linked to an issue and `tracker.linkInPr` is true (the default)
 
 ### Checks and status
 
-Natamux asks GitHub about each open or draft pull request once a minute. The **Pull request** section of the details panel shows:
+While a dashboard is open, Natamux asks GitHub about each open or draft pull request once a minute, with one request per repository. Once the checks of all of them have finished, it asks every 5 minutes. The **Pull request** section of the details panel shows:
 
 - The pull request link.
 - A summary such as `open, checks pass`, `open, checks fail` or `draft, checks running`.

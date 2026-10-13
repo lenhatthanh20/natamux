@@ -4,6 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChangedFiles, type ChangedFilesProps } from './ChangedFiles'
 
+// Counts how often each row draws its icon, to see which rows render again.
+const iconRenders = vi.hoisted(() => [] as string[])
+vi.mock('./FileIcon', () => ({
+  FileIcon: ({ path }: { path: string }) => {
+    iconRenders.push(path)
+    return null
+  },
+}))
+
 type Entry = ChangeEntry & { added?: number | null; removed?: number | null }
 
 function entry(path: string, status: ChangeStatus = 'M', extra: Partial<Entry> = {}): Entry {
@@ -92,6 +101,13 @@ describe('ChangedFiles', () => {
 
     await user.keyboard('{ArrowLeft}')
     expect(document.activeElement).toBe(item(/^lib,/))
+  })
+
+  it('renders only the rows that changed when the selection moves', () => {
+    const { update } = files({ selectedPath: 'src/app.ts' })
+    iconRenders.length = 0
+    update({ selectedPath: 'README.md' })
+    expect(iconRenders.sort()).toEqual(['README.md', 'src/app.ts'])
   })
 
   it('selects a file with Enter or a click', async () => {

@@ -6,7 +6,7 @@ import { MAIN_TERMINAL } from './terminal-service.js'
 // trusted, and Cursor's CLI has no such hook, so the bell still counts for them.
 const AGENTS_WITH_HOOKS: readonly string[] = ['claude-code', 'codex', 'gemini']
 
-const BELL = '\x07'
+const BELL = 0x07
 
 // Output comes in many small pieces. Looking at the task for each would read its file each time.
 const LOOK_EVERY_MS = 10_000
@@ -62,7 +62,7 @@ export class GenericSignals {
     })
   }
 
-  onOutput(taskId: string, terminal: string, data: string): void {
+  onOutput(taskId: string, terminal: string, data: Buffer): void {
     this.checkLaunch(taskId, terminal, data)
     if (terminal !== MAIN_TERMINAL) {
       return
@@ -101,7 +101,7 @@ export class GenericSignals {
 
   // A shell that cannot find the agent prints so at once. The stage would wait for an agent that
   // never came, so the task fails with the shell's words and what to do.
-  private checkLaunch(taskId: string, terminal: string, data: string): void {
+  private checkLaunch(taskId: string, terminal: string, data: Buffer): void {
     const key = `${taskId}/${terminal}`
     const launch = this.launches.get(key)
     if (launch === undefined) {
@@ -112,7 +112,8 @@ export class GenericSignals {
       return
     }
     // A line can come in two pieces; the last bit of text is enough to join them.
-    launch.text = (launch.text + data).slice(-4000)
+    // Decoded only here, while a launch is watched: the rest needs no text.
+    launch.text = (launch.text + data.toString()).slice(-4000)
     const line = notFoundLine(launch.text, launch.program)
     if (line === undefined) {
       return

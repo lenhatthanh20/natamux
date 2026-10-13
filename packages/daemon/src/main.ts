@@ -22,6 +22,15 @@ import { TemplateService } from './template-service.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
 
+// Marks of the start, logged as one line after the listen. performance.now() counts from the start
+// of the process, so the first mark also shows the time that the imports took.
+const marks: [name: string, at: number][] = []
+function mark(name: string): void {
+  performance.mark(`daemon:${name}`)
+  marks.push([name, Math.round(performance.now())])
+}
+mark('module-start')
+
 // Set under the desktop app only.
 const parentPort = (process as NodeJS.Process & { parentPort?: ParentPort }).parentPort
 let loginPath: string | undefined
@@ -46,6 +55,7 @@ const service = new TaskService({
   settingsOf: (repo) => settings.get(repo),
 })
 service.init()
+mark('init')
 const issueLinker = new IssueLinker({
   tasks: service,
   bus,
@@ -60,6 +70,7 @@ const workspaces = new WorkspaceService({
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
   closeTerminals: (taskId) => terminals.closeAndWait(taskId),
   programOf: (agent) => agents.programOf(agent),
+  bus,
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -87,6 +98,8 @@ const terminals = new TerminalService({
     genericSignals.onOutput(taskId, terminal, data)
   },
   isEnded: (taskId) => isTaskEnded(service, taskId),
+  bus,
+  onOutputIdle: (taskId) => workspaces.touch(taskId),
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
@@ -123,6 +136,7 @@ const stages = new StageRunner({
 const pullRequests = new PullRequestWatcher({
   tasks: service,
   cwdOf: repoFolderOr(repos, config.dataDir),
+  bus,
 })
 // They run git, gh and the checks of stages.
 const ready = pathReady.then(() => {
@@ -149,12 +163,16 @@ const app = await buildServer({
   webDir: config.webDir,
   ready,
 })
+mark('build-server')
 await app.listen({ host: config.host, port: config.port })
+mark('listen')
 // The desktop app opens its window now, instead of at its next look at /health.
 parentPort?.postMessage('ready')
 // After the listen, so the hooks of the agents reach the daemon.
 void ready.then(() => stages.resumeAgents())
 
+const startup = marks.map(([name, at]) => `${name} ${at}`).join(', ')
+console.log(`Startup, ms since the process began: ${startup}`)
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)
 console.log(`Projects: ${repos.list().length}`)

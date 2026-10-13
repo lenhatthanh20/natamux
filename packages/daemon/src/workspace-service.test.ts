@@ -17,6 +17,8 @@ import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
   branchNameFor,
+  DIFF_STATS_MAX_AGE_MS,
+  DIRTY_DEBOUNCE_MS,
   FileNotChangedError,
   GIT_READ_MS,
   slugify,
@@ -1295,7 +1297,29 @@ describe('diffStats', () => {
     clock += GIT_READ_MS
     const next = workspaces.diffStats()
     expect(next).not.toBe(first)
-    expect(await next).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+    // Nothing told the service that the workspace changed.
+    expect(await next).toEqual({ [task.id]: { files: 0, added: 0, removed: 0 } })
+
+    clock += DIFF_STATS_MAX_AGE_MS
+    expect(await workspaces.diffStats()).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+  })
+
+  it('reads again only the workspaces that changed', async () => {
+    const first = await workspaces.create(tasks.createTask({ title: 'First' }).id)
+    const second = await workspaces.create(tasks.createTask({ title: 'Second' }).id)
+    const none = { files: 0, added: 0, removed: 0 }
+    expect(await workspaces.diffStats()).toEqual({ [first.id]: none, [second.id]: none })
+    for (const task of [first, second]) {
+      writeFileSync(join(task.workspace ?? '', 'notes.txt'), 'a\n')
+      runGit(task.workspace ?? '', 'add', 'notes.txt')
+    }
+
+    workspaces.touch(first.id)
+
+    expect(await workspaces.diffStats()).toEqual({
+      [first.id]: { files: 1, added: 1, removed: 0 },
+      [second.id]: none,
+    })
   })
 
   it('reads again at once after a workspace is made or removed here', async () => {
@@ -1309,6 +1333,83 @@ describe('diffStats', () => {
 
     await workspaces.remove(task.id, { deleteBranch: true })
     expect(await workspaces.diffStats()).toEqual({})
+  })
+})
+
+describe('touch', () => {
+  let sent: DaemonMessage[]
+  let touching: WorkspaceService
+
+  beforeEach(() => {
+    sent = []
+    const bus = new EventBus()
+    bus.subscribe((message) => sent.push(message))
+    touching = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      bus,
+      now: () => clock,
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tells the dashboards once per burst of changes in a task', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    for (let step = 0; step < 10; step += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(50)
+    }
+    expect(sent).toEqual([])
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS - 500)
+    expect(sent).toEqual([{ kind: 'workspace.dirty', taskId: task.id }])
+
+    touching.touch(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    expect(sent).toHaveLength(2)
+  })
+
+  it('tells about each task apart', () => {
+    vi.useFakeTimers()
+    const first = tasks.createTask({ title: 'First' })
+    const second = tasks.createTask({ title: 'Second' })
+
+    touching.touch(first.id)
+    touching.touch(second.id)
+    touching.touch(first.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+
+    expect(sent).toEqual([
+      { kind: 'workspace.dirty', taskId: first.id },
+      { kind: 'workspace.dirty', taskId: second.id },
+    ])
+  })
+
+  it('says nothing about a task deleted in the meantime', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    touching.touch(task.id)
+    tasks.deleteTask(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+
+    expect(sent.filter((message) => message.kind === 'workspace.dirty')).toEqual([])
+  })
+
+  it('follows each change made here, such as a commit', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await touching.create(task.id)
+    writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'a\n')
+    const touch = vi.spyOn(touching, 'touch')
+
+    await touching.commit(task.id, 'Add notes')
+
+    expect(touch).toHaveBeenCalledWith(task.id)
   })
 })
 

@@ -1,6 +1,14 @@
 import type { Task } from '@natamux/core'
+import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import { closeSocket, deletedTaskId, isReposChanged, liveSocketUrl, parseLiveMessage } from './live'
+import type { AgentActivity } from './api'
+import {
+  ACTIVITY_KEY,
+  applyLiveMessages,
+  closeSocket,
+  liveSocketUrl,
+  parseLiveMessage,
+} from './live'
 
 const task: Task = {
   id: 'T-0001',
@@ -47,50 +55,169 @@ describe('liveSocketUrl', () => {
 })
 
 describe('parseLiveMessage', () => {
+  const parse = (message: unknown) => parseLiveMessage(JSON.stringify(message))
+
   it('reads the task of a created message', () => {
-    expect(parseLiveMessage(JSON.stringify({ kind: 'task.created', task }))).toEqual(task)
+    expect(parse({ kind: 'task.created', task })).toEqual({ kind: 'task', task })
   })
 
   it('reads the task of an updated message and ignores the other fields', () => {
-    const text = JSON.stringify({ kind: 'task.updated', task, accepted: true, event: {} })
-    expect(parseLiveMessage(text)).toEqual(task)
+    const message = { kind: 'task.updated', task, accepted: true, event: {} }
+    expect(parse(message)).toEqual({ kind: 'task', task })
+  })
+
+  it.each([
+    { kind: 'task.deleted', taskId: 'T-0001' },
+    { kind: 'repos.changed' },
+    { kind: 'resync' },
+    { kind: 'shells.changed', taskId: 'T-0001' },
+    { kind: 'workspace.dirty', taskId: 'T-0001' },
+  ])('reads $kind', (message) => {
+    expect(parse(message)).toEqual(message)
+  })
+
+  it('reads the activity of a task as the line of each terminal and the latest line', () => {
+    const activity = {
+      '1': { text: 'Edit src/a.ts', at: '2026-10-08T09:00:00Z' },
+      '2': { text: 'Bash: pnpm test', at: '2026-10-08T09:00:05Z' },
+    }
+    expect(parse({ kind: 'activity.changed', taskId: 'T-0001', activity })).toEqual({
+      kind: 'activity.changed',
+      taskId: 'T-0001',
+      lines: { '1': 'Edit src/a.ts', '2': 'Bash: pnpm test' },
+      latest: 'Bash: pnpm test',
+    })
+  })
+
+  it('reads an activity that is empty as no lines', () => {
+    expect(parse({ kind: 'activity.changed', taskId: 'T-0001', activity: {} })).toEqual({
+      kind: 'activity.changed',
+      taskId: 'T-0001',
+      lines: {},
+      latest: null,
+    })
+  })
+
+  it('parses the text once', () => {
+    const json = vi.spyOn(JSON, 'parse')
+    parseLiveMessage('{"kind":"shells.changed","taskId":"T-0001"}')
+    expect(json).toHaveBeenCalledTimes(1)
+    json.mockRestore()
   })
 
   it.each([
     ['text that is not JSON', 'not json'],
     ['JSON that is not an object', '42'],
-    ['a message without a task', JSON.stringify({ kind: 'task.updated' })],
-    ['a task that is not valid', JSON.stringify({ task: { id: 'nope' } })],
+    ['null', 'null'],
+    ['a message without a kind or a task', '{"taskId":"T-0001"}'],
+    ['a kind this dashboard does not know', '{"kind":"later","taskId":"T-0001"}'],
+    ['a message without a task', '{"kind":"task.updated"}'],
+    ['a task that is not valid', '{"task":{"id":"nope"}}'],
+    ['a delete message without an id', '{"kind":"task.deleted"}'],
+    ['a shells message with an id that is not text', '{"kind":"shells.changed","taskId":3}'],
+    [
+      'an activity message without an activity',
+      '{"kind":"activity.changed","taskId":"T-0001"}',
+    ],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
   })
 })
 
-describe('deletedTaskId', () => {
-  it('reads the id of a deleted task', () => {
-    expect(deletedTaskId(JSON.stringify({ kind: 'task.deleted', taskId: 'T-0001' }))).toBe('T-0001')
+describe('applyLiveMessages', () => {
+  const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  const activity: AgentActivity = {
+    byTask: { 'T-0001': 'Edit src/a.ts', 'T-0002': 'Bash: pnpm test' },
+    byTerminal: { 'T-0001': { '1': 'Edit src/a.ts' }, 'T-0002': { '1': 'Bash: pnpm test' } },
+  }
+
+  const changed = (taskId: string, lines: Record<string, string>, latest: string | null) =>
+    ({ kind: 'activity.changed', taskId, lines, latest }) as const
+
+  it('writes the activity of the tasks and keeps the other tasks as they were', () => {
+    const queryClient = client()
+    queryClient.setQueryData(ACTIVITY_KEY, activity)
+
+    applyLiveMessages(queryClient, [
+      changed('T-0001', { '1': 'Read a.ts' }, 'Read a.ts'),
+      changed('T-0003', { '2': 'Grep' }, 'Grep'),
+    ])
+
+    const next = queryClient.getQueryData<AgentActivity>(ACTIVITY_KEY)
+    expect(next?.byTask).toEqual({
+      'T-0001': 'Read a.ts',
+      'T-0002': 'Bash: pnpm test',
+      'T-0003': 'Grep',
+    })
+    expect(next?.byTerminal['T-0001']).toEqual({ '1': 'Read a.ts' })
+    // The same object, so a part that shows T-0002 sees no change.
+    expect(next?.byTerminal['T-0002']).toBe(activity.byTerminal['T-0002'])
   })
 
-  it.each([
-    ['text that is not JSON', 'not json'],
-    ['a task message', JSON.stringify({ kind: 'task.created', task })],
-    ['a delete message without an id', JSON.stringify({ kind: 'task.deleted' })],
-  ])('is undefined for %s', (_name, text) => {
-    expect(deletedTaskId(text)).toBeUndefined()
-  })
-})
+  it('drops a task whose agents do nothing now', () => {
+    const queryClient = client()
+    queryClient.setQueryData(ACTIVITY_KEY, activity)
 
-describe('isReposChanged', () => {
-  it('knows the message that the projects changed', () => {
-    expect(isReposChanged(JSON.stringify({ kind: 'repos.changed' }))).toBe(true)
+    applyLiveMessages(queryClient, [changed('T-0001', {}, null)])
+
+    const next = queryClient.getQueryData<AgentActivity>(ACTIVITY_KEY)
+    expect(next?.byTask).toEqual({ 'T-0002': 'Bash: pnpm test' })
+    expect(Object.keys(next?.byTerminal ?? {})).toEqual(['T-0002'])
   })
 
-  it.each([
-    ['text that is not JSON', 'not json'],
-    ['JSON that is not an object', 'null'],
-    ['a task message', JSON.stringify({ kind: 'task.created', task })],
-  ])('is false for %s', (_name, text) => {
-    expect(isReposChanged(text)).toBe(false)
+  it('leaves the activity to its first read when it was not read yet', () => {
+    const queryClient = client()
+
+    applyLiveMessages(queryClient, [changed('T-0001', { '1': 'Grep' }, 'Grep')])
+
+    expect(queryClient.getQueryData(ACTIVITY_KEY)).toBeUndefined()
+  })
+
+  it('reads the shells of that task again, once however many messages came', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyLiveMessages(queryClient, [
+      { kind: 'shells.changed', taskId: 'T-0001' },
+      { kind: 'shells.changed', taskId: 'T-0001' },
+    ])
+
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
+  })
+
+  it('reads the files, the shells and the sizes of a changed workspace again', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyLiveMessages(queryClient, [
+      { kind: 'workspace.dirty', taskId: 'T-0001' },
+      { kind: 'workspace.dirty', taskId: 'T-0002' },
+    ])
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    for (const id of ['T-0001', 'T-0002']) {
+      // The shells too: a hook's shell state, or a program started in a shell, sends no message.
+      for (const key of ['changes', 'file-diff', 'graph', 'stage-files', 'task-shells']) {
+        expect(keys).toContainEqual([key, id])
+      }
+    }
+    // The sizes of all tasks come in one answer, read once.
+    expect(keys.filter((key) => key?.[0] === 'diffstats')).toEqual([['diffstats']])
+  })
+
+  it('reads everything again after a resync', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyLiveMessages(queryClient, [
+      { kind: 'shells.changed', taskId: 'T-0001' },
+      { kind: 'resync' },
+    ])
+
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith()
   })
 })
 

@@ -56,6 +56,8 @@ export class RepoService {
   private readonly removedFile: string
   // A function, not the task service itself: the task service is made after this one.
   private readonly tasks: () => readonly Pick<Task, 'repo' | 'workspace'>[]
+  // repos.json as last read or saved. Every hook asks for a path, so it is not read each time.
+  private cached: Repo[] | undefined
 
   constructor(options: {
     dataDir: string
@@ -73,19 +75,20 @@ export class RepoService {
     }
   }
 
+  // Copies, so a caller cannot change the cache.
   list(): Repo[] {
-    return this.stored()
+    return this.stored().map((repo) => ({ ...repo }))
   }
 
   // Null means the default repository.
   get(id: string | null): Repo {
-    const repo = this.list().find((candidate) => candidate.id === (id ?? DEFAULT_REPO))
+    const repo = this.stored().find((candidate) => candidate.id === (id ?? DEFAULT_REPO))
     if (!repo) {
       throw id === null
         ? new RepoNotFoundError(DEFAULT_REPO, 'There is no default project. Add a project first')
         : new RepoNotFoundError(id)
     }
-    return repo
+    return { ...repo }
   }
 
   pathOf(id: string | null): string {
@@ -179,11 +182,12 @@ export class RepoService {
     return added !== '' && canonical(added) === canonical(folder)
   }
 
-  private stored(): Repo[] {
-    if (!existsSync(this.file)) {
-      return []
+  private stored(): readonly Repo[] {
+    if (this.cached === undefined) {
+      const text = existsSync(this.file) ? readFileSync(this.file, 'utf8') : '[]'
+      this.cached = z.array(repoSchema).parse(JSON.parse(text))
     }
-    return z.array(repoSchema).parse(JSON.parse(readFileSync(this.file, 'utf8')))
+    return this.cached
   }
 
   private removed(): Record<string, string> {
@@ -204,5 +208,6 @@ export class RepoService {
     mkdirSync(join(this.file, '..'), { recursive: true })
     writeFileSync(`${this.file}.tmp`, `${JSON.stringify(repos, null, 2)}\n`)
     renameSync(`${this.file}.tmp`, this.file)
+    this.cached = repos.map((repo) => ({ ...repo }))
   }
 }

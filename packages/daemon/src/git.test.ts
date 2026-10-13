@@ -31,6 +31,8 @@ import {
   parseLog,
   parseNumstat,
   parseNumstatZ,
+  parsePullRequestBatch,
+  parsePullRequestRef,
   parsePullRequestView,
   parseRefs,
   parseStatus,
@@ -45,6 +47,7 @@ import {
   readFileImage,
   readGitGraph,
   readPullRequestStatus,
+  readPullRequestStatuses,
   readPushStatus,
   removeWorktree,
   snapshotCommit,
@@ -1345,6 +1348,139 @@ describe('readPullRequestStatus', () => {
     const gh: RunGh = async () => 'not json'
     const reading = readPullRequestStatus('/repo', 'https://github.com/o/r/pull/1', gh)
     await expect(reading).rejects.toThrow(GitHubError)
+  })
+})
+
+// A pull request as `gh api graphql` gives it, with the checks of its last commit.
+function pullRequestNode(state: string, isDraft: boolean, checks: object[] | null) {
+  const rollup = checks === null ? null : { contexts: { nodes: checks } }
+  return { state, isDraft, commits: { nodes: [{ commit: { statusCheckRollup: rollup } }] } }
+}
+
+describe('parsePullRequestRef', () => {
+  it.each([
+    ['https://github.com/o/r/pull/12', { host: 'github.com', owner: 'o', name: 'r', number: 12 }],
+    [
+      'https://ghe.example.com/team/app/pull/3',
+      { host: 'ghe.example.com', owner: 'team', name: 'app', number: 3 },
+    ],
+    ['https://github.com/o/r/issues/12', undefined],
+    ['not an address', undefined],
+  ])('reads %j', (url, ref) => {
+    expect(parsePullRequestRef(url)).toEqual(ref)
+  })
+})
+
+describe('parsePullRequestBatch', () => {
+  it('maps each pull request as parsePullRequestView does', () => {
+    const cases = [
+      [
+        pullRequestNode('OPEN', false, []),
+        { state: 'OPEN', isDraft: false, statusCheckRollup: [] },
+      ],
+      [pullRequestNode('OPEN', true, null), { state: 'OPEN', isDraft: true }],
+      [
+        pullRequestNode('MERGED', false, [{ state: 'SUCCESS' }]),
+        { state: 'MERGED', isDraft: false, statusCheckRollup: [{ state: 'SUCCESS' }] },
+      ],
+      [
+        pullRequestNode('OPEN', false, [{ status: 'IN_PROGRESS', conclusion: null }]),
+        { state: 'OPEN', isDraft: false, statusCheckRollup: [{ status: 'IN_PROGRESS' }] },
+      ],
+      [
+        pullRequestNode('OPEN', false, [{ status: 'COMPLETED', conclusion: 'FAILURE' }]),
+        {
+          state: 'OPEN',
+          isDraft: false,
+          statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }],
+        },
+      ],
+      [{ state: 'CLOSED', isDraft: false, commits: { nodes: [] } }, { state: 'CLOSED' }],
+    ] as const
+    const repository = Object.fromEntries(cases.map(([node], at) => [`pr${at + 1}`, node]))
+    const statuses = parsePullRequestBatch(
+      JSON.stringify({ data: { repository } }),
+      cases.map((_, at) => at + 1),
+    )
+
+    for (const [at, [, view]] of cases.entries()) {
+      expect(statuses.get(at + 1)).toEqual(parsePullRequestView(JSON.stringify(view)))
+    }
+  })
+
+  it('leaves out a number that GitHub did not find', () => {
+    const repository = { pr1: pullRequestNode('OPEN', false, []), pr2: null }
+    const statuses = parsePullRequestBatch(JSON.stringify({ data: { repository } }), [1, 2])
+    expect([...statuses.keys()]).toEqual([1])
+  })
+
+  it('fails without a repository in the answer', () => {
+    const output = JSON.stringify({ data: { repository: null } })
+    expect(() => parsePullRequestBatch(output, [1])).toThrow()
+  })
+})
+
+describe('readPullRequestStatuses', () => {
+  const repo = { host: 'github.com', owner: 'o', name: 'r' }
+
+  it('asks for all pull requests of a repository in one GraphQL call', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      const repository = { pr1: pullRequestNode('OPEN', false, []), pr7: null }
+      return JSON.stringify({ data: { repository } })
+    }
+
+    const statuses = await readPullRequestStatuses('/repo', repo, [1, 7], gh)
+
+    expect(statuses).toEqual(new Map([[1, { state: 'open', checks: 'none' }]]))
+    expect(calls).toHaveLength(1)
+    const [args = []] = calls
+    expect(args.slice(0, 2)).toEqual(['api', 'graphql'])
+    expect(args).toContain('owner=o')
+    expect(args).toContain('name=r')
+    expect(args).not.toContain('--hostname')
+    const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+    expect(query).toContain('pr1: pullRequest(number: 1)')
+    expect(query).toContain('pr7: pullRequest(number: 7)')
+  })
+
+  it('names the host of GitHub Enterprise', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return JSON.stringify({ data: { repository: { pr1: pullRequestNode('OPEN', false, []) } } })
+    }
+
+    await readPullRequestStatuses('/repo', { ...repo, host: 'ghe.example.com' }, [1], gh)
+
+    expect(calls[0]?.slice(2, 4)).toEqual(['--hostname', 'ghe.example.com'])
+  })
+
+  it('reads the answer gh printed before it failed for a number it did not find', async () => {
+    const gh: RunGh = async () => {
+      const repository = { pr1: pullRequestNode('MERGED', false, []), pr2: null }
+      throw new GitHubError(
+        'Could not resolve to a PullRequest',
+        JSON.stringify({ data: { repository } }),
+      )
+    }
+
+    expect(await readPullRequestStatuses('/repo', repo, [1, 2], gh)).toEqual(
+      new Map([[1, { state: 'merged', checks: 'none' }]]),
+    )
+  })
+
+  it('passes on a failure without an answer', async () => {
+    const gh: RunGh = async () => {
+      throw new GitHubError('not logged in')
+    }
+    await expect(readPullRequestStatuses('/repo', repo, [1], gh)).rejects.toThrow('not logged in')
+  })
+
+  it('fails with a GitHubError on an answer that is not JSON', async () => {
+    const gh: RunGh = async () => 'not json'
+    await expect(readPullRequestStatuses('/repo', repo, [1], gh)).rejects.toThrow(GitHubError)
   })
 })
 

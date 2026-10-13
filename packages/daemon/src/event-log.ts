@@ -1,7 +1,14 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { type TaskEvent, taskEventSchema } from '@natamux/core'
-import { tasksDir } from './task-files.js'
+import { type FileStat, isMissingFile, tasksDir } from './task-files.js'
 
 // One JSON line per event of a task, next to its task file. The index keeps the events too, for
 // fast reads; this file is what survives when the index is lost.
@@ -11,9 +18,22 @@ export function eventLogPath(dataDir: string, taskId: string): string {
   return join(tasksDir(dataDir), `${taskId}.events.jsonl`)
 }
 
-export function appendEventLine(dataDir: string, event: TaskEvent, accepted: boolean): void {
-  mkdirSync(tasksDir(dataDir), { recursive: true })
-  appendFileSync(eventLogPath(dataDir, event.taskId), `${JSON.stringify({ ...event, accepted })}\n`)
+// Returns the stat of the log after the line, so the next start knows whether the log changed.
+export function appendEventLine(dataDir: string, event: TaskEvent, accepted: boolean): FileStat {
+  const path = eventLogPath(dataDir, event.taskId)
+  const line = `${JSON.stringify({ ...event, accepted })}\n`
+  try {
+    appendFileSync(path, line)
+  } catch (error) {
+    // The folder is made only when it is missing, not once per event.
+    if (!isMissingFile(error)) {
+      throw error
+    }
+    mkdirSync(tasksDir(dataDir), { recursive: true })
+    appendFileSync(path, line)
+  }
+  const { mtimeMs, size } = statSync(path)
+  return { mtimeMs, size }
 }
 
 export function writeEventLog(

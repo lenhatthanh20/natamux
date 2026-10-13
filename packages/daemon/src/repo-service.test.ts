@@ -265,4 +265,26 @@ describe('RepoService', () => {
     withTasks.remove('default')
     expect(withTasks.list()).toEqual([])
   })
+
+  it('reads repos.json once, and again only after its own save', async () => {
+    const file = join(repo.root, 'data', 'repos.json')
+    const before = repos.list()
+    writeFileSync(file, '[]\n')
+
+    expect(repos.list()).toEqual(before)
+    expect(repos.pathOf(null)).toBe(repo.dir)
+
+    const added = await repos.add({ path: gitFolder('web') })
+    expect(repos.list()).toEqual([...before, added])
+    repos.remove('default')
+    expect(repos.list()).toEqual([added])
+  })
+
+  it('gives copies, so a caller cannot change the list it keeps', () => {
+    repos.get(null).name = 'changed'
+    const listed = repos.list()
+    listed.pop()
+
+    expect(repos.list()).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
+  })
 })
