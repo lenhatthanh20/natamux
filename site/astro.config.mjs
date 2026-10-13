@@ -22,7 +22,7 @@ export default defineConfig({
       lastUpdated: true,
       sidebar: [
         {
-          label: 'Start here',
+          label: 'Getting started',
           items: [
             { label: 'What is Natamux', slug: 'docs' },
             { slug: 'docs/getting-started/install' },
