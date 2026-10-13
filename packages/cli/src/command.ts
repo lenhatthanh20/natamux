@@ -18,8 +18,6 @@ export const SENDABLE_EVENT_TYPES = EVENT_TYPES.filter(
   (type) => !RECORD_ONLY_EVENT_TYPES.includes(type),
 )
 
-const AGENT_NAME = /^[a-z][a-z0-9-]*$/
-
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
 export type TaskChanges = {
@@ -92,7 +90,6 @@ export type Command =
     }
   | { name: 'event.list'; id: string; json: boolean }
   | { name: 'hooks.claude-code' }
-  | { name: 'hook.forward'; agent: string; event?: string }
   | { name: 'workspace.create'; id: string; base?: string; json: boolean }
   | { name: 'workspace.remove'; id: string; deleteBranch: boolean; json: boolean }
 
@@ -379,21 +376,6 @@ export function parseCommand(argv: readonly string[]): Command {
   if (group === 'events') {
     noExtraArguments(rest)
     return { name: 'event.list', id: taskId(second), json }
-  }
-
-  if (group === 'hook') {
-    if (second === undefined || !AGENT_NAME.test(second)) {
-      throw new UsageError(
-        'An agent name is required, in lower case letters, digits and "-": natamux hook claude-code',
-      )
-    }
-    // Copilot CLI does not say which event a hook is for, so its hook command names it.
-    const [event, ...extra] = rest
-    noExtraArguments(extra)
-    if (event !== undefined && !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(event)) {
-      throw new UsageError(`Unexpected argument: ${event}`)
-    }
-    return { name: 'hook.forward', agent: second, ...(event === undefined ? {} : { event }) }
   }
 
   if (group === 'hooks') {

@@ -31,7 +31,8 @@ test('shows no agent on a new shell that runs another program', async ({ page, r
     return (await response.json()).lanes?.['2'] ?? 'none'
   }
   await expect.poll(lane, { timeout: 15_000 }).toEqual({ stage: null, state: null, agent: null })
-  // The dashboard reads the list every 5 s; give it one read with the shell listed.
+  // The dashboard reads the list again once the shell's output goes quiet; give it one read with
+  // the shell listed.
   await page.waitForTimeout(6_000)
   const header = shell.locator('header')
   await expect(header.locator('img, svg.lucide-bot')).toHaveCount(0)

@@ -10,8 +10,9 @@ export type NatamuxParts = { daemonMain: string; cliMain: string; webDir: string
 export function findParts(env: NodeJS.ProcessEnv): NatamuxParts {
   const packageDir = (name: string) => dirname(require.resolve(`${name}/package.json`))
   return {
-    // The daemon's exports hide its package.json; its main module sits next to the entry.
-    daemonMain: join(dirname(require.resolve('@natamux/daemon')), 'main.js'),
+    // The daemon's exports hide its package.json. Its entry, which turns on the compile cache, sits
+    // next to index.js.
+    daemonMain: join(dirname(require.resolve('@natamux/daemon')), 'entry.js'),
     cliMain: join(packageDir('@natamux/cli'), 'dist', 'main.js'),
     webDir: env.NATAMUX_WEB_DIR?.trim() || join(packageDir('@natamux/web'), 'dist'),
   }

@@ -54,7 +54,7 @@ COPY --from=build /app/packages/daemon/dist packages/daemon/dist
 RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 4317
-CMD ["node", "packages/daemon/dist/main.js"]
+CMD ["node", "packages/daemon/dist/entry.js"]
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS web
 LABEL org.opencontainers.image.source="https://github.com/lenhatthanh20/natamux"

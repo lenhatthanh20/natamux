@@ -43,7 +43,7 @@ describe('GenericSignals', () => {
     const task = runningTask('cursor')
     later(60)
 
-    signals.onOutput(task.id, '1', 'compiling...')
+    signals.onOutput(task.id, '1', Buffer.from('compiling...'))
 
     expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:01:00.000Z')
   })
@@ -51,13 +51,13 @@ describe('GenericSignals', () => {
   it('keeps a running task alive while it prints', () => {
     const task = runningTask('cursor')
     later(60)
-    signals.onOutput(task.id, '1', 'a')
+    signals.onOutput(task.id, '1', Buffer.from('a'))
     later(31)
-    signals.onOutput(task.id, '1', 'b')
+    signals.onOutput(task.id, '1', Buffer.from('b'))
     expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:01:31.000Z')
 
     later(31)
-    signals.onOutput(task.id, '1', 'c')
+    signals.onOutput(task.id, '1', Buffer.from('c'))
     expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:02:02.000Z')
   })
 
@@ -67,7 +67,7 @@ describe('GenericSignals', () => {
     const since = tasks.getTask(task.id).backgroundSince
     later(60)
 
-    signals.onOutput(task.id, '1', '\x1b[2J redraw after a resize')
+    signals.onOutput(task.id, '1', Buffer.from('\x1b[2J redraw after a resize'))
 
     expect(tasks.getTask(task.id)).toMatchObject({
       backgroundSince: since,
@@ -78,7 +78,7 @@ describe('GenericSignals', () => {
   it('moves a running task to needs input when an agent without hooks rings the bell', () => {
     const task = runningTask('cursor')
 
-    signals.onOutput(task.id, '1', 'Allow this command? \x07')
+    signals.onOutput(task.id, '1', Buffer.from('Allow this command? \x07'))
 
     expect(tasks.getTask(task.id).state).toBe('needs-input')
     expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
@@ -89,15 +89,15 @@ describe('GenericSignals', () => {
 
   it('leaves agents with hooks, other terminals and tasks that do not run alone', () => {
     const claude = runningTask('claude-code')
-    signals.onOutput(claude.id, '1', '\x07')
+    signals.onOutput(claude.id, '1', Buffer.from('\x07'))
     expect(tasks.getTask(claude.id).state).toBe('running')
 
     const other = runningTask('cursor')
-    signals.onOutput(other.id, '2', '\x07')
+    signals.onOutput(other.id, '2', Buffer.from('\x07'))
     expect(tasks.getTask(other.id).state).toBe('running')
 
     const draft = tasks.createTask({ title: 'Not started' })
-    signals.onOutput(draft.id, '1', '\x07')
+    signals.onOutput(draft.id, '1', Buffer.from('\x07'))
     expect(tasks.getTask(draft.id).state).toBe('draft')
   })
 
@@ -116,7 +116,7 @@ describe('GenericSignals', () => {
       payload: { to: 'running', stage: 'build' },
     })
 
-    new GenericSignals(staged, () => clock.getTime()).onOutput(task.id, '1', '\x07')
+    new GenericSignals(staged, () => clock.getTime()).onOutput(task.id, '1', Buffer.from('\x07'))
 
     expect(staged.getTask(task.id).lanes).toEqual({
       'test-spec': 'running',
@@ -138,8 +138,12 @@ describe('a shell that cannot find the agent', () => {
     const task = runningTask('claude-code')
     launch(task.id)
 
-    signals.onOutput(task.id, '1', `$ . '/data/agent-launch.sh'\r\n${line.slice(0, 9)}`)
-    signals.onOutput(task.id, '1', `${line.slice(9)}\r\n$ `)
+    signals.onOutput(
+      task.id,
+      '1',
+      Buffer.from(`$ . '/data/agent-launch.sh'\r\n${line.slice(0, 9)}`),
+    )
+    signals.onOutput(task.id, '1', Buffer.from(`${line.slice(9)}\r\n$ `))
 
     const failed = tasks.listEvents(task.id).at(-1)?.event
     expect(tasks.getTask(task.id).state).toBe('failed')
@@ -150,10 +154,10 @@ describe('a shell that cannot find the agent', () => {
   it('pays no heed to other words, to other programs, or after the first seconds', () => {
     const task = runningTask('claude-code')
     launch(task.id)
-    signals.onOutput(task.id, '1', 'bash: pnpm: command not found\r\n')
-    signals.onOutput(task.id, '2', 'bash: claude: command not found\r\n')
+    signals.onOutput(task.id, '1', Buffer.from('bash: pnpm: command not found\r\n'))
+    signals.onOutput(task.id, '2', Buffer.from('bash: claude: command not found\r\n'))
     later(20)
-    signals.onOutput(task.id, '1', 'bash: claude: command not found\r\n')
+    signals.onOutput(task.id, '1', Buffer.from('bash: claude: command not found\r\n'))
 
     expect(tasks.getTask(task.id).state).toBe('running')
   })

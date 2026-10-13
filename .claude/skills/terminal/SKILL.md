@@ -20,13 +20,13 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | File | What |
 |---|---|
 | `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs, flow control. `splitFrames`, `sliceEnd` |
-| `packages/daemon/src/pty.ts` | node-pty spawn. `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell |
+| `packages/daemon/src/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell |
 | `packages/daemon/src/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
 | `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
 | `packages/daemon/src/agent-runner.ts`, `stage-runner.ts` | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
 | `packages/core/src/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
 | `packages/web/src/components/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one (after the render without the "Connecting." strip, so a cached terminal fits once and sends no resize), shows status, find, "Jump to latest" |
-| `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load |
+| `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load. `session.search()` makes the `SearchAddon` at the first find (`TerminalFind` calls it); `importWebgl()` loads `@xterm/addon-webgl` with the first GPU renderer |
 | `packages/web/src/lib/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
 | `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (6), `GIVE_BACK_DELAY_MS` (10 s), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
 | `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle, or after 3 s at most. Pointing at or focusing Agents in the sidebar loads it too |
@@ -46,9 +46,10 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - A done or cancelled task ends all its shells (`stage-runner.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
   - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`.
-- **Pane.**
-  - The fit is debounced by `FIT_DELAY_MS` (100 ms).
-  - `onResize` sets the scrollback for the new width and sends the size.
+- **Pane.** Resizes work like VS Code's `terminalResizeDebouncer` (`resizeNow`, `settle`).
+  - While the pane changes size, the rows change in xterm at once (`fit.proposeDimensions()`). The columns change at once too while the buffer (`buffer.normal.length`) has fewer than `REFLOW_WAIT_ROWS` (200) rows; a longer one waits, because columns reflow every wrapped line.
+  - These resizes are local: `holdSize` keeps `onResize` from sending them. When the pane settles (`FIT_DELAY_MS`, 100 ms after the last change), `settle` fits (the columns catch up) and sends one resize. A hide or dispose before that sends nothing.
+  - `onResize` sets the scrollback for the new width and, outside a local resize, sends the size.
   - Disposal closes the socket at once and frees xterm after `DISPOSE_DELAY_MS`, because xterm still has a frame queued.
 - **Cache (web).**
   - Key `taskId/terminal` (`terminalKey`). Shell 1 in the agents grid and in the task view share a key, so the terminal moves between them.
@@ -61,6 +62,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - `show` fits once and calls `refresh`. Nothing fits while hidden: the `ResizeObserver` is off, because a fit of a box with no size sends a tiny resize.
   - Scroll state goes to React at most once per frame, and never while hidden. `state()` returns the same object until something changes (`useSyncExternalStore`).
 - **GPU budget (web).**
+  - `@xterm/addon-webgl` is not in the TerminalView chunk. The first renderer loads it with `import()` (`importWebgl`), so that first load is async: it settles later and fits again (`onSwitch`). After it, every renderer starts in the same call. A failed import counts as no WebGL: the terminal draws with the DOM.
   - At most 6 WebGL renderers per page, one per pane of a full grid (`MAX_PANES`). Each holds a GPU context and glyph textures, tens of MB at Retina.
   - A hidden terminal (in the holder, or off screen for `watchVisible`) keeps its renderer for `GIVE_BACK_DELAY_MS` (10 s), so a quick switch back is instant. Then it gives the renderer back and draws with the DOM. A show before that cancels the give-back; a show after it takes a renderer again if the budget allows.
   - When the budget is full, the terminal hidden longest gives its renderer back at once. With none hidden, a new terminal draws with the DOM.
@@ -104,7 +106,9 @@ Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFU
 
 ## Batching (daemon)
 
-- `queueOutput` collects pty chunks in `session.batch`. A frame goes out when the batch reaches `OUTPUT_FRAME_BYTES` (64 KB; full frames at once, the rest stays).
+- The pty gives bytes. A read can stop inside a UTF-8 character: `start` keeps those first bytes in `session.partial` (`wholeChars`) and adds them to the next read. So the screen, the frames, a snapshot cut and `onOutput` always get whole characters.
+- `onOutput` listeners get the bytes. They decode only when they need text: the bell check looks for byte `0x07`; the launch check (`generic-signals.ts`) and the Windows title check (`stage-runner.ts`) decode.
+- `queueOutput` collects the chunks in `session.batch`, with no copy (the flush copies once). A frame goes out when the batch reaches `OUTPUT_FRAME_BYTES` (64 KB; full frames at once, the rest stays).
 - A chunk after a quiet moment (`OUTPUT_COALESCE_MS` = 4 ms since the last flush) and a batch under `OUTPUT_IDLE_BYTES` (1024): flush on the next turn (`setImmediate`). Typing echo is not delayed.
 - Anything else waits `OUTPUT_COALESCE_MS` for more.
 - `flushOutput` runs before every control message, `setSize` and snapshot cut, so output comes before them.
@@ -130,14 +134,14 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `SCREEN_HIGH_WATER` / `SCREEN_LOW_WATER` | 1,000,000 / 250,000 chars | Pause the pty above, resume below |
+| `SCREEN_HIGH_WATER` / `SCREEN_LOW_WATER` | 1,000,000 / 250,000 bytes | Pause the pty above, resume below |
 | `CLIENT_HIGH_WATER` | 512 KiB | Unacked bytes a live client may have |
-| `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 256 KiB / 1000 ms | Live output a hidden client gets per window |
+| `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 256 KiB / 1000 ms | Live output a hidden client gets per window. Past it, a resume from the ring (or a snapshot) catches it up when shown |
 | `RESYNC_QUIET_WINDOW_MS` | 100 ms | Quiet = less than `cols * rows / 8` bytes in this window |
 | `RESYNC_MAX_WAIT_MS` | 2000 ms | Catch up anyway after this long behind; at most one snapshot per this long during a flood |
 | `ACK_STALL_MS` | 5000 ms | A behind client whose acks made no progress this long gets a snapshot once the shell is quiet |
 
-- **Screen marks.** `ScreenState` counts chars (string `.length`) from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
+- **Screen marks.** `ScreenState` counts bytes from `write` to xterm's write callback, the freeze queue of a snapshot included, so a long snapshot pauses the shell by itself. Two marks, so no flapping. Input still goes to a paused pty (Ctrl+C works). `closeOne` resumes before SIGHUP; `onExit` resumes too.
 - **Unacked** = `sent - acked` per client, in stream offsets. An ack above `sent` is clamped, an older one is ignored. Bytes of a catch-up (snapshot, waiting frames, ring frames of a resume) never count: at `replayed`, `sent = acked = offset`.
 - **Behind.** A live frame that would take a client past `CLIENT_HIGH_WATER`, or a hidden client past its window's budget, is dropped, not queued. The client becomes `behind` with `behindFrom` (first missed byte) and `behindSince`. Other clients are not affected.
 - **Hidden budget.** Fixed windows from the moment it went hidden (`visible: false`, or attach with `visible=0`). A status line at 2 KB/s never hits it; a flood does.
@@ -206,7 +210,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - **Daemon:** `terminal-service.test.ts`.
   - Clients are `client()`: `frames` holds binary and control frames. Helpers: `bytesOf`, `outputOf`, `controls`, `isBytes`, `numbered(count)`, `screenOf(frames, size)`, `headless(size)`, `mixedLines(cols, count)` (colors, wide, emoji, wraps, Vietnamese), `nextTurn()`.
   - `onEachSlice(between)` spies on `SerializeAddon.serialize` and calls `between` on every history slice: use it to send output or resize while a sliced snapshot runs.
-  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` still delivers while paused. Set `program` to fake the foreground, and `stubborn` to ignore SIGHUP.
+  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` takes text or bytes and delivers a Buffer, as the real pty; it still delivers while paused. Set `program` to fake the foreground, and `stubborn` to ignore SIGHUP.
   - Flow control helpers: `frameOf(i)` (one full 64 KB frame of numbered lines), `ackingClient(service, terminal?)` (acks like the dashboard, a microtask later; `arrivals` has live bytes and times), `catchUps(frames)` (catch-ups after the attach snapshot), `sinceSnapshot(frames)`, `sentTo(frames)`, `expectSameScreen(frames, daemonFrames)` (compares as deep as the daemon's history), `flood(pty, ms, bytes?)` (fake timers), `first(items)`.
   - A file-level `afterEach` runs `closeAll()` on every service made by `setup()`, so resync timers and snapshots of one test never run in the next.
   - `screenOf()` replays a client's output into a headless xterm to compare screens. Use Unicode 11, as the code does.
@@ -214,7 +218,8 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
   - Use `LONG_TEST_MS` for tests that print thousands of lines.
 - **Daemon benchmark:** `terminal-bench.test.ts` records snapshot size and time, parse speed and frames per flood. It asserts the snapshot loop delay (≤ 50 ms). Per snapshot case it also records the longest synchronous run per phase (`sliceMs`, `lastPartMs`, `sendTurnMs`, `timerMs`, `otherMs`, by wrapping the global timers during the measure) and the longest GC pause (`gcMs`). The history is printed with no client attached, and services are closed after each case, so no garbage of earlier work lands in the measure. It runs only with `NATAMUX_BENCH=1`, which the CI `build` job sets. The table goes to the job's step summary and a `TERMINAL_BENCH_JSON` log line.
 - **Web:**
-  - `xterm-fake.fixture.ts`: a fake xterm, addons and socket. Mock `@xterm/*` with it (see `terminal-session.test.ts`).
+  - `xterm-fake.fixture.ts`: a fake xterm, addons and socket. Mock `@xterm/*` with it (see `terminal-session.test.ts`). `vi.mock` covers the `import()` of `@xterm/addon-webgl` too; the test files `await importWebgl()` in `beforeAll`, so every renderer starts in the same call. `FakeFitAddon.proposeDimensions()` gives `fitSize`; set `buffer.normal.length` to test the column wait.
+  - `TerminalFind.test.tsx`: the find bar asks for the search addon once.
   - `terminal-session.test.ts`: show, hide, fit, dispose, scroll state, settings, GPU, catch-up. Uses fake timers and stubs `ResizeObserver` and `requestAnimationFrame`. Helpers: `shown()` (session on screen, socket open), `snapshotOf(socket, size, chunks, offset?)` (the daemon's side of an attach; no `replayed` without an offset), `setPageHidden`.
   - `fakeSocket()` (`xterm-fake.fixture.ts`): `message(obj)`, `bytes(text)` (a fresh `ArrayBuffer`, as with `binaryType = 'arraybuffer'`), `open`, `drop(code = 1006)`, `sent`. Pings are not in `sent`: they count in `pings` and get a `pong` at once while `answerPings` is true. `FakeTerminal`: `write` records `written`/`writes`; write callbacks wait for `parse()`; `fire('data', x)`, `keyData`, `fitSize`, `resets`.
   - Reconnect tests: `reconnecting(random?)` gives a new socket per connect (`last()`), `attached()` is that session on screen and caught up at offset 6, `wait(ms)` advances fake time and lets `connect()` resolve. `random` fixes the jitter (0.5: none).
@@ -233,7 +238,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
 - `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.
 - Add a resize only where the size really changes. Each one costs a redraw, and in Claude Code's classic renderer a duplicate block.
-- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 256 KB per second per terminal; past it the terminal is behind until shown.
+- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 256 KiB per second per terminal (`HIDDEN_BUDGET_BYTES`); past it the terminal is behind until shown.
 - A test client that never acks goes behind after 512 KB of live output, or past 512 KB of output during its snapshot. Use `ackingClient` when a test needs all the bytes.
 - In tests, find `.xterm-rows` inside a pane region. The holder has rows of the hidden terminals too.
 - Client code checks `typeof event.data !== 'string'`, not `instanceof ArrayBuffer`: a buffer from another realm (jsdom in tests) fails `instanceof`.

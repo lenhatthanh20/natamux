@@ -9,6 +9,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import xtermHeadless from '@xterm/headless'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { type DaemonMessage, EventBus } from './event-bus.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import {
   ACK_STALL_MS,
@@ -39,6 +40,7 @@ import {
   TerminalLimitError,
   TerminalService,
   TICKET_TTL_MS,
+  WORKSPACE_QUIET_MS,
 } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
@@ -49,7 +51,7 @@ const LONG_TEST_MS = 30_000
 type SetupOptions = {
   now?: () => number
   isEnded?: (taskId: string) => boolean
-  onOutput?: (taskId: string, terminal: string, data: string) => void
+  onOutput?: (taskId: string, terminal: string, data: Buffer) => void
 }
 
 // Shells of a test must not run timers or snapshots during the next one.
@@ -617,7 +619,7 @@ describe('closing a shell', () => {
     const service = new TerminalService({
       spawn,
       workspaceOf: (taskId) => `/work/${taskId}`,
-      onOutput: (_task, _terminal, data) => heard.push(data),
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
     })
     service.attach('T-0001', client(), size, '2')
     service.closeOne('T-0001', '2')
@@ -998,6 +1000,152 @@ describe('onOutput', () => {
     ptys[0]?.emit('hi')
 
     expect(heard).toEqual(['T-0001/2:hi'])
+  })
+
+  it('holds the start of a character that a read cut, until the rest comes', async () => {
+    const heard: Buffer[] = []
+    const { service, ptys } = setup({ onOutput: (_task, _terminal, data) => heard.push(data) })
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const text = 'Tiếng Việt 😀 中文\r\n'
+    const bytes = Buffer.from(text)
+    // Inside "ế" (3 bytes) and inside the emoji (4 bytes).
+    const cutA = bytes.indexOf(Buffer.from('ế')) + 1
+    const cutB = bytes.indexOf(Buffer.from('😀')) + 2
+    const pty = first(ptys)
+
+    pty.emit(bytes.subarray(0, cutA))
+    pty.emit(bytes.subarray(cutA, cutB))
+    pty.emit(bytes.subarray(cutB))
+    await service.settled('T-0001')
+
+    const strict = new TextDecoder('utf-8', { fatal: true })
+    for (const piece of [...heard, ...watching.frames.filter(isBytes)]) {
+      expect(() => strict.decode(piece)).not.toThrow()
+    }
+    expect(Buffer.concat(heard).toString()).toBe(text)
+    expect(outputOf(watching.frames)).toContain(text)
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+    expect(await screenOf(later.frames)).toEqual(['Tiếng Việt 😀 中文'])
+  })
+})
+
+describe('telling the dashboards', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function watched() {
+    const { spawn, ptys } = fakeSpawner()
+    const bus = new EventBus()
+    const sent: DaemonMessage[] = []
+    bus.subscribe((message) => sent.push(message))
+    const quiet: string[] = []
+    const service = new TerminalService({
+      spawn,
+      workspaceOf: (taskId) => `/work/${taskId}`,
+      bus,
+      onOutputIdle: (taskId) => quiet.push(taskId),
+    })
+    services.push(service)
+    return { service, ptys, sent, quiet }
+  }
+
+  it('sends shells.changed when a shell starts, is closed or ends', () => {
+    const { service, ptys, sent } = watched()
+    const changed = { kind: 'shells.changed', taskId: 'T-0001' }
+
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    expect(sent).toEqual([changed, changed])
+
+    service.closeOne('T-0001', '2')
+    expect(sent).toHaveLength(3)
+
+    // A shell that crashed ended too.
+    ptys[0]?.exit(1)
+    expect(sent).toEqual([changed, changed, changed, changed])
+  })
+
+  it('tells once when the output of a task stopped for a moment', () => {
+    vi.useFakeTimers()
+    const { service, ptys, quiet } = watched()
+    service.attach('T-0001', client(), size)
+
+    for (let step = 0; step < 10; step += 1) {
+      ptys[0]?.emit('working\r\n')
+      vi.advanceTimersByTime(WORKSPACE_QUIET_MS / 2)
+    }
+    expect(quiet).toEqual([])
+
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(quiet).toEqual(['T-0001'])
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 4)
+    expect(quiet).toEqual(['T-0001'])
+  })
+
+  it('sends shells.changed when the output stops and the program in front is another', () => {
+    vi.useFakeTimers()
+    const { service, ptys, sent } = watched()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    const changes = () => sent.filter((message) => message.kind === 'shells.changed').length
+    const started = changes()
+
+    ptys[1]?.emit('ls\r\n')
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(changes()).toBe(started)
+
+    if (ptys[1]) {
+      ptys[1].program = 'vim'
+    }
+    ptys[1]?.emit('vim notes.txt\r\n')
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(changes()).toBe(started + 1)
+    expect(sent.at(-1)).toEqual({ kind: 'shells.changed', taskId: 'T-0001' })
+  })
+})
+
+describe('shells.changed', () => {
+  function watched() {
+    const { spawn, ptys } = fakeSpawner()
+    const bus = new EventBus()
+    const sent: DaemonMessage[] = []
+    bus.subscribe((message) => sent.push(message))
+    const service = new TerminalService({ spawn, workspaceOf: (taskId) => `/work/${taskId}`, bus })
+    services.push(service)
+    return { service, ptys, sent }
+  }
+
+  it('sends one message per shell when all shells of a task close, each for its task', () => {
+    const { service, sent } = watched()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    service.attach('T-0002', client(), size)
+    const changed = { kind: 'shells.changed', taskId: 'T-0001' }
+    expect(sent).toEqual([changed, changed, { kind: 'shells.changed', taskId: 'T-0002' }])
+
+    service.close('T-0001')
+
+    expect(sent.slice(3)).toEqual([changed, changed])
+  })
+
+  it('sends nothing more when a closed shell ends later', () => {
+    const { service, ptys, sent } = watched()
+    service.attach('T-0001', client(), size)
+    const pty = first(ptys)
+    // It ignores SIGHUP, so it ends after closeOne.
+    pty.stubborn = true
+
+    service.closeOne('T-0001', MAIN_TERMINAL)
+    expect(sent).toHaveLength(2)
+    pty.exit(0)
+
+    expect(sent).toHaveLength(2)
   })
 })
 
@@ -1423,7 +1571,7 @@ describe('batching output', () => {
   it('sends a burst of chunks in few frames, in order, with all bytes', async () => {
     const heard: string[] = []
     const { pty, watching } = await watched({
-      onOutput: (_task, _terminal, data) => heard.push(data),
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
     })
     const chunks = Array.from(
       { length: 1000 },
@@ -2131,9 +2279,9 @@ describe('the screen of a shell under a flood', () => {
   it('pauses the shell when its screen falls behind, and resumes it once parsed', async () => {
     const { service, pty } = await shell()
 
-    // Chars, not bytes: these are 1.5 MB.
-    pty.emit('中'.repeat(SCREEN_HIGH_WATER / 2))
-    pty.emit('a'.repeat(SCREEN_HIGH_WATER / 2))
+    // Bytes, not chars: these are 500,000 chars.
+    pty.emit('中'.repeat(SCREEN_HIGH_WATER / 4))
+    pty.emit('a'.repeat(SCREEN_HIGH_WATER / 4))
     expect(pty.flow).toEqual([])
     pty.emit('b')
     expect(pty.flow).toEqual(['pause'])
@@ -2154,7 +2302,8 @@ describe('the screen of a shell under a flood', () => {
     const write = xtermHeadless.Terminal.prototype.write
     const spy = vi.spyOn(xtermHeadless.Terminal.prototype, 'write')
     spy.mockImplementation(function (this: Headless, data, callback) {
-      if (data !== firstChunk) {
+      // The screen gets bytes; only this chunk has this length.
+      if (data.length !== firstChunk.length) {
         write.call(this, data, callback)
         return
       }
@@ -2369,6 +2518,12 @@ describe('a hidden client', () => {
     LONG_TEST_MS,
   )
 
+  // Less makes a terminal hidden during a 200 KB/s stream catch up slowly when shown (E2E).
+  it('gets 256 KiB per second', () => {
+    expect(HIDDEN_BUDGET_BYTES).toBe(256 * 1024)
+    expect(HIDDEN_BUDGET_WINDOW_MS).toBe(1000)
+  })
+
   it('takes its whole budget in one window, and a burst split by a window border', async () => {
     const { ptys, clients } = await hidden()
     const pty = first(ptys)
@@ -2378,20 +2533,22 @@ describe('a hidden client', () => {
     for (let index = 0; index < budget; index += 1) {
       pty.emit(frameOf(index))
     }
+    // A full window just before a border, and a full one just after it.
     await vi.advanceTimersByTimeAsync(2 * HIDDEN_BUDGET_WINDOW_MS - 100)
-    pty.emit(frameOf(budget))
-    pty.emit(frameOf(budget + 1))
+    for (let index = 0; index < budget; index += 1) {
+      pty.emit(frameOf(budget + index))
+    }
     await vi.advanceTimersByTimeAsync(100)
     for (let index = 0; index < budget; index += 1) {
-      pty.emit(frameOf(budget + 2 + index))
+      pty.emit(frameOf(2 * budget + index))
     }
     await vi.advanceTimersByTimeAsync(0)
-    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+    expect(bytesOf(watching.frames)).toHaveLength(3 * budget * OUTPUT_FRAME_BYTES)
 
     // One byte past the budget of this window: behind, and not caught up while hidden.
     pty.emit('!')
     await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS)
-    expect(bytesOf(watching.frames)).toHaveLength((2 * budget + 2) * OUTPUT_FRAME_BYTES)
+    expect(bytesOf(watching.frames)).toHaveLength(3 * budget * OUTPUT_FRAME_BYTES)
     expect(catchUps(watching.frames)).toEqual([])
   })
 
@@ -2896,5 +3053,81 @@ describe('a client that comes back', () => {
     detach()
 
     expect(ptys[0]?.sizes).toEqual([large, middle])
+  })
+})
+
+describe('bytes from the pty', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps an escape sequence that two reads split', async () => {
+    const { service, ptys } = setup()
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const pty = first(ptys)
+
+    pty.emit('\x1b[3')
+    pty.emit('1mred\x1b[0m plain\r\n')
+    await service.settled('T-0001')
+
+    expect(outputOf(watching.frames)).toContain('\x1b[31mred\x1b[0m plain\r\n')
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+    expect(await screenOf(later.frames)).toEqual(['red plain'])
+  })
+
+  it('sends nothing for a read that is only the start of a character', async () => {
+    const heard: string[] = []
+    const { service, ptys } = setup({
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
+    })
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const before = bytesOf(watching.frames).byteLength
+    const bytes = Buffer.from('中')
+    const pty = first(ptys)
+
+    pty.emit(bytes.subarray(0, 1))
+    await service.settled('T-0001')
+    expect(heard).toEqual([])
+    expect(bytesOf(watching.frames).byteLength).toBe(before)
+
+    pty.emit(bytes.subarray(1))
+    await service.settled('T-0001')
+    expect(heard).toEqual(['中'])
+    expect(bytesOf(watching.frames).subarray(before).toString()).toBe('中')
+  })
+
+  it('keeps every line of a flood while hidden, through a ring resume when shown', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const watching = ackingClient(service)
+    service.attach('T-0001', watching, size, MAIN_TERMINAL, { visible: false })
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    let printed = ''
+
+    // Twice the budget of one window: the second half is dropped while hidden.
+    for (let index = 0; index < (2 * HIDDEN_BUDGET_BYTES) / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+      printed += frameOf(index)
+    }
+    await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS)
+    service.visible('T-0001', { visible: true }, MAIN_TERMINAL, watching)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(catchUps(watching.frames)).toEqual([{ type: 'resume', offset: HIDDEN_BUDGET_BYTES }])
+    expect(controls(watching.frames).at(-1)).toEqual({
+      type: 'replayed',
+      offset: 2 * HIDDEN_BUDGET_BYTES,
+    })
+    const attached = watching.frames.findIndex(
+      (frame) => !isBytes(frame) && frame.type === 'replayed',
+    )
+    expect(outputOf(watching.frames.slice(attached + 1))).toBe(printed)
   })
 })

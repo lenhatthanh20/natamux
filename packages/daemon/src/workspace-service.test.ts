@@ -11,12 +11,16 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRun } from './commit-drafter.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
-import { GitError, NothingToCommitError, type RunGh, worktreeState } from './git.js'
+import { GitError, gitSpawnCount, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
   branchNameFor,
+  DIFF_STATS_MAX_AGE_MS,
+  DIRTY_BURST,
+  DIRTY_DEBOUNCE_MS,
+  DIRTY_MIN_INTERVAL_MS,
   FileNotChangedError,
   GIT_READ_MS,
   slugify,
@@ -1295,7 +1299,75 @@ describe('diffStats', () => {
     clock += GIT_READ_MS
     const next = workspaces.diffStats()
     expect(next).not.toBe(first)
-    expect(await next).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+    // Nothing told the service that the workspace changed.
+    expect(await next).toEqual({ [task.id]: { files: 0, added: 0, removed: 0 } })
+
+    clock += DIFF_STATS_MAX_AGE_MS
+    expect(await workspaces.diffStats()).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+  })
+
+  it('reads again only the workspaces that changed', async () => {
+    const first = await workspaces.create(tasks.createTask({ title: 'First' }).id)
+    const second = await workspaces.create(tasks.createTask({ title: 'Second' }).id)
+    const none = { files: 0, added: 0, removed: 0 }
+    expect(await workspaces.diffStats()).toEqual({ [first.id]: none, [second.id]: none })
+    for (const task of [first, second]) {
+      writeFileSync(join(task.workspace ?? '', 'notes.txt'), 'a\n')
+      runGit(task.workspace ?? '', 'add', 'notes.txt')
+    }
+
+    workspaces.touch(first.id)
+
+    expect(await workspaces.diffStats()).toEqual({
+      [first.id]: { files: 1, added: 1, removed: 0 },
+      [second.id]: none,
+    })
+  })
+
+  it('runs git only for the workspaces that changed', { timeout: GIT_TEST_MS }, async () => {
+    const ids: string[] = []
+    for (const title of ['First', 'Second', 'Third']) {
+      ids.push((await workspaces.create(tasks.createTask({ title }).id)).id)
+    }
+    // The git processes of one read after the given workspaces changed.
+    const spawnsAfter = async (touched: readonly string[]) => {
+      for (const id of touched) {
+        workspaces.touch(id)
+      }
+      clock += GIT_READ_MS
+      const before = gitSpawnCount()
+      expect(Object.keys(await workspaces.diffStats())).toHaveLength(3)
+      return gitSpawnCount() - before
+    }
+
+    const all = await spawnsAfter([])
+    const two = await spawnsAfter(ids.slice(0, 2))
+    const one = await spawnsAfter(ids.slice(0, 1))
+    expect(await spawnsAfter([])).toBe(0)
+
+    // Each workspace read again costs the same number of git processes.
+    expect(two - one).toBeGreaterThan(0)
+    expect(all - two).toBe(two - one)
+  })
+
+  it('keeps the stats of the other workspaces when git fails for one', async () => {
+    const good = await workspaces.create(tasks.createTask({ title: 'Good' }).id)
+    const broken = await workspaces.create(tasks.createTask({ title: 'Broken' }).id)
+    const none = { files: 0, added: 0, removed: 0 }
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none, [broken.id]: none })
+
+    rmSync(broken.workspace ?? '', { recursive: true, force: true })
+    workspaces.touch(broken.id)
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none })
+
+    // Nothing told the service, so the good one still comes from the earlier read.
+    writeFileSync(join(good.workspace ?? '', 'notes.txt'), 'a\n')
+    runGit(good.workspace ?? '', 'add', 'notes.txt')
+    clock += GIT_READ_MS
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none })
+
+    workspaces.touch(good.id)
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: { files: 1, added: 1, removed: 0 } })
   })
 
   it('reads again at once after a workspace is made or removed here', async () => {
@@ -1309,6 +1381,136 @@ describe('diffStats', () => {
 
     await workspaces.remove(task.id, { deleteBranch: true })
     expect(await workspaces.diffStats()).toEqual({})
+  })
+})
+
+describe('touch', () => {
+  let sent: DaemonMessage[]
+  let touching: WorkspaceService
+
+  beforeEach(() => {
+    sent = []
+    const bus = new EventBus()
+    bus.subscribe((message) => sent.push(message))
+    touching = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      bus,
+      now: () => clock,
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('tells the dashboards once per burst of changes in a task', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    for (let step = 0; step < 10; step += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(50)
+    }
+    expect(sent).toEqual([])
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS - 500)
+    expect(sent).toEqual([{ kind: 'workspace.dirty', taskId: task.id }])
+  })
+
+  it('tells a few changes in a row soon, as when a shell starts and runs a command', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const dirty = () => sent.filter((message) => message.kind === 'workspace.dirty').length
+
+    for (let change = 1; change <= DIRTY_BURST; change += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+      expect(dirty()).toBe(change)
+      vi.advanceTimersByTime(1000)
+    }
+  })
+
+  it('tells once per interval while changes go on, and once after the last', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const dirty = () => sent.filter((message) => message.kind === 'workspace.dirty').length
+
+    touching.touch(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    expect(dirty()).toBe(1)
+
+    // A busy agent: a change every second for 25 seconds. The first ones are told soon, then one
+    // per interval.
+    for (let second = 0; second < 25; second += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(1000)
+    }
+    expect(dirty()).toBe(DIRTY_BURST + 2)
+
+    // The changes after the last message are told once, at the end of the interval.
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS)
+    expect(dirty()).toBe(DIRTY_BURST + 3)
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS * (DIRTY_BURST + 1))
+    expect(dirty()).toBe(DIRTY_BURST + 3)
+
+    // After a quiet time, the first change is told soon again.
+    touching.touch(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    expect(dirty()).toBe(DIRTY_BURST + 4)
+  })
+
+  it('tells about each task apart', () => {
+    vi.useFakeTimers()
+    const first = tasks.createTask({ title: 'First' })
+    const second = tasks.createTask({ title: 'Second' })
+
+    touching.touch(first.id)
+    touching.touch(second.id)
+    touching.touch(first.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+
+    expect(sent).toEqual([
+      { kind: 'workspace.dirty', taskId: first.id },
+      { kind: 'workspace.dirty', taskId: second.id },
+    ])
+  })
+
+  it('says nothing about a task deleted in the meantime', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    touching.touch(task.id)
+    tasks.deleteTask(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+
+    expect(sent.filter((message) => message.kind === 'workspace.dirty')).toEqual([])
+  })
+
+  it('says nothing about a task deleted while it waited for the next interval', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    for (let change = 0; change < DIRTY_BURST; change += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    }
+
+    touching.touch(task.id)
+    tasks.deleteTask(task.id)
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS * 2)
+
+    expect(sent.filter((message) => message.kind === 'workspace.dirty')).toHaveLength(DIRTY_BURST)
+  })
+
+  it('follows each change made here, such as a commit', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await touching.create(task.id)
+    writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'a\n')
+    const touch = vi.spyOn(touching, 'touch')
+
+    await touching.commit(task.id, 'Add notes')
+
+    expect(touch).toHaveBeenCalledWith(task.id)
   })
 })
 

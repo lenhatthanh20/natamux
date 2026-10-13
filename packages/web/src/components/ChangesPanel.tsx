@@ -8,6 +8,7 @@ import { useStoredFlag } from '../hooks/useStoredFlag'
 import { useAppEvent } from '../lib/app-events'
 import { fileOrder } from '../lib/change-tree'
 import { stepFile, wholeFileKind, wrapsByDefault } from '../lib/changes'
+import { FALLBACK_POLL_MS } from '../lib/live'
 import { AgentComment } from './AgentComment'
 import { ChangedFiles } from './ChangedFiles'
 import { type BodyKind, DiffToolbar } from './DiffToolbar'
@@ -25,7 +26,9 @@ import { textarea } from './ui/styles'
 const MonacoDiff = lazy(() => import('./MonacoDiff'))
 const MonacoFile = lazy(() => import('./MonacoFile'))
 
-const REFRESH_MS = 10_000
+// The daemon says when the workspace changed (workspace.dirty); this poll only catches what the
+// live feed missed.
+const REFRESH_MS = FALLBACK_POLL_MS
 // Under this width the file list becomes a picker above the diff.
 const WIDE_FROM = 720
 // Side by side needs this much room for the diff itself.

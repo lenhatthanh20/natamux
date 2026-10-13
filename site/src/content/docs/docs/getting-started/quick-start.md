@@ -101,7 +101,7 @@ Natamux never pushes or merges unless you click the button or run the command.
 
 ## 8. Finish
 
-Merge the pull request on GitHub. Natamux checks pull requests of open tasks once a minute, and when one is merged it moves a task in review to done.
+Merge the pull request on GitHub. While a dashboard is open, Natamux checks pull requests of open tasks once a minute (every 5 minutes once all their checks have finished), and when one is merged it moves a task in review to done.
 
 To clean up, open the task and remove its workspace. Natamux asks first and refuses if the worktree has changes that are not committed.
 

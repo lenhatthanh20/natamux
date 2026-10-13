@@ -11,7 +11,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
+import type { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import { keyBelongsToShell } from './dispatch'
 import { ICON_FONT } from './fonts'
@@ -33,8 +33,12 @@ import { pageTheme, uiZoom } from './theme'
 // the terminal cache can keep it while no view shows it. Only TerminalView imports this file, so
 // xterm stays out of the first load.
 
-// A burst of resizes (dragging a divider) fits the terminal once, when it settles.
+// A burst of resizes (dragging a divider) fits the terminal and sends its size once, when it
+// settles.
 export const FIT_DELAY_MS = 100
+// As VS Code's terminalResizeDebouncer: rows change at once, they cost little. Columns reflow every
+// wrapped line, so a buffer of this many rows or more changes them only once the pane settles.
+export const REFLOW_WAIT_ROWS = 200
 export const DISPOSE_DELAY_MS = 200
 // A catch-up whose `replayed` never comes ends after this, so a daemon bug never leaves a blank
 // pane (spec 6).
@@ -68,7 +72,8 @@ type CatchUp = {
 
 export type TerminalSession = CachedTerminal & {
   readonly terminal: Terminal
-  readonly search: SearchAddon
+  // Made at the first call: most terminals are never searched.
+  search(): SearchAddon
   // The same object until something changes, for useSyncExternalStore.
   state(): TerminalSessionState
   subscribe(listener: () => void): () => void
@@ -89,11 +94,33 @@ function safeFit(fit: FitAddon): void {
   }
 }
 
+// The WebGL addon loads with the first GPU renderer, so a page that never gets one never fetches
+// it. Once loaded, a renderer starts in the same call: a terminal shown again draws with the GPU
+// in its first frame.
+let webglImport: Promise<typeof WebglAddon> | undefined
+let webglClass: typeof WebglAddon | undefined
+
+export function importWebgl(): Promise<typeof WebglAddon> {
+  webglImport ??= import('@xterm/addon-webgl').then((module) => {
+    webglClass = module.WebglAddon
+    return module.WebglAddon
+  })
+  return webglImport
+}
+
 // Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
-// drops the context, the terminal keeps or goes back to drawing with the DOM.
-function loadWebgl(terminal: Terminal, onLost: () => void): Renderer | null {
+// drops the context, the terminal keeps or goes back to drawing with the DOM. A failed import is
+// the same as no WebGL (gpuRenderer).
+function loadWebgl(
+  terminal: Terminal,
+  onLost: () => void,
+): Renderer | null | Promise<Renderer | null> {
+  const Webgl = webglClass
+  if (Webgl === undefined) {
+    return importWebgl().then(() => loadWebgl(terminal, onLost))
+  }
   try {
-    const webgl = new WebglAddon()
+    const webgl = new Webgl()
     webgl.onContextLoss(onLost)
     // The addon adds one canvas, its own. Asking any other canvas for a context would make one.
     const before = new Set(terminal.element?.querySelectorAll('canvas'))
@@ -154,8 +181,7 @@ export function createTerminalSession(options: {
   })
   const fit = new FitAddon()
   terminal.loadAddon(fit)
-  const search = new SearchAddon()
-  terminal.loadAddon(search)
+  let searchAddon: SearchAddon | null = null
   // Only web addresses become links, and they open in a new tab.
   terminal.loadAddon(
     new WebLinksAddon((event, uri) => {
@@ -207,6 +233,8 @@ export function createTerminalSession(options: {
   let gpu: GpuRenderer | null = null
   let observer: ResizeObserver | null = null
   let fitTimer: ReturnType<typeof setTimeout> | undefined
+  // Set while a resize is local only: the shell gets the size once the pane settles.
+  let holdSize = false
   let frame: number | null = null
   const subscriptions: { dispose(): void }[] = []
   let catchUp: CatchUp | null = null
@@ -430,6 +458,39 @@ export function createTerminalSession(options: {
   const fitNow = () => {
     if (onScreen && catchUp?.kind !== 'snapshot') {
       safeFit(fit)
+    }
+  }
+
+  // While the pane changes size: the rows follow at once, the columns too in a short buffer.
+  const resizeNow = () => {
+    if (!onScreen || catchUp?.kind === 'snapshot') {
+      return
+    }
+    let size: { cols: number; rows: number } | undefined
+    try {
+      size = fit.proposeDimensions()
+    } catch {
+      // Nothing to measure yet, see safeFit.
+      return
+    }
+    // A pane with no computed size (display: none) measures NaN, which xterm's resize throws on.
+    if (size === undefined || Number.isNaN(size.cols) || Number.isNaN(size.rows)) {
+      return
+    }
+    const cols = terminal.buffer.normal.length < REFLOW_WAIT_ROWS ? size.cols : terminal.cols
+    holdSize = true
+    try {
+      terminal.resize(cols, size.rows)
+    } finally {
+      holdSize = false
+    }
+  }
+
+  // The pane settled: the columns catch up, and the shell gets the size once.
+  const settle = () => {
+    if (onScreen) {
+      fitNow()
+      sendSize()
     }
   }
 
@@ -782,7 +843,9 @@ export function createTerminalSession(options: {
       terminal.onResize(() => {
         // The history keeps the same memory at any width, as the daemon's screen does.
         terminal.options.scrollback = scrollbackLines(terminal.cols)
-        sendSize()
+        if (!holdSize) {
+          sendSize()
+        }
       }),
       terminal.onScroll(updateScrolled),
       terminal.onWriteParsed(updateScrolled),
@@ -809,8 +872,9 @@ export function createTerminalSession(options: {
     }
     stopObserving()
     observer = new ResizeObserver(() => {
+      resizeNow()
       clearTimeout(fitTimer)
-      fitTimer = setTimeout(fitNow, FIT_DELAY_MS)
+      fitTimer = setTimeout(settle, FIT_DELAY_MS)
     })
     observer.observe(container)
     // Takes the settings changed while hidden, and fits once. The fit sends a resize only when
@@ -889,7 +953,13 @@ export function createTerminalSession(options: {
 
   const session: TerminalSession = {
     terminal,
-    search,
+    search() {
+      if (searchAddon === null) {
+        searchAddon = new SearchAddon()
+        terminal.loadAddon(searchAddon)
+      }
+      return searchAddon
+    },
     state: () => state,
     subscribe(listener) {
       listeners.add(listener)

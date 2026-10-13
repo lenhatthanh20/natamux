@@ -1416,12 +1416,12 @@ describe('a prompt for a running agent', () => {
     expect(pty.written.join('').split(exited)).toHaveLength(2)
 
     // The shell echoes the typed line, which is no sign that the agent ended.
-    runner.onOutput(task.id, '1', exited)
+    runner.onOutput(task.id, '1', Buffer.from(exited))
     await runner.act(task.id, 'reopen', { to: 'spec' })
     expect(pty.written.join('')).toContain('\x1b[200~')
 
-    runner.onOutput(task.id, '1', '\x1b]0;natamux-ag')
-    runner.onOutput(task.id, '1', 'ent-exited\x07PS C:\\work> ')
+    runner.onOutput(task.id, '1', Buffer.from('\x1b]0;natamux-ag'))
+    runner.onOutput(task.id, '1', Buffer.from('ent-exited\x07PS C:\\work> '))
     await runner.act(task.id, 'reopen', { to: 'spec' })
     // The launch line waits for the Enter of the prompt pasted before.
     await vi.waitFor(() => expect(pty.written.join('').split(exited)).toHaveLength(3))

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import type { StoredEvent } from '../lib/api'
 import { groupEvents } from '../lib/events'
 import { formatExact } from '../lib/tasks'
@@ -19,9 +20,14 @@ export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
   })
 
   // "Agent is working" lines only keep the time of the last update fresh. They are not news.
-  const lines = query.data
-    ? groupEvents(query.data.filter(({ event }) => event.type !== 'agent.active'))
-    : undefined
+  // Newest first. Worked out once per read, not on every render.
+  const lines = useMemo(
+    () =>
+      query.data
+        ? groupEvents(query.data.filter(({ event }) => event.type !== 'agent.active')).reverse()
+        : undefined,
+    [query.data],
+  )
 
   return (
     <DetailSection id="activity" title="Activity">
@@ -30,7 +36,7 @@ export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
       {lines?.length === 0 && <p className="text-muted">No activity yet.</p>}
       {lines && lines.length > 0 && (
         <ol className="ml-1 flex flex-col border-l border-line">
-          {[...lines].reverse().map((line) => (
+          {lines.map((line) => (
             <li
               key={line.seq}
               data-accepted={line.accepted}

@@ -6,7 +6,7 @@ import {
   HEARTBEAT_MS,
   type TerminalSize,
 } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ICON_FONT } from './fonts'
 import { GIVE_BACK_DELAY_MS, GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
 import type { TerminalConnectQuery } from './terminal'
@@ -17,6 +17,8 @@ import {
   DISPOSE_DELAY_MS,
   FIT_DELAY_MS,
   HIDDEN_RESUME_BYTES,
+  importWebgl,
+  REFLOW_WAIT_ROWS,
   type TerminalSession,
 } from './terminal-session'
 import { TERMINAL_LOOK, terminalTheme } from './terminal-theme'
@@ -149,6 +151,12 @@ function fontsLoaded(...families: string[]): void {
   })
   document.fonts.dispatchEvent(event)
 }
+
+// The WebGL addon loads with the first renderer of the page. Loaded once here, every renderer
+// starts in the same call, as on a page that drew with the GPU before.
+beforeAll(async () => {
+  await importWebgl()
+})
 
 beforeEach(() => {
   resetFakes()
@@ -357,6 +365,96 @@ describe('showing a terminal session', () => {
 
     expect(fitsOf()).toBe(fits + 1)
     expect(socket.sent).toEqual([{ type: 'resize', cols: 140, rows: 24 }])
+  })
+
+  it('changes the rows at once, and sends one resize when the pane settles', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.buffer.normal.length = REFLOW_WAIT_ROWS
+    terminal.fitSize = { cols: 80, rows: 30 }
+    observer?.callback()
+
+    expect(terminal.rows).toBe(30)
+    expect(socket.sent).toEqual([])
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 80, rows: 30 }])
+  })
+
+  it('changes the columns of a long buffer only once the pane settles', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.buffer.normal.length = REFLOW_WAIT_ROWS
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    expect([terminal.cols, terminal.rows]).toEqual([80, 30])
+
+    vi.advanceTimersByTime(FIT_DELAY_MS - 1)
+    terminal.fitSize = { cols: 120, rows: 30 }
+    observer?.callback()
+    vi.advanceTimersByTime(FIT_DELAY_MS - 1)
+    expect(terminal.cols).toBe(80)
+    expect(socket.sent).toEqual([])
+
+    vi.advanceTimersByTime(1)
+    expect([terminal.cols, terminal.rows]).toEqual([120, 30])
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 120, rows: 30 }])
+  })
+
+  it('changes the columns of a short buffer at once, and sends the size once', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.buffer.normal.length = REFLOW_WAIT_ROWS - 1
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+
+    expect([terminal.cols, terminal.rows]).toEqual([100, 30])
+    expect(socket.sent).toEqual([])
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 100, rows: 30 }])
+  })
+
+  it('sends no resize when it hides before the pane settles', async () => {
+    const { session, socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    session.hide(box())
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+
+    expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
+  })
+
+  it('sends no resize when the pane closes before it settles', async () => {
+    const { session, socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    session.dispose()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+
+    expect(socket.sent).not.toContainEqual(expect.objectContaining({ type: 'resize' }))
+  })
+
+  it('keeps its size while the pane has no size, and fits once it has one', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.fitSize = { cols: Number.NaN, rows: Number.NaN }
+    expect(() => observer?.callback()).not.toThrow()
+    expect([terminal.cols, terminal.rows]).toEqual([80, 24])
+
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 100, rows: 30 }])
+  })
+
+  it('makes the search addon at the first find, and keeps it', async () => {
+    const { session } = await shown()
+    expect(fakes.searches).toHaveLength(0)
+
+    const search = session.search()
+    expect(session.search()).toBe(search)
+    expect(fakes.searches).toHaveLength(1)
   })
 
   it('sends what the user types', async () => {

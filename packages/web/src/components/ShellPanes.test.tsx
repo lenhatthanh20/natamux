@@ -6,6 +6,7 @@ import { createElement, useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskShells } from '../lib/api'
 import { MAX_PANES } from '../lib/panes'
+import { SHELLS_EVERY_MS } from '../lib/task-shells'
 import { disposeTerminal } from '../lib/terminal-cache'
 import { useViewStore } from '../lib/view-store'
 import { ShellPanes } from './ShellPanes'
@@ -562,7 +563,7 @@ describe('ShellPanes stage shells', () => {
 
   const slots: HTMLElement[] = []
 
-  // The agent list is read every 5 s. Fake timers make a poll without waiting.
+  // The agent list is read every SHELLS_EVERY_MS. Fake timers make a poll without waiting.
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
   })
@@ -574,7 +575,7 @@ describe('ShellPanes stage shells', () => {
     }
   })
 
-  const poll = () => act(() => vi.advanceTimersByTimeAsync(5000))
+  const poll = () => act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS))
   const typist = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
   // The daemon's lists, which a test changes as the daemon would. The page around the shells has
