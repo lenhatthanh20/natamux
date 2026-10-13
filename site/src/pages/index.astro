@@ -212,7 +212,8 @@ const extras = [
         <div class="wrap hero-copy">
           <a class="news" href="#download">Now on macOS, Windows and Linux</a>
           <h1 id="hero-title">
-            Run coding agents in parallel. Step in only when one needs you.<span class="cursor" aria-hidden="true"></span>
+            <span class="line">Run coding agents in parallel.</span>
+            <span class="line">Step in only when one needs you.<span class="cursor" aria-hidden="true"></span></span>
           </h1>
           <p class="lede">
             Natamux is a free desktop app for Claude Code, Codex, Gemini CLI, GitHub Copilot and Cursor. Each task
@@ -227,7 +228,7 @@ const extras = [
             <a class="btn big" href={`${docs}getting-started/quick-start/`}>Read the quick start</a>
           </div>
           <p class="fine">
-            <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>
+            <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
             <a href="#download">Other systems</a>. MIT licensed, no account.
           </p>
         </div>
@@ -255,7 +256,7 @@ const extras = [
                 priority
                 alt="The Natamux dashboard in the Progress view. Each task is a row across the stages Context, Spec, Plan, Test spec, Implement, Automated tests, Review and Release. The sidebar shows a question card with an Answer button, and the title bar says 5 need you."
               />
-              <span class="pin" style="--px: 92%; --py: 2%" data-side="left"><i></i><em>Tasks that wait for you</em></span>
+              <span class="pin" style="--px: 92.2%; --py: 4.6%" data-side="left"><i></i><em>Tasks that wait for you</em></span>
               <span class="pin" style="--px: 11%; --py: 29%" data-side="right"><i></i><em>An agent asks. You answer here.</em></span>
               <span class="pin" style="--px: 61%; --py: 45%" data-side="below"><i></i><em>Each task against each stage</em></span>
             </div>
@@ -343,12 +344,6 @@ const extras = [
                 </div>
                 <figcaption>Test spec and Implement run side by side in one task. You approve the test spec.</figcaption>
               </figure>
-              <figure class="reveal">
-                <div class="frame">
-                  <Shot name="crop-sent-back" crop={{ width: 641, height: 352 }} alt="The Implement stage running for the second time, with the note Sent back 1×." />
-                </div>
-                <figcaption>The review agent sent the task back once, so Implement runs again.</figcaption>
-              </figure>
             </div>
             <div class="proof-col wide">
               <figure class="reveal">
@@ -357,13 +352,14 @@ const extras = [
                 </div>
                 <figcaption>Pick the review agent in <b>Project settings → Stages → Review → Agent</b>. It is saved in <code>.natamux.json</code>, so the team shares it.</figcaption>
               </figure>
-              <figure class="reveal">
+              <figure class="reveal side">
                 <div class="frame">
-                  <video controls muted playsinline preload="metadata" width="800" height="500" aria-label="Screen recording: the review agent sends the task back to Implement with a reason, the Sent back count appears, and Implement runs again.">
-                    <source src={`${base}media/home/review-loop-dark.webm`} type="video/webm" />
-                  </video>
+                  <Shot name="crop-sent-back" crop={{ width: 641, height: 352 }} alt="The Implement stage running for the second time, with the note Sent back 1×." />
                 </div>
-                <figcaption>Watch it in the app: the review agent sends the task back, and Implement runs again. About 20 seconds, no sound.</figcaption>
+                <figcaption>
+                  The review agent sent the task back once, so Implement runs again. Then the tests and Review run
+                  again. <a href={`${base}media/home/review-loop-dark.webm`}>Watch a 20-second recording</a> of the loop in the app.
+                </figcaption>
               </figure>
             </div>
           </div>
@@ -375,8 +371,8 @@ const extras = [
           <div class="head">
             <h2 id="views-title">See every task, and the one that needs you</h2>
             <p>
-              The sidebar sizes each task by how much it needs you. A question or a failure gets a tinted card with
-              <b>Answer</b>. A running task shows its stage. Finished work folds to one line. The amber pill in the
+              The sidebar sizes each task by how much it needs you. A question or a failure gets a tinted card
+              with <b>Answer</b>. A running task shows its stage. Finished work folds to one line. The amber pill in the
               title bar counts what waits.
             </p>
           </div>
