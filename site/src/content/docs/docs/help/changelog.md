@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.16 (2026-10-13)
+
+- Spinners, stage rings, stripes and breathing icons move 8 times a second, all at once, not on every frame. With the window in front and tasks running, the app uses much less CPU.
+
 ## v0.1.15 (2026-10-13)
 
 - A stage that was sent back shows only **Sent back N×** in its card. The long reason no longer fills the details panel; the agent still gets it in its prompt.
