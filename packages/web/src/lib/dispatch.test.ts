@@ -43,6 +43,27 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+describe('the commit message draft key', () => {
+  it('does nothing with the focus outside the commit box', () => {
+    document.body.innerHTML = `
+      <textarea id="commit-message"></textarea>
+      <textarea id="agent-comment"></textarea>
+      <button id="button">Go</button>`
+    const key = press('G', { ctrlKey: true, shiftKey: true })
+    for (const id of ['agent-comment', 'button']) {
+      const outside = document.getElementById(id)
+      outside?.focus()
+      expect(findCommand(key, inFocus(focusKind(outside)), false), id).toBeNull()
+    }
+    document.body.focus()
+    expect(findCommand(key, inFocus('body'), false)).toBeNull()
+
+    const box = document.getElementById('commit-message')
+    box?.focus()
+    expect(findCommand(key, inFocus(focusKind(box)), false)?.id).toBe('diff.draftCommit')
+  })
+})
+
 describe('focusKind', () => {
   it('tells a terminal, a field, the page and a control apart', () => {
     document.body.innerHTML = `

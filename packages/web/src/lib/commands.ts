@@ -490,7 +490,10 @@ export const COMMANDS: readonly Command[] = [
     category: 'Workspace',
     shortcuts: ['Mod+Shift+G'],
     group: 'Diff',
-    when: inWorkspace,
+    // Only in the commit box (#commit-message of ChangesPanel): elsewhere the key would start an
+    // agent run, and its draft could replace text the user did not mean to give up.
+    focus: ['field'],
+    when: (context) => inWorkspace(context) && document.activeElement?.id === 'commit-message',
     run: () => fireAppEvent('commit-draft'),
   },
 

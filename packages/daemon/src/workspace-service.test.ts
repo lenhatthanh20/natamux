@@ -1033,11 +1033,14 @@ describe('commit, push and pull request', () => {
 describe('draftCommitMessage', () => {
   let runs: AgentRun[]
   let answer: (run: AgentRun) => Promise<string>
+  let logged: string[]
 
   beforeEach(() => {
     runs = []
+    logged = []
     answer = async () => 'Add the fix\n'
     workspaces = new WorkspaceService({
+      log: (message) => logged.push(message),
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -1095,6 +1098,15 @@ describe('draftCommitMessage', () => {
       agent: 'claude-code',
       reason: 'my-claude-code exited with code 127',
     })
+    expect(logged).toEqual([
+      `No commit message draft by claude-code for ${task.id}: my-claude-code exited with code 127`,
+    ])
+  })
+
+  it('logs nothing when the agent drafts', async () => {
+    const task = await taskWithWork()
+    await workspaces.draftCommitMessage(task.id)
+    expect(logged).toEqual([])
   })
 
   it('runs the agent once for two asks at the same time, and again after', async () => {

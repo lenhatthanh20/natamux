@@ -73,6 +73,8 @@ type WorkspaceServiceOptions = {
   // The command of each agent, for the run that drafts a commit message. Default: its usual name.
   programOf?: (agent: LaunchableAgent) => string
   runAgentOnce?: RunAgentOnce
+  // Where a failed draft is written down. Default: console.warn.
+  log?: (message: string) => void
 }
 
 export type RemoveWorkspaceResult = {
@@ -113,6 +115,7 @@ export class WorkspaceService {
   private readonly closeTerminals: (taskId: string) => unknown
   private readonly programOf: (agent: LaunchableAgent) => string
   private readonly runAgentOnce: RunAgentOnce
+  private readonly log: (message: string) => void
   private readonly busy = new Set<string>()
   private readonly drafts = new Map<string, Promise<CommitMessageDraft>>()
   private diffStatsRead: Promise<Record<string, DiffStat>> | undefined
@@ -130,6 +133,7 @@ export class WorkspaceService {
     this.closeTerminals = options.closeTerminals ?? (() => undefined)
     this.programOf = options.programOf ?? ((agent) => DEFAULT_PROGRAMS[agent])
     this.runAgentOnce = options.runAgentOnce ?? runAgentOnce
+    this.log = options.log ?? ((message) => console.warn(message))
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -359,10 +363,14 @@ export class WorkspaceService {
       readCommitDiff(workspace, MAX_DIFF_CHARS),
       listChanges(workspace),
     ])
-    return draftCommitMessage(
+    const draft = await draftCommitMessage(
       { agent, program: this.programOf(agent), cwd: workspace, title: task.title, changes, diff },
       this.runAgentOnce,
     )
+    if (draft.source === 'draft') {
+      this.log(`No commit message draft by ${agent} for ${taskId}: ${draft.reason}`)
+    }
+    return draft
   }
 
   // Pushes the task branch to `origin` and makes it the upstream of the branch.
