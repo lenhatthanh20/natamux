@@ -929,9 +929,7 @@ export class TaskService {
     }
     const updated: Task = { ...task, skipStages, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
