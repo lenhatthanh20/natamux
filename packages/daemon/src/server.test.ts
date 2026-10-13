@@ -945,6 +945,18 @@ describe('changes', () => {
     expect(file.json()).toMatchObject({ path: 'notes.txt', original: null, modified: 'hello\n' })
   })
 
+  it('keeps the list of a timed read, and reads git now with fresh=1', async () => {
+    const workspace = await taskWithWorkspace()
+    const read = async (url: string) =>
+      (await app.inject({ method: 'GET', url, headers: authorization })).json().changes
+    expect(await read('/tasks/T-0001/changes')).toEqual([])
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect(await read('/tasks/T-0001/changes')).toEqual([])
+    expect(await read('/tasks/T-0001/changes?fresh=1')).toHaveLength(1)
+    expect(await read('/tasks/T-0001/changes')).toHaveLength(1)
+  })
+
   it('answers 404 for a file that is not a changed file', async () => {
     await taskWithWorkspace()
     const response = await app.inject({
@@ -1208,6 +1220,13 @@ describe('graph', () => {
       truncated: false,
     })
     expect(response.json().commits).toHaveLength(1)
+
+    const fresh = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/graph?fresh=1',
+      headers: authorization,
+    })
+    expect(fresh.json()).toMatchObject({ base: 'main', ahead: 0 })
   })
 
   it('answers 409 for a task without a workspace, and needs the token', async () => {

@@ -43,11 +43,12 @@ type ChangesViewProps = {
   onFileChange?: (path: string | null) => void
   // What the agent of each shell does now.
   terminalActivity?: Readonly<Record<string, string>>
-  loadChanges: () => Promise<ChangeEntry[]>
+  // `fresh` (here and in loadGraph): the daemon reads git now, not the answer it kept.
+  loadChanges: (fresh?: boolean) => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   // One side of a changed image, as bytes.
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
-  loadGraph: () => Promise<GitGraphData>
+  loadGraph: (fresh?: boolean) => Promise<GitGraphData>
   loadEvents: () => Promise<StoredEvent[]>
   connectTerminal: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
@@ -147,11 +148,25 @@ export function ChangesView({
     }
   }, [tab])
 
+  // Set while a refresh the user asked for runs.
+  const freshGraph = useRef(false)
   // The graph has the commits ahead of the base, for the pull request, and the push status.
   const graph = useQuery({
     queryKey: ['graph', task.id],
-    queryFn: loadGraph,
+    queryFn: () => loadGraph(freshGraph.current),
     refetchInterval: REFRESH_MS,
+  })
+  const refreshGraph = () => {
+    freshGraph.current = true
+    void graph.refetch().finally(() => {
+      freshGraph.current = false
+    })
+  }
+  // On the Changes tab, the panel answers this.
+  useAppEvent('refresh-changes', () => {
+    if (tab === 'history') {
+      refreshGraph()
+    }
   })
   const ahead = graph.data?.ahead ?? null
   const base = graph.data?.base ?? null
@@ -160,7 +175,7 @@ export function ChangesView({
   // the next step is a commit or a push.
   const changes = useQuery({
     queryKey: ['changes', task.id],
-    queryFn: loadChanges,
+    queryFn: () => loadChanges(),
     refetchInterval: REFRESH_MS,
   })
   const uncommitted = changes.data?.length ?? null
@@ -365,7 +380,7 @@ export function ChangesView({
               now={now}
               uncommitted={uncommitted}
               onShowChanges={() => pickTab('changes')}
-              onRefresh={() => graph.refetch()}
+              onRefresh={refreshGraph}
             />
           )}
         </div>

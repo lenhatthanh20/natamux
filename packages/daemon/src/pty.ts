@@ -4,8 +4,19 @@ import { spawn } from 'node-pty'
 import { commandsUnder, descendants } from './process-tree.js'
 import { shellCommand } from './shell-command.js'
 import type { SpawnPty } from './terminal-service.js'
+import { TtlCache } from './ttl-cache.js'
 
 const execFileAsync = promisify(execFile)
+
+// Each agent pane asks for the commands of its shell on a timer, so one `ps` serves them all for a
+// moment.
+const PROCESS_TABLE_MS = 2000
+const processTable = new TtlCache<string>(PROCESS_TABLE_MS)
+
+async function readProcessTable(): Promise<string> {
+  const { stdout } = await execFileAsync('ps', ['-ww', '-A', '-o', 'pid=,ppid=,args='])
+  return stdout
+}
 
 // An agent runs as a job of the shell. Ending only the shell leaves it running with no terminal,
 // so every process under the shell gets the signal too.
@@ -54,8 +65,7 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
         return undefined
       }
       try {
-        const { stdout } = await execFileAsync('ps', ['-ww', '-A', '-o', 'pid=,ppid=,args='])
-        return commandsUnder(stdout, pty.pid)
+        return commandsUnder(await processTable.get('', readProcessTable), pty.pid)
       } catch {
         return undefined
       }

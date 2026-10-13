@@ -305,6 +305,25 @@ describe('createApi', () => {
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/graph')
   })
 
+  it('asks the daemon to read git now for a fresh graph or list of changes', async () => {
+    // One body that reads as a graph and as a list of changes.
+    const body = { head: 'b2', branch: null, base: null, ahead: null, behind: null }
+    const { calls, fetchFunction } = fakeFetch(() =>
+      json({ ...body, truncated: false, commits: [], changes: [] }),
+    )
+    const api = createApi('secret', fetchFunction)
+
+    await api.getGitGraph('T-0001', true)
+    await api.listChanges('T-0001', true)
+    await api.listChanges('T-0001')
+
+    expect(calls.map((call) => call.url)).toEqual([
+      '/api/tasks/T-0001/graph?fresh=1',
+      '/api/tasks/T-0001/changes?fresh=1',
+      '/api/tasks/T-0001/changes',
+    ])
+  })
+
   it('reads a git graph without a push status as one whose status is unknown', async () => {
     const graph = {
       branch: 'natamux/t-0001',
