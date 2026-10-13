@@ -40,6 +40,7 @@ import {
 import { mapLimit } from './map-limit.js'
 import type { RepoService } from './repo-service.js'
 import type { TaskService } from './task-service.js'
+import { TtlCache } from './ttl-cache.js'
 
 export class WorkspaceConflictError extends Error {
   constructor(message: string) {
@@ -75,6 +76,7 @@ type WorkspaceServiceOptions = {
   runAgentOnce?: RunAgentOnce
   // Where a failed draft is written down. Default: console.warn.
   log?: (message: string) => void
+  now?: () => number
 }
 
 export type RemoveWorkspaceResult = {
@@ -84,6 +86,9 @@ export type RemoveWorkspaceResult = {
 
 const MAX_SLUG_LENGTH = 40
 const DIFF_STAT_READS = 4
+// Dashboards ask for the changes, the graph and the diff stats on timers. Within this time they
+// share one read, so git runs less often. A change made through this service is seen at once.
+export const GIT_READ_MS = 5000
 
 // What the diff of a workspace counts from: where a new workspace starts, by name.
 async function baseForDiff(repoDir: string): Promise<string | null> {
@@ -118,7 +123,9 @@ export class WorkspaceService {
   private readonly log: (message: string) => void
   private readonly busy = new Set<string>()
   private readonly drafts = new Map<string, Promise<CommitMessageDraft>>()
-  private diffStatsRead: Promise<Record<string, DiffStat>> | undefined
+  private readonly diffStatsReads: TtlCache<Record<string, DiffStat>>
+  private readonly changesReads: TtlCache<ChangeEntry[]>
+  private readonly graphReads: TtlCache<GitGraph>
 
   constructor(options: WorkspaceServiceOptions) {
     this.tasks = options.tasks
@@ -134,6 +141,10 @@ export class WorkspaceService {
     this.programOf = options.programOf ?? ((agent) => DEFAULT_PROGRAMS[agent])
     this.runAgentOnce = options.runAgentOnce ?? runAgentOnce
     this.log = options.log ?? ((message) => console.warn(message))
+    const now = options.now ?? Date.now
+    this.diffStatsReads = new TtlCache(GIT_READ_MS, now)
+    this.changesReads = new TtlCache(GIT_READ_MS, now)
+    this.graphReads = new TtlCache(GIT_READ_MS, now)
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -267,9 +278,14 @@ export class WorkspaceService {
     })
   }
 
-  // The files of the workspace that differ from its last commit, with the lines of each.
-  async changes(taskId: string): Promise<ChangeEntry[]> {
-    return listChanges(this.workspaceOf(taskId), { counts: true })
+  // The files of the workspace that differ from its last commit, with the lines of each. `fresh`
+  // reads git now, and the answer replaces the kept one.
+  async changes(taskId: string, fresh = false): Promise<ChangeEntry[]> {
+    const workspace = this.workspaceOf(taskId)
+    if (fresh) {
+      this.changesReads.forget(taskId)
+    }
+    return this.changesReads.get(taskId, () => listChanges(workspace, { counts: true }))
   }
 
   // Only a file that is in the list of changes can be read: this is what keeps the request from
@@ -297,13 +313,9 @@ export class WorkspaceService {
     return change
   }
 
-  // The size of the work in each workspace. A workspace that git cannot read is left out. Every
-  // open dashboard asks for this on a timer, so callers that ask while a read runs share it.
+  // The size of the work in each workspace. A workspace that git cannot read is left out.
   diffStats(): Promise<Record<string, DiffStat>> {
-    this.diffStatsRead ??= this.readDiffStats().finally(() => {
-      this.diffStatsRead = undefined
-    })
-    return this.diffStatsRead
+    return this.diffStatsReads.get('', () => this.readDiffStats())
   }
 
   private async readDiffStats(): Promise<Record<string, DiffStat>> {
@@ -327,11 +339,17 @@ export class WorkspaceService {
     return Object.fromEntries(entries.flat())
   }
 
-  // The history of the task branch next to the branch that the main checkout is on.
-  async graph(taskId: string): Promise<GitGraph> {
+  // The history of the task branch next to the branch that the main checkout is on. `fresh` as
+  // for changes.
+  async graph(taskId: string, fresh = false): Promise<GitGraph> {
     const workspace = this.workspaceOf(taskId)
-    const task = this.tasks.getTask(taskId)
-    return readGitGraph(workspace, await currentBranch(this.repoDirOf(task.repo)))
+    const repoDir = this.repoDirOf(this.tasks.getTask(taskId).repo)
+    if (fresh) {
+      this.graphReads.forget(taskId)
+    }
+    return this.graphReads.get(taskId, async () =>
+      readGitGraph(workspace, await currentBranch(repoDir)),
+    )
   }
 
   // Commits every change of the workspace on the task branch.
@@ -427,6 +445,10 @@ export class WorkspaceService {
       return await work()
     } finally {
       this.busy.delete(taskId)
+      // Every change of a workspace runs here, so the next read sees it, even after a failure.
+      this.changesReads.forget(taskId)
+      this.graphReads.forget(taskId)
+      this.diffStatsReads.forget()
     }
   }
 }

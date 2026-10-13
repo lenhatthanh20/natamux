@@ -448,4 +448,13 @@ describe('contextText', () => {
     expect(contextText({ source: 'skill', ref: 'LIN-7' })).toBe('skill LIN-7')
     expect(contextText({ source: 'github-issue', ref: '#42' })).toBe('GitHub issue #42')
   })
+
+  it('names a skill picked for the task', () => {
+    expect(contextText({ source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' })).toBe(
+      'jira-ticket (skill) ABC-1',
+    )
+    expect(contextText({ source: 'skill', name: 'Ticket', skill: 'jira-ticket', ref: '' })).toBe(
+      'jira-ticket (skill)',
+    )
+  })
 })

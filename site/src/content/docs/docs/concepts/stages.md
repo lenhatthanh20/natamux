@@ -304,12 +304,23 @@ The first stage of the default pipeline reads the context of the task. The sourc
 |---|---|
 | `manual` | Writes the title, notes and reference of the task into `context.md`. The stage passes by itself, so a new task does not wait for you. |
 | `github-issue` | Reads the issue with the `gh` CLI (title, body, labels, comments) into `context.md`, and links the issue to the task. Needs a reference such as `#42`, `owner/name#42` or an issue address. |
-| `skill` | An agent runs a skill you configured and writes `context.md`. Natamux names the skill the way the agent of the task needs, with the rules in [Skills in a prompt](#skills-in-a-prompt). |
+| `skill` | An agent runs a skill and writes `context.md`. Pick the skill in the dialog, or configure it. Natamux names the skill the way the agent of the task needs, with the rules in [Skills in a prompt](#skills-in-a-prompt). |
 | `mcp` | An agent runs a prompt you configured and writes `context.md`. |
 
 For `github-issue`, `gh` must be installed and logged in. See [GitHub](/docs/guides/github/). Configure the sources in `context.sources`; see the [configuration reference](/docs/reference/configuration/).
 
 Natamux starts the context stage as soon as you create the task. The other stages start when the task reaches them, or when you start them.
+
+### Context from a skill
+
+Use a skill when the context lives in another application, for example a record in a ticket tracker. The skill reads the record, by itself or through an MCP server the agent has.
+
+1. In **Start a task**, set **Context from** to **An agent skill**. It shows when an agent has at least one skill.
+2. Click **Pick a skill** and choose the skill.
+3. Enter the key or address of the record in **Reference**.
+4. Choose an agent. **No agent, a plain shell** cannot run a skill.
+
+The context stage starts the agent with the skill and the reference, for example `/read-record ABC-1` for Claude Code. The agent writes what it finds to `context.md` and runs `natamux done`. No entry in `.natamux.json` is needed. Natamux does not install skills or MCP servers: the agent uses what it has.
 
 ### Attachments
 

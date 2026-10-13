@@ -213,6 +213,7 @@ When you create a task, you pick one source with its type, for example `--contex
 
 - `name` is 1 to 60 characters.
 - `skill` is the name of the skill, without the slash or the dollar sign.
+- A `skill` source is optional. **Start a task** offers every skill of the agents as **An agent skill**. Configure one to give it a name in **Context from**.
 - A `skill` source follows the three rules of the [skill placeholder](#skill-placeholder), as a whole line. For the skill `fetch-ticket` and the reference `ABC-1`, an agent with the skill gets `/fetch-ticket ABC-1` (a call). Otherwise it gets `Read <path> and follow it for ABC-1.` (the file), or `Use the fetch-ticket skill for ABC-1.` (not found). The file format does not change.
 - `prompt` can use `{title}`, `{description}`, `{dir}` and `{ref}`.
 - The `agent` field is accepted, but Natamux does not use it yet. The task's own agent runs a `skill` or `mcp` source, or `claude-code` when the task has none.

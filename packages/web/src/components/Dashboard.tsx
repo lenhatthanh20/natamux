@@ -1032,10 +1032,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 setDetailOpen(changesTask.id, false)
               }
             }}
-            loadChanges={() => api.listChanges(changesTask.id)}
+            loadChanges={(fresh) => api.listChanges(changesTask.id, fresh)}
             loadFile={(path) => api.getFileDiff(changesTask.id, path)}
             loadImage={(path, side) => api.getFileImage(changesTask.id, path, side)}
-            loadGraph={() => api.getGitGraph(changesTask.id)}
+            loadGraph={(fresh) => api.getGitGraph(changesTask.id, fresh)}
             loadEvents={() => api.listEvents(changesTask.id)}
             resume={() => eventMutation.mutate({ taskId: changesTask.id, type: 'agent.resumed' })}
             resuming={eventMutation.isPending}
@@ -1335,6 +1335,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           initialTitle={newWorkspace.title}
           loadBranches={(repo) => api.listBranches(repo)}
           loadSettings={(repo) => api.getSettings(repo)}
+          loadSkills={(repo) => api.getSkills(repo)}
           create={(input) => api.newWorkspace(input)}
           onCreated={(task) => {
             mergeTask(task)

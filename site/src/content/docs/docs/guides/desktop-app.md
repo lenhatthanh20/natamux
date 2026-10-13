@@ -81,7 +81,7 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 
 ## Quit and close
 
-- **Quit** stops the daemon, and with it every agent and shell. If agents are working, the app asks first ("An agent is still working" or "N agents are still working"). Tasks, worktrees and their changes stay. When you open the app again, the agents of running and waiting tasks start again.
+- **Quit** stops the daemon, and with it every agent and shell. If agents are working, the app asks first ("An agent is still working" or "N agents are still working"). Tasks, worktrees and their changes stay. When you open the app again, the agents of running, waiting and in-review tasks start again.
 - **On macOS, closing the window** keeps the app, the daemon and the agents running. Click the Dock icon to open the window again. Quit from the app menu to stop everything.
 - **On Linux, closing the window** quits the app, with the same question when agents work.
 

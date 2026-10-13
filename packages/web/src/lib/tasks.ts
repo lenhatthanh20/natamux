@@ -311,6 +311,7 @@ const SOURCE_KIND: Record<TaskContext['source'], string> = {
 // lists it, then the reference.
 export function contextText(context: TaskContext): string {
   const kind = SOURCE_KIND[context.source]
-  const source = context.name === undefined ? kind : `${context.name} (${kind})`
+  const name = context.skill ?? context.name
+  const source = name === undefined ? kind : `${name} (${kind})`
   return context.ref === '' ? source : `${source} ${context.ref}`
 }

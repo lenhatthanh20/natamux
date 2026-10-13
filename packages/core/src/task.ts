@@ -22,6 +22,8 @@ export const taskContextSchema = z.object({
   source: z.enum(CONTEXT_SOURCE_TYPES),
   // Picks one of several skills or MCP servers in the project settings.
   name: z.string().trim().min(1).max(60).optional(),
+  // A skill picked when the task was started, with no source in the project settings.
+  skill: z.string().trim().min(1).max(200).optional(),
   ref: z.string().trim().max(500).default(''),
 })
 

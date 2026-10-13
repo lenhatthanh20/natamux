@@ -93,6 +93,8 @@ function view({
     return task
   })
   const openPullRequest = vi.fn(async () => ({ ...task, pr: 'https://github.com/o/r/pull/1' }))
+  const loadChanges = vi.fn(async (_fresh?: boolean) => changes)
+  const loadGraph = vi.fn(async (_fresh?: boolean) => graph)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const reject = () => Promise.reject(new Error('Not in this test'))
   render(
@@ -101,10 +103,10 @@ function view({
         task={task}
         now={new Date('2026-10-10T08:30:00.000Z')}
         initialTab={tab}
-        loadChanges={async () => changes}
+        loadChanges={loadChanges}
         loadFile={reject}
         loadImage={reject}
-        loadGraph={async () => graph}
+        loadGraph={loadGraph}
         loadEvents={async () => []}
         connectTerminal={reject}
         loadTerminals={async () => []}
@@ -124,7 +126,7 @@ function view({
       />
     </QueryClientProvider>,
   )
-  return { push, openPullRequest }
+  return { push, openPullRequest, loadChanges, loadGraph }
 }
 
 describe('ChangesView', () => {
@@ -141,6 +143,34 @@ describe('ChangesView', () => {
 
     act(() => pushed?.actions?.[0]?.run())
     await waitFor(() => expect(openPullRequest).toHaveBeenCalledTimes(1))
+  })
+
+  it('reads the history from git at once on Refresh and Shift+R', async () => {
+    const { loadGraph } = view()
+    const user = userEvent.setup()
+    await screen.findByRole('button', { name: 'Push ↑1' })
+    expect(loadGraph).toHaveBeenLastCalledWith(false)
+
+    await user.click(screen.getAllByRole('button', { name: 'Refresh' })[0] as HTMLElement)
+    await waitFor(() => expect(loadGraph).toHaveBeenLastCalledWith(true))
+
+    loadGraph.mockClear()
+    act(() => fireAppEvent('refresh-changes'))
+    await waitFor(() => expect(loadGraph).toHaveBeenCalledWith(true))
+  })
+
+  it('reads the changes from git at once on Refresh and Shift+R', async () => {
+    const { loadChanges } = view({ tab: 'changes', changes: [CHANGE] })
+    const user = userEvent.setup()
+    const [refresh] = await screen.findAllByRole('button', { name: 'Refresh' })
+    expect(loadChanges).not.toHaveBeenCalledWith(true)
+
+    await user.click(refresh as HTMLElement)
+    await waitFor(() => expect(loadChanges).toHaveBeenCalledWith(true))
+
+    loadChanges.mockClear()
+    act(() => fireAppEvent('refresh-changes'))
+    await waitFor(() => expect(loadChanges).toHaveBeenCalledWith(true))
   })
 
   it('reads the push status again after a push', async () => {
