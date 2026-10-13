@@ -18,6 +18,7 @@ import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
   branchNameFor,
   FileNotChangedError,
+  GIT_READ_MS,
   slugify,
   WorkspaceConflictError,
   WorkspaceService,
@@ -28,8 +29,11 @@ let index: TaskIndex
 let messages: DaemonMessage[]
 let tasks: TaskService
 let workspaces: WorkspaceService
+// The clock of the git reads that are kept for a moment.
+let clock: number
 
 beforeEach(() => {
+  clock = 0
   repo = createTestRepo()
   const dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
@@ -42,6 +46,7 @@ beforeEach(() => {
     tasks,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
+    now: () => clock,
   })
 })
 
@@ -862,6 +867,19 @@ describe('graph', () => {
     ])
   })
 
+  it('keeps the graph for a moment, and reads it again after a commit made here', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    const first = await workspaces.graph(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'outside')
+
+    expect(await workspaces.graph(task.id)).toBe(first)
+
+    writeFileSync(join(created.workspace ?? '', 'fix.txt'), 'fixed\n')
+    await workspaces.commit(task.id, 'Fix the bug')
+    expect((await workspaces.graph(task.id)).ahead).toBe(2)
+  })
+
   it('refuses a task that has no workspace', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await expect(workspaces.graph(task.id)).rejects.toThrow(WorkspaceConflictError)
@@ -880,10 +898,29 @@ describe('changes and fileDiff', () => {
     expect(await workspaces.changes(task.id)).toEqual([])
 
     writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+    clock += GIT_READ_MS
 
     expect(await workspaces.changes(task.id)).toEqual([
       { path: 'notes.txt', status: 'U', originalPath: null, added: 1, removed: 0 },
     ])
+  })
+
+  it('keeps the list for a moment, then reads it again', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    const first = await workspaces.changes(task.id)
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    clock += GIT_READ_MS - 1
+    expect(await workspaces.changes(task.id)).toBe(first)
+    clock += 1
+    expect((await workspaces.changes(task.id)).map((entry) => entry.path)).toEqual(['notes.txt'])
+  })
+
+  it('shares one read between callers that ask at the same time', async () => {
+    const { task } = await taskWithWorkspace()
+    const first = workspaces.changes(task.id)
+    const second = workspaces.changes(task.id)
+    expect(await second).toBe(await first)
   })
 
   it('gives both sides of a changed file', async () => {
@@ -970,6 +1007,8 @@ describe('commit, push and pull request', () => {
   it('commits the changes of the workspace and logs the commit', async () => {
     const task = await taskWithWork()
 
+    // Kept from before the commit, which must not show up afterwards.
+    expect(await workspaces.changes(task.id)).toHaveLength(1)
     const { hash } = await workspaces.commit(task.id, 'Fix the bug')
 
     expect(await workspaces.changes(task.id)).toEqual([])
@@ -1220,7 +1259,7 @@ describe('diffStats', () => {
     })
   })
 
-  it('shares one read between callers that ask at the same time', async () => {
+  it('shares one read between callers, and keeps it for a moment', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     const created = await workspaces.create(task.id)
 
@@ -1230,9 +1269,25 @@ describe('diffStats', () => {
 
     writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'a\n')
     runGit(created.workspace ?? '', 'add', 'notes.txt')
+    expect(workspaces.diffStats()).toBe(first)
+
+    clock += GIT_READ_MS
     const next = workspaces.diffStats()
     expect(next).not.toBe(first)
     expect(await next).toEqual({ [task.id]: { files: 1, added: 1, removed: 0 } })
+  })
+
+  it('reads again at once after a workspace is made or removed here', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    expect(await workspaces.diffStats()).toEqual({})
+
+    await workspaces.create(task.id)
+    expect(await workspaces.diffStats()).toEqual({
+      [task.id]: { files: 0, added: 0, removed: 0 },
+    })
+
+    await workspaces.remove(task.id, { deleteBranch: true })
+    expect(await workspaces.diffStats()).toEqual({})
   })
 })
 
