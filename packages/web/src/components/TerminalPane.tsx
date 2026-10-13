@@ -83,7 +83,7 @@ export function TerminalPane({
       aria-label={label}
       hidden={hidden}
       style={style}
-      className="hm-pane group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
+      className="group/pane relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line-strong bg-terminal ring-contrast focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-focus"
     >
       <header className="@container flex h-8 shrink-0 items-center gap-2 border-b border-line bg-surface pr-1 pl-2.5 text-xs">
         <span className="flex shrink-0 items-center text-muted">{icon}</span>

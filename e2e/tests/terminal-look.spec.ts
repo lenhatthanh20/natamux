@@ -31,6 +31,11 @@ async function dimOf(shell: Locator): Promise<string> {
   })
 }
 
+// The outline style of a pane: 'solid' while it has the focus, 'none' without.
+async function outlineOf(shell: Locator): Promise<string> {
+  return shell.evaluate((element) => getComputedStyle(element).outlineStyle)
+}
+
 // The load status of a font face, or 'missing' when the page has none.
 async function faceStatus(page: Page, family: string, style = 'normal'): Promise<string> {
   return page.evaluate(
@@ -203,35 +208,79 @@ test('shows the scrollbar on hover, and keeps the pill off it (C18, C22)', async
   await expect(rows(shell)).toContainText('300')
 })
 
-test('dims the shells without the focus, and only them (C19)', async ({ page }) => {
-  const first = pane(page, 'Shell 1')
-  await screenOf(first).click()
-  expect(await dimOf(first)).toBe('none')
+test('does not dim the shells without the focus, and outlines the focused one (C19)', async ({
+  page,
+}) => {
+  await addShells(page, 2)
+  const shells = [pane(page, 'Shell 1'), pane(page, 'Shell 2'), pane(page, 'Shell 3')]
+  const [first, second] = shells
 
+  for (const focused of shells) {
+    await screenOf(focused).click()
+    await expect.poll(() => outlineOf(focused)).toBe('solid')
+    for (const shell of shells) {
+      // Read at once after the focus move, so a fade left over would show.
+      expect(await dimOf(shell)).toBe('none')
+      if (shell !== focused) expect(await outlineOf(shell)).toBe('none')
+    }
+  }
+
+  // A click reaches the pane's terminal, so the keys go there and nowhere else.
+  await runIn(page, second, 'echo T0032B')
+  await expect(rows(second)).toContainText('T0032B')
+  await expect(rows(first)).not.toContainText('T0032B')
+  await runIn(page, first, 'echo T0032A')
+  await expect(rows(first)).toContainText('T0032A')
+  await expect(rows(second)).not.toContainText('T0032A')
+
+  // A pane added while another one has the focus is not dimmed either.
+  await screenOf(first).click()
+  const before = await page.getByRole('region', { name: /^Shell \d+$/ }).count()
   await addShells(page, 1)
-  const second = pane(page, 'Shell 2')
-  await screenOf(first).click()
-  await expect.poll(() => dimOf(second)).toBe('0.3')
-  expect(await dimOf(first)).toBe('none')
+  expect(await dimOf(pane(page, `Shell ${before + 1}`))).toBe('none')
 
-  // A click on the dimmed pane reaches its terminal and moves the dim.
-  await screenOf(second).click()
-  await expect.poll(() => dimOf(first)).toBe('0.3')
-  expect(await dimOf(second)).toBe('none')
-
-  // A maximized pane is the only one on screen, so it is never dimmed.
-  await second.getByRole('button', { name: 'Maximize Shell 2' }).click()
-  await screenOf(second).click()
-  expect(await dimOf(second)).toBe('none')
-  await second.getByRole('button', { name: 'Restore Shell 2' }).click()
-
-  // With the focus outside the panes, none is dimmed.
+  // With the focus outside the panes, none has the outline.
   await page.getByRole('button', { name: 'Account' }).focus()
-  await expect.poll(() => dimOf(first)).toBe('none')
-  expect(await dimOf(second)).toBe('none')
+  for (const shell of shells) {
+    await expect.poll(() => outlineOf(shell)).toBe('none')
+    expect(await dimOf(shell)).toBe('none')
+  }
+  await expect(page.locator('.hm-pane, .hm-panes')).toHaveCount(0)
 })
 
-test('moves the dim with the focus, with no extra resize and no motion (C20)', async ({ page }) => {
+test('does not dim the agents without the focus, and outlines the focused one', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: /^Agents( \d+)?$/ }).click()
+  const agents = page.getByRole('region', { name: 'Agents', exact: true })
+  const panes = agents.getByRole('region', { name: /^Agent of / })
+  const add = agents.getByRole('combobox', { name: 'Add a pane' })
+  // A fresh daemon may have no agent pane yet: add tasks until two show.
+  await expect(add.or(panes.nth(1)).first()).toBeVisible()
+  while ((await panes.count()) < 2) {
+    await add.click()
+    await page.getByRole('option').first().click()
+  }
+  const shown = [panes.nth(0), panes.nth(1)]
+
+  for (const focused of shown) {
+    await screenOf(focused).click()
+    await expect(focused.locator('.xterm-helper-textarea')).toBeFocused()
+    await expect.poll(() => outlineOf(focused)).toBe('solid')
+    for (const agent of shown) {
+      expect(await dimOf(agent)).toBe('none')
+      if (agent !== focused) expect(await outlineOf(agent)).toBe('none')
+    }
+  }
+
+  await page.getByRole('button', { name: 'Account' }).focus()
+  for (const agent of shown) {
+    await expect.poll(() => outlineOf(agent)).toBe('none')
+    expect(await dimOf(agent)).toBe('none')
+  }
+})
+
+test('moves the focus between panes with no extra resize (C20)', async ({ page }) => {
   const resizes: string[] = []
   page.on('websocket', (socket) => {
     socket.on('framesent', (frame) => {
@@ -249,16 +298,31 @@ test('moves the dim with the focus, with no extra resize and no motion (C20)', a
   for (let step = 0; step < 10; step++) {
     await screenOf(step % 2 === 0 ? second : first).click()
   }
-  // At most the size claim of each focus, as on main. The dim adds none.
+  // At most the size claim of each focus, as on main.
   expect(resizes.length).toBeLessThanOrEqual(10)
-  await expect.poll(() => dimOf(second)).toBe('0.3')
-  expect(await dimOf(first)).toBe('none')
-  // The layer has no transition: it comes and goes at once. With reduced motion the app-wide rule
-  // in styles.css allows 80ms opacity fades, and a layer that is only created runs none.
-  const transition = await second
-    .locator('.hm-terminal')
-    .evaluate((element) => getComputedStyle(element, '::after').transitionDuration)
-  expect(transition).toBe('0s')
+  await expect.poll(() => outlineOf(first)).toBe('solid')
+  expect(await dimOf(second)).toBe('none')
+})
+
+test('keeps an ended shell dimmed, focused or not, with no dim on top', async ({ page }) => {
+  const before = await page.getByRole('region', { name: /^Shell \d+$/ }).count()
+  await addShells(page, 1)
+  const running = pane(page, 'Shell 1')
+  const ended = pane(page, `Shell ${before + 1}`)
+  await runIn(page, ended, 'exit')
+  await expect(ended.getByRole('button', { name: 'Open a new shell' })).toBeVisible()
+
+  await screenOf(running).click()
+  await expect(screenOf(ended)).toHaveCSS('opacity', '0.6')
+  await expect(screenOf(running)).toHaveCSS('opacity', '1')
+  expect(await dimOf(ended)).toBe('none')
+  expect(await dimOf(running)).toBe('none')
+
+  await screenOf(ended).click()
+  await expect(screenOf(ended)).toHaveCSS('opacity', '0.6')
+  await expect(screenOf(running)).toHaveCSS('opacity', '1')
+  expect(await dimOf(ended)).toBe('none')
+  expect(await dimOf(running)).toBe('none')
 })
 
 test('follows the app theme with the Night palette, as --terminal (C13)', async ({ page }) => {
