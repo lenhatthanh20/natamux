@@ -449,8 +449,10 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
 // A task with no workspace has no row in the tree. The needs-you pill lists it: Enter opens the
 // first one.
 async function openFromPill(user: ReturnType<typeof userEvent.setup>) {
+  // An open workspace has a header of its own; the title bar comes first.
+  const [titleBar] = screen.getAllByRole('banner')
   await user.click(
-    within(screen.getByRole('banner')).getByRole('button', { name: /^\d+ needs? you$/ }),
+    within(titleBar as HTMLElement).getByRole('button', { name: /^\d+ needs? you$/ }),
   )
   await user.keyboard('{Enter}')
 }
@@ -2157,7 +2159,9 @@ describe('App', () => {
       })
     })
 
-    await waitFor(() => expect(screen.getByRole('img', { name: '2 waiting' })).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: '2 need you' })).toHaveLength(2),
+    )
   })
   it('hides and shows the sidebar from the title bar', async () => {
     installDaemon([reviewTask, runningTask])
