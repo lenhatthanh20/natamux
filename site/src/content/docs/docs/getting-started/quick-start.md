@@ -33,9 +33,10 @@ For this guide, use **Start a task**. The dialog has two groups.
 | Field | What to enter |
 |---|---|
 | Title | A short title, for example `Fix the login redirect` |
-| Context from | Where the context comes from. It shows when the project offers more than one source |
+| Context from | Where the context comes from: **My notes**, **A GitHub issue**, or **An agent skill** when an agent has a skill. It shows when there is more than one source |
+| Skill | With **An agent skill**. Click **Pick a skill** and choose the skill that reads the context |
 | Notes | Optional, with **My notes**. What to change and why, where to look, and how to tell it is done |
-| Reference | With any other source. The issue or ticket to read, for example `#42` |
+| Reference | With any other source. The issue, ticket or record to read, for example `#42` |
 | Attachments | Optional. Screenshots, logs or specs. Click **Add files**, drop them, or paste a screenshot |
 
 **Workspace and agent** is where and how the task runs.

@@ -40,7 +40,7 @@ export type NewWorkspaceInput = {
   base?: string
   agent?: string
   prompt?: string
-  context?: { source: ContextSourceType; name?: string; ref: string }
+  context?: { source: ContextSourceType; name?: string; skill?: string; ref: string }
   attachments?: AttachmentUpload[]
 }
 

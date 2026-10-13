@@ -57,6 +57,16 @@ describe('parseCommand', () => {
       expect(() => parseCommand(['task', 'create'])).toThrow(UsageError)
     })
 
+    it('splits --context on the first colon only, and sends no skill', () => {
+      const context = 'skill:ticket-reader:REC-1'
+      const command = parseCommand(['task', 'create', 'x', '--context', context])
+      expect(command).toMatchObject({
+        name: 'task.create',
+        context: { source: 'skill', ref: 'ticket-reader:REC-1' },
+      })
+      expect(command).not.toHaveProperty('context.skill')
+    })
+
     it('reads the project from --repo and checks it is an id', () => {
       expect(parseCommand(['task', 'create', 'x', '--repo', 'my-app'])).toMatchObject({
         name: 'task.create',

@@ -833,6 +833,10 @@ export class StageRunner {
 
   private sourceOf(task: Task): ContextSource {
     const type = task.context?.source ?? 'manual'
+    const skill = task.context?.skill
+    if (type === 'skill' && skill) {
+      return { type: 'skill', name: skill, skill }
+    }
     const name = task.context?.name
     const offered = this.tasks
       .settingsOf(task.repo)
