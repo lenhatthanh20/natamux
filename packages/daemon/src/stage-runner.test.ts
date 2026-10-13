@@ -1531,6 +1531,94 @@ describe('a resume after a restart', () => {
       expect(after).toContainEqual({ state: 'needs-input', shells: [] })
       expect(after).toContainEqual({ state: 'running', shells: ['1'] })
     })
+
+    it('adds only the launch to the events, and keeps each state', async () => {
+      const running = await runningAfterRestart('s-1')
+      const waiting = await waitingAfterRestart({ sessionId: 's-2' })
+      const before = [running, waiting].map((task) => tasks.listEvents(task.id).length)
+
+      await resumeAll()
+
+      for (const [at, task] of [running, waiting].entries()) {
+        const added = tasks.listEvents(task.id).slice(before[at])
+        expect(added.map(({ event }) => event.type)).toEqual(['agent.launched'])
+        expect(tasks.getTask(task.id).state).toBe(task.state)
+      }
+    })
+
+    it('resumes a running and a waiting stage of the same group', async () => {
+      const task = await buildAfterRestart()
+      tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.resumed',
+        payload: { stage: 'implement', sessionId: 's-1' },
+      })
+
+      await resumeAll()
+
+      expect(tasks.getTask(task.id).lanes).toEqual({
+        implement: 'running',
+        'test-spec': 'needs-input',
+      })
+      expect(launchScript(task.id)).toContain("--resume 's-1'")
+      expect(launchScript(task.id, '2')).toContain("--resume 's-2'")
+    })
+
+    it.each([
+      ['done', 'done'],
+      ['cancelled', 'cancelled'],
+      ['failed', 'failed'],
+    ] as const)('leaves alone a task that is %s', async (_name, to) => {
+      const task = await waitingAfterRestart({ sessionId: 's-1' })
+      tasks.applyEvent(task.id, {
+        source: 'human',
+        type: 'state.overridden',
+        payload: { to, stage: 'spec' },
+      })
+      await runner.settle()
+      terminals.close(task.id)
+      const before = tasks.listEvents(task.id).length
+
+      await resumeAll()
+
+      expect(terminals.list(task.id)).toEqual([])
+      expect(tasks.listEvents(task.id)).toHaveLength(before)
+    })
+
+    // Natamux cannot start it, so it must not fail the stage either.
+    it('leaves alone a task whose agent Natamux cannot start', async () => {
+      const task = await runningAfterRestart('s-1', 'opencode')
+      const before = tasks.listEvents(task.id).length
+
+      await resumeAll()
+
+      expect(tasks.getTask(task.id).state).toBe('running')
+      expect(terminals.list(task.id)).toEqual([])
+      expect(tasks.listEvents(task.id)).toHaveLength(before)
+    })
+
+    it('pastes the prompt of a new start of the stage into the resumed agent', async () => {
+      const task = await waitingAfterRestart({ sessionId: 's-1' })
+      await resumeAll()
+      const pty = ptys.at(-1) as FakePty
+
+      await runner.act(task.id, 'reopen', { to: 'spec' })
+      await runner.settle()
+
+      await expectSubmitted(pty, 'Task: Export tasks')
+      expect(pty.written.join('').split(`agent-launch-${task.id}.sh`)).toHaveLength(2)
+    })
+
+    it('resumes again after a second restart', async () => {
+      const task = await runningAfterRestart('s-1')
+      await resumeAll()
+      terminals.close(task.id)
+
+      await resumeAll()
+
+      expect(terminals.list(task.id)).toEqual(['1'])
+      expect(launchScript(task.id)).toContain("--resume 's-1'")
+    })
   })
 })
 

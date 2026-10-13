@@ -23,7 +23,12 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
-import { agentOfCommand, LAST_SESSION, type LaunchableAgent } from './agent-launch.js'
+import {
+  agentOfCommand,
+  isLaunchable,
+  LAST_SESSION,
+  type LaunchableAgent,
+} from './agent-launch.js'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
@@ -585,9 +590,9 @@ export class StageRunner {
         const step = this.stepOf(task)
         for (const stage of stagesOf(step)) {
           const working = ['running', 'needs-input'].includes(laneState(task, step, stage.id))
-          // No agent was ever started for it: a person runs their own in the shell.
-          const started = (stageAgent(step, stage).agent ?? task.agent) !== null
-          if (working && started) {
+          // No agent Natamux started for it: a person runs their own in the shell.
+          const agent = stageAgent(step, stage).agent ?? task.agent
+          if (working && agent !== null && isLaunchable(agent)) {
             // In a group, the newest session of the folder may be the other stage's.
             this.relaunch(task, step, stage, !isGroup(step))
           }
