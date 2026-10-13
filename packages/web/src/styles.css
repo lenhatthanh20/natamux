@@ -1024,7 +1024,16 @@
 .stage-link[data-kind="upcoming"] {
   background-image: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 8px);
 }
+/* Moving stripes slide a wider ::before with transform. Animating background-position repaints every
+   frame: one striped bar cost about 20% CPU while the window was visible. */
 .stage-link[data-kind="flow"] {
+  position: relative;
+  overflow: hidden;
+}
+.stage-link[data-kind="flow"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 -12px;
   background-image: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px);
   animation: hm-flow 900ms linear infinite;
 }
@@ -1032,6 +1041,13 @@
   visibility: hidden;
 }
 .stage-stripes {
+  position: relative;
+  overflow: hidden;
+}
+.stage-stripes::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 -17px;
   background: repeating-linear-gradient(
     -45deg,
     var(--chip-fg) 0 6px,
@@ -1295,20 +1311,20 @@
 }
 @keyframes hm-flow {
   to {
-    background-position: 12px 0;
+    transform: translateX(12px);
   }
 }
 @keyframes hm-stripes {
   to {
-    background-position: 17px 0;
+    transform: translateX(17px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .stage-arc,
   .stage-halo,
-  .stage-link[data-kind="flow"],
-  .stage-stripes,
+  .stage-link[data-kind="flow"]::before,
+  .stage-stripes::before,
   .stage-node[data-state="review"] .stage-core {
     animation: none;
   }
