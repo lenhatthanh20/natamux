@@ -2,7 +2,14 @@ import type { Task } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { rowLabel } from '../lib/tasks'
 import { TaskBoard } from './TaskBoard'
+
+// Each row names itself once per render, so the calls count the renders of each row.
+vi.mock('../lib/tasks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/tasks')>()
+  return { ...actual, rowLabel: vi.fn(actual.rowLabel) }
+})
 
 afterEach(cleanup)
 
@@ -110,5 +117,26 @@ describe('TaskBoard', () => {
     const card = screen.getByRole('button', { name: /Fix flaky login test/ })
     expect(within(card).getByText('Claude Code')).toBeTruthy()
     expect(within(card).queryByText('claude-code')).toBeNull()
+  })
+
+  it('re-renders only the card of the task that changed', () => {
+    // New handlers on every render, as the dashboard passes them.
+    const boardOf = (tasks: readonly Task[]) => (
+      <TaskBoard
+        tasks={tasks}
+        selectedId={null}
+        stateFilter={null}
+        showFinished={false}
+        onSelect={() => {}}
+        onOpen={() => {}}
+      />
+    )
+    const { rerender } = render(boardOf(TASKS))
+    vi.mocked(rowLabel).mockClear()
+
+    rerender(boardOf([makeTask({ title: 'Fix the login test' }), ...TASKS.slice(1)]))
+
+    expect(vi.mocked(rowLabel).mock.calls.map(([task]) => task.id)).toEqual(['T-0001'])
+    expect(screen.getByRole('button', { name: /^Fix the login test,/ })).toBeTruthy()
   })
 })

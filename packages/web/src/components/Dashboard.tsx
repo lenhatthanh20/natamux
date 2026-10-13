@@ -21,8 +21,10 @@ import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
+import { createTaskBatch } from '../lib/task-batch'
 import { agentLanes, taskShellsQuery } from '../lib/task-shells'
 import {
+  applyTaskChanges,
   filterTasks,
   isQuiet,
   needsMeTasks,
@@ -30,7 +32,6 @@ import {
   STATE_LABEL,
   sortTasks,
   type TaskAction,
-  upsertTask,
 } from '../lib/tasks'
 import { terminalSocketUrl } from '../lib/terminal'
 import { syncTaskTerminals } from '../lib/terminal-cache'
@@ -147,8 +148,22 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const tasksQuery = useQuery({ queryKey: TASKS_KEY, queryFn: () => api.listTasks() })
   const tasks = tasksQuery.data ?? []
 
-  const mergeTask = (task: Task) =>
-    queryClient.setQueryData<Task[]>(TASKS_KEY, (current) => upsertTask(current ?? [], task))
+  // Live changes are written once per frame. A change from the user's own action is written at
+  // once, after the ones queued before it.
+  const batch = useMemo(
+    () =>
+      createTaskBatch((changes) =>
+        queryClient.setQueryData<Task[]>(TASKS_KEY, (current) =>
+          applyTaskChanges(current ?? [], changes),
+        ),
+      ),
+    [queryClient],
+  )
+  useEffect(() => () => batch.cancel(), [batch])
+  const mergeTask = (task: Task) => {
+    batch.push(task)
+    batch.flush()
+  }
 
   // A task the user just deleted must not also raise "there is no task".
   const deletedIds = useRef(new Set<string>())
@@ -168,14 +183,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     if (panes.includes(id)) {
       view.setAgentPanes(panes.filter((pane) => pane !== id))
     }
-    queryClient.setQueryData<Task[]>(TASKS_KEY, (current) =>
-      (current ?? []).filter((task) => task.id !== id),
-    )
+    batch.push({ deleted: id })
+    batch.flush()
   }
 
   const liveStatus = useLiveTasks(
     token,
-    mergeTask,
+    batch.push,
     () => queryClient.invalidateQueries({ queryKey: ['repos'] }),
     forgetTask,
   )

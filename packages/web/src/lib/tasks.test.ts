@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import {
   actionsFor,
   agentAction,
+  applyTaskChanges,
   contextText,
   countByState,
   filterTasks,
@@ -123,6 +124,40 @@ describe('sorting and merging', () => {
   it('adds a task that is new', () => {
     const result = upsertTask([makeTask({ id: 'T-0001' })], makeTask({ id: 'T-0002' }))
     expect(result).toHaveLength(2)
+  })
+
+  it('puts a changed task where a full sort would, and keeps the other tasks as they are', () => {
+    const at = (minute: number) => `2026-10-08T09:0${minute}:00.000Z`
+    const tasks = sortByRecent([
+      makeTask({ id: 'T-0001', updatedAt: at(1) }),
+      makeTask({ id: 'T-0002', updatedAt: at(2) }),
+      makeTask({ id: 'T-0003', updatedAt: at(3) }),
+      makeTask({ id: 'T-0004', updatedAt: at(3) }),
+    ])
+    for (const change of [
+      makeTask({ id: 'T-0001', updatedAt: at(9) }),
+      makeTask({ id: 'T-0004', title: 'Same time', updatedAt: at(3) }),
+      makeTask({ id: 'T-0005', updatedAt: at(2) }),
+      makeTask({ id: 'T-0000', updatedAt: at(0) }),
+    ]) {
+      const result = upsertTask(tasks, change)
+      expect(result).toEqual(
+        sortByRecent([...tasks.filter((task) => task.id !== change.id), change]),
+      )
+      expect(result.find((task) => task.id === 'T-0002')).toBe(tasks[2])
+    }
+  })
+
+  it('applies live changes in the order they came, deletions too', () => {
+    const first = makeTask({ id: 'T-0001', updatedAt: '2026-10-08T09:00:00.000Z' })
+    const changed = { ...first, title: 'Changed', updatedAt: '2026-10-08T10:00:00.000Z' }
+    const added = makeTask({ id: 'T-0002', updatedAt: '2026-10-08T11:00:00.000Z' })
+
+    const result = applyTaskChanges([first], [changed, added, { deleted: 'T-0001' }])
+    expect(result.map((task) => task.id)).toEqual(['T-0002'])
+
+    const readded = applyTaskChanges([first], [{ deleted: 'T-0001' }, changed])
+    expect(readded.map((task) => task.title)).toEqual(['Changed'])
   })
 })
 

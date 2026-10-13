@@ -1,9 +1,10 @@
 import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@natamux/core'
 import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-react'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { usePhone } from '../hooks/useLayoutMode'
 import { useNow } from '../hooks/useNow'
 import { useScrollEdges } from '../hooks/useScrollEdges'
+import { useStableCallback } from '../hooks/useStableCallback'
 import { pullRequestNumber } from '../lib/pull-request'
 import {
   formatAge,
@@ -44,8 +45,9 @@ const taskCount = (count: number) => (count === 1 ? '1 task' : `${count} tasks`)
 const SCROLL_BUTTON =
   'pointer-events-auto rounded-full border border-line-strong bg-popover text-ink-2 shadow-pop'
 
-// A card is tinted on its left edge when it needs the user: that is where to look first.
-function Card({
+// A card is tinted on its left edge when it needs the user: that is where to look first. It
+// re-renders only when its own values change, and is not laid out or painted while off screen.
+const Card = memo(function Card({
   task,
   selected,
   stat,
@@ -56,7 +58,8 @@ function Card({
   task: Task
   selected: boolean
   stat: DiffStat | undefined
-  waits: readonly string[]
+  // The ids of the tasks this one still waits for, such as "T-0003, T-0004". Empty: none.
+  waits: string
   onSelect: (id: string) => void
   onOpen: (id: string) => void
 }) {
@@ -71,7 +74,7 @@ function Card({
       aria-label={rowLabel(task, now)}
       onClick={() => onSelect(task.id)}
       onDoubleClick={() => onOpen(task.id)}
-      className={`flex shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-left hover:border-line-strong data-[selected=true]:border-accent data-[selected=true]:ring-1 data-[selected=true]:ring-accent ${urgent ? 'border-l-2 border-l-(--chip-fg)' : ''}`}
+      className={`flex shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-left [contain-intrinsic-height:auto_88px] [content-visibility:auto] hover:border-line-strong data-[selected=true]:border-accent data-[selected=true]:ring-1 data-[selected=true]:ring-accent ${urgent ? 'border-l-2 border-l-(--chip-fg)' : ''}`}
     >
       <span className="flex items-center gap-2">
         <span className="font-mono text-xs text-muted">{task.id}</span>
@@ -90,11 +93,11 @@ function Card({
         {task.agent !== null && <AgentName agent={task.agent} />}
         <DiffSize stat={stat} empty={null} />
         {task.pr !== null && <span>{pullRequestNumber(task.pr)}</span>}
-        {waits.length > 0 && <span>waits for {waits.join(', ')}</span>}
+        {waits !== '' && <span>waits for {waits}</span>}
       </span>
     </button>
   )
-}
+})
 
 // The same tasks as the table, in one column per state, the ones that need the user first. Each column scrolls by itself, so the
 // board always fills the height of the view.
@@ -115,6 +118,8 @@ export function TaskBoard({
   const [expanded, setExpanded] = useState<ReadonlySet<TaskState>>(new Set())
   const [pickedState, setPickedState] = useState<TaskState | null>(null)
   const [scroller, edges] = useScrollEdges<HTMLDivElement>()
+  const select = useStableCallback(onSelect)
+  const open = useStableCallback(onOpen)
 
   const shown = STATE_ORDER.filter((state) =>
     stateFilter !== null ? state === stateFilter : showFinished || !isFinished(state),
@@ -239,9 +244,9 @@ export function TaskBoard({
                     task={task}
                     selected={task.id === selectedId}
                     stat={diffStats[task.id]}
-                    waits={waitingOn(task, allTasks)}
-                    onSelect={onSelect}
-                    onOpen={onOpen}
+                    waits={waitingOn(task, allTasks).join(', ')}
+                    onSelect={select}
+                    onOpen={open}
                   />
                 ))}
               </div>
