@@ -21,7 +21,7 @@ import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
-import { buildServer, isAuthorized } from './server.js'
+import { buildServer, isAuthorized, NO_PROGRAM_ROUTES } from './server.js'
 import { archiveDir } from './stage-files.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
@@ -245,7 +245,7 @@ describe('authentication', () => {
 })
 
 describe('before the login PATH came', () => {
-  it('serves /health and the page at once, and holds API requests until it came', async () => {
+  it('answers what runs no program at once, and holds the rest until it came', async () => {
     let ready = (): void => undefined
     const waiting = await buildServer({
       ...serverOptions,
@@ -257,10 +257,16 @@ describe('before the login PATH came', () => {
       expect((await waiting.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200)
       const page = await waiting.inject({ method: 'GET', url: '/index.html' })
       expect(page.body).toBe(PAGE)
+      const tasks = await waiting.inject({ method: 'GET', url: '/tasks', headers: authorization })
+      expect(tasks.json()).toEqual({ tasks: [] })
+      const repos = await waiting.inject({ method: 'GET', url: '/repos', headers: authorization })
+      expect(repos.statusCode).toBe(200)
+      const refused = await waiting.inject({ method: 'GET', url: '/tasks' })
+      expect(refused.statusCode).toBe(401)
 
       let answered = false
-      const tasks = waiting
-        .inject({ method: 'GET', url: '/tasks', headers: authorization })
+      const branches = waiting
+        .inject({ method: 'GET', url: '/git/branches', headers: authorization })
         .then((response) => {
           answered = true
           return response
@@ -268,9 +274,15 @@ describe('before the login PATH came', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(answered).toBe(false)
       ready()
-      expect((await tasks).json()).toEqual({ tasks: [] })
+      expect((await branches).json()).toEqual({ branches: ['main'], current: 'main' })
     } finally {
       await waiting.close()
+    }
+  })
+
+  it('lists only GET routes that exist', () => {
+    for (const url of NO_PROGRAM_ROUTES) {
+      expect(app.hasRoute({ method: 'GET', url })).toBe(true)
     }
   })
 })
