@@ -113,7 +113,7 @@ function taskId(value: string | undefined): string {
     throw new UsageError('A task id is required, for example T-42')
   }
   if (!taskIdSchema.safeParse(value).success) {
-    throw new UsageError(`"${value}" is not a task id. A task id looks like T-42`)
+    throw new UsageError(`"${value}" is not a task id. A task id looks like T-42 or ABC-42`)
   }
   return value
 }

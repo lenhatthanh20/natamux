@@ -16,6 +16,12 @@ describe('parseRoute', () => {
     expect(parseRoute('/w/T-0018/history')).toMatchObject({ tab: 'history' })
   })
 
+  it('reads a task id the user chose, in any case', () => {
+    expect(parseRoute('/t/TASK-0005')).toEqual({ kind: 'task', id: 'TASK-0005' })
+    expect(parseRoute('/t/task-0005')).toEqual({ kind: 'task', id: 'TASK-0005' })
+    expect(parseRoute('/w/TASK-0005/terminal')).toMatchObject({ id: 'TASK-0005', tab: 'terminal' })
+  })
+
   it('reads the file of the Changes tab', () => {
     expect(parseRoute('/w/T-0018/changes', '?file=src/a.ts')).toEqual({
       kind: 'workspace',

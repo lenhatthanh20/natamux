@@ -317,6 +317,34 @@ describe('tasks', () => {
     expect(listed.json().tasks).toHaveLength(1)
   })
 
+  it('takes the id from the title, and refuses an id that is used with 400', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix bug xxx' },
+    })
+    expect(created.statusCode).toBe(201)
+    expect(created.json().task).toMatchObject({ id: 'TASK-0005', title: 'Fix bug xxx' })
+    const fetched = await app.inject({
+      method: 'GET',
+      url: '/tasks/TASK-0005',
+      headers: authorization,
+    })
+    expect(fetched.json().task.title).toBe('Fix bug xxx')
+
+    const clash = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'task-0005 Other' },
+    })
+    expect(clash.statusCode).toBe(400)
+    expect(clash.json().message).toBe('Task id TASK-0005 is already used')
+    const listed = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(listed.json().tasks).toHaveLength(1)
+  })
+
   it('rejects an invalid task body with 400', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -616,6 +644,49 @@ describe('workspaces', () => {
     expect(existsSync(workspace)).toBe(false)
   })
 
+  it('names the branch and folder of a task with a chosen id after that id', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix bug xxx' },
+    })
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/TASK-0005/workspace',
+      headers: authorization,
+    })
+
+    expect(created.statusCode).toBe(201)
+    const { workspace, branch } = created.json().task
+    expect(branch).toBe('natamux/task-0005-fix-bug-xxx')
+    expect(workspace).toMatch(/[/\\]TASK-0005$/)
+    expect(existsSync(workspace)).toBe(true)
+  })
+
+  it('refuses a new workspace whose id is used, and makes no task or branch', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'TASK-0005: First' },
+    })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Task-0005: Other' },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json().message).toBe('Task id TASK-0005 is already used')
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toHaveLength(1)
+    expect(runGit(repo.dir, 'branch', '--list', 'natamux/*')).toBe('')
+  })
+
   it('removes a workspace whose folder was already deleted', async () => {
     await createTask()
     const created = await app.inject({
@@ -864,6 +935,21 @@ describe('Claude Code hooks', () => {
 
     await post({ hook_event_name: 'Stop' }, { 'x-natamux-task': 'T-0001' })
     expect(await stateOf('T-0001')).toBe('needs-input')
+  })
+
+  it('moves a task with a chosen id, but not for that id in lower case', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix the bug' },
+    })
+
+    await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-natamux-task': 'task-0005' })
+    expect(await stateOf('TASK-0005')).toBe('draft')
+
+    await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-natamux-task': 'TASK-0005' })
+    expect(await stateOf('TASK-0005')).toBe('running')
   })
 
   it('keeps the task running when the agent stops with background work', async () => {

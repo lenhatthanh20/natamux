@@ -31,7 +31,7 @@ export function parseTaskIds(text: string): string[] {
       text
         .split(/[\s,]+/)
         .map((id) => id.trim().toUpperCase())
-        .filter((id) => /^T-\d+$/.test(id)),
+        .filter((id) => /^[A-Z]+-\d+$/.test(id)),
     ),
   ]
 }

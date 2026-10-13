@@ -46,6 +46,8 @@ export async function fanOut(
         repo: source.repo,
       },
       attachments,
+      // The title of the source lost its id already; a word left at its start is not an id.
+      { splitId: false },
     )
     if (options.start) {
       await parts.workspaces.create(task.id)

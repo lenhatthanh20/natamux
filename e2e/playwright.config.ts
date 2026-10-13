@@ -1,4 +1,12 @@
+import { readdirSync } from 'node:fs'
 import { defineConfig, devices } from '@playwright/test'
+import { skippedIn } from './groups'
+
+const specs = readdirSync(new URL('tests', import.meta.url)).filter((file) =>
+  file.endsWith('.spec.ts'),
+)
+// E2E_GROUP picks the CI group of e2e/groups.ts. Unset, every spec file runs.
+const skipped = skippedIn(process.env.E2E_GROUP, specs).map((file) => `**/${file}`)
 
 // The tests run against the production images that scripts/e2e.sh starts. See docs/e2e.md.
 export default defineConfig({
@@ -25,12 +33,13 @@ export default defineConfig({
     {
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
-      testIgnore: /phone\.spec\.ts/,
+      testIgnore: [/phone\.spec\.ts/, ...skipped],
     },
     {
       name: 'phone',
       use: { ...devices['Pixel 7'] },
       testMatch: /phone\.spec\.ts/,
+      testIgnore: skipped,
     },
   ],
 })
