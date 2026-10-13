@@ -40,7 +40,7 @@ export type NewWorkspaceInput = {
   base?: string
   agent?: string
   prompt?: string
-  context?: { source: ContextSourceType; name?: string; ref: string }
+  context?: { source: ContextSourceType; name?: string; skill?: string; ref: string }
   attachments?: AttachmentUpload[]
 }
 
@@ -271,8 +271,10 @@ export function createApi(
       })
     },
 
-    async listChanges(taskId: string): Promise<ChangeEntry[]> {
-      const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/changes`))
+    // `fresh`: the daemon reads git now, not the answer it kept for timed reads.
+    async listChanges(taskId: string, fresh = false): Promise<ChangeEntry[]> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/changes${fresh ? '?fresh=1' : ''}`
+      const body = asRecord(await request('GET', path))
       if (!Array.isArray(body.changes)) {
         throw new Error('The daemon sent an answer this dashboard does not understand.')
       }
@@ -293,10 +295,9 @@ export function createApi(
       return requestBlob(`/tasks/${encodeURIComponent(taskId)}/changes/image?${query}`)
     },
 
-    async getGitGraph(taskId: string): Promise<GitGraph> {
-      return gitGraphSchema.parse(
-        await request('GET', `/tasks/${encodeURIComponent(taskId)}/graph`),
-      )
+    async getGitGraph(taskId: string, fresh = false): Promise<GitGraph> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/graph${fresh ? '?fresh=1' : ''}`
+      return gitGraphSchema.parse(await request('GET', path))
     },
 
     async updateTask(taskId: string, changes: TaskChanges): Promise<Task> {

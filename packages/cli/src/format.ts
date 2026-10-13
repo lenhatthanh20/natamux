@@ -2,6 +2,13 @@ import { EVENT_SOURCES, TASK_PRIORITIES, TASK_STATES, type Task } from '@natamux
 import type { RemoveWorkspaceResult, SendEventResult, StoredEvent } from './client.js'
 import { SENDABLE_EVENT_TYPES } from './command.js'
 
+// "jira-ticket (skill) ABC-1": a source with a skill or a name says which one it runs.
+function contextText(context: NonNullable<Task['context']>): string {
+  const name = context.skill ?? context.name
+  const source = name === undefined ? context.source : `${name} (${context.source})`
+  return `${source} ${context.ref}`.trim()
+}
+
 export const DEFAULT_URL = 'http://127.0.0.1:4317'
 
 export const USAGE = `Usage: natamux <command> [options]
@@ -107,7 +114,7 @@ export function formatTask(task: Task): string {
     `Workspace:  ${task.workspace ?? '-'}`,
     `PR:         ${task.pr ?? '-'}`,
     `Issue:      ${task.issue === null ? '-' : `${task.issue.key} ${task.issue.url}`}`,
-    `Context:    ${task.context === null ? '-' : `${task.context.source} ${task.context.ref}`.trim()}`,
+    `Context:    ${task.context === null ? '-' : contextText(task.context)}`,
     `Repo:       ${task.repo ?? 'default'}`,
     `Depends on: ${task.dependsOn.join(', ') || '-'}`,
     `Created:    ${task.createdAt}`,

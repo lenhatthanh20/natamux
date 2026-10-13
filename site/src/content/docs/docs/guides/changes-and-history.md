@@ -13,7 +13,7 @@ Open them from a workspace, or press `2` for **Changes** and `3` for **History**
 
 ## Changes tab
 
-The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The tab label shows how many there are. The list refreshes every 10 seconds. Click **Refresh**, or press `Shift+R`, to refresh at once.
+The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The tab label shows how many there are. The list refreshes every 10 seconds; changes made outside Natamux can take a few seconds more to show. Click **Refresh**, or press `Shift+R`, to read them at once.
 
 When no file differs, the tab says **No changes** and **The workspace matches its last commit.**
 
@@ -137,4 +137,4 @@ The **History** tab draws the git graph of the task branch and of the branch of 
 - Each row shows branch and tag names, the commit message, the author, the short hash and the age. Hover the age for the exact date.
 - The graph shows the newest 200 commits. When there are more, it says **Only the newest 200 commits are shown.**
 
-Click **Refresh**, or press `Shift+R`, to read the history again. The graph also refreshes every 10 seconds.
+Click **Refresh**, or press `Shift+R`, to read the history again at once. The graph also refreshes every 10 seconds; commits made outside Natamux can take a few seconds more to show.

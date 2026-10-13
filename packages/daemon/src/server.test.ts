@@ -486,6 +486,33 @@ describe('task events', () => {
     expect(tasks.json().tasks).toEqual([])
   })
 
+  it('keeps the skill picked as the context of a new workspace', async () => {
+    const context = { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' }
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Example', context },
+    })
+    expect(response.statusCode).toBe(201)
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(task.json().task.context).toEqual(context)
+  })
+
+  it('refuses a picked skill that is empty or too long, and stores nothing', async () => {
+    for (const skill of ['', '   ', 'a'.repeat(201)]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/workspaces',
+        headers: authorization,
+        payload: { title: 'Example', context: { source: 'skill', skill, ref: 'ABC-1' } },
+      })
+      expect(response.statusCode).toBe(400)
+    }
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toEqual([])
+  })
+
   it.each(['task.created', 'workspace.created', 'workspace.removed', 'agent.active'])(
     'does not let a client send %s',
     async (type) => {
@@ -918,6 +945,18 @@ describe('changes', () => {
     expect(file.json()).toMatchObject({ path: 'notes.txt', original: null, modified: 'hello\n' })
   })
 
+  it('keeps the list of a timed read, and reads git now with fresh=1', async () => {
+    const workspace = await taskWithWorkspace()
+    const read = async (url: string) =>
+      (await app.inject({ method: 'GET', url, headers: authorization })).json().changes
+    expect(await read('/tasks/T-0001/changes')).toEqual([])
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect(await read('/tasks/T-0001/changes')).toEqual([])
+    expect(await read('/tasks/T-0001/changes?fresh=1')).toHaveLength(1)
+    expect(await read('/tasks/T-0001/changes')).toHaveLength(1)
+  })
+
   it('answers 404 for a file that is not a changed file', async () => {
     await taskWithWorkspace()
     const response = await app.inject({
@@ -1181,6 +1220,13 @@ describe('graph', () => {
       truncated: false,
     })
     expect(response.json().commits).toHaveLength(1)
+
+    const fresh = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/graph?fresh=1',
+      headers: authorization,
+    })
+    expect(fresh.json()).toMatchObject({ base: 'main', ahead: 0 })
   })
 
   it('answers 409 for a task without a workspace, and needs the token', async () => {

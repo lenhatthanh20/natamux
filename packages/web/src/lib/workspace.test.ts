@@ -249,4 +249,30 @@ describe('createBlockedReason', () => {
     )
     expect(createBlockedReason('Fix', 'github-issue', '#4')).toBeUndefined()
   })
+
+  it('needs a skill, a reference and an agent for a skill picked in the dialog', () => {
+    expect(createBlockedReason('Fix', 'skill', '', '', 'claude-code')).toBe('Pick a skill')
+    expect(createBlockedReason('Fix', 'skill', ' ', 'jira-ticket', 'claude-code')).toBe(
+      'Enter the reference of the context',
+    )
+    expect(createBlockedReason('Fix', 'skill', 'ABC-1', 'jira-ticket', '')).toBe(
+      'Pick an agent to run the skill',
+    )
+    expect(createBlockedReason('Fix', 'skill', 'ABC-1', 'jira-ticket', 'codex')).toBeUndefined()
+    // A skill from the project settings needs no pick.
+    expect(createBlockedReason('Fix', 'skill', 'ABC-1', undefined, 'codex')).toBeUndefined()
+  })
+
+  it('gives one reason at a time: title, skill, reference, then agent', () => {
+    expect(createBlockedReason(' ', 'skill', '', '', '')).toBe('Enter a title')
+    expect(createBlockedReason('Fix', 'skill', '', '', '')).toBe('Pick a skill')
+    expect(createBlockedReason('Fix', 'skill', '  ', 'jira-ticket', '')).toBe(
+      'Enter the reference of the context',
+    )
+  })
+
+  it('needs no agent for My notes or for a skill from the settings', () => {
+    expect(createBlockedReason('Fix', 'manual', '', undefined, '')).toBeUndefined()
+    expect(createBlockedReason('Fix', 'skill', 'ABC-1', undefined, '')).toBeUndefined()
+  })
 })

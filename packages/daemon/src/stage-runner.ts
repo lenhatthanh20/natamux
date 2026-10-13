@@ -576,7 +576,7 @@ export class StageRunner {
   }
 
   // Agents end with the daemon. At its start, each stage an agent worked on gets its agent back,
-  // and the task keeps its state.
+  // and the task keeps its state. A stage in review gets it too, so you can ask it for changes.
   resumeAgents(): void {
     for (const task of this.tasks.listTasks()) {
       if (task.state === 'done' || task.state === 'cancelled') {
@@ -585,7 +585,9 @@ export class StageRunner {
       try {
         const step = this.stepOf(task)
         for (const stage of stagesOf(step)) {
-          const working = ['running', 'needs-input'].includes(laneState(task, step, stage.id))
+          const working = ['running', 'needs-input', 'review'].includes(
+            laneState(task, step, stage.id),
+          )
           // No agent Natamux started for it: a person runs their own in the shell.
           const agent = stageAgent(step, stage).agent ?? task.agent
           if (working && agent !== null && isLaunchable(agent)) {
@@ -831,6 +833,10 @@ export class StageRunner {
 
   private sourceOf(task: Task): ContextSource {
     const type = task.context?.source ?? 'manual'
+    const skill = task.context?.skill
+    if (type === 'skill' && skill) {
+      return { type: 'skill', name: skill, skill }
+    }
     const name = task.context?.name
     const offered = this.tasks
       .settingsOf(task.repo)

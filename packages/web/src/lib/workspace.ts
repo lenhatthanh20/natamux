@@ -128,15 +128,25 @@ export function latestQuestion(events: readonly StoredEvent[]): string | null {
 
 // Why Start task is off in the Start a task dialog. A source other than manual needs its reference,
 // or the task would start with no context.
+// `skill` is the skill picked in the dialog, undefined for a source from the project settings.
 export function createBlockedReason(
   title: string,
   source: string,
   ref: string,
+  skill?: string,
+  agent?: string,
 ): string | undefined {
   if (title.trim() === '') {
     return 'Enter a title'
   }
-  return source !== 'manual' && ref.trim() === '' ? 'Enter the reference of the context' : undefined
+  if (skill === '') {
+    return 'Pick a skill'
+  }
+  if (source !== 'manual' && ref.trim() === '') {
+    return 'Enter the reference of the context'
+  }
+  // A plain shell cannot run a skill.
+  return skill !== undefined && agent === '' ? 'Pick an agent to run the skill' : undefined
 }
 
 // Why a task waits for the user. Only an agent that asked has a question to answer.

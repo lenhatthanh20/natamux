@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { taskSchema, upgradeTaskFields } from './task.js'
+import { taskContextSchema, taskSchema, upgradeTaskFields } from './task.js'
 
 const minimalTask = {
   id: 'T-42',
@@ -76,6 +76,25 @@ describe('taskSchema', () => {
   it('keeps the name of the context source', () => {
     const context = { source: 'skill', name: 'Linear', ref: 'LIN-7' }
     expect(taskSchema.parse({ ...minimalTask, context }).context).toEqual(context)
+  })
+
+  it('keeps the skill picked for the task, and parses a context without one', () => {
+    const picked = { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' }
+    expect(taskSchema.parse({ ...minimalTask, context: picked }).context).toEqual(picked)
+    const plain = { source: 'skill', name: 'Ticket', ref: 'ABC-1' }
+    expect(taskSchema.parse({ ...minimalTask, context: plain }).context).toEqual(plain)
+    const empty = { source: 'skill', skill: ' ', ref: 'ABC-1' }
+    expect(taskSchema.safeParse({ ...minimalTask, context: empty }).success).toBe(false)
+  })
+
+  it('trims the picked skill, and takes 1 to 200 characters of text', () => {
+    const parse = (skill: unknown) =>
+      taskContextSchema.safeParse({ source: 'skill', skill, ref: 'REC-1' })
+    expect(parse('  ticket-reader  ').data?.skill).toBe('ticket-reader')
+    expect(parse('a'.repeat(200)).success).toBe(true)
+    for (const skill of ['', '   ', 'a'.repeat(201), 42, null]) {
+      expect(parse(skill).success).toBe(false)
+    }
   })
 
   it('rejects a pr that is not a URL', () => {
