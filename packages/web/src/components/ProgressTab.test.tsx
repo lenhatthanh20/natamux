@@ -715,6 +715,243 @@ describe('ProgressTab check on CI', () => {
     expect(within(card).getByText('natamux-ci/natamux/t-0001')).toBeTruthy()
     expect((box(card) as HTMLInputElement).checked).toBe(true)
   })
+
+  const run = 'https://github.com/o/r/actions/runs/38437550055'
+  const implementing = (state: Task['state']): Task => ({
+    ...TASK,
+    state,
+    stage: 'implement',
+    stages: ['implement'],
+    ciStages: ['implement'],
+  })
+  const reportedToCi = [
+    stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'implement' }),
+    stored(2, 'stage.reported', '2026-10-10T08:10:00.000Z', { stage: 'implement' }),
+    stored(3, 'stage.ci-started', '2026-10-10T08:11:00.000Z', { stage: 'implement' }),
+  ]
+
+  it('shows a send back by CI as one chip, with the failed runs in its tip', async () => {
+    const reason = [
+      'CI failed on Implement:',
+      `- CI E2E failure: ${run}`,
+      '',
+      'Error: 2 tests failed',
+      'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
+    ].join('\n')
+    progress({
+      task: implementing('running'),
+      events: [
+        ...reportedToCi,
+        stored(4, 'stage.check-failed', '2026-10-10T08:20:00.000Z', {
+          stage: 'implement',
+          reasons: [`CI E2E failure: ${run}`],
+          final: false,
+        }),
+        stored(5, 'stage.reopened', '2026-10-10T08:20:00.000Z', {
+          to: 'implement',
+          from: 'implement',
+          byAgent: true,
+          ci: true,
+          reason,
+        }),
+        stored(6, 'stage.started', '2026-10-10T08:20:00.000Z', { stage: 'implement' }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const chip = within(card).getByText('Sent back by CI 1×')
+    expect(chip.closest('[data-tip]')?.getAttribute('data-tip')).toBe(
+      `CI failed on Implement:\n- CI E2E failure: ${run}`,
+    )
+    expect(within(card).queryByText(/runs\/38437550055|2 tests failed/)).toBeNull()
+    expect(within(card).queryByRole('list')).toBeNull()
+  })
+
+  it('counts each send back by CI, and shows a reason without a log whole in the tip', async () => {
+    const reason = `CI failed on Implement:\n- CI E2E failure: ${run}`
+    const sendBack = (seq: number, at: string) => [
+      stored(seq, 'stage.reopened', at, { to: 'implement', from: 'implement', ci: true, reason }),
+      stored(seq + 1, 'stage.started', at, { stage: 'implement' }),
+    ]
+    progress({
+      task: implementing('running'),
+      events: [
+        ...reportedToCi,
+        ...sendBack(4, '2026-10-10T08:20:00.000Z'),
+        ...sendBack(6, '2026-10-10T08:25:00.000Z'),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const chip = within(card).getByText('Sent back by CI 2×')
+    expect(chip.closest('[data-tip]')?.getAttribute('data-tip')).toBe(reason)
+  })
+
+  it('says only that the checks failed while the agent fixes them', async () => {
+    progress({
+      task: implementing('running'),
+      events: [
+        ...reportedToCi.slice(0, 2),
+        stored(3, 'stage.check-failed', '2026-10-10T08:11:00.000Z', {
+          stage: 'implement',
+          reasons: ['Nothing was committed since the stage started'],
+          final: false,
+        }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const chip = within(card).getByText('Checks failed, the agent fixes them')
+    expect(chip.closest('[data-tip]')?.getAttribute('data-tip')).toBe(
+      'Nothing was committed since the stage started',
+    )
+    expect(within(card).queryByRole('list')).toBeNull()
+  })
+
+  it('lists the failed runs with short links when the stage waits for you', async () => {
+    progress({
+      task: implementing('needs-input'),
+      events: [
+        ...reportedToCi,
+        stored(4, 'stage.check-failed', '2026-10-10T08:20:00.000Z', {
+          stage: 'implement',
+          reasons: [`CI E2E failure: ${run}`, 'No CI run started for natamux-ci/natamux/t-0001.'],
+          final: true,
+        }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const items = within(within(card).getByRole('list')).getAllByRole('listitem')
+    expect(items.map((item) => item.textContent)).toEqual([
+      'CI E2E failure: view run',
+      'No CI run started for natamux-ci/natamux/t-0001.',
+    ])
+    const link = within(items[0] as HTMLElement).getByRole('link', { name: 'view run' })
+    expect(link.getAttribute('href')).toBe(run)
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(link.getAttribute('data-tip')).toBe(run)
+  })
+
+  const failedWith = (state: Task['state'], reasons: string[]) =>
+    progress({
+      task: implementing(state),
+      events: [
+        ...reportedToCi.slice(0, 2),
+        stored(3, 'stage.check-failed', '2026-10-10T08:11:00.000Z', {
+          stage: 'implement',
+          reasons,
+          final: true,
+        }),
+      ],
+    })
+
+  it('links every address in a reason, wherever it is, without the punctuation after it', async () => {
+    const other = 'https://example.com/docs/ci'
+    failedWith('needs-input', [
+      `${run} failed, see ${other}.`,
+      `Runs: ${run}, (${run}) and javascript:alert(1)`,
+    ])
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const [first, second] = within(within(card).getByRole('list')).getAllByRole('listitem')
+    expect(first?.textContent).toBe(`view run failed, see ${other}.`)
+    expect(
+      within(first as HTMLElement)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([run, other])
+    expect(second?.textContent).toBe('Runs: view run, (view run) and javascript:alert(1)')
+    expect(within(second as HTMLElement).getAllByRole('link')).toHaveLength(2)
+  })
+
+  it('shows the reasons box when the stage failed, with the failed tone', async () => {
+    failedWith('failed', ['The agent could not start'])
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const list = within(card).getByRole('list')
+    expect(list.getAttribute('data-state')).toBe('failed')
+    expect(within(list).getByText('The agent could not start')).toBeTruthy()
+  })
+
+  it('shows no reasons box when the stage waits for you without reasons, or is done', async () => {
+    const { update } = progress({
+      task: implementing('needs-input'),
+      events: reportedToCi.slice(0, 2),
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(card).queryByRole('list')).toBeNull()
+
+    update({ ...implementing('done'), updatedAt: '2026-10-10T08:40:00.000Z' }, [
+      ...reportedToCi.slice(0, 2),
+      stored(3, 'stage.check-failed', '2026-10-10T08:11:00.000Z', {
+        stage: 'implement',
+        reasons: ['Old reason'],
+        final: true,
+      }),
+    ])
+    await waitFor(() => expect(within(card).queryByText('Done')).toBeTruthy())
+    await userEvent.setup().click(within(card).getByRole('button', { expanded: false }))
+    expect(within(card).queryByText('Old reason')).toBeNull()
+  })
+
+  it.each(['draft', 'ready'] as const)(
+    'shows the hints as text while the stage is %s',
+    async (state) => {
+      progress({ task: implementing(state), events: [] })
+
+      const card = await screen.findByRole('article', { name: 'Implement' })
+      expect(within(card).getByText(/natamux-ci branch/)).toBeTruthy()
+      expect(within(card).getByText('More accurate, uses many more tokens.')).toBeTruthy()
+      expect(box(card)?.closest('label')?.hasAttribute('data-tip')).toBe(false)
+    },
+  )
+
+  it('offers no checkboxes on a finished stage', async () => {
+    progress({
+      task: { ...implementing('done'), stage: 'implement' },
+      events: [
+        ...reportedToCi.slice(0, 1),
+        stored(2, 'stage.approved', '2026-10-10T08:10:00.000Z', { stage: 'implement' }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    await userEvent.setup().click(within(card).getByRole('button', { expanded: false }))
+    expect(within(card).queryAllByRole('checkbox')).toHaveLength(0)
+  })
+
+  it('keeps the Claude Code hint in view on a running stage', async () => {
+    progress({ task: { ...implementing('running'), agent: 'codex' }, events: reportedToCi })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    const workflow = within(card).getByRole('checkbox', { name: /Run with a workflow/ })
+    expect((workflow as HTMLInputElement).disabled).toBe(true)
+    expect(within(card).getByText('Only Claude Code can run a workflow.')).toBeTruthy()
+    expect(workflow.closest('label')?.hasAttribute('data-tip')).toBe(false)
+    expect(within(card).queryByText(/natamux-ci branch/)).toBeNull()
+  })
+
+  it('moves the hints into tips once the stage started', async () => {
+    const { update } = progress({ task: FULL_TASK, events: FULL_EVENTS })
+
+    const upcoming = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(upcoming).getByText(/natamux-ci branch/)).toBeTruthy()
+    expect(within(upcoming).getByText('More accurate, uses many more tokens.')).toBeTruthy()
+
+    update(
+      { ...implementing('running'), updatedAt: '2026-10-10T08:25:00.000Z' },
+      reportedToCi.slice(0, 1),
+    )
+    await waitFor(() => expect(screen.queryByText(/natamux-ci branch/)).toBeNull())
+    const card = screen.getByRole('article', { name: 'Implement' })
+    expect(within(card).queryByText(/uses many more tokens/)).toBeNull()
+    expect(box(card)?.closest('label')?.getAttribute('data-tip')).toMatch(/natamux-ci branch/)
+    const workflow = within(card).getByRole('checkbox', { name: /Run with a workflow/ })
+    expect(workflow.closest('label')?.getAttribute('data-tip')).toMatch(/many more tokens/)
+  })
 })
 
 describe('ProgressTab workflow', () => {
@@ -768,7 +1005,9 @@ describe('ProgressTab workflow', () => {
 
     const implement = await screen.findByRole('article', { name: 'Implement' })
     expect((box(implement) as HTMLInputElement).checked).toBe(true)
-    expect(within(implement).getByText(/the next time this stage starts/)).toBeTruthy()
+    expect(box(implement)?.closest('label')?.getAttribute('data-tip')).toMatch(
+      /the next time this stage starts/,
+    )
   })
 
   it('lets only Claude Code run a workflow', async () => {

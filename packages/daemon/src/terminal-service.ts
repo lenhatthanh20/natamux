@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { basename } from 'node:path'
 import {
   ACK_EVERY_BYTES,
+  plainText,
   portRange,
   scrollbackLines,
   TERMINAL_SCROLLBACK_MAX_LINES,
@@ -1166,13 +1167,14 @@ export class TerminalService {
   // Pastes text into a shell (the first by default) and presses Enter, so the agent there takes it
   // as its next prompt. Bracketed paste keeps line breaks from sending the text early. The Cursor
   // CLI ignores an Enter that it reads in one piece with the end of a paste, so the Enter goes
-  // ENTER_AFTER_PASTE_MS later.
+  // ENTER_AFTER_PASTE_MS later. The text loses escapes and control bytes: one could end the paste
+  // early, and then the agent reads the Enter as a line break.
   paste(taskId: string, text: string, terminal = MAIN_TERMINAL): void {
     const session = this.sessions.get(sessionKey(taskId, terminal))
     if (!session) {
       throw new NoTerminalError(taskId)
     }
-    this.write(session, `\x1b[200~${text}\x1b[201~`)
+    this.write(session, `\x1b[200~${plainText(text)}\x1b[201~`)
     session.pending.push({ data: '\r', kind: 'submit' })
     this.flush(session)
   }
