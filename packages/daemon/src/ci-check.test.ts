@@ -80,7 +80,7 @@ describe('checkOnCi', () => {
     })
   })
 
-  it('gives the end of the failed log of each failed run, for the agent to fix', async () => {
+  it('names each failed run in one line, and keeps the end of its log for the agent', async () => {
     const failed = run({ databaseId: 9, workflowName: 'E2E', conclusion: 'failure', url: 'u9' })
     const deps = fakes([[run({}), failed]], `${'x'.repeat(5000)}Error: 2 tests failed\n`)
 
@@ -88,11 +88,34 @@ describe('checkOnCi', () => {
 
     expect(result.passed).toBe(false)
     expect(result.final).toBe(false)
-    expect(result.reasons).toHaveLength(1)
-    expect(result.reasons[0]).toMatch(/^CI E2E failure: u9\n/)
-    expect(result.reasons[0]).toContain('Error: 2 tests failed')
-    expect(result.reasons[0]?.length).toBeLessThan(3200)
+    expect(result.reasons).toEqual(['CI E2E failure: u9'])
+    expect(result.logs).toHaveLength(1)
+    expect(result.logs?.[0]).toMatch(/^CI E2E failure: u9\n/)
+    expect(result.logs?.[0]).toContain('Error: 2 tests failed')
+    expect(result.logs?.[0]?.length).toBeLessThan(3200)
     expect(deps.calls.at(-1)).toEqual(['run', 'view', '9', '--log-failed'])
+  })
+
+  it('names every failed run in order, and only those', async () => {
+    const runs = [
+      run({ databaseId: 1, workflowName: 'Build', conclusion: 'failure', url: 'u1' }),
+      run({ databaseId: 2, workflowName: 'E2E', conclusion: 'cancelled', url: 'u2' }),
+      run({ databaseId: 3, workflowName: 'Lint', url: 'u3' }),
+    ]
+
+    const result = await checkOnCi(input, fakes([runs]))
+
+    expect(result.reasons).toEqual(['CI Build failure: u1', 'CI E2E cancelled: u2'])
+    expect(result.logs?.map((log) => log.split('\n')[0])).toEqual(result.reasons)
+  })
+
+  it('keeps one line for a failed run without a log', async () => {
+    const failed = run({ workflowName: 'E2E', conclusion: 'failure', url: 'u7' })
+
+    const result = await checkOnCi(input, fakes([[failed]], ''))
+
+    expect(result.reasons).toEqual(['CI E2E failure: u7'])
+    expect(result.logs).toEqual(['CI E2E failure: u7'])
   })
 
   it('stops for the user when no CI run starts on the branch', async () => {
