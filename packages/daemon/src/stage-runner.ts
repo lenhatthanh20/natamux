@@ -23,7 +23,7 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
-import { agentOfCommand, type LaunchableAgent } from './agent-launch.js'
+import { agentOfCommand, LAST_SESSION, type LaunchableAgent } from './agent-launch.js'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
@@ -569,9 +569,41 @@ export class StageRunner {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     const stage = stagesOf(step).find((candidate) => candidate.id === event.payload.stage)
+    if (stage !== undefined) {
+      this.relaunch(task, step, stage)
+    }
+  }
+
+  // Agents end with the daemon. At its start, each stage an agent worked on gets its agent back,
+  // and the task keeps its state.
+  resumeAgents(): void {
+    for (const task of this.tasks.listTasks()) {
+      if (task.state === 'done' || task.state === 'cancelled') {
+        continue
+      }
+      try {
+        const step = this.stepOf(task)
+        for (const stage of stagesOf(step)) {
+          const working = ['running', 'needs-input'].includes(laneState(task, step, stage.id))
+          // No agent was ever started for it: a person runs their own in the shell.
+          const started = (stageAgent(step, stage).agent ?? task.agent) !== null
+          if (working && started) {
+            // In a group, the newest session of the folder may be the other stage's.
+            this.relaunch(task, step, stage, !isGroup(step))
+          }
+        }
+      } catch {
+        // A stage the settings no longer have: the task waits for a person, the daemon starts.
+      }
+    }
+  }
+
+  // Starts the agent of a stage again when it is gone. Claude Code goes on with its session of the
+  // stage, or with `newest` the newest of the folder; other agents get the stage prompt again.
+  private relaunch(task: Task, step: Step, stage: Stage, newest = false): void {
     const byAgent =
-      stage?.kind === 'agent' || (stage?.kind === 'testing' && stage.command === undefined)
-    if (stage === undefined || !byAgent || task.workspace === null) {
+      stage.kind === 'agent' || (stage.kind === 'testing' && stage.command === undefined)
+    if (!byAgent || task.workspace === null) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)
@@ -580,7 +612,9 @@ export class StageRunner {
     }
     const own = stageAgent(step, stage)
     const agent = own.agent ?? task.agent ?? 'claude-code'
-    const session = this.lastSession(task.id, stage.id, agent)
+    const session =
+      this.lastSession(task.id, stage.id, agent) ??
+      (newest && agent === 'claude-code' ? LAST_SESSION : undefined)
     const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''
     this.launch(task.id, stage.id, agent, terminal, text, session, own)
   }
