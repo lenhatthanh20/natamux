@@ -7,7 +7,11 @@ sidebar:
 
 Each workspace has a **Changes** tab and a **History** tab. Use them to review the agent's work and ship it, without leaving the dashboard.
 
-![The Changes tab with the file tree and a side by side diff](/screens/changes.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/changes-generate-dark.webp" alt="The Changes tab: the changed files with their status letters and line counts, a side by side diff, and the commit box under the list with a message drafted by Generate and the Commit all button." width="1600" height="1000" decoding="async" />
+<img class="shot-light" src="/screens/ui/changes-generate-light.webp" alt="The Changes tab: the changed files with their status letters and line counts, a side by side diff, and the commit box under the list with a message drafted by Generate and the Commit all button." width="1600" height="1000" decoding="async" />
+<figcaption>The Changes tab: files, diff, and the commit box with a drafted message.</figcaption>
+</figure>
 
 Open them from a workspace, or press `2` for **Changes** and `3` for **History**. The **Docs** tab (`4`) shows the stage files; see [Stages](/docs/concepts/stages/#the-docs-tab).
 
@@ -129,6 +133,12 @@ While a dashboard is open, Natamux asks GitHub about open pull requests once a m
 ## History tab
 
 The **History** tab draws the git graph of the task branch and of the branch of the main checkout, newest commit first.
+
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/history-dark.webp" alt="The History tab: a commit graph with branch labels, commit messages, authors, short hashes and ages, under a line that says how many commits the task branch is ahead of and behind its base." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/history-light.webp" alt="The History tab: a commit graph with branch labels, commit messages, authors, short hashes and ages, under a line that says how many commits the task branch is ahead of and behind its base." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The History tab: the task branch against its base.</figcaption>
+</figure>
 
 - The first line says how far the task branch is from the base: `2 commits ahead of main, 0 behind.` When files are not committed, it adds **N files not committed.**, which opens the Changes tab.
 - The base is the branch that the main checkout of the repository is on. When that checkout is not on a branch, or is on the task's own branch, the line says **No base branch to compare with.**

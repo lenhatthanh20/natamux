@@ -2,7 +2,7 @@
 title: Fan out
 description: Run several tries of one task in parallel, compare the results and keep the best one.
 sidebar:
-  order: 5
+  order: 7
 ---
 
 Agents do not give the same answer twice. **Fan out** copies a task so that several agents try the same work at once, each in its own workspace. You compare the results and keep one.

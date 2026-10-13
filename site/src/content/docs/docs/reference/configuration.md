@@ -17,7 +17,7 @@ Every field is optional. A repository without the file uses the defaults on this
 - Unknown fields are ignored.
 - Each repository that Natamux manages has its own file.
 
-To edit the file in the dashboard, open **Settings** in the menu of the project. The **Stages** tab edits the stages without JSON, and the **JSON** tab edits the whole file. **Save** writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default pipeline in the editor. See [Project settings](/docs/guides/dashboard/#project-settings).
+To edit the file in the dashboard, open **Settings** in the menu of the project. The **Stages** tab edits the stages without JSON, and the **JSON** tab edits the whole file. **Save** writes `.natamux.json` in the repository. Commit it to share it with your team. **Reset to default** puts the default pipeline in the editor. See [Project settings](/docs/guides/project-settings/).
 
 - The editor changes only `stages`. Other fields and keys it does not know stay in the file as they are.
 - When the stages equal the default pipeline, the editor leaves `stages` out of the file, so the project follows later changes of the default.
@@ -53,7 +53,7 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
 | `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
 | `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
-| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that runs beside the stage in Shell 1. |
+| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that starts its own agent: one that runs beside the stage in Shell 1, such as Test spec, or one with `"ownShell": true`, such as Review. |
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own shell (Shell 5) with a new session. Only for an `agent` stage with an `output`. |
 | `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Same rule as `agent`. |
@@ -67,7 +67,7 @@ Details:
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
-- `agent` and `args` are for an `agent` stage in a group that does not keep Shell 1. That is every agent stage of the group but the one that changes code (the first agent stage without an `output`). That stage starts its own agent in its own shell, so it can use another agent or model without touching the session in Shell 1. A launch for such a stage does not change the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- `agent` and `args` are for an `agent` stage that starts its own agent: a stage in a group that does not keep Shell 1, or a stage with `"ownShell": true`, such as Review. In a group, that is every agent stage but the one that changes code (the first agent stage without an `output`). Such a stage starts its own agent in its own shell, so it can use another agent or model without touching the session in Shell 1. A launch for such a stage does not change the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
@@ -359,6 +359,26 @@ A `manual` stage waits for your approval. Use `doneWhen` to tell people what it 
 { "id": "legal", "kind": "manual", "gate": "manual", "doneWhen": "Legal signs off." }
 ```
 
+### Review with another agent
+
+Let Codex review the work of the task's agent. Copy the [default pipeline](#default-pipeline) and add `agent` and `args` to the Review stage:
+
+```json
+{
+  "id": "agent-review",
+  "name": "Review",
+  "kind": "agent",
+  "gate": "auto",
+  "output": "review.md",
+  "sections": ["Findings"],
+  "ownShell": true,
+  "agent": "codex",
+  "args": "--model gpt-5"
+}
+```
+
+**Agent** and **Arguments** in [Project settings](/docs/guides/project-settings/#choose-the-review-agent) write the same fields.
+
 ### Turn off issues
 
 ```json
@@ -368,5 +388,6 @@ A `manual` stage waits for your approval. Use `doneWhen` to tell people what it 
 ## Related
 
 - [Stages](/docs/concepts/stages/): how kinds, gates and checks work
-- [Dashboard](/docs/guides/dashboard/#project-settings): edit the settings on a screen
+- [Project settings](/docs/guides/project-settings/): edit the settings on a screen
+- [The review loop](/docs/concepts/review-loop/): the default pipeline at work
 - [HTTP API](/docs/reference/http-api/): read and write the settings from a script

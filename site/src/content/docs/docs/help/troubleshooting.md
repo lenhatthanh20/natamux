@@ -20,6 +20,10 @@ If there is no button, remove the quarantine flag:
 xattr -dr com.apple.quarantine /Applications/Natamux.app
 ```
 
+## Windows says it protected your PC
+
+The installer is not signed with a Windows certificate, so SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. Check the file against `SHA256SUMS.txt` first if you like; see [Verify the download](/docs/getting-started/install/#verify-the-download).
+
 ## The AppImage does not start on Ubuntu
 
 Ubuntu 24.04 and later can block Chromium's sandbox. Either install the `.deb`, or start the AppImage with `--no-sandbox`:
@@ -77,6 +81,20 @@ Natamux learns an agent's state from its hooks. If the task stays "ready" or nev
 
 Agents without hooks are followed by their output and bell. They can report with `natamux ask` and `natamux done`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
+## Automated tests does not start
+
+**Automated tests** starts when the whole group before it is done. In the default pipeline that group is **Test spec and Implement**, and Test spec waits for your approval. Open the task, read `test-spec.md` in the **Docs** tab, and click **Approve** on the **Ready for review: Test spec** banner. See [The review loop](/docs/concepts/review-loop/).
+
+## The review keeps sending the task back
+
+The Review agent may send the task back to Implement 2 times. The third time Natamux refuses, and the task waits in **Needs your input** with "Review sent the task back 2 times. Decide what to do." Read `review.md` in the **Docs** tab, then:
+
+- fix the code yourself, or type to the agent in Shell 1, and press **Mark as done** on Review;
+- **Send back** with your own reason, which has no limit;
+- or **Approve anyway** when the findings do not matter.
+
+To change who reviews, pick another **Agent** for Review in [project settings](/docs/guides/project-settings/#choose-the-review-agent).
+
 ## Removing a workspace fails
 
 Natamux refuses to remove a worktree that has files not committed: "T-0001 has N changes that are not committed. Commit or discard them first". Nothing is ended or deleted when this happens.
@@ -98,4 +116,4 @@ The branch is deleted only when it is fully merged. Otherwise it stays, and you 
 |---|---|
 | Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Windows: `%APPDATA%\Natamux`. Linux: `~/.config/Natamux` |
 | Docker | `docker compose -f compose.prod.yaml logs` |
-| A task's history | The **Timeline** and events of the task in the dashboard |
+| A task's history | The **Activity** section in the **Details** view of the task, or `natamux events T-0001` |

@@ -7,7 +7,11 @@ sidebar:
 
 The dashboard is the web app of the Natamux daemon. It shows every task, every workspace and every agent on one page, and it updates live.
 
-![The dashboard with the task table, the Needs you strip and the sidebar](/screens/dashboard.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/table-dark.webp" alt="The dashboard: the title bar with Search or run a command and the 5 need you count, the sidebar with All tasks, Agents and the workspaces of a project, and the All tasks table with state chips and Table, Board and Progress switches." width="1600" height="1000" decoding="async" />
+<img class="shot-light" src="/screens/ui/table-light.webp" alt="The dashboard: the title bar with Search or run a command and the 5 need you count, the sidebar with All tasks, Agents and the workspaces of a project, and the All tasks table with state chips and Table, Board and Progress switches." width="1600" height="1000" decoding="async" />
+<figcaption>The dashboard with the All tasks table. The tinted card in the sidebar is a task that waits for an answer.</figcaption>
+</figure>
 
 ## Layout
 
@@ -23,6 +27,12 @@ The window has five parts.
 
 The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
 
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/task-details-dark.webp" alt="An open task with the Details view of the details panel: the notes of the task, its workspace with branch, folder and dev ports, its subtasks and its activity." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-details-light.webp" alt="An open task with the Details view of the details panel: the notes of the task, its workspace with branch, folder and dev ports, its subtasks and its activity." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The details panel on <strong>Details</strong>: notes, workspace, dev ports, subtasks and activity.</figcaption>
+</figure>
+
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
 Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the details. `Mod` is ⌘ on macOS and Ctrl elsewhere. Press `F6` to move between the parts. Drag the edge of the sidebar or the details panel to resize it.
@@ -30,7 +40,7 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 ## Sidebar
 
 - **All tasks** shows the task list in the main area. The number is every task.
-- **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto.
+- **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto. See [The Agents view](/docs/guides/terminal/#the-agents-view).
 - **Workspaces** lists workspaces in folders, one per project. How much room a row takes follows what it needs:
   - A task that waits on you, failed or is blocked is a tinted card. It shows the agent's question, or why the task failed, on up to two lines. On a task that asks, **Answer** opens the terminal of the agent that asked.
   - A task that works, waits for review or is ready has two lines: the title and age, then the task id, the step and stage (such as "3/5 Review"), the subtasks done, what the agent does now, the pull request and the agent's icon. Hover the id to see the branch.
@@ -57,9 +67,17 @@ Pick a view with the **Layout** switch above the list.
 | Board | One column per state. An empty column is folded to a narrow rail; click it to open it. **Show finished** adds the done and cancelled columns. |
 | Progress | Tasks against their [stages](/docs/concepts/stages/) |
 
-![The board view](/screens/board.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/board-wide-dark.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs your input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/board-wide-light.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs your input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The Board view: one column per state.</figcaption>
+</figure>
 
-![The progress view](/screens/progress.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/progress-dark.webp" alt="The Progress view: one row per task and one column per stage from Context to Release. Each stage has a marker for its state, and the last column has the next action, such as Answer or Review." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/progress-light.webp" alt="The Progress view: one row per task and one column per stage from Context to Release. Each stage has a marker for its state, and the last column has the next action, such as Answer or Review." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The Progress view: every task against its stages, with the next action on the right.</figcaption>
+</figure>
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
@@ -105,6 +123,12 @@ Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search task
 
 Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to `Alt+9` pick a row by number. `Tab` changes the scope.
 
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/palette-dark.webp" alt="The command palette open over the dashboard, with a search for a task and the matching tasks and commands below." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/palette-light.webp" alt="The command palette open over the dashboard, with a search for a task and the matching tasks and commands below." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The command palette finds tasks, commands and projects.</figcaption>
+</figure>
+
 Press `Mod+J` for **Jump to a workspace**. It lists workspaces and their extra shells, with the ones that need you first.
 
 The palette also changes the view (**All tasks**, **Agents**, table, board, progress), the theme, the text size, and runs **Add a project** and **Import GitHub issues**. See [Keyboard shortcuts](/docs/reference/shortcuts/) for every key.
@@ -133,6 +157,12 @@ A task needs you when it is in Needs your input, In review, Failed or Blocked st
 - In the sidebar, a task that waits on you, failed or is blocked is a tinted card with the agent's question. See [Sidebar](#sidebar).
 - The browser tab title shows the count: `(2) Natamux`.
 
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/task-needs-you-dark.webp" alt="A task in Needs your input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-needs-you-light.webp" alt="A task in Needs your input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>A task that needs you: the banner, the card in the sidebar, and the actions of its stage.</figcaption>
+</figure>
+
 A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed no longer needs you.
 
 ## Notifications
@@ -157,44 +187,7 @@ To remove a project, choose **Remove project** in the menu of its group in the s
 
 ## Project settings
 
-Click **Settings** in the menu of a project to open **Project settings of <repo>**. It has two tabs: **Stages** (the default) and **JSON**. Settings are saved in `.natamux.json` in the repository, so commit the file to share them. For every field of the file, see the [configuration reference](/docs/reference/configuration/).
-
-### The Stages tab
-
-- **Pipeline preview.** A flow chart on top shows the stages as you edit them, with side-by-side stages in one column. A person icon marks a stage that waits for your approval. A pencil marks a prompt of your own. Click a node to select its stage.
-- **Stage list.** One row per stage, with a switch (on or off) and a drag handle. Drag a row, or focus it and press `Alt+ArrowUp` or `Alt+ArrowDown`. The row menu has **Move up**, **Move down**, **Run alongside the stage above**, **Run on its own** and **Remove**. A stage that is off stays in the file, but new tasks do not get it.
-- **Add stage** opens the catalog, grouped by phase. **Custom stage** makes a stage of your own. The [catalog](/docs/reference/configuration/#stage-catalog) lists every stage.
-- **Details.** Click a stage to edit it:
-
-| Field | Shown for | Meaning |
-|---|---|---|
-| **Name** | Every stage | The name in the dashboard. |
-| **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
-| **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. Shows **Default** or **Changed**. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
-| **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
-| **Agent** | Agent stages beside the stage in Shell 1, such as Test spec, and stages in their own shell, such as Review | The agent this stage starts. **Task's agent** keeps the task's own. |
-| **Arguments** | The same stages | Words added to that agent's command line, such as `--model sonnet`. |
-| **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. |
-| **Command** | Testing stages | The command to run. The Lint and types and End-to-end tests stages need one. |
-| **Output file** | Agent stages | The Markdown file the stage writes. Fixed for a catalog stage. |
-| **Required sections** | Agent stages with an output file | Headings the file must have. |
-| **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
-
-- **Problems.** Each problem shows next to its stage, and Save is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
-- **Footer.** **Reset to default** puts the default pipeline in the editor. **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
-- **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
-
-Save changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file.
-
-### The JSON tab
-
-The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show, such as `requireCommit`, `requireClean` and `check`, and for `context`, `tracker` and `agents`.
-
-### The file changed
-
-If the file changed on disk since you opened it (another editor, a pull), Natamux says "The file changed on disk since you opened it." **Reload** reads the file again and drops your edits. **Overwrite** saves your version over it. Closing the screen with edits asks "Discard your changes?".
-
-If the file is not valid, the screen shows the error and the default settings, and Save asks before it replaces the file.
+Click **Settings** in the menu of a project to open **Project settings of &lt;repo&gt;**. The **Stages** tab edits the pipeline of the project: add stages from the catalog, run stages side by side, choose which ones wait for you, and pick the agent of a stage such as **Review**. The **JSON** tab edits the whole `.natamux.json` file. See [Project settings](/docs/guides/project-settings/).
 
 ## Import issues
 
@@ -206,6 +199,7 @@ The account icon at the right of the status bar opens a menu.
 
 - **Theme**: System, Light or Dark.
 - **UI size**: Compact, Default or Large.
+- **Terminal font…**: the font family and size of the terminals. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
 - **Keyboard shortcuts**, also on `?`.
 - **Sign out**. Natamux asks first. Your tasks keep running.
 

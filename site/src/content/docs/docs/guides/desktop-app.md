@@ -2,7 +2,7 @@
 title: Desktop app
 description: What the Natamux desktop app starts, where it keeps its data and logs, and what happens when you quit.
 sidebar:
-  order: 6
+  order: 8
 ---
 
 The desktop app is a window around the dashboard. It holds no task logic of its own. It starts the daemon, signs in for you and shows the dashboard. For installation, see [Install Natamux](/docs/getting-started/install/).
@@ -49,7 +49,7 @@ How the new version goes in depends on how you installed the app:
 | Windows installer | The app tells you about the new version: the menu item becomes **Download Natamux 0.1.5…** and opens the release page. Run the new `Natamux-win-x64.exe`; it replaces the old version and keeps your data |
 | `.tar.gz`, or a macOS app run from the disk image | The app tells you about the new version and opens the release page. Download it yourself |
 
-Intel Mac and Linux installs of 0.1.2 update themselves again from the first release that has their files.
+Releases from 0.1.18 have files for every system again, so an Intel Mac or Linux install of an older version, such as 0.1.2, updates itself again.
 
 When a check fails, the app tries again at the next check. **Check for Updates…** shows the error. Every step is written to `logs/update.log`.
 
