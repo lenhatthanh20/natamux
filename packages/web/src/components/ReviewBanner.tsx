@@ -29,7 +29,8 @@ export function ReviewBanner({ task, approving, onApprove, onSendBack }: ReviewB
             <Button
               variant="primary"
               busy={busy}
-              shortcut={shortcutOf('task.review.approved')}
+              data-tip="Approve"
+              data-tip-kbd={shortcutOf('task.review.approved')}
               onClick={() => onApprove(stages[0] ?? task.stage)}
             >
               Approve

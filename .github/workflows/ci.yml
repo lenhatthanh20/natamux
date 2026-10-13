@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
+    branches: [main, 'natamux-ci/**']
   pull_request:
 
 permissions:
@@ -30,6 +31,8 @@ jobs:
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm test
+        env:
+          NATAMUX_BENCH: "1"
       - run: scripts/fake-agent.test.sh
       - run: scripts/release.test.sh
 

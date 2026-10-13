@@ -3,7 +3,7 @@
 import '../styles/landing.css'
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
-const version = '0.1.8'
+const version = '0.1.13'
 const repo = 'https://github.com/lenhatthanh20/natamux'
 // The file name carries no version, so this link always gets the newest release.
 const mac = `${repo}/releases/latest/download/Natamux-mac-arm64.dmg`
@@ -62,8 +62,8 @@ const docs = `${base}docs/`
       <section class="hero" aria-labelledby="hero-title">
         <div class="grid-bg" aria-hidden="true"></div>
         <div class="wrap hero-copy">
-          <a class="news" href={`${docs}concepts/stages/#run-a-stage-as-a-workflow`}>
-            <b>v{version}</b> Run a hard stage as a Claude Code workflow
+          <a class="news" href={`${docs}concepts/stages/#review-by-an-agent`}>
+            <b>v{version}</b> An agent reviews the work and sends it back
           </a>
           <h1 id="hero-title">
             <span class="line">Five agents at work.</span>

@@ -11,6 +11,9 @@ export type LayoutMode = {
 // The same steps as the Tailwind breakpoints md, lg and xl.
 export const BREAKPOINT = { md: 768, lg: 1024, xl: 1280 } as const
 export const MIN_MAIN_WIDTH_FOR_DOCKED_DETAILS = 640
+// One default for both side panels, so the page looks balanced. At 1280 two of them still
+// leave main its 640, so the details stay docked.
+export const PANEL_WIDTH = 320
 
 // Without a measured width (tests, old browsers) the page gets the desktop layout.
 export const DESKTOP_LAYOUT: LayoutMode = {

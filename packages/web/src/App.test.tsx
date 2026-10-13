@@ -11,6 +11,7 @@ import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { routeOf } from './lib/route'
+import { acquireTerminal, cachedTerminalCount, resetTerminalCache } from './lib/terminal-cache'
 import { useToasts } from './lib/toasts'
 import { initialViewData, useViewStore } from './lib/view-store'
 
@@ -74,6 +75,13 @@ class FakeSocket {
   close(): void {
     this.onclose?.()
   }
+}
+
+// Puts a terminal in the cache, as a TerminalView on screen would; the real view is mocked here.
+function cacheTerminal(key: string) {
+  const session = { hide: vi.fn(), dispose: vi.fn() }
+  acquireTerminal(key, () => session)
+  return session
 }
 
 type Call = { method: string; path: string; authorization: string | null; body: string | null }
@@ -464,6 +472,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // The cache and the task list it knows are module state, kept from one test to the next.
+  resetTerminalCache()
   vi.unstubAllGlobals()
 })
 
@@ -507,11 +517,14 @@ describe('App', () => {
     )
     const user = userEvent.setup()
     render(<App />)
+    const cached = cacheTerminal('T-0001/1')
 
     await signIn(user)
 
     expect(await screen.findByText(/rejected that token/)).toBeTruthy()
     expect(window.localStorage.length).toBe(0)
+    expect(cached.dispose).toHaveBeenCalledTimes(1)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
   })
 
   it('approves a task in review from its details', async () => {
@@ -788,6 +801,15 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(await within(view).findByText('The agent asks: Which test runner?')).toBeTruthy()
+    // Said in Needs you, on the task's card in the tree, and in the workspace banner; the banner
+    // stands for the state chip.
+    await waitFor(() =>
+      expect(screen.getAllByText('The agent asks: Which test runner?')).toHaveLength(3),
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Needs you' })).getByText(/Which test/),
+    ).toBeTruthy()
+    expect(view.querySelector('.state-chip')).toBeNull()
 
     await user.click(within(view).getByRole('button', { name: 'Answer in terminal' }))
     expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(
@@ -1715,6 +1737,46 @@ describe('App', () => {
     expect(await screen.findByRole('table')).toBeTruthy()
   })
 
+  it('puts the keyboard in the first agent of each workspace opened from the sidebar', async () => {
+    installDaemon([
+      workspaceTask(),
+      workspaceTask({ id: 'T-0002', title: 'Add export', state: 'running', agent: 'claude-code' }),
+    ])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+    // T-0001 is in review, so Needs you lists it too. Click the rows of the workspace list.
+    const list = within(sidebar).getByRole('region', { name: 'Workspaces' })
+    const tokenIn = async (view: HTMLElement) => {
+      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
+    }
+
+    await user.click(within(list).getByRole('button', { name: /Fix timezone bug/ }))
+    const first = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    await waitFor(async () => expect(await tokenIn(first)).not.toBe(''))
+    // T-0001 is left on its Changes tab.
+    await user.click(within(first).getByRole('tab', { name: /^Changes/ }))
+
+    await user.click(within(list).getByRole('button', { name: /Add export/ }))
+    const second = await screen.findByRole('region', { name: 'Changes of T-0002' })
+    await waitFor(async () => expect(await tokenIn(second)).not.toBe(''))
+
+    // Back on T-0001, the remembered Changes tab shows, and no terminal takes the keyboard.
+    await user.click(within(list).getByRole('button', { name: /Fix timezone bug/ }))
+    const again = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    expect(
+      within(again)
+        .getByRole('tab', { name: /^Changes/ })
+        .getAttribute('aria-selected'),
+    ).toBe('true')
+    await user.click(within(again).getByRole('tab', { name: 'Terminal' }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(await tokenIn(again)).toBe('')
+  })
+
   it('opens the changes from the sidebar with the details beside them', async () => {
     installDaemon([
       makeTask({
@@ -2208,9 +2270,100 @@ describe('App', () => {
     expect(screen.getByRole('table')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Account' }))
+    const cached = cacheTerminal('T-0001/1')
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
     expect(await screen.findByLabelText('Daemon token')).toBeTruthy()
+    // A cached terminal would keep its socket and shell alive for the next sign-in.
+    expect(cached.dispose).toHaveBeenCalledTimes(1)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
+  })
+
+  it('drops the cached terminals of a done task when the task list comes', async () => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Shipped', state: 'done', workspace: '/work/T-0001' }),
+      makeTask({ id: 'T-0002', title: 'Open', state: 'review', workspace: '/work/T-0002' }),
+    ])
+    const shipped = { hide: vi.fn(), dispose: vi.fn() }
+    const inReview = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0001/1', () => shipped).release()
+    acquireTerminal('T-0002/1', () => inReview).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    await waitFor(() => expect(shipped.dispose).toHaveBeenCalledTimes(1))
+    expect(inReview.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
+  it.each([
+    ['a cancelled task', { state: 'cancelled' as const, workspace: '/work/T-0001' }],
+    ['a task with no workspace', { state: 'review' as const, workspace: null }],
+  ])('drops the cached terminals of %s when the task list comes', async (_name, ended) => {
+    installDaemon([
+      makeTask({ id: 'T-0001', title: 'Gone', ...ended }),
+      makeTask({ id: 'T-0002', title: 'Open', state: 'review', workspace: '/work/T-0002' }),
+    ])
+    const gone = { hide: vi.fn(), dispose: vi.fn() }
+    const inReview = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0001/1', () => gone).release()
+    acquireTerminal('T-0002/1', () => inReview).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    await waitFor(() => expect(gone.dispose).toHaveBeenCalledTimes(1))
+    expect(inReview.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
+  it('keeps the cached terminal of a task while one with no workspace is open (C2)', async () => {
+    installDaemon([
+      reviewTask,
+      makeTask({
+        id: 'T-0002',
+        title: 'Add export',
+        state: 'running',
+        updatedAt: new Date().toISOString(),
+        workspace: '/work/T-0002',
+        branch: 'natamux/t-0002',
+      }),
+    ])
+    // The real view is mocked here, so the terminal is put in the cache as a pane that left the
+    // screen would leave it.
+    const shell = { hide: vi.fn(), dispose: vi.fn() }
+    acquireTerminal('T-0002/1', () => shell).release()
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
+
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await screen.findByRole('region', { name: 'Workspace of T-0001' })
+    await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
+    await screen.findByRole('region', { name: 'Changes of T-0002' })
+
+    expect(shell.dispose).not.toHaveBeenCalled()
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+
+  it("loads the terminal's code when the page is idle after the task list", async () => {
+    const idle = vi.fn((_callback: () => void) => 1)
+    vi.stubGlobal('requestIdleCallback', idle)
+    vi.stubGlobal('cancelIdleCallback', vi.fn())
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    expect(idle).not.toHaveBeenCalled()
+
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await waitFor(() => expect(idle).toHaveBeenCalledTimes(1))
   })
 
   it('opens the shortcut list with the question mark key', async () => {
@@ -2398,7 +2551,7 @@ describe('App', () => {
     const progressTab = within(details).getByRole('tab', { name: 'Progress' })
     expect(progressTab.getAttribute('aria-selected')).toBe('true')
 
-    const review = await within(details).findByRole('article', { name: 'Review' })
+    const review = await within(details).findByRole('article', { name: 'Manual review' })
     await user.click(within(review).getByRole('button', { name: 'Approve' }))
     await waitFor(() =>
       expect(
@@ -2929,6 +3082,29 @@ describe('App', () => {
     expect(screen.queryByRole('complementary', { name: 'Details of T-0001' })).toBeNull()
   })
 
+  it('starts the sidebar and the docked details at the same width', async () => {
+    stubWindowWidth(1280)
+    installDaemon([workspaceTask()])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+
+    openWorkspace('T-0001')
+    await screen.findByRole('complementary', { name: 'Details of T-0001' })
+    const sidebarHandle = screen.getByRole('separator', { name: 'Resize the sidebar' })
+    const detailsHandle = screen.getByRole('separator', { name: 'Resize the details' })
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('320')
+    expect(detailsHandle.getAttribute('aria-valuenow')).toBe('320')
+
+    // Each panel still resizes on its own, and Enter brings it back to the shared width.
+    sidebarHandle.focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('304')
+    expect(detailsHandle.getAttribute('aria-valuenow')).toBe('320')
+    await user.keyboard('{Enter}')
+    expect(sidebarHandle.getAttribute('aria-valuenow')).toBe('320')
+  })
+
   it('opens the details once a workspace is made from the empty workspace view', async () => {
     installDaemon([reviewTask])
     const user = userEvent.setup()
@@ -3177,6 +3353,8 @@ describe('App', () => {
     expect(group?.getAttribute('aria-expanded')).toBe('true')
     await user.keyboard('{ArrowRight}')
     expect(document.activeElement?.getAttribute('data-roving')).toBe('task:T-0002')
+    // Once its shells are read, the running task is open, so Left first folds it.
+    await user.keyboard('{ArrowLeft}')
     await user.keyboard('{ArrowLeft}')
     expect(document.activeElement).toBe(group)
   })

@@ -7,6 +7,43 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.13 (2026-10-13)
+
+- The sidebar gives each task the room it needs. A task that waits on you, failed or is blocked is a tinted card with the agent's question or the reason; **Answer** opens the terminal of the agent that asked. A task that works has two lines: id, step and stage, subtasks, what the agent does, the pull request and the agent. A finished task is one line. Each state has its own icon shape. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Only the open task shows its shells and subtasks. Click a task, or press `Right` on it, to open it. The chevron and the comet are gone, and rows no longer open by themselves.
+
+## v0.1.12 (2026-10-13)
+
+- The default pipeline is Context, Spec, Plan, Test spec and Implement side by side, **Automated tests**, **Review** and Release. **Review** is an agent stage in its own shell: it writes `review.md` and sends the task back to Implement with the problems, at most twice, then waits for you. The review by a person is **Manual review** in the catalog, and **Manual QA** is now **Manual testing**. See [Review by an agent](/docs/concepts/stages/#review-by-an-agent).
+- **Check on CI**: a checkbox on Implement and Automated tests pushes the work to `natamux-ci/<branch>`, waits for your CI and gives a failure back to the agent. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+- A stage beside Shell 1 or in its own shell can use another agent and arguments, such as a cheaper model. The Spec stage writes a **Code map**. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- A new workspace starts from the branch of your main checkout as its remote has it now. See [Base branch](/docs/concepts/workspaces/#base-branch).
+- The sidebar shows one row per shell under each task, a comet for the progress of the task, and a task icon that spins while any of its agents works. The diff size is no longer on the second line. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- An agent you start yourself in a shell shows in the pane header with its own name and, when its hooks reach Natamux, its own state. Natamux runs at most 30 shells in all. See [Shells](/docs/guides/terminal/#shells).
+- Fix: a shell where you started Cursor with `agent` showed nothing in its header or in the sidebar. Now it shows Cursor and its state.
+
+## v0.1.11 (2026-10-13)
+
+- Open subtasks sit under their parent task in the sidebar. A line such as "2 open subtasks · 2 parallel stages" shows or hides the task's agent shells and subtasks; click it or press `Right` and `Left`. Click a shell to open the task's terminal on it. The line opens by itself while something under it works, waits or failed, and Natamux remembers what you fold. The line under a workspace title shows the agent, the task id (hover it for the branch), the stage and its step, the pull request, how many subtasks are done, and the size of the diff. A blue dot marks a change you have not seen yet. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- A task that waits for you says so once in **Needs you** and once in the banner of its workspace. The workspace row, the workspace header and the terminal pane no longer repeat it, and terminal panes have no amber bar or tint. With more than one agent pane, the waiting one says **Needs your input** in its header. The state is called **Needs your input** everywhere. When the agent ends its turn without `natamux done`, the banner says **The agent ended its turn. Reply in the terminal, or resume it.** See [Needs you](/docs/guides/dashboard/#needs-you).
+- Fix: when you opened a task with two shells side by side, the keyboard went to Shell 2 first and then jumped to Shell 1. Now Shell 1 gets the keyboard at once. A shell you pick with **Answer in terminal** or **Jump to a workspace** gets it with no stop in Shell 1.
+
+## v0.1.10 (2026-10-12)
+
+- When a task is done or cancelled, each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.**, and **Open a new shell** opens a plain shell in the workspace without the agent. After a daemon restart, the pane shows **The shell ended.** with the same link. See [Shells](/docs/guides/terminal/#shells).
+- When you switch to another task's workspace, the keyboard goes to its first agent shell, so you can type to the agent at once. See [Open the terminal](/docs/guides/terminal/#open-the-terminal).
+- The sidebar and the details panel start at the same width, 320 px. A width you set by dragging stays.
+- Fix: after you quit and opened the app again, **Resume** on a task that waits for you moved it to running, but no agent ran in its terminal. Now **Resume** starts the agent again. Claude Code goes on with the same conversation; other agents start again with the stage prompt. See [Type to the agent](/docs/guides/terminal/#type-to-the-agent).
+- Fix: in the desktop app, the first click on a terminal from another app only brought the window to the front, and a second click was needed to type. Now one click does both.
+
+## v0.1.9 (2026-10-12)
+
+- The terminal looks like a native terminal: **JetBrains Mono** at 13px with rows as tall as the font and bold at 700, bundled Nerd Font icons, the **Night** palette, dimmed panes without the focus, an outline cursor and a dimmer selection when a terminal has no focus, and `Alt` + wheel to scroll 5 times faster. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
+- The diff in **Changes** and the file editor use JetBrains Mono, the font of the terminal, so code looks the same in a diff and in a shell.
+- The text of the dashboard is in **Inter** at 13px, the UI font of JetBrains IDEs. Small labels such as ids and branches stay in Geist Mono.
+- Faster terminals: up to 8 hidden terminals stay open, so going back to a terminal or a task shows it at once. A shell that prints a lot no longer slows down the page or the other shells, and `Ctrl+C` shows the prompt quickly. A dropped connection shows **Reconnecting.** and resumes the same shell, with the output you missed. After a daemon restart the pane shows **The shell ended.** with **Start a new shell**. See [Shells](/docs/guides/terminal/#shells).
+- Fix: an agent typed into a new shell, such as `codex`, showed the agent of the task ("Claude Code") in the pane header. Shell panes and the **Agents** grid now show the agent that runs in each shell, and no agent for another program. Codex has its own icon.
+
 ## v0.1.8 (2026-10-11)
 
 - Run a hard stage as a Claude Code workflow: more accurate, but many more tokens. In **Project settings**, an agent stage has **Tasks can run it as a workflow** (`"workflow": true`), on by default for **Plan** and **Implement**. On a task, the stage card in **Progress** has **Run with a workflow**, off by default. Only Claude Code runs workflows. The CLI has `natamux stage workflow <task> on|off --stage <id>`, and the API has `PUT /tasks/:id/workflow`. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).

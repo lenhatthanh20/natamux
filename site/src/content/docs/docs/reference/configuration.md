@@ -53,6 +53,10 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
 | `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
 | `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
+| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that runs beside the stage in Shell 1. |
+| `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
+| `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own shell (Shell 5) with a new session. Only for an `agent` stage with an `output`. |
+| `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Same rule as `agent`. |
 
 Details:
 
@@ -63,6 +67,7 @@ Details:
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
+- `agent` and `args` are for an `agent` stage in a group that does not keep Shell 1. That is every agent stage of the group but the one that changes code (the first agent stage without an `output`). That stage starts its own agent in its own shell, so it can use another agent or model without touching the session in Shell 1. A launch for such a stage does not change the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
@@ -83,6 +88,9 @@ Details:
 - These rules count only stages that are on. A group needs 2 stages that are on. At least one stage must be on.
 - When a task starts, a group with one stage on runs that stage on its own, and a group with none is left out.
 - `"workflow": true` is only allowed on an `agent` stage.
+- `agent` and `args` are only allowed on an `agent` stage in a group that does not keep Shell 1, or on one with `"ownShell": true`.
+- `"ownShell": true` is only allowed on an `agent` stage with an `output`.
+- `"ci": true` is only allowed on a `testing` stage or an `agent` stage without an `output`.
 
 ### Skill placeholder
 
@@ -105,7 +113,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Understand | `context` | Context | `context` | manual | `context.md` | Default. Reads the context sources of the task. |
 | Understand | `research` | Research | `agent` | manual | `research.md` | Reads the code and docs the task touches. |
 | Understand | `clarify` | Open questions | `agent` | manual | `questions.md` | Lists what is unclear, with a suggested answer for each. |
-| Design | `spec` | Spec | `agent` | manual | `spec.md` | Default. Goal, scope and acceptance criteria. |
+| Design | `spec` | Spec | `agent` | manual | `spec.md` | Default. Goal, scope, acceptance criteria and a code map. |
 | Design | `ux-design` | UX design | `agent` | manual | `ux.md` | Screens, states, flows, accessibility. |
 | Design | `architecture` | Architecture | `agent` | manual | `architecture.md` | Components, data flow, interfaces, trade-offs. |
 | Design | `threat-model` | Threat model | `agent` | manual | `threat-model.md` | What an attacker could reach, and how each threat is handled. |
@@ -121,10 +129,11 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Check | `security` | Security review | `agent` | manual | `security.md` | Checks the diff for security problems. |
 | Check | `performance` | Performance check | `agent` | manual | `performance.md` | Looks for slow paths in the diff. |
 | Check | `accessibility` | Accessibility check | `agent` | manual | `accessibility.md` | Checks UI changes for keyboard, screen reader and contrast problems. |
-| Check | `review` | Review | `review` | manual | none | Default. You read the diff and approve it or send it back. |
-| Check | `testing` | Testing | `testing` | auto | none | Default. Adds a test for each case of the test spec, then runs all tests. |
+| Check | `agent-review` | Review | `agent` | auto | `review.md` | Default. An agent reviews the changes against the spec in its own shell, and sends the task back to Implement when they need fixes. |
+| Check | `review` | Manual review | `review` | manual | none | A person reads the diff and approves it or sends it back. |
+| Check | `testing` | Automated tests | `testing` | auto | none | Default. An agent adds a test for each case of the test spec and runs all tests, or a `command` runs them. |
 | Check | `e2e` | End-to-end tests | `testing` | auto | none | Adds end-to-end tests, then runs them. Needs a `command`. |
-| Check | `qa` | Manual QA | `manual` | manual | none | You try the change yourself. |
+| Check | `qa` | Manual testing | `manual` | manual | none | A person tries the change by hand. |
 | Check | `design-review` | Design review | `manual` | manual | none | A designer checks the UI. |
 | Ship | `changelog` | Release notes | `agent` | auto | none | Adds a changelog entry. |
 | Ship | `staging` | Staging check | `manual` | manual | none | You check the change on a staging server. |
@@ -145,7 +154,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
       "kind": "agent",
       "gate": "manual",
       "output": "spec.md",
-      "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria"]
+      "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria", "Code map"]
     },
     {
       "id": "plan",
@@ -164,13 +173,22 @@ The stage starts in every case. Each agent page says where it finds skills, for 
           "kind": "agent",
           "gate": "manual",
           "output": "test-spec.md",
-          "sections": ["Cases"]
+          "sections": ["Cases"],
+          "ownShell": true
         },
-        { "id": "implement", "kind": "agent", "gate": "auto", "workflow": true }
+        { "id": "implement", "kind": "agent", "gate": "auto", "workflow": true, "ci": true }
       ]
     },
-    { "id": "review", "kind": "review", "gate": "manual" },
-    { "id": "testing", "kind": "testing", "gate": "auto" },
+    { "id": "testing", "name": "Automated tests", "kind": "testing", "gate": "auto", "ci": true },
+    {
+      "id": "agent-review",
+      "name": "Review",
+      "kind": "agent",
+      "gate": "auto",
+      "output": "review.md",
+      "sections": ["Findings"],
+      "ownShell": true
+    },
     { "id": "release", "kind": "release", "gate": "manual" }
   ]
 }

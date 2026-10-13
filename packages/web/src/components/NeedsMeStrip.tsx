@@ -1,6 +1,6 @@
 import type { Task } from '@natamux/core'
 import { BellRing } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatAge, isQuiet, needsMeReason, rowLabel, stageLabel } from '../lib/tasks'
 import { StatusGlyph } from './StatusGlyph'
 import { CountBadge } from './ui/CountBadge'
@@ -33,6 +33,17 @@ export function NeedsMeStrip({
   onOpen,
 }: NeedsMeStripProps) {
   const [all, setAll] = useState(false)
+  const [announcement, setAnnouncement] = useState('')
+  // The tasks that waited already. Null before the first render: those are not news.
+  const known = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const fresh =
+      known.current === null ? [] : waiting.filter((task) => !known.current?.has(task.id))
+    known.current = new Set(waiting.map((task) => task.id))
+    if (fresh.length > 0) {
+      setAnnouncement(fresh.map((task) => `${task.title} needs you`).join('. '))
+    }
+  }, [waiting])
   const rows = all ? waiting : waiting.slice(0, SHOWN)
   const hidden = waiting.length - SHOWN
   const any = waiting.length > 0
@@ -58,6 +69,9 @@ export function NeedsMeStrip({
           </span>
         )}
       </div>
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       {!any && <p className="flex h-7 items-center px-2 text-muted">Nothing needs you</p>}
       {any && (
         <ul className="flex flex-col">

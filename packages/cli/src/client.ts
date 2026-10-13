@@ -194,6 +194,14 @@ export class DaemonClient {
     return taskSchema.parse(body.task)
   }
 
+  async setCi(id: string, stage: string, on: boolean): Promise<Task> {
+    const body = asRecord(
+      await this.request('PUT', `${this.taskPath(id)}/ci`, { stage, on }),
+      'task',
+    )
+    return taskSchema.parse(body.task)
+  }
+
   async linkIssue(id: string, link: { provider: string; key: string; url: string }): Promise<Task> {
     const body = asRecord(await this.request('PUT', `${this.taskPath(id)}/issue`, link), 'task')
     return taskSchema.parse(body.task)

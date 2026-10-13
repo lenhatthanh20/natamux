@@ -3,13 +3,16 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import {
   type ContextSource,
-  codeStage,
+  codeStageBefore,
   findStep,
   isGroup,
+  offersCi,
   RECORD_ONLY_EVENT_TYPES,
   runsWorkflow,
   type Stage,
   type Step,
+  stageAgent,
+  stageName,
   stageOfTerminal,
   stagesOf,
   stepIndex,
@@ -21,11 +24,13 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
+import { agentOfCommand, isLaunchable, LAST_SESSION, type LaunchableAgent } from './agent-launch.js'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
+import { type CiResult, checkOnCi, ciBranchOf } from './ci-check.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
-import { type RunGh, runGh } from './git.js'
+import { deleteRemoteRef, type RunGh, runGh } from './git.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
 import {
   archiveStageFiles,
@@ -86,6 +91,32 @@ export class StageInputError extends Error {
 
 function laneState(task: Pick<Task, 'state' | 'lanes'>, step: Step, stageId: string): TaskState {
   return isGroup(step) ? (task.lanes[stageId] ?? 'done') : task.state
+}
+
+// Rounds of "fix it" an agent may ask for on its own before a person decides.
+export const MAX_AGENT_SEND_BACKS = 2
+
+// The stages whose CI check started and has no result yet.
+function stagesWaitingForCi(events: readonly { event: TaskEvent }[]): string[] {
+  const waits = new Set<string>()
+  for (const { event } of events) {
+    const stage = event.payload.stage
+    if (typeof stage !== 'string') {
+      continue
+    }
+    if (event.type === 'stage.ci-started') {
+      waits.add(stage)
+    } else if (['stage.started', 'stage.checked', 'stage.check-failed'].includes(event.type)) {
+      waits.delete(stage)
+    }
+  }
+  return [...waits]
+}
+
+// A CI check that could not run, such as gh missing, is a failure no agent can fix.
+function ciError(error: unknown): CiResult {
+  const reason = error instanceof Error ? error.message : String(error)
+  return { passed: false, reasons: [reason], passes: [], final: true }
 }
 
 // Why a send back asked for changes, for the agent's next prompt.
@@ -180,6 +211,8 @@ type StageRunnerOptions = {
   platform?: NodeJS.Platform
   // The home folder, where agents keep the user's skills.
   home?: string
+  // Pushes the work of a task to its CI branch and waits for CI. Tests give a fake.
+  checkCi?: (input: { worktree: string; branch: string }) => Promise<CiResult>
 }
 
 // A stage prompt for the agent that will get it, and the skills it names that were not found.
@@ -200,6 +233,7 @@ export class StageRunner {
   private readonly now: () => number
   private readonly platform: NodeJS.Platform
   private readonly home: string
+  private readonly checkCi: (input: { worktree: string; branch: string }) => Promise<CiResult>
   // Terminals whose agent reported a stage done, with that stage: the turn end that follows the
   // report is not a "stopped early". Kept by terminal, since the task may be at the next stage
   // when the turn ends.
@@ -208,8 +242,8 @@ export class StageRunner {
   private readonly waitingForWorkspace = new Set<string>()
   // Tasks whose agent stage waits for the tasks it depends on to be done.
   private readonly waitingForTasks = new Set<string>()
-  // Terminals where this daemon started an agent, and when.
-  private readonly launched = new Map<string, number>()
+  // Terminals where this daemon started an agent: which one, and when.
+  private readonly launched = new Map<string, { agent: string; at: number }>()
   // The end of the output of those terminals, on Windows.
   private readonly outputTails = new Map<string, string>()
   // The agent a person picked, while the stage it starts is starting.
@@ -222,6 +256,10 @@ export class StageRunner {
   private readonly startWork = new Map<string, Promise<void>>()
   private readonly starting = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
+  // Finished tasks whose CI branch was deleted, so later updates do not push again.
+  private readonly ciCleaned = new Set<string>()
+  // The CI checks that run now, by task and stage. A second report waits for the first check.
+  private readonly ciRounds = new Set<string>()
   private unsubscribe: (() => void) | undefined
 
   constructor(options: StageRunnerOptions) {
@@ -233,6 +271,7 @@ export class StageRunner {
     this.repoPath = options.repoPath
     this.gh = options.gh ?? runGh
     this.runCommand = options.runCommand ?? runShellCommand
+    this.checkCi = options.checkCi ?? ((input) => checkOnCi(input))
     this.now = options.now ?? Date.now
     this.platform = options.platform ?? process.platform
     this.home = options.home ?? homedir()
@@ -240,6 +279,19 @@ export class StageRunner {
 
   start(): void {
     this.unsubscribe = this.bus.subscribe((message) => this.onMessage(message))
+    this.resumeCiChecks()
+  }
+
+  // A CI check that ran when the daemon stopped goes on: it pushes the work again and waits.
+  private resumeCiChecks(): void {
+    for (const task of this.tasks.listTasks()) {
+      if (task.state === 'done' || task.state === 'cancelled') {
+        continue
+      }
+      for (const stageId of stagesWaitingForCi(this.tasks.listEvents(task.id))) {
+        this.startCiRound(task.id, stageId, this.lastStart(task.id, stageId).seq, [])
+      }
+    }
   }
 
   stop(): void {
@@ -278,13 +330,12 @@ export class StageRunner {
     return step
   }
 
-  // The stage a hook from this terminal is about, and its state.
-  laneFor(task: Task, terminal: string | undefined): { stage: string; state: TaskState } {
+  // The stage a hook from this terminal is about, and its state. Null for a shell that no stage
+  // uses, where the user started an agent by hand.
+  laneFor(task: Task, terminal: string | undefined): { stage: string; state: TaskState } | null {
     const step = this.stepOf(task)
-    const stage = isGroup(step)
-      ? (stageOfTerminal(step, terminal ?? MAIN_TERMINAL) ?? codeStage(step))
-      : step
-    return { stage: stage.id, state: laneState(task, step, stage.id) }
+    const stage = stageOfTerminal(step, terminal ?? MAIN_TERMINAL)
+    return stage === undefined ? null : { stage: stage.id, state: laneState(task, step, stage.id) }
   }
 
   // The stage an agent in this terminal works on, and its own state, for the dashboard.
@@ -316,6 +367,14 @@ export class StageRunner {
     if (['stage.approved', 'stage.passed', 'stage.checked'].includes(event.type)) {
       archiveStageFiles(this.dataDir, task)
     }
+    const finished = task.state === 'done' || task.state === 'cancelled'
+    const usedCi = (task.ciStages ?? []).length > 0 && !this.ciCleaned.has(task.id)
+    if (finished && usedCi && task.branch !== null) {
+      this.ciCleaned.add(task.id)
+      // The CI branch only held snapshots for checks. Gone already, or offline: nothing to do.
+      const ref = ciBranchOf(task.branch)
+      this.background(deleteRemoteRef(this.repoPath(task.repo), ref).catch(() => undefined))
+    }
     if (event.type === 'workspace.created' && task.workspace !== null) {
       restoreStageFiles(this.dataDir, task)
       restoreAttachments(this.dataDir, task)
@@ -326,6 +385,9 @@ export class StageRunner {
     }
     if (message.moved === true) {
       this.startInBackground(task.id, ['ready'], event)
+    } else if (event.type === 'agent.resumed' && event.source !== 'agent') {
+      // After this message has reached every listener, so its events come in order.
+      this.background(Promise.resolve().then(() => this.resumeStage(task.id, event)))
     }
     const ended = task.state === 'done' || task.state === 'cancelled'
     if (ended && !RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
@@ -394,28 +456,18 @@ export class StageRunner {
     this.starting.add(key)
     try {
       const task = this.tasks.getTask(taskId)
-      const reason = sendBackReason(cause)
       switch (stage.kind) {
         case 'context':
           await this.startContext(task, step, stage)
           return
         case 'agent': {
-          const prompt: PromptFor = (agent) => {
-            const workflow = runsWorkflow(stage, task.workflowStages, agent)
-            const filled = this.withSkills(stagePrompt(stage, task, { workflow }), task, agent)
-            const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
-            return { ...filled, text, workflow }
-          }
-          // A prompt typed to the agent took the stage up again: the agent has its prompt.
           const resumed = cause?.type === 'agent.resumed'
-          await this.startAgent(task, step, stage, resumed ? undefined : prompt)
+          await this.startAgent(task, step, stage, this.promptOf(task, stage, cause), resumed)
           return
         }
         case 'testing':
           if (stage.command === undefined) {
-            await this.startAgent(task, step, stage, (agent) =>
-              this.withSkills(stagePrompt(stage, task), task, agent),
-            )
+            await this.startAgent(task, step, stage, this.promptOf(task, stage))
           } else {
             await this.startCommand(task, step, stage, stage.command)
           }
@@ -457,11 +509,27 @@ export class StageRunner {
     return fillSkills(text, this.skillContext(task, agent))
   }
 
+  // The prompt of a stage that an agent works on: an agent stage, or a testing stage with no
+  // command.
+  private promptOf(task: Task, stage: Stage, cause?: TaskEvent): PromptFor {
+    if (stage.kind !== 'agent') {
+      return (agent) => this.withSkills(stagePrompt(stage, task), task, agent)
+    }
+    const reason = sendBackReason(cause)
+    return (agent) => {
+      const workflow = runsWorkflow(stage, task.workflowStages, agent)
+      const filled = this.withSkills(stagePrompt(stage, task, { workflow }), task, agent)
+      const text = reason ? `${filled.text}\nWhat to change: ${reason}` : filled.text
+      return { ...filled, text, workflow }
+    }
+  }
+
   private async startAgent(
     task: Task,
     step: Step,
     stage: Stage,
-    promptFor: PromptFor | undefined,
+    promptFor: PromptFor,
+    resumed = false,
   ): Promise<void> {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
@@ -478,28 +546,128 @@ export class StageRunner {
     }
     await excludeStageDir(task.workspace).catch(() => undefined)
     const head = await currentHead(task.workspace)
-    const agent = this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
-    const prompt = promptFor?.(agent)
+    const own = stageAgent(step, stage)
+    const agent = own.agent ?? this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
+    const terminal = terminalOfStage(step, stage.id)
+    // A prompt typed to the agent took the stage up again: the agent has its prompt. With no
+    // agent left (the app restarted), Claude Code goes on with its last session of the stage.
+    const running = resumed && this.agentRuns(task.id, terminal)
+    const session = resumed && !running ? this.lastSession(task.id, stage.id, agent) : undefined
+    const prompt = running || session !== undefined ? undefined : promptFor(agent)
     // The stage card says which skills of the prompt the agent did not get, and whether it asked
     // for a workflow.
     const missing = prompt?.missing.length ? { missingSkills: prompt.missing, agent } : {}
     const workflow = prompt?.workflow === true ? { workflow: true } : {}
-    if (
-      !this.markStarted(task, step, stage, { head, ...missing, ...workflow }) ||
-      prompt === undefined
-    ) {
+    if (!this.markStarted(task, step, stage, { head, ...missing, ...workflow }) || running) {
+      return
+    }
+    this.launch(task.id, stage.id, agent, terminal, prompt?.text ?? '', session, own)
+  }
+
+  // A person resumed a stage that waited for them. Its agent may be gone, for example after a
+  // restart, and then starts again.
+  private resumeStage(taskId: string, event: TaskEvent): void {
+    const task = this.tasks.getTask(taskId)
+    const step = this.stepOf(task)
+    const stage = stagesOf(step).find((candidate) => candidate.id === event.payload.stage)
+    if (stage !== undefined) {
+      this.relaunch(task, step, stage)
+    }
+  }
+
+  // Agents end with the daemon. At its start, each stage an agent worked on gets its agent back,
+  // and the task keeps its state.
+  resumeAgents(): void {
+    for (const task of this.tasks.listTasks()) {
+      if (task.state === 'done' || task.state === 'cancelled') {
+        continue
+      }
+      try {
+        const step = this.stepOf(task)
+        for (const stage of stagesOf(step)) {
+          const working = ['running', 'needs-input'].includes(laneState(task, step, stage.id))
+          // No agent Natamux started for it: a person runs their own in the shell.
+          const agent = stageAgent(step, stage).agent ?? task.agent
+          if (working && agent !== null && isLaunchable(agent)) {
+            // In a group, the newest session of the folder may be the other stage's.
+            this.relaunch(task, step, stage, !isGroup(step))
+          }
+        }
+      } catch {
+        // A stage the settings no longer have: the task waits for a person, the daemon starts.
+      }
+    }
+  }
+
+  // Starts the agent of a stage again when it is gone. Claude Code goes on with its session of the
+  // stage, or with `newest` the newest of the folder; other agents get the stage prompt again.
+  private relaunch(task: Task, step: Step, stage: Stage, newest = false): void {
+    const byAgent =
+      stage.kind === 'agent' || (stage.kind === 'testing' && stage.command === undefined)
+    if (!byAgent || task.workspace === null) {
       return
     }
     const terminal = terminalOfStage(step, stage.id)
+    if (this.agentRuns(task.id, terminal)) {
+      return
+    }
+    const own = stageAgent(step, stage)
+    const agent = own.agent ?? task.agent ?? 'claude-code'
+    const session =
+      this.lastSession(task.id, stage.id, agent) ??
+      (newest && agent === 'claude-code' ? LAST_SESSION : undefined)
+    const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''
+    this.launch(task.id, stage.id, agent, terminal, text, session, own)
+  }
+
+  // The last session that Claude Code reported from this stage. Other agents start new ones.
+  private lastSession(taskId: string, stageId: string, agent: string): string | undefined {
+    if (agent !== 'claude-code') {
+      return undefined
+    }
+    for (const { event } of [...this.tasks.listEvents(taskId)].reverse()) {
+      // A session from before another agent was started is not this agent's. The own agent of
+      // another stage runs in another shell, so it does not count.
+      const otherStage = event.payload.stage !== undefined && event.payload.stage !== stageId
+      if (event.type === 'agent.launched' && event.payload.agent !== agent && !otherStage) {
+        return undefined
+      }
+      const session = event.payload.sessionId
+      const fromStage = event.source === 'agent' && event.payload.stage === stageId
+      if (fromStage && typeof session === 'string' && session !== '') {
+        return session
+      }
+    }
+    return undefined
+  }
+
+  // Gives the prompt to the agent that runs in the terminal, else starts the agent there.
+  private launch(
+    taskId: string,
+    stageId: string,
+    agent: string,
+    terminal: string,
+    text: string,
+    session?: string,
+    own: Pick<Stage, 'agent' | 'args'> = {},
+  ): void {
     try {
-      if (this.agentRuns(task.id, terminal)) {
-        this.terminals.paste(task.id, prompt.text, terminal)
+      if (session === undefined && this.agentRuns(taskId, terminal)) {
+        this.terminals.paste(taskId, text, terminal)
       } else {
-        this.agents.start(task.id, agent, prompt.text, terminal)
-        this.launched.set(`${task.id}/${terminal}`, this.now())
+        const none = own.agent === undefined && own.args === undefined
+        this.agents.start(
+          taskId,
+          agent,
+          text,
+          terminal,
+          session,
+          none ? {} : { args: own.args, stage: stageId },
+        )
+        this.launched.set(`${taskId}/${terminal}`, { agent, at: this.now() })
       }
     } catch (error) {
-      this.failStage(task.id, stage.id, error instanceof Error ? error.message : String(error))
+      this.failStage(taskId, stageId, error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -542,7 +710,7 @@ export class StageRunner {
       return this.tasks.getTask(taskId)
     }
     const task = this.agents.start(taskId, agent, prompt)
-    this.launched.set(`${taskId}/${MAIN_TERMINAL}`, this.now())
+    this.launched.set(`${taskId}/${MAIN_TERMINAL}`, { agent, at: this.now() })
     return task
   }
 
@@ -557,7 +725,7 @@ export class StageRunner {
       this.outputTails.delete(key)
       return false
     }
-    const launchedAt = this.launched.get(key)
+    const launchedAt = this.launched.get(key)?.at
     const program = this.terminals.foreground(taskId, terminal)
     if (program !== undefined && !SHELLS.includes(basename(program))) {
       return true
@@ -571,6 +739,29 @@ export class StageRunner {
       this.platform === 'win32' ||
       this.now() - launchedAt < LAUNCH_GRACE_MS
     )
+  }
+
+  // The agent that runs in a terminal, for its pane header: the one its processes show. Where the
+  // platform does not list them, or just after the launch, the one this daemon started there. Null
+  // for a program that is no agent Natamux knows.
+  async agentIn(taskId: string, terminal: string): Promise<string | null> {
+    // A process that ends while `ps` runs must not fail the request.
+    const commands = await this.terminals.commands(taskId, terminal).catch(() => undefined)
+    const programOf = (agent: LaunchableAgent) => this.agents.programOf(agent)
+    for (const line of commands ?? []) {
+      const agent = agentOfCommand(line, programOf)
+      if (agent !== undefined) {
+        return agent
+      }
+    }
+    const launched = this.launched.get(`${taskId}/${terminal}`)
+    if (
+      launched !== undefined &&
+      (commands === undefined || this.now() - launched.at < LAUNCH_GRACE_MS)
+    ) {
+      return launched.agent
+    }
+    return null
   }
 
   // Output of a terminal of a task. On Windows an agent started here counts as running until its
@@ -782,10 +973,18 @@ export class StageRunner {
       if (input.to !== undefined) {
         this.checkTarget(task, input.to)
       }
+      // A person can type the command in a task shell too; only an agent there counts.
+      const byAgent = input.terminal !== undefined && this.agentRuns(taskId, input.terminal)
+      const from = byAgent ? this.agentSendsBack(task, step, input.terminal ?? '') : undefined
       this.apply(taskId, 'stage.reopened', {
         ...(input.to === undefined ? {} : { to: input.to }),
         ...(input.reason === undefined ? {} : { reason: input.reason }),
+        ...(from === undefined ? {} : { from, byAgent: true }),
       })
+      if (from !== undefined) {
+        // Its turn ends after this, as after `natamux done`.
+        this.reported.set(`${taskId}/${input.terminal}`, from)
+      }
       return this.afterStart(taskId)
     }
     const plan: Record<typeof action, { type: TaskEvent['type']; states: TaskState[] }> = {
@@ -815,6 +1014,39 @@ export class StageRunner {
         `${task.id} has no stage "${to}" to go back to. Name this stage or one before it`,
       )
     }
+  }
+
+  // An agent that reviews sends the task back by itself, at most MAX_AGENT_SEND_BACKS times from
+  // its stage; then the stage waits for you, so two agents that disagree do not loop forever.
+  private agentSendsBack(task: Task, step: Step, terminal: string): string {
+    const from = stageOfTerminal(step, terminal)?.id ?? task.stage
+    const before = this.sendBacksFrom(task.id, from)
+    if (before >= MAX_AGENT_SEND_BACKS) {
+      const name = stageName({ id: from })
+      this.tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.asked',
+        payload: {
+          stage: from,
+          message: `${name} sent the task back ${before} times. Decide what to do.`,
+        },
+      })
+      throw new StageActionError(
+        `${task.id} went back ${before} times already, so it waits for the user now. Stop here.`,
+      )
+    }
+    return from
+  }
+
+  private sendBacksFrom(taskId: string, from: string): number {
+    return this.tasks
+      .listEvents(taskId)
+      .filter(
+        ({ event }) =>
+          event.type === 'stage.reopened' &&
+          event.payload.byAgent === true &&
+          event.payload.from === from,
+      ).length
   }
 
   private apply(taskId: string, type: TaskEvent['type'], payload: Record<string, unknown>): void {
@@ -906,6 +1138,17 @@ export class StageRunner {
     if (this.lastStart(taskId, stageId).seq !== start.seq) {
       return
     }
+    if (result.passed && this.waitsForCi(task, stage)) {
+      if (this.ciRounds.has(`${taskId}/${stageId}`)) {
+        return
+      }
+      this.tasks.recordEvent(taskId, 'stage.ci-started', {
+        stage: stageId,
+        branch: ciBranchOf(task.branch ?? ''),
+      })
+      this.startCiRound(taskId, stageId, start.seq, result.passes)
+      return
+    }
     if (result.passed) {
       this.tasks.applyEvent(taskId, {
         source: 'system',
@@ -914,21 +1157,112 @@ export class StageRunner {
       })
       return
     }
-    // An agent gets one more try; a stage that no agent works on waits for you at once.
+    this.failChecks(taskId, stageId, result.reasons)
+  }
+
+  // The task asked for CI on this stage, and has the branch to push.
+  private waitsForCi(task: Task, stage: Stage): boolean {
+    const chosen = (task.ciStages ?? []).includes(stage.id)
+    return chosen && offersCi(stage) && task.workspace !== null && task.branch !== null
+  }
+
+  private startCiRound(taskId: string, stageId: string, seq: number, passes: string[]): void {
+    const key = `${taskId}/${stageId}`
+    if (this.ciRounds.has(key)) {
+      return
+    }
+    this.ciRounds.add(key)
+    const round = this.ciRound(taskId, stageId, seq, passes)
+    this.background(round.finally(() => this.ciRounds.delete(key)))
+  }
+
+  // CI takes minutes, so it runs after the report has its answer. Its result counts only for the
+  // round of the stage that asked for it.
+  private async ciRound(taskId: string, stageId: string, seq: number, passes: string[]) {
+    const task = this.tasks.getTask(taskId)
+    const input = { worktree: task.workspace ?? '', branch: task.branch ?? '' }
+    const ci = await this.checkCi(input).catch(ciError)
+    if (this.lastStart(taskId, stageId).seq !== seq) {
+      return
+    }
+    if (ci.passed) {
+      this.tasks.applyEvent(taskId, {
+        source: 'system',
+        type: 'stage.checked',
+        payload: { stage: stageId, passes: [...passes, ...ci.passes] },
+      })
+      return
+    }
+    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons)) {
+      return
+    }
+    this.failChecks(taskId, stageId, ci.reasons, ci.final, ci.logs)
+  }
+
+  // A testing stage only runs the code, so its CI failure goes back to the stage that changes
+  // code, at most MAX_AGENT_SEND_BACKS times, as an agent's send back.
+  private sendBackForCi(taskId: string, stageId: string, reasons: string[]): boolean {
+    const task = this.tasks.getTask(taskId)
+    const steps = this.tasks.stepsOf(task)
+    const stage = stagesOf(this.stepOf(task)).find((candidate) => candidate.id === stageId)
+    const to = codeStageBefore(steps, stageId)
+    if (stage?.kind !== 'testing' || to === undefined) {
+      return false
+    }
+    if (this.sendBacksFrom(taskId, stageId) >= MAX_AGENT_SEND_BACKS) {
+      this.failChecks(taskId, stageId, reasons, true)
+      return true
+    }
+    // Ends the CI wait of the stage, so a restart does not check it again.
+    this.tasks.applyEvent(taskId, {
+      source: 'system',
+      type: 'stage.check-failed',
+      payload: { stage: stageId, reasons, final: false },
+    })
+    const reason = [
+      `CI failed on ${stageName(stage)}:`,
+      ...reasons.map((each) => `- ${each}`),
+      'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
+    ].join('\n')
+    this.tasks.applyEvent(taskId, {
+      source: 'system',
+      type: 'stage.reopened',
+      payload: { to: to.id, reason, from: stageId, byAgent: true },
+    })
+    return true
+  }
+
+  // An agent gets one more try; a stage that no agent works on, or a failure no agent can fix,
+  // waits for you at once.
+  private failChecks(
+    taskId: string,
+    stageId: string,
+    reasons: string[],
+    cannotFix = false,
+    // What the agent reads, when it is longer than the reasons the stage card shows.
+    logs = reasons,
+  ) {
+    const task = this.tasks.getTask(taskId)
+    const step = this.stepOf(task)
+    const stage = stagesOf(step).find((candidate) => candidate.id === stageId)
+    if (stage === undefined) {
+      return
+    }
+    const start = this.lastStart(taskId, stageId)
     const terminal = terminalOfStage(step, stageId)
     const agentWorks =
       (stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)) &&
       this.agentRuns(taskId, terminal)
-    const final = !agentWorks || start.failures >= 1
+    const final = cannotFix || !agentWorks || start.failures >= 1
     this.tasks.applyEvent(taskId, {
       source: 'system',
       type: 'stage.check-failed',
-      payload: { stage: stageId, reasons: result.reasons, final },
+      payload: { stage: stageId, reasons, final },
     })
     if (!final) {
       const text = [
         'The checks of this stage failed:',
-        ...result.reasons.map((reason) => `- ${reason}`),
+        ...logs.map((reason) => `- ${reason}`),
         'Fix them, then run `natamux done` again.',
       ].join('\n')
       try {

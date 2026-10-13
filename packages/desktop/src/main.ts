@@ -23,6 +23,7 @@ import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { Updater } from './updater.js'
+import { windowOptions } from './window-options.js'
 
 // Before the paths are read: the user data folder is named after the app.
 app.setName('Natamux')
@@ -149,22 +150,9 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
 }
 
 function createWindow(): void {
-  const created = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 800,
-    minHeight: 560,
-    show: false,
-    title: 'Natamux',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#18181b' : '#ffffff',
-    webPreferences: {
-      preload: join(here, 'preload.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      spellcheck: false,
-    },
-  })
+  const created = new BrowserWindow(
+    windowOptions(join(here, 'preload.cjs'), nativeTheme.shouldUseDarkColors),
+  )
   window = created
   created.once('ready-to-show', () => created.show())
   created.on('closed', () => {
@@ -228,7 +216,7 @@ async function confirmStop(action: string): Promise<boolean> {
   const answer = await dialog.showMessageBox({
     type: 'warning',
     message: `${running === 1 ? 'An agent is' : `${running} agents are`} still working`,
-    detail: `${action} stops the daemon, and with it every agent and shell. Tasks, worktrees and their changes stay.`,
+    detail: `${action} stops the daemon, and with it every agent and shell. Tasks, worktrees and their changes stay, and the agents start again when Natamux does.`,
     buttons: [action, 'Cancel'],
     defaultId: 1,
     cancelId: 1,

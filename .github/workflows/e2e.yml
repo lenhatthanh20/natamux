@@ -8,7 +8,8 @@ name: E2E
 # test job cannot push images that other machines then run.
 on:
   push:
-    branches: [main]
+    # natamux-ci/* holds snapshots that tasks push for a CI check (Check on CI).
+    branches: [main, 'natamux-ci/**']
   pull_request:
   workflow_dispatch:
 
@@ -53,7 +54,8 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The tests take about 6 minutes; a hang must fail the job, not hold it.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -85,6 +87,15 @@ jobs:
       - name: Run the tests
         working-directory: e2e
         run: pnpm e2e
+
+      # The terminal numbers of a green run too, so the next PRs can compare with them.
+      - name: Terminal measures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-measures
+          path: e2e/test-results/terminal-measures.json
+          if-no-files-found: ignore
 
       - name: Report, pictures and traces
         if: failure()

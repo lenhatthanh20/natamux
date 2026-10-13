@@ -16,7 +16,8 @@ export function StartAgentControl({
 }) {
   const [agent, setAgent] = useState<AgentId>(isAgentId(current) ? current : DEFAULT_AGENT)
   return (
-    <div className="flex items-center gap-1.5">
+    // max-w-full lets the select shrink in a narrow card, so the button stays inside it.
+    <div className="flex max-w-full min-w-0 items-center gap-1.5">
       <Select
         value={agent}
         onChange={(event) => isAgentId(event.target.value) && setAgent(event.target.value)}

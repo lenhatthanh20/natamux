@@ -1,6 +1,21 @@
-import type { DiffStat, Task } from '@natamux/core'
-import { Copy, FileDiff, FolderMinus, GitBranch, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
-import { type FocusEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import type { Task, TaskState } from '@natamux/core'
+import {
+  Copy,
+  FileDiff,
+  FolderMinus,
+  GitBranch,
+  GitPullRequest,
+  ListTree,
+  Pencil,
+  Pin,
+  PinOff,
+  SquareTerminal,
+  Trash2,
+} from 'lucide-react'
+import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { agentLabel } from '../lib/agents'
+import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
+import { cometOf, rowTier, type ShellRow, shellRowName, shellTag } from '../lib/sidebar-tree'
 import {
   deleteTaskDescription,
   formatAge,
@@ -10,11 +25,17 @@ import {
   rowLabel,
 } from '../lib/tasks'
 import { toast } from '../lib/toasts'
-import { shortBranch } from '../lib/workspace-groups'
-import { DiffSize } from './DiffSize'
-import { StatusGlyph } from './StatusGlyph'
+import { AgentIcon } from './AgentBadge'
+import { ShapeGlyph } from './ShapeGlyph'
 import { ConfirmDialog } from './ui/Dialog'
 import { Menu, type MenuItem, openContextMenu } from './ui/Menu'
+import { ICON } from './ui/styles'
+
+type RovingTab = {
+  tabIndex: number
+  'data-roving': string
+  onFocus: (event: FocusEvent<HTMLElement>) => void
+}
 
 type WorkspaceRowProps = {
   task: Task
@@ -23,7 +44,8 @@ type WorkspaceRowProps = {
   pinned: boolean
   // Pinned rows come from several repositories, so they name theirs.
   repoName?: string
-  stat?: DiffStat
+  // What the task glyph shows: the task state, or running while one of its agents works.
+  glyph: TaskState
   // What the agent does now, for a running task.
   activity?: string
   // What the agent asked, or why the task failed. Null while it is not known.
@@ -31,11 +53,19 @@ type WorkspaceRowProps = {
   // The state changed since the user last opened this workspace.
   unseen: boolean
   // The roving tab stop from the tree: tabIndex, data-roving and onFocus.
-  tab: {
-    tabIndex: number
-    'data-roving': string
-    onFocus: (event: FocusEvent<HTMLElement>) => void
-  }
+  tab: RovingTab
+  // Done and all subtasks of the task. Null: it has none.
+  subtasks?: { done: number; total: number } | null
+  // Only the open workspace shows the rows under it: its shells and open subtasks.
+  open?: boolean
+  // It has rows under it, shown once it is the open workspace.
+  expandable?: boolean
+  // Opens the terminal of the agent that asked.
+  onAnswer?: () => void
+  // The row was added after the list was first drawn, so it slides in.
+  enter?: boolean
+  // The rows under the open fold.
+  children?: ReactNode
   onOpen: (id: string) => void
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
@@ -52,21 +82,36 @@ function copy(text: string, what: string) {
 }
 
 const ROW =
-  'flex min-h-11 w-full flex-col rounded-md px-2 py-1.5 text-left text-xs leading-4 pointer-coarse:min-h-14 pointer-coarse:justify-center'
+  'flex w-full flex-col justify-center rounded-md px-2.5 text-left text-xs leading-4 pointer-coarse:min-h-14'
 
-// One workspace in the sidebar: its state, title and age, then its branch and the size of its
-// work, then what its agent does or asks. Double-click the title, or press F2, to rename it.
+// The height follows what the row needs: a card for what waits on the user, two lines for work
+// that goes on, one line for what is finished.
+const TIER = {
+  attention: 'row-attn my-0.5 min-h-[68px] rounded-lg py-2',
+  live: 'min-h-10 py-1.5',
+  quiet: 'min-h-6 py-1',
+} as const
+
+// One workspace in the sidebar: its state, title and age, then its id, step and what its agent
+// does. A task that waits on the user shows the question; a finished one is a single line.
+// Double-click the title, or press F2, to rename it.
 export function WorkspaceRow({
   task,
   now,
   current,
   pinned,
   repoName,
-  stat,
+  glyph,
   activity,
   question,
   unseen,
   tab,
+  subtasks = null,
+  open = false,
+  expandable = false,
+  onAnswer,
+  enter = false,
+  children,
   onOpen,
   onViewChanges,
   onRename,
@@ -87,6 +132,21 @@ export function WorkspaceRow({
   const wasRenaming = useRef(false)
   const finished = task.state === 'done' || task.state === 'cancelled'
   const quiet = isQuiet(task, now)
+  // Only rows that come after the first paint slide in; the first paint stays still.
+  const [slides] = useState(enter)
+  // Each time the task starts to wait, the row flashes once.
+  const [flash, setFlash] = useState(0)
+  const lastState = useRef(task.state)
+  useEffect(() => {
+    if (task.state !== lastState.current && task.state === 'needs-input') {
+      setFlash((count) => count + 1)
+    }
+    lastState.current = task.state
+  }, [task.state])
+  const comet = cometOf(task)
+  const tier = rowTier(task.state)
+  // Screen readers hear every step, as the comet's tooltip shows them.
+  const stepsId = useId()
 
   useEffect(() => {
     if (renaming) {
@@ -154,16 +214,52 @@ export function WorkspaceRow({
         ]),
   ]
 
-  const titleClass = `min-w-0 flex-1 truncate text-sm ${unseen ? 'font-semibold' : 'font-medium'} ${
-    finished ? 'text-muted' : 'text-ink'
-  } ${finished && task.state === 'cancelled' ? 'line-through' : ''}`
+  const weight = unseen || tier === 'attention' ? 'font-semibold' : 'font-medium'
+  const size = tier === 'quiet' ? 'text-xs font-normal' : `text-sm ${weight}`
+  const tone = finished ? 'text-muted' : tier === 'quiet' ? 'text-ink-2' : 'text-ink'
+  const titleClass = `min-w-0 flex-1 truncate ${size} ${tone} ${task.state === 'cancelled' ? 'line-through' : ''}`
   const metaColor = 'text-muted'
+  const answers = task.state === 'needs-input' && onAnswer !== undefined
+  const step = comet.of > 1 ? `${comet.at}/${comet.of}` : null
+  // What a card says: the question, or why the task failed or waits.
+  const said = question ?? (task.state === 'needs-input' ? 'Waiting for your answer' : null)
+
+  // The branch is mostly the title, so it waits in the tooltip and the menu.
+  const id = (
+    <span data-tip={task.branch ?? undefined} className="shrink-0 font-mono text-2xs">
+      {task.id}
+    </span>
+  )
+  const stage = (
+    <>
+      {step !== null && <span className="shrink-0 font-mono text-2xs tabular-nums">{step}</span>}
+      {comet.stage !== null && <span className="min-w-0 shrink truncate">{comet.stage}</span>}
+    </>
+  )
+  // The agent that drives the task. Open, the rows under it name the agent of each stage.
+  const agent = task.agent !== null && (
+    <span data-tip={agentLabel(task.agent)} className="inline-flex shrink-0">
+      <AgentIcon agent={task.agent} />
+    </span>
+  )
 
   const body = (titleLine: ReactNode): ReactNode => (
     <>
       <span className="flex h-4 w-full items-center gap-2">
-        <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
+        <ShapeGlyph
+          state={glyph}
+          quiet={quiet}
+          size={tier === 'attention' ? 9 : 8}
+          tip={laneSummary(task)}
+        />
         {titleLine}
+        {unseen && (
+          <span
+            data-unseen
+            className="size-1.5 shrink-0 rounded-full bg-accent"
+            aria-hidden="true"
+          />
+        )}
         {!renaming && (
           <span
             data-tip={formatExact(task.updatedAt)}
@@ -173,121 +269,173 @@ export function WorkspaceRow({
           </span>
         )}
       </span>
-      <span className={`flex w-full min-w-0 items-center gap-2 pl-6 ${metaColor}`}>
-        {repoName !== undefined && (
-          <span className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2">
-            {repoName}
+      <span id={stepsId} className="sr-only">{`Steps: ${comet.summary}`}</span>
+      {tier === 'live' && (
+        <span className={`mt-0.5 flex w-full min-w-0 items-center gap-1.5 pl-5.5 ${metaColor}`}>
+          {repoName !== undefined && (
+            <span className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2">
+              {repoName}
+            </span>
+          )}
+          {id}
+          {stage}
+          {subtasks !== null && (
+            <span data-tip="Subtasks done" className="inline-flex shrink-0 items-center gap-0.5">
+              <ListTree size={ICON.xs} aria-hidden="true" />
+              {`${subtasks.done}/${subtasks.total}`}
+            </span>
+          )}
+          {/* Open, each shell row says what its agent does. */}
+          <span className="min-w-0 flex-1 truncate text-ink-2">
+            {task.state === 'running' && !open ? activity : null}
           </span>
-        )}
-        <span className="min-w-0 flex-1 truncate font-mono">{shortBranch(task) || task.id}</span>
-        <DiffSize stat={stat} empty={null} />
-      </span>
-      {task.state === 'running' && activity !== undefined && activity !== '' && (
-        <span className={`block h-4 w-full truncate pl-6 ${metaColor}`}>{activity}</span>
-      )}
-      {task.state === 'needs-input' && (
-        <span data-tip-overflow className="block h-4 w-full truncate pl-6 text-signal">
-          {question ?? 'Waiting for your answer'}
+          {task.pr !== null && (
+            <span
+              data-tip={`Pull request ${pullRequestSummary(task) ?? ''}`.trim()}
+              className={`inline-flex shrink-0 items-center gap-0.5 ${
+                task.prStatus === null ? '' : CHECKS_COLOR[task.prStatus.checks]
+              }`}
+            >
+              <GitPullRequest size={ICON.xs} aria-hidden="true" />
+              {pullRequestNumber(task.pr)}
+            </span>
+          )}
+          {agent}
         </span>
       )}
-      {/* Why it failed, so the user need not open each failed task to find out. */}
-      {task.state === 'failed' && typeof question === 'string' && (
-        <span
-          data-tip-overflow
-          data-state="failed"
-          className="block h-4 w-full truncate pl-6 text-(--chip-fg)"
-        >
-          {question}
+      {tier === 'attention' && said !== null && (
+        <span data-tip-overflow className="mt-1 line-clamp-2 w-full pl-5.5 text-ink">
+          {said}
+        </span>
+      )}
+      {tier === 'attention' && (
+        <span className={`mt-1.5 flex w-full min-w-0 items-center gap-1.5 pl-5.5 ${metaColor}`}>
+          {/* Room for the Answer button, which sits on top of the row. */}
+          {answers && <span className="h-5 w-14 shrink-0" />}
+          {id}
+          {stage}
+          <span className="flex-1" />
+          {agent}
         </span>
       )}
     </>
   )
 
   return (
-    <li className="group relative">
-      {renaming ? (
-        <div className={ROW}>
-          {body(
-            <form
-              onSubmit={(event) => {
-                event.preventDefault()
-                finishRename(true)
-              }}
-              className="min-w-0 flex-1"
-            >
-              <input
-                ref={field}
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                onBlur={() => finishRename(true)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.stopPropagation()
-                    finishRename(false)
-                  }
+    <li className={slides ? 'hm-pop' : undefined}>
+      <div className="group relative">
+        {flash > 0 && (
+          <span
+            key={flash}
+            aria-hidden="true"
+            className="sb-flash pointer-events-none absolute inset-0 rounded-md"
+          />
+        )}
+        {renaming ? (
+          <div
+            data-state={tier === 'attention' ? task.state : undefined}
+            className={`${ROW} ${TIER[tier]}`}
+          >
+            {body(
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  finishRename(true)
                 }}
-                aria-label={`New name for ${task.id}`}
-                className="h-6 w-full rounded-sm border border-focus bg-input px-1.5 text-sm text-ink outline-none"
-              />
-            </form>,
-          )}
-        </div>
-      ) : (
-        <button
-          ref={row}
-          type="button"
-          {...tab}
-          onClick={() => onOpen(task.id)}
-          onContextMenu={(event) => openContextMenu(event, items, `Actions for ${task.id}`)}
-          onKeyDown={(event) => {
-            if (event.key === 'F2') {
-              event.preventDefault()
-              event.stopPropagation()
-              startRename()
-            } else if (event.key === 'Delete') {
-              event.preventDefault()
-              event.stopPropagation()
-              setRemoving(true)
-            } else if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
-              event.stopPropagation()
-              openContextMenu(
-                {
-                  preventDefault: () => event.preventDefault(),
-                  currentTarget: event.currentTarget,
-                },
-                items,
-                `Actions for ${task.id}`,
-              )
-            }
-          }}
-          aria-current={current ? 'true' : undefined}
-          aria-label={rowLabel(task, now)}
-          className={`${ROW} focus-inset hover:bg-hover aria-[current=true]:bg-selected aria-[current=true]:shadow-[inset_0_0_0_1px_var(--line-strong)] group-focus-within/tree:aria-[current=true]:bg-selection-active`}
-        >
-          {body(
-            // biome-ignore lint/a11y/noStaticElementInteractions: the row around it is the button; a double click on the title is a shortcut for F2.
-            <span
-              onDoubleClick={(event) => {
+                className="min-w-0 flex-1"
+              >
+                <input
+                  ref={field}
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  onBlur={() => finishRename(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.stopPropagation()
+                      finishRename(false)
+                    }
+                  }}
+                  aria-label={`New name for ${task.id}`}
+                  className="h-6 w-full rounded-sm border border-focus bg-input px-1.5 text-sm text-ink outline-none"
+                />
+              </form>,
+            )}
+          </div>
+        ) : (
+          <button
+            ref={row}
+            type="button"
+            {...tab}
+            onClick={() => onOpen(task.id)}
+            onContextMenu={(event) => openContextMenu(event, items, `Actions for ${task.id}`)}
+            onKeyDown={(event) => {
+              if (event.key === 'F2') {
+                event.preventDefault()
                 event.stopPropagation()
                 startRename()
-              }}
-              className={titleClass}
-            >
-              {task.title}
-            </span>,
-          )}
-        </button>
-      )}
-      {!renaming && (
-        <span className="absolute top-0.5 right-1 pointer-coarse:top-3">
-          <Menu
-            label={`Actions for ${task.id}`}
-            revealOnHover
-            onOpenChange={setMenuOpen}
-            items={items}
-          />
-        </span>
-      )}
+              } else if (event.key === 'Delete') {
+                event.preventDefault()
+                event.stopPropagation()
+                setRemoving(true)
+              } else if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
+                event.stopPropagation()
+                openContextMenu(
+                  {
+                    preventDefault: () => event.preventDefault(),
+                    currentTarget: event.currentTarget,
+                  },
+                  items,
+                  `Actions for ${task.id}`,
+                )
+              }
+            }}
+            aria-current={current ? 'true' : undefined}
+            aria-expanded={expandable ? open : undefined}
+            aria-label={`${rowLabel(task, now)}${unseen ? ', unseen' : ''}`}
+            aria-describedby={comet.of > 0 ? stepsId : undefined}
+            // The card takes its tint from the state.
+            data-state={tier === 'attention' ? task.state : undefined}
+            className={`${ROW} ${TIER[tier]} sb-row focus-inset hover:bg-hover aria-[current=true]:bg-selected group-focus-within/tree:aria-[current=true]:bg-selection-active`}
+          >
+            {body(
+              // biome-ignore lint/a11y/noStaticElementInteractions: the row around it is the button; a double click on the title is a shortcut for F2.
+              <span
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                  startRename()
+                }}
+                className={titleClass}
+              >
+                {task.title}
+              </span>,
+            )}
+          </button>
+        )}
+        {answers && !renaming && (
+          <button
+            type="button"
+            // The row keeps the one tab stop of the tree; Enter on it opens the task.
+            tabIndex={-1}
+            data-state={task.state}
+            aria-label={`Answer ${task.id}`}
+            onClick={onAnswer}
+            className="absolute bottom-2.5 left-8 h-5 rounded-md bg-[color-mix(in_srgb,var(--chip-fg)_15%,transparent)] px-1.5 text-2xs font-medium text-(--chip-fg) hover:bg-[color-mix(in_srgb,var(--chip-fg)_25%,transparent)]"
+          >
+            Answer
+          </button>
+        )}
+        {!renaming && (
+          <span className="absolute top-0.5 right-1 pointer-coarse:top-3">
+            <Menu
+              label={`Actions for ${task.id}`}
+              revealOnHover
+              onOpenChange={setMenuOpen}
+              items={items}
+            />
+          </span>
+        )}
+      </div>
+      {open && children}
       {removing && (
         <ConfirmDialog
           title="Remove the workspace?"
@@ -306,6 +454,72 @@ export function WorkspaceRow({
           onClose={() => setDeleting(false)}
         />
       )}
+    </li>
+  )
+}
+
+type AgentRowProps = {
+  row: ShellRow
+  // What the agent of this shell does now.
+  activity?: string
+  tab: RovingTab
+  onOpen: () => void
+}
+
+// A shell with no agent shows a terminal; an agent with no state yet, a muted ring.
+function RowGlyph({ row }: { row: ShellRow }) {
+  if (row.plain) {
+    return (
+      <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted">
+        <SquareTerminal size={ICON.xs} aria-hidden="true" />
+      </span>
+    )
+  }
+  if (row.state === null) {
+    return (
+      <span
+        data-tip="State not known yet"
+        className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted"
+      >
+        {/* The ring of the ready state at the size of the other shell glyphs, in muted. */}
+        <svg width={9} height={9} viewBox="-1 -1 9 9" aria-hidden="true">
+          <circle cx={3.5} cy={3.5} r={2.75} fill="none" stroke="currentColor" strokeWidth={1.5} />
+        </svg>
+      </span>
+    )
+  }
+  return <ShapeGlyph state={row.state} size={7} />
+}
+
+// One shell under a task, or a parallel stage with no shell yet: its state, its agent, what it
+// works on and does, and its shell.
+export function AgentRow({ row, activity, tab, onOpen }: AgentRowProps) {
+  const tag = shellTag(row)
+  return (
+    <li>
+      <button
+        type="button"
+        {...tab}
+        aria-label={shellRowName(row)}
+        onClick={onOpen}
+        className="focus-inset flex h-5.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-hover pointer-coarse:h-10"
+      >
+        <RowGlyph row={row} />
+        {row.agent !== null && (
+          <span data-tip={agentLabel(row.agent)} className="inline-flex shrink-0">
+            <AgentIcon agent={row.agent} />
+          </span>
+        )}
+        <span className={`shrink-0 font-medium ${row.plain ? 'text-muted' : 'text-ink-2'}`}>
+          {row.label}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-muted">{activity}</span>
+        {tag !== null && (
+          <span data-tip={`Shell ${row.shell}`} className="shrink-0 font-mono text-2xs text-muted">
+            {tag}
+          </span>
+        )}
+      </button>
     </li>
   )
 }

@@ -1,14 +1,20 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings } from '@natamux/core'
+import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type TaskState } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
-import { type SettingsOf, TaskEditError, TaskNotFoundError, TaskService } from './task-service.js'
+import {
+  isTaskEnded,
+  type SettingsOf,
+  TaskEditError,
+  TaskNotFoundError,
+  TaskService,
+} from './task-service.js'
 
 let dataDir: string
 let index: TaskIndex
@@ -195,8 +201,8 @@ describe('createTask with stages that are off', () => {
     expect(task.stages).toEqual([
       'spec',
       { id: 'build', parallel: ['test-spec', 'implement'] },
-      'review',
       'testing',
+      'agent-review',
       'release',
     ])
     expect(task.stage).toBe('spec')
@@ -737,6 +743,29 @@ describe('setWorkflow', () => {
     ])
   })
 
+  it('turns the check on CI on and off for a stage that offers it, and logs each change', () => {
+    const task = service.createTask({ title: 'Export' })
+    expect(task.ciStages).toBeUndefined()
+
+    const on = service.setCi(task.id, 'implement', true)
+    expect(on.ciStages).toEqual(['implement'])
+    expect(readTaskFile(dataDir, task.id)?.ciStages).toEqual(['implement'])
+    expect(service.setCi(task.id, 'testing', true).ciStages).toEqual(['implement', 'testing'])
+    expect(service.setCi(task.id, 'implement', false).ciStages).toEqual(['testing'])
+    expect(
+      service
+        .listEvents(task.id)
+        .filter((entry) => entry.event.type === 'stage.ci-set')
+        .map((entry) => entry.event.payload),
+    ).toEqual([
+      { stage: 'implement', on: true },
+      { stage: 'testing', on: true },
+      { stage: 'implement', on: false },
+    ])
+    expect(() => service.setCi(task.id, 'spec', true)).toThrow(/project settings/)
+    expect(() => service.setCi(task.id, 'nope', true)).toThrow(TaskEditError)
+  })
+
   it('logs nothing when the choice does not change', () => {
     const task = service.createTask({ title: 'Export' })
     service.setWorkflow(task.id, 'implement', true)
@@ -798,7 +827,7 @@ describe('setWorkflow', () => {
     service.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
-      payload: { to: 'review', stage: 'review' },
+      payload: { to: 'review', stage: 'agent-review' },
     })
     expect(service.setWorkflow(task.id, 'plan', true).workflowStages).toEqual(['plan'])
   })
@@ -828,5 +857,23 @@ describe('setWorkflow', () => {
     expect(fresh.listTasks()[0]?.workflowStages).toEqual(['implement'])
     expect(fresh.listEvents(task.id).at(-1)?.event.type).toBe('stage.workflow-set')
     freshIndex.close()
+  })
+})
+
+describe('isTaskEnded', () => {
+  const withState = (state: TaskState) => ({ getTask: () => ({ state }) })
+
+  it('ends the shells of a done or cancelled task', () => {
+    expect(isTaskEnded(withState('done'), 'T-0001')).toBe(true)
+    expect(isTaskEnded(withState('cancelled'), 'T-0001')).toBe(true)
+  })
+
+  it('keeps the shells of a task that is still active', () => {
+    expect(isTaskEnded(withState('running'), 'T-0001')).toBe(false)
+    expect(isTaskEnded(service, service.createTask({ title: 'Export' }).id)).toBe(false)
+  })
+
+  it('ends the shells of a task that is gone', () => {
+    expect(isTaskEnded(service, 'T-9999')).toBe(true)
   })
 })

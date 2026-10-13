@@ -62,7 +62,7 @@ On the dashboard, the state of the task updates by itself, because Natamux's hoo
 
 ## 4. Answer when it needs you
 
-When an agent asks a question or waits for a permission, the task moves to **Needs input**. The **Needs you** strip at the top of the dashboard names it, and the title bar shows a count such as "1 needs you".
+When an agent asks a question or waits for a permission, the task moves to **Needs your input**. The **Needs you** strip at the top of the dashboard names it, and the title bar shows a count such as "1 needs you".
 
 1. Click the task in the strip.
 2. Click **Answer in terminal** on the banner.
@@ -92,7 +92,7 @@ Open the **Changes** tab. It lists the changed files and shows a diff for each o
 
 ## 7. Commit, push and open a pull request
 
-1. In the **Changes** tab, write a commit message and click **Commit all**. It commits every change, new files included.
+1. In the **Changes** tab, write a commit message, or click **Generate** to let the agent draft one. Then click **Commit all**. It commits every change, new files included.
 2. Click **Push** in the task header. The button shows how many commits are ahead, for example **Push ↑2**.
 3. Click **Create pull request**. It needs the `gh` command, logged in. When the pull request exists, the button becomes **Open pull request**.
 

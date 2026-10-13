@@ -18,6 +18,8 @@ const FIELD_LABELS: Record<string, string> = {
   sections: 'Required sections',
   command: 'Command',
   doneWhen: 'Finished when',
+  agent: 'Agent',
+  args: 'Arguments',
 }
 
 // The rules of `pipelineSchema` and of the catalog, as one message per problem. Each stage is

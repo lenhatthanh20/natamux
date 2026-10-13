@@ -8,7 +8,8 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentRun } from './commit-drafter.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { GitError, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
@@ -134,6 +135,55 @@ describe('create', () => {
     const failure = results.find((result) => result.status === 'rejected')
     expect(failure?.status === 'rejected' && failure.reason).toBeInstanceOf(WorkspaceConflictError)
   })
+
+  // The main checkout was not pulled: a new task starts from its remote branch, fetched now.
+  it(
+    'starts a new workspace from the newest remote branch when the checkout is behind',
+    async () => {
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'push', '-u', 'origin', 'main')
+      // Someone else pushes a commit, and the checkout does not pull it.
+      const other = join(repo.root, 'other')
+      runGit(repo.root, 'clone', origin, other)
+      writeFileSync(join(other, 'newer.txt'), 'newer\n')
+      runGit(other, 'add', 'newer.txt')
+      runGit(other, 'commit', '-m', 'newer')
+      runGit(other, 'push', 'origin', 'main')
+      const newer = runGit(other, 'rev-parse', 'HEAD').trim()
+      const before = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+
+      const created = await workspaces.create(tasks.createTask({ title: 'Fresh' }).id)
+
+      expect(runGit(created.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(newer)
+      expect(runGit(repo.dir, 'rev-parse', 'HEAD').trim()).toBe(before)
+      // The task branch follows no branch, so a plain push never goes to main.
+      expect(() => runGit(created.workspace ?? '', 'rev-parse', '@{upstream}')).toThrow()
+      // The diff counts the task's own work, not the commits the checkout did not pull.
+      expect((await workspaces.diffStats())[created.id]).toEqual({ files: 0, added: 0, removed: 0 })
+    },
+    GIT_TEST_MS,
+  )
+
+  it(
+    'keeps local commits that are not pushed, and works without a remote or a network',
+    async () => {
+      // No remote: the checkout's HEAD, as before.
+      const head = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+      const first = await workspaces.create(tasks.createTask({ title: 'No remote' }).id)
+      expect(runGit(first.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(head)
+
+      // A remote that is gone, and a local commit ahead of what was pushed.
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'push', '-u', 'origin', 'main')
+      runGit(repo.dir, 'commit', '--allow-empty', '-m', 'local only')
+      const local = runGit(repo.dir, 'rev-parse', 'HEAD').trim()
+      rmSync(origin, { recursive: true, force: true })
+
+      const second = await workspaces.create(tasks.createTask({ title: 'Offline' }).id)
+      expect(runGit(second.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(local)
+    },
+    GIT_TEST_MS,
+  )
 
   it('leaves the task as it was when git fails', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
@@ -977,6 +1027,183 @@ describe('commit, push and pull request', () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await expect(workspaces.commit(task.id, 'x')).rejects.toThrow(WorkspaceConflictError)
     await expect(workspaces.push(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+})
+
+describe('draftCommitMessage', () => {
+  let runs: AgentRun[]
+  let answer: (run: AgentRun) => Promise<string>
+  let logged: string[]
+
+  beforeEach(() => {
+    runs = []
+    logged = []
+    answer = async () => 'Add the fix\n'
+    workspaces = new WorkspaceService({
+      log: (message) => logged.push(message),
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      programOf: (agent) => `my-${agent}`,
+      runAgentOnce: (run) => {
+        runs.push(run)
+        return answer(run)
+      },
+    })
+  })
+
+  async function taskWithWork() {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    writeFileSync(join(created.workspace ?? '', 'fix.txt'), 'fixed\n')
+    return created
+  }
+
+  it('asks the task agent, with the diff, and leaves the worktree as it was', async () => {
+    const task = await taskWithWork()
+    tasks.recordAgentLaunch(task.id, 'codex')
+    const workspace = task.workspace ?? ''
+    const status = runGit(workspace, 'status', '--porcelain')
+    const events = tasks.listEvents(task.id).length
+
+    const draft = await workspaces.draftCommitMessage(task.id)
+
+    expect(draft).toEqual({ message: 'Add the fix', source: 'agent', agent: 'codex' })
+    expect(runs).toHaveLength(1)
+    expect(runs[0]).toMatchObject({ agent: 'codex', program: 'my-codex', cwd: workspace })
+    expect(runs[0]?.prompt).toContain('Task: Fix the bug')
+    expect(runs[0]?.prompt).toContain('+fixed')
+    expect(runGit(workspace, 'status', '--porcelain')).toBe(status)
+    expect(tasks.listEvents(task.id)).toHaveLength(events)
+    expect(tasks.getTask(task.id).state).toBe(task.state)
+  })
+
+  it.each([null, 'shell'])('uses Claude Code for a task whose agent is %j', async (agent) => {
+    const task = await taskWithWork()
+    if (agent !== null) {
+      tasks.recordAgentLaunch(task.id, agent)
+    }
+    expect(await workspaces.draftCommitMessage(task.id)).toMatchObject({ agent: 'claude-code' })
+    expect(runs[0]?.program).toBe('my-claude-code')
+  })
+
+  it('gives the simple draft when the agent fails', async () => {
+    const task = await taskWithWork()
+    answer = async () => {
+      throw new Error('my-claude-code exited with code 127')
+    }
+    expect(await workspaces.draftCommitMessage(task.id)).toEqual({
+      message: 'Add fix.txt',
+      source: 'draft',
+      agent: 'claude-code',
+      reason: 'my-claude-code exited with code 127',
+    })
+    expect(logged).toEqual([
+      `No commit message draft by claude-code for ${task.id}: my-claude-code exited with code 127`,
+    ])
+  })
+
+  it('logs nothing when the agent drafts', async () => {
+    const task = await taskWithWork()
+    await workspaces.draftCommitMessage(task.id)
+    expect(logged).toEqual([])
+  })
+
+  it('runs the agent once for two asks at the same time, and again after', async () => {
+    const task = await taskWithWork()
+    const [first, second] = await Promise.all([
+      workspaces.draftCommitMessage(task.id),
+      workspaces.draftCommitMessage(task.id),
+    ])
+    expect(second).toEqual(first)
+    expect(runs).toHaveLength(1)
+
+    await workspaces.draftCommitMessage(task.id)
+    expect(runs).toHaveLength(2)
+  })
+
+  it('starts a new run after a failed one, and runs once per task', async () => {
+    const one = await taskWithWork()
+    answer = async () => {
+      throw new Error('boom')
+    }
+    expect(await workspaces.draftCommitMessage(one.id)).toMatchObject({ source: 'draft' })
+    answer = async () => 'Add the fix'
+    expect(await workspaces.draftCommitMessage(one.id)).toMatchObject({ source: 'agent' })
+    expect(runs).toHaveLength(2)
+
+    const other = tasks.createTask({ title: 'Other' })
+    const created = await workspaces.create(other.id)
+    writeFileSync(join(created.workspace ?? '', 'other.txt'), 'x\n')
+    await Promise.all([
+      workspaces.draftCommitMessage(one.id),
+      workspaces.draftCommitMessage(other.id),
+    ])
+    const cwds = new Set(runs.slice(2).map((run) => run.cwd))
+    expect(cwds).toEqual(new Set([one.workspace, created.workspace]))
+  })
+
+  // An agent run that ends when the test says so.
+  function heldAgent() {
+    const held = { started: false, finish: (_text: string) => {} }
+    const run = () =>
+      new Promise<string>((done) => {
+        held.started = true
+        held.finish = done
+      })
+    return { held, run }
+  }
+
+  it('does not wait for a push, and does not hold a commit back', async () => {
+    let release: () => void = () => {}
+    const blocked = new Promise<void>((done) => {
+      release = done
+    })
+    const gh: RunGh = async () => {
+      await blocked
+      return 'https://github.com/o/r/pull/1\n'
+    }
+    const first = heldAgent()
+    workspaces = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      gh,
+      runAgentOnce: first.run,
+    })
+    addBareOrigin(repo)
+    const task = await taskWithWork()
+    await workspaces.commit(task.id, 'First')
+    writeFileSync(join(task.workspace ?? '', 'more.txt'), 'more\n')
+
+    const opening = workspaces.openPullRequest(task.id)
+    const drafting = workspaces.draftCommitMessage(task.id)
+    await vi.waitFor(() => expect(first.held.started).toBe(true), { timeout: 10_000 })
+    first.held.finish('Add more')
+    expect(await drafting).toMatchObject({ message: 'Add more' })
+    release()
+    await opening
+
+    const second = heldAgent()
+    workspaces = new WorkspaceService({
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      runAgentOnce: second.run,
+    })
+    const waiting = workspaces.draftCommitMessage(task.id)
+    await vi.waitFor(() => expect(second.held.started).toBe(true), { timeout: 10_000 })
+    await workspaces.commit(task.id, 'Add more')
+    second.held.finish('Late')
+    expect(await waiting).toMatchObject({ message: 'Late' })
+  })
+
+  it('refuses when nothing changed, or there is no workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    await expect(workspaces.draftCommitMessage(task.id)).rejects.toThrow(WorkspaceConflictError)
+    await workspaces.create(task.id)
+    await expect(workspaces.draftCommitMessage(task.id)).rejects.toThrow(NothingToCommitError)
+    expect(runs).toEqual([])
   })
 })
 

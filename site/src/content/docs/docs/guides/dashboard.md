@@ -32,13 +32,18 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 - **All tasks** shows the task list in the main area. The number is every task.
 - **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto.
 - **Needs you** lists the tasks that wait for you. See [Needs you](#needs-you).
-- **Workspaces** lists workspaces in folders, one per project. A workspace row shows its state, title, age, branch, the size of its diff, and what the agent does now or asks.
+- **Workspaces** lists workspaces in folders, one per project. How much room a row takes follows what it needs:
+  - A task that waits on you, failed or is blocked is a tinted card. It shows the agent's question, or why the task failed, on up to two lines. On a task that asks, **Answer** opens the terminal of the agent that asked.
+  - A task that works, waits for review or is ready has two lines: the title and age, then the task id, the step and stage (such as "3/5 Review"), the subtasks done, what the agent does now, the pull request and the agent's icon. Hover the id to see the branch.
+  - A finished, cancelled or draft task is one short line.
+  - The icon before the title has its own shape for each state: a ring for ready, a dot that breathes while an agent works, a diamond for a question, a square for review, a triangle for a failure and a check for done. A blue dot marks a change you have not seen yet.
 
 In the workspace list:
 
 - Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
+- Only the open workspace shows the work under it: one row per shell, then its open subtasks. Click a task, or press `Right` on it, to open it; the task that was open before folds. A shell row shows the state, the agent's icon, the stage (or **Shell 2** for an agent you started yourself), what the agent does and the shell (**S1**). A shell with no agent shows a terminal icon and its program, such as **zsh**. Click a shell row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the shells of tasks that work or wait, and of the open workspace.
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path**, **Remove workspace** and **Delete task**. **Remove workspace** deletes the worktree and keeps the task. **Delete task** deletes the task, its notes and its history, and the worktree when there is one. Both ask first. Pinned workspaces move to a **Pinned** section at the top.
 - Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.
@@ -59,7 +64,7 @@ Pick a view with the **Layout** switch above the list.
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
-The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
+The default order puts what needs you first: Needs your input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
@@ -114,7 +119,7 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 | Draft | A task in the backlog. |
 | Ready | Marked ready to start. |
 | Running | An agent works on it. |
-| Needs input | The agent asked a question. |
+| Needs your input | The agent asked a question, or ended its turn without `natamux done`. |
 | In review | Work is ready for you to review. |
 | Blocked | You or Natamux blocked it. |
 | Failed | The agent or a stage failed. |
@@ -125,7 +130,7 @@ See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 ## Needs you
 
-A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
+A task needs you when it is in Needs your input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
 - The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage and what the agent asks, or why the task failed, with how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
 - The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks.
@@ -169,6 +174,9 @@ Click **Settings** in the menu of a project to open **Project settings of <repo>
 | **Name** | Every stage | The name in the dashboard. |
 | **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. Shows **Default** or **Changed**. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
+| **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
+| **Agent** | Agent stages beside the stage in Shell 1, such as Test spec, and stages in their own shell, such as Review | The agent this stage starts. **Task's agent** keeps the task's own. |
+| **Arguments** | The same stages | Words added to that agent's command line, such as `--model sonnet`. |
 | **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. |
 | **Command** | Testing stages | The command to run. The Lint and types and End-to-end tests stages need one. |
 | **Output file** | Agent stages | The Markdown file the stage writes. Fixed for a catalog stage. |

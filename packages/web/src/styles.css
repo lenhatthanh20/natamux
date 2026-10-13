@@ -13,7 +13,7 @@
   --raised: #f6f7f9;
   --popover: #ffffff;
   --input: #ffffff;
-  --terminal: #fbfbfc;
+  --terminal: #f7f9fd;
   --scrim: rgb(15 17 20 / 0.32);
   --scrim-palette: rgb(15 17 20 / 0.12);
   --skeleton: rgb(20 24 31 / 0.06);
@@ -105,7 +105,7 @@
   --raised: #1c1d21;
   --popover: #1c1d21;
   --input: #0f1012;
-  --terminal: #0b0c0e;
+  --terminal: #0f1219;
   --scrim: rgb(0 0 0 / 0.5);
   --scrim-palette: rgb(0 0 0 / 0.24);
   --skeleton: rgb(255 255 255 / 0.06);
@@ -234,7 +234,7 @@
   --color-tooltip-fg: var(--tooltip-fg);
   --shadow-pop: var(--shadow-1);
   --shadow-modal: var(--shadow-2);
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono:
     "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
@@ -496,6 +496,154 @@
   animation: hm-dialog var(--dur-modal) var(--ease-out);
 }
 
+/* Sidebar rows. A bar marks the open workspace; a row that starts to wait flashes once. */
+.sb-row {
+  position: relative;
+}
+
+.sb-row::before {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  left: 0;
+  width: 2px;
+  border-radius: 9999px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.sb-row[aria-current="true"]::before {
+  transform: scaleY(1);
+}
+
+.sb-chevron {
+  transition: transform var(--dur-hover) var(--ease-out);
+}
+
+.sb-unfold {
+  animation: hm-pop var(--dur-modal) var(--ease-out);
+}
+
+/* Only a running glyph moves, and slowly. A row that needs the user is a tinted card. */
+@keyframes sb-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.sb-breathe {
+  animation: sb-breathe 2.4s ease-in-out infinite;
+}
+
+.row-attn {
+  background: color-mix(in srgb, var(--chip-fg) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-fg) 35%, transparent);
+}
+
+@keyframes sb-flash {
+  to {
+    opacity: 0;
+  }
+}
+
+.sb-flash {
+  background: var(--signal-soft);
+  box-shadow: inset 0 0 0 1px var(--signal-line);
+  animation: sb-flash 600ms var(--ease-out) forwards;
+}
+
+/* The comet on a sidebar row (Comet.tsx). Its head moves when a step changes, and it sends out a
+   halo and sparks only while its stage runs. */
+.comet {
+  --comet: var(--chip-fg);
+  --comet-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.comet-track {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 0.6 1.8;
+  stroke-linecap: round;
+}
+
+.comet-from {
+  stop-color: var(--comet);
+  stop-opacity: 0;
+}
+
+.comet-to {
+  stop-color: color-mix(in oklab, var(--comet) 80%, white);
+}
+
+.comet-tail {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transition: transform 900ms var(--comet-ease);
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--comet) 70%, transparent));
+}
+
+.comet-head {
+  transition: transform 900ms var(--comet-ease);
+}
+
+.comet-core {
+  fill: color-mix(in oklab, var(--comet) 72%, white);
+  filter: drop-shadow(0 0 1.4px var(--comet))
+    drop-shadow(0 0 2.6px color-mix(in srgb, var(--comet) 60%, transparent));
+}
+
+.comet-shine {
+  fill: white;
+  opacity: 0.95;
+}
+
+.comet-spark {
+  fill: color-mix(in oklab, var(--comet) 55%, white);
+  opacity: 0;
+}
+
+.comet-halo {
+  fill: var(--comet);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.comet[data-state="running"] .comet-halo {
+  animation: comet-halo 1.6s ease-out infinite;
+}
+
+.comet[data-state="running"] .comet-spark {
+  animation: comet-spark 1.1s linear infinite;
+}
+
+.comet[data-state="running"] .comet-spark-late {
+  animation-delay: 0.55s;
+}
+
+@keyframes comet-halo {
+  from {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+@keyframes comet-spark {
+  from {
+    transform: translateX(-1px);
+    opacity: 0.9;
+  }
+  to {
+    transform: translateX(-8px);
+    opacity: 0;
+  }
+}
+
 .hm-scrim {
   animation: hm-fade var(--dur-modal) var(--ease-out);
 }
@@ -722,19 +870,31 @@
   border-top: 1px solid var(--line);
 }
 
-/* The terminal's scrollbar shows when the pointer is over the pane. */
-.hm-terminal .xterm-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.hm-terminal:hover .xterm-viewport,
-.hm-terminal:focus-within .xterm-viewport {
-  scrollbar-color: var(--scroll-hover) transparent;
-}
-
+/* xterm 6 draws its own scrollbar, which shows on hover and while scrolling. */
 .hm-terminal .xterm-scrollable-element > .scrollbar > .slider {
   border-radius: 9999px;
+}
+
+/* Nerd Font icons for terminals (lib/fonts.ts). The unicode-range holds only the icons, so the
+   file loads the first time an icon is drawn. U+26A1 is left out: it is an emoji, two cells wide. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+23FB-23FE, U+2630, U+2665, U+276C-2771, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}
+
+/* With several panes, the ones without the focus are dimmed, as in Ghostty. Only the screen is
+   dimmed, so the header and its needs-input bar stay clear. A click goes through to the pane.
+   No :has() here: each row xterm writes inside it would make the browser check it again. */
+.hm-panes:focus-within .hm-pane:not(:focus-within) .hm-terminal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--terminal);
+  opacity: 0.3;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -755,8 +915,27 @@
   .hm-dialog,
   .hm-scrim,
   .hm-slide-left,
-  .hm-slide-right {
+  .hm-slide-right,
+  .sb-unfold {
     animation: hm-fade 80ms linear;
+  }
+
+  .sb-row::before,
+  .sb-chevron {
+    transition: none;
+  }
+
+  .sb-flash {
+    display: none;
+  }
+
+  .sb-breathe {
+    animation: none;
+  }
+
+  .comet[data-state="running"] .comet-halo,
+  .comet[data-state="running"] .comet-spark {
+    animation: none;
   }
 
   .hm-skeleton {

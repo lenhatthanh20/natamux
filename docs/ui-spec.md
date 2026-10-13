@@ -29,8 +29,9 @@ All tokens live in `packages/web/src/styles.css`. Raw values on `:root` (light) 
 
 | Token | Value | Use |
 |---|---|---|
-| `--font-sans` | `"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text |
-| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd, terminal, diff |
+| `--font-sans` | `"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif` | all UI text. Inter at 13px is the UI font of JetBrains IDEs |
+| `--font-mono` | `"Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace` | ids, branches, paths, hashes, ports, +/- counts, kbd |
+| terminal (`TERMINAL_FONT` in `lib/fonts.ts`) | `"JetBrains Mono Variable", "Symbols Nerd Font Mono"`, then the `--font-mono` stack | terminals and code views (Monaco diff and file). The icon font is bundled (`src/assets/fonts`) and loads on the first icon |
 | body features | `font-feature-settings: "ss01", "cv11"; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased` | already set, keep |
 
 - Both fonts are already installed (`@fontsource-variable/geist`, `geist-mono`). No new font package.
@@ -77,7 +78,7 @@ Contrast = WCAG 2.x ratio, computed with the script in the study folder (`tools/
 | `--raised` | `bg-raised` | `#1c1d21` | `#f6f7f9` | secondary buttons, segmented track, kbd |
 | `--popover` | `bg-popover` | `#1c1d21` | `#ffffff` | menus, tooltips (dark), toasts, dialogs, palette |
 | `--input` | `bg-input` | `#0f1012` | `#ffffff` | text fields, selects, textareas (sunken in dark) |
-| `--terminal` | `bg-terminal` | `#0b0c0e` | `#fbfbfc` | terminal body (sunken) |
+| `--terminal` | `bg-terminal` | `#0f1219` | `#f7f9fd` | terminal body (sunken) |
 | `--scrim` | `bg-scrim` | `rgb(0 0 0 / 0.5)` | `rgb(15 17 20 / 0.32)` | behind dialogs, drawers on small screens |
 | `--skeleton` | `bg-skeleton` | `rgb(255 255 255 / 0.06)` | `rgb(20 24 31 / 0.06)` | loading bars |
 | `--badge` | `bg-badge` | `#2a2c31` | `#e6e8ec` | count badges |
@@ -175,21 +176,21 @@ Running (blue) and needs-input (amber) are far apart in hue, so "working" never 
 
 #### Terminal ANSI palettes (xterm `ITheme`)
 
-Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Black is a background color in practice; its 1.9 is fine because the ratio option lifts it when used as text.
+The "Night" palette, picked from four designs in `docs/design-terminal-look.md` (2026-10-12). Ratios are against the background. Set `minimumContrastRatio: 4.5` too, so any app color is pushed to readable (fixes WS-11). Dark black is a background color in practice; its 1.7 is fine because the ratio option lifts it when used as text.
 
-| | Dark (on `#0b0c0e`) | Light (on `#fbfbfc`) |
+| | Dark (on `#0f1219`) | Light (on `#f7f9fd`) |
 |---|---|---|
-| background / foreground | `#0b0c0e` / `#e6e7ea` | `#fbfbfc` / `#17191d` |
-| cursor / cursorAccent | `#7aa2ff` / `#0b0c0e` | `#2f5fe0` / `#fbfbfc` |
-| selectionBackground | `#7aa2ff4d` | `#2f5fe033` |
-| black / brightBlack | `#3a3f4b` / `#7d828c` (5.1) | `#24272d` / `#5f6570` (5.7) |
-| red / brightRed | `#ff7b72` (7.8) / `#ffa198` | `#c0362c` (5.3) / `#b93a30` (5.5) |
-| green / brightGreen | `#6fd19a` (10.5) / `#8fe0b0` | `#1c7442` (5.6) / `#237a48` (5.1) |
-| yellow / brightYellow | `#e8c15a` (11.4) / `#f5d47a` | `#8a5a00` (5.7) / `#8f6000` (5.3) |
-| blue / brightBlue | `#7aa2ff` (7.9) / `#a5c0ff` | `#2448b8` (7.5) / `#2f5fe0` (5.3) |
-| magenta / brightMagenta | `#d09bff` (9.2) / `#e2bcff` | `#8a3fb8` (5.8) / `#8f45c2` (5.4) |
-| cyan / brightCyan | `#6cc4d6` (9.8) / `#97dbe8` | `#0b6274` (6.7) / `#0f7489` (5.2) |
-| white / brightWhite | `#c9ccd2` / `#f2f3f5` | `#5f6570` (5.7) / `#17191d` |
+| background / foreground | `#0f1219` / `#d6dcf0` (13.7) | `#f7f9fd` / `#1b2238` (15.0) |
+| cursor / cursorAccent | `#7aa2ff` / `#0f1219` | `#2f5fe0` / `#f7f9fd` |
+| selectionBackground / selectionInactiveBackground | `#7aa2ff47` / `#7aa2ff21` | `#2f5fe030` / `#2f5fe018` |
+| black / brightBlack | `#343b52` (1.7) / `#7c86a8` (5.2) | `#262d45` (12.9) / `#5d6684` (5.4) |
+| red / brightRed | `#f7768e` (7.1) / `#ff9bae` (9.4) | `#c4304f` (5.1) / `#b02a46` (6.1) |
+| green / brightGreen | `#8fd694` (10.9) / `#aee6b2` (13.2) | `#2c7a3a` (5.0) / `#256c33` (6.1) |
+| yellow / brightYellow | `#e6c07b` (10.9) / `#f0d39d` (12.9) | `#8c5f00` (5.3) / `#7b5300` (6.5) |
+| blue / brightBlue | `#7aa2ff` (7.5) / `#a6c1ff` (10.4) | `#2f5fe0` (5.2) / `#2448b8` (7.4) |
+| magenta / brightMagenta | `#bb9af7` (8.1) / `#d2bbfa` (10.9) | `#7c4dd6` (5.1) / `#6a3ec2` (6.5) |
+| cyan / brightCyan | `#6fd0e0` (10.5) / `#9ce0eb` (12.7) | `#0b6a80` (5.9) / `#095c6f` (7.2) |
+| white / brightWhite | `#b8c0dc` (10.4) / `#e8ecf8` (15.9) | `#5d6684` (5.4) / `#1b2238` (15.0) |
 
 The terminal follows the app theme (RA-17). A setting "Terminal: always dark" is P2.
 
@@ -272,8 +273,9 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 
 - What moves: opacity; menus and tooltips +4px slide from the anchor side; dialog and palette scale 0.98 to 1; drawer and sheet slide on X. Never animate panel width while dragging. No bounce.
 - Spinner (running glyph) 900ms linear rotation. Remove the opacity pulse on chips (calm).
+- Sidebar (`.sb-*` in `styles.css`): the current-row bar grows on Y over `--dur-pop`; chevrons turn over `--dur-hover`; an unfolded list slides in 4px over `--dur-modal`; a row added after the first paint slides in (`hm-pop`); a row that starts to need input flashes `--signal-soft` once over 600ms; a state glyph changes color over `--dur-modal`. The first paint does not move.
 - Skeleton shimmer 1.5s linear.
-- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`.
+- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`. Every `.sb-*` class is listed there too (a test checks it): unfold is an 80ms fade, the bar and chevrons do not move, no flash.
 - Feedback by wait time: under 100ms nothing; 100ms-1s the control is busy (disabled + label kept); 1-3s spinner in the control; over 3s a stage label ("Creating worktree...", "Pushing..."). Skeletons appear only after 200ms and stay at least 300ms (no flash, RA-29).
 
 ---------------------------------------------------------------------
@@ -287,7 +289,7 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | Title bar 36                                                     |
 +-----------+------------------------------------+-----------------+
 | Sidebar   | Main                               | Details         |
-| 272       | view header 44 / workspace hdr 44  | 360             |
+| 320       | view header 44 / workspace hdr 44  | 320             |
 | (220-440) | tabs 36                            | (320-560)       |
 |           | content                            |                 |
 +-----------+------------------------------------+-----------------+
@@ -305,7 +307,7 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 - Electron: whole bar is `-webkit-app-region: drag`; every control `no-drag`. Window inactive (`:root[data-window="inactive"]`): title bar text and icons use `--muted`.
 - Moves out of the sidebar header: "Natamux" title and the "Start a task" button (the sidebar keeps the filter field and lists).
 
-**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 272, min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
+**Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 320 (the same as the details), min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
 2. Nav rows (28px): All tasks + count, Agents + count.
 3. Needs you section (compact, see 4.12).
@@ -315,7 +317,7 @@ Only part 5 scrolls (fixes NAV-16).
 
 **Main** (`<main id="main">`), `bg-canvas`, `container-type: inline-size; container-name: main`. Min widths: terminal content 480, diff 560, table 360 (card list below 560).
 
-**Details** (`<aside>`), `bg-surface`, default 360, min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
+**Details** (`<aside>`), `bg-surface`, default 320 (the same as the sidebar), min 320, max 560, resizable. Modes: docked, overlay sheet, full page (see 3.2). Open/closed remembered per task id in the view store (fixes WS-16). Until the user opens or closes them, the details of a task are open when they dock beside its workspace (the task has a workspace), so its progress is in sight; elsewhere, and as a sheet or a page, they start closed. A list address hides the details without counting as a close. Auto-closed when the Changes tab opens and main would drop below 900 (WS-03/WS-25).
 
 **Status bar** (`components/StatusBar.tsx`), 28px, `bg-shell`, top border `--line`, items 24px (see 4.27).
 
@@ -331,8 +333,8 @@ Extra rule at every width: details dock only if main stays >= 640 after docking;
 
 | Width | Sidebar | Details | Main content | Title bar | Status bar |
 |---|---|---|---|---|---|
-| >= 1440 | docked 272 | docked 360 when open | table all columns; diff side by side; agents auto-fill | full | full |
-| 1280-1439 | docked 272 | docked if main >= 640, else sheet | table drops Branch | full | full |
+| >= 1440 | docked 320 | docked 320 when open | table all columns; diff side by side; agents auto-fill | full | full |
+| 1280-1439 | docked 320 | docked if main >= 640, else sheet | table drops Branch | full | full |
 | 1024-1279 | docked, default 248, max 30vw | sheet: slides over main from the right, 360, `--shadow-2`, no scrim, stays until Esc / close / toggle | table drops Branch + PR; diff inline if diff width < 720; agents max 2 columns | wordmark hidden | Projects / Import become icon-only with tooltips |
 | 768-1023 | drawer: 300 (max 85vw), slides from left over a scrim, opened by the title bar toggle or Mod+B, closes on pick / Esc / scrim click | sheet with scrim, 360 (max 90vw) | table: Id, Task, State, Last activity; diff inline only, file list collapses to a file picker above the diff; terminal panes stack when < 320 each; workspace header actions: Push stays, PR becomes icon+"PR" | breadcrumb shortened to task id | only Live dot, running, needs-you, `?`, account |
 | < 768 (design at 390) | drawer full height, width min(360, 100vw) | full page with a Back button (`ArrowLeft`), replaces main | table becomes a card list; board shows one column at a time with a state segmented control on top; workspace: title wraps to 2 lines, Push/PR go into a "..." menu, tabs scroll, ONE terminal at a time with a pane switcher (Shell 1 / Shell 2 chips); agents: 1 column, each pane `min-height: 60vh`, scroll; diff inline + wrap on; dialogs become bottom sheets; toasts full width | 44px: menu, view title, needs-you pill, `+`; command center becomes a `Search` icon button | hidden; Live state is a 6px dot on the title bar menu button; status items move to the drawer footer |
@@ -393,24 +395,39 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 - Used by: changed-file rows, menu rows, palette rows (32 there), nav rows.
 
 ### 4.9 Tree row: workspace row (`components/WorkspaceRow.tsx`)
-Anatomy (44px, pad 6/8, radius 6):
+The height follows what the row needs (`rowTier` in `lib/sidebar-tree.ts`). Pad 10 left and right, radius 6 (8 for a card), no chevron:
 ```
-[glyph16] Title (13/500, ink, truncate)                 [age 12 muted | ... on hover]
-          branch-slug (mono 12 muted, truncate)         [+12 -3 mono 12]
-          (running only) Edit notes/T-0018.md (12 muted, truncate)   -> +16px
-          (needs-input) "Which test runner?" (12 signal, truncate)   -> +16px
+attention (needs-input, failed, blocked), min 68px, card tinted with the state color (.row-attn):
+[glyph9] Title (13/600, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+         Which test runner should I use? (12 ink, up to 2 lines)
+         [Answer] T-0018 3/5 Review                                [agent]
+live (running, review, ready), min 40px:
+[glyph8] Title (13/500, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+         T-0018 3/5 Review [subtasks 1/3] Edit a.ts (ink-2, truncate)  [PR #12] [agent]
+quiet (done, cancelled, draft), min 24px:
+[glyph8] Title (12/400, ink-2; muted when finished, cancelled line-through)   [age 12 muted]
+   |  [glyph7] [agent12] Implement  Edit a.ts …                 S1
+   |  [term12] zsh                                              S2
 ```
-- Text column starts at 32px (8 pad + 16 glyph + 8 gap).
+- Text column starts at 32px (10 pad + 14 glyph slot + 8 gap); lines 2 and 3 indent 22px from the row's content edge, so they start under the title.
+- Glyph (`components/ShapeGlyph.tsx`): one shape per state in a 14px slot, in `--chip-fg`: ready hollow circle, draft dashed circle, running filled disc that breathes (opacity 1 → 0.45, 2.4s, `.sb-breathe`; still with reduced motion), needs-input filled diamond, blocked hollow diamond, review rounded square, failed triangle, done check in a circle, cancelled dash in a circle. A quiet running task shows a hollow diamond in the needs-input color ("Running, but quiet"). Tooltip and screen readers get the state label, as with `StatusGlyph`.
+- Task glyph: `running` while any row or parallel stage under the task runs, else the task state (`taskGlyphState`).
+- Only the open workspace shows the rows under it, and the parent of an open subtask. No row opens by itself, and the user cannot fold the open one. The row carries `aria-expanded` when it has work under it. A click, Enter or Right on a folded row opens that task.
+- Live line 2: repo chip (pinned rows), task id in mono (tooltip: branch), the step `n/m` (only with 2 steps or more; a parallel group is one step), the current stage (in a group the most urgent stage), subtasks `done/all`, what the agent does (running and folded only; open, the shell rows say it), pull request number in the checks color, the icon of the task's agent (icon only, tooltip: its name; folded and open, since the shell rows name the agent of each stage). Screen readers hear every step through `aria-describedby` ("Steps: Spec done, Implement needs your input, …").
+- Attention card: the question (needs-input; "Waiting for your answer" until it is known) or the reason (failed, blocked) on up to 2 lines, then id, step and stage. A needs-input card has an **Answer** button (`Answer T-0018`, not a tab stop) that opens the terminal of the waiting shell, or the first shell.
+- Under the open row, inside a 1px `--line` guide under the task glyph (`ml-4`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 22px (40 on touch), glyph lined up with the title: shape glyph 7 (muted ring, tooltip "State not known yet", for an agent with no state yet, such as one started by hand before a daemon restart; `SquareTerminal` 12 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, Claude Code, State not known"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read every 5 s while the tab is visible for tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
+- A finished or pinned subtask stays where it was (finished list, pinned group). An open subtask of a finished parent stays at the top level, so it is never folded away in "N finished". A subtask whose parent is not shown stays at the top level. A filter that matches a subtask keeps its parent in view, open, with the subtask under it.
+- Folds of groups and "N finished" lists are kept per browser in `natamux.sidebar-folds` (only what the user picked; the newest 300). Task rows keep no fold.
 - Age moves to line 1 and swaps with the "..." button on hover/focus, so the slug gets the full line 2 (fixes NAV-27 truncation) and nothing overlaps.
-- States: hover bg-hover; current (open in main) bg-selected + `inset 0 0 0 1px var(--line-strong)`; keyboard focus ring inset; selected + focused list bg-selection-active.
+- States: hover bg-hover; current (open in main) bg-selected + a 2px `--accent` bar at the left (`.sb-row`); keyboard focus ring inset; selected + focused list bg-selection-active.
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
-- Unseen change (agent finished or asked since the user last opened it): title weight 600 (P2).
-- Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (row keeps 44px, line 2 stays), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
-- Group header (repo): 28px, chevron 12, `FolderGit2` 14, name 13/500, count badge, hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (for every project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
+- Unseen change (agent finished or asked since the user last opened it): title weight 600 and a 6px accent dot before the age; the row name ends with ", unseen" (P2).
+- Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (the row keeps its height and other lines), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
+- Group header (repo): 28px band (radius 6, `--ink` 5%, 8% on hover; 8px between groups, 2px above the first row), chevron 12, `FolderGit2` 14 ink-2, name 13/600 ink, accent count badge (screen readers: "3 workspaces"), hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (for every project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
 - "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32. Hover `FolderMinus` button (24) "Remove finished workspaces in <project>": asks first, listing the task ids; removes the workspaces one after the other, skips any with changes that are not committed, and ends with one toast. Pinned workspaces are not part of it.
 - No projects: one 12 muted line "No projects yet" and an "Add project" text button that opens the projects panel. "Add task" is off with "Add a project first"; "Start a task" opens the projects panel with the toast "Add a project first."
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
-- Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group / moves to first child, Left collapses / moves to parent, Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
+- Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group, opens a folded task / moves to first child, Left collapses a group / moves to parent (the open task does not fold), Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
 
 ### 4.10 Status glyphs (`components/StatusGlyph.tsx`)
 16px box, 14px icon, stroke 2.25, color `--chip-fg` of the state. Every glyph has a different shape, so color is never the only cue (fixes WS-33, WS-35).
@@ -432,7 +449,7 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 
 ### 4.11 Chips and badges
 - State chip (`.state-chip`): 20px high, pad x 8, radius full, 12/500, 6px dot, `--chip-bg` / `--chip-fg`. No pulse animation.
-- Count badge: min-width 16, height 16, pad x 5, radius full, 11/600 tabular, bg badge, ink-2. Signal variant (needs-you): bg signal-soft, text signal, 1px signal-line.
+- Count badge: min-width 16, height 16, pad x 5, radius full, 11/600 tabular, bg badge, ink-2. Signal variant (needs-you): bg signal-soft, text signal, 1px signal-line. Accent variant (project headers): bg `--accent` 16%, text link (accent text is under 4.5:1 on it in light).
 - Label chip (task labels, relation "part of T-0014", "waits for T-0009"): 20px, pad x 6, radius 4, 12/400, 1px line, ink-2.
 - Kbd (`ui/Kbd.tsx`): height 18, min-width 18, pad x 4, radius 4, 11/500 mono, bg raised, 1px line, `box-shadow: inset 0 -1px 0 var(--line-strong)`, muted text. Renders platform keys: macOS glyphs joined (`⌘K`, `⇧⌘P`), Windows words with `+` (`Ctrl+K`). Source: `lib/keys.ts` `formatShortcut('Mod+K')`.
 
@@ -442,8 +459,9 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 - Rows are two lines, about 44px, pad 6 8, one button:
   - Line 1: glyph 16, title 13/500, truncate. Only the title, so it has the whole width.
   - Line 2, 12px, indented 24 to start under the title: stage muted (when there is one), reason in `--signal` ("asks", "review", "failed", "blocked", "quiet"), age muted at the right.
-- Cap at 3 rows + "Show all 5" link row. Ordered by longest wait. Rows here are not highlighted again in the tree below.
+- Cap at 3 rows + "Show all 5" link row. Ordered by longest wait. Rows here are not highlighted again in the tree below. The section is the one place in the sidebar with the question or reason as text; the tree row shows only the glyph (4.9, T-0015).
 - When 0: one muted line "Nothing needs you" (28px), so the section never jumps.
+- A polite live region (`role="status"`, sr-only) says "<title> needs you" when a task starts to wait. The tasks that wait when the page opens are not said.
 - The section ignores the sidebar filter on purpose (must stay in sight); a caps note "Not filtered" appears when a filter is active (NAV-15 count mismatch explained).
 
 ### 4.13 Menu (`ui/Menu.tsx`)
@@ -524,11 +542,14 @@ Shared shell:
 
 ### 4.23 Terminal pane header (`components/TerminalPane.tsx`)
 - Height 32 fixed (fixes the 29/30px mismatch, WS-12), pad 0 4 0 10, bg surface, border-bottom line.
-- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); role chip "Agent" only when an agent runs in it (WS-13); state text 12 muted truncate ("Running · Edit notes/T-0018.md", WS-21).
+- Left: status glyph 16 (agent panes) or `SquareTerminal` 14 (shells); title 12/500 ink ("Shell 2", or in Agents: `T-0018` mono muted + task title as a link-style button with pointer cursor, underline on hover, tooltip "Open workspace T-0018", WS-20); agent badge only when an agent runs in it, naming the agent the daemon found there, not the task's (WS-13); state text 12 muted truncate; an agent on no stage (started by hand in an extra shell) shows the state its own hooks gave, or none ("Running · Edit notes/T-0018.md", WS-21).
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
-- Needs-input pane: 2px top bar `--signal`, header bg signal-soft, state text "Needs your input" in signal (WS-21).
-- Body: bg terminal, pad 8 10. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Shell ended" + [Start a new shell]) as a 28px strip at the top of the body.
+- Opening another task's workspace on its Terminal tab puts the keyboard in its first agent shell (the lowest-numbered shell that runs an agent, else Shell 1), once the shells are read. Not on a phone, not when opened from an address, and a shell picked in the jump palette wins.
+- Needs-input pane: one mark only, the state text "Needs your input" in signal. No top bar and no header tint (WS-21, T-0015).
+- In a workspace the mark shows only while two or more agent panes are on the screen, so it says which one waits. With one agent pane (also when one is maximized, and on a phone) the pane shows no state text for needs-input: the banner over the tabs says it. The Agents grid has no banner, so its panes always show the mark.
+- Body: bg terminal, pad 8 top and bottom, 10 left, 2 right (xterm keeps 8 for its scrollbar, so text has 10 on both sides). 13px, line height 1 (xterm multiplies the font's own height: about 17px rows, as in Ghostty and VS Code), bold 700 in its own color (not bright), block cursor, outline cursor when unfocused, Alt + wheel scrolls 5×. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Reconnecting", "Could not start" + [Start a new shell]) as a 28px strip at the top of the body. "Reconnecting" shows while a dropped connection comes back by itself; it has no button, the screen stays as it was, and the output missed meanwhile follows. If the shell is gone by then (a daemon restart), the pane shows the ended state below. A pane that comes back (another tab, another task) shows the same screen and scroll position at once, with no strip; "Connecting" shows only for a new connection. While a new connection writes the shell's history, the screen stays hidden and the body shows the pane's skeleton; the final screen then shows at once, scrolled to the bottom, so no history scrolls by. An ended shell dims the screen (opacity 60%), hides the cursor and takes no input; a 32px bar at the bottom (bg surface, border-top) shows the task state glyph (done, cancelled) or `SquareTerminal`, the reason, and [Open a new shell].
+- With two or more panes, the panes without the focus get a dim layer over the body: `--terminal` at 0.3 opacity, no animation, clicks go through (`.hm-panes` / `.hm-pane` in `styles.css`).
 
 ### 4.24 Diff view chrome (`components/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
 - Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.
@@ -536,13 +557,13 @@ Shared shell:
   - List view: status colour on the file name, folder 12 muted truncated at the start, `+12 −3` when the panel is at least 15rem wide, status letter in a 16px mono box with tooltip.
   - Tree view: folders first, natural sort, single-child folders compacted ("web/src"), 12px indent a level, indent guides on hover or focus, chevrons on folders. A collapsed folder shows its summed counts. Collapsed folders are kept per task while the page is open. Arrow keys, Home, End and type-ahead work as in VS Code.
   - Per-file counts come from `git diff --numstat`, and a line count for untracked text files. Binary files, files that are too big, and untracked files after the first 300 have no counts.
-  - Commit box docked at the bottom of the panel: textarea (3 rows, placeholder "Commit message"), primary `Commit all` full width with `Mod Enter` kbd.
+  - Commit box docked at the bottom of the panel: textarea (3 rows, placeholder "Commit message"), then a row: ghost `Generate` (Sparkles icon, tooltip "Draft a message with the task's agent", `Mod+Shift+G`) and primary `Commit all` filling the rest with `Mod Enter` kbd. While `Generate` runs it is busy and `Commit all` is off with the reason "Drafting the message…". The draft replaces the text only when the user did not type meanwhile. `Commit…` in the header drafts when the box is empty.
 - Diff toolbar (`DiffToolbar`, min 36, wraps):
   - Left: the path (mono 12, folder muted / name ink; a rename shows `old → new`, tooltip "Renamed from x to y"), Copy path, badge "New file · N lines" / "Deleted · N lines".
   - Right: `+12 −3` (text diffs); change navigator (Previous change `Shift+Alt+F5`, "2 of 7" or "7 changes", Next change `Alt+F5`; wraps at the ends); Segmented [Side by side | Inline] (icons only under 960; [Side by side | Stacked] for images); Collapse unchanged lines (aria-pressed); Wrap long lines (aria-pressed); Show image preview (SVG only); Diff options menu (Ignore leading and trailing whitespace, Show moved code); prev/next file (`[` `]`, in the order of the file panel).
 - Remembered per browser: `natamux.diff-side-by-side` (on), `natamux.diff-collapse-unchanged` (on), `natamux.diff-ignore-whitespace` (on), `natamux.diff-show-moves` (off), `natamux.diff-wrap-prose` (on), `natamux.diff-wrap-code` (off).
 - Side by side is offered only when the diff column >= 720. Below it the control shows Inline selected and Side by side disabled with tooltip "Needs a wider window" (WS-03). The stored choice is kept and comes back on a wider window. Monaco's own switch (`useInlineViewWhenSpaceIsLimited`) is off, so only one rule decides.
-- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = mono stack, `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
+- Monaco fills the remaining height (`flex-1 min-h-0`, no `70vh`, WS-15). Options: theme from the app theme (not `prefers-color-scheme`, root cause of the white editor WS-01), `fontFamily` = `TERMINAL_FONT` (JetBrains Mono, as the terminal; `remeasureFonts()` once it loads), `fontSize` 12, `lineHeight` 18, `lightbulb` off, `glyphMargin: false`, `diffAlgorithm: 'advanced'`, `renderOverviewRuler: true` (green and red marks), `hideUnchangedRegions` (context 3, reveal 20) from the toggle, sticky scroll, `wordWrap` from the toggle (prose files wrap by default, WS-04), `scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }`.
 - The editor is built again only for a new file or a new UI size. Every other option, and new text from the 10 s refresh, updates it in place, so the scroll position stays.
 - New or deleted files are not diffs: show a read-only single editor with the whole file decorated as added (or removed), and no phantom empty line (WS-02). An empty one shows "Empty file."
 - Notices instead of an editor: "Renamed without changes.", "The text did not change. Only the file mode may differ.", binary, larger than 1 MB. Above the editor, when the diff finds nothing: "Only whitespace or line endings changed." with [Show whitespace].
@@ -596,9 +617,9 @@ Shared shell:
 
 ### 4.29 View header and workspace header
 - View header 44, pad x 16, border-bottom line: title 15/600 + count badge (NAV-31), then the state filter (4.30), then right: Show finished (board only), Segmented Table/Board (`aria-label="Layout"`, options "Table", "Board", NAV-22).
-- Workspace header 44, pad x 16: id mono 12 muted · title 16/600 truncate (wraps to 2 lines < 768) · state chip · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows the commits that `origin/<branch>` does not have, and `↓N` when origin has commits the branch lacks; "Publish branch" when origin has no branch of this name; `aria-disabled` + tooltip with the reason when nothing to push, origin is ahead, no `origin` remote or no branch, WS-05), [Create pull request] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; label "Open PR" when main < 900, nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
+$1(hidden while needs-input: the needs-input banner says it, T-0015) · branch chip (mono 12, middle-truncated, copy on click, tooltip full name, WS-27) · right: [Push ↑2] secondary (label shows the commits that `origin/<branch>` does not have, and `↓N` when origin has commits the branch lacks; "Publish branch" when origin has no branch of this name; `aria-disabled` + tooltip with the reason when nothing to push, origin is ahead, no `origin` remote or no branch, WS-05), [Create pull request] primary (`aria-disabled` + tooltip "Push first" when nothing is pushed/no commits; label "Open PR" when main < 900, nowrap, RA-07), details toggle. Below 768 Push/PR move into a "..." menu.
 - Git action results go to toasts, never a status line inside the header (fixes WS-09 layout shift).
-- Needs-input banner (`components/NeedsInputBanner.tsx`) under the header when the task is needs-input: 40px, bg signal-soft, top+bottom 1px signal-line, `CircleQuestionMark` 16 signal, text "The agent asks: <question>" (from the latest needs-input event payload; fallback "The agent is waiting for your answer in Shell 1."), right: [Answer in terminal] (focuses Shell 1) [Resume] (WS-08).
+- Needs-input banner (`components/NeedsInputBanner.tsx`) under the header when the task is needs-input: 40px, bg signal-soft, top+bottom 1px signal-line, `CircleQuestionMark` 16 signal, text "The agent asks: <question>" (from the latest needs-input event payload; fallback "The agent is waiting for your answer in its terminal."; an agent that ended its turn without `natamux done`: "The agent ended its turn. Reply in the terminal, or resume it."), right: [Answer in terminal] (focuses Shell 1) [Resume] (WS-08). It is the one place in the workspace with the reason, on every tab.
 
 ### 4.30 State filter (`components/StateFilter.tsx`)
 - Main >= 900: chip buttons 24 high (dot + label + count, radius 6, `aria-pressed`). The row measures itself; chips that do not fit fold into a "+N" menu button (checkbox items). Needs-you states come first. Never clipped (NAV-04, RA-05).
@@ -830,7 +851,7 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | W-05 | P0 | WS-08 | new `components/NeedsInputBanner.tsx`, `ChangesView.tsx`, `lib/events.ts` | Banner per 4.29 under the workspace header for needs-input tasks; question text from the latest needs-input event (if the payload has none, the fallback sentence); [Answer in terminal] switches to Terminal and focuses Shell 1; [Resume] sends `agent.resumed`. |
 | W-06 | P1 | WS-09 | `ChangesView.tsx` | Remove the in-header notice line; results and errors of commit/push/PR go to toasts (errors with [Show details]). Busy state stays in the button (spinner + locked width). |
 | W-07 | P1 | WS-10 | `components/GitGraph.tsx` | Ref chips capped at 2 + "+N" chip with tooltip listing the rest; message column `min-w-0 truncate`; graph-to-message gap 12; Refresh moves onto the summary row as an icon button. |
-| W-08 | P1 | WS-12, WS-21, WS-20, NAV-34 | `components/TerminalPane.tsx`, `AgentPanes.tsx`, `ShellPanes.tsx` | Pane header per 4.23: fixed 32px, 24px icon buttons, maximize/restore (`Mod+Shift+Enter`), state text + last activity, needs-input top bar and tint, focused-pane outline, title button with pointer cursor and "Open workspace" tooltip. |
+| W-08 | P1 | WS-12, WS-21, WS-20, NAV-34 | `components/TerminalPane.tsx`, `AgentPanes.tsx`, `ShellPanes.tsx` | Pane header per 4.23: fixed 32px, 24px icon buttons, maximize/restore (`Mod+Shift+Enter`), state text + last activity, needs-input state text in signal (no bar or tint since T-0015), focused-pane outline, title button with pointer cursor and "Open workspace" tooltip. |
 | W-09 | P1 | WS-13 | `packages/daemon/src/agent-runner.ts`, `packages/daemon/src/agent-runner.test.ts`, `ShellPanes.tsx` | Start the agent without echoing its full launch command (run it through a short wrapper script or clear the line before exec; test that the scrollback does not contain the settings path). Label Shell 1 "Agent" only when `task.agent` is set; otherwise "Shell 1". |
 | W-10 | P1 | WS-14 | `TerminalView.tsx`, `packages/daemon/src/terminal-service.ts` | Debounce `fit()` to 100ms on ResizeObserver; send resize only when cols/rows change; on re-attach send the current size before replaying scrollback; cap replayed scrollback to the last screen + 1000 lines. |
 | W-11 | P1 | WS-18 | `lib/view-store.ts`, `Dashboard.tsx` | Per-workspace last tab `tabByTask: Record<string, WorkspaceTab>`; open rules per 5.4 (running/needs-input -> Terminal; new workspace -> Terminal; else last tab, default Terminal). |

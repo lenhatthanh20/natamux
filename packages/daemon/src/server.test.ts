@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { CLOSE_GONE, SILENT_CLOSE_MS } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
@@ -39,9 +40,11 @@ let app: FastifyInstance
 let ptys: FakePty[]
 let bus: EventBus
 let webIndexPath: string
+let agentAnswer: () => Promise<string>
 const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
 beforeEach(async () => {
+  agentAnswer = async () => 'Add the fix\n'
   repo = createTestRepo()
   const dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
@@ -65,6 +68,7 @@ beforeEach(async () => {
     worktreesDir: join(repo.root, 'worktrees'),
     repos,
     closeTerminals: (taskId) => terminals.close(taskId),
+    runAgentOnce: () => agentAnswer(),
   })
   const spawner = fakeSpawner()
   ptys = spawner.ptys
@@ -1221,10 +1225,43 @@ describe('terminal', () => {
 
   type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
 
-  function nextMessage(socket: Socket): Promise<unknown> {
-    return new Promise((resolve) => {
-      socket.once('message', (data: Buffer) => resolve(JSON.parse(data.toString())))
-    })
+  type Frame = { binary: boolean; text: string }
+
+  // The listener is set at init: `hello` is sent while the socket opens, before injectWS returns.
+  async function open(query: string): Promise<{ socket: Socket; frames: Frame[] }> {
+    const frames: Frame[] = []
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(await ticket())}&${query}`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer, isBinary: boolean) => {
+            frames.push({ binary: isBinary, text: data.toString('utf8') })
+          })
+        },
+      },
+    )
+    return { socket, frames }
+  }
+
+  function controls(frames: Frame[]): { type: string }[] {
+    return frames.filter((frame) => !frame.binary).map((frame) => JSON.parse(frame.text))
+  }
+
+  async function replayed(frames: Frame[]): Promise<void> {
+    await vi.waitFor(() =>
+      expect(controls(frames).map((frame) => frame.type)).toContain('replayed'),
+    )
+  }
+
+  // The live output: the binary frames after the snapshot is replayed.
+  function output(frames: Frame[]): string {
+    const end = frames.findIndex((frame) => !frame.binary && frame.text.includes('"replayed"'))
+    return frames
+      .slice(end + 1)
+      .filter((frame) => frame.binary)
+      .map((frame) => frame.text)
+      .join('')
   }
 
   function closeCode(socket: Socket): Promise<number> {
@@ -1235,31 +1272,216 @@ describe('terminal', () => {
 
   it('runs a shell in the workspace and passes input and output', async () => {
     await taskWithWorkspace()
-    const socket = await app.injectWS(
-      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(await ticket())}&cols=100&rows=30`,
-    )
+    const { socket, frames } = await open('cols=100&rows=30')
     expect(ptys[0]?.options).toMatchObject({ cols: 100, rows: 30 })
     expect(ptys[0]?.options.cwd).toContain('T-0001')
+    await replayed(frames)
 
-    const echoed = nextMessage(socket)
     socket.send(JSON.stringify({ type: 'input', data: 'pwd\r' }))
-    expect(await echoed).toEqual({ type: 'output', data: 'pwd\r' })
+    await vi.waitFor(() => expect(output(frames)).toBe('pwd\r'))
 
     socket.send(JSON.stringify({ type: 'resize', cols: 120, rows: 40 }))
     socket.send('not json')
     socket.send(JSON.stringify({ type: 'input', data: 42 }))
     // Frames arrive in order, so once this one is echoed, the ones before it were handled.
-    const marker = nextMessage(socket)
     socket.send(JSON.stringify({ type: 'input', data: 'done' }))
-    expect(await marker).toEqual({ type: 'output', data: 'done' })
+    await vi.waitFor(() => expect(output(frames)).toBe('pwd\rdone'))
 
-    const exited = nextMessage(socket)
     const closed = closeCode(socket)
     ptys[0]?.exit(0)
-    expect(await exited).toEqual({ type: 'exit', code: 0 })
+    await vi.waitFor(() => expect(controls(frames).at(-1)).toEqual({ type: 'exit', code: 0 }))
     await closed
     expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
     expect(ptys[0]?.written).toEqual(['pwd\r', 'done'])
+  })
+
+  it('sends hello first, then the snapshot and replayed, with output as binary frames', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+
+    const types = controls(frames).map((frame) => frame.type)
+    expect(types.slice(0, 3)).toEqual(['hello', 'snapshot', 'replayed'])
+    expect(frames[0]?.binary).toBe(false)
+    expect(controls(frames)[0]).toMatchObject({ type: 'hello', shellId: expect.any(String) })
+    expect(controls(frames)[1]).toEqual({ type: 'snapshot', cols: 80, rows: 24 })
+    expect(controls(frames)[2]).toMatchObject({ type: 'replayed', offset: expect.any(Number) })
+
+    socket.send(JSON.stringify({ type: 'input', data: 'ls\r' }))
+    await vi.waitFor(() => expect(output(frames)).toBe('ls\r'))
+    // Control frames are text, the rest is binary.
+    expect(frames.at(-1)?.binary).toBe(true)
+    expect(controls(frames).length).toBeLessThan(frames.length)
+  })
+
+  it('gives the shell the size of a visible client only', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+
+    const hidden = await open('cols=100&rows=30&visible=0')
+    await replayed(hidden.frames)
+    expect(ptys[0]?.sizes).toEqual([])
+
+    const shown = await open('cols=120&rows=40&visible=1')
+    await replayed(shown.frames)
+    expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
+  })
+
+  it('claims the size with a visible message only when it has cols and rows', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    const hidden = await open('cols=100&rows=30&visible=0')
+    await replayed(hidden.frames)
+
+    hidden.socket.send(JSON.stringify({ type: 'visible', visible: true }))
+    // The marker comes from the client that has the shell's size, so it changes nothing itself.
+    first.socket.send(JSON.stringify({ type: 'input', data: 'marker' }))
+    await vi.waitFor(() => expect(output(first.frames)).toBe('marker'))
+    expect(ptys[0]?.sizes).toEqual([])
+
+    hidden.socket.send(JSON.stringify({ type: 'visible', visible: true, cols: 90, rows: 20 }))
+    await vi.waitFor(() => expect(ptys[0]?.sizes).toEqual([{ cols: 90, rows: 20 }]))
+  })
+
+  it('passes an ack to flow control, and ignores a binary frame from the client', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+    const ack = vi.spyOn(TerminalService.prototype, 'ack')
+
+    socket.send(JSON.stringify({ type: 'ack', offset: 5 }))
+    socket.send(Buffer.from(JSON.stringify({ type: 'input', data: 'binary' })), { binary: true })
+    socket.send(JSON.stringify({ type: 'input', data: 'after' }))
+    await vi.waitFor(() => expect(output(frames)).toBe('after'))
+
+    expect(ack).toHaveBeenCalledWith('T-0001', 5, '1', expect.anything())
+    ack.mockRestore()
+    expect(ptys[0]?.written).toEqual(['after'])
+    expect(socket.readyState).toBe(socket.OPEN)
+  })
+
+  it('answers a ping with a pong', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24')
+    await replayed(frames)
+
+    socket.send(JSON.stringify({ type: 'ping' }))
+
+    await vi.waitFor(() => expect(controls(frames).at(-1)).toEqual({ type: 'pong' }))
+  })
+
+  // AC 27: the daemon side of a reconnect.
+  it('resumes a shell by its id, with only the output since the offset', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    const [hello, , done] = controls(first.frames) as [
+      { type: 'hello'; shellId: string },
+      { type: string },
+      { type: 'replayed'; offset: number },
+    ]
+    first.socket.terminate()
+    ptys[0]?.emit('missed')
+
+    const shellId = encodeURIComponent(hello.shellId)
+    const back = await open(`cols=100&rows=30&shellId=${shellId}&offset=${done.offset}`)
+    await replayed(back.frames)
+
+    expect(controls(back.frames)).toEqual([
+      hello,
+      { type: 'resume', offset: done.offset },
+      { type: 'replayed', offset: done.offset + 'missed'.length },
+    ])
+    const bytes = back.frames.filter((frame) => frame.binary).map((frame) => frame.text)
+    expect(bytes.join('')).toBe('missed')
+    expect(ptys).toHaveLength(1)
+    // A resume never takes the shell's size.
+    expect(ptys[0]?.sizes).toEqual([])
+  })
+
+  // AC 29
+  it('closes a resume of a shell that no longer runs with CLOSE_GONE, and starts none', async () => {
+    await taskWithWorkspace()
+    const { socket, frames } = await open('cols=80&rows=24&shellId=gone&offset=0')
+
+    expect(await closeCode(socket)).toBe(CLOSE_GONE)
+    expect(frames).toEqual([])
+    expect(ptys).toHaveLength(0)
+  })
+
+  // AC 32
+  it('closes a socket that sent nothing for SILENT_CLOSE_MS, and its client detaches', async () => {
+    await taskWithWorkspace()
+    const first = await open('cols=80&rows=24')
+    await replayed(first.frames)
+    // Only from here on, so the timer of the first socket stays a real one.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const quiet = await open('cols=120&rows=40')
+      await replayed(quiet.frames)
+      expect(ptys[0]?.sizes).toEqual([{ cols: 120, rows: 40 }])
+      const ack = vi.spyOn(TerminalService.prototype, 'ack')
+
+      await vi.advanceTimersByTimeAsync(SILENT_CLOSE_MS - 5000)
+      // Any message counts.
+      quiet.socket.send(JSON.stringify({ type: 'ack', offset: 0 }))
+      await vi.waitFor(() => expect(ack).toHaveBeenCalled())
+      ack.mockRestore()
+      await vi.advanceTimersByTimeAsync(SILENT_CLOSE_MS - 5000)
+      expect(quiet.socket.readyState).toBe(quiet.socket.OPEN)
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await vi.waitFor(() => expect(quiet.socket.readyState).toBe(quiet.socket.CLOSED))
+      // The shell goes back to the size of the client that is left.
+      await vi.waitFor(() =>
+        expect(ptys[0]?.sizes).toEqual([
+          { cols: 120, rows: 40 },
+          { cols: 80, rows: 24 },
+        ]),
+      )
+      expect(first.socket.readyState).toBe(first.socket.OPEN)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers an error and closes when the shell cannot start, without hello', async () => {
+    await taskWithWorkspace()
+    const used = await ticket()
+    await app.inject({
+      method: 'DELETE',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const frames: Frame[] = []
+    const socket = await app.injectWS(
+      `/tasks/T-0001/terminal?ticket=${encodeURIComponent(used)}&cols=80&rows=24`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer, isBinary: boolean) => {
+            frames.push({ binary: isBinary, text: data.toString('utf8') })
+          })
+        },
+      },
+    )
+
+    expect(await closeCode(socket)).toBe(4409)
+    expect(controls(frames).map((frame) => frame.type)).toEqual(['error'])
+    expect(ptys).toHaveLength(0)
+  })
+
+  it('lists no terminals for a task that has none', async () => {
+    await taskWithWorkspace()
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(listed.statusCode).toBe(200)
+    expect(listed.json()).toEqual({ terminals: [], agents: [], lanes: {}, programs: {} })
   })
 
   it('opens a second terminal, lists the terminals and closes one', async () => {
@@ -1275,7 +1497,13 @@ describe('terminal', () => {
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(listed.json()).toEqual({ terminals: ['1', '2'], agents: [], lanes: {} })
+    // The program in the foreground of each shell, for the rows of a plain shell.
+    expect(listed.json()).toEqual({
+      terminals: ['1', '2'],
+      agents: [],
+      lanes: {},
+      programs: { '1': 'bash', '2': 'bash' },
+    })
     // A program that is not a shell runs in the first one: an agent, as far as Natamux can tell.
     ;(ptys[0] as FakePty).program = 'node'
     const withAgent = await app.inject({
@@ -1286,19 +1514,64 @@ describe('terminal', () => {
     const read = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
     const task = read.json().task
     // The first terminal has the task's stage and state; the second has no agent, so no lane.
+    // Natamux did not start the program and cannot list its processes, so it names no agent.
     expect(withAgent.json()).toEqual({
       terminals: ['1', '2'],
       agents: ['1'],
-      lanes: { '1': { stage: task.stage, state: task.state } },
+      lanes: { '1': { stage: task.stage, state: task.state, agent: null } },
+      programs: { '1': 'node', '2': 'bash' },
     })
-    // An agent in an extra shell outside a group works on no stage.
+    // An agent in an extra shell outside a group works on no stage. Its processes name it.
     ;(ptys[1] as FakePty).program = 'node'
+    ;(ptys[1] as FakePty).commandLines = ['node /usr/local/bin/codex']
     const twoAgents = await app.inject({
       method: 'GET',
       url: '/tasks/T-0001/terminals',
       headers: authorization,
     })
-    expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null })
+    expect(twoAgents.json().lanes['2']).toEqual({ stage: null, state: null, agent: 'codex' })
+    // Reading the processes fails: the shell names no agent, and the list still comes.
+    ;(ptys[1] as FakePty).commands = async () => {
+      throw new Error('ps failed')
+    }
+    const unread = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(unread.statusCode).toBe(200)
+    expect(unread.json().lanes['2']).toEqual({ stage: null, state: null, agent: null })
+
+    // Cursor started by hand as `agent`. Its hooks give the shell a state of its own and leave
+    // the task as it was.
+    ;(ptys[1] as FakePty).commands = async () => [
+      '/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js',
+    ]
+    const hooked = await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001', 'x-natamux-terminal': '2' },
+      payload: { hook_event_name: 'beforeSubmitPrompt' },
+    })
+    expect(hooked.statusCode).toBe(200)
+    const cursor = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(cursor.json().lanes['2']).toEqual({ stage: null, state: 'running', agent: 'cursor' })
+    const after = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(after.json().task.state).toBe(task.state)
+    // Cursor quits: the shell has no agent and no state, also when the next one starts.
+    ;(ptys[1] as FakePty).program = 'bash'
+    await app.inject({ method: 'GET', url: '/tasks/T-0001/terminals', headers: authorization })
+    ;(ptys[1] as FakePty).program = 'node'
+    const next = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/terminals',
+      headers: authorization,
+    })
+    expect(next.json().lanes['2']).toEqual({ stage: null, state: null, agent: 'cursor' })
 
     const closed = closeCode(second)
     const removed = await app.inject({
@@ -1492,8 +1765,76 @@ describe('commit and push', () => {
     expect(pushed.json().task.id).toBe('T-0001')
   })
 
+  it('drafts a commit message, and answers 409 when nothing changed', async () => {
+    const workspace = await taskWithChange()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      message: 'Add the fix',
+      source: 'agent',
+      agent: 'claude-code',
+    })
+
+    rmSync(join(workspace, 'fix.txt'))
+    const nothing = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+    })
+    expect(nothing.statusCode).toBe(409)
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0099/commit-message',
+      headers: authorization,
+    })
+    expect(unknown.statusCode).toBe(404)
+    expect(unknown.json().error).toBe('not_found')
+  })
+
+  it('ignores a body, and answers 200 with the simple draft when the agent fails', async () => {
+    await taskWithChange()
+    agentAnswer = async () => {
+      throw new Error('claude exited with code 1: boom')
+    }
+    const events = async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/tasks/T-0001/events',
+        headers: authorization,
+      })
+      return response.json().events.length
+    }
+    const before = await events()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/commit-message',
+      headers: authorization,
+      payload: {},
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      message: 'Add fix.txt',
+      source: 'draft',
+      agent: 'claude-code',
+      reason: 'claude exited with code 1: boom',
+    })
+    expect(await events()).toEqual(before)
+  })
+
   it('needs the token', async () => {
-    const urls = ['/tasks/T-0001/commit', '/tasks/T-0001/push', '/tasks/T-0001/pull-request']
+    const urls = [
+      '/tasks/T-0001/commit',
+      '/tasks/T-0001/commit-message',
+      '/tasks/T-0001/push',
+      '/tasks/T-0001/pull-request',
+    ]
     for (const url of urls) {
       const response = await app.inject({ method: 'POST', url })
       expect(response.statusCode).toBe(401)

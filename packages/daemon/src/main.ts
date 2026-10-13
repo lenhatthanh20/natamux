@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { claudeCodeHookSettings } from '@natamux/core'
-import { geminiHookSettings, LAUNCHABLE_AGENTS } from './agent-launch.js'
+import { geminiHookSettings, LAUNCHABLE_AGENTS, prepareAgentHooks } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { loadConfig } from './config.js'
 import { EventBus } from './event-bus.js'
@@ -16,7 +16,7 @@ import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
-import { TaskService } from './task-service.js'
+import { isTaskEnded, TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
@@ -52,6 +52,7 @@ const workspaces = new WorkspaceService({
   repos,
   pullRequestBody: (task) => issueLinker.pullRequestBody(task),
   closeTerminals: (taskId) => terminals.closeAndWait(taskId),
+  programOf: (agent) => agents.programOf(agent),
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -65,22 +66,18 @@ const workspaces = new WorkspaceService({
 const daemonUrl = `http://127.0.0.1:${config.port}`
 const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
-  spawn: spawnShell,
+  // An agent the user starts by hand in the shell finds its hooks there.
+  spawn: (options) => {
+    prepareAgentHooks(options.cwd)
+    return spawnShell(options)
+  },
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
   onOutput: (taskId, terminal, data) => {
     stages.onOutput(taskId, terminal, data)
     genericSignals.onOutput(taskId, terminal, data)
   },
-  isEnded: (taskId) => {
-    try {
-      const { state } = service.getTask(taskId)
-      return state === 'done' || state === 'cancelled'
-    } catch {
-      // A task that is gone needs its shells no more either.
-      return true
-    }
-  },
+  isEnded: (taskId) => isTaskEnded(service, taskId),
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
@@ -141,6 +138,8 @@ const app = await buildServer({
   webDir: config.webDir,
 })
 await app.listen({ host: config.host, port: config.port })
+// After the listen, so the hooks of the agents reach the daemon.
+stages.resumeAgents()
 
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)

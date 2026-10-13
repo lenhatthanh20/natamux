@@ -125,6 +125,7 @@ type Options = {
   startAgent?: (agent: AgentId) => Promise<Task>
   startInBanner?: boolean
   setWorkflow?: SetWorkflow
+  setCi?: SetWorkflow
   settings?: LoadedSettings
 }
 
@@ -140,6 +141,7 @@ afterEach(() => {
 function progress(options: Options = {}) {
   const act = vi.fn<Act>(options.act ?? (async () => TASK))
   const setWorkflow = vi.fn<SetWorkflow>(options.setWorkflow ?? (async () => TASK))
+  const setCi = vi.fn<SetWorkflow>(options.setCi ?? (async () => TASK))
   const createIssue = vi.fn(async () => TASK)
   const onOpenFile = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -158,12 +160,13 @@ function progress(options: Options = {}) {
         startAgent={options.startAgent}
         startInBanner={options.startInBanner}
         setWorkflow={setWorkflow}
+        setCi={setCi}
       />
     </QueryClientProvider>
   )
   const { rerender } = render(view(options.task ?? TASK, options.events ?? EVENTS))
   const update = (task: Task, events: StoredEvent[]) => rerender(view(task, events))
-  return { act, createIssue, onOpenFile, setWorkflow, client, update }
+  return { act, createIssue, onOpenFile, setWorkflow, setCi, client, update }
 }
 
 describe('ProgressTab', () => {
@@ -284,7 +287,7 @@ describe('the stage cards', () => {
     const testSpec = within(group).getByRole('article', { name: 'Test spec' })
     expect(within(group).getByRole('article', { name: 'Implement' })).toBeTruthy()
     expect(within(group).getByText('side by side')).toBeTruthy()
-    expect(within(group).getByText('Review starts when both are finished')).toBeTruthy()
+    expect(within(group).getByText('Manual review starts when both are finished')).toBeTruthy()
     expect(testSpec.parentElement?.className).toContain('flex-col')
     expect(testSpec.parentElement?.className).not.toContain('grid')
   })
@@ -328,7 +331,7 @@ describe('the stage cards', () => {
   it('shows one line with the finish rule for a stage not reached yet', async () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
-    const review = await screen.findByRole('article', { name: 'Review' })
+    const review = await screen.findByRole('article', { name: 'Manual review' })
     expect(within(review).getByText('Not started')).toBeTruthy()
     expect(within(review).getByText('Finished when you approve the changes.')).toBeTruthy()
     expect(within(review).queryByRole('button')).toBeNull()
@@ -632,6 +635,49 @@ describe('the data of the progress', () => {
   })
 })
 
+describe('ProgressTab check on CI', () => {
+  const box = (card: HTMLElement) => within(card).queryByRole('checkbox', { name: /Check on CI/ })
+
+  it('offers the check on the stages the settings allow, and turns it on', async () => {
+    const { setCi } = progress({ task: FULL_TASK, events: FULL_EVENTS })
+    const user = userEvent.setup()
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect((box(implement) as HTMLInputElement).checked).toBe(false)
+    for (const name of ['Context', 'Spec', 'Plan', 'Test spec', 'Manual review']) {
+      expect(box(screen.getByRole('article', { name }))).toBeNull()
+    }
+    await user.click(box(implement) as HTMLElement)
+    await waitFor(() => expect(setCi).toHaveBeenCalledWith('implement', true))
+  })
+
+  it('says the stage waits for CI, and on which branch', async () => {
+    const running: Task = {
+      ...TASK,
+      state: 'running',
+      stage: 'implement',
+      stages: ['implement'],
+      ciStages: ['implement'],
+    }
+    progress({
+      task: running,
+      events: [
+        stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'implement' }),
+        stored(2, 'stage.reported', '2026-10-10T08:10:00.000Z', { stage: 'implement' }),
+        stored(3, 'stage.ci-started', '2026-10-10T08:11:00.000Z', {
+          stage: 'implement',
+          branch: 'natamux-ci/natamux/t-0001',
+        }),
+      ],
+    })
+
+    const card = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(card).getByText('Checking on CI')).toBeTruthy()
+    expect(within(card).getByText('natamux-ci/natamux/t-0001')).toBeTruthy()
+    expect((box(card) as HTMLInputElement).checked).toBe(true)
+  })
+})
+
 describe('ProgressTab workflow', () => {
   const box = (card: HTMLElement) =>
     within(card).queryByRole('checkbox', { name: /Run with a workflow/ })
@@ -644,7 +690,7 @@ describe('ProgressTab workflow', () => {
     expect((box(plan) as HTMLInputElement).checked).toBe(false)
     expect((box(implement) as HTMLInputElement).checked).toBe(false)
     expect(within(implement).getByText(/uses many more tokens/)).toBeTruthy()
-    for (const name of ['Context', 'Spec', 'Test spec', 'Review']) {
+    for (const name of ['Context', 'Spec', 'Test spec', 'Manual review']) {
       expect(box(screen.getByRole('article', { name }))).toBeNull()
     }
   })
@@ -747,8 +793,11 @@ describe('ProgressTab workflow and the settings', () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
     const group = await screen.findByRole('region', { name: 'Test spec and Implement' })
-    expect(within(group).getAllByRole('checkbox')).toHaveLength(1)
-    expect(box(within(group).getByRole('article', { name: 'Implement' }))).not.toBeNull()
+    const implement = within(group).getByRole('article', { name: 'Implement' })
+    // The workflow and the CI check, both on the lane.
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(2)
+    expect(within(implement).getAllByRole('checkbox')).toHaveLength(2)
+    expect(box(implement)).not.toBeNull()
   })
 
   it('offers it on a stage of your own, each lane on its own, and not without the field', async () => {

@@ -1,19 +1,20 @@
 import type {
   Attachment,
   ChangeEntry,
+  CommitMessageDraft,
   FileDiff,
   GitGraph as GitGraphData,
   ImageSide,
   Task,
   TerminalLane,
-  TerminalSize,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { AgentId } from '../lib/agents'
+import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import type { StageFile, StoredEvent } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import type { TerminalConnectQuery } from '../lib/terminal'
 import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
 import { nextGitStep, waitReason } from '../lib/workspace'
@@ -48,11 +49,12 @@ type ChangesViewProps = {
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
   loadGraph: () => Promise<GitGraphData>
   loadEvents: () => Promise<StoredEvent[]>
-  connectTerminal: (size: TerminalSize, terminal: string) => Promise<WebSocket>
+  connectTerminal: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
   loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
   closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
+  generateCommitMessage?: () => Promise<CommitMessageDraft>
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
   sendToAgent: (text: string) => Promise<Task>
@@ -101,6 +103,7 @@ export function ChangesView({
   loadAgentTerminals,
   closeTerminal,
   commit,
+  generateCommitMessage,
   push,
   openPullRequest,
   sendToAgent,
@@ -161,8 +164,11 @@ export function ChangesView({
     refetchInterval: REFRESH_MS,
   })
   const uncommitted = changes.data?.length ?? null
+  // Commit… asks the commit box for a draft; the box says when it took the request.
+  const [autoDraft, setAutoDraft] = useState(false)
   const openCommit = () => {
     pickTab('changes')
+    setAutoDraft(generateCommitMessage !== undefined)
     // The commit box is drawn with the tab.
     requestAnimationFrame(() => document.getElementById('commit-message')?.focus())
   }
@@ -234,6 +240,27 @@ export function ChangesView({
     mutationFn: (stage: string) => approveStage?.(stage) ?? Promise.resolve(task),
     onError: (error) => toast('Could not approve the stage.', 'error', { detail: error.message }),
   })
+
+  // The drafted message, or null when the toast says why there is none.
+  const draftMessage = async (): Promise<string | null> => {
+    if (generateCommitMessage === undefined) {
+      return null
+    }
+    try {
+      const draft = await generateCommitMessage()
+      if (draft.source === 'draft') {
+        toast('The agent could not draft the message. A simple draft is in the box.', 'info', {
+          detail: draft.reason,
+        })
+      }
+      return draft.message
+    } catch (error) {
+      toast('Could not draft the commit message.', 'error', {
+        detail: error instanceof Error ? error.message : String(error),
+      })
+      return null
+    }
+  }
 
   const commitFiles = async (message: string, fileCount: number) => {
     try {
@@ -377,6 +404,10 @@ export function ChangesView({
             onCommit={commitFiles}
             committing={pending === 'commit'}
             gitBusy={pending !== null}
+            onDraft={generateCommitMessage === undefined ? undefined : draftMessage}
+            draftAgent={agentLabel(isAgentId(task.agent) ? task.agent : DEFAULT_AGENT)}
+            autoDraft={autoDraft}
+            onAutoDraftTaken={() => setAutoDraft(false)}
             file={file}
             onFileChange={onFileChange}
           />

@@ -69,6 +69,8 @@ export const taskSchema = z.object({
   // The stages the user chose to run as a workflow, used the next time each one starts. A bad
   // value in a hand-edited file means none, so the task still loads.
   workflowStages: z.array(stageIdSchema).catch([]),
+  // The stages the user chose to check on CI before they pass. Left out when none.
+  ciStages: z.array(stageIdSchema).optional().catch(undefined),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

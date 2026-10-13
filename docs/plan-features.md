@@ -129,7 +129,7 @@ Goals:
 |---|---|
 | Diff view per task (unified and split). Done: changed files list, a Monaco diff of uncommitted changes, and a git graph of the task branch against its base | MVP |
 | Inline comments that are sent back to the agent as a follow-up prompt. Done: a comment under the diff, about the file and the line the cursor is on, is pasted into the agent's terminal as its next prompt | v1 |
-| Commit from the app with a message draft. Done: commit all changes with a message. Next: a drafted message | v1 |
+| Commit from the app with a message draft. Done: commit all changes with a message; **Generate** and **Commit…** draft the message with the task's agent, with a simple draft when the agent fails | v1 |
 | One-click push and PR creation (GitHub first). Done: push, and a pull request through `gh` whose address is kept on the task | v1 |
 | CI status shown on the task. Done: the daemon reads each open pull request with `gh pr view` once a minute; the table shows its state and checks, and a merged pull request finishes a task in review | v1 |
 | Rebase or merge conflict help | Later |

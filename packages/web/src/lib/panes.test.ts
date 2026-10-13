@@ -376,6 +376,11 @@ describe('terminalState', () => {
   it('has no state for a terminal that works on no stage', () => {
     expect(terminalState(makeTask({}), { stage: null, state: null })).toBeNull()
   })
+
+  it('gives an agent on no stage the state its hooks gave, not the task state', () => {
+    const task = makeTask({ state: 'running' })
+    expect(terminalState(task, { stage: null, state: 'needs-input' })).toBe('needs-input')
+  })
 })
 
 describe('otherTerminalHint', () => {

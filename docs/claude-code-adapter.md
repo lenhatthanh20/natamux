@@ -37,6 +37,13 @@ Everything else is ignored and not logged, so the event log does not fill with c
 
 **A choice to know about:** because `Stop` fires after every answer, a task lands in "needs input" at the end of each turn, even when the agent only asked a question in plain text. The dashboard then says "this task is waiting for you", which is true. The stage is done only when the agent runs `natamux done`; the daemon drops the `Stop` that follows that report, runs the checks, and the stage then waits for approval ("in review") or moves on. A person can also mark the stage as done, or type the next prompt, which resumes it.
 
+**Resume after a restart.** Quitting the app ends every agent, but a task keeps its state. The agent of a stage starts again in that stage's terminal in two cases:
+
+- When the daemon starts, after it listens: each stage that is `running` or `needs-input`. The task keeps its state. A task no agent was started for, or whose agent Natamux cannot launch, is left alone.
+- When a person clicks **Resume** (or sends `agent.resumed` from the CLI or the API) and no agent runs in the stage's terminal.
+
+Claude Code goes on with its last session of that stage: `claude --resume <session_id>`, with no new prompt. The id is the `sessionId` that the hooks of that stage logged. With no id yet (the agent was in its first turn), the start of the daemon uses `claude --continue`, the newest session of the worktree, for a stage outside a group. A stage of a group, and **Resume**, start the agent with the stage prompt instead, since the stages of a group share the folder. Other agents always start with the stage prompt. An `agent.resumed` from a hook never starts an agent, since it comes from one that runs.
+
 **Background work.** A `Stop` is "with background work" when `background_tasks` has an entry whose `status` is not `completed`, `failed`, `killed` or `stopped`, or `session_crons` has an entry. The agent then only paused: the work wakes it again, for example when `pnpm test` in a background shell ends. So the task stays running, the `agent.waiting` event lists the work (at most 5 entries of 200 characters, in `payload.waitingFor`), and the task's one-line summary says "Waiting for Bash: pnpm test and 1 more". The task keeps `backgroundSince` until the agent shows up again or the task leaves running; until then it is never "quiet". Entries that cannot be read are skipped, so a `Stop` with only bad entries ends the turn as before. The `Stop` after `natamux done` is dropped as always, with or without background work.
 
 ## Which task a hook belongs to

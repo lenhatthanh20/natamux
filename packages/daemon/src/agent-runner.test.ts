@@ -12,7 +12,7 @@ import { ProjectSettingsService } from './project-settings.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
-import { TerminalService } from './terminal-service.js'
+import { type TerminalFrame, TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
 const size = { cols: 80, rows: 24 }
@@ -115,7 +115,9 @@ describe('AgentRunner', () => {
     // Wide enough for the long temp path of macOS and Windows: on a resize, xterm keeps the line
     // with the cursor as it is, so a narrower screen would cut it.
     const wide = { cols: 200, rows: 40 }
-    terminals.attach(task.id, { send: (message) => seen.push(JSON.stringify(message)) }, wide)
+    const send = (frame: TerminalFrame) =>
+      seen.push(frame instanceof Uint8Array ? Buffer.from(frame).toString() : JSON.stringify(frame))
+    terminals.attach(task.id, { send }, wide)
     await terminals.settled(task.id)
 
     const text = seen.join('')
@@ -336,6 +338,33 @@ describe('AgentRunner', () => {
     const task = taskWithWorkspace()
     spaced.start(task.id, 'codex', 'Only this')
     expect(readFileSync(script(task.id), 'utf8')).toMatch(/[^ ] 'Only this'\n$/)
+  })
+
+  it("starts a stage's own agent with its words after the configured ones, and keeps the task agent", () => {
+    const configured = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+      extraArgs: { codex: '--foo' },
+    })
+    const task = taskWithWorkspace()
+    configured.start(task.id, 'claude-code')
+
+    const updated = configured.start(task.id, 'codex', 'Only this', '2', undefined, {
+      args: '--model gpt-5',
+      stage: 'test-spec',
+    })
+
+    expect(readFileSync(join(dataDir, `agent-launch-${task.id}-2.sh`), 'utf8')).toContain(
+      "--foo --model gpt-5 'Only this'",
+    )
+    expect(updated.agent).toBe('claude-code')
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'agent.launched',
+      payload: { agent: 'codex', stage: 'test-spec' },
+    })
   })
 
   it('starts the next agent with the mode saved in .natamux.json', () => {

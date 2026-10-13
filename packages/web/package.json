@@ -1,6 +1,6 @@
 {
   "name": "@natamux/web",
-  "version": "0.1.8",
+  "version": "0.1.13",
   "private": true,
   "type": "module",
   "files": [
@@ -15,6 +15,8 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@natamux/core": "workspace:*",
     "@tanstack/react-query": "^5.104.1",
     "@xterm/addon-fit": "^0.11.0",

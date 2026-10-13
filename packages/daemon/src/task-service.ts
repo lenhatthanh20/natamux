@@ -12,6 +12,7 @@ import {
   issueLinkSchema,
   LEGACY_PIPELINE,
   makesCycle,
+  offersCi,
   offersWorkflow,
   type ProjectSettings,
   type PullRequestStatus,
@@ -110,6 +111,19 @@ export class TaskNotFoundError extends Error {
 }
 
 export type SettingsOf = (repo: string | null) => ProjectSettings
+
+// A done or cancelled task needs its shells no more. Neither does a task that is gone.
+export function isTaskEnded(
+  tasks: { getTask(taskId: string): Pick<Task, 'state'> },
+  taskId: string,
+): boolean {
+  try {
+    const { state } = tasks.getTask(taskId)
+    return state === 'done' || state === 'cancelled'
+  } catch {
+    return true
+  }
+}
 
 // The flow tasks had before stages: implement, review, release. The daemon passes the settings of
 // each repository instead.
@@ -502,16 +516,25 @@ export class TaskService {
 
   // Writes down that an agent was started in the task's terminal, and names it on the task.
   // The program is the command the shell looks for, to tell when it was not found.
-  recordAgentLaunch(taskId: string, agent: string, program?: string): Task {
+  // The agent of a stage that starts its own (`stage`) is not the task's agent.
+  recordAgentLaunch(taskId: string, agent: string, program?: string, stage?: string): Task {
     const task = this.getTask(taskId)
     const event: TaskEvent = {
       taskId,
       source: 'human',
       type: 'agent.launched',
       at: this.timestamp(),
-      payload: program === undefined ? { agent } : { agent, program },
+      payload: {
+        agent,
+        ...(program === undefined ? {} : { program }),
+        ...(stage === undefined ? {} : { stage }),
+      },
     }
-    const updated: Task = { ...task, agent, updatedAt: event.at }
+    const updated: Task = {
+      ...task,
+      agent: stage === undefined ? agent : task.agent,
+      updatedAt: event.at,
+    }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)
@@ -625,6 +648,41 @@ export class TaskService {
       payload: { stage: stageId, on },
     }
     const updated: Task = { ...task, workflowStages, updatedAt: event.at }
+
+    writeTaskFile(this.dataDir, updated)
+    this.index.upsertTask(updated)
+    this.logEvent(event, true)
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
+  // Whether the stage waits for CI before it passes. The project settings must offer it.
+  setCi(taskId: string, stageId: string, on: boolean): Task {
+    const task = this.getTask(taskId)
+    const stages = this.stepsOf(task).flatMap(stagesOf)
+    const stage = stages.find((each) => each.id === stageId)
+    if (stage === undefined) {
+      throw new TaskEditError(`${taskId} has no stage "${stageId}"`)
+    }
+    if (on && !offersCi(stage)) {
+      throw new TaskEditError(
+        `The ${stageName(stage)} stage cannot be checked on CI. Turn it on for the stage in the project settings first`,
+      )
+    }
+    const before = task.ciStages ?? []
+    const ciStages = on ? [...new Set([...before, stageId])] : before.filter((id) => id !== stageId)
+    if (ciStages.length === before.length) {
+      return task
+    }
+
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'stage.ci-set',
+      at: this.timestamp(),
+      payload: { stage: stageId, on },
+    }
+    const updated: Task = { ...task, ciStages, updatedAt: event.at }
 
     writeTaskFile(this.dataDir, updated)
     this.index.upsertTask(updated)

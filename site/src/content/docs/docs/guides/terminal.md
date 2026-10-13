@@ -15,6 +15,8 @@ Every task with a workspace has a **Terminal** tab. It holds real shells that ru
 2. Double-click it, or press `Enter`. The workspace opens on the terminal while an agent works.
 3. From another tab of the workspace, click **Terminal** or press `1`.
 
+When you switch to another task's workspace, the keyboard goes to its first agent shell, so you can type to the agent at once. A shell you pick with **Jump to a workspace** gets the keyboard instead.
+
 A task without a workspace shows **Start agent** and a way to make a workspace instead. See [Workspaces](/docs/concepts/workspaces/).
 
 ## Shells
@@ -35,14 +37,17 @@ Things to know:
 
 - A task has at most 6 shells. **New shell** is off after that.
 - Shell 1 has no close button. It stays for the agent.
+- You can start an agent yourself in any shell, for example type `codex` or `agent` (Cursor) in Shell 2. Its pane header then shows that agent, even when the task has another one. A shell that runs another program, such as `vim`, shows no agent. On Windows, a header shows only an agent that Natamux started.
+- An agent you start yourself in an extra shell has a state of its own, such as **Running** or **Needs your input**, when its hooks reach Natamux. It does not change the task's state or stage. Cursor and Copilot read their hooks from the worktree, which Natamux prepares for every shell. Claude Code, Codex and Gemini started by hand show their name but no state.
 - New shells are named in order: Shell 2, Shell 3, and so on.
 - Panes sit side by side and fill the width. The last pane takes the rest of its row.
 - On a phone, one shell fills the screen. Chips named **Shell 1**, **Shell 2** switch between them.
 - Closing a shell ends its process and everything that runs in it.
 - A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again, drawn for the pane's size.
-- When a task is done or cancelled, its shells end, with the agent and everything else in them. You can still open a shell in its workspace. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
+- When the connection to a shell drops, for example after your computer sleeps or the network changes, the pane shows **Reconnecting.** and connects again by itself. The screen stays as it was, and the output you missed follows.
+- When a task is done or cancelled, its shells end, with the agent and everything else in them. Each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.** Click **Open a new shell** to open a plain shell in its workspace. It does not start the agent. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
 - When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
-- Natamux runs at most 20 shells in all.
+- Natamux runs at most 30 shells in all.
 
 To jump to an extra shell of any workspace, press `Mod+J` outside a terminal, or use **Search or run a command**. The palette lists the extra shells under their workspace.
 
@@ -68,7 +73,11 @@ Terminals draw with the GPU (WebGL), as native terminals do, and fall back to th
 
 To change the font, open the **Account** menu at the bottom right and click **Terminal font…**. Type a font family that is installed on your machine and a size in pixels. Leave a field empty to use the default.
 
-In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Natamux reads `font-family` and `font-size` from Ghostty's config file each time the dashboard loads. Without a Ghostty config, the default is Geist Mono at 13px.
+In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Natamux reads `font-family` and `font-size` from Ghostty's config file each time the dashboard loads. Without a Ghostty config, the default is JetBrains Mono at 13px.
+
+Natamux bundles the [Nerd Font](https://www.nerdfonts.com) icons, as Ghostty does. Prompt themes such as Starship or Powerlevel10k and `eza --icons` show their icons with any font, without installing a Nerd Font.
+
+When several panes show, the panes that do not have the focus are dimmed. Click one to type in it.
 
 ### Keys that belong to the shell
 
@@ -82,7 +91,9 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to Needs input and a banner shows what it asks. The pane gets a colored bar. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
+When an agent asks something, the task goes to **Needs your input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs your input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
+
+After you quit and open the app again, Natamux starts the agent of each running or waiting task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
 
 ### Send a message to the agent
 
@@ -98,9 +109,9 @@ A failed task shows a banner with the reason. Use **Start agent** or **Restart a
 
 Shells belong to the daemon. When the daemon stops, it ends every shell, and an agent in a shell ends with it.
 
-After a restart the pane shows **The shell ended.** (or **The terminal could not start.**) and a **Start a new shell** link. Click it. Natamux opens a fresh shell in the same workspace folder. The old screen and the processes in it are gone. Your files and your git state are not.
+While the daemon is down, the pane shows **Reconnecting.** After a restart the pane shows **The shell ended.** and an **Open a new shell** link at the bottom. Click it. If it shows **The terminal could not start.** at the top, click **Start a new shell** instead. Natamux opens a fresh shell in the same workspace folder. The old screen and the processes in it are gone. Your files and your git state are not.
 
-To run the agent again in Shell 1, use **Start agent**.
+The agent of a running or waiting task starts again on its own, as in [Type to the agent](#type-to-the-agent). For any other task, use **Start agent**.
 
 ## Ports
 

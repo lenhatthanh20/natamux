@@ -41,8 +41,8 @@ describe('stageProgress', () => {
       ['plan', 'upcoming'],
       ['test-spec', 'upcoming'],
       ['implement', 'upcoming'],
-      ['review', 'upcoming'],
       ['testing', 'upcoming'],
+      ['agent-review', 'upcoming'],
       ['release', 'upcoming'],
     ])
     expect(progress[0]).toMatchObject({

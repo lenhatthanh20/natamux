@@ -123,8 +123,16 @@ export class AgentRunner {
   }
 
   // Starts the agent in a terminal of the task: the first by default, another for a stage that
-  // runs beside the first one.
-  start(taskId: string, agent: string, prompt?: string, terminal?: string): Task {
+  // runs beside the first one. With a session, Claude Code goes on with it and gets no prompt.
+  // A stage with its own agent or words names itself, so the task keeps its agent.
+  start(
+    taskId: string,
+    agent: string,
+    prompt?: string,
+    terminal?: string,
+    session?: string,
+    own: { args?: string; stage?: string } = {},
+  ): Task {
     if (!isLaunchable(agent)) {
       throw new UnknownAgentError(agent)
     }
@@ -139,8 +147,10 @@ export class AgentRunner {
     }
     const command = launchCommand(agent, {
       program: this.programs[agent],
-      extraArgs: this.extraArgs[agent] ?? '',
-      prompt: (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim(),
+      extraArgs: [this.extraArgs[agent], own.args].filter(Boolean).join(' '),
+      prompt:
+        session === undefined ? (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim() : '',
+      session,
       platform: this.platform,
       claudeSettingsPath: this.claudeSettingsPath,
       geminiSettingsPath: this.geminiSettingsPath,
@@ -152,7 +162,7 @@ export class AgentRunner {
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
     const program = this.programs[agent]
     this.onLaunch?.({ taskId, terminal: terminal ?? MAIN_TERMINAL, agent, program })
-    return this.tasks.recordAgentLaunch(taskId, agent, program)
+    return this.tasks.recordAgentLaunch(taskId, agent, program, own.stage)
   }
 
   // What is typed into the terminal. The terminal echoes it, so the long command (settings path,

@@ -1,4 +1,5 @@
-import type { DiffStat, Repo, Task, TaskState } from '@natamux/core'
+import type { Repo, Task, TaskState } from '@natamux/core'
+import { useQueries } from '@tanstack/react-query'
 import {
   ChevronRight,
   FolderGit2,
@@ -8,10 +9,21 @@ import {
   Plus,
   Settings,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRovingFocus } from '../hooks/useRovingFocus'
+import type { TaskShells } from '../lib/api'
 import { shortcutOf } from '../lib/commands'
 import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
+import {
+  FOLDS_KEY,
+  isFoldOpen,
+  parseFolds,
+  shellRows,
+  subtaskCount,
+  taskGlyphState,
+  withFold,
+  withParents,
+} from '../lib/sidebar-tree'
 import { isUnseen } from '../lib/view-store'
 import { collapsedHint, DEFAULT_REPO_ID, workspaceGroups } from '../lib/workspace-groups'
 import { CountBadge } from './ui/CountBadge'
@@ -19,7 +31,7 @@ import { ConfirmDialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
 import { Menu, type MenuItem, openContextMenu } from './ui/Menu'
 import { ICON, sectionTitle } from './ui/styles'
-import { WorkspaceRow } from './WorkspaceRow'
+import { AgentRow, WorkspaceRow } from './WorkspaceRow'
 
 type WorkspaceListProps = {
   repos: readonly Pick<Repo, 'id' | 'name' | 'path'>[]
@@ -32,13 +44,18 @@ type WorkspaceListProps = {
   now: Date
   currentId: string | null
   pinnedIds: readonly string[]
-  diffStats?: Readonly<Record<string, DiffStat>>
   activity?: Readonly<Record<string, string>>
   // What waiting agents asked, or why tasks failed, by task id.
   questions?: Readonly<Record<string, string | null>>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>
+  // The shells of a task, read while its agents work or wait, and for the open workspace.
+  loadTerminals?: (taskId: string) => Promise<TaskShells>
+  // What the agent in each shell does now, by task id and shell name.
+  terminalActivity?: Readonly<Record<string, Readonly<Record<string, string>>>>
   onOpen: (id: string) => void
+  // Opens the terminal of a task on this shell. Null: its first shell.
+  onOpenShell: (taskId: string, shell: string | null) => void
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string) => void
@@ -57,7 +74,25 @@ type WorkspaceListProps = {
   onRemoveRepo: (id: string) => void
 }
 
-type Entry = TreeRow & { label: string }
+type Entry = TreeRow & { label: string; open?: boolean; toggle?: () => void }
+
+// Shells are read again this often while a row shows them, as the agents grid does.
+const TERMINALS_EVERY_MS = 5000
+
+const NO_SHELLS: TaskShells = { terminals: [], lanes: {}, programs: {} }
+
+// A task whose agents work or wait has its shells read, so its rows show without a click.
+const ACTIVE: readonly TaskState[] = ['running', 'needs-input']
+
+function savedFolds(): Record<string, boolean> {
+  try {
+    return parseFolds(globalThis.localStorage?.getItem(FOLDS_KEY))
+  } catch {
+    return {}
+  }
+}
+
+const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
 
 // Every workspace, grouped by repository, like folders in an editor's sidebar. The whole tree is
 // one tab stop: arrows move, Left and Right fold and unfold, F2 renames.
@@ -69,11 +104,13 @@ export function WorkspaceList({
   now,
   currentId,
   pinnedIds,
-  diffStats = {},
   activity = {},
   questions = {},
   seenState = {},
+  loadTerminals,
+  terminalActivity = {},
   onOpen,
+  onOpenShell,
   onViewChanges,
   onRename,
   onTogglePin,
@@ -87,12 +124,20 @@ export function WorkspaceList({
   onRepoSettings,
   onRemoveRepo,
 }: WorkspaceListProps) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const [folds, setFolds] = useState(savedFolds)
   const [removing, setRemoving] = useState<Pick<Repo, 'id' | 'name' | 'path'> | null>(null)
-  const [finishedOpen, setFinishedOpen] = useState<ReadonlySet<string>>(new Set())
   // The repository whose finished workspaces the user asked to remove.
   const [clearing, setClearing] = useState<string | null>(null)
-  const { pinned, groups } = workspaceGroups(repos, tasks, pinnedIds)
+  // False during the first paint, so only what comes later slides in.
+  const painted = useRef(false)
+  useEffect(() => {
+    painted.current = true
+  }, [])
+  const { pinned, groups, children } = workspaceGroups(
+    repos,
+    withParents(tasks, allTasks),
+    pinnedIds,
+  )
   const finishedIn = (id: string) => groups.find((group) => group.repo.id === id)?.finished ?? []
   const repoName = (task: Task) =>
     repos.find((repo) => repo.id === (task.repo ?? 'default'))?.name ?? task.repo ?? undefined
@@ -144,44 +189,113 @@ export function WorkspaceList({
     ]
   }
 
-  const flip = (set: ReadonlySet<string>, id: string) => {
-    const next = new Set(set)
-    if (!next.delete(id)) {
-      next.add(id)
+  // Only a choice of the user is kept, so a first visit writes nothing.
+  const setFold = (key: string, open: boolean) => {
+    const next = withFold(folds, key, open)
+    setFolds(next)
+    try {
+      globalThis.localStorage?.setItem(FOLDS_KEY, JSON.stringify(next))
+    } catch {
+      // Not kept; the next visit starts with the defaults.
     }
-    return next
   }
+  const repoOpen = (id: string) => isFoldOpen(folds, `repo:${id}`, true)
+  const finishedShown = (id: string) => isFoldOpen(folds, `finished:${id}`, false)
+
+  // Only the open workspace shows what works under it, or its parent when it is a subtask. A
+  // filter shows the subtasks it matched.
+  const holdsCurrent = (task: Task) =>
+    task.id === currentId ||
+    (children[task.id] ?? []).some((child) => child.id === currentId || filtered)
+
+  const shownRows = [
+    ...pinned,
+    ...groups.flatMap(({ repo, open, finished }) =>
+      repoOpen(repo.id) ? [...open, ...(finishedShown(repo.id) ? finished : [])] : [],
+    ),
+  ]
+  // The shells are read while its agents work or wait, and for the open workspace. A finished
+  // task, or one without a workspace, has none left.
+  const readsShells = (task: Task) =>
+    !isFinished(task) &&
+    task.workspace !== null &&
+    (holdsCurrent(task) || ACTIVE.includes(task.state))
+  const loading =
+    loadTerminals === undefined ? [] : shownRows.filter(readsShells).map((task) => task.id)
+  const terminalQueries = useQueries({
+    queries: loading.map((id) => ({
+      queryKey: ['task-shells', id],
+      queryFn: () => loadTerminals?.(id) ?? Promise.resolve(NO_SHELLS),
+      refetchInterval: TERMINALS_EVERY_MS,
+    })),
+  })
+  const rowsOf = (task: Task) => shellRows(task, terminalQueries[loading.indexOf(task.id)]?.data)
+  const canFold = (task: Task) => (children[task.id]?.length ?? 0) > 0 || rowsOf(task).length > 0
+  const taskOpen = (task: Task) => canFold(task) && holdsCurrent(task)
 
   // The rows as they are on screen, for the keyboard.
   const entries: Entry[] = []
+  const pushTask = (task: Task, parent: string | null) => {
+    const key = `task:${task.id}`
+    const open = taskOpen(task)
+    entries.push({
+      key,
+      parent,
+      expandable: canFold(task),
+      label: task.title,
+      open,
+      // A folded task opens when it becomes the open workspace; the open one does not fold.
+      toggle: open ? undefined : () => onOpen(task.id),
+    })
+    if (!open) {
+      return
+    }
+    for (const shell of rowsOf(task)) {
+      entries.push({
+        key: `agent:${task.id}:${shell.key}`,
+        parent: key,
+        expandable: false,
+        label: shell.label,
+      })
+    }
+    for (const child of children[task.id] ?? []) {
+      entries.push({ key: `task:${child.id}`, parent: key, expandable: false, label: child.title })
+    }
+  }
   for (const task of pinned) {
-    entries.push({ key: `task:${task.id}`, parent: null, expandable: false, label: task.title })
+    pushTask(task, null)
   }
   for (const { repo, open, finished } of groups) {
     const repoKey = `repo:${repo.id}`
-    entries.push({ key: repoKey, parent: null, expandable: true, label: repo.name })
-    if (collapsed.has(repo.id)) {
+    const shown = repoOpen(repo.id)
+    entries.push({
+      key: repoKey,
+      parent: null,
+      expandable: true,
+      label: repo.name,
+      open: shown,
+      toggle: () => setFold(repoKey, !shown),
+    })
+    if (!shown) {
       continue
     }
     for (const task of open) {
-      entries.push({
-        key: `task:${task.id}`,
-        parent: repoKey,
-        expandable: false,
-        label: task.title,
-      })
+      pushTask(task, repoKey)
     }
     if (finished.length > 0) {
       const finishedKey = `finished:${repo.id}`
-      entries.push({ key: finishedKey, parent: repoKey, expandable: true, label: '' })
-      if (finishedOpen.has(repo.id)) {
+      const finishedOpen = finishedShown(repo.id)
+      entries.push({
+        key: finishedKey,
+        parent: repoKey,
+        expandable: true,
+        label: '',
+        open: finishedOpen,
+        toggle: () => setFold(finishedKey, !finishedOpen),
+      })
+      if (finishedOpen) {
         for (const task of finished) {
-          entries.push({
-            key: `task:${task.id}`,
-            parent: finishedKey,
-            expandable: false,
-            label: task.title,
-          })
+          pushTask(task, finishedKey)
         }
       }
     }
@@ -192,20 +306,12 @@ export function WorkspaceList({
     labels: entries.map((entry) => entry.label),
     preferred: currentId === null ? null : `task:${currentId}`,
     onKey: (event, key) => {
-      const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)]
-      const isOpen =
-        kind === 'repo' ? !collapsed.has(id) : kind === 'finished' ? finishedOpen.has(id) : false
-      const expandable = kind === 'repo' || kind === 'finished'
-      const toggleEntry = () => {
-        if (kind === 'repo') {
-          setCollapsed(flip(collapsed, id))
-        } else {
-          setFinishedOpen(flip(finishedOpen, id))
-        }
-      }
+      const entry = entries.find((candidate) => candidate.key === key)
+      const expandable = entry?.expandable === true
+      const isOpen = entry?.open === true
       if (event.key === 'ArrowRight' && expandable) {
         if (!isOpen) {
-          toggleEntry()
+          entry?.toggle?.()
         } else {
           const child = firstChildKey(entries, key)
           if (child !== null) {
@@ -215,8 +321,8 @@ export function WorkspaceList({
         return true
       }
       if (event.key === 'ArrowLeft') {
-        if (expandable && isOpen) {
-          toggleEntry()
+        if (expandable && isOpen && entry?.toggle !== undefined) {
+          entry?.toggle?.()
           return true
         }
         const parent = parentKey(entries, key)
@@ -229,27 +335,60 @@ export function WorkspaceList({
     },
   })
 
-  const row = (task: Task, prefix = false) => (
-    <WorkspaceRow
-      key={task.id}
-      task={task}
-      now={now}
-      current={task.id === currentId}
-      pinned={pinnedIds.includes(task.id)}
-      repoName={prefix ? repoName(task) : undefined}
-      stat={diffStats[task.id]}
-      activity={activity[task.id]}
-      question={questions[task.id]}
-      unseen={isUnseen(seenState, task)}
-      tab={roving.item(`task:${task.id}`)}
-      onOpen={onOpen}
-      onViewChanges={onViewChanges}
-      onRename={onRename}
-      onTogglePin={onTogglePin}
-      onRemove={onRemove}
-      onDelete={onDelete}
-    />
-  )
+  const row = (task: Task, prefix = false, nested = false) => {
+    const open = !nested && taskOpen(task)
+    return (
+      <WorkspaceRow
+        key={task.id}
+        task={task}
+        now={now}
+        current={task.id === currentId}
+        pinned={pinnedIds.includes(task.id)}
+        repoName={prefix ? repoName(task) : undefined}
+        glyph={taskGlyphState(task, rowsOf(task))}
+        activity={activity[task.id]}
+        question={questions[task.id]}
+        unseen={isUnseen(seenState, task)}
+        tab={roving.item(`task:${task.id}`)}
+        subtasks={subtaskCount(task.id, allTasks)}
+        enter={painted.current}
+        open={open}
+        expandable={!nested && canFold(task)}
+        onAnswer={() =>
+          onOpenShell(
+            task.id,
+            rowsOf(task).find((shell) => shell.state === 'needs-input')?.shell ?? null,
+          )
+        }
+        onOpen={onOpen}
+        onViewChanges={onViewChanges}
+        onRename={onRename}
+        onTogglePin={onTogglePin}
+        onRemove={onRemove}
+        onDelete={onDelete}
+      >
+        {open && (
+          // The guide sits under the task glyph; the rows' glyphs line up with the title.
+          <ul
+            className={`ml-4 flex flex-col border-l border-line pl-[7px] ${painted.current ? 'sb-unfold' : ''}`}
+          >
+            {rowsOf(task).map((shell) => (
+              <AgentRow
+                key={shell.key}
+                row={shell}
+                activity={
+                  shell.shell === null ? undefined : terminalActivity[task.id]?.[shell.shell]
+                }
+                tab={roving.item(`agent:${task.id}:${shell.key}`)}
+                onOpen={() => onOpenShell(task.id, shell.shell)}
+              />
+            ))}
+            {(children[task.id] ?? []).map((child) => row(child, false, true))}
+          </ul>
+        )}
+      </WorkspaceRow>
+    )
+  }
 
   return (
     <section
@@ -283,25 +422,29 @@ export function WorkspaceList({
         </div>
       )}
 
-      {groups.map((group) => {
-        const { repo, open, finished } = group
-        const isCollapsed = collapsed.has(repo.id)
+      {groups.map((group, index) => {
+        const { repo, open, finished, nested } = group
+        const count = open.length + nested.length
+        const isCollapsed = !repoOpen(repo.id)
         const hint = isCollapsed ? collapsedHint(group, currentId, now) : null
-        const shownFinished = finishedOpen.has(repo.id)
-        const hidden = totalIn(repo.id) - open.length - finished.length
+        const shownFinished = finishedShown(repo.id)
+        const hidden = totalIn(repo.id) - open.length - finished.length - nested.length
         const hiddenInGroup = filtered && open.length + finished.length === 0 && hidden > 0
         const items = repoItems(repo.id)
         const menuLabel = `Actions for ${repo.name}`
         // A project that is gone takes no new tasks.
         const gone = !repos.some((known) => known.id === repo.id)
+        // With the gap of the list, 8px between projects.
+        const spaced = index > 0 ? 'mt-1' : ''
         return (
-          <div key={repo.id} className="flex flex-col">
-            <div className="group flex h-7 items-center rounded-md pr-0.5 hover:bg-hover">
+          <div key={repo.id} className={`flex flex-col ${spaced}`}>
+            {/* A band, so each project reads as a block above its rows. */}
+            <div className="group flex h-7 items-center rounded-md bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] pr-0.5 hover:bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]">
               <button
                 type="button"
                 {...roving.item(`repo:${repo.id}`)}
                 aria-expanded={!isCollapsed}
-                onClick={() => setCollapsed(flip(collapsed, repo.id))}
+                onClick={() => setFold(`repo:${repo.id}`, isCollapsed)}
                 onContextMenu={(event) => {
                   if (items.length > 0) {
                     openContextMenu(event, items, menuLabel)
@@ -327,11 +470,15 @@ export function WorkspaceList({
                 <ChevronRight
                   size={ICON.xs}
                   aria-hidden="true"
-                  className={`shrink-0 text-muted transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                  className={`sb-chevron shrink-0 text-muted ${isCollapsed ? '' : 'rotate-90'}`}
                 />
-                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-muted" />
-                <span className="min-w-0 truncate font-medium">{repo.name}</span>
-                <CountBadge count={open.length} />
+                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-ink-2" />
+                <span className="min-w-0 truncate text-sm font-semibold text-ink">{repo.name}</span>
+                <CountBadge
+                  count={count}
+                  tone="accent"
+                  label={`${count} workspace${count === 1 ? '' : 's'}`}
+                />
                 {hint !== null && (
                   <span
                     className="state-dot"
@@ -354,7 +501,7 @@ export function WorkspaceList({
               {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
-              <ul className="flex flex-col">
+              <ul className="mt-0.5 flex flex-col">
                 {open.map((task) => row(task))}
                 {open.length === 0 && !hiddenInGroup && (
                   <li className="py-1 pl-8 text-xs text-muted">
@@ -382,13 +529,13 @@ export function WorkspaceList({
                         type="button"
                         {...roving.item(`finished:${repo.id}`)}
                         aria-expanded={shownFinished}
-                        onClick={() => setFinishedOpen(flip(finishedOpen, repo.id))}
+                        onClick={() => setFold(`finished:${repo.id}`, !shownFinished)}
                         className="focus-inset flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md pl-6 text-left text-xs text-muted hover:text-ink"
                       >
                         <ChevronRight
                           size={ICON.xs}
                           aria-hidden="true"
-                          className={`transition-transform ${shownFinished ? 'rotate-90' : ''}`}
+                          className={`sb-chevron ${shownFinished ? 'rotate-90' : ''}`}
                         />
                         {finished.length} finished
                       </button>

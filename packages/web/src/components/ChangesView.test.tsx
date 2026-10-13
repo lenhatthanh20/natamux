@@ -1,8 +1,9 @@
-import type { ChangeEntry, GitGraph, Task } from '@natamux/core'
+import type { ChangeEntry, CommitMessageDraft, GitGraph, Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireAppEvent } from '../lib/app-events'
 import { useToasts } from '../lib/toasts'
 import { ChangesView } from './ChangesView'
 
@@ -65,6 +66,10 @@ type Options = {
   // The graph after a push. Without it, the graph stays as it is.
   pushedGraph?: GitGraph
   pushFails?: boolean
+  graph?: GitGraph
+  tab?: 'history' | 'changes'
+  generate?: () => Promise<CommitMessageDraft>
+  commit?: (message: string) => Promise<Task>
 }
 
 function view({
@@ -74,8 +79,12 @@ function view({
   onSendBack,
   pushedGraph,
   pushFails = false,
+  graph: firstGraph = GRAPH,
+  tab = 'history',
+  generate,
+  commit = async () => task,
 }: Options = {}) {
-  let graph = GRAPH
+  let graph = firstGraph
   const push = vi.fn(async () => {
     if (pushFails) {
       throw new Error('rejected')
@@ -91,7 +100,7 @@ function view({
       <ChangesView
         task={task}
         now={new Date('2026-10-10T08:30:00.000Z')}
-        initialTab="history"
+        initialTab={tab}
         loadChanges={async () => changes}
         loadFile={reject}
         loadImage={reject}
@@ -100,7 +109,8 @@ function view({
         connectTerminal={reject}
         loadTerminals={async () => []}
         closeTerminal={async () => []}
-        commit={async () => task}
+        commit={commit}
+        generateCommitMessage={generate}
         push={push}
         openPullRequest={openPullRequest}
         sendToAgent={async () => task}
@@ -175,6 +185,260 @@ describe('ChangesView', () => {
     const tab = screen.getByRole('tab', { name: 'Changes' })
     expect(tab.textContent).toBe('Changes')
     expect(tab.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  describe('the commit message draft', () => {
+    const agentDraft: CommitMessageDraft = {
+      message: 'Fix the parser',
+      source: 'agent',
+      agent: 'claude-code',
+    }
+    const messageBox = () => screen.getByLabelText<HTMLTextAreaElement>('Commit message')
+    const commitButton = () => screen.getByRole('button', { name: /^Commit all/ })
+
+    // A draft that comes when the test says so.
+    function pendingDraft() {
+      let resolve: (draft: CommitMessageDraft) => void = () => {}
+      const keep = (done: (draft: CommitMessageDraft) => void) => {
+        resolve = done
+      }
+      const generate = vi.fn(() => new Promise<CommitMessageDraft>(keep))
+      return { generate, finish: (draft: CommitMessageDraft) => resolve(draft) }
+    }
+
+    it('fills the box when Generate is clicked, and holds Commit all while it drafts', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+
+      expect(generate).toHaveBeenCalledTimes(1)
+      expect(commitButton().dataset.tip).toBe('Drafting the message…')
+      act(() => finish(agentDraft))
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+      expect(commitButton().getAttribute('aria-disabled')).toBeNull()
+      expect(useToasts.getState().toasts).toEqual([])
+    })
+
+    it('keeps what the user typed while the agent drafts', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await user.type(messageBox(), 'My own words')
+      act(() => finish(agentDraft))
+
+      await waitFor(() => expect(commitButton().dataset.tip).toBeUndefined())
+      expect(messageBox().value).toBe('My own words')
+    })
+
+    it('says why when the agent could not draft, and shows the simple draft', async () => {
+      const generate = async (): Promise<CommitMessageDraft> => ({
+        message: 'Update src/a.ts',
+        source: 'draft',
+        agent: 'claude-code',
+        reason: 'claude timed out after 60 s',
+      })
+      view({ tab: 'changes', changes: [CHANGE], generate })
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: /^Generate/ }))
+
+      await waitFor(() => expect(messageBox().value).toBe('Update src/a.ts'))
+      expect(useToasts.getState().toasts).toMatchObject([
+        {
+          text: 'The agent could not draft the message. A simple draft is in the box.',
+          tone: 'info',
+          detail: 'claude timed out after 60 s',
+        },
+      ])
+    })
+
+    it('keeps the box as it was when the request fails', async () => {
+      const generate = async (): Promise<CommitMessageDraft> => {
+        throw new Error('There is nothing to commit.')
+      }
+      view({ tab: 'changes', changes: [CHANGE], generate })
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: /^Generate/ }))
+
+      await waitFor(() => expect(useToasts.getState().toasts[0]?.tone).toBe('error'))
+      expect(useToasts.getState().toasts[0]).toMatchObject({
+        text: 'Could not draft the commit message.',
+        detail: 'There is nothing to commit.',
+      })
+      expect(messageBox().value).toBe('')
+    })
+
+    const nothingToPush: GitGraph = {
+      ...GRAPH,
+      push: { remote: 'tracked', unpushed: 0, unpulled: 0 },
+    }
+
+    it('drafts once when Commit… opens an empty box', async () => {
+      const generate = vi.fn(async () => agentDraft)
+      view({ graph: nothingToPush, changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: 'Commit…' }))
+
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+      expect(generate).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves a box with text alone when Commit… is picked', async () => {
+      const generate = vi.fn(async () => agentDraft)
+      view({ tab: 'changes', graph: nothingToPush, changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.type(await screen.findByLabelText('Commit message'), 'Mine')
+      await user.click(screen.getByRole('button', { name: 'Commit…' }))
+
+      expect(messageBox().value).toBe('Mine')
+      expect(generate).not.toHaveBeenCalled()
+    })
+
+    const generateButton = () => screen.getByRole('button', { name: /^Generate/ })
+
+    it.each([
+      ['claude-code', 'Claude Code'],
+      ['codex', 'Codex'],
+      ['shell', 'Claude Code'],
+      [null, 'Claude Code'],
+    ])('names the agent that drafts for a task of %j', async (agent, name) => {
+      view({ task: { ...TASK, agent }, tab: 'changes', changes: [CHANGE], generate: vi.fn() })
+      await screen.findByLabelText('Commit message')
+      expect(generateButton().dataset.tip).toBe(`Draft a message with ${name}`)
+    })
+
+    it('has no commit box and no Generate button without changes', async () => {
+      view({ tab: 'changes', generate: vi.fn() })
+      expect((await screen.findAllByText('No changes')).length).toBeGreaterThan(0)
+      expect(screen.queryByRole('button', { name: /^Generate/ })).toBeNull()
+      expect(screen.queryByLabelText('Commit message')).toBeNull()
+    })
+
+    it('shows Generate busy, runs it once, and ignores Mod+Enter meanwhile', async () => {
+      const { generate, finish } = pendingDraft()
+      const commit = vi.fn(async () => TASK)
+      view({ tab: 'changes', changes: [CHANGE], generate, commit })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await user.click(generateButton())
+      await user.type(messageBox(), 'x{Control>}{Enter}{/Control}')
+
+      expect(generateButton().getAttribute('aria-busy')).toBe('true')
+      expect(generate).toHaveBeenCalledTimes(1)
+      expect(commit).not.toHaveBeenCalled()
+      act(() => finish(agentDraft))
+      await waitFor(() => expect(generateButton().getAttribute('aria-busy')).toBeNull())
+    })
+
+    it('replaces text on a click, keeps the lines, and puts the cursor at the end', async () => {
+      const generate = async (): Promise<CommitMessageDraft> => ({
+        ...agentDraft,
+        message: 'Add login\n\nThe form had no submit.',
+      })
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.type(await screen.findByLabelText('Commit message'), 'wip')
+      await user.click(generateButton())
+
+      await waitFor(() => expect(messageBox().value).toBe('Add login\n\nThe form had no submit.'))
+      await waitFor(() => expect(document.activeElement).toBe(messageBox()))
+      expect(messageBox().selectionStart).toBe(messageBox().value.length)
+    })
+
+    // The rule compares the text, not the edits: text typed and removed again lets the draft in.
+    it('takes the draft when the text is back to what it was', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await user.type(messageBox(), 'a{Backspace}')
+      act(() => finish(agentDraft))
+
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+    })
+
+    it('does not fail when the tab closes before the draft comes', async () => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await user.click(screen.getByRole('tab', { name: 'History' }))
+      act(() => finish(agentDraft))
+
+      await waitFor(() => expect(screen.queryByLabelText('Commit message')).toBeNull())
+      expect(errors).not.toHaveBeenCalled()
+      errors.mockRestore()
+    })
+
+    it('says why the agent failed even when the user typed meanwhile', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await user.type(messageBox(), 'Mine')
+      act(() => finish({ ...agentDraft, source: 'draft', reason: 'boom' }))
+
+      await waitFor(() => expect(useToasts.getState().toasts[0]?.detail).toBe('boom'))
+      expect(messageBox().value).toBe('Mine')
+    })
+
+    it('drafts on the Mod+Shift+G command, once while it runs', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', changes: [CHANGE], generate })
+      await screen.findByLabelText('Commit message')
+
+      act(() => fireAppEvent('commit-draft'))
+      act(() => fireAppEvent('commit-draft'))
+
+      expect(generate).toHaveBeenCalledTimes(1)
+      act(() => finish(agentDraft))
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+    })
+
+    it('drafts for a box of spaces, once for two quick clicks on Commit…', async () => {
+      const { generate, finish } = pendingDraft()
+      view({ tab: 'changes', graph: nothingToPush, changes: [CHANGE], generate })
+      const user = userEvent.setup()
+
+      await user.type(await screen.findByLabelText('Commit message'), '   ')
+      await user.click(screen.getByRole('button', { name: 'Commit…' }))
+      await user.click(screen.getByRole('button', { name: 'Commit…' }))
+      act(() => finish(agentDraft))
+
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+      expect(generate).toHaveBeenCalledTimes(1)
+    })
+
+    it('commits the drafted message only when the user asks', async () => {
+      const commit = vi.fn(async () => TASK)
+      view({ tab: 'changes', changes: [CHANGE], generate: async () => agentDraft, commit })
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /^Generate/ }))
+      await waitFor(() => expect(messageBox().value).toBe('Fix the parser'))
+      expect(commit).not.toHaveBeenCalled()
+
+      await user.click(commitButton())
+      await waitFor(() => expect(commit).toHaveBeenCalledWith('Fix the parser'))
+      expect(commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('has no Generate button without a way to draft', async () => {
+      view({ tab: 'changes', changes: [CHANGE] })
+      await screen.findByLabelText('Commit message')
+      expect(screen.queryByRole('button', { name: /^Generate/ })).toBeNull()
+    })
   })
 
   it('approves the stage of a task in review from the banner', async () => {

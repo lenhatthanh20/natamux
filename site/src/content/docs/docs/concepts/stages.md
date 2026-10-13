@@ -14,17 +14,17 @@ A stage is one step of the work on a task, such as writing a spec or implementin
 A project without a `.natamux.json` file uses this pipeline:
 
 ```text
-Context → Spec → Plan → [ Test spec ‖ Implement ] → Review → Testing → Release
+Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release
 ```
 
 | Stage | Kind | Gate | What happens |
 |---|---|---|---|
 | Context | `context` | manual | Natamux collects what the task is about into `context.md`. |
-| Spec | `agent` | manual | The agent writes `spec.md`. It does not change code. |
+| Spec | `agent` | manual | The agent writes `spec.md`, with a **Code map** of the files and functions to change. It does not change code. |
 | Plan | `agent` | manual | The agent writes `plan.md`. It does not change code. |
 | Test spec and Implement | group | | Two stages run side by side, see below. |
-| Review | `review` | manual | You read the changes and approve them, or send the task back. |
-| Testing | `testing` | auto | The agent adds missing tests, runs all tests and fixes failures. It does not commit. |
+| Automated tests | `testing` | auto | The agent adds a test for each case of the test spec, runs all tests and fixes failures. It does not commit. |
+| Review | `agent` | auto | An agent in its own shell reviews the changes against the spec and writes `review.md`. When something must be fixed, it sends the task back to Implement by itself. See [Review by an agent](#review-by-an-agent). |
 | Release | `release` | manual | The task finishes when its pull request is merged. |
 
 The group in the middle holds two stages:
@@ -34,7 +34,35 @@ The group in the middle holds two stages:
 | Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
 | Implement | `agent` | auto | The agent writes tests and code. It does not commit: you read the changes in the **Changes** tab and commit them. |
 
-To change the pipeline, use [Project settings](#change-the-pipeline) or see the [configuration reference](/docs/reference/configuration/).
+To change the pipeline, use [Project settings](#change-the-pipeline) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
+
+### Shells and agents
+
+The default pipeline runs three agents. All are the task's agent unless a stage names its own.
+
+| Stage | Shell | Agent |
+|---|---|---|
+| Context | none, or Shell 1 for a `skill` or `mcp` source | none, or agent A |
+| Spec, Plan | Shell 1 | Agent A. Each stage's prompt goes into the same session. |
+| Implement | Shell 1 | Agent A, same session |
+| Test spec | Shell 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model). |
+| Automated tests | Shell 1 | Agent A, same session. With a `command`: a new shell and no agent. |
+| Review | Shell 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent. A later round goes into the same session. |
+| Release | none | none |
+
+One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
+
+### Choose a model
+
+Natamux uses the model each agent picks. Set it in one of these places:
+
+| Where | Counts for | Example |
+|---|---|---|
+| The agent's own settings | Every session of that agent | Claude Code: `"model": "opus"` in `~/.claude/settings.json`. Codex: `model = "…"` in `~/.codex/config.toml`. |
+| `NATAMUX_<AGENT>_ARGS` | Every agent Natamux starts | `NATAMUX_CLAUDE_ARGS="--model opus"`. See [Environment variables](/docs/reference/environment-variables/). |
+| The stage's `args` | One stage that runs beside the stage in Shell 1 | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
+
+A stage in Shell 1 cannot change the model: that would need a new session and lose the context of the stages before it.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -42,10 +70,11 @@ A task keeps the list of stage ids it had when it was created. A later change to
 
 Open the menu of a project and click **Settings**. The **Stages** tab edits the pipeline of the project. Save writes it to `.natamux.json` in the repository. Commit the file to share it. The **JSON** tab edits the whole file as text. See [Project settings](/docs/guides/dashboard/#project-settings).
 
-- **Pick stages.** **Add stage** opens the catalog: common work steps such as Research, Security review or Manual QA, grouped by phase. **Custom stage** makes a stage of your own. The [reference](/docs/reference/configuration/#stage-catalog) lists every catalog stage.
+- **Pick stages.** **Add stage** opens the catalog: common work steps such as Research, Security review or Manual testing, grouped by phase. **Custom stage** makes a stage of your own. The [reference](/docs/reference/configuration/#stage-catalog) lists every catalog stage.
 - **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The switch of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
+- **Agent.** A stage that runs beside the stage in Shell 1, such as Test spec, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
 - **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
 - **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
@@ -194,12 +223,62 @@ From the CLI:
 natamux stage workflow T-0001 on --stage implement
 ```
 
+## Review by an agent
+
+The **Review** stage is an agent stage that runs in its own shell (`"ownShell": true`), apart from the agent that wrote the code.
+
+- It reads `spec.md` and `test-spec.md`, then the changes (`git status`, `git diff` and the changed files). It does not change code.
+- It writes `review.md` with a **Findings** section.
+- **Nothing to fix:** it runs `natamux done`, and the task goes on.
+- **Something to fix:** it runs `natamux stage back` with the problems as the reason. Implement starts again with "What to change: …" in its prompt, then Automated tests and Review run again.
+- An agent may send the task back from its stage **2 times**. The third time the stage waits for you ("needs your input"), so two agents that disagree do not loop. You can always send it back yourself.
+- Pick another agent or model for it in **Agent** and **Arguments** of its stage settings.
+
+For a review by a person, add **Manual review** from the catalog, for example after Review.
+
+### Stages in their own shell
+
+A stage that only writes a report can run in its own shell with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Shell 5**, can have its own agent and arguments, and a turn of its agent does not touch the session in Shell 1.
+
+## Check a stage on CI
+
+A stage that changes code (an agent stage without an output file) or a testing stage can wait for your CI before it passes. This tests the work on CI when it cannot run on your machine, and sends the agent the error instead of a guess.
+
+- **Project settings** decide which stages offer it: tick **Tasks can check it on CI** on the stage, or write `"ci": true` in `.natamux.json`. The default pipeline offers it on **Implement** and **Automated tests**.
+- On each task, the card of such a stage has a **Check on CI** checkbox. It is off by default, because it pushes the work to your remote.
+- When the agent runs `natamux done` and the other checks pass, Natamux:
+  1. makes a commit of the worktree as it is, without changing your branch, your index or your files. It holds every file that git does not ignore, also new files you did not add, so keep secrets such as `.env` in ignored files;
+  2. force-pushes it to `natamux-ci/<task branch>` on `origin`;
+  3. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
+- **Every run passes:** the stage passes, and its checks list each run.
+- **A run fails:** the card shows one line per failed run, with its link. The agent gets the end of the failed log (`gh run view --log-failed`), once, as for any failed check. The next failure waits for you.
+- **A run fails on a testing stage:** the task goes back to the stage before it that changes code, such as **Implement**, with the failed runs. Its agent fixes them, and the testing stage runs again. After two such send backs, the next failure waits for you.
+- **No run starts within 3 minutes, CI takes more than 30 minutes, or the push or `gh` fails:** the stage waits for you, with the reason.
+- When the task is done or cancelled, Natamux deletes the `natamux-ci/` branch.
+
+Your CI workflows must run on a push to these branches, for example in GitHub Actions:
+
+```yaml
+on:
+  push:
+    branches: [main, 'natamux-ci/**']
+```
+
+It needs the GitHub CLI (`gh`), signed in, as for pull requests.
+
+From the CLI:
+
+```sh
+natamux stage ci T-0001 on --stage implement
+```
+
 ## Stages that run side by side
 
 A group holds 2 to 4 stages that are on and work at the same time. Only `agent` and `manual` stages can be in a group.
 
 - The group finishes when every stage in it is done.
 - Each stage works in its own shell. The stage that changes code (an agent stage without an output file) keeps the first shell.
+- A stage in another shell can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file).
 - The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`, `draft`, in that order.
 
 ## Testing with a command

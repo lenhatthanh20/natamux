@@ -37,7 +37,7 @@ The state list does not change. Each state now means "in the current stage":
 | `draft` | The stage cannot start yet; something is missing (for example no context source) | Not started |
 | `ready` | The stage can start | Ready |
 | `running` | An agent or a command works on the stage | Running |
-| `needs-input` | The agent asks a question | Needs input |
+| `needs-input` | The agent asks a question | Needs your input |
 | `review` | The stage output waits for your approval | Waiting for approval |
 | `blocked`, `failed` | As before | Blocked, Failed |
 | `done` | The last stage is approved. Only reachable from the last stage | Done |
@@ -153,7 +153,7 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 | `release` | The pull request watcher sees the pull request merged |
 
 - `natamux done` sends `stage.reported`. It reads the task from `NATAMUX_TASK_ID` and the terminal from `NATAMUX_TERMINAL`, which the daemon sets in each terminal; the terminal tells the stage inside a group.
-- **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `natamux done` moves the stage to `needs-input`, with "The agent stopped without saying it is done" and a **Mark as done** button. That button counts as the report and runs the checks.
+- **The `Stop` hook is not a report.** Claude Code fires it after every turn, also when the agent stops to ask something in plain text. A `Stop` without `natamux done` moves the stage to `needs-input`, with "The agent ended its turn. Reply in the terminal, or resume it." and a **Mark as done** button. That button counts as the report and runs the checks.
 - **A paused turn is not a stop.** When the `Stop` lists background work that will wake the agent again (a background shell, a monitor, a scheduled prompt), the stage stays `running` with "Waiting for …" as its summary (`agent.waiting`, see `docs/claude-code-adapter.md`).
 
 **Step 2: the checks.** After the report the daemon checks the result itself:

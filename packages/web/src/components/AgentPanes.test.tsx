@@ -5,8 +5,10 @@ import { type ComponentProps, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentPanes } from './AgentPanes'
 
+// The stand-in shows its cache key.
 vi.mock('./TerminalView', () => ({
-  default: () => createElement('p', null, 'Terminal stand-in'),
+  default: ({ cacheKey }: { cacheKey?: string }) =>
+    createElement('p', { 'data-cache-key': cacheKey ?? '' }, 'Terminal stand-in'),
 }))
 
 afterEach(() => {
@@ -80,6 +82,29 @@ describe('AgentPanes agent badge', () => {
     expect(within(header('T-0001')).queryByText('Agent')).toBeNull()
   })
 
+  it('shows the agent that runs in Shell 1, not the agent of the task', () => {
+    grid(
+      [makeTask('T-0001')],
+      {},
+      {
+        terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: 'codex' } } },
+      },
+    )
+    expect(within(header('T-0001')).getByText('Codex')).toBeTruthy()
+    expect(within(header('T-0001')).queryByText('Claude Code')).toBeNull()
+  })
+
+  it('shows no badge when Shell 1 runs a program that is no agent', () => {
+    grid(
+      [makeTask('T-0001')],
+      {},
+      {
+        terminals: { 'T-0001': { '1': { stage: 'implement', state: 'running', agent: null } } },
+      },
+    )
+    expect(agentIcons('T-0001')).toHaveLength(0)
+  })
+
   it('shows an unknown id with the generic icon, without errors', () => {
     const errors = vi.spyOn(console, 'error')
     grid([makeTask('T-0001', { agent: 'my-custom-agent' })])
@@ -142,10 +167,26 @@ describe('AgentPanes header around the badge', () => {
     },
   )
 
-  it('keeps the needs-input tint with the badge on top', () => {
-    grid([makeTask('T-0001', { state: 'needs-input' })])
-    expect(header('T-0001').className).toMatch(/bg-signal-soft/)
+  // One amber mark per pane: the state text. No bar and no tint, so it stays calm.
+  it('marks a waiting pane with its state text only, and a running pane not at all', () => {
+    grid([makeTask('T-0001', { state: 'needs-input' }), makeTask('T-0002', { state: 'running' })])
+    const line = (id: string) => header(id).querySelector('[data-tip-overflow]') as HTMLElement
+    expect(line('T-0001').className).toMatch(/text-signal/)
+    expect(line('T-0002').className).not.toMatch(/text-signal/)
+    for (const id of ['T-0001', 'T-0002']) {
+      const region = screen.getByRole('region', { name: `Agent of ${id}` })
+      expect(region.querySelector('.bg-signal')).toBeNull()
+      expect(header(id).className).not.toMatch(/bg-signal-soft/)
+    }
     expect(within(header('T-0001')).getByText('Claude Code')).toBeTruthy()
+  })
+
+  // The grid has no banner, so even a lone waiting pane keeps its mark.
+  it('keeps the mark on a lone waiting pane', () => {
+    grid([makeTask('T-0001', { state: 'needs-input' })])
+    const line = header('T-0001').querySelector('[data-tip-overflow]') as HTMLElement
+    expect(line.textContent).toBe('Needs your input')
+    expect(line.className).toMatch(/text-signal/)
   })
 
   it('keeps the badge while the state changes', () => {
@@ -288,6 +329,17 @@ describe('AgentPanes keys', () => {
     expect(order()).toEqual(['Agent of T-0012', 'Agent of T-0007'])
     expect(region('T-0012')).toBe(picked)
     expect(region('T-0007')).toBe(added)
+  })
+})
+
+describe('AgentPanes cache keys', () => {
+  it('gives each pane the key of Shell 1 of its task, as the task view does', async () => {
+    grid([makeTask('T-0001'), makeTask('T-0002')])
+    for (const id of ['T-0001', 'T-0002']) {
+      const pane = screen.getByRole('region', { name: `Agent of ${id}` })
+      const terminal = await within(pane).findByText('Terminal stand-in')
+      expect(terminal.getAttribute('data-cache-key')).toBe(`${id}/1`)
+    }
   })
 })
 

@@ -1,22 +1,40 @@
 import { join } from 'node:path'
-import type { ChangeEntry, DiffStat, FileDiff, GitGraph, ImageSide, Task } from '@natamux/core'
+import type {
+  ChangeEntry,
+  CommitMessageDraft,
+  DiffStat,
+  FileDiff,
+  GitGraph,
+  ImageSide,
+  Task,
+} from '@natamux/core'
+import { DEFAULT_PROGRAMS, isLaunchable, type LaunchableAgent } from './agent-launch.js'
+import {
+  draftCommitMessage,
+  MAX_DIFF_CHARS,
+  type RunAgentOnce,
+  runAgentOnce,
+} from './commit-drafter.js'
 import {
   addWorktree,
   commitAll,
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  fetchUpstream,
   hasSubmodules,
   listBranches,
   listChanges,
   pushBranch,
   type RunGh,
+  readCommitDiff,
   readDiffStat,
   readFileDiff,
   readFileImage,
   readGitGraph,
   removeWorktree,
   runGh,
+  startRef,
   worktreeState,
 } from './git.js'
 import { mapLimit } from './map-limit.js'
@@ -52,6 +70,11 @@ type WorkspaceServiceOptions = {
   // Ends the shells of a task, before its worktree is removed. A promise it returns ends when
   // the shells have ended.
   closeTerminals?: (taskId: string) => unknown
+  // The command of each agent, for the run that drafts a commit message. Default: its usual name.
+  programOf?: (agent: LaunchableAgent) => string
+  runAgentOnce?: RunAgentOnce
+  // Where a failed draft is written down. Default: console.warn.
+  log?: (message: string) => void
 }
 
 export type RemoveWorkspaceResult = {
@@ -61,6 +84,11 @@ export type RemoveWorkspaceResult = {
 
 const MAX_SLUG_LENGTH = 40
 const DIFF_STAT_READS = 4
+
+// What the diff of a workspace counts from: where a new workspace starts, by name.
+async function baseForDiff(repoDir: string): Promise<string | null> {
+  return (await startRef(repoDir)) ?? currentBranch(repoDir)
+}
 
 export function slugify(text: string): string {
   const slug = text
@@ -85,7 +113,11 @@ export class WorkspaceService {
   private readonly onCreated: (task: Task) => void
   private readonly pullRequestBody: (task: Task) => Promise<string>
   private readonly closeTerminals: (taskId: string) => unknown
+  private readonly programOf: (agent: LaunchableAgent) => string
+  private readonly runAgentOnce: RunAgentOnce
+  private readonly log: (message: string) => void
   private readonly busy = new Set<string>()
+  private readonly drafts = new Map<string, Promise<CommitMessageDraft>>()
   private diffStatsRead: Promise<Record<string, DiffStat>> | undefined
 
   constructor(options: WorkspaceServiceOptions) {
@@ -99,6 +131,9 @@ export class WorkspaceService {
       options.pullRequestBody ??
       (async (task) => task.description.trim() || `Task ${task.id} in Natamux.`)
     this.closeTerminals = options.closeTerminals ?? (() => undefined)
+    this.programOf = options.programOf ?? ((agent) => DEFAULT_PROGRAMS[agent])
+    this.runAgentOnce = options.runAgentOnce ?? runAgentOnce
+    this.log = options.log ?? ((message) => console.warn(message))
   }
 
   // The folder name is the task id only, to keep paths short.
@@ -124,7 +159,8 @@ export class WorkspaceService {
     return listBranches(this.repoDirOf(repo))
   }
 
-  // Makes the worktree from `base` when given (a local branch), or from the checkout's HEAD.
+  // Makes the worktree from `base` when given (a local branch). Otherwise from the checkout's
+  // branch as its remote has it now, or its HEAD when that is newer or there is no remote.
   async create(taskId: string, base?: string): Promise<Task> {
     return this.exclusive(taskId, async () => {
       const task = this.tasks.getTask(taskId)
@@ -145,7 +181,11 @@ export class WorkspaceService {
       const worktreePath = this.worktreePathFor(taskId)
       const branch = kept ?? branchNameFor(task)
       if (kept === null) {
-        await addWorktree(repoDir, worktreePath, branch, base)
+        if (base === undefined) {
+          await fetchUpstream(repoDir)
+        }
+        const start = base ?? (await startRef(repoDir)) ?? undefined
+        await addWorktree(repoDir, worktreePath, branch, start)
       } else {
         await addWorktree(repoDir, worktreePath, branch, undefined, true)
       }
@@ -269,7 +309,8 @@ export class WorkspaceService {
   private async readDiffStats(): Promise<Record<string, DiffStat>> {
     const bases = new Map<string | null, Promise<string | null>>()
     const baseOf = (repo: string | null) => {
-      const known = bases.get(repo) ?? currentBranch(this.repoDirOf(repo))
+      // Where a new workspace starts, so the commits the checkout did not pull do not count.
+      const known = bases.get(repo) ?? baseForDiff(this.repoDirOf(repo))
       bases.set(repo, known)
       return known
     }
@@ -300,6 +341,36 @@ export class WorkspaceService {
       const task = this.tasks.recordGit(taskId, 'git.committed', { hash, subject })
       return { task, hash }
     })
+  }
+
+  // A commit message for the changes of the workspace, by the task's agent. It only reads, so a
+  // push that runs does not stop it. A second ask while one runs gets the same answer.
+  async draftCommitMessage(taskId: string): Promise<CommitMessageDraft> {
+    const running = this.drafts.get(taskId)
+    if (running !== undefined) {
+      return running
+    }
+    const draft = this.draftNow(taskId).finally(() => this.drafts.delete(taskId))
+    this.drafts.set(taskId, draft)
+    return draft
+  }
+
+  private async draftNow(taskId: string): Promise<CommitMessageDraft> {
+    const workspace = this.workspaceOf(taskId)
+    const task = this.tasks.getTask(taskId)
+    const agent = task.agent !== null && isLaunchable(task.agent) ? task.agent : 'claude-code'
+    const [diff, changes] = await Promise.all([
+      readCommitDiff(workspace, MAX_DIFF_CHARS),
+      listChanges(workspace),
+    ])
+    const draft = await draftCommitMessage(
+      { agent, program: this.programOf(agent), cwd: workspace, title: task.title, changes, diff },
+      this.runAgentOnce,
+    )
+    if (draft.source === 'draft') {
+      this.log(`No commit message draft by ${agent} for ${taskId}: ${draft.reason}`)
+    }
+    return draft
   }
 
   // Pushes the task branch to `origin` and makes it the upstream of the branch.

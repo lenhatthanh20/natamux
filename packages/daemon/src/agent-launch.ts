@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import type { PermissionMode } from '@natamux/core'
+import { SHELLS } from './terminal-service.js'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
 export const LAUNCHABLE_AGENTS = ['claude-code', 'codex', 'gemini', 'copilot', 'cursor'] as const
@@ -19,6 +20,36 @@ export const DEFAULT_PROGRAMS: Record<LaunchableAgent, string> = {
   gemini: 'gemini',
   copilot: 'copilot',
   cursor: 'cursor-agent',
+}
+
+// Other names an agent is installed under. Cursor's installer adds `agent` next to `cursor-agent`.
+const OTHER_PROGRAMS: Partial<Record<LaunchableAgent, string[]>> = { cursor: ['agent'] }
+
+// Programs that run the script of an agent: one installed with npm runs as `node <path>/codex`.
+const RUNTIMES = ['node', 'bun', 'deno', ...SHELLS]
+
+// `/usr/lib/node_modules/@openai/codex/bin/codex.js` names the program `codex`.
+const programName = (word: string) => basename(word).replace(/\.[cm]?js$|\.exe$/, '')
+
+// The agent a command line runs, by its program: the one configured for an agent or the default.
+// After a runtime, the script counts.
+export function agentOfCommand(
+  line: string,
+  programOf: (agent: LaunchableAgent) => string,
+): LaunchableAgent | undefined {
+  const words = line.trim().split(/\s+/)
+  const first = programName(words[0] ?? '')
+  const script = words.slice(1).find((word) => !word.startsWith('-'))
+  const name = RUNTIMES.includes(first) && script !== undefined ? programName(script) : first
+  return LAUNCHABLE_AGENTS.find((agent) =>
+    [
+      DEFAULT_PROGRAMS[agent],
+      ...(OTHER_PROGRAMS[agent] ?? []),
+      programOf(agent).trim().split(/\s+/)[0] ?? '',
+    ]
+      .map(programName)
+      .includes(name),
+  )
 }
 
 // The flags of the `auto` permission mode. Only Claude Code checks each action in its auto mode;
@@ -144,11 +175,16 @@ function codexTrustArg(workspace: string): string {
   return `projects={${JSON.stringify(workspace)}={trust_level="trusted"}}`
 }
 
+// In place of a session id: the newest Claude Code session of the folder. No id looks like it.
+export const LAST_SESSION = '--continue'
+
 export type LaunchOptions = {
   program: string
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
+  // A Claude Code session to go on with, or LAST_SESSION. Other agents start a new one.
+  session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
   geminiSettingsPath: string
@@ -172,6 +208,11 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
+        ...(options.session === undefined
+          ? []
+          : options.session === LAST_SESSION
+            ? [LAST_SESSION]
+            : ['--resume', quote(options.session)]),
         ...extra,
         ...prompt,
       ].join(' ')
@@ -210,6 +251,32 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
   }
 }
 
+// The command line that runs an agent once, without its interactive screen, for a short answer
+// such as a commit message: the prompt goes on stdin where the agent reads it there, so a long
+// prompt does not hit the limit of a command line. No hooks, no permission flags: it needs no
+// tools, and must not move the task.
+export function oneShotCommand(
+  agent: LaunchableAgent,
+  program: string,
+  prompt: string,
+  platform: NodeJS.Platform = process.platform,
+): { line: string; stdin: string } {
+  const quote = (value: string) => quoteArgument(value, platform)
+  switch (agent) {
+    case 'claude-code':
+      return { line: `${program} -p`, stdin: prompt }
+    case 'codex':
+      return { line: `${program} exec -`, stdin: prompt }
+    case 'gemini':
+      // Gemini puts the text of -p after what it reads on stdin.
+      return { line: `${program} -p ${quote('Answer the request above.')}`, stdin: prompt }
+    case 'copilot':
+      return { line: `${program} -p ${quote(prompt)}`, stdin: '' }
+    case 'cursor':
+      return { line: `${program} -p --output-format text ${quote(prompt)}`, stdin: '' }
+  }
+}
+
 // Writes the agent's hook file into the workspace and keeps it out of git. A file of the user's
 // own at that place is left alone: the agent then runs without Natamux's hooks, and its terminal
 // still shows that it works. Returns whether Natamux's hooks are in place.
@@ -234,6 +301,14 @@ export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boo
   }
   excludeFromGit(workspace, `/${file.path}`)
   return true
+}
+
+// The hook files of all agents that read them from the workspace, so an agent the user starts by
+// hand in any shell reports to the daemon too.
+export function prepareAgentHooks(workspace: string): void {
+  for (const agent of LAUNCHABLE_AGENTS) {
+    prepareWorkspace(agent, workspace)
+  }
 }
 
 // Adds a line to the repository's own ignore list, which all its worktrees share.

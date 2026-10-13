@@ -15,7 +15,7 @@ function preview(steps: readonly Step[], selected: string | null = null) {
   render(
     <PipelinePreview
       steps={steps}
-      issues={[{ stage: 'review', message: 'Something is wrong', level: 'error' }]}
+      issues={[{ stage: 'agent-review', message: 'Something is wrong', level: 'error' }]}
       selected={selected}
       onSelect={onSelect}
     />,
@@ -27,7 +27,7 @@ describe('PipelinePreview', () => {
   it('names the stages in order, with the group side by side', () => {
     const { chart } = preview(DEFAULT_PIPELINE)
     expect(chart.getAttribute('aria-label')).toBe(
-      'Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Review, then Testing, then Release',
+      'Pipeline: Context, then Spec, then Plan, then Test spec and Implement side by side, then Automated tests, then Review, then Release',
     )
     const group = within(chart).getByRole('list', {
       name: 'Test spec and Implement, side by side',
@@ -75,7 +75,7 @@ describe('PipelinePreview', () => {
     expect(spec.getAttribute('aria-pressed')).toBe('true')
     const review = within(chart).getByRole('button', { name: /^Review/ })
     expect(review.hasAttribute('data-error')).toBe(true)
-    expect(review.getAttribute('data-tip')).toBe('Code review · Always waits for you')
+    expect(review.getAttribute('data-tip')).toBe('Agent · Moves on by itself · Output: review.md')
   })
 
   it('C19: draws one stage as one node, without a fork', () => {
@@ -113,7 +113,7 @@ describe('PipelinePreview', () => {
     const { chart } = preview(off)
     expect(within(chart).queryByRole('list')).toBeNull()
     expect(chart.getAttribute('aria-label')).toBe(
-      'Pipeline: Context, then Spec, then Plan, then Review, then Testing, then Release',
+      'Pipeline: Context, then Spec, then Plan, then Automated tests, then Review, then Release',
     )
   })
 
@@ -122,7 +122,7 @@ describe('PipelinePreview', () => {
       { id: 'review', kind: 'review', gate: 'auto' },
       { id: 'qa', kind: 'manual', gate: 'auto' },
     ])
-    for (const name of [/^Review/, /^Manual QA/]) {
+    for (const name of [/^Manual review/, /^Manual testing/]) {
       const node = within(chart).getByRole('button', { name })
       expect(within(node).getByRole('img', { name: 'Waits for approval' })).toBeTruthy()
     }

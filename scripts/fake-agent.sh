@@ -19,6 +19,19 @@
 #   none  works, then ends its turn
 set -u
 
+# A one-shot run, such as the commit message draft: the prompt comes on stdin, one answer goes
+# to stdout. A task title with [no-draft] makes it fail, so the simple draft shows.
+if [ "${1:-}" = -p ]; then
+  case "$(cat)" in
+  *'[no-draft]'*)
+    echo "fake agent: no draft for this task" >&2
+    exit 1
+    ;;
+  esac
+  printf 'Add fixed message\n'
+  exit 0
+fi
+
 # Natamux starts it as: <this file> --settings <file> [--permission-mode <mode>] [prompt]
 prompt=""
 while [ "$#" -gt 0 ]; do

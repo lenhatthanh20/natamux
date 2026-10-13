@@ -1,6 +1,6 @@
 {
   "name": "@natamux/core",
-  "version": "0.1.8",
+  "version": "0.1.13",
   "private": true,
   "type": "module",
   "files": [

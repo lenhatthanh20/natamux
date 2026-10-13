@@ -47,6 +47,8 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'agent.stopped': 'Agent stopped',
   'attachment.added': 'File attached',
   'stage.workflow-set': 'Workflow choice changed',
+  'stage.ci-set': 'CI check choice changed',
+  'stage.ci-started': 'CI check started',
 }
 
 export function describeEvent(type: EventType): string {

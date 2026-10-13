@@ -7,7 +7,10 @@ FROM node:22-bookworm-slim AS base
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
-ENV COREPACK_HOME=/opt/corepack
+# node-gyp takes the headers this image already has, instead of downloading them from nodejs.org,
+# which sometimes answers 502 and fails the build.
+ENV COREPACK_HOME=/opt/corepack \
+    npm_config_nodedir=/usr/local
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
 

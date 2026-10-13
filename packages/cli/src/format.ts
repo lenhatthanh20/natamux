@@ -18,6 +18,7 @@ Commands:
   done                       For an agent: say its stage is done, so the daemon checks it
   stage <command> <id>       approve, back, skip, pass, fail or start the task's stage
   stage workflow <id> on|off Run a stage as a workflow (Claude Code; needs --stage)
+  stage ci <id> on|off       Check a stage on CI before it passes (needs --stage)
   event <id> <type>          Send an event to a task
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
@@ -39,8 +40,8 @@ Options:
   --repo <id>           task create: the project (default: the project of NATAMUX_TASK_ID's
                         task, or the only project)
   --attach <path>       task create: a file for the agents to read (repeat for more)
-  --stage <id>          stage, done, ask: the stage, when two run side by side; stage workflow:
-                        the stage to change
+  --stage <id>          stage, done, ask: the stage, when two run side by side; stage workflow,
+                        stage ci: the stage to change
   --to <id>             stage back: the stage to go back to (default: the last agent stage)
   --reason <text>       stage back, stage fail: why, for the agent and the log
   --issue <key>         task link: the issue or ticket, such as #42 or ABC-123

@@ -230,6 +230,34 @@ describe('createApi', () => {
     ])
   })
 
+  it('asks for a commit message draft', async () => {
+    const draft = { message: 'Fix it', source: 'draft', agent: 'codex', reason: 'codex timed out' }
+    const { calls, fetchFunction } = fakeFetch(() => json(draft))
+
+    expect(await createApi('secret', fetchFunction).generateCommitMessage('T-0001')).toEqual(draft)
+    expect(calls.map((call) => [call.method, call.url, call.body])).toEqual([
+      ['POST', '/api/tasks/T-0001/commit-message', undefined],
+    ])
+  })
+
+  it('throws the message of a 409 and of a 404 when asked for a draft', async () => {
+    const message = 'There is nothing to commit. The workspace matches its last commit.'
+    const conflict = fakeFetch(() => json({ error: 'conflict', message }, 409))
+    const draft = createApi('secret', conflict.fetchFunction).generateCommitMessage('T-0001')
+    await expect(draft).rejects.toThrow(message)
+    const missing = fakeFetch(() => json({ error: 'not_found', message: 'No task T-9' }, 404))
+    const lost = createApi('secret', missing.fetchFunction).generateCommitMessage('T-9')
+    await expect(lost).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it.each([
+    { source: 'agent', agent: 'codex' },
+    { message: 'Fix it', source: 'other', agent: 'codex' },
+  ])('rejects a draft of the wrong shape: %j', async (body) => {
+    const { fetchFunction } = fakeFetch(() => json(body))
+    await expect(createApi('secret', fetchFunction).generateCommitMessage('T-1')).rejects.toThrow()
+  })
+
   it('starts an agent for a task', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ task }))
 
@@ -301,17 +329,34 @@ describe('createApi', () => {
         terminals: ['1', '2', '3'],
         agents: ['1', '2'],
         lanes: {
-          '1': { stage: 'implement', state: 'running' },
-          '2': { stage: 'test-spec', state: 'review' },
+          '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+          '2': { stage: 'test-spec', state: 'review', agent: null },
         },
       }),
     )
 
     expect(await createApi('secret', fetchFunction).listAgentTerminals('T-0001')).toEqual({
-      '1': { stage: 'implement', state: 'running' },
-      '2': { stage: 'test-spec', state: 'review' },
+      '1': { stage: 'implement', state: 'running', agent: 'claude-code' },
+      '2': { stage: 'test-spec', state: 'review', agent: null },
     })
     expect(calls[0]?.url).toBe('/api/tasks/T-0001/terminals')
+  })
+
+  it('reads every shell of a task: its agent lane, and the program in front', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({
+        terminals: ['1', '2', '3'],
+        agents: ['1'],
+        lanes: { '1': { stage: 'implement', state: 'running', agent: 'claude-code' } },
+        programs: { '1': 'node', '2': 'zsh', '3': 7 },
+      }),
+    )
+
+    expect(await createApi('secret', fetchFunction).listShells('T-0001')).toEqual({
+      terminals: ['1', '2', '3'],
+      lanes: { '1': { stage: 'implement', state: 'running', agent: 'claude-code' } },
+      programs: { '1': 'node', '2': 'zsh', '3': null },
+    })
   })
 
   it('reads what the agent of each terminal does, and the latest line of each task', async () => {
