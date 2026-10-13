@@ -15,7 +15,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal } from '@xterm/xterm'
 import { keyBelongsToShell } from './dispatch'
 import { ICON_FONT } from './fonts'
-import { type GpuRenderer, gpuRenderer } from './gpu-renderer'
+import { type GpuRenderer, gpuRenderer, type Renderer } from './gpu-renderer'
 import { closeSocket } from './live'
 import {
   isQueryReply,
@@ -91,12 +91,27 @@ function safeFit(fit: FitAddon): void {
 
 // Draws with the GPU, as native terminals do. Without WebGL (old GPU, tests) or when the GPU
 // drops the context, the terminal keeps or goes back to drawing with the DOM.
-function loadWebgl(terminal: Terminal, onLost: () => void): WebglAddon | null {
+function loadWebgl(terminal: Terminal, onLost: () => void): Renderer | null {
   try {
     const webgl = new WebglAddon()
     webgl.onContextLoss(onLost)
+    // The addon adds one canvas, its own. Asking any other canvas for a context would make one.
+    const before = new Set(terminal.element?.querySelectorAll('canvas'))
     terminal.loadAddon(webgl)
-    return webgl
+    const after = terminal.element?.querySelectorAll('canvas') ?? []
+    const canvas = [...after].find((one) => !before.has(one))
+    return {
+      dispose() {
+        webgl.dispose()
+        // xterm drops the canvas but keeps its context, which holds GPU memory until garbage
+        // collection and counts toward the browser's limit of contexts. The addon's loss
+        // listener went with dispose, so this loss never reaches onLost.
+        const gl = canvas?.getContext('webgl2')
+        if (gl && !gl.isContextLost()) {
+          gl.getExtension('WEBGL_lose_context')?.loseContext()
+        }
+      },
+    }
   } catch {
     return null
   }
@@ -825,6 +840,9 @@ export function createTerminalSession(options: {
     if (disposed) {
       return
     }
+    // Freed with xterm below. Hidden first, it would only start its give-back timer.
+    const disposing = gpu
+    gpu = null
     setOnScreen(false)
     disposed = true
     stopObserving()
@@ -852,7 +870,7 @@ export function createTerminalSession(options: {
     // is taken off the page now and disposed of a moment later.
     host.remove()
     setTimeout(() => {
-      gpu?.dispose()
+      disposing?.dispose()
       terminal.dispose()
     }, DISPOSE_DELAY_MS)
   }

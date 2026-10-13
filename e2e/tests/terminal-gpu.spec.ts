@@ -4,11 +4,13 @@ import { goToAllTasks, makeShellTask, pane, removeTasks, runIn } from './termina
 
 // The other specs run without WebGL, so their text is in the page. This one draws with WebGL
 // (SwiftShader, a GPU in software) to check the GPU budget: a terminal hidden in the holder gives
-// its renderer back, the renderer changes while the terminal has no size, and lost contexts turn
-// WebGL off. The screen is then a canvas, so the test counts drawn pixels instead of reading text.
+// its renderer back (to a new terminal, or after the give-back delay), the renderer changes while
+// the terminal has no size, and lost contexts turn WebGL off. The screen is then a canvas, so the test counts drawn pixels instead of reading text.
 
 // GPU_CONTEXTS of packages/web/src/lib/gpu-renderer.ts. e2e cannot import web code.
 const GPU_CONTEXTS = 6
+// GIVE_BACK_DELAY_MS of the same file (10 s), and a little more.
+const GIVE_BACK_WAIT_MS = 10_500
 // A pane with only a cursor has about 150 drawn pixels; a prompt and lines of text have thousands.
 const DRAWN_PIXELS = 1500
 const PROMPT_PIXELS = 300
@@ -81,6 +83,19 @@ async function rendererOf(target: Locator): Promise<'webgl' | 'dom'> {
   })
 }
 
+// WebGL canvases of the hidden terminals. The holder is aria-hidden, so it is read directly.
+async function heldWebglCanvases(page: Page): Promise<number> {
+  return page.locator('#terminal-holder').evaluate((holder) => {
+    let count = 0
+    for (const canvas of holder.querySelectorAll('canvas')) {
+      if (canvas.getContext('webgl2') !== null) {
+        count += 1
+      }
+    }
+    return count
+  })
+}
+
 function shellPanes(page: Page): Locator {
   return page.getByRole('region', { name: /^Shell \d+$/ })
 }
@@ -121,7 +136,7 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   page,
   request,
 }) => {
-  test.setTimeout(120_000)
+  test.setTimeout(150_000)
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   const taskA = await newTask(request, 'A')
@@ -166,6 +181,19 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   const tabs = await openTask(page, taskA.title)
   await tabs.getByRole('tab', { name: 'Changes' }).click()
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  await expectAllDrawn(page)
+
+  // Hidden longer than the give-back delay, the terminals free their GPU renderers, and take
+  // them again when shown.
+  await goToAllTasks(page)
+  expect(await heldWebglCanvases(page)).toBeGreaterThan(0)
+  await page.waitForTimeout(GIVE_BACK_WAIT_MS)
+  expect(await heldWebglCanvases(page)).toBe(0)
+  await openTask(page, taskA.title)
+  await expect(shellPanes(page)).toHaveCount(GPU_CONTEXTS)
+  for (let index = 1; index <= GPU_CONTEXTS; index++) {
+    expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+  }
   await expectAllDrawn(page)
 
   // Two lost contexts turn WebGL off for the page; those panes go on with the DOM renderer.

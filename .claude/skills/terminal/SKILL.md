@@ -64,6 +64,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - At most 6 WebGL renderers per page, one per pane of a full grid (`MAX_PANES`). Each holds a GPU context and glyph textures, tens of MB at Retina.
   - A hidden terminal (in the holder, or off screen for `watchVisible`) keeps its renderer for `GIVE_BACK_DELAY_MS` (10 s), so a quick switch back is instant. Then it gives the renderer back and draws with the DOM. A show before that cancels the give-back; a show after it takes a renderer again if the budget allows.
   - When the budget is full, the terminal hidden longest gives its renderer back at once. With none hidden, a new terminal draws with the DOM.
+  - A renderer given back or disposed also drops its WebGL context (`WEBGL_lose_context`): xterm removes the canvas but keeps the context, which would hold GPU memory until garbage collection and count toward Chrome's limit of 16 contexts. The addon's loss listener is gone by then, so this is not counted as a lost context.
   - A slot is reserved before the load runs. A load that ends after a newer take or a dispose (load id) only disposes its result.
   - After 2 lost contexts, no WebGL for the rest of the page session.
   - After a renderer switch, the terminal fits again on screen, or at its next show when hidden. A renderer taken during `show` needs no fit of its own: `setOnScreen` calls the GPU before it marks the terminal on screen, and fits once after.

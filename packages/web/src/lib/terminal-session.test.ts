@@ -454,6 +454,7 @@ describe('disposing a terminal session (AC 3)', () => {
     vi.advanceTimersByTime(DISPOSE_DELAY_MS)
     expect(terminal.disposed).toBe(true)
     expect(fakes.webgl[0]?.disposed).toBe(true)
+    expect(fakes.webgl[0]?.contextLost).toBe(true)
     expect(() => session.dispose()).not.toThrow()
   })
 
@@ -751,6 +752,10 @@ describe('visibility', () => {
     const fits = fitsOf()
     vi.advanceTimersByTime(GIVE_BACK_DELAY_MS)
     expect(fakes.webgl[0]?.disposed).toBe(true)
+    // The context goes at once, not at garbage collection, and is not counted as a loss.
+    expect(fakes.webgl[0]?.contextLost).toBe(true)
+    fakes.webgl[0]?.loseContext()
+    expect(gpuBudget.losses()).toBe(0)
     expect(gpuBudget.inUse()).toBe(0)
     expect(fitsOf()).toBe(fits)
 
@@ -1193,12 +1198,11 @@ describe('the end of a catch-up by exit or dispose (C4)', () => {
     terminal.element?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
     socket.message({ type: 'replayed', offset: 6 })
     session.dispose()
-    // Only the one that frees xterm, and the GPU give-back, which that one clears.
-    expect(vi.getTimerCount()).toBe(2)
+    // Only the one that frees xterm.
+    expect(vi.getTimerCount()).toBe(1)
 
     terminal.parse()
     vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
-    expect(vi.getTimerCount()).toBe(0)
     expect(terminal.resets).toBe(0)
     expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
   })

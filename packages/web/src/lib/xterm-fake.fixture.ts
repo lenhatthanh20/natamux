@@ -213,12 +213,33 @@ export class FakeWebglAddon {
   disposed = false
   // Calls the code's context-loss listener, as a GPU that drops the context.
   loseContext: () => void = () => undefined
+  // Set when the code drops the context of its canvas through WEBGL_lose_context.
+  contextLost = false
+  private readonly gl = {
+    isContextLost: (): boolean => this.contextLost,
+    getExtension: (name: string) =>
+      name === 'WEBGL_lose_context'
+        ? {
+            loseContext: (): void => {
+              this.contextLost = true
+            },
+          }
+        : null,
+  }
+  private readonly canvas = document.createElement('canvas')
 
   constructor() {
     fakes.webgl.push(this)
+    // jsdom has no WebGL. Other canvases answer null, as one with a 2D context would.
+    Object.defineProperty(this.canvas, 'getContext', {
+      value: (type: string) => (type === 'webgl2' ? this.gl : null),
+    })
   }
 
-  activate = () => undefined
+  // As xterm: the canvas goes into the terminal's element, and leaves it on dispose.
+  activate(terminal: FakeTerminal): void {
+    terminal.element?.append(this.canvas)
+  }
 
   onContextLoss(listener: () => void) {
     this.loseContext = listener
@@ -227,6 +248,7 @@ export class FakeWebglAddon {
 
   dispose(): void {
     this.disposed = true
+    this.canvas.remove()
   }
 }
 
