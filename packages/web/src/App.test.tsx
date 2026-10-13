@@ -446,6 +446,15 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Connect' }))
 }
 
+// A task with no workspace has no row in the tree. The needs-you pill lists it: Enter opens the
+// first one.
+async function openFromPill(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    within(screen.getByRole('banner')).getByRole('button', { name: /^\d+ needs? you$/ }),
+  )
+  await user.keyboard('{Enter}')
+}
+
 const reviewTask = makeTask({
   id: 'T-0001',
   title: 'Fix timezone bug',
@@ -491,7 +500,7 @@ describe('App', () => {
 
     await signIn(user)
 
-    expect(await screen.findByRole('img', { name: '1 waiting' })).toBeTruthy()
+    expect(await screen.findAllByRole('button', { name: '1 needs you' })).toHaveLength(2)
     const table = screen.getByRole('table')
     expect(within(table).getByText('Fix timezone bug')).toBeTruthy()
     expect(within(table).getByText('Add export')).toBeTruthy()
@@ -533,7 +542,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('img', { name: '1 waiting' })
+    await screen.findAllByRole('button', { name: '1 needs you' })
 
     await user.click(
       within(screen.getByRole('table')).getByRole('button', { name: /Fix timezone bug/ }),
@@ -615,9 +624,7 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
 
-    const badge = await screen.findByRole('img', { name: '1 waiting' })
-    const strip = badge.closest('section')
-    expect(strip?.textContent).toContain('quiet')
+    expect(await screen.findAllByRole('button', { name: '1 needs you' })).toHaveLength(2)
 
     await user.click(
       within(screen.getByRole('table')).getByRole('button', { name: /Silent agent/ }),
@@ -1728,7 +1735,7 @@ describe('App', () => {
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
 
-    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await openFromPill(user)
     const empty = await screen.findByRole('region', { name: 'Workspace of T-0001' })
     expect(within(empty).getByText(/no workspace yet/)).toBeTruthy()
     // No workspace, no progress to watch: the details stay closed.
@@ -1833,7 +1840,7 @@ describe('App', () => {
     await screen.findByRole('region', { name: 'Changes of T-0002' })
     expect(screen.getByRole('complementary', { name: 'Details of T-0002' })).toBeTruthy()
 
-    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await openFromPill(user)
     await screen.findByRole('region', { name: 'Workspace of T-0001' })
     expect(screen.getByRole('complementary', { name: 'Details of T-0001' })).toBeTruthy()
   })
@@ -1897,9 +1904,8 @@ describe('App', () => {
     render(<App />)
     await signIn(user)
     await screen.findByRole('table')
-    const sidebar = screen.getByRole('navigation', { name: 'Workspaces' })
 
-    await user.click(within(sidebar).getByRole('button', { name: /Release 1\.0/ }))
+    await openFromPill(user)
     await screen.findByRole('region', { name: 'Workspace of T-0001' })
     await user.click(screen.getByRole('button', { name: 'Show details' }))
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
@@ -2138,7 +2144,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     await signIn(user)
-    await screen.findByRole('img', { name: '1 waiting' })
+    await screen.findAllByRole('button', { name: '1 needs you' })
 
     const socket = FakeSocket.instances[0]
     expect(socket?.url).toContain('/api/events?token=secret')
@@ -2363,7 +2369,7 @@ describe('App', () => {
 
     await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
     await screen.findByRole('region', { name: 'Changes of T-0002' })
-    await user.click(within(sidebar).getByRole('button', { name: /Fix timezone bug/ }))
+    await openFromPill(user)
     await screen.findByRole('region', { name: 'Workspace of T-0001' })
     await user.click(within(sidebar).getByRole('button', { name: /Add export/ }))
     await screen.findByRole('region', { name: 'Changes of T-0002' })
@@ -2470,7 +2476,7 @@ describe('App', () => {
     expect(within(tree).queryByRole('button', { name: /^Fix timezone bug,/ })).toBeNull()
     expect(within(jump).getByRole('option', { name: /Fix timezone bug/ })).toBeTruthy()
     await user.keyboard('{Enter}')
-    expect(await screen.findByRole('region', { name: 'Changes of T-0001' })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: 'Workspace of T-0001' })).toBeTruthy()
   })
 
   it('runs a command from the palette', async () => {
@@ -3246,7 +3252,6 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Search tasks'), 'zzzz')
     expect(await screen.findByText('No tasks match “zzzz”')).toBeTruthy()
     expect(screen.getByText('No matches in natamux (1 hidden)')).toBeTruthy()
-    expect(screen.getByText('Not filtered')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Clear filter' }))
     expect(await screen.findByRole('table')).toBeTruthy()

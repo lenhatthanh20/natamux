@@ -296,7 +296,8 @@ describe('the jump palette', () => {
       await user.keyboard('{Shift>}{Enter}{/Shift}')
       expect(on.onAddToAgents).not.toHaveBeenCalled()
       expect(on.onOpenTask).toHaveBeenCalledWith('T-0005')
-      await user.click(screen.getByRole('option', { name: /Ship docs/ }))
+      // The name has no spaces between its parts, so match the id.
+      await user.click(screen.getByRole('option', { name: /T-0005/ }))
       expect(on.onOpenTask).toHaveBeenCalledTimes(2)
     })
 
