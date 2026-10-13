@@ -344,6 +344,43 @@ test('follows the app theme with the Night palette, as --terminal (C13)', async 
   }
 })
 
+// The highest alpha in the first pixel column of the scrollbar's ruler canvas, where xterm
+// draws the ruler's border line. -1 when the pane has no ruler.
+async function rulerEdgeAlpha(shell: Locator): Promise<number> {
+  return screenOf(shell).evaluate((element) => {
+    const canvas = element.querySelector<HTMLCanvasElement>(
+      'canvas.xterm-decoration-overview-ruler',
+    )
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context || canvas.height === 0) return -1
+    const pixels = context.getImageData(0, 0, 1, canvas.height).data
+    let alpha = 0
+    for (let index = 3; index < pixels.length; index += 4) alpha = Math.max(alpha, pixels[index])
+    return alpha
+  })
+}
+
+test('draws no line beside the scrollbar, in both themes (T-0037)', async ({ page }) => {
+  const shell = pane(page, 'Shell 1')
+  // Before any scrollback too: xterm draws the border as soon as the ruler exists.
+  expect(await rulerEdgeAlpha(shell)).toBe(0)
+  await runIn(page, shell, 'seq 1 300')
+  await expect(rows(shell)).toContainText('300')
+  await screenOf(shell).hover()
+  for (const theme of ['Dark', 'Light', 'Dark'] as const) {
+    await setTheme(page, theme)
+    await expect.poll(() => rulerEdgeAlpha(shell)).toBe(0)
+  }
+
+  // A cached terminal takes the theme at its next show.
+  const view = page.getByRole('tablist', { name: 'View', exact: true })
+  await view.getByRole('tab', { name: 'Changes' }).click()
+  await setTheme(page, 'Light')
+  await view.getByRole('tab', { name: 'Terminal' }).click()
+  await expect(rows(shell)).toContainText('300')
+  await expect.poll(() => rulerEdgeAlpha(shell)).toBe(0)
+})
+
 test('loads the icon font once, only when an icon shows (C8, C9)', async ({ page }) => {
   const iconRequests: string[] = []
   const errors: string[] = []
