@@ -6,14 +6,13 @@ import {
   resolveSteps,
   type Stage,
   type StageProgress,
-  type Step,
   stageProgress,
   stagesOf,
   type Task,
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, CircleAlert, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useNow, useNowValue } from '../hooks/useNow'
 import { type AgentId, agentLabel, DEFAULT_AGENT } from '../lib/agents'
 import type {
@@ -66,6 +65,8 @@ type ProgressTabProps = {
   setWorkflow?: (stage: string, on: boolean) => Promise<Task>
   // Whether a stage waits for CI before it passes.
   setCi?: (stage: string, on: boolean) => Promise<Task>
+  // Whether a stage not reached yet is skipped when the task reaches it.
+  setSkip?: (stage: string, on: boolean) => Promise<Task>
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -103,6 +104,7 @@ export function ProgressTab({
   startInBanner = false,
   setWorkflow,
   setCi,
+  setSkip,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -145,6 +147,12 @@ export function ProgressTab({
       setCi?.(stage, on) ?? Promise.resolve(task),
     onError: (error) =>
       toast('Could not change the CI check of the stage.', 'error', { detail: error.message }),
+  })
+  const skip = useMutation({
+    mutationFn: ({ stage, on }: { stage: string; on: boolean }) =>
+      setSkip?.(stage, on) ?? Promise.resolve(task),
+    onError: (error) =>
+      toast('Could not change the skip of the stage.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -250,6 +258,15 @@ export function ProgressTab({
               }
         }
         ciBranch={ciWaits.get(stage.id)}
+        skip={
+          setSkip === undefined || stage.kind === 'context'
+            ? undefined
+            : {
+                on: (task.skipStages ?? []).includes(stage.id),
+                busy: skip.isPending,
+                onChange: (on) => skip.mutate({ stage: stage.id, on }),
+              }
+        }
         activity={
           entry.status === 'current' &&
           entry.state === 'running' &&
@@ -265,13 +282,7 @@ export function ProgressTab({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="flex flex-col gap-3 p-3">
-        <Overview
-          task={task}
-          steps={steps}
-          progress={progress}
-          count={count}
-          sentBack={sentBackCount(accepted)}
-        />
+        <Overview task={task} count={count} sentBack={sentBackCount(accepted)} />
 
         <ol ref={stageList} className="m-0 flex list-none flex-col p-0" aria-label="Stages">
           {steps.map((step, index) => {
@@ -403,7 +414,7 @@ export function ProgressTab({
                 <Age at={event.at} />
               </span>
               <span className="truncate">
-                {describeEvent(event.type)}
+                {describeEvent(event.type, event.payload)}
                 {typeof event.payload.stage === 'string' ? (
                   <span className="text-muted">
                     {' '}
@@ -440,35 +451,17 @@ export function ProgressTab({
 
 function Overview({
   task,
-  steps,
-  progress,
   count,
   sentBack,
 }: {
   task: Task
-  steps: readonly Step[]
-  progress: readonly StageProgress[]
   count: { done: number; total: number }
   sentBack: number
 }) {
   const now = useNow()
-  const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const finished = task.state === 'done' || task.state === 'cancelled'
-  const minutes = (entry: StageProgress | undefined) => {
-    if (entry === undefined || entry.startedAt === null) {
-      return 20
-    }
-    // Only a stage in progress grows with the clock.
-    const end =
-      entry.endedAt !== null
-        ? Date.parse(entry.endedAt)
-        : entry.status === 'current'
-          ? now.getTime()
-          : Date.parse(entry.startedAt)
-    return Math.max(8, (end - Date.parse(entry.startedAt)) / 60_000)
-  }
   return (
-    <section aria-label="Overview" className={`${CARD} flex flex-col gap-3 p-3`}>
+    <section aria-label="Overview" className={`${CARD} p-3`}>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Figure value={`${count.done} of ${count.total}`} label="stages done" />
         <Figure
@@ -483,24 +476,6 @@ function Overview({
           label={sentBack === 1 ? 'time sent back' : 'times sent back'}
         />
       </div>
-      {/* The names and times of the steps are in the stage list below. */}
-      <div className="flex h-2.5 items-stretch gap-1" aria-hidden="true">
-        {steps.map((step) => {
-          const ids = stagesOf(step).map((stage) => stage.id)
-          const weight = Math.max(...ids.map((id) => minutes(byId.get(id))))
-          return (
-            <span
-              key={step.id}
-              className="flex min-w-2.5 flex-col gap-0.5"
-              style={{ flex: `${weight} 1 0` }}
-            >
-              {ids.map((id) => (
-                <Segment key={id} entry={byId.get(id)} />
-              ))}
-            </span>
-          )
-        })}
-      </div>
     </section>
   )
 }
@@ -511,39 +486,6 @@ function Figure({ value, label }: { value: string; label: string }) {
       <div className="text-lg font-semibold tracking-tight tabular-nums">{value}</div>
       <div className="text-xs text-muted">{label}</div>
     </div>
-  )
-}
-
-function Segment({ entry }: { entry: StageProgress | undefined }) {
-  if (entry === undefined || entry.status === 'upcoming') {
-    return (
-      <span
-        className="flex-1 rounded-sm"
-        style={{
-          boxShadow: 'inset 0 0 0 1px var(--muted)',
-          backgroundImage:
-            'repeating-linear-gradient(-45deg, transparent 0 4px, var(--line) 4px 5px)',
-        }}
-      />
-    )
-  }
-  if (entry.status === 'current') {
-    return (
-      <span
-        data-state={entry.state ?? 'running'}
-        className={`flex-1 rounded-sm ${entry.state === 'running' ? 'stage-stripes' : ''}`}
-        style={
-          entry.state === 'running' ? undefined : { background: 'var(--chip-fg)', opacity: 0.8 }
-        }
-      />
-    )
-  }
-  return (
-    <span
-      data-state="done"
-      className="flex-1 rounded-sm"
-      style={{ background: 'var(--chip-fg)', opacity: entry.status === 'skipped' ? 0.35 : 0.8 }}
-    />
   )
 }
 
@@ -614,6 +556,7 @@ function StageCard({
   workflow,
   ci,
   ciBranch,
+  skip,
 }: {
   activity?: string
   // The last start of the stage asked the agent for a workflow.
@@ -624,6 +567,8 @@ function StageCard({
   ci?: CiChoice
   // The CI branch of a check that runs now.
   ciBranch?: string
+  // The skip mark of a stage not reached yet.
+  skip?: SkipChoice
   agent: string | null
   // Skills the prompt named that the agent did not get at the latest start.
   missingSkills: readonly string[]
@@ -650,6 +595,7 @@ function StageCard({
   const current = progress.status === 'current'
   const upcoming = progress.status === 'upcoming'
   const finished = progress.status === 'done' || progress.status === 'skipped'
+  const marked = upcoming && skip?.on === true
   const state = progress.state
   const facts = [
     time,
@@ -658,10 +604,15 @@ function StageCard({
       ? `Approved by ${progress.approvedBy === 'human' ? 'you' : progress.approvedBy}`
       : null,
   ].filter((fact) => fact !== null)
+  const sentBack = progress.rounds - 1
+  // The failed runs of a CI send back. The log after them is for the agent.
+  const ciRuns = progress.sentBackByCi ? progress.sentBackFor?.split('\n\n')[0] : undefined
 
   const title = (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className={`text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>
+      <span
+        className={`text-md font-semibold ${marked ? 'text-muted' : upcoming ? 'text-ink-2' : ''}`}
+      >
         {progress.name}
       </span>
       {current && state !== null ? (
@@ -674,7 +625,9 @@ function StageCard({
             ? 'Done'
             : progress.status === 'skipped'
               ? 'Skipped'
-              : 'Not started'}
+              : marked
+                ? 'Will be skipped'
+                : 'Not started'}
         </span>
       )}
       {progress.rounds > 1 && (
@@ -691,7 +644,7 @@ function StageCard({
   )
   // A stage that started already keeps its prompt; the choice is for its next start.
   const started = current && state !== 'draft' && state !== 'ready'
-  const ciBox = ci !== undefined && !finished && canAct && <CiBox choice={ci} />
+  const ciBox = ci !== undefined && !finished && canAct && <CiBox choice={ci} started={started} />
   const workflowBox = workflow !== undefined && !finished && canAct && (
     <WorkflowBox choice={workflow} started={started} />
   )
@@ -740,6 +693,17 @@ function StageCard({
           <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
           {workflowBox}
           {ciBox}
+          {skip !== undefined && canAct && (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="mt-1.5"
+              disabled={skip.busy}
+              onClick={() => skip.onChange(!skip.on)}
+            >
+              {skip.on ? "Don't skip" : 'Skip'}
+            </Button>
+          )}
         </>
       ) : finished && !opened ? null : (
         <>
@@ -798,9 +762,15 @@ function StageCard({
               </span>
             )}
             {progress.sentBackFor !== null && progress.rounds > 1 && (
-              <span className={`${CHIP} text-ink-2`}>
+              <span className={`${CHIP} text-ink-2`} data-tip={ciRuns}>
                 <Undo2 size={13} aria-hidden="true" className="shrink-0" />
-                Sent back {progress.rounds - 1}×
+                {`${progress.sentBackByCi ? 'Sent back by CI' : 'Sent back'} ${sentBack}×`}
+              </span>
+            )}
+            {current && progress.reasons.length > 0 && state === 'running' && (
+              <span className={`${CHIP} text-ink-2`} data-tip={progress.reasons.join('\n')}>
+                <CircleAlert size={13} aria-hidden="true" className="shrink-0 text-signal" />
+                Checks failed, the agent fixes them
               </span>
             )}
             {pr !== null && (
@@ -818,7 +788,7 @@ function StageCard({
             )}
           </div>
 
-          {current && progress.reasons.length > 0 && (
+          {current && progress.reasons.length > 0 && state !== 'running' && (
             <ul
               // A failed stage is red, as its chip; checks that wait for the user are amber.
               data-state={state === 'failed' ? 'failed' : undefined}
@@ -826,7 +796,7 @@ function StageCard({
             >
               {progress.reasons.map((reason) => (
                 <li key={reason} className="whitespace-pre-wrap break-words text-ink">
-                  {reason}
+                  <ReasonText text={reason} />
                 </li>
               ))}
             </ul>
@@ -922,12 +892,54 @@ function StageCard({
   )
 }
 
+type SkipChoice = {
+  on: boolean
+  busy: boolean
+  onChange: (on: boolean) => void
+}
+
 type WorkflowChoice = {
   on: boolean
   // The agent of the task can run a workflow.
   allowed: boolean
   busy: boolean
   onChange: (on: boolean) => void
+}
+
+// The punctuation that ends a sentence or closes a bracket is not part of the address.
+const ADDRESS = /https?:\/\/\S*[^\s.,;:!?)\]}'"]/g
+const RUN_ADDRESS = /\/actions\/runs\/\d+/
+
+// A reason with its addresses as links. A CI run address is a short "view run", so the reason
+// stays on one line.
+function ReasonText({ text }: { text: string }) {
+  const parts: ReactNode[] = []
+  let from = 0
+  for (const match of text.matchAll(ADDRESS)) {
+    const [address] = match
+    const at = match.index ?? 0
+    parts.push(
+      text.slice(from, at),
+      <a
+        key={at}
+        href={address}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-tip={address}
+        className="text-link hover:underline"
+      >
+        {RUN_ADDRESS.test(address) ? 'view run' : address}
+      </a>,
+    )
+    from = at + address.length
+  }
+  parts.push(text.slice(from))
+  return <>{parts}</>
+}
+
+// Once the stage started, a hint is a tip on its checkbox, so the running card stays short.
+function BoxHint({ hint, started }: { hint: string; started: boolean }) {
+  return started ? null : <span className="pl-5.5 text-xs text-muted">{hint}</span>
 }
 
 function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boolean }) {
@@ -938,7 +950,10 @@ function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boo
       : 'More accurate, uses many more tokens.'
   return (
     <div className="mt-2 flex flex-col gap-0.5">
-      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+      <label
+        className="flex w-fit items-center gap-2 text-sm text-ink-2"
+        data-tip={started && choice.allowed ? hint : undefined}
+      >
         <input
           type="checkbox"
           checked={choice.on}
@@ -949,7 +964,8 @@ function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boo
         />
         Run with a workflow
       </label>
-      <span className="pl-5.5 text-xs text-muted">{hint}</span>
+      {/* The Claude Code hint stays in view: it says why the box is off. */}
+      <BoxHint hint={hint} started={started && choice.allowed} />
     </div>
   )
 }
@@ -960,10 +976,16 @@ type CiChoice = {
   onChange: (on: boolean) => void
 }
 
-function CiBox({ choice }: { choice: CiChoice }) {
+const CI_HINT =
+  'When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes once CI passes. A failure goes back to the agent.'
+
+function CiBox({ choice, started }: { choice: CiChoice; started: boolean }) {
   return (
     <div className="mt-2 flex flex-col gap-0.5">
-      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+      <label
+        className="flex w-fit items-center gap-2 text-sm text-ink-2"
+        data-tip={started ? CI_HINT : undefined}
+      >
         <input
           type="checkbox"
           checked={choice.on}
@@ -973,10 +995,7 @@ function CiBox({ choice }: { choice: CiChoice }) {
         />
         Check on CI
       </label>
-      <span className="pl-5.5 text-xs text-muted">
-        When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes once
-        CI passes. A failure goes back to the agent.
-      </span>
+      <BoxHint hint={CI_HINT} started={started} />
     </div>
   )
 }

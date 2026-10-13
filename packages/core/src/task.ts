@@ -38,7 +38,23 @@ export const issueLinkSchema = z.object({
 
 export type IssueLink = z.infer<typeof issueLinkSchema>
 
-export const taskIdSchema = z.string().regex(/^T-\d+$/, 'Task id looks like T-42')
+export const taskIdSchema = z
+  .string()
+  .max(32)
+  .regex(/^[A-Z]+-\d+$/, 'Task id looks like T-42 or ABC-42')
+
+// A title that starts with a task id, such as "Task-0005: Fix bug" or "ABC-12 Fix it".
+const TITLE_WITH_ID = /^([A-Za-z]+-\d+)(?:\s*:|\s)\s*(.*)$/
+
+// Splits the id the user chose from the start of a title. The id is upper case, because task
+// files may live on a file system that does not tell `Task-5.md` from `TASK-5.md`.
+export function splitTaskId(title: string): { id: string | null; title: string } {
+  const trimmed = title.trim()
+  const match = TITLE_WITH_ID.exec(trimmed)
+  return match?.[1] && match[2]
+    ? { id: match[1].toUpperCase(), title: match[2] }
+    : { id: null, title: trimmed }
+}
 
 export const taskSchema = z.object({
   id: taskIdSchema,
@@ -73,6 +89,9 @@ export const taskSchema = z.object({
   workflowStages: z.array(stageIdSchema).catch([]),
   // The stages the user chose to check on CI before they pass. Left out when none.
   ciStages: z.array(stageIdSchema).optional().catch(undefined),
+  // Later stages the user chose to skip: each is skipped when the task reaches it. Left out when
+  // none.
+  skipStages: z.array(stageIdSchema).optional().catch(undefined),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

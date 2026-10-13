@@ -1,8 +1,16 @@
-import { TASK_ID_HEADER, TERMINAL_HEADER } from '@natamux/core'
 import type { FetchFunction } from './client.js'
-import { DEFAULT_URL } from './format.js'
+import { DEFAULT_URL } from './default-url.js'
+
+// This module is all that `natamux hook` loads, so it must not import @natamux/core (it pulls in
+// zod). A test checks these two against the core values.
+export const TASK_ID_HEADER = 'X-Natamux-Task'
+export const TERMINAL_HEADER = 'X-Natamux-Terminal'
 
 const REQUEST_TIMEOUT_MS = 3000
+const AGENT_NAME = /^[a-z][a-z0-9-]*$/
+const EVENT_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/
+// Agents that read a hook's output as JSON.
+const JSON_ANSWER_AGENTS: readonly string[] = ['cursor', 'gemini']
 
 type ForwardOptions = {
   agent: string
@@ -62,4 +70,50 @@ export async function forwardHook(options: ForwardOptions): Promise<void> {
       options.debug(`natamux hook ${agent}: ${reason}\n`)
     }
   }
+}
+
+export type HookCommandOptions = {
+  env: Record<string, string | undefined>
+  stdout: (text: string) => void
+  stderr: (text: string) => void
+  readStdin: () => Promise<string>
+  fetch: FetchFunction
+}
+
+// `natamux hook <agent> [event]`, with the arguments after "hook". It always exits 0: it runs
+// inside an agent, which treats exit code 2 as "block this action". It prints an empty JSON answer
+// for the agents that read one (Cursor blocks a shell command on an answer that is not JSON), and
+// nothing for the others.
+export async function runHookCommand(
+  args: readonly string[],
+  options: HookCommandOptions,
+): Promise<number> {
+  const [agent, event, ...extra] = args
+  let problem: string | undefined
+  if (agent === undefined || !AGENT_NAME.test(agent)) {
+    problem =
+      'An agent name is required, in lower case letters, digits and "-": natamux hook claude-code'
+  } else if (extra.length > 0) {
+    problem = `Unexpected argument: ${extra.join(' ')}`
+  } else if (event !== undefined && !EVENT_NAME.test(event)) {
+    problem = `Unexpected argument: ${event}`
+  }
+  if (agent === undefined || problem !== undefined) {
+    options.stderr(`${problem}\nRun "natamux help" for usage.\n`)
+    return 0
+  }
+
+  if (JSON_ANSWER_AGENTS.includes(agent)) {
+    options.stdout('{}\n')
+  }
+  await forwardHook({
+    agent,
+    // Copilot CLI does not say which event a hook is for, so its hook command names it.
+    ...(event === undefined ? {} : { event }),
+    env: options.env,
+    readStdin: options.readStdin,
+    fetch: options.fetch,
+    debug: options.stderr,
+  })
+  return 0
 }

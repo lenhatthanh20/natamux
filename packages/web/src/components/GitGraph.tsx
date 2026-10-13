@@ -84,7 +84,7 @@ export function GitGraph({ graph, uncommitted = null, onShowChanges, onRefresh }
           return (
             <li
               key={commit.hash}
-              className={`flex items-center gap-3 pr-3 ${commit.onBranch ? '' : 'text-muted'}`}
+              className={`cv-row flex items-center gap-3 pr-3 [--cv-h:28px] ${commit.onBranch ? '' : 'text-muted'}`}
               style={{ height: ROW_HEIGHT }}
             >
               <svg

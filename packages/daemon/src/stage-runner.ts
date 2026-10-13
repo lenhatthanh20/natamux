@@ -7,6 +7,7 @@ import {
   findStep,
   isGroup,
   offersCi,
+  plainText,
   RECORD_ONLY_EVENT_TYPES,
   runsWorkflow,
   type Stage,
@@ -92,6 +93,16 @@ export class StageInputError extends Error {
 function laneState(task: Pick<Task, 'state' | 'lanes'>, step: Step, stageId: string): TaskState {
   return isGroup(step) ? (task.lanes[stageId] ?? 'done') : task.state
 }
+
+// Events that end a stage and so may move the task on to the next step. A send back does not
+// count: a person who sends the task back to a stage marked to skip wants it to run.
+const ENDS_STAGE: readonly TaskEvent['type'][] = [
+  'stage.approved',
+  'review.approved',
+  'stage.passed',
+  'stage.checked',
+  'stage.skipped',
+]
 
 // Rounds of "fix it" an agent may ask for on its own before a person decides.
 export const MAX_AGENT_SEND_BACKS = 2
@@ -439,6 +450,15 @@ export class StageRunner {
 
   // Starts the stages of the task's step that are in one of `states`.
   async startLanes(taskId: string, states: readonly TaskState[], cause?: TaskEvent): Promise<void> {
+    const forward = cause !== undefined && ENDS_STAGE.includes(cause.type)
+    if (forward && this.markedLanes(taskId).length > 0) {
+      // After the message of the move has reached every listener, so its events come in order.
+      await Promise.resolve()
+      if (this.skipMarked(taskId)) {
+        // The skips ended the step. The message of that move starts the next one.
+        return
+      }
+    }
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     for (const stage of stagesOf(step)) {
@@ -446,6 +466,30 @@ export class StageRunner {
         await this.startStage(task.id, step, stage, cause)
       }
     }
+  }
+
+  // The stages of the current step that the user marked to skip, and that are not done.
+  private markedLanes(taskId: string): Stage[] {
+    const task = this.tasks.getTask(taskId)
+    const marked = task.skipStages ?? []
+    const step = this.stepOf(task)
+    return stagesOf(step).filter(
+      (stage) => marked.includes(stage.id) && laneState(task, step, stage.id) !== 'done',
+    )
+  }
+
+  // Skips the marked stages of the current step. True when that ended the step.
+  private skipMarked(taskId: string): boolean {
+    const before = this.tasks.getTask(taskId)
+    for (const stage of this.markedLanes(taskId)) {
+      this.tasks.applyEvent(taskId, {
+        source: 'system',
+        type: 'stage.skipped',
+        payload: { stage: stage.id, planned: true },
+      })
+    }
+    const after = this.tasks.getTask(taskId)
+    return after.stage !== before.stage || after.state === 'done'
   }
 
   private async startStage(taskId: string, step: Step, stage: Stage, cause?: TaskEvent) {
@@ -768,12 +812,12 @@ export class StageRunner {
 
   // Output of a terminal of a task. On Windows an agent started here counts as running until its
   // launch line sets the window title that says it has ended (/exit, a crash).
-  onOutput(taskId: string, terminal: string, data: string): void {
+  onOutput(taskId: string, terminal: string, data: Buffer): void {
     const key = `${taskId}/${terminal}`
     if (this.platform !== 'win32' || !this.launched.has(key)) {
       return
     }
-    const text = (this.outputTails.get(key) ?? '') + data
+    const text = (this.outputTails.get(key) ?? '') + data.toString()
     if (AGENT_EXITED_MARKS.some((mark) => text.includes(mark))) {
       this.launched.delete(key)
       this.outputTails.delete(key)
@@ -1065,7 +1109,12 @@ export class StageRunner {
   // The task once the stages the action moved it to have started, so the answer shows a stage
   // that failed at once, not the ready state before it.
   private async afterStart(taskId: string): Promise<Task> {
-    await this.startWork.get(taskId)
+    // A skip of a marked stage moves the task on, and the next step starts in work of its own.
+    for (let work = this.startWork.get(taskId); work !== undefined; ) {
+      await work
+      const next = this.startWork.get(taskId)
+      work = next === work ? undefined : next
+    }
     return this.tasks.getTask(taskId)
   }
 
@@ -1199,20 +1248,28 @@ export class StageRunner {
       })
       return
     }
-    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons)) {
+    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons, ci.logs)) {
       return
     }
     this.failChecks(taskId, stageId, ci.reasons, ci.final, ci.logs)
   }
 
-  // A testing stage only runs the code, so its CI failure goes back to the stage that changes
-  // code, at most MAX_AGENT_SEND_BACKS times, as an agent's send back.
-  private sendBackForCi(taskId: string, stageId: string, reasons: string[]): boolean {
+  // A CI failure goes back to an agent as a send back, at most MAX_AGENT_SEND_BACKS times, so the
+  // stage starts a new round and its prompt is pasted as a review's would be. An agent stage gets
+  // it with the log. A testing stage only runs the code, so its failure goes to the stage that
+  // changes code, without the log.
+  private sendBackForCi(
+    taskId: string,
+    stageId: string,
+    reasons: string[],
+    logs = reasons,
+  ): boolean {
     const task = this.tasks.getTask(taskId)
     const steps = this.tasks.stepsOf(task)
     const stage = stagesOf(this.stepOf(task)).find((candidate) => candidate.id === stageId)
-    const to = codeStageBefore(steps, stageId)
-    if (stage?.kind !== 'testing' || to === undefined) {
+    const own = stage?.kind === 'agent'
+    const to = own ? stage : stage?.kind === 'testing' ? codeStageBefore(steps, stageId) : undefined
+    if (stage === undefined || to === undefined) {
       return false
     }
     if (this.sendBacksFrom(taskId, stageId) >= MAX_AGENT_SEND_BACKS) {
@@ -1225,15 +1282,18 @@ export class StageRunner {
       type: 'stage.check-failed',
       payload: { stage: stageId, reasons, final: false },
     })
+    // The stage card shows the lines before the first blank line.
     const reason = [
       `CI failed on ${stageName(stage)}:`,
       ...reasons.map((each) => `- ${each}`),
+      '',
+      ...(own ? logs.map((log) => plainText(log).trimEnd()) : []),
       'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
     ].join('\n')
     this.tasks.applyEvent(taskId, {
       source: 'system',
       type: 'stage.reopened',
-      payload: { to: to.id, reason, from: stageId, byAgent: true },
+      payload: { to: to.id, reason, from: stageId, byAgent: true, ci: true },
     })
     return true
   }

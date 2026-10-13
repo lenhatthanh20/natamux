@@ -7,13 +7,17 @@ sidebar:
 
 Each workspace has a **Changes** tab and a **History** tab. Use them to review the agent's work and ship it, without leaving the dashboard.
 
-![The Changes tab with the file tree and a side by side diff](/screens/changes.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/changes-generate-dark.webp" alt="The Changes tab: the changed files with their status letters and line counts, a side by side diff, and the commit box under the list with a message drafted by Generate and the Commit all button." width="1600" height="1000" decoding="async" />
+<img class="shot-light" src="/screens/ui/changes-generate-light.webp" alt="The Changes tab: the changed files with their status letters and line counts, a side by side diff, and the commit box under the list with a message drafted by Generate and the Commit all button." width="1600" height="1000" decoding="async" />
+<figcaption>The Changes tab: files, diff, and the commit box with a drafted message.</figcaption>
+</figure>
 
 Open them from a workspace, or press `2` for **Changes** and `3` for **History**. The **Docs** tab (`4`) shows the stage files; see [Stages](/docs/concepts/stages/#the-docs-tab).
 
 ## Changes tab
 
-The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The tab label shows how many there are. The list refreshes every 10 seconds; changes made outside Natamux can take a few seconds more to show. Click **Refresh**, or press `Shift+R`, to read them at once.
+The tab lists every file in the workspace that differs from the last commit of the branch. This includes new files that git does not track yet. The tab label shows how many there are. The list refreshes soon after an agent or a terminal of the task changes files, and once a minute; changes made outside Natamux can take up to a minute to show. Click **Refresh**, or press `Shift+R`, to read them at once.
 
 When no file differs, the tab says **No changes** and **The workspace matches its last commit.**
 
@@ -124,11 +128,17 @@ The pull request needs the GitHub CLI (`gh`) logged in on the machine that runs 
 
 The **Pull request** section in the details panel shows the pull request link and a summary such as `open, checks pass`. The states are open, draft, merged and closed. The checks are **checks pass**, **checks fail** and **checks running**. A pull request with no checks shows only its state.
 
-Natamux asks GitHub about open pull requests once a minute. Click **Check now** to ask at once. When the pull request is merged and the task is at review or later, the task moves to Done.
+While a dashboard is open, Natamux asks GitHub about open pull requests once a minute, or every 5 minutes once all checks have finished. Click **Check now** to ask at once. When the pull request is merged and the task is at review or later, the task moves to Done.
 
 ## History tab
 
 The **History** tab draws the git graph of the task branch and of the branch of the main checkout, newest commit first.
+
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/history-dark.webp" alt="The History tab: a commit graph with branch labels, commit messages, authors, short hashes and ages, under a line that says how many commits the task branch is ahead of and behind its base." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/history-light.webp" alt="The History tab: a commit graph with branch labels, commit messages, authors, short hashes and ages, under a line that says how many commits the task branch is ahead of and behind its base." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The History tab: the task branch against its base.</figcaption>
+</figure>
 
 - The first line says how far the task branch is from the base: `2 commits ahead of main, 0 behind.` When files are not committed, it adds **N files not committed.**, which opens the Changes tab.
 - The base is the branch that the main checkout of the repository is on. When that checkout is not on a branch, or is on the task's own branch, the line says **No base branch to compare with.**
@@ -137,4 +147,4 @@ The **History** tab draws the git graph of the task branch and of the branch of 
 - Each row shows branch and tag names, the commit message, the author, the short hash and the age. Hover the age for the exact date.
 - The graph shows the newest 200 commits. When there are more, it says **Only the newest 200 commits are shown.**
 
-Click **Refresh**, or press `Shift+R`, to read the history again at once. The graph also refreshes every 10 seconds; commits made outside Natamux can take a few seconds more to show.
+Click **Refresh**, or press `Shift+R`, to read the history again at once. The graph also refreshes soon after an agent, a terminal or Natamux commits, and once a minute; commits made outside Natamux can take up to a minute to show.

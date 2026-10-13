@@ -7,7 +7,13 @@ sidebar:
 
 A stage is one step of the work on a task, such as writing a spec or implementing code. Every task goes through a **pipeline** of stages. For each stage, Natamux starts the work, checks the result, and waits for your approval when the stage asks for it.
 
-![The stage progress view of a task](/screens/progress.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/progress-dark.webp" alt="The Progress view: one row per task and one column per stage from Context to Release, with a marker for the state of each stage." width="1600" height="1000" decoding="async" />
+<img class="shot-light" src="/screens/ui/progress-light.webp" alt="The Progress view: one row per task and one column per stage from Context to Release, with a marker for the state of each stage." width="1600" height="1000" decoding="async" />
+<figcaption>Tasks against their stages in the Progress view.</figcaption>
+</figure>
+
+For the default pipeline at work, with two agents side by side and a review agent that sends the task back, see [The review loop](/docs/concepts/review-loop/).
 
 ## The default pipeline
 
@@ -34,7 +40,7 @@ The group in the middle holds two stages:
 | Test spec | `agent` | manual | An agent writes `test-spec.md` with a **Cases** section. It does not read the code. |
 | Implement | `agent` | auto | The agent writes tests and code. It does not commit: you read the changes in the **Changes** tab and commit them. |
 
-To change the pipeline, use [Project settings](#change-the-pipeline) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
+To change the pipeline, use [Project settings](/docs/guides/project-settings/) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
 
 ### Shells and agents
 
@@ -68,10 +74,10 @@ A task keeps the list of stage ids it had when it was created. A later change to
 
 ## Change the pipeline
 
-Open the menu of a project and click **Settings**. The **Stages** tab edits the pipeline of the project. Save writes it to `.natamux.json` in the repository. Commit the file to share it. The **JSON** tab edits the whole file as text. See [Project settings](/docs/guides/dashboard/#project-settings).
+Open the menu of a project and click **Settings**. The **Stages** tab edits the pipeline of the project. Save writes it to `.natamux.json` in the repository. Commit the file to share it. The **JSON** tab edits the whole file as text. See [Project settings](/docs/guides/project-settings/).
 
 - **Pick stages.** **Add stage** opens the catalog: common work steps such as Research, Security review or Manual testing, grouped by phase. **Custom stage** makes a stage of your own. The [reference](/docs/reference/configuration/#stage-catalog) lists every catalog stage.
-- **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The switch of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
+- **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The checkbox of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
 - **Agent.** A stage that runs beside the stage in Shell 1, such as Test spec, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
@@ -140,6 +146,12 @@ A task in a workspace shows its stages in the **Progress** view of the details p
 
 The **Docs** tab of a workspace (key `4`) lists the stage files of the task, such as `context.md`, `spec.md` and `plan.md`, with the time each changed. You can read them and fix them by hand before you approve a stage.
 
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/docs-dark.webp" alt="The Docs tab of a task: the stage file context.md in the list on the left, and its text shown formatted on the right, with Rendered, Source and Edit buttons." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/docs-light.webp" alt="The Docs tab of a task: the stage file context.md in the list on the left, and its text shown formatted on the right, with Rendered, Source and Edit buttons." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The Docs tab: read and edit the files the stages wrote.</figcaption>
+</figure>
+
 - **Rendered** shows Markdown as formatted text. **Source** shows the raw text. Natamux remembers your choice in this browser.
 - Click **Edit** to change a file, then **Save**. If the file changed after you began, Natamux asks before it replaces the new text. Your unsaved edit stays when you switch to another file or tab.
 - A task with no stage file shows **Write context.md** to start the first one.
@@ -201,6 +213,11 @@ Sending back starts a stage again. You can go back to the current stage or to an
 
 Skipping ends a stage without checks and moves the task on. If you skip the last stage, the task is `done`.
 
+You can also skip a stage before the task gets there. In **Progress**, a stage that has not started has **Skip**. The card then says **Will be skipped**, and the task skips the stage when it reaches it. **Don't skip** takes the mark off.
+
+- The mark stays after a send back: the task skips the stage again on its way forward.
+- If you send the task back to the marked stage itself, the stage runs.
+
 ### Pass and fail
 
 `natamux stage pass` and `natamux stage fail` set the result of a stage by hand. Natamux uses them itself for a testing stage with a command: when the command ends, the shell reports the result.
@@ -231,10 +248,10 @@ The **Review** stage is an agent stage that runs in its own shell (`"ownShell": 
 - It writes `review.md` with a **Findings** section.
 - **Nothing to fix:** it runs `natamux done`, and the task goes on.
 - **Something to fix:** it runs `natamux stage back` with the problems as the reason. Implement starts again with "What to change: …" in its prompt, then Automated tests and Review run again.
-- An agent may send the task back from its stage **2 times**. The third time the stage waits for you ("needs your input"), so two agents that disagree do not loop. You can always send it back yourself.
+- An agent may send the task back from its stage **2 times**, over the life of the task. The third time the stage waits for you ("needs your input"), so two agents that disagree do not loop. You can always send it back yourself.
 - Pick another agent or model for it in **Agent** and **Arguments** of its stage settings.
 
-For a review by a person, add **Manual review** from the catalog, for example after Review.
+For a review by a person, add **Manual review** from the catalog, for example after Review. The whole loop, with screenshots and the limits, is on [The review loop](/docs/concepts/review-loop/).
 
 ### Stages in their own shell
 
@@ -251,7 +268,7 @@ A stage that changes code (an agent stage without an output file) or a testing s
   2. force-pushes it to `natamux-ci/<task branch>` on `origin`;
   3. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
 - **Every run passes:** the stage passes, and its checks list each run.
-- **A run fails:** the card shows one line per failed run, with its link. The agent gets the end of the failed log (`gh run view --log-failed`), once, as for any failed check. The next failure waits for you.
+- **A run fails:** the stage goes back to its agent, as a send back from a review does. The agent gets the stage prompt again, with the failed runs and the end of each failed log (`gh run view --log-failed`), and the prompt is sent at once. The card says only **Sent back by CI N×**; point at it to see the failed runs. After two such send backs, the next failure waits for you, and the card lists the failed runs with a **view run** link each.
 - **A run fails on a testing stage:** the task goes back to the stage before it that changes code, such as **Implement**, with the failed runs. Its agent fixes them, and the testing stage runs again. After two such send backs, the next failure waits for you.
 - **No run starts within 3 minutes, CI takes more than 30 minutes, or the push or `gh` fails:** the stage waits for you, with the reason.
 - When the task is done or cancelled, Natamux deletes the `natamux-ci/` branch.
@@ -319,6 +336,12 @@ Use a skill when the context lives in another application, for example a record 
 2. Click **Pick a skill** and choose the skill.
 3. Enter the key or address of the record in **Reference**.
 4. Choose an agent. **No agent, a plain shell** cannot run a skill.
+
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/start-task-skill-dark.webp" alt="The Start a task dialog with Context from set to An agent skill, the skill fetch-ticket picked, and the reference NAT-142." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/start-task-skill-light.webp" alt="The Start a task dialog with Context from set to An agent skill, the skill fetch-ticket picked, and the reference NAT-142." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>Context from a skill: pick the skill, then enter the record to read.</figcaption>
+</figure>
 
 The context stage starts the agent with the skill and the reference, for example `/read-record ABC-1` for Claude Code. The agent writes what it finds to `context.md` and runs `natamux done`. No entry in `.natamux.json` is needed. Natamux does not install skills or MCP servers: the agent uses what it has.
 

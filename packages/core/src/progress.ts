@@ -35,6 +35,8 @@ export type StageProgress = {
   reasons: string[]
   // Why the stage was sent back the last time.
   sentBackFor: string | null
+  // The last send back came from a CI failure, not from a person or a review.
+  sentBackByCi: boolean
 }
 
 const ENDS: readonly TaskEvent['type'][] = [
@@ -138,6 +140,7 @@ export function stageProgress(
               ? [agentFailed.payload.reason]
               : [],
         sentBackFor: typeof reopened?.payload.reason === 'string' ? reopened.payload.reason : null,
+        sentBackByCi: reopened?.payload.ci === true,
       }
     }),
   )

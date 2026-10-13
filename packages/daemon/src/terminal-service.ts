@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { basename } from 'node:path'
 import {
   ACK_EVERY_BYTES,
+  plainText,
   portRange,
   scrollbackLines,
   TERMINAL_SCROLLBACK_MAX_LINES,
@@ -12,12 +13,14 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 // The package is CommonJS without named exports for Node.js.
 import xtermHeadless from '@xterm/headless'
+import type { EventBus } from './event-bus.js'
 import { withLoopbackNoProxy } from './no-proxy.js'
 
 // The part of a pseudo terminal that the service uses. `node-pty` gives one in main.ts; tests give
 // a fake, so they do not need the native module.
 export type PtyProcess = {
-  onData: (listener: (data: string) => void) => void
+  // UTF-8 bytes as the pty read them. A read can stop inside a character.
+  onData: (listener: (data: Buffer) => void) => void
   onExit: (listener: (code: number | null) => void) => void
   write: (data: string) => void
   resize: (cols: number, rows: number) => void
@@ -87,13 +90,14 @@ export const SNAPSHOT_SYNC_WAIT_MS = 150
 // A snapshot is sent at most this much per turn (or SERIALIZE_SLICE_MS of sending), so a large one
 // does not block other shells either.
 export const SNAPSHOT_SEND_BYTES = 256 * 1024
-// Chars the daemon's screen has not parsed yet, the freeze queue of a snapshot included. Above the
+// Bytes the daemon's screen has not parsed yet, the freeze queue of a snapshot included. Above the
 // high mark the shell is paused; it goes on below the low mark.
 export const SCREEN_HIGH_WATER = 1_000_000
 export const SCREEN_LOW_WATER = 250_000
 // A client with more output not acked than this is behind: its live output is dropped.
 export const CLIENT_HIGH_WATER = 512 * 1024
-// A hidden client gets at most this much live output per window, counted from when it hid.
+// A hidden client gets at most this much live output per window, counted from when it hid. Its
+// tab parses all of it on the main thread; past the budget a resume or snapshot catches it up.
 export const HIDDEN_BUDGET_BYTES = 256 * 1024
 export const HIDDEN_BUDGET_WINDOW_MS = 1000
 // A behind client is caught up once the shell wrote less than cols * rows / 8 bytes in the last
@@ -118,6 +122,8 @@ const DEFAULT_SIZE: TerminalSize = { cols: 120, rows: 32 }
 // A shell of a done or cancelled task that nobody looks at ends after this long, unless a program
 // runs in it. A dashboard that comes back sooner finds it as it was.
 export const ENDED_IDLE_MS = 60_000
+// The shells of a task that printed nothing for about this long went quiet, see onOutputIdle.
+export const WORKSPACE_QUIET_MS = 500
 
 // A task can have several terminals, named "1", "2" and so on. The agent runs in the first.
 export const MAIN_TERMINAL = '1'
@@ -146,7 +152,7 @@ export type SnapshotSteps = {
   done: (parts: Buffer[], size: TerminalSize) => void
 }
 
-type Queued = { data: string } | { run: () => void }
+type Queued = { data: Buffer } | { run: () => void }
 
 // The screen of a shell, kept the way a terminal shows it. Programs such as agents place text
 // with cursor moves for the size the shell had at that moment, so the raw output shows garbage
@@ -164,7 +170,7 @@ export class ScreenState {
   private queue: Queued[] = []
   // Rows serialized per turn, learned from the last turn so one takes about SERIALIZE_SLICE_MS.
   private sliceRows = SNAPSHOT_FIRST_SLICE_ROWS
-  // Chars written but not parsed yet, the queue included, see SCREEN_HIGH_WATER.
+  // Bytes written but not parsed yet, the queue included, see SCREEN_HIGH_WATER.
   private unparsed = 0
   private full = false
   private readonly onFull: (full: boolean) => void
@@ -188,7 +194,7 @@ export class ScreenState {
     this.terminal.unicode.activeVersion = '11'
   }
 
-  write(data: string): void {
+  write(data: Buffer): void {
     if (this.disposed) {
       return
     }
@@ -256,7 +262,7 @@ export class ScreenState {
     this.terminal.dispose()
   }
 
-  private feed(data: string): void {
+  private feed(data: Buffer): void {
     this.terminal.write(data, () => {
       if (!this.disposed) {
         this.count(-data.length)
@@ -265,8 +271,8 @@ export class ScreenState {
   }
 
   // Two marks, so a backlog near one of them does not pause and resume the shell over and over.
-  private count(chars: number): void {
-    this.unparsed += chars
+  private count(bytes: number): void {
+    this.unparsed += bytes
     if (!this.full && this.unparsed > SCREEN_HIGH_WATER) {
       this.full = true
       this.onFull(true)
@@ -437,6 +443,19 @@ function charBorder(bytes: Buffer, start: number, end: number): number {
   return border > start ? border : end
 }
 
+// The end of the last whole UTF-8 character. The screen would join a cut character by itself, but
+// a frame, a snapshot cut or a listener's text must not split one.
+function wholeChars(bytes: Buffer): number {
+  for (let back = 1; back <= Math.min(4, bytes.length); back += 1) {
+    const byte = bytes[bytes.length - back] ?? 0
+    if ((byte & 0xc0) !== 0x80) {
+      const size = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1
+      return size > back ? bytes.length - back : bytes.length
+    }
+  }
+  return bytes.length
+}
+
 function sameSize(a: TerminalSize, b: TerminalSize): boolean {
   return a.cols === b.cols && a.rows === b.rows
 }
@@ -524,7 +543,11 @@ type Session = {
   // Input that waits for its turn, see write().
   pending: Input[]
   lastWrite?: { at: number; kind: Input['kind'] }
+  // The first bytes of a character that the last read cut, see wholeChars.
+  partial?: Buffer
   writeTimer?: NodeJS.Timeout
+  // The program in the foreground when the output last went quiet, see noteForeground.
+  program?: string
 }
 
 // A piece of input for a shell. Pieces of another kind than the one before go a moment apart.
@@ -541,9 +564,14 @@ type TerminalServiceOptions = {
   env?: NodeJS.ProcessEnv
   now?: () => number
   // Called with every piece of output, for signs of life of an agent without hooks.
-  onOutput?: (taskId: string, terminal: string, data: string) => void
+  onOutput?: (taskId: string, terminal: string, data: Buffer) => void
   // True when the task is done or cancelled, so its shells are only there to look around.
   isEnded?: (taskId: string) => boolean
+  // Dashboards hear when a shell starts or ends.
+  bus?: EventBus
+  // Called once the shells of a task went quiet after output: files in the workspace may have
+  // changed.
+  onOutputIdle?: (taskId: string) => void
 }
 
 type Ticket = { taskId: string; expiresAt: number }
@@ -556,18 +584,72 @@ export class TerminalService {
   private readonly workspaceOf: (taskId: string) => string
   private readonly env: NodeJS.ProcessEnv
   private readonly now: () => number
-  private readonly onOutput: (taskId: string, terminal: string, data: string) => void
+  private readonly onOutput: (taskId: string, terminal: string, data: Buffer) => void
   private readonly isEnded: (taskId: string) => boolean
   private readonly sessions = new Map<string, Session>()
   private readonly tickets = new Map<string, Ticket>()
+  private readonly bus: EventBus | undefined
+  // By task: whether output came since the quiet timer was set.
+  private readonly outputSeen = new Map<string, { seen: boolean }>()
 
   constructor(options: TerminalServiceOptions) {
     this.spawn = options.spawn
     this.workspaceOf = options.workspaceOf
     this.env = withLoopbackNoProxy(options.env ?? process.env)
     this.now = options.now ?? Date.now
-    this.onOutput = options.onOutput ?? (() => undefined)
+    const onOutput = options.onOutput ?? (() => undefined)
+    const onOutputIdle = options.onOutputIdle
+    this.onOutput = (taskId, terminal, data) => {
+      if (onOutputIdle !== undefined) {
+        this.noteOutput(taskId, onOutputIdle)
+      }
+      onOutput(taskId, terminal, data)
+    }
     this.isEnded = options.isEnded ?? (() => false)
+    this.bus = options.bus
+  }
+
+  // A flag per task, not a new timer per chunk, so a flood stays cheap. The quiet moment is
+  // between WORKSPACE_QUIET_MS and twice that.
+  private noteOutput(taskId: string, onQuiet: (taskId: string) => void): void {
+    const known = this.outputSeen.get(taskId)
+    if (known !== undefined) {
+      known.seen = true
+      return
+    }
+    const entry = { seen: false }
+    this.outputSeen.set(taskId, entry)
+    const check = () => {
+      if (entry.seen) {
+        entry.seen = false
+        setTimeout(check, WORKSPACE_QUIET_MS).unref()
+        return
+      }
+      this.outputSeen.delete(taskId)
+      try {
+        onQuiet(taskId)
+      } catch {
+        // A failing listener must not break the terminal.
+      }
+      this.noteForeground(taskId)
+    }
+    setTimeout(check, WORKSPACE_QUIET_MS).unref()
+  }
+
+  // A program that starts or ends in a shell prints something. The dashboards show it, and an
+  // agent started by hand, with the shells: tell them when it changed.
+  private noteForeground(taskId: string): void {
+    let changed = false
+    for (const session of this.sessions.values()) {
+      if (session.taskId === taskId) {
+        const program = session.pty.foreground?.()
+        changed = changed || program !== session.program
+        session.program = program
+      }
+    }
+    if (changed) {
+      this.bus?.publish({ kind: 'shells.changed', taskId })
+    }
   }
 
   // A browser cannot set headers on a WebSocket. Instead of the daemon token in the URL, it asks
@@ -997,8 +1079,7 @@ export class TerminalService {
   }
 
   // Output goes out in batches: one frame for many small chunks, see OUTPUT_COALESCE_MS.
-  private queueOutput(session: Session, data: string): void {
-    const bytes = Buffer.from(data)
+  private queueOutput(session: Session, bytes: Buffer): void {
     if (bytes.length === 0) {
       return
     }
@@ -1166,13 +1247,14 @@ export class TerminalService {
   // Pastes text into a shell (the first by default) and presses Enter, so the agent there takes it
   // as its next prompt. Bracketed paste keeps line breaks from sending the text early. The Cursor
   // CLI ignores an Enter that it reads in one piece with the end of a paste, so the Enter goes
-  // ENTER_AFTER_PASTE_MS later.
+  // ENTER_AFTER_PASTE_MS later. The text loses escapes and control bytes: one could end the paste
+  // early, and then the agent reads the Enter as a line break.
   paste(taskId: string, text: string, terminal = MAIN_TERMINAL): void {
     const session = this.sessions.get(sessionKey(taskId, terminal))
     if (!session) {
       throw new NoTerminalError(taskId)
     }
-    this.write(session, `\x1b[200~${text}\x1b[201~`)
+    this.write(session, `\x1b[200~${plainText(text)}\x1b[201~`)
     session.pending.push({ data: '\r', kind: 'submit' })
     this.flush(session)
   }
@@ -1295,6 +1377,7 @@ export class TerminalService {
       return
     }
     this.sessions.delete(key)
+    this.bus?.publish({ kind: 'shells.changed', taskId })
     clearTimeout(session.idleTimer)
     clearTimeout(session.writeTimer)
     clearTimeout(session.resyncTimer)
@@ -1375,6 +1458,7 @@ export class TerminalService {
       terminal,
       shellId: randomBytes(16).toString('base64url'),
       pty,
+      program: pty.foreground?.(),
       size,
       screen: new ScreenState(size, this.now, (full) => this.setPaused(session, full)),
       clients: new Map(),
@@ -1392,10 +1476,19 @@ export class TerminalService {
       pending: [],
     }
     this.sessions.set(key, session)
+    this.bus?.publish({ kind: 'shells.changed', taskId })
 
-    pty.onData((data) => {
+    pty.onData((read) => {
       if (this.sessions.get(key) !== session) {
         // A closed shell may still print while it ends. Nobody looks at it any more.
+        return
+      }
+      const all = session.partial === undefined ? read : Buffer.concat([session.partial, read])
+      const end = wholeChars(all)
+      // Copied: a view would keep the whole read alive.
+      session.partial = end < all.length ? Buffer.from(all.subarray(end)) : undefined
+      const data = all.subarray(0, end)
+      if (data.length === 0) {
         return
       }
       session.screen.write(data)
@@ -1417,6 +1510,7 @@ export class TerminalService {
       if (this.sessions.get(key) === session) {
         this.sessions.delete(key)
         session.screen.dispose()
+        this.bus?.publish({ kind: 'shells.changed', taskId })
       }
       this.setPaused(session, false)
       for (const client of session.clients.keys()) {

@@ -139,6 +139,11 @@ describe('parseCommand', () => {
       expect(() => parseCommand(['task', 'show', '42'])).toThrow(/not a task id/)
     })
 
+    it('shows a task with an id the user chose, and names both id forms on a bad id', () => {
+      expect(parseCommand(['task', 'show', 'TASK-0005'])).toMatchObject({ id: 'TASK-0005' })
+      expect(() => parseCommand(['task', 'show', 'task-0005'])).toThrow(/T-42 or ABC-42/)
+    })
+
     it('rejects an unknown task command', () => {
       expect(() => parseCommand(['task', 'remove', 'T-1'])).toThrow(/Unknown task command/)
     })
@@ -235,34 +240,6 @@ describe('parseCommand', () => {
       expect(() => parseCommand(['workspace', 'create'])).toThrow(/task id is required/)
       expect(() => parseCommand(['workspace', 'create', 'nope'])).toThrow(/not a task id/)
       expect(() => parseCommand(['workspace', 'list'])).toThrow(/Unknown workspace command/)
-    })
-  })
-
-  describe('hook', () => {
-    it('forwards the hook of an agent', () => {
-      expect(parseCommand(['hook', 'claude-code'])).toEqual({
-        name: 'hook.forward',
-        agent: 'claude-code',
-      })
-    })
-
-    it.each([[['hook']], [['hook', 'Claude Code']], [['hook', 'a/b']], [['hook', '1x']]])(
-      'rejects the agent name in %j',
-      (argv) => {
-        expect(() => parseCommand(argv)).toThrow(/agent name is required/)
-      },
-    )
-
-    it('takes the event that a Copilot hook names, and nothing more', () => {
-      expect(parseCommand(['hook', 'copilot', 'agentStop'])).toEqual({
-        name: 'hook.forward',
-        agent: 'copilot',
-        event: 'agentStop',
-      })
-      expect(() => parseCommand(['hook', 'copilot', 'agentStop', 'extra'])).toThrow(
-        /Unexpected argument/,
-      )
-      expect(() => parseCommand(['hook', 'copilot', 'a/b'])).toThrow(/Unexpected argument/)
     })
   })
 

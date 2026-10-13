@@ -43,6 +43,18 @@ export function scrollbackLines(cols: number): number {
   return Math.min(TERMINAL_SCROLLBACK_MAX_LINES, Math.max(TERMINAL_SCROLLBACK_MIN_LINES, fit))
 }
 
+// OSC (links, titles), CSI (colors, cursor moves, the end of a paste) and two-byte sequences.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: escape sequences start with ESC
+const ESCAPES = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g
+// biome-ignore lint/suspicious/noControlCharactersInRegex: these are the bytes it removes
+const CONTROLS = /[\x00-\x08\x0b-\x1f\x7f-\x9f\ufeff]/g
+
+// Text with no escape sequences or control bytes except tabs and line breaks, and with LF line
+// ends. Pasted into an agent, an escape can end the paste early, so its Enter is not a submit.
+export function plainText(text: string): string {
+  return text.replace(ESCAPES, '').replace(/\r\n?/g, '\n').replace(CONTROLS, '')
+}
+
 export const terminalSizeSchema = z.object({
   cols: z.coerce.number().int().min(1).max(MAX_SIZE),
   rows: z.coerce.number().int().min(1).max(MAX_SIZE),

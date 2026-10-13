@@ -37,7 +37,7 @@ import {
   readAttachment,
 } from './attachments.js'
 import { COPILOT_EVENT_FIELD } from './copilot-hooks.js'
-import type { EventBus } from './event-bus.js'
+import type { DaemonMessage, EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import {
   GitError,
@@ -211,6 +211,50 @@ const terminalQuerySchema = terminalSizeSchema.extend({
 })
 const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
 const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
+// An /events socket with more than this not sent yet skips messages, and gets `resync` once it
+// is below again, every DRAIN_CHECK_MS.
+export const EVENTS_HIGH_WATER = 1024 * 1024
+export const DRAIN_CHECK_MS = 250
+const RESYNC = JSON.stringify({ kind: 'resync' } satisfies DaemonMessage)
+const SOCKET_OPEN = 1
+
+// The part of a WebSocket that /events uses.
+export type EventSocket = {
+  readonly bufferedAmount: number
+  readonly readyState: number
+  send: (text: string) => void
+}
+
+type EventSender = { send: (text: string) => void; stop: () => void }
+
+// Sends the messages of the bus to one /events socket. A dashboard that is too far behind (a
+// sleeping laptop, a slow link) does not make the daemon hold every message for it.
+export function eventSender(socket: EventSocket): EventSender {
+  let drainTimer: NodeJS.Timeout | undefined
+  const stop = () => {
+    clearInterval(drainTimer)
+    drainTimer = undefined
+  }
+  const send = (text: string) => {
+    if (socket.readyState !== SOCKET_OPEN || drainTimer !== undefined) {
+      return
+    }
+    if (socket.bufferedAmount <= EVENTS_HIGH_WATER) {
+      socket.send(text)
+      return
+    }
+    drainTimer = setInterval(() => {
+      if (socket.readyState !== SOCKET_OPEN) {
+        stop()
+      } else if (socket.bufferedAmount <= EVENTS_HIGH_WATER) {
+        stop()
+        socket.send(RESYNC)
+      }
+    }, DRAIN_CHECK_MS)
+    drainTimer.unref()
+  }
+  return { send, stop }
+}
 
 export function isAuthorized(provided: string | undefined, token: string): boolean {
   if (provided === undefined) {
@@ -248,7 +292,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     logger: false,
     rewriteUrl: (request) => stripApiPrefix(request.url ?? '/'),
   })
-  const hooks = new AgentHookService(options.service, options.stages)
+  const hooks = new AgentHookService(options.service, options.stages, {
+    bus: options.bus,
+    workspaceChanged: (taskId) => options.workspaces.touch(taskId),
+  })
   await app.register(websocket)
   const servesPage =
     options.webIndexPath === undefined
@@ -470,6 +517,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     const { stage, on } = workflowBodySchema.parse(request.body)
     return { task: options.service.setCi(id, stage, on) }
+  })
+
+  // Whether a later stage is skipped when the task reaches it.
+  app.put('/tasks/:id/skip', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { stage, on } = workflowBodySchema.parse(request.body)
+    return { task: options.service.setSkip(id, stage, on) }
   })
 
   app.get('/tasks/:id/files', async (request) => {
@@ -814,11 +868,18 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   })
 
   app.get('/events', { websocket: true }, (socket) => {
-    const unsubscribe = options.bus.subscribe((message) => {
-      socket.send(JSON.stringify(message))
-    })
-    socket.on('close', unsubscribe)
-    socket.on('error', unsubscribe)
+    const sender = eventSender(socket)
+    const unsubscribe = options.bus.subscribeClient(sender.send)
+    // The pull request statuses may be old: nobody looked while no dashboard listened.
+    if (options.bus.size() === 1) {
+      options.pullRequests.wake()
+    }
+    const end = () => {
+      unsubscribe()
+      sender.stop()
+    }
+    socket.on('close', end)
+    socket.on('error', end)
   })
 
   return app

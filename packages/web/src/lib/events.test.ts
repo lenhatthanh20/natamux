@@ -10,9 +10,23 @@ describe('describeEvent', () => {
     }
   })
 
+  it('names a change of the skip mark, and a planned skip as any skip', () => {
+    expect(describeEvent('stage.skip-set')).toBe('Skip choice changed')
+    expect(describeEvent('stage.skipped')).toBe('Stage skipped')
+  })
+
   it('does not give two kinds of event the same sentence', () => {
     const sentences = EVENT_TYPES.map((type) => describeEvent(type))
     expect(new Set(sentences).size).toBe(sentences.length)
+  })
+
+  it('says a send back by CI came from CI, also when it goes to the same stage', () => {
+    const fromCi = { to: 'implement', from: 'implement', byAgent: true, ci: true }
+    expect(describeEvent('stage.reopened', fromCi)).toBe('Sent back by CI')
+    expect(describeEvent('stage.reopened', { to: 'plan', reason: 'x' })).toBe(
+      'Sent back to an earlier stage',
+    )
+    expect(describeEvent('stage.started', { ci: true })).toBe('Stage started')
   })
 })
 
@@ -73,6 +87,22 @@ describe('groupEvents', () => {
         stored(2, 'agent.resumed', 'human', false),
       ]),
     ).toHaveLength(2)
+  })
+
+  it('keeps a send back by CI apart from one by a person', () => {
+    const reopened = (seq: number, payload: Record<string, unknown>): StoredEvent => {
+      const base = stored(seq, 'stage.reopened', 'system')
+      return { ...base, event: { ...base.event, payload } }
+    }
+    const lines = groupEvents([
+      reopened(1, { to: 'implement', ci: true }),
+      reopened(2, { to: 'implement', ci: true }),
+      reopened(3, { to: 'implement' }),
+    ])
+    expect(lines.map(describeLine)).toEqual([
+      'Sent back by CI ×2 · Daemon',
+      'Sent back to an earlier stage · Daemon',
+    ])
   })
 
   it('has no lines without events', () => {

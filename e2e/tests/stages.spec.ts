@@ -1,5 +1,5 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
-import { openTask, signIn, TOKEN } from './helpers'
+import { openTask, signIn, TOKEN, taskNamed, taskTable } from './helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 
@@ -271,4 +271,45 @@ test('sends a stage back with a reason the card does not show', async ({ page, r
   const spec = details.getByRole('list', { name: 'Stages' }).getByRole('article', { name: 'Spec' })
   await expect(spec.getByText('Sent back 1×')).toBeVisible()
   await expect(spec.getByText(reason)).toHaveCount(0)
+})
+
+// C16 of the test spec of T-0039: a stage marked early is skipped when the task gets there.
+test('skips a stage that was marked before the task reached it', async ({ page, request }) => {
+  test.setTimeout(120_000)
+  const title = `Skip early e2e ${Date.now()}`
+  const task = await newTask(request, title)
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).state, { timeout: 30_000 })
+    .toMatch(/^(ready|review)$/)
+
+  await page.getByRole('radio', { name: 'Table' }).click()
+  await taskTable(page)
+    .getByRole('button', { name: taskNamed(title) })
+    .click()
+  const details = page.getByRole('complementary', { name: /^Details of T-/ })
+  await details.getByRole('tab', { name: 'Progress' }).click()
+  const testing = details
+    .getByRole('list', { name: 'Stages' })
+    .getByRole('article', { name: 'Automated tests' })
+  await testing.getByRole('button', { name: 'Skip' }).click()
+  await expect(testing.getByText('Will be skipped')).toBeVisible()
+  await expect(testing.getByRole('button', { name: "Don't skip" })).toBeVisible()
+  expect((await taskOf(request, task.id)).skipStages).toEqual(['testing'])
+
+  // Both stages of the group wait for approval; approving them reaches the marked stage.
+  await request.post(`/api/tasks/${task.id}/events`, {
+    headers,
+    data: { source: 'human', type: 'state.overridden', payload: { to: 'review', stage: 'build' } },
+  })
+  for (const stage of ['test-spec', 'implement']) {
+    await request.post(`/api/tasks/${task.id}/stage`, {
+      headers,
+      data: { action: 'approve', stage },
+    })
+  }
+  await expect
+    .poll(async () => (await taskOf(request, task.id)).stage, { timeout: 30_000 })
+    .toBe('agent-review')
+  await expect(testing.getByText('Skipped', { exact: true })).toBeVisible()
+  await expect(testing.getByRole('button', { name: "Don't skip" })).toHaveCount(0)
 })

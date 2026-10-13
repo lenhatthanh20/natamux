@@ -201,7 +201,7 @@ export function Tooltip() {
       }}
       className={`pointer-events-none fixed z-(--z-tooltip) flex max-w-70 items-center gap-2 rounded border border-transparent bg-tooltip-bg px-2 py-1 text-xs text-tooltip-fg shadow-pop dark:border-line-strong ${position === null ? '' : 'hm-pop'}`}
     >
-      <span className="min-w-0 break-words">{shown.text}</span>
+      <span className="min-w-0 whitespace-pre-line break-words">{shown.text}</span>
       {shown.kbd !== null && (
         <span className="shrink-0 font-mono text-2xs opacity-70">{formatShortcut(shown.kbd)}</span>
       )}

@@ -433,6 +433,15 @@ describe('sortTasks', () => {
     ])
   })
 
+  it('sorts a task with a chosen id by the number at the end of its id', () => {
+    const mixed = ['T-0010', 'TASK-0005', 'T-0003'].map((id) => makeTask({ id }))
+    expect(sortTasks(mixed, { key: 'id', direction: 'asc' }).map((task) => task.id)).toEqual([
+      'T-0003',
+      'TASK-0005',
+      'T-0010',
+    ])
+  })
+
   it('does not change the list it is given', () => {
     const before = tasks.map((task) => task.id)
     sortTasks(tasks, { key: 'id', direction: 'asc' })

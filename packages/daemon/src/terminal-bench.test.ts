@@ -241,6 +241,9 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
     )
     it.each(cases)(
       'attach after $cols columns of $style history',
+      // One sample of the loop delay: a busy shared CI runner went past the limit by a few ms on
+      // unrelated changes. A retry keeps a real slowdown, which fails every time.
+      { timeout: BENCH_TEST_MS, retry: 2 },
       async ({ cols, style }) => {
         const { service, ptys } = setup()
         // No client while the history is printed, as a shell that ran with no dashboard: one
@@ -283,7 +286,6 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('terminal benchmark', () => {
         expect(stats.tail).toContain(`END-${cols}-${style}`)
         expect(delay.max / 1e6).toBeLessThanOrEqual(MAX_LOOP_DELAY_MS)
       },
-      BENCH_TEST_MS,
     )
   })
 

@@ -10,6 +10,7 @@ import {
 import {
   type FocusEvent,
   type KeyboardEvent,
+  memo,
   type ReactNode,
   useEffect,
   useMemo,
@@ -17,7 +18,8 @@ import {
   useState,
 } from 'react'
 import type { FileViewMode } from '../hooks/useFileViewMode'
-import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
+import { findRoving, rovingItem, useRovingFocus } from '../hooks/useRovingFocus'
+import { useStableCallback } from '../hooks/useStableCallback'
 import {
   allFolderKeys,
   ancestorKeys,
@@ -91,20 +93,42 @@ export function ChangedFiles({
   const total = useMemo(() => totalCounts(list), [list])
   const anyOpen = folderKeys.some((key) => !collapsed.has(key))
   const selectedKey = selectedPath === null ? null : `f:${selectedPath}`
-  const byKey = new Map<string, TreeRow>(rows.map((row) => [row.key, row]))
+  const byKey = useMemo(() => new Map<string, TreeRow>(rows.map((row) => [row.key, row])), [rows])
+  // One array per row, kept while the rows stay, so a memoized row does not see a new prop.
+  const ancestors = useMemo(() => {
+    const found = new Map<string, TreeRow[]>()
+    const of = (row: TreeRow): TreeRow[] => {
+      const known = found.get(row.key)
+      if (known !== undefined) {
+        return known
+      }
+      const parent = row.parent === null ? undefined : byKey.get(row.parent)
+      const chain = parent === undefined ? [] : [...of(parent), parent]
+      found.set(row.key, chain)
+      return chain
+    }
+    for (const row of rows) {
+      of(row)
+    }
+    return found
+  }, [rows, byKey])
 
   const treeRef = useRef<HTMLDivElement | null>(null)
   // The row that last had focus in the tree, and where it was.
   const lastFocus = useRef<{ key: string; index: number } | null>(null)
   const scrollTo = useRef<string | null>(null)
 
-  const toggle = (key: string) => {
+  const toggle = useStableCallback((key: string) => {
     const next = new Set(collapsed)
     if (!next.delete(key)) {
       next.add(key)
     }
     setCollapsed(next)
-  }
+  })
+  const select = useStableCallback((path: string) => onSelect(path))
+  const remember = useStableCallback((key: string, index: number) => {
+    lastFocus.current = { key, index }
+  })
 
   const roving = useRovingFocus({
     keys: rows.map((row) => row.key),
@@ -228,11 +252,6 @@ export function ChangedFiles({
     },
   }
 
-  const ancestorsOf = (row: TreeRow): TreeRow[] => {
-    const parent = row.parent === null ? undefined : byKey.get(row.parent)
-    return parent === undefined ? [] : [...ancestorsOf(parent), parent]
-  }
-
   return (
     <>
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line pr-1 pl-3">
@@ -287,86 +306,183 @@ export function ChangedFiles({
         {...treeEvents}
         className="group/tree @container min-h-0 flex-1 overflow-y-auto p-1"
       >
-        {rows.map((row, index) => {
-          const tab = roving.item(row.key)
-          const node = row.node
-          const isFile = node.kind === 'file'
-          return (
-            // The tree handles the keys of every row, see treeEvents.
-            // biome-ignore lint/a11y/useKeyWithClickEvents: see above.
-            <div
-              key={row.key}
-              role="treeitem"
-              {...tab}
-              tabIndex={tab.tabIndex}
-              onFocus={(event) => {
-                tab.onFocus(event)
-                if (event.target === event.currentTarget) {
-                  lastFocus.current = { key: row.key, index }
-                }
-              }}
-              onClick={() => (isFile ? onSelect(node.key) : toggle(row.key))}
-              aria-level={row.level}
-              aria-posinset={row.posInSet}
-              aria-setsize={row.setSize}
-              aria-selected={isFile ? row.key === selectedKey : undefined}
-              aria-expanded={row.expandable ? row.expanded : undefined}
-              aria-label={node.kind === 'file' ? fileLabel(node.entry) : folderLabel(node)}
-              style={{
-                paddingLeft:
-                  mode === 'tree' ? `calc(0.25rem + ${row.level - 1} * 0.75rem)` : '0.5rem',
-              }}
-              className="focus-inset relative flex h-(--row-h) cursor-pointer items-center gap-1.5 rounded-md pr-2 select-none hover:bg-hover aria-selected:bg-selected group-focus-within/tree:aria-selected:bg-selection-active"
-            >
-              {ancestorsOf(row).map((ancestor) => (
-                <span
-                  key={ancestor.key}
-                  aria-hidden="true"
-                  style={{ left: `calc(0.75rem + ${ancestor.level - 1} * 0.75rem)` }}
-                  className="pointer-events-none absolute inset-y-0 w-px bg-line opacity-0 group-hover/tree:opacity-100 group-focus-within/tree:opacity-100 motion-safe:transition-opacity"
-                />
-              ))}
-              {mode === 'tree' && (
-                <span
-                  aria-hidden="true"
-                  className="flex size-4 shrink-0 items-center justify-center text-muted"
-                >
-                  {node.kind === 'file' ? (
-                    <FileIcon path={node.key} />
-                  ) : (
-                    <ChevronRight
-                      size={ICON.xs}
-                      className={`motion-safe:transition-transform ${row.expanded ? 'rotate-90' : ''}`}
-                    />
-                  )}
-                </span>
-              )}
-              {mode === 'list' && node.kind === 'file' && <FileIcon path={node.key} />}
-              {node.kind === 'file' ? (
-                <FileContent entry={node.entry} name={node.name} showFolder={mode === 'list'} />
-              ) : (
-                <>
-                  <span data-tip={node.key} className="min-w-0 truncate text-ink-2">
-                    {node.name}
-                  </span>
-                  <span className="flex-1" />
-                  {!row.expanded && node.added !== null && (
-                    <Counts added={node.added} removed={node.removed ?? 0} />
-                  )}
-                  <span className="shrink-0 text-xs text-faint tabular-nums">{node.fileCount}</span>
-                  <span
-                    aria-hidden="true"
-                    className={`flex size-4 shrink-0 items-center justify-center ${STATUS_TONE[node.status]}`}
-                  >
-                    <span className="size-1.5 rounded-full bg-current" />
-                  </span>
-                </>
-              )}
-            </div>
-          )
-        })}
+        {rows.map((row, index) => (
+          <ChangedRow
+            key={row.key}
+            row={row}
+            index={index}
+            mode={mode}
+            selected={row.key === selectedKey}
+            isStop={row.key === roving.stop}
+            ancestors={ancestors.get(row.key) ?? NO_ANCESTORS}
+            activate={roving.activate}
+            remember={remember}
+            onSelect={select}
+            onToggle={toggle}
+          />
+        ))}
       </div>
     </>
+  )
+}
+
+const NO_ANCESTORS: TreeRow[] = []
+
+type ChangedRowProps = {
+  row: TreeRow
+  index: number
+  mode: FileViewMode
+  selected: boolean
+  isStop: boolean
+  ancestors: readonly TreeRow[]
+  activate: (key: string) => void
+  remember: (key: string, index: number) => void
+  onSelect: (path: string) => void
+  onToggle: (key: string) => void
+}
+
+// Memoized: all its props are values or stable functions, so a focus move or a new selection
+// renders only the rows that changed. A new list builds new rows, so rows are compared by what
+// they show (sameRowProps). content-visibility skips the rows far off screen.
+const ChangedRow = memo(function ChangedRow({
+  row,
+  index,
+  mode,
+  selected,
+  isStop,
+  ancestors,
+  activate,
+  remember,
+  onSelect,
+  onToggle,
+}: ChangedRowProps) {
+  const tab = rovingItem(row.key, isStop, activate)
+  const node = row.node
+  const isFile = node.kind === 'file'
+  return (
+    // The tree handles the keys of every row, see treeEvents.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: see above.
+    <div
+      role="treeitem"
+      {...tab}
+      tabIndex={tab.tabIndex}
+      onFocus={(event) => {
+        tab.onFocus(event)
+        if (event.target === event.currentTarget) {
+          remember(row.key, index)
+        }
+      }}
+      onClick={() => (isFile ? onSelect(node.key) : onToggle(row.key))}
+      aria-level={row.level}
+      aria-posinset={row.posInSet}
+      aria-setsize={row.setSize}
+      aria-selected={isFile ? selected : undefined}
+      aria-expanded={row.expandable ? row.expanded : undefined}
+      aria-label={node.kind === 'file' ? fileLabel(node.entry) : folderLabel(node)}
+      style={{
+        paddingLeft: mode === 'tree' ? `calc(0.25rem + ${row.level - 1} * 0.75rem)` : '0.5rem',
+      }}
+      className="cv-row focus-inset relative flex h-(--row-h) cursor-pointer items-center gap-1.5 rounded-md pr-2 select-none hover:bg-hover aria-selected:bg-selected group-focus-within/tree:aria-selected:bg-selection-active"
+    >
+      {ancestors.map((ancestor) => (
+        <span
+          key={ancestor.key}
+          aria-hidden="true"
+          style={{ left: `calc(0.75rem + ${ancestor.level - 1} * 0.75rem)` }}
+          className="pointer-events-none absolute inset-y-0 w-px bg-line opacity-0 group-hover/tree:opacity-100 group-focus-within/tree:opacity-100 motion-safe:transition-opacity"
+        />
+      ))}
+      {mode === 'tree' && (
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 items-center justify-center text-muted"
+        >
+          {node.kind === 'file' ? (
+            <FileIcon path={node.key} />
+          ) : (
+            <ChevronRight
+              size={ICON.xs}
+              className={`motion-safe:transition-transform ${row.expanded ? 'rotate-90' : ''}`}
+            />
+          )}
+        </span>
+      )}
+      {mode === 'list' && node.kind === 'file' && <FileIcon path={node.key} />}
+      {node.kind === 'file' ? (
+        <FileContent entry={node.entry} name={node.name} showFolder={mode === 'list'} />
+      ) : (
+        <>
+          <span data-tip={node.key} className="min-w-0 truncate text-ink-2">
+            {node.name}
+          </span>
+          <span className="flex-1" />
+          {!row.expanded && node.added !== null && (
+            <Counts added={node.added} removed={node.removed ?? 0} />
+          )}
+          <span className="shrink-0 text-xs text-faint tabular-nums">{node.fileCount}</span>
+          <span
+            aria-hidden="true"
+            className={`flex size-4 shrink-0 items-center justify-center ${STATUS_TONE[node.status]}`}
+          >
+            <span className="size-1.5 rounded-full bg-current" />
+          </span>
+        </>
+      )}
+    </div>
+  )
+}, sameRowProps)
+
+function sameRowProps(before: ChangedRowProps, after: ChangedRowProps): boolean {
+  return (
+    sameRow(before.row, after.row) &&
+    before.index === after.index &&
+    before.mode === after.mode &&
+    before.selected === after.selected &&
+    before.isStop === after.isStop &&
+    before.ancestors.length === after.ancestors.length &&
+    // A guide line shows only the key and level of each folder above.
+    before.ancestors.every(
+      (row, at) => row.key === after.ancestors[at]?.key && row.level === after.ancestors[at]?.level,
+    ) &&
+    before.activate === after.activate &&
+    before.remember === after.remember &&
+    before.onSelect === after.onSelect &&
+    before.onToggle === after.onToggle
+  )
+}
+
+function sameRow(before: TreeRow, after: TreeRow): boolean {
+  if (before === after) {
+    return true
+  }
+  const one = before.node
+  const two = after.node
+  const sameNode =
+    one.kind === 'file' && two.kind === 'file'
+      ? sameEntry(one.entry, two.entry)
+      : one.kind === 'folder' &&
+        two.kind === 'folder' &&
+        one.fileCount === two.fileCount &&
+        one.added === two.added &&
+        one.removed === two.removed &&
+        one.status === two.status
+  return (
+    sameNode &&
+    one.key === two.key &&
+    one.name === two.name &&
+    before.key === after.key &&
+    before.level === after.level &&
+    before.posInSet === after.posInSet &&
+    before.setSize === after.setSize &&
+    before.expandable === after.expandable &&
+    before.expanded === after.expanded
+  )
+}
+
+function sameEntry(before: ChangeEntry, after: ChangeEntry): boolean {
+  const keys = Object.keys(after) as (keyof ChangeEntry)[]
+  return (
+    keys.length === Object.keys(before).length && keys.every((key) => before[key] === after[key])
   )
 }
 

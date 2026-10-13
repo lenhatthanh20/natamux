@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import type { StageFile } from '../lib/api'
 import { saveBlob } from '../lib/attachments'
+import { FALLBACK_POLL_MS } from '../lib/live'
 import { toast } from '../lib/toasts'
 import { Age } from './Age'
 import { useObjectUrl } from './ImageDiff'
@@ -170,7 +171,8 @@ export function DocsTab({
   const files = useQuery({
     queryKey: ['stage-files', taskId],
     queryFn: loadFiles,
-    refetchInterval: 10_000,
+    // The daemon says when the workspace changed (workspace.dirty); see lib/live.ts.
+    refetchInterval: FALLBACK_POLL_MS,
   })
   const entries = files.data ?? []
   const names = entries.map((entry) => entry.name)

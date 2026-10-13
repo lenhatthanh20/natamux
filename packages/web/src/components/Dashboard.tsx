@@ -1,7 +1,9 @@
-import { type EventType, type Repo, type Task, waitingOn } from '@natamux/core'
+import { type DiffStat, type EventType, type Repo, type Task, waitingOn } from '@natamux/core'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Columns3, ListChecks, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type ComponentProps, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useActivity, useDiffStats } from '../hooks/useActivity'
 import { useDelayedFlag } from '../hooks/useDelayedFlag'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFrozenOrder } from '../hooks/useFrozenOrder'
@@ -11,12 +13,13 @@ import { useLiveTasks } from '../hooks/useLiveTasks'
 import { clockNow, useNowValue } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { type AgentId, DEFAULT_AGENT, isAgentId } from '../lib/agents'
-import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
+import { type AgentActivity, createApi, isUnauthorized, type TaskChanges } from '../lib/api'
 import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
 import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
 import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
+import { ACTIVITY_KEY, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../lib/live'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
@@ -38,7 +41,7 @@ import { syncTaskTerminals } from '../lib/terminal-cache'
 import { toast } from '../lib/toasts'
 import { triesOf, triesToCancel, tryGroup } from '../lib/tries'
 import { detailsOpenFor, detailsViewFor, useViewStore } from '../lib/view-store'
-import { rowText, tabToOpen, waitReason } from '../lib/workspace'
+import { tabToOpen } from '../lib/workspace'
 import { AgentPanes } from './AgentPanes'
 import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
@@ -85,6 +88,8 @@ type DashboardProps = {
 export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) {
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
+  // Only the fields the dashboard shows: a change of another one, such as a shell request, does
+  // not render it.
   const {
     stateFilter,
     search,
@@ -101,12 +106,33 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     agentsOpen,
     agentPanes,
     paneLayout,
-    tabByTask,
     pinned,
     sort,
     showFinished,
     seenState,
-  } = useViewStore()
+  } = useViewStore(
+    useShallow((view) => ({
+      stateFilter: view.stateFilter,
+      search: view.search,
+      selectedId: view.selectedId,
+      detailOpenByTask: view.detailOpenByTask,
+      detailsView: view.detailsView,
+      sidebarOpen: view.sidebarOpen,
+      drawerOpen: view.drawerOpen,
+      changesTaskId: view.changesTaskId,
+      changesTab: view.changesTab,
+      changesFile: view.changesFile,
+      recent: view.recent,
+      layout: view.layout,
+      agentsOpen: view.agentsOpen,
+      agentPanes: view.agentPanes,
+      paneLayout: view.paneLayout,
+      pinned: view.pinned,
+      sort: view.sort,
+      showFinished: view.showFinished,
+      seenState: view.seenState,
+    })),
+  )
   const {
     showState,
     setSearch,
@@ -194,14 +220,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     forgetTask,
   )
 
-  // Messages sent while the socket was down are lost, so load again what they would have changed.
-  useEffect(() => {
-    if (liveStatus === 'live') {
-      queryClient.invalidateQueries({ queryKey: TASKS_KEY })
-      queryClient.invalidateQueries({ queryKey: ['repos'] })
-    }
-  }, [liveStatus, queryClient])
-
   useEffect(() => {
     if (isUnauthorized(tasksQuery.error)) {
       onUnauthorized()
@@ -215,12 +233,26 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.data])
 
-  // The first terminal then does not wait for xterm's code.
+  // Read by the E2E measures, like the mark in main.tsx. Once: a list read again is not the first.
+  const markedFirstTasks = useRef(false)
+  useEffect(() => {
+    if (tasksQuery.isSuccess && !markedFirstTasks.current) {
+      markedFirstTasks.current = true
+      performance.mark?.('natamux/first-tasks')
+    }
+  }, [tasksQuery.isSuccess])
+
+  // The first terminal then does not wait for xterm's code, and the first diff not for Monaco's.
   useEffect(() => {
     if (!tasksQuery.isSuccess) {
       return
     }
-    return prefetchWhenIdle(loadTerminalView)
+    const cancelTerminal = prefetchWhenIdle(loadTerminalView)
+    const cancelDiff = prefetchWhenIdle(() => import('./MonacoDiff'))
+    return () => {
+      cancelTerminal()
+      cancelDiff()
+    }
   }, [tasksQuery.isSuccess])
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
@@ -447,19 +479,24 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     onError: (error) => toast(error.message, 'error'),
   })
 
-  // The size of each task's work. Edits in a workspace do not reach the daemon as events, so
-  // this is read again every 15 seconds.
+  // The size of each task's work; the daemon says when a workspace changed (workspace.dirty). The
+  // parts that show the sizes read them themselves. Here they only sort, so a change of a size
+  // renders the dashboard only while the list is sorted by size.
+  const sortsBySize = sort?.key === 'changes'
   const diffStatsQuery = useQuery({
-    queryKey: ['diffstats'],
+    queryKey: DIFFSTATS_KEY,
     queryFn: () => api.listDiffStats(),
-    refetchInterval: 15_000,
+    refetchInterval: FALLBACK_POLL_MS,
+    select: (stats: Record<string, DiffStat>) => (sortsBySize ? stats : undefined),
   })
 
-  // Hooks do not reach the dashboard as task changes, so the agents' current steps are read often.
-  const activityQuery = useQuery({
-    queryKey: ['activity'],
+  // What the agents do now; the daemon pushes each change (activity.changed). The dashboard only
+  // loads it: the rows and panes read their own part, so a change never renders the dashboard.
+  useQuery({
+    queryKey: ACTIVITY_KEY,
     queryFn: () => api.listActivity(),
-    refetchInterval: 3_000,
+    refetchInterval: FALLBACK_POLL_MS,
+    notifyOnChangeProps: [],
   })
 
   // The search narrows the counts of the state filter, and the filter narrows the rows.
@@ -508,21 +545,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     detailsWidth: details.width,
   })
   const phone = shellLayout.details === 'page'
-  // What waiting agents asked, or why tasks failed, for the sidebar rows.
-  const asking = tasks.filter(
-    (task) => (task.state === 'needs-input' || task.state === 'failed') && task.workspace !== null,
-  )
-  const askQueries = useQueries({
-    queries: asking.map((task) => ({
-      queryKey: ['events', task.id, task.updatedAt],
-      queryFn: () => api.listEvents(task.id),
-    })),
-  })
-  const questions = Object.fromEntries(
-    asking.map((task, index) => [task.id, rowText(waitReason(askQueries[index]?.data))]),
-  )
   // The stage of each agent shell in the agents grid, so each pane shows its own state. An agent
-  // starts and ends in its shell without a task event, so this is read again often.
+  // starts and ends in its shell without a task event; the daemon says so with shells.changed.
   const paneTasks = agentsOpen ? agentPaneTasks(agentPanes, tasks) : []
   const paneQueries = useQueries({
     queries: paneTasks.map((task) => ({
@@ -606,7 +630,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const openTask = (id: string) => {
     const task = tasks.find((candidate) => candidate.id === id)
     select(id)
-    openChanges(id, task === undefined ? 'terminal' : tabToOpen(task.state, tabByTask[id]))
+    const lastTab = useViewStore.getState().tabByTask[id]
+    openChanges(id, task === undefined ? 'terminal' : tabToOpen(task.state, lastTab))
   }
 
   const moveSelection = (step: number) => {
@@ -860,13 +885,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     tasks={search.trim() === '' ? tasks : searchedTasks}
                     allTasks={tasks}
                     filter={search}
-                    questions={questions}
                     seenState={seenState}
                     currentId={changesTaskId}
                     pinnedIds={pinned}
-                    activity={activityQuery.data?.byTask}
+                    loadEvents={(id) => api.listEvents(id)}
                     loadTerminals={(id) => api.listShells(id)}
-                    terminalActivity={activityQuery.data?.byTerminal}
                     onOpen={(id) => {
                       openTask(id)
                       afterPick()
@@ -930,7 +953,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 sizing: { ...details, defaultWidth: PANEL_WIDTH },
                 onClose: () => setDetailOpen(detailTask.id, false),
                 render: (mode) => (
-                  <TaskDetail
+                  <LiveTaskDetail
                     key={detailTask.id}
                     mode={mode}
                     task={detailTask}
@@ -956,7 +979,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     }
                     onSelectTask={changesTask ? openTask : chooseTask}
                     tries={detailTries}
-                    diffStats={diffStatsQuery.data}
                     onKeepTry={(kept) => keepTryMutation.mutate({ kept, tries: detailTries })}
                     onFanOut={(count, start) =>
                       fanOutMutation.mutate({ task: detailTask, count, start })
@@ -966,7 +988,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     view={detailsViewFor(detailsView, besideWorkspace)}
                     onViewChange={setDetailsView}
                     progress={
-                      <ProgressTab
+                      <LiveProgressTab
                         task={detailTask}
                         loadSettings={() => api.getSettings(detailTask.repo ?? 'default')}
                         loadEvents={() => api.listEvents(detailTask.id)}
@@ -993,12 +1015,16 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           mergeTask(updated)
                           return updated
                         }}
+                        setSkip={async (stage, on) => {
+                          const updated = await api.setSkip(detailTask.id, stage, on)
+                          mergeTask(updated)
+                          return updated
+                        }}
                         createIssue={async () => {
                           const updated = await api.createIssue(detailTask.id)
                           mergeTask(updated)
                           return updated
                         }}
-                        activity={activityQuery.data?.byTask[detailTask.id]}
                         onOpenFile={(name) => openStageFile(detailTask, name)}
                       />
                     }
@@ -1034,7 +1060,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
             onFileChange={setChangesFile}
-            terminalActivity={activityQuery.data?.byTerminal[changesTask.id]}
             onTabChange={(tab) => {
               // Side by side, the diff needs about 900px. The details give way.
               const main =
@@ -1105,13 +1130,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             }}
           />
         ) : agentsOpen ? (
-          <AgentPanes
+          <LiveAgentPanes
             tasks={tasks}
             chosen={agentPanes}
             onChange={setAgentPanes}
             layout={paneLayout}
             onLayout={setPaneLayout}
-            activity={activityQuery.data?.byTerminal}
             terminals={paneTerminals}
             connect={async (taskId, size) => {
               const ticket = await api.terminalTicket(taskId)
@@ -1293,10 +1317,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     : 'Clear the filter to see every task.'}
                 </EmptyState>
               ) : layout === 'progress' ? (
-                <ProgressBoard
+                <LiveProgressBoard
                   tasks={orderedTasks}
                   repos={repos}
-                  activity={activityQuery.data?.byTask}
                   loadSettings={(repo) => api.getSettings(repo)}
                   onOpenTask={(id) => {
                     select(id)
@@ -1305,10 +1328,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   }}
                 />
               ) : layout === 'board' ? (
-                <TaskBoard
+                <LiveTaskBoard
                   tasks={orderedTasks}
                   selectedId={selectedId}
-                  diffStats={diffStatsQuery.data}
                   allTasks={tasks}
                   stateFilter={stateFilter}
                   showFinished={showFinished}
@@ -1316,13 +1338,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onOpen={openTask}
                 />
               ) : (
-                <TaskTable
+                <LiveTaskTable
                   tasks={orderedTasks}
                   mainWidth={mainWidth}
                   selectedId={selectedId}
-                  diffStats={diffStatsQuery.data}
                   allTasks={tasks}
-                  activity={activityQuery.data?.byTask}
                   showRepo={repos.length > 1}
                   sort={sort}
                   onSort={(key) => setSort(nextSort(sort, key))}
@@ -1444,4 +1464,41 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       )}
     </>
   )
+}
+
+// The parts that show the activity or the sizes read them here, below the dashboard, so a change
+// renders only them.
+const byTask = (activity: AgentActivity) => activity.byTask
+const byTerminal = (activity: AgentActivity) => activity.byTerminal
+
+function LiveTaskTable(props: Omit<ComponentProps<typeof TaskTable>, 'activity' | 'diffStats'>) {
+  const activity = useActivity(byTask)
+  const diffStats = useDiffStats()
+  return <TaskTable {...props} activity={activity} diffStats={diffStats} />
+}
+
+function LiveTaskBoard(props: Omit<ComponentProps<typeof TaskBoard>, 'diffStats'>) {
+  const diffStats = useDiffStats()
+  return <TaskBoard {...props} diffStats={diffStats} />
+}
+
+function LiveTaskDetail(props: Omit<ComponentProps<typeof TaskDetail>, 'diffStats'>) {
+  const diffStats = useDiffStats()
+  return <TaskDetail {...props} diffStats={diffStats} />
+}
+
+function LiveProgressBoard(props: Omit<ComponentProps<typeof ProgressBoard>, 'activity'>) {
+  const activity = useActivity(byTask)
+  return <ProgressBoard {...props} activity={activity} />
+}
+
+function LiveProgressTab(props: Omit<ComponentProps<typeof ProgressTab>, 'activity'>) {
+  const taskId = props.task.id
+  const activity = useActivity((all) => all.byTask[taskId])
+  return <ProgressTab {...props} activity={activity} />
+}
+
+function LiveAgentPanes(props: Omit<ComponentProps<typeof AgentPanes>, 'activity'>) {
+  const activity = useActivity(byTerminal)
+  return <AgentPanes {...props} activity={activity} />
 }

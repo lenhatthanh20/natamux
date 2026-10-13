@@ -15,7 +15,11 @@ Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts ea
 
 ## Does it run on Windows?
 
-Not yet. The current release has a macOS build for Apple silicon only. The Intel Mac and Linux builds are paused; v0.1.2 has them.
+Yes, on Windows 10 (version 1809 or later) and Windows 11, x64. Download `Natamux-win-x64.exe`; task terminals run PowerShell. The installer is not signed yet, so SmartScreen asks first: click **More info**, then **Run anyway**. There are also builds for macOS (Apple silicon and Intel) and Linux. See [Install Natamux](/docs/getting-started/install/).
+
+## Which agent reviews the work?
+
+The **Review** stage uses the task's agent unless you choose another one in **Project settings → Stages → Review → Agent**. There is no global setting; each project keeps it in its `.natamux.json`. See [Choose the review agent](/docs/concepts/review-loop/#choose-the-review-agent).
 
 ## What does it cost?
 
@@ -27,7 +31,9 @@ No. You log in to your agents (and `gh`) as you do today. The dashboard uses a l
 
 ## Can two agents work on one task?
 
-A task has one worktree, and its agent runs in the task's first terminal. Some stages run side by side (Test spec and Implement), each with its own agent. To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/docs/guides/fan-out/).
+Yes. A task has one worktree, and its agent runs in Shell 1. In the default pipeline, **Test spec** starts a second agent in Shell 2 while Implement runs, and **Review** starts a third one in Shell 5 that can send the work back. Each of them can be another agent or model. See [The review loop](/docs/concepts/review-loop/).
+
+To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/docs/guides/fan-out/).
 
 You can also open more terminals in a task for your own shells.
 
@@ -38,6 +44,7 @@ As Markdown files with a small header, in `<data folder>/tasks/T-0001.md`. A SQL
 | Setup | Data folder |
 |---|---|
 | Desktop app, macOS | `~/Library/Application Support/Natamux/data` |
+| Desktop app, Windows | `%APPDATA%\Natamux\data` |
 | Desktop app, Linux | `~/.config/Natamux/data` |
 | A daemon started in a repository | `.natamux/` in that folder, unless you set `NATAMUX_DATA_DIR` |
 | Docker | The volume `natamux-data`, at `/data` |
@@ -63,7 +70,7 @@ Yes, from version 0.1.2. The desktop app checks GitHub for a new release, downlo
 ## How do I uninstall it?
 
 1. Quit the app.
-2. macOS: drag Natamux from Applications to the Trash. Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
-3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
+2. macOS: drag Natamux from Applications to the Trash. Windows: **Settings → Apps → Installed apps → Natamux → Uninstall** (Windows 10: **Apps & features**). Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
+3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
 4. Optional: remove worktrees you no longer need. In each repository, `git worktree list` shows them and `git worktree remove <path>` removes one.
 5. Optional: remove the `PATH` line you added for the `natamux` command.

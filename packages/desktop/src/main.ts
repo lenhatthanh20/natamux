@@ -18,12 +18,22 @@ import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
 import { readGhosttyFont } from './ghostty-config.js'
-import { isDashboardUrl, opensInBrowser } from './navigation.js'
+import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
-import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
+import { runSmoke } from './smoke.js'
+import {
+  freePort,
+  loginPathLogLine,
+  loginShellPath,
+  startupMarks,
+  waitForHealth,
+} from './startup.js'
 import { Updater } from './updater.js'
 import { windowOptions } from './window-options.js'
+
+const marks = startupMarks()
+marks.mark('module start')
 
 // Before the paths are read: the user data folder is named after the app.
 app.setName('Natamux')
@@ -37,6 +47,9 @@ let daemon: UtilityProcess | undefined
 let daemonExited = false
 let daemonToken = ''
 let dashboardUrl = ''
+// False while the window shows the loading page and waits for the daemon.
+let daemonReady = false
+let marksLogged = false
 let window: BrowserWindow | undefined
 let quitConfirmed = false
 let updater: Updater | undefined
@@ -80,7 +93,8 @@ async function pickRepository(): Promise<string | undefined> {
   }
 }
 
-async function startDaemon(repoDir: string | undefined): Promise<void> {
+// onForked runs in the same tick as the fork, so the window opens while the daemon starts.
+async function startDaemon(repoDir: string | undefined, onForked: () => void): Promise<void> {
   // Right after login the shell can take seconds, so the daemon starts meanwhile and gets the PATH
   // later (see packages/daemon/src/login-path.ts).
   const login = process.platform === 'win32' ? undefined : loginShellPath(process.env.SHELL)
@@ -121,6 +135,8 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     serviceName: 'Natamux daemon',
   })
   daemon = child
+  marks.mark('daemon forked')
+  onForked()
   let ready = (): void => undefined
   const readyMessage = new Promise<void>((resolve) => {
     ready = resolve
@@ -129,6 +145,7 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     if (message !== 'ready') {
       return
     }
+    marks.mark('daemon ready')
     ready()
     void login?.then((answer) => {
       const problem = loginPathLogLine(answer, process.env.PATH)
@@ -171,16 +188,28 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
 }
 
 function createWindow(): void {
-  const created = new BrowserWindow(
-    windowOptions(join(here, 'preload.cjs'), nativeTheme.shouldUseDarkColors),
-  )
+  const dark = nativeTheme.shouldUseDarkColors
+  const origin = new URL(dashboardUrl).origin
+  const created = new BrowserWindow(windowOptions(join(here, 'preload.cjs'), dark))
   window = created
-  created.once('ready-to-show', () => created.show())
+  marks.mark('window created')
+  // By origin, not by the exact loading page URL: Chromium may rewrite a data: URL.
+  const onDashboard = (): boolean => created.webContents.getURL().startsWith(`${origin}/`)
+  created.once('ready-to-show', () => {
+    marks.mark('ready-to-show')
+    created.show()
+  })
+  created.webContents.on('did-finish-load', () => {
+    if (!marksLogged && onDashboard()) {
+      marksLogged = true
+      marks.mark('did-finish-load')
+      log(marks.line())
+    }
+  })
   created.on('closed', () => {
     window = undefined
   })
 
-  const origin = new URL(dashboardUrl).origin
   created.webContents.setWindowOpenHandler(({ url }) => {
     if (opensInBrowser(url)) {
       void shell.openExternal(url)
@@ -196,9 +225,14 @@ function createWindow(): void {
     }
   })
   if (process.env.NATAMUX_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loads signed in, then the app quits. The
-    // exit code tells: on Windows the app's output may not reach the console.
-    created.webContents.once('did-finish-load', async () => {
+    // A check for CI and the codespace: the dashboard loads signed in, a terminal and an agent work
+    // (smoke.ts), then the app quits. The exit code tells: on Windows the app's output may not reach
+    // the console.
+    created.webContents.on('did-finish-load', async () => {
+      // The loading page finishes first.
+      if (!onDashboard()) {
+        return
+      }
       await new Promise((resolve) => setTimeout(resolve, 4000))
       const signedIn: unknown = await created.webContents.executeJavaScript(
         `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
@@ -208,12 +242,31 @@ function createWindow(): void {
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
       }
+      let passed = signedIn === true
+      if (passed) {
+        // Also in the daemon log, which CI reads on Windows.
+        let result = 'natamux-desktop: smoke passed, the terminal and the agent work'
+        try {
+          await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
+        } catch (error) {
+          passed = false
+          const message = error instanceof Error ? error.message : String(error)
+          result = `natamux-desktop: smoke failed: ${message}`
+        }
+        console.log(result)
+        log(`${result}\n`)
+      }
       quitConfirmed = true
       daemon?.kill()
-      app.exit(signedIn === true ? 0 : 1)
+      app.exit(passed ? 0 : 1)
     })
   }
-  void created.loadURL(`${dashboardUrl}/`)
+  if (daemonReady) {
+    void created.loadURL(`${dashboardUrl}/`)
+  } else {
+    // The dashboard load cuts this one short when the daemon is quick, and that rejects.
+    created.loadURL(loadingPageUrl(dark)).catch(() => undefined)
+  }
 }
 
 // The number of tasks whose agent works now. Quitting stops them.
@@ -324,7 +377,8 @@ function makeUpdater(): Updater | undefined {
   })
 }
 
-// The page reads the token once, as it loads. Only the dashboard may ask.
+// The page reads the token once, as it loads. Only the dashboard may ask. Not a window argument:
+// other local users can read a process's arguments.
 ipcMain.on('natamux:daemon-token', (event) => {
   const from = event.senderFrame?.url ?? ''
   event.returnValue =
@@ -383,10 +437,11 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(async () => {
+    marks.mark('whenReady')
     updater = makeUpdater()
     buildMenu()
     try {
-      await startDaemon(startingRepoDir(loadSettings(settingsFile)))
+      await startDaemon(startingRepoDir(loadSettings(settingsFile)), createWindow)
     } catch (error) {
       quitConfirmed = true
       await dialog.showMessageBox({
@@ -397,7 +452,8 @@ if (!app.requestSingleInstanceLock()) {
       app.quit()
       return
     }
-    createWindow()
+    daemonReady = true
+    void window?.loadURL(`${dashboardUrl}/`)
     updater?.start()
   })
 }

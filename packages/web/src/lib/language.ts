@@ -9,8 +9,10 @@ const BY_EXTENSION = new Map(
     jsx: 'javascript',
     mjs: 'javascript',
     cjs: 'javascript',
-    json: 'json',
-    jsonc: 'json',
+    // Monaco's JSON language service brings editor parts the slim editor has no services for
+    // (lib/monaco-setup.ts), so JSON gets the colors of JavaScript.
+    json: 'javascript',
+    jsonc: 'javascript',
     css: 'css',
     scss: 'scss',
     less: 'less',

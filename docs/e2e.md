@@ -21,15 +21,25 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, the run stops there, and the test job stops after 20 minutes.
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report-<group>` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, its group stops there and the other groups are cancelled. Each test job stops after 20 minutes.
 
 The workflow has three jobs:
 
 | Job | Does | Can write packages |
 |---|---|---|
 | `build` | `scripts/e2e.sh build`, then saves the images as an artifact and their ids as outputs | no |
-| `test` | loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests | no |
+| `test` | one job per group: loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests of its group | no |
 | `publish` | on `main` only: checks the image ids against `build`, pushes the images, attests their build provenance | yes |
+
+The tests share one daemon, so in one job they run one at a time. To save time, CI runs them in groups, each in its own `test` job with its own daemon and demo data. `e2e/groups.ts` names the groups, and the job sets `E2E_GROUP`:
+
+| Group | Spec files |
+|---|---|
+| `timing` | `dashboard-measures.spec.ts`, `terminal-cache.spec.ts`, `terminal-measures.spec.ts`: all write the measures, so `e2e-measures` stays one file |
+| `terminal` | `terminal-gpu.spec.ts`, `terminal-look.spec.ts`, `terminal-protocol.spec.ts` |
+| `rest` | every other spec file, so a new file runs with no change to the workflow |
+
+Without `E2E_GROUP`, `pnpm e2e` runs every spec file. `E2E_GROUP=<group> pnpm e2e` runs one group, as its CI job does. An unknown group stops the run with an error. `groups.spec.ts` checks that each test of a full run is in exactly one group, and that the workflow runs every group.
 
 Only `publish` can push images, and it installs no packages. A bad package in the Playwright install of `test` cannot push an image, and it cannot swap the artifact either, because `publish` checks the ids.
 
@@ -70,13 +80,14 @@ playwright-cli reload
 
 ## Terminal measures
 
-Two spec files time the terminal, so a change can show its effect with numbers.
+These spec files time the terminal and the dashboard, so a change can show its effect with numbers.
 
 | File | What |
 |---|---|
 | `terminal-measures.spec.ts` | The baseline: time to show a long history, sockets per tab switch, JS heap, keypress to paint, echo and Ctrl+C during a flood, daemon memory. It mostly records numbers. Limits: a 10,000-line plain history shows within 500 ms (median of 5, AC 8); in a flood of 5,000,000 lines in another shell, the echo p95 is at most 100 ms, no long task passes 100 ms until the prompt is back, Ctrl+C reaches the prompt within 500 ms (median of 5), and the daemon memory grows by at most 100 MB (peak minus the median just before the flood; AC 25, 26) |
 | `terminal-cache.spec.ts` | The terminal cache: showing a terminal again within 100 ms with no new socket, the limit of 8 hidden terminals, the heap of hidden terminals. While the hidden shells of another task flood, the echo is at most 100 ms (p95) with no long task over 150 ms, and the flooded task catches up when shown again (AC 45) |
 | `terminal-protocol.spec.ts` | The catch-up of a new connection: no history scrolls by while the snapshot is written (the skeleton shows instead), and keys typed while `replayed` is held back (`page.routeWebSocket`) reach the shell once, after it, in order. Reconnect: a socket closed from the page comes back to the same shell with only the missed output, `exit` opens no new socket, and replies to queries printed while the socket was closed are never sent (`controlTerminalSockets`) |
+| `dashboard-measures.spec.ts` | The dashboard: JS and CSS bytes of the first load, and time from a reload to the first task row and to the `natamux:first-render` mark (median of 5). HTTP requests per minute in 60 s on the Terminal tab of one of 10 tasks whose fake agents work. Limit: at most 20% of what the polls before T-0033 asked for on that screen (activity every 3 s, diffstats every 15 s, the open task's changes and graph every 10 s each, shells every 5 s per sidebar row that read them). Count and total ms of long tasks in 60 s on the task table, with 50 new tasks and 3 fake agents at work. The agents' tasks are cancelled, their notes committed, and the tasks deleted after each test |
 | `terminal-helpers.ts` | Shell tasks, panes, history, and timing in the page (`timeToShow`, `typeAndMeasure`). Times come from the page's clock (`event.timeStamp`, `requestAnimationFrame`), so the runner's delay does not count |
 | `measures.ts` | `recordMeasure` writes `e2e/test-results/terminal-measures.json` and prints a `MEASURE` line. `writeSummary` adds a table to the job summary |
 | `daemon-rss.ts` | Samples the memory (`VmRSS`) of the daemon process every 0.5 s through one `docker compose exec`. Its shells are not counted |

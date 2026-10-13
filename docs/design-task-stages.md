@@ -2,6 +2,8 @@
 
 Status: built in the stage pull requests (#60 to #63). The notes at the end say where the code differs from this text.
 
+This is design history. Since v0.1.12 the default pipeline is `Context → Spec → Plan → [Test spec ‖ Implement] → Automated tests → Review → Release`: the tests run before Review, and Review is an agent stage that can send the task back to Implement. The user docs are current: [Stages](https://natamux.github.io/docs/concepts/stages/) and [The review loop](https://natamux.github.io/docs/concepts/review-loop/).
+
 ## 1. Goal
 
 A task moves through the steps of real work, not only "the agent runs, then I review":
@@ -238,6 +240,16 @@ A hard stage can run as a Claude Code workflow: the agent splits the work across
   - The "Workflow" label follows how the stage last started (`stage.started` payload), not the current choice or settings.
   - A `workflowStages` value that is not a list of stage ids reads as empty, so a hand-edited task file still loads.
   - A default stage that is gone from the settings keeps its default settings (section 6), so `plan` and `implement` keep offering it there.
+
+### 3.9 Skip a later stage early
+
+A person can mark a stage the task has not reached yet; the task skips it when it gets there.
+
+- **Choice:** per task, the field `skipStages` (stage ids), left out when none. Set with `PUT /tasks/:id/skip` `{ stage, on }`; each change logs `stage.skip-set` (`payload.stage`, `payload.on`). The Progress view shows **Skip** / **Don't skip** on each upcoming stage, and "Will be skipped" on a marked one.
+- **Refused:** a stage the task does not have, the current stage or an earlier one (the current stage has its own **Skip**), the context stage, and any change on a task that is `done` or `cancelled`. Otherwise a mark can always come off. Choosing the same value again writes no event.
+- **Skip:** when the task enters a step by a forward move (`stage.approved`, `review.approved`, `stage.passed`, `stage.checked`, `stage.skipped`), the stage runner applies `stage.skipped` (source `system`, `payload.planned: true`) to each marked stage of the step, then starts the others. A group whose stages are all marked is skipped as a whole.
+- **Send back:** the mark stays, so the next forward pass skips the stage again. A send back straight to a marked stage runs it.
+- A marked release stage ends the task as `done` when it is skipped.
 
 ## 4. Task context
 
@@ -479,7 +491,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 **Task progress page** (the Progress view of the details panel, beside the workspace). It shows what each stage did and the evidence that it is finished. The panel is narrow (320-560), so everything is one column.
 
-- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. A bar with one segment per stage, as wide as the time spent; a parallel step is two thin bars on top of each other; a running segment has moving stripes.
+- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
 - **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
   - Done stage: time, who approved and when, and evidence chips. **Show evidence** opens the passed checks and, for a stage that ran twice, each round with the comment that sent it back.
   - Current stage: everything the checks of 3.5 will look at, live. A parallel step shows its stages side by side, each in its own card.

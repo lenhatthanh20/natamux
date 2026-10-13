@@ -4,7 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CommandActions, CommandContext } from '../lib/commands'
-import { CommandPalette } from './CommandPalette'
+import { CommandPalette, capRows, MAX_ROWS } from './CommandPalette'
+import source from './CommandPalette.tsx?raw'
 
 const NOW = new Date('2026-10-09T12:00:00.000Z')
 
@@ -327,5 +328,60 @@ describe('the jump palette', () => {
     await user.click(row as HTMLElement)
     // The first workspace of the list is the one that asks a question.
     expect(on.onOpenTask).toHaveBeenCalledWith('T-0002', '2')
+  })
+})
+
+describe('capRows', () => {
+  const section = (id: string, count: number) => ({
+    id,
+    title: id,
+    rows: Array.from({ length: count }, (_, i) => ({
+      kind: 'create-task' as const,
+      key: `${id}${i}`,
+      title: `${id}${i}`,
+    })),
+  })
+
+  it('keeps the first rows and drops the sections after the cap', () => {
+    const capped = capRows([section('a', 30), section('b', 30), section('c', 5)])
+    expect(capped.map((s) => s.rows.length)).toEqual([30, MAX_ROWS - 30])
+  })
+
+  it('returns short lists as they are', () => {
+    const sections = [section('a', 3)]
+    expect(capRows(sections)).toEqual(sections)
+  })
+})
+
+describe('a palette with 500 workspaces', () => {
+  const many = Array.from({ length: 500 }, (_, index) =>
+    task(`T-${String(index + 1).padStart(4, '0')}`, 'done'),
+  )
+  const jump = () => palette({ mode: 'jump', loadTerminals: async () => [] }, handlers(), many)
+
+  it('renders the first 50 rows only', () => {
+    jump()
+    expect(screen.getAllByRole('option')).toHaveLength(MAX_ROWS)
+    // The recent T-0001 comes first, then the newest, so T-0002 is past the cap.
+    expect(screen.queryByRole('option', { name: /T-0002/ })).toBeNull()
+  })
+
+  it('finds a workspace past the first 50 rows as you type', async () => {
+    const { on } = jump()
+    const user = userEvent.setup()
+    await user.keyboard('T-0002')
+    expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(MAX_ROWS)
+    await user.click(screen.getByRole('option', { name: /T-0002/ }))
+    expect(on.onOpenTask).toHaveBeenCalledWith('T-0002')
+  })
+
+  it('keys its rows on the time each shell list was read, not on its text', () => {
+    expect(source).not.toContain('JSON.stringify')
+  })
+})
+
+describe('capRows with nothing', () => {
+  it('returns no sections', () => {
+    expect(capRows([])).toEqual([])
   })
 })

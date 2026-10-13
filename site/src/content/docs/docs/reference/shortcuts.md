@@ -90,7 +90,7 @@ These work in the **Stages** tab of the project settings, with the focus on a st
 | Move the stage down | `Alt+ArrowDown` |
 | Save the settings | `Mod+Enter` |
 
-The row menu has the same moves as **Move up** and **Move down**. See [Project settings](/docs/guides/dashboard/#project-settings).
+The row menu has the same moves as **Move up** and **Move down**. See [Project settings](/docs/guides/project-settings/).
 
 ## Panes and terminals
 

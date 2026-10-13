@@ -69,7 +69,7 @@ The **Progress** view of the details panel shows the context source and the issu
 
 Natamux can open a GitHub issue for a task that you made in the app, and link the two. The issue has the task title as its title. Its body is the spec (`spec.md`) when there is one, and otherwise the task notes, plus a line `Made by Natamux for T-0001.`
 
-Natamux opens no issue on its own until you turn it on. Choose when in the **Issues** tab of the project settings (**Projects** > **Settings**). It writes `tracker.createIssue` in the `.natamux.json` file at the root of the repository.
+Natamux opens no issue on its own until you turn it on. Choose when in the **Issues** tab of [Project settings](/docs/guides/project-settings/#the-issues-tab). It writes `tracker.createIssue` in the `.natamux.json` file at the root of the repository.
 
 | Value | Natamux opens the issue |
 |---|---|
@@ -100,7 +100,7 @@ When the task is linked to an issue and `tracker.linkInPr` is true (the default)
 
 ### Checks and status
 
-Natamux asks GitHub about each open or draft pull request once a minute. The **Pull request** section of the details panel shows:
+While a dashboard is open, Natamux asks GitHub about each open or draft pull request once a minute, with one request per repository. Once the checks of all of them have finished, it asks every 5 minutes. The **Pull request** section of the details panel shows:
 
 - The pull request link.
 - A summary such as `open, checks pass`, `open, checks fail` or `draft, checks running`.

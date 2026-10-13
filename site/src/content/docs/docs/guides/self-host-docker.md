@@ -2,7 +2,7 @@
 title: Self-host with Docker
 description: Run the Natamux dashboard and daemon in hardened Docker containers.
 sidebar:
-  order: 7
+  order: 9
 ---
 
 The production compose file runs two containers: the **daemon** and the **web** dashboard behind nginx.
@@ -22,6 +22,16 @@ docker compose -f compose.prod.yaml up -d --build
 ```
 
 Open `http://localhost:8080` and paste the token into the **Daemon token** field. Write the token down: you also need it for the CLI.
+
+## Try it with demo data
+
+To look around the dashboard without your own repository, start the images that CI builds on `main`. From a clone of the Natamux repository, with Docker and the GitHub CLI:
+
+```sh
+scripts/e2e.sh up
+```
+
+The script pulls `ghcr.io/lenhatthanh20/natamux-daemon` and `natamux-web`, checks their build attestation with `gh`, starts them, and adds demo tasks. Open `http://localhost:8080` and sign in with the token `e2e-token`. The demo uses a fake agent, and its data lives in Docker volumes. `scripts/e2e.sh down` stops it and removes the demo data. See `docs/e2e.md` in the repository.
 
 ## Settings
 
@@ -57,7 +67,7 @@ Agent hooks reach the daemon the same way: set `NATAMUX_URL=http://host:8080/api
 - **There is no TLS.** The token travels in clear text. Put a reverse proxy with TLS in front before you open the dashboard beyond localhost, and only then change `NATAMUX_BIND`.
 - Keep the token secret. It is the only lock on the API.
 - The repository must be writable by user 1000 inside the container. Otherwise `workspace create` fails, although reading tasks still works.
-- The images are built locally and carry the tag `local`. Base images are tags, not pinned digests.
+- `compose.prod.yaml` builds the images locally, with the tag `local`. Base images are tags, not pinned digests. The images that `scripts/e2e.sh` pulls are built by CI from `main` and carry a build attestation.
 
 ## Stop and update
 

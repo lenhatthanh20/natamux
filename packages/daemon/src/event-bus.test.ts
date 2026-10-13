@@ -1,5 +1,5 @@
 import type { Task } from '@natamux/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 
 const task: Task = {
@@ -67,5 +67,66 @@ describe('EventBus', () => {
     bus.publish(message)
 
     expect(received).toEqual([message])
+  })
+})
+
+describe('EventBus clients', () => {
+  it('counts only the dashboards, not the services that subscribe', () => {
+    const bus = new EventBus()
+    bus.subscribe(() => undefined)
+    expect(bus.size()).toBe(0)
+
+    const first = bus.subscribeClient(() => undefined)
+    const second = bus.subscribeClient(() => undefined)
+    expect(bus.size()).toBe(2)
+
+    first()
+    second()
+    expect(bus.size()).toBe(0)
+  })
+
+  it('makes the JSON text once for all dashboards', () => {
+    const bus = new EventBus()
+    const texts: string[] = []
+    for (let count = 0; count < 3; count += 1) {
+      bus.subscribeClient((text) => texts.push(text))
+    }
+    const services: DaemonMessage[] = []
+    bus.subscribe((next) => services.push(next))
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      bus.publish(message)
+      expect(stringify.mock.calls.filter(([value]) => value === message)).toHaveLength(1)
+    } finally {
+      stringify.mockRestore()
+    }
+
+    expect(texts).toEqual([0, 1, 2].map(() => JSON.stringify(message)))
+    expect(services).toEqual([message])
+  })
+
+  it('makes no text without dashboards', () => {
+    const bus = new EventBus()
+    bus.subscribe(() => undefined)
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      bus.publish(message)
+      expect(stringify.mock.calls.filter(([value]) => value === message)).toHaveLength(0)
+    } finally {
+      stringify.mockRestore()
+    }
+  })
+
+  it('keeps sending to the other dashboards when one throws', () => {
+    const bus = new EventBus()
+    const texts: string[] = []
+    bus.subscribeClient(() => {
+      throw new Error('closed socket')
+    })
+    bus.subscribeClient((text) => texts.push(text))
+
+    bus.publish({ kind: 'shells.changed', taskId: 'T-0001' })
+
+    expect(texts).toEqual(['{"kind":"shells.changed","taskId":"T-0001"}'])
   })
 })

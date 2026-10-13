@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { taskContextSchema, taskSchema, upgradeTaskFields } from './task.js'
+import { splitTaskId, taskContextSchema, taskSchema, upgradeTaskFields } from './task.js'
 
 const minimalTask = {
   id: 'T-42',
@@ -52,6 +52,14 @@ describe('taskSchema', () => {
     expect(taskSchema.parse({ ...minimalTask, ciStages: 'implement' }).ciStages).toBeUndefined()
   })
 
+  it('reads the stages marked to skip, and a bad value as none', () => {
+    expect(taskSchema.parse({ ...minimalTask, skipStages: ['testing'] }).skipStages).toEqual([
+      'testing',
+    ])
+    expect(taskSchema.parse(minimalTask).skipStages).toBeUndefined()
+    expect(taskSchema.parse({ ...minimalTask, skipStages: 'testing' }).skipStages).toBeUndefined()
+  })
+
   it('trims the title', () => {
     expect(taskSchema.parse({ ...minimalTask, title: '  Fix it  ' }).title).toBe('Fix it')
   })
@@ -60,8 +68,24 @@ describe('taskSchema', () => {
     expect(taskSchema.safeParse({ ...minimalTask, title }).success).toBe(false)
   })
 
-  it.each(['42', 'T42', 't-42', 'T-', 'T-4a'])('rejects the id %j', (id) => {
+  it.each(['42', 'T42', 't-42', 'T-', 'T-4a', 'A1-2', '-1'])('rejects the id %j', (id) => {
     expect(taskSchema.safeParse({ ...minimalTask, id }).success).toBe(false)
+  })
+
+  it('accepts an id of 32 characters and rejects a longer one', () => {
+    const id = `${'A'.repeat(29)}-12`
+    expect(taskSchema.parse({ ...minimalTask, id }).id).toBe(id)
+    const result = taskSchema.safeParse({ ...minimalTask, id: `A${id}` })
+    expect(result.success).toBe(false)
+  })
+
+  it('names both id forms when an id is not valid', () => {
+    const result = taskSchema.safeParse({ ...minimalTask, id: 'T42' })
+    expect(result.error?.issues[0]?.message).toBe('Task id looks like T-42 or ABC-42')
+  })
+
+  it.each(['T-1', 'T-0001', 'ABC-1', 'TASK-0005'])('accepts the id %j', (id) => {
+    expect(taskSchema.parse({ ...minimalTask, id }).id).toBe(id)
   })
 
   it('rejects an unknown state and priority', () => {
@@ -131,5 +155,42 @@ describe('upgradeTaskFields', () => {
   it('leaves a task that has a stage as it is', () => {
     const task = { state: 'review', stage: 'plan' }
     expect(upgradeTaskFields(task)).toBe(task)
+  })
+})
+
+describe('splitTaskId', () => {
+  it.each([
+    ['Task-0005: Fix bug xxx', 'TASK-0005', 'Fix bug xxx'],
+    ['Task-0005 Fix bug xxx', 'TASK-0005', 'Fix bug xxx'],
+    ['  abc-12 : Fix it ', 'ABC-12', 'Fix it'],
+    ['abc-12 Fix it', 'ABC-12', 'Fix it'],
+    ['Task-0005:Fix', 'TASK-0005', 'Fix'],
+    ['aBc-12:Fix it', 'ABC-12', 'Fix it'],
+    ['abc-12\tFix it', 'ABC-12', 'Fix it'],
+    ['Task-5: a: b', 'TASK-5', 'a: b'],
+    ['Task-5: fix T-12 parser', 'TASK-5', 'fix T-12 parser'],
+    ['COVID-19 tracker', 'COVID-19', 'tracker'],
+  ])('splits %j', (title, id, rest) => {
+    expect(splitTaskId(title)).toEqual({ id, title: rest })
+  })
+
+  it.each([
+    'Fix bug xxx',
+    'Fix T-12 parser',
+    'Task-0005',
+    'Task-0005:',
+    ' Task-0005 : ',
+    'Task-0005:   ',
+    'A-1x y',
+    'T-12x parser',
+    'abc-12, Fix it',
+    'abc-12- Fix it',
+    'abc-12.Fix it',
+    'abc-12-3 x',
+    'A1-2 x',
+    'ABC12 x',
+    'Tâsk-1: x',
+  ])('leaves %j as a plain title', (title) => {
+    expect(splitTaskId(title)).toEqual({ id: null, title: title.trim() })
   })
 })
