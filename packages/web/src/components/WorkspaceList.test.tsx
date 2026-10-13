@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { type ComponentProps, type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_CHOICES } from '../lib/agents'
 import type { TaskShells } from '../lib/api'
 import { ContextMenuHost } from './ui/Menu'
 import { WorkspaceList } from './WorkspaceList'
@@ -694,6 +695,56 @@ describe('one row per shell', () => {
     expect(cursor.querySelector('[data-tip="Cursor"]')).toBeTruthy()
   })
 
+  // The daemon keeps the state of an agent started by hand in memory only; a restart loses it.
+  it('shows a ring for an agent whose state is not known, until a hook gives one', async () => {
+    let state: TaskState | null = null
+    const loadTerminals = vi.fn(async () =>
+      shells({ '1': claude, '2': { stage: null, state, agent: 'claude-code' } }),
+    )
+    list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
+
+    const unknown = await screen.findByRole('button', {
+      name: 'Shell 2, Claude Code, State not known',
+    })
+    expect(unknown.querySelector('[data-tip="State not known yet"] svg')).toBeTruthy()
+
+    // Test spec C15: a new hook gives the state, and the ring goes.
+    state = 'running'
+    await act(() => queryClient.refetchQueries())
+    const running = await screen.findByRole('button', { name: 'Shell 2, Claude Code, Running' })
+    expect(running.querySelector('[data-tip="State not known yet"]')).toBeNull()
+    expect(running.querySelector('[data-state="running"]')).toBeTruthy()
+  })
+
+  // Test spec C16 and C17: a known state keeps its glyph; a plain shell keeps its terminal icon.
+  it('shows the glyph of each known state, and no ring on a plain shell', async () => {
+    const loadTerminals = vi.fn(async () =>
+      shells(
+        {
+          '1': claude,
+          '2': { stage: null, state: 'needs-input', agent: 'claude-code' },
+          '3': { stage: null, state: 'failed', agent: 'codex' },
+        },
+        { '4': 'zsh' },
+      ),
+    )
+    list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
+
+    const rows = [
+      ['Spec, Claude Code, Shell 1, Running', 'running'],
+      ['Shell 2, Claude Code, Needs your input', 'needs-input'],
+      ['Shell 3, Codex, Failed', 'failed'],
+    ]
+    for (const [name, glyph] of rows) {
+      const shell = await screen.findByRole('button', { name })
+      expect(shell.querySelector(`[data-state="${glyph}"]`)).toBeTruthy()
+      expect(shell.querySelector('[data-tip="State not known yet"]')).toBeNull()
+    }
+    const zsh = screen.getByRole('button', { name: 'Shell 4, zsh' })
+    expect(zsh.querySelector('.lucide-square-terminal')).toBeTruthy()
+    expect(zsh.querySelector('[data-tip="State not known yet"]')).toBeNull()
+  })
+
   it('reads and shows the shells of the open workspace even when it rests', async () => {
     const resting = { ...plain, state: 'review' as const }
     const loadTerminals = vi.fn(async () => shells({}, { '1': 'bash' }))
@@ -701,6 +752,75 @@ describe('one row per shell', () => {
 
     expect(await screen.findByRole('button', { name: 'Shell 1, bash' })).toBeTruthy()
     expect(rowOf('Plain').getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
+describe('a project header', () => {
+  it('says how many workspaces the project has', () => {
+    list({
+      tasks: [
+        makeTask({ id: 'T-0001', title: 'One' }),
+        makeTask({ id: 'T-0002', title: 'Two', repo: 'web' }),
+        makeTask({ id: 'T-0003', title: 'Three', repo: 'web' }),
+      ],
+      pinnedIds: [],
+    })
+
+    const natamux = screen.getByRole('button', { name: /^natamux/ })
+    expect(within(natamux).getByRole('img', { name: '1 workspace' })).toBeTruthy()
+    const web = screen.getByRole('button', { name: /^Web app/ })
+    expect(within(web).getByRole('img', { name: '2 workspaces' })).toBeTruthy()
+  })
+
+  // Test spec C9: open subtasks nested in their parent count too; an empty project says 0.
+  it('counts nested subtasks, and says 0 for a project with no workspace', () => {
+    list({
+      tasks: [
+        parent,
+        { ...child, state: 'needs-input' },
+        makeTask({ id: 'T-0003', title: 'Other' }),
+      ],
+      pinnedIds: [],
+    })
+
+    const natamux = screen.getByRole('button', { name: /^natamux/ })
+    expect(within(natamux).getByRole('img', { name: '3 workspaces' }).textContent).toBe('3')
+    const web = screen.getByRole('button', { name: /^Web app/ })
+    expect(within(web).getByRole('img', { name: '0 workspaces' })).toBeTruthy()
+  })
+
+  // Test spec C7, C8 and C11: a band per project, a strong name, and room between projects.
+  it('draws each project as a band with a strong name, apart from the next one', async () => {
+    const user = userEvent.setup()
+    list({
+      tasks: [makeTask({ id: 'T-0001', title: 'One' }), makeTask({ id: 'T-0002', repo: 'web' })],
+      pinnedIds: [],
+    })
+
+    const natamux = screen.getByRole('button', { name: /^natamux/ })
+    const band = natamux.parentElement as HTMLElement
+    expect(band.className).toContain('h-7')
+    expect(band.className).toContain('bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]')
+    expect(band.className).toContain('hover:bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]')
+    expect(band.className).not.toContain('hover:bg-hover')
+    const name = within(natamux).getByText('natamux')
+    expect(name.className).toContain('font-semibold text-ink')
+    expect(name.className).not.toContain('font-medium')
+    const folder = natamux.querySelector('svg.lucide-folder-git-2, svg.lucide-folder-git')
+    expect(folder?.getAttribute('class')).toContain('text-ink-2')
+    const count = within(natamux).getByRole('img', { name: '1 workspace' })
+    expect(count.className).toContain('text-link')
+
+    // Only the projects after the first take the extra space.
+    const web = screen.getByRole('button', { name: /^Web app/ })
+    expect(band.parentElement?.className).not.toContain('mt-1')
+    expect(web.parentElement?.parentElement?.className).toContain('mt-1')
+
+    // Folded, the band and the count stay.
+    await user.click(natamux)
+    expect(natamux.getAttribute('aria-expanded')).toBe('false')
+    expect(band.className).toContain('bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]')
+    expect(within(natamux).getByRole('img', { name: '1 workspace' })).toBeTruthy()
   })
 })
 
@@ -770,6 +890,139 @@ describe('a task row', () => {
     expect(within(row).getByText('#12')).toBeTruthy()
     expect(within(row).getByText('1/2')).toBeTruthy()
     expect(within(row).queryByText(/parent-work/)).toBeNull()
+  })
+
+  // The shell rows name the agent of each stage; line 2 keeps the agent that drives the task.
+  it('shows the icon of the task agent, without its name, also while the row is open', async () => {
+    const loadTerminals = vi.fn(async () =>
+      shells({ '1': { stage: 'implement', state: 'running', agent: 'codex' } }),
+    )
+    list({
+      tasks: [makeTask({ id: 'T-0001', title: 'Parent', agent: 'claude-code' })],
+      pinnedIds: [],
+      currentId: 'T-0001',
+      loadTerminals,
+    })
+
+    await screen.findByRole('button', { name: 'Implement, Codex, Shell 1, Running' })
+    const row = rowOf('Parent')
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(row.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
+    expect(within(row).queryByText(/Claude/)).toBeNull()
+  })
+
+  it('shows the task agent on a card, and on no finished row or task without an agent', () => {
+    list({
+      tasks: [
+        makeTask({ id: 'T-0001', title: 'Asks', state: 'needs-input', agent: 'claude-code' }),
+        makeTask({ id: 'T-0002', title: 'Finished', state: 'done', agent: 'claude-code' }),
+        makeTask({ id: 'T-0003', title: 'No agent', agent: null }),
+      ],
+      // The finished rows of a group are folded away; a pinned one shows.
+      pinnedIds: ['T-0002'],
+    })
+
+    expect(rowOf('Asks').querySelector('[data-tip="Claude Code"]')).toBeTruthy()
+    expect(rowOf('Finished').querySelector('[data-tip="Claude Code"]')).toBeNull()
+    expect(rowOf('No agent').querySelector('img, .lucide-bot')).toBeNull()
+  })
+
+  // Test spec C1: each known agent has its own icon, and its name only in the tooltip.
+  it.each(AGENT_CHOICES.map((choice) => [choice.id, choice.label]))(
+    'shows the icon of %s on line 2, named in the tooltip only',
+    (agent, label) => {
+      list({ tasks: [makeTask({ id: 'T-0001', title: 'Parent', agent })], pinnedIds: [] })
+
+      const row = rowOf('Parent')
+      expect(row.querySelector(`[data-tip="${label}"] img`)).toBeTruthy()
+      expect(row.querySelector('.lucide-bot')).toBeNull()
+      expect(within(row).queryByText(label)).toBeNull()
+    },
+  )
+
+  // Test spec C2: the card of each state that waits on the user.
+  it.each(['needs-input', 'failed', 'blocked'] as const)(
+    'shows the task agent on the card of a %s task',
+    (state) => {
+      list({
+        tasks: [makeTask({ id: 'T-0001', title: 'Card', state, agent: 'claude-code' })],
+        pinnedIds: [],
+      })
+
+      const row = rowOf('Card')
+      expect(row.getAttribute('data-state')).toBe(state)
+      expect(row.querySelector('[data-tip="Claude Code"] img')).toBeTruthy()
+    },
+  )
+
+  // Test spec C3: the icon stays while the row opens and folds, next to the same agent below.
+  it('keeps the task agent while the row opens and folds, also on an open card', async () => {
+    const loadTerminals = vi.fn(async () =>
+      shells({ '1': { stage: 'implement', state: 'running', agent: 'claude-code' } }),
+    )
+    const task = makeTask({ id: 'T-0001', title: 'Parent', agent: 'claude-code' })
+    const { rerender } = list({ tasks: [task], pinnedIds: [], loadTerminals })
+    const icon = () => rowOf('Parent').querySelector('[data-tip="Claude Code"]')
+    expect(icon()).toBeTruthy()
+
+    rerender({ tasks: [task], pinnedIds: [], currentId: 'T-0001', loadTerminals })
+    const shell = await screen.findByRole('button', {
+      name: 'Implement, Claude Code, Shell 1, Running',
+    })
+    expect(shell.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
+    expect(icon()).toBeTruthy()
+
+    const card = { ...task, state: 'needs-input' as const }
+    rerender({ tasks: [card], pinnedIds: [], currentId: 'T-0001', loadTerminals })
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('true')
+    expect(icon()).toBeTruthy()
+
+    rerender({ tasks: [task], pinnedIds: [], currentId: null, loadTerminals })
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('false')
+    expect(icon()).toBeTruthy()
+  })
+
+  // Test spec C4: an agent Natamux does not know gets the generic bot, named by its id.
+  it('shows the generic bot for an agent it does not know', () => {
+    list({
+      tasks: [makeTask({ id: 'T-0001', title: 'Odd', agent: 'some-new-agent' })],
+      pinnedIds: [],
+    })
+
+    const tip = rowOf('Odd').querySelector('[data-tip="some-new-agent"]')
+    expect(tip?.querySelector('.lucide-bot')).toBeTruthy()
+  })
+
+  // Test spec C5 and C6: no agent, or a finished row, shows no icon, open or folded.
+  it('shows no agent icon for a task with no agent or a finished one, open or folded', async () => {
+    const loadTerminals = vi.fn(async () => shells({}, { '1': 'zsh' }))
+    const none = makeTask({ id: 'T-0001', title: 'No agent', agent: null })
+    const card = makeTask({ id: 'T-0002', title: 'Card', state: 'needs-input', agent: null })
+    const done = makeTask({ id: 'T-0003', title: 'Finished', state: 'done', agent: 'codex' })
+    const { rerender } = list({ tasks: [none, card, done], pinnedIds: ['T-0003'] })
+    const icons = (title: string) => rowOf(title).querySelectorAll('img, .lucide-bot')
+
+    expect(icons('No agent')).toHaveLength(0)
+    expect(icons('Card')).toHaveLength(0)
+    expect(icons('Finished')).toHaveLength(0)
+
+    for (const [currentId, title] of [
+      ['T-0001', 'No agent'],
+      ['T-0002', 'Card'],
+    ]) {
+      rerender({ tasks: [none, card, done], pinnedIds: ['T-0003'], currentId, loadTerminals })
+      await waitFor(() => expect(rowOf(title).getAttribute('aria-expanded')).toBe('true'))
+      expect(icons(title)).toHaveLength(0)
+    }
+    // A finished task has no shells left, so its row opens nothing under it.
+    rerender({
+      tasks: [none, card, done],
+      pinnedIds: ['T-0003'],
+      currentId: 'T-0003',
+      loadTerminals,
+    })
+    expect(rowOf('Finished').getAttribute('aria-current')).toBe('true')
+    expect(icons('Finished')).toHaveLength(0)
   })
 
   it('marks an unseen change with a dot, and says it', () => {

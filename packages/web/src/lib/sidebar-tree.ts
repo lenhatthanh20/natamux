@@ -118,7 +118,8 @@ export type ShellRow = {
   // with no agent.
   label: string
   agent: string | null
-  // Null: no state to show, as for a shell with no agent.
+  // Null: a shell with no agent, or an agent whose state is not known, such as one started by hand
+  // before the daemon restarted.
   state: TaskState | null
   // The terminal to focus. Null: the task's first shell.
   shell: string | null
@@ -179,7 +180,7 @@ export function shellRowName(row: ShellRow): string {
   const named = row.shell === null || row.label === `Shell ${row.shell}`
   const shell = named ? null : `Shell ${row.shell}`
   const agent = row.agent === null ? null : agentLabel(row.agent)
-  const state = row.state === null ? null : STATE_LABEL[row.state]
+  const state = row.state === null ? 'State not known' : STATE_LABEL[row.state]
   return [row.label, agent, shell, state].filter((part) => part !== null).join(', ')
 }
 
