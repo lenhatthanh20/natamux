@@ -251,7 +251,8 @@ A stage that changes code (an agent stage without an output file) or a testing s
   2. force-pushes it to `natamux-ci/<task branch>` on `origin`;
   3. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
 - **Every run passes:** the stage passes, and its checks list each run.
-- **A run fails:** the agent gets the end of the failed log (`gh run view --log-failed`), once, as for any failed check. The next failure waits for you.
+- **A run fails:** the card shows one line per failed run, with its link. The agent gets the end of the failed log (`gh run view --log-failed`), once, as for any failed check. The next failure waits for you.
+- **A run fails on a testing stage:** the task goes back to the stage before it that changes code, such as **Implement**, with the failed runs. Its agent fixes them, and the testing stage runs again. After two such send backs, the next failure waits for you.
 - **No run starts within 3 minutes, CI takes more than 30 minutes, or the push or `gh` fails:** the stage waits for you, with the reason.
 - When the task is done or cancelled, Natamux deletes the `natamux-ci/` branch.
 

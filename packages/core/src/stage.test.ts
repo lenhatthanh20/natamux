@@ -3,6 +3,7 @@ import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-setti
 import {
   activeSteps,
   canRunWorkflow,
+  codeStageBefore,
   combinedState,
   DEFAULT_PIPELINE,
   defaultPrompt,
@@ -478,6 +479,35 @@ describe('a check on CI', () => {
       )
     }
     expect(issues({ kind: 'review', ci: false })).toBeUndefined()
+  })
+
+  it('finds the last stage that changes code before a stage', () => {
+    const before = (steps: Step[], id: string) => codeStageBefore(steps, id)?.id
+    expect(before(DEFAULT_PIPELINE, 'testing')).toBe('implement')
+    expect(before(DEFAULT_PIPELINE, 'implement')).toBeUndefined()
+    const steps: Step[] = [
+      { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
+      {
+        id: 'build',
+        parallel: [
+          { id: 'code', kind: 'agent', gate: 'auto' },
+          { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md' },
+        ],
+      },
+      { id: 'testing', kind: 'testing', gate: 'auto', ci: true },
+    ]
+    expect(before(steps, 'testing')).toBe('code')
+    expect(before(steps, 'spec')).toBeUndefined()
+    expect(before(steps, 'missing')).toBeUndefined()
+    // The last one wins; stages that write a file or wait for a person are skipped.
+    const later: Step[] = [
+      { id: 'implement', kind: 'agent', gate: 'auto' },
+      { id: 'refactor', kind: 'agent', gate: 'auto' },
+      { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md' },
+      { id: 'review', kind: 'review', gate: 'manual' },
+      { id: 'testing', kind: 'testing', gate: 'auto', ci: true },
+    ]
+    expect(before(later, 'testing')).toBe('refactor')
   })
 })
 

@@ -819,7 +819,7 @@ function StageCard({
           </div>
 
           {progress.sentBackFor !== null && progress.rounds > 1 && (
-            <p className="m-0 mt-2 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-sm break-words">
+            <p className="m-0 mt-2 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-sm whitespace-pre-wrap break-words">
               {progress.sentBackFor}
             </p>
           )}

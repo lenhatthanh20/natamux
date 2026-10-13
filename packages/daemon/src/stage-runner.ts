@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import {
   type ContextSource,
+  codeStageBefore,
   findStep,
   isGroup,
   offersCi,
@@ -985,14 +986,7 @@ export class StageRunner {
   // its stage; then the stage waits for you, so two agents that disagree do not loop forever.
   private agentSendsBack(task: Task, step: Step, terminal: string): string {
     const from = stageOfTerminal(step, terminal)?.id ?? task.stage
-    const before = this.tasks
-      .listEvents(task.id)
-      .filter(
-        ({ event }) =>
-          event.type === 'stage.reopened' &&
-          event.payload.byAgent === true &&
-          event.payload.from === from,
-      ).length
+    const before = this.sendBacksFrom(task.id, from)
     if (before >= MAX_AGENT_SEND_BACKS) {
       const name = stageName({ id: from })
       this.tasks.applyEvent(task.id, {
@@ -1008,6 +1002,17 @@ export class StageRunner {
       )
     }
     return from
+  }
+
+  private sendBacksFrom(taskId: string, from: string): number {
+    return this.tasks
+      .listEvents(taskId)
+      .filter(
+        ({ event }) =>
+          event.type === 'stage.reopened' &&
+          event.payload.byAgent === true &&
+          event.payload.from === from,
+      ).length
   }
 
   private apply(taskId: string, type: TaskEvent['type'], payload: Record<string, unknown>): void {
@@ -1154,12 +1159,55 @@ export class StageRunner {
       })
       return
     }
-    this.failChecks(taskId, stageId, ci.reasons, ci.final)
+    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons)) {
+      return
+    }
+    this.failChecks(taskId, stageId, ci.reasons, ci.final, ci.logs)
+  }
+
+  // A testing stage only runs the code, so its CI failure goes back to the stage that changes
+  // code, at most MAX_AGENT_SEND_BACKS times, as an agent's send back.
+  private sendBackForCi(taskId: string, stageId: string, reasons: string[]): boolean {
+    const task = this.tasks.getTask(taskId)
+    const steps = this.tasks.stepsOf(task)
+    const stage = stagesOf(this.stepOf(task)).find((candidate) => candidate.id === stageId)
+    const to = codeStageBefore(steps, stageId)
+    if (stage?.kind !== 'testing' || to === undefined) {
+      return false
+    }
+    if (this.sendBacksFrom(taskId, stageId) >= MAX_AGENT_SEND_BACKS) {
+      this.failChecks(taskId, stageId, reasons, true)
+      return true
+    }
+    // Ends the CI wait of the stage, so a restart does not check it again.
+    this.tasks.applyEvent(taskId, {
+      source: 'system',
+      type: 'stage.check-failed',
+      payload: { stage: stageId, reasons, final: false },
+    })
+    const reason = [
+      `CI failed on ${stageName(stage)}:`,
+      ...reasons.map((each) => `- ${each}`),
+      'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
+    ].join('\n')
+    this.tasks.applyEvent(taskId, {
+      source: 'system',
+      type: 'stage.reopened',
+      payload: { to: to.id, reason, from: stageId, byAgent: true },
+    })
+    return true
   }
 
   // An agent gets one more try; a stage that no agent works on, or a failure no agent can fix,
   // waits for you at once.
-  private failChecks(taskId: string, stageId: string, reasons: string[], cannotFix = false) {
+  private failChecks(
+    taskId: string,
+    stageId: string,
+    reasons: string[],
+    cannotFix = false,
+    // What the agent reads, when it is longer than the reasons the stage card shows.
+    logs = reasons,
+  ) {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     const stage = stagesOf(step).find((candidate) => candidate.id === stageId)
@@ -1180,7 +1228,7 @@ export class StageRunner {
     if (!final) {
       const text = [
         'The checks of this stage failed:',
-        ...reasons.map((reason) => `- ${reason}`),
+        ...logs.map((reason) => `- ${reason}`),
         'Fix them, then run `natamux done` again.',
       ].join('\n')
       try {

@@ -291,6 +291,15 @@ export function checksOnCi(stage: Pick<Stage, 'kind' | 'output'>): boolean {
   return stage.kind === 'testing' || (stage.kind === 'agent' && stage.output === undefined)
 }
 
+// The last stage before stage `id` that changes code: where a CI failure of a later stage is fixed.
+export function codeStageBefore(steps: readonly Step[], id: string): Stage | undefined {
+  return steps
+    .slice(0, Math.max(stepIndex(steps, id), 0))
+    .flatMap(stagesOf)
+    .filter((stage) => stage.kind === 'agent' && stage.output === undefined)
+    .at(-1)
+}
+
 // The project settings let tasks check this stage on CI.
 export function offersCi(stage: Pick<Stage, 'kind' | 'output' | 'ci'>): boolean {
   return checksOnCi(stage) && stage.ci === true

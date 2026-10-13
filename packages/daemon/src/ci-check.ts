@@ -16,8 +16,9 @@ const CI_TIMEOUT_MS = 30 * 60 * 1000
 const LOG_TAIL_CHARS = 3000
 const PASSING = ['success', 'skipped', 'neutral']
 
-// `final`: the agent cannot fix it, so the stage waits for the user.
-export type CiResult = CheckResult & { final: boolean }
+// `final`: the agent cannot fix it, so the stage waits for the user. `logs`: the reasons with the
+// end of each failed log, for the agent only; the stage card shows the short reasons.
+export type CiResult = CheckResult & { final: boolean; logs?: string[] }
 
 export type CiDeps = {
   snapshot: (worktree: string, message: string) => Promise<string>
@@ -107,11 +108,14 @@ export async function checkOnCi(
     return { passed: true, reasons: [], passes, final: false }
   }
   const reasons: string[] = []
+  const logs: string[] = []
   for (const each of failed) {
     const view = ['run', 'view', String(each.databaseId), '--log-failed']
     const log = await deps.gh(input.worktree, view).catch(() => '')
     const tail = log.trim() === '' ? '' : `\n${log.slice(-LOG_TAIL_CHARS)}`
-    reasons.push(`CI ${each.workflowName} ${each.conclusion}: ${each.url}${tail}`)
+    const reason = `CI ${each.workflowName} ${each.conclusion}: ${each.url}`
+    reasons.push(reason)
+    logs.push(`${reason}${tail}`)
   }
-  return { passed: false, reasons, passes: [], final: false }
+  return { passed: false, reasons, logs, passes: [], final: false }
 }
