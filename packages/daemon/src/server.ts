@@ -472,6 +472,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return { task: options.service.setCi(id, stage, on) }
   })
 
+  // Whether a later stage is skipped when the task reaches it.
+  app.put('/tasks/:id/skip', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { stage, on } = workflowBodySchema.parse(request.body)
+    return { task: options.service.setSkip(id, stage, on) }
+  })
+
   app.get('/tasks/:id/files', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     return { files: listStageFiles(options.dataDir, options.service.getTask(id)) }

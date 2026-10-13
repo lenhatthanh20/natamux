@@ -1161,6 +1161,157 @@ describe('a stage that runs as a workflow', () => {
   })
 })
 
+describe('a stage marked to skip', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'qa', kind: 'manual', gate: 'manual' },
+        { id: 'docs', kind: 'agent', gate: 'auto' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  })
+
+  const skips = (id: string) =>
+    tasks
+      .listEvents(id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.skipped')
+
+  async function reportImplement(id: string): Promise<Task> {
+    await runner.act(id, 'report', { terminal: '1' })
+    await runner.settle()
+    return tasks.getTask(id)
+  }
+
+  it('is skipped when the task reaches it, and the next stage runs', async () => {
+    const task = await implementing()
+    tasks.setSkip(task.id, 'qa', true)
+
+    expect(await reportImplement(task.id)).toMatchObject({ stage: 'docs', state: 'running' })
+    expect(skips(task.id)).toEqual([
+      expect.objectContaining({ source: 'system', payload: { stage: 'qa', planned: true } }),
+    ])
+  })
+
+  it('is skipped again after a send back, but runs when sent back to it', async () => {
+    const task = await implementing()
+    tasks.setSkip(task.id, 'qa', true)
+    await reportImplement(task.id)
+
+    await runner.act(task.id, 'reopen', { to: 'implement', reason: 'Fix the dates' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('implement')
+    expect(await reportImplement(task.id)).toMatchObject({ stage: 'docs', state: 'running' })
+    expect(skips(task.id)).toHaveLength(2)
+
+    await runner.act(task.id, 'reopen', { to: 'qa' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'qa', state: 'review' })
+    expect(skips(task.id)).toHaveLength(2)
+  })
+
+  it.each(['pass', 'skip'] as const)('is skipped after %s of the stage before', async (action) => {
+    const task = await implementing()
+    tasks.setSkip(task.id, 'qa', true)
+
+    await runner.act(task.id, action)
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'docs', state: 'running' })
+  })
+
+  it('is skipped after a review approval, in order, and a marked release ends the task', async () => {
+    const task = await implementing()
+    tasks.setSkip(task.id, 'docs', true)
+    tasks.setSkip(task.id, 'release', true)
+    expect(await reportImplement(task.id)).toMatchObject({ stage: 'qa', state: 'review' })
+
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'review.approved',
+      payload: { stage: 'qa' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('done')
+    const moves = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => ['review.approved', 'stage.skipped'].includes(event.type))
+      .map((event) => [event.type, event.payload.stage])
+    expect(moves).toEqual([
+      ['review.approved', 'qa'],
+      ['stage.skipped', 'docs'],
+      ['stage.skipped', 'release'],
+    ])
+    expect(() => tasks.setSkip(task.id, 'release', false)).toThrow()
+  })
+
+  it('runs when the mark is taken off', async () => {
+    const task = await implementing()
+    tasks.setSkip(task.id, 'qa', true)
+    tasks.setSkip(task.id, 'qa', false)
+
+    expect(await reportImplement(task.id)).toMatchObject({ stage: 'qa', state: 'review' })
+    expect(skips(task.id)).toEqual([])
+  })
+})
+
+describe('a stage of a group marked to skip', () => {
+  async function atPlanReview(): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'plan' },
+    })
+    return withWorkspace(task.id)
+  }
+
+  it('is skipped, and the other stage of the group starts', async () => {
+    const task = await atPlanReview()
+    tasks.setSkip(task.id, 'test-spec', true)
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    expect(() => launchScript(task.id, '2')).toThrow()
+  })
+
+  it('skips a group and the stage after it in one move, and answers with the next stage started', async () => {
+    const task = await atPlanReview()
+    for (const stage of ['test-spec', 'implement', 'testing']) {
+      tasks.setSkip(task.id, stage, true)
+    }
+
+    const moved = await runner.act(task.id, 'approve')
+
+    expect(moved).toMatchObject({ stage: 'agent-review', state: 'running' })
+    const skipped = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.skipped')
+      .map((event) => event.payload.stage)
+    expect(skipped).toEqual(['test-spec', 'implement', 'testing'])
+  })
+
+  it('skips the whole group when each of its stages is marked', async () => {
+    const task = await atPlanReview()
+    tasks.setSkip(task.id, 'test-spec', true)
+    tasks.setSkip(task.id, 'implement', true)
+
+    const moved = await runner.act(task.id, 'approve')
+
+    expect(moved.stage).toBe('testing')
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('testing')
+  })
+})
+
 describe('helpers', () => {
   it.each([
     ['#42', 42],

@@ -766,6 +766,77 @@ describe('setWorkflow', () => {
     expect(() => service.setCi(task.id, 'nope', true)).toThrow(TaskEditError)
   })
 
+  it('marks a later stage to skip and unmarks it, and logs each change', () => {
+    const task = service.createTask({ title: 'Export' })
+    expect(task.skipStages).toBeUndefined()
+
+    const on = service.setSkip(task.id, 'testing', true)
+    expect(on.skipStages).toEqual(['testing'])
+    expect(readTaskFile(dataDir, task.id)?.skipStages).toEqual(['testing'])
+    expect(messages.at(-1)).toMatchObject({
+      kind: 'task.updated',
+      task: { skipStages: ['testing'] },
+      event: { type: 'stage.skip-set', source: 'human' },
+    })
+    expect(service.setSkip(task.id, 'implement', true).skipStages).toEqual(['testing', 'implement'])
+    expect(service.setSkip(task.id, 'testing', false).skipStages).toEqual(['implement'])
+    const count = service.listEvents(task.id).length
+    service.setSkip(task.id, 'implement', true)
+    service.setSkip(task.id, 'release', false)
+    expect(service.listEvents(task.id)).toHaveLength(count)
+    expect(
+      service
+        .listEvents(task.id)
+        .filter((entry) => entry.event.type === 'stage.skip-set')
+        .map((entry) => entry.event.payload),
+    ).toEqual([
+      { stage: 'testing', on: true },
+      { stage: 'implement', on: true },
+      { stage: 'testing', on: false },
+    ])
+  })
+
+  it('marks only a stage after the current one, of a task that is not over', () => {
+    const task = service.createTask({ title: 'Export' })
+    expect(() => service.setSkip(task.id, 'nope', true)).toThrow(/"nope"/)
+    expect(() => service.setSkip(task.id, 'context', true)).toThrow(TaskEditError)
+
+    service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+    service.applyEvent(task.id, { source: 'system', type: 'stage.passed' })
+    expect(service.getTask(task.id).stage).toBe('spec')
+    expect(() => service.setSkip(task.id, 'spec', true)).toThrow(/Skip/)
+    expect(() => service.setSkip(task.id, 'context', true)).toThrow(TaskEditError)
+    expect(service.setSkip(task.id, 'plan', true).skipStages).toEqual(['plan'])
+
+    service.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    expect(() => service.setSkip(task.id, 'testing', true)).toThrow(TaskEditError)
+    expect(() => service.setSkip(task.id, 'plan', false)).toThrow(TaskEditError)
+    expect(service.getTask(task.id).skipStages).toEqual(['plan'])
+  })
+
+  it('refuses a stage of the current group and an earlier one', () => {
+    const task = service.createTask({ title: 'Export' })
+    service.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    const count = service.listEvents(task.id).length
+
+    expect(() => service.setSkip(task.id, 'implement', true)).toThrow(/Skip/)
+    expect(() => service.setSkip(task.id, 'plan', true)).toThrow(TaskEditError)
+    expect(service.listEvents(task.id)).toHaveLength(count)
+    expect(service.setSkip(task.id, 'testing', true).skipStages).toEqual(['testing'])
+  })
+
+  it('adds no field and logs nothing when an unmarked stage is unmarked', () => {
+    const task = service.createTask({ title: 'Export' })
+    const count = service.listEvents(task.id).length
+
+    expect(service.setSkip(task.id, 'testing', false).skipStages).toBeUndefined()
+    expect(service.listEvents(task.id)).toHaveLength(count)
+  })
+
   it('logs nothing when the choice does not change', () => {
     const task = service.createTask({ title: 'Export' })
     service.setWorkflow(task.id, 'implement', true)

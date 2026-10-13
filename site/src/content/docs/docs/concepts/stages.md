@@ -201,6 +201,11 @@ Sending back starts a stage again. You can go back to the current stage or to an
 
 Skipping ends a stage without checks and moves the task on. If you skip the last stage, the task is `done`.
 
+You can also skip a stage before the task gets there. In **Progress**, a stage that has not started has **Skip**. The card then says **Will be skipped**, and the task skips the stage when it reaches it. **Don't skip** takes the mark off.
+
+- The mark stays after a send back: the task skips the stage again on its way forward.
+- If you send the task back to the marked stage itself, the stage runs.
+
 ### Pass and fail
 
 `natamux stage pass` and `natamux stage fail` set the result of a stage by hand. Natamux uses them itself for a testing stage with a command: when the command ends, the shell reports the result.

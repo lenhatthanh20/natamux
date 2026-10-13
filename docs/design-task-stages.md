@@ -239,6 +239,16 @@ A hard stage can run as a Claude Code workflow: the agent splits the work across
   - A `workflowStages` value that is not a list of stage ids reads as empty, so a hand-edited task file still loads.
   - A default stage that is gone from the settings keeps its default settings (section 6), so `plan` and `implement` keep offering it there.
 
+### 3.9 Skip a later stage early
+
+A person can mark a stage the task has not reached yet; the task skips it when it gets there.
+
+- **Choice:** per task, the field `skipStages` (stage ids), left out when none. Set with `PUT /tasks/:id/skip` `{ stage, on }`; each change logs `stage.skip-set` (`payload.stage`, `payload.on`). The Progress view shows **Skip** / **Don't skip** on each upcoming stage, and "Will be skipped" on a marked one.
+- **Refused:** a stage the task does not have, the current stage or an earlier one (the current stage has its own **Skip**), the context stage, and any change on a task that is `done` or `cancelled`. Otherwise a mark can always come off. Choosing the same value again writes no event.
+- **Skip:** when the task enters a step by a forward move (`stage.approved`, `review.approved`, `stage.passed`, `stage.checked`, `stage.skipped`), the stage runner applies `stage.skipped` (source `system`, `payload.planned: true`) to each marked stage of the step, then starts the others. A group whose stages are all marked is skipped as a whole.
+- **Send back:** the mark stays, so the next forward pass skips the stage again. A send back straight to a marked stage runs it.
+- A marked release stage ends the task as `done` when it is skipped.
+
 ## 4. Task context
 
 ### 4.1 Sources
