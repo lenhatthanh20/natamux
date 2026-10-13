@@ -51,7 +51,11 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'stage.ci-started': 'CI check started',
 }
 
-export function describeEvent(type: EventType): string {
+// A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.
+export function describeEvent(type: EventType, payload: TaskEvent['payload'] = {}): string {
+  if (type === 'stage.reopened' && payload.ci === true) {
+    return 'Sent back by CI'
+  }
   return EVENT_SENTENCE[type]
 }
 
@@ -80,6 +84,7 @@ export type ActivityLine = {
   seq: number
   accepted: boolean
   type: EventType
+  sentence: string
   actor: string
   // How many events in a row were the same.
   count: number
@@ -106,7 +111,8 @@ export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
     const actor = actorOf(event.source)
     const last = lines[lines.length - 1]
     const detail = detailOf(event)
-    if (last?.type === event.type && last.actor === actor && last.accepted === accepted) {
+    const sentence = describeEvent(event.type, event.payload)
+    if (last?.sentence === sentence && last.actor === actor && last.accepted === accepted) {
       last.count += 1
       last.at = event.at
       if (detail !== undefined) {
@@ -117,6 +123,7 @@ export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
         seq,
         accepted,
         type: event.type,
+        sentence,
         actor,
         count: 1,
         at: event.at,
@@ -131,5 +138,5 @@ export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
 export function describeLine(line: ActivityLine): string {
   const times = line.count > 1 ? ` ×${line.count}` : ''
   const detail = line.detail === undefined ? '' : `: ${line.detail}`
-  return `${describeEvent(line.type)}${times}${detail} · ${line.actor}`
+  return `${line.sentence}${times}${detail} · ${line.actor}`
 }

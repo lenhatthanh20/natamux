@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import type { StoredEvent } from '../lib/api'
-import { describeEvent, groupEvents } from '../lib/events'
+import { groupEvents } from '../lib/events'
 import { formatExact } from '../lib/tasks'
 import { Age } from './Age'
 import { DetailSection } from './DetailSection'
@@ -47,7 +47,7 @@ export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
                 className="absolute top-[0.7rem] left-[-0.1875rem] size-[0.3125rem] rounded-full bg-line-strong"
               />
               <span className="min-w-0">
-                {describeEvent(line.type)}
+                {line.sentence}
                 {line.count > 1 && <span className="text-muted"> ×{line.count}</span>}
                 {line.detail !== undefined && (
                   <span className="break-words text-muted">: {line.detail}</span>
