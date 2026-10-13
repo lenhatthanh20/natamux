@@ -17,6 +17,7 @@ import {
   Undo2,
 } from 'lucide-react'
 import { type MouseEvent, useState } from 'react'
+import { useNow } from '../hooks/useNow'
 import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
 import { copyText } from '../lib/clipboard'
 import { shortcutOf } from '../lib/commands'
@@ -50,7 +51,6 @@ import { ICON } from './ui/styles'
 type TaskTableProps = {
   // In the order to show. The parent sorts them and keeps them still under the pointer.
   tasks: readonly Task[]
-  now: Date
   // The width of the main area, which picks the columns. Null: not measured, show all.
   mainWidth: number | null
   selectedId: string | null
@@ -123,7 +123,6 @@ function HeaderCell({
 
 export function TaskTable({
   tasks,
-  now,
   mainWidth,
   selectedId,
   diffStats = {},
@@ -140,6 +139,7 @@ export function TaskTable({
   onStartAgent,
   onDelete,
 }: TaskTableProps) {
+  const now = useNow()
   const [cancelling, setCancelling] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
   const roving = useRovingFocus({

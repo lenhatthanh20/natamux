@@ -79,7 +79,6 @@ function palette(
         tasks={nextTasks}
         repos={[]}
         recent={['T-0001']}
-        now={NOW}
         context={context}
         loadTerminals={async () => ['1']}
         {...on}
@@ -87,6 +86,8 @@ function palette(
       />
     </QueryClientProvider>
   )
+  // The palette reads the time as it opens.
+  vi.setSystemTime(NOW)
   const view = render(element(tasks))
   return { ...view, on, update: (nextTasks: Task[]) => view.rerender(element(nextTasks)) }
 }
@@ -100,6 +101,7 @@ const selected = () =>
 afterEach(() => {
   cleanup()
   document.getElementById('root')?.removeAttribute('inert')
+  vi.useRealTimers()
 })
 
 describe('the command palette', () => {

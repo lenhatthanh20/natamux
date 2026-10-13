@@ -38,7 +38,6 @@ type CommandPaletteProps = {
   tasks: readonly Task[]
   repos: readonly RepoItem[]
   recent: readonly string[]
-  now: Date
   context: CommandContext
   loadTerminals: (taskId: string) => Promise<string[]>
   onClose: () => void
@@ -166,7 +165,6 @@ export function CommandPalette({
   tasks,
   repos,
   recent,
-  now,
   context,
   loadTerminals,
   onClose,
@@ -179,7 +177,7 @@ export function CommandPalette({
   const [query, setQuery] = useState(initialQuery)
   const [scope, setScope] = useState<PaletteScope>(initialScope)
   const [activeKey, setActiveKey] = useState<string | null>(null)
-  const [snapshot] = useState(() => ({ tasks, now, recent }))
+  const [snapshot] = useState(() => ({ tasks, now: new Date(), recent }))
   const listId = useId()
   const input = useRef<HTMLInputElement>(null)
 

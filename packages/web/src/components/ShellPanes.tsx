@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
+import type { TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
+import { agentLanes, NO_SHELLS, taskShellsQuery } from '../lib/task-shells'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
@@ -24,9 +26,9 @@ type ShellPanesProps = {
   activity?: Readonly<Record<string, string>>
   connect: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
-  // The shells where an agent runs now, with the stage each one works on. Without it, Shell 1
-  // counts as the agent's and has the task state.
-  loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
+  // The shells of the task, as the sidebar reads them. Their lanes say where an agent runs now and
+  // which stage it works on. Without it, Shell 1 counts as the agent's and has the task state.
+  loadShells?: (taskId: string) => Promise<TaskShells>
   closeTerminal: (terminal: string) => Promise<string[]>
   // A new number puts the keyboard in the shell that waits for the user, else in Shell 1. 0 asks
   // for nothing.
@@ -41,7 +43,7 @@ export function ShellPanes({
   activity,
   connect,
   loadTerminals,
-  loadAgentTerminals,
+  loadShells,
   closeTerminal,
   focusToken,
   actionsSlot,
@@ -49,12 +51,10 @@ export function ShellPanes({
   const taskId = task.id
   const agent = task.agent
   const open = useQuery({ queryKey: ['terminals', taskId], queryFn: loadTerminals })
-  // An agent starts and ends in its shell without a task event, so this is read again often.
   const agentShells = useQuery({
-    queryKey: ['agent-terminals', taskId],
-    queryFn: () => loadAgentTerminals?.() ?? Promise.resolve<Record<string, TerminalLane>>({}),
-    enabled: loadAgentTerminals !== undefined,
-    refetchInterval: 5000,
+    ...taskShellsQuery(taskId, (id) => loadShells?.(id) ?? Promise.resolve(NO_SHELLS)),
+    enabled: loadShells !== undefined,
+    select: agentLanes,
   })
   // A stage that starts or ends changes the lanes. The daemon may have opened or ended the
   // stage's agent shell, so the agent list is read again now, not at the next poll.
@@ -63,7 +63,7 @@ export function ShellPanes({
   useEffect(() => {
     if (seenLanes.current !== lanesKey) {
       seenLanes.current = lanesKey
-      if (loadAgentTerminals !== undefined) {
+      if (loadShells !== undefined) {
         void agentShells.refetch()
       }
     }
@@ -116,7 +116,7 @@ export function ShellPanes({
   // The state an agent shell shows: the state of its own stage, or null for an agent that works
   // on no stage. Undefined: no agent runs in the shell.
   const agentState = (name: string): TaskState | null | undefined => {
-    if (loadAgentTerminals === undefined) {
+    if (loadShells === undefined) {
       return name === '1' && agent !== null ? task.state : undefined
     }
     const lane = agentShells.data?.[name]
@@ -168,7 +168,7 @@ export function ShellPanes({
   const shellsRead =
     !open.isPending &&
     !open.isFetching &&
-    (loadAgentTerminals === undefined || (!agentShells.isPending && !agentShells.isFetching))
+    (loadShells === undefined || (!agentShells.isPending && !agentShells.isFetching))
 
   // The jump palette can ask for one shell of the workspace, and opening the workspace asks for
   // the first agent. On a phone the first agent takes no keyboard, so no keyboard pops up.

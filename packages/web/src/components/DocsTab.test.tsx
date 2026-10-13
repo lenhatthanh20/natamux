@@ -7,8 +7,6 @@ import type { StageFile } from '../lib/api'
 import { useToasts } from '../lib/toasts'
 import { DocsTab } from './DocsTab'
 
-const NOW = new Date('2026-10-11T10:00:00Z')
-
 const SPEC = [
   '# Spec title',
   '',
@@ -83,7 +81,6 @@ function docs(start: Files, fail: Failures = {}, first: string | null = null) {
       <Harness
         first={first}
         taskId={`T-${taskCount}`}
-        now={NOW}
         loadFiles={loadFiles}
         readFile={readFile}
         writeFile={writeFile}
@@ -759,7 +756,6 @@ describe('DocsTab attachments', () => {
         <Harness
           first={null}
           taskId={`T-${taskCount}`}
-          now={NOW}
           loadFiles={async () =>
             Object.entries(stageFiles).map(([name, entry]) => ({
               name,

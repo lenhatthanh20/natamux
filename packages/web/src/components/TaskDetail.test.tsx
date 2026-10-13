@@ -50,7 +50,6 @@ function details({ view, progress, mode }: DetailsOptions = {}) {
     <QueryClientProvider client={client}>
       <TaskDetail
         task={TASK}
-        now={new Date('2026-10-10T09:00:00.000Z')}
         busy={false}
         loadEvents={async () => []}
         onAction={vi.fn()}

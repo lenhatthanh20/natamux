@@ -7,8 +7,6 @@ import { ContextMenuHost } from './ui/Menu'
 
 afterEach(cleanup)
 
-const NOW = new Date('2026-10-10T08:30:00.000Z')
-
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 'T-0001',
@@ -57,7 +55,6 @@ function table(tasks: readonly Task[] = TASKS) {
     <>
       <TaskTable
         tasks={tasks}
-        now={NOW}
         mainWidth={null}
         selectedId={null}
         sort={null}

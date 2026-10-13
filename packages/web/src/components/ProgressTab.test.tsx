@@ -20,8 +20,6 @@ import { fireAppEvent } from '../lib/app-events'
 import { useToasts } from '../lib/toasts'
 import { ProgressTab } from './ProgressTab'
 
-const NOW = new Date('2026-10-10T08:30:00.000Z')
-
 const TASK: Task = {
   id: 'T-0001',
   title: 'Fix the login',
@@ -149,7 +147,6 @@ function progress(options: Options = {}) {
     <QueryClientProvider client={client}>
       <ProgressTab
         task={task}
-        now={NOW}
         loadSettings={async () => options.settings ?? SETTINGS}
         loadEvents={async () => events}
         loadFiles={options.loadFiles ?? (async () => FILES)}

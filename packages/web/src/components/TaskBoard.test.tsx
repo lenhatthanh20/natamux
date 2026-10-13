@@ -6,8 +6,6 @@ import { TaskBoard } from './TaskBoard'
 
 afterEach(cleanup)
 
-const NOW = new Date('2026-10-10T08:30:00.000Z')
-
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 'T-0001',
@@ -47,7 +45,6 @@ function board(tasks: readonly Task[] = TASKS) {
   render(
     <TaskBoard
       tasks={tasks}
-      now={NOW}
       selectedId={null}
       stateFilter={null}
       showFinished={false}

@@ -8,7 +8,7 @@ import { useFrozenOrder } from '../hooks/useFrozenOrder'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useLayoutMode, useViewportWidth } from '../hooks/useLayoutMode'
 import { useLiveTasks } from '../hooks/useLiveTasks'
-import { useNow } from '../hooks/useNow'
+import { useNowValue } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { type AgentId, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
@@ -21,8 +21,10 @@ import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
+import { agentLanes, taskShellsQuery } from '../lib/task-shells'
 import {
   filterTasks,
+  isQuiet,
   needsMeTasks,
   nextSort,
   STATE_LABEL,
@@ -72,7 +74,6 @@ import { Tooltip } from './ui/Tooltip'
 import { WorkspaceList } from './WorkspaceList'
 
 const TASKS_KEY = ['tasks']
-const NOW_INTERVAL_MS = 30_000
 
 type DashboardProps = {
   token: string
@@ -83,7 +84,6 @@ type DashboardProps = {
 export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) {
   const queryClient = useQueryClient()
   const api = useMemo(() => createApi(token), [token])
-  const now = useNow(NOW_INTERVAL_MS)
   const {
     stateFilter,
     search,
@@ -474,8 +474,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const besideWorkspace = changesTask !== null && changesTask.workspace !== null
   const detailGroup = detailTask === null ? null : tryGroup(detailTask)
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
+  // A running task turns quiet as time passes. The clock is read as the ids of the quiet tasks, so
+  // it re-renders the dashboard only when one turns quiet, not on every tick.
+  const quietIds = useNowValue((now) =>
+    tasks
+      .filter((task) => isQuiet(task, now))
+      .map((task) => task.id)
+      .join(' '),
+  )
   // The tasks that need the user ignore the search: they must stay in sight.
-  const waiting = useMemo(() => needsMeTasks(tasks, now), [tasks, now])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: quietIds is the trigger of the clock.
+  const waiting = useMemo(() => needsMeTasks(tasks, new Date()), [tasks, quietIds])
   const sidebar = useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)
   const details = useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)
   const viewportWidth = useViewportWidth()
@@ -503,9 +512,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const paneTasks = agentsOpen ? agentPaneTasks(agentPanes, tasks) : []
   const paneQueries = useQueries({
     queries: paneTasks.map((task) => ({
-      queryKey: ['agent-terminals', task.id],
-      queryFn: () => api.listAgentTerminals(task.id),
-      refetchInterval: 5000,
+      ...taskShellsQuery(task.id, (id) => api.listShells(id)),
+      select: agentLanes,
     })),
   })
   const paneTerminals = Object.fromEntries(
@@ -840,7 +848,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     filter={search}
                     questions={questions}
                     seenState={seenState}
-                    now={now}
                     currentId={changesTaskId}
                     pinnedIds={pinned}
                     activity={activityQuery.data?.byTask}
@@ -913,7 +920,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     key={detailTask.id}
                     mode={mode}
                     task={detailTask}
-                    now={now}
                     busy={busy}
                     loadEvents={() => api.listEvents(detailTask.id)}
                     onAction={(action) => runAction(detailTask, action)}
@@ -948,7 +954,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     progress={
                       <ProgressTab
                         task={detailTask}
-                        now={now}
                         loadSettings={() => api.getSettings(detailTask.repo ?? 'default')}
                         loadEvents={() => api.listEvents(detailTask.id)}
                         // A task without a workspace has no stage files yet.
@@ -1011,7 +1016,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           <ChangesView
             key={changesTask.id}
             task={changesTask}
-            now={now}
             initialTab={changesTab}
             onTabPicked={(tab) => rememberTab(changesTask.id, tab)}
             file={changesFile}
@@ -1067,7 +1071,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               )
             }}
             loadTerminals={() => api.listTerminals(changesTask.id)}
-            loadAgentTerminals={() => api.listAgentTerminals(changesTask.id)}
+            loadShells={(id) => api.listShells(id)}
             closeTerminal={(terminal) => api.closeTerminal(changesTask.id, terminal)}
             loadStageFiles={() => api.listStageFiles(changesTask.id)}
             readStageFile={(name) => api.readStageFile(changesTask.id, name)}
@@ -1278,7 +1282,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 <ProgressBoard
                   tasks={orderedTasks}
                   repos={repos}
-                  now={now}
                   activity={activityQuery.data?.byTask}
                   loadSettings={(repo) => api.getSettings(repo)}
                   onOpenTask={(id) => {
@@ -1290,7 +1293,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               ) : layout === 'board' ? (
                 <TaskBoard
                   tasks={orderedTasks}
-                  now={now}
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
                   allTasks={tasks}
@@ -1302,7 +1304,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               ) : (
                 <TaskTable
                   tasks={orderedTasks}
-                  now={now}
                   mainWidth={mainWidth}
                   selectedId={selectedId}
                   diffStats={diffStatsQuery.data}
@@ -1397,7 +1398,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           tasks={tasks}
           repos={repos.length > 1 ? repos.map(({ id, name }) => ({ id, name })) : []}
           recent={recent}
-          now={now}
           context={{ state: { ...commandState, focus: 'body' }, actions }}
           loadTerminals={(taskId) => api.listTerminals(taskId)}
           onClose={() => setPalette(null)}

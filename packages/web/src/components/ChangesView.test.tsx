@@ -99,7 +99,6 @@ function view({
     <QueryClientProvider client={client}>
       <ChangesView
         task={task}
-        now={new Date('2026-10-10T08:30:00.000Z')}
         initialTab={tab}
         loadChanges={async () => changes}
         loadFile={reject}

@@ -10,6 +10,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useNowValue } from '../hooks/useNow'
 import { useRovingFocus } from '../hooks/useRovingFocus'
 import type { TaskShells } from '../lib/api'
 import { shortcutOf } from '../lib/commands'
@@ -25,8 +26,14 @@ import {
   withFold,
   withParents,
 } from '../lib/sidebar-tree'
+import { NO_SHELLS, taskShellsQuery } from '../lib/task-shells'
 import { isUnseen } from '../lib/view-store'
-import { collapsedHint, DEFAULT_REPO_ID, workspaceGroups } from '../lib/workspace-groups'
+import {
+  collapsedHint,
+  DEFAULT_REPO_ID,
+  type RepoGroup,
+  workspaceGroups,
+} from '../lib/workspace-groups'
 import { CountBadge } from './ui/CountBadge'
 import { ConfirmDialog } from './ui/Dialog'
 import { IconButton } from './ui/IconButton'
@@ -42,7 +49,6 @@ type WorkspaceListProps = {
   allTasks: readonly Task[]
   // The filter text. Empty: no filter.
   filter?: string
-  now: Date
   currentId: string | null
   pinnedIds: readonly string[]
   activity?: Readonly<Record<string, string>>
@@ -77,11 +83,6 @@ type WorkspaceListProps = {
 
 type Entry = TreeRow & { label: string; open?: boolean; toggle?: () => void }
 
-// Shells are read again this often while a row shows them, as the agents grid does.
-const TERMINALS_EVERY_MS = 5000
-
-const NO_SHELLS: TaskShells = { terminals: [], lanes: {}, programs: {} }
-
 // A task whose agents work or wait has its shells read, so its rows show without a click.
 const ACTIVE: readonly TaskState[] = ['running', 'needs-input']
 
@@ -105,7 +106,6 @@ export function WorkspaceList({
   tasks,
   allTasks,
   filter = '',
-  now,
   currentId,
   pinnedIds,
   activity = {},
@@ -227,11 +227,9 @@ export function WorkspaceList({
   const loading =
     loadTerminals === undefined ? [] : shownRows.filter(readsShells).map((task) => task.id)
   const terminalQueries = useQueries({
-    queries: loading.map((id) => ({
-      queryKey: ['task-shells', id],
-      queryFn: () => loadTerminals?.(id) ?? Promise.resolve(NO_SHELLS),
-      refetchInterval: TERMINALS_EVERY_MS,
-    })),
+    queries: loading.map((id) =>
+      taskShellsQuery(id, (taskId) => loadTerminals?.(taskId) ?? Promise.resolve(NO_SHELLS)),
+    ),
   })
   const rowsOf = (task: Task) => shellRows(task, terminalQueries[loading.indexOf(task.id)]?.data)
   const canFold = (task: Task) => (children[task.id]?.length ?? 0) > 0 || rowsOf(task).length > 0
@@ -348,7 +346,6 @@ export function WorkspaceList({
       <WorkspaceRow
         key={task.id}
         task={task}
-        now={now}
         current={task.id === currentId}
         pinned={pinnedIds.includes(task.id)}
         repoName={prefix ? repoName(task) : undefined}
@@ -433,7 +430,6 @@ export function WorkspaceList({
         const { repo, open, finished, nested } = group
         const count = open.length + nested.length
         const isCollapsed = !repoOpen(repo.id)
-        const hint = isCollapsed ? collapsedHint(group, currentId, now) : null
         const shownFinished = finishedShown(repo.id)
         const hidden = totalIn(repo.id) - open.length - finished.length - nested.length
         const hiddenInGroup = filtered && open.length + finished.length === 0 && hidden > 0
@@ -486,14 +482,8 @@ export function WorkspaceList({
                   tone="accent"
                   label={`${count} workspace${count === 1 ? '' : 's'}`}
                 />
-                {hint !== null && (
-                  <span
-                    className="state-dot"
-                    style={{ width: 6, height: 6 }}
-                    data-state={hint}
-                    data-tip={`A workspace in ${repo.name} is hidden here`}
-                    aria-hidden="true"
-                  />
+                {isCollapsed && (
+                  <HiddenDot group={group} currentId={currentId} repoName={repo.name} />
                 )}
               </button>
               {!gone && (
@@ -598,6 +588,28 @@ export function WorkspaceList({
         />
       )}
     </section>
+  )
+}
+
+// The dot of a folded group. It reads the clock itself: a workspace in it can turn quiet.
+function HiddenDot({
+  group,
+  currentId,
+  repoName,
+}: {
+  group: RepoGroup
+  currentId: string | null
+  repoName: string
+}) {
+  const hint = useNowValue((now) => collapsedHint(group, currentId, now))
+  return hint === null ? null : (
+    <span
+      className="state-dot"
+      style={{ width: 6, height: 6 }}
+      data-state={hint}
+      data-tip={`A workspace in ${repoName} is hidden here`}
+      aria-hidden="true"
+    />
   )
 }
 

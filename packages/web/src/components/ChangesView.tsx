@@ -6,13 +6,12 @@ import type {
   GitGraph as GitGraphData,
   ImageSide,
   Task,
-  TerminalLane,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
-import type { StageFile, StoredEvent } from '../lib/api'
+import type { StageFile, StoredEvent, TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { type ToastAction, toast } from '../lib/toasts'
@@ -32,7 +31,6 @@ const REFRESH_MS = 10_000
 
 type ChangesViewProps = {
   task: Task
-  now: Date
   initialTab?: WorkspaceTab
   // Called with the tab that shows, also when the view first appears.
   onTabChange?: (tab: WorkspaceTab) => void
@@ -51,7 +49,7 @@ type ChangesViewProps = {
   loadEvents: () => Promise<StoredEvent[]>
   connectTerminal: (query: TerminalConnectQuery, terminal: string) => Promise<WebSocket>
   loadTerminals: () => Promise<string[]>
-  loadAgentTerminals?: () => Promise<Record<string, TerminalLane>>
+  loadShells?: (taskId: string) => Promise<TaskShells>
   closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
   generateCommitMessage?: () => Promise<CommitMessageDraft>
@@ -86,7 +84,6 @@ const FAILED: Record<GitAction['action'], string> = {
 
 export function ChangesView({
   task,
-  now,
   initialTab = 'terminal',
   onTabChange,
   onTabPicked,
@@ -100,7 +97,7 @@ export function ChangesView({
   loadEvents,
   connectTerminal,
   loadTerminals,
-  loadAgentTerminals,
+  loadShells,
   closeTerminal,
   commit,
   generateCommitMessage,
@@ -344,7 +341,7 @@ export function ChangesView({
             activity={terminalActivity}
             connect={connectTerminal}
             loadTerminals={loadTerminals}
-            loadAgentTerminals={loadAgentTerminals}
+            loadShells={loadShells}
             closeTerminal={closeTerminal}
             focusToken={focusToken}
             actionsSlot={tabActions}
@@ -362,7 +359,6 @@ export function ChangesView({
           {graph.data && (
             <GitGraph
               graph={graph.data}
-              now={now}
               uncommitted={uncommitted}
               onShowChanges={() => pickTab('changes')}
               onRefresh={() => graph.refetch()}
@@ -378,7 +374,6 @@ export function ChangesView({
         >
           <DocsTab
             taskId={task.id}
-            now={now}
             file={docFile}
             onFileChange={setDocFile}
             loadFiles={loadStageFiles}

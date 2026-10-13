@@ -14,6 +14,7 @@ import {
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useNow, useNowValue } from '../hooks/useNow'
 import { type AgentId, agentLabel, DEFAULT_AGENT } from '../lib/agents'
 import type {
   LoadedSettings,
@@ -34,8 +35,9 @@ import {
   stageTime,
   waitingForCi,
 } from '../lib/stage-view'
-import { contextText, formatAge, STATE_LABEL } from '../lib/tasks'
+import { contextText, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { Age } from './Age'
 import { STATE_TONE } from './Banner'
 import { DetailSection } from './DetailSection'
 import { StageMarker } from './StageMarker'
@@ -47,7 +49,6 @@ import { ICON, textarea } from './ui/styles'
 
 type ProgressTabProps = {
   task: Task
-  now: Date
   loadSettings: () => Promise<LoadedSettings>
   loadEvents: () => Promise<StoredEvent[]>
   loadFiles: () => Promise<StageFile[]>
@@ -91,7 +92,6 @@ function kilobytes(size: number): string {
 // the evidence that it is finished.
 export function ProgressTab({
   task,
-  now,
   loadSettings,
   loadEvents,
   loadFiles,
@@ -215,7 +215,6 @@ export function ProgressTab({
         fileStatus={fileStatus}
         pr={stage.kind === 'release' ? task.pr : null}
         merged={task.state === 'done'}
-        now={now}
         busy={action.isPending}
         canAct={open}
         onAction={(name) => run(name, { stage: stage.id })}
@@ -266,7 +265,6 @@ export function ProgressTab({
       <div className="flex flex-col gap-3 p-3">
         <Overview
           task={task}
-          now={now}
           steps={steps}
           progress={progress}
           count={count}
@@ -391,7 +389,7 @@ export function ProgressTab({
       </DetailSection>
 
       <DetailSection id="progress-time" title="Time per stage" defaultOpen={false}>
-        <TimeBars progress={progress} now={now} />
+        <TimeBars progress={progress} />
       </DetailSection>
 
       <DetailSection id="progress-events" title="Latest events" defaultOpen={false}>
@@ -399,7 +397,7 @@ export function ProgressTab({
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm empty:hidden">
           {latest.map(({ seq, event }) => (
             <li key={seq} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2">
-              <span className="text-xs text-muted tabular-nums">{formatAge(event.at, now)}</span>
+              <span className="text-xs text-muted tabular-nums"><Age at={event.at} /></span>
               <span className="truncate">
                 {describeEvent(event.type)}
                 {typeof event.payload.stage === 'string' ? (
@@ -438,19 +436,18 @@ export function ProgressTab({
 
 function Overview({
   task,
-  now,
   steps,
   progress,
   count,
   sentBack,
 }: {
   task: Task
-  now: Date
   steps: readonly Step[]
   progress: readonly StageProgress[]
   count: { done: number; total: number }
   sentBack: number
 }) {
+  const now = useNow()
   const byId = new Map(progress.map((entry) => [entry.stage, entry]))
   const finished = task.state === 'done' || task.state === 'cancelled'
   const minutes = (entry: StageProgress | undefined) => {
@@ -546,7 +543,8 @@ function Segment({ entry }: { entry: StageProgress | undefined }) {
   )
 }
 
-function TimeBars({ progress, now }: { progress: readonly StageProgress[]; now: Date }) {
+function TimeBars({ progress }: { progress: readonly StageProgress[] }) {
+  const now = useNow()
   const rows = progress
     .filter((entry) => entry.startedAt !== null)
     .map((entry) => {
@@ -596,7 +594,6 @@ function StageCard({
   fileStatus,
   pr,
   merged,
-  now,
   busy,
   canAct,
   onAction,
@@ -637,7 +634,6 @@ function StageCard({
   fileStatus: 'loading' | 'ready' | 'error'
   pr: string | null
   merged: boolean
-  now: Date
   busy: boolean
   canAct: boolean
   onAction: (action: StageAction) => void
@@ -646,7 +642,7 @@ function StageCard({
 }) {
   // A finished stage is one line until the user opens it; the current one is always open.
   const [opened, setOpened] = useState(false)
-  const time = stageTime(progress, now)
+  const time = useNowValue((now) => stageTime(progress, now))
   const current = progress.status === 'current'
   const upcoming = progress.status === 'upcoming'
   const finished = progress.status === 'done' || progress.status === 'skipped'

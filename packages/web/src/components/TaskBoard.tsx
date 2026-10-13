@@ -2,6 +2,7 @@ import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@n
 import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-react'
 import { useState } from 'react'
 import { usePhone } from '../hooks/useLayoutMode'
+import { useNow } from '../hooks/useNow'
 import { useScrollEdges } from '../hooks/useScrollEdges'
 import { pullRequestNumber } from '../lib/pull-request'
 import {
@@ -24,7 +25,6 @@ import { ICON } from './ui/styles'
 type TaskBoardProps = {
   // In the order to show, filtered. The parent sorts them and keeps them still under the pointer.
   tasks: readonly Task[]
-  now: Date
   selectedId: string | null
   diffStats?: Readonly<Record<string, DiffStat>>
   allTasks?: readonly Task[]
@@ -47,7 +47,6 @@ const SCROLL_BUTTON =
 // A card is tinted on its left edge when it needs the user: that is where to look first.
 function Card({
   task,
-  now,
   selected,
   stat,
   waits,
@@ -55,13 +54,13 @@ function Card({
   onOpen,
 }: {
   task: Task
-  now: Date
   selected: boolean
   stat: DiffStat | undefined
   waits: readonly string[]
   onSelect: (id: string) => void
   onOpen: (id: string) => void
 }) {
+  const now = useNow()
   const quiet = isQuiet(task, now)
   const urgent = needsMe(task.state)
   return (
@@ -101,7 +100,6 @@ function Card({
 // board always fills the height of the view.
 export function TaskBoard({
   tasks,
-  now,
   selectedId,
   diffStats = {},
   allTasks = tasks,
@@ -239,7 +237,6 @@ export function TaskBoard({
                   <Card
                     key={task.id}
                     task={task}
-                    now={now}
                     selected={task.id === selectedId}
                     stat={diffStats[task.id]}
                     waits={waitingOn(task, allTasks)}

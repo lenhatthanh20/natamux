@@ -2,7 +2,7 @@ import type { GitGraph as GitGraphData } from '@natamux/core'
 import { RefreshCw } from 'lucide-react'
 import { shortcutOf } from '../lib/commands'
 import { layoutGraph } from '../lib/graph-layout'
-import { formatAge } from '../lib/tasks'
+import { Age } from './Age'
 import { IconButton } from './ui/IconButton'
 
 const ROW_HEIGHT = 28
@@ -44,7 +44,6 @@ const MAX_REFS = 2
 
 type GitGraphProps = {
   graph: GitGraphData
-  now: Date
   // Files that are not committed, which no commit below shows yet. Null while unknown.
   uncommitted?: number | null
   onShowChanges?: () => void
@@ -53,7 +52,6 @@ type GitGraphProps = {
 
 export function GitGraph({
   graph,
-  now,
   uncommitted = null,
   onShowChanges,
   onRefresh,
@@ -164,7 +162,7 @@ export function GitGraph({
                 className="w-20 shrink-0 whitespace-nowrap text-right text-muted"
                 data-tip={commit.date}
               >
-                {formatAge(commit.date, now)}
+                <Age at={commit.date} />
               </span>
             </li>
           )

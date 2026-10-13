@@ -113,7 +113,6 @@ function props(
     tasks,
     allTasks,
     filter,
-    now: new Date('2026-10-10T09:00:00.000Z'),
     currentId,
     pinnedIds,
     removingFinished,

@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import type { StageFile } from '../lib/api'
 import { saveBlob } from '../lib/attachments'
-import { formatAge } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { Age } from './Age'
 import { useObjectUrl } from './ImageDiff'
 import { Markdown, preloadMarkdown } from './Markdown'
 import { Button } from './ui/Button'
@@ -37,7 +37,6 @@ const keepDrafts = (taskId: string, drafts: Record<string, Draft>) => {
 
 type DocsTabProps = {
   taskId: string
-  now: Date
   // The file to show first, from the progress in the details.
   file: string | null
   onFileChange: (name: string) => void
@@ -128,7 +127,6 @@ function AttachmentPreview({
 // hand before a stage is approved.
 export function DocsTab({
   taskId,
-  now,
   file,
   onFileChange,
   loadFiles,
@@ -300,7 +298,7 @@ export function DocsTab({
               {item.name}
               {dirty(item.name) && <span className="text-2xs text-signal">edited</span>}
             </span>
-            <span className="text-2xs text-muted">changed {formatAge(item.modifiedAt, now)}</span>
+            <span className="text-2xs text-muted">changed <Age at={item.modifiedAt} /></span>
           </button>
         ))}
         {attachmentList}
