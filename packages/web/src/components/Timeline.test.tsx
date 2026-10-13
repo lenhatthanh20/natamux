@@ -19,17 +19,20 @@ vi.mock('../lib/events', async (importOriginal) => {
 
 // Edits by the user and turns of the agent, one after the other, so no two group into one line.
 function events(count: number): StoredEvent[] {
-  return Array.from({ length: count }, (_, index): StoredEvent => ({
-    seq: index + 1,
-    accepted: true,
-    event: {
-      taskId: 'T-0001',
-      source: index % 2 === 0 ? 'human' : 'agent',
-      type: index % 2 === 0 ? 'task.edited' : 'agent.finished',
-      at: new Date(Date.UTC(2026, 9, 8, 9, 0, index)).toISOString(),
-      payload: {},
-    },
-  }))
+  return Array.from(
+    { length: count },
+    (_, index): StoredEvent => ({
+      seq: index + 1,
+      accepted: true,
+      event: {
+        taskId: 'T-0001',
+        source: index % 2 === 0 ? 'human' : 'agent',
+        type: index % 2 === 0 ? 'task.edited' : 'agent.finished',
+        at: new Date(Date.UTC(2026, 9, 8, 9, 0, index)).toISOString(),
+        payload: {},
+      },
+    }),
+  )
 }
 
 let client: QueryClient
