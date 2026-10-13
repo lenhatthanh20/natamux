@@ -1,9 +1,9 @@
 import type { TaskShells } from './api'
-import { FALLBACK_POLL_MS } from './live'
 
-// The daemon says when a shell starts or ends (shells.changed), and when a hook or shell output
-// came (workspace.dirty); this poll only catches what the live feed missed.
-export const SHELLS_EVERY_MS = FALLBACK_POLL_MS
+// The daemon says when a shell starts or ends, its program in front changes, or a hook changes the
+// state of its agent (shells.changed); this poll only catches what the live feed missed. Longer
+// than the other fallbacks: there is one per task row, so ten rows at 60 s were ten reads a minute.
+export const SHELLS_EVERY_MS = 300_000
 
 export const NO_SHELLS: TaskShells = { terminals: [], lanes: {}, programs: {} }
 

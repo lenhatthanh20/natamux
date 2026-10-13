@@ -2302,7 +2302,7 @@ describe('pushed to the dashboards', () => {
     second.socket.terminate()
   })
 
-  it('sends the activity of a task after a hook, and tells its workspace changed', async () => {
+  it('sends the activity after a hook, and touches the workspace after a tool ran', async () => {
     const touch = vi.spyOn(serverOptions.workspaces, 'touch')
     const sent: unknown[] = []
     bus.subscribe((message) => sent.push(message))
@@ -2328,6 +2328,15 @@ describe('pushed to the dashboards', () => {
       kind: 'activity.changed',
       taskId: 'T-0001',
       activity: { '1': { text: 'Edit a.ts', at: expect.any(String) } },
+    })
+    // The tool did not run yet.
+    expect(touch).not.toHaveBeenCalled()
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001' },
+      payload: { hook_event_name: 'PostToolUse', tool_name: 'Edit' },
     })
     expect(touch).toHaveBeenCalledWith('T-0001')
   })

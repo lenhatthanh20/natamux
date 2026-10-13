@@ -6,7 +6,7 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/main.js",
+  "main": "./dist/entry.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

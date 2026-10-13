@@ -1087,6 +1087,27 @@ describe('telling the dashboards', () => {
     vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 4)
     expect(quiet).toEqual(['T-0001'])
   })
+
+  it('sends shells.changed when the output stops and the program in front is another', () => {
+    vi.useFakeTimers()
+    const { service, ptys, sent } = watched()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    const changes = () => sent.filter((message) => message.kind === 'shells.changed').length
+    const started = changes()
+
+    ptys[1]?.emit('ls\r\n')
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(changes()).toBe(started)
+
+    if (ptys[1]) {
+      ptys[1].program = 'vim'
+    }
+    ptys[1]?.emit('vim notes.txt\r\n')
+    vi.advanceTimersByTime(WORKSPACE_QUIET_MS * 2)
+    expect(changes()).toBe(started + 1)
+    expect(sent.at(-1)).toEqual({ kind: 'shells.changed', taskId: 'T-0001' })
+  })
 })
 
 describe('shells.changed', () => {

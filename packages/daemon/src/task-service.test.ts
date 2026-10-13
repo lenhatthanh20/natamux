@@ -11,7 +11,12 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings, type TaskState } from '@natamux/core'
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  type ProjectSettings,
+  type Task,
+  type TaskState,
+} from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
@@ -958,6 +963,125 @@ describe('task files edited outside Natamux', () => {
         expect(errors).toHaveBeenCalledWith(expect.stringContaining(task.id))
       }, SEEN)
       expect(watching.getTask(task.id)).toEqual(task)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+})
+
+describe('outside edits without a watch event', () => {
+  let clock: number
+  let polled: TaskService
+
+  // Started with the watcher off, as on a file system that gives no events.
+  beforeEach(() => {
+    clock = 0
+    const bus = new EventBus()
+    bus.subscribe((message) => messages.push(message))
+    polled = new TaskService({ dataDir, index, bus, clock: () => clock })
+  })
+
+  function startPolled() {
+    polled.init()
+    polled.close()
+    messages = []
+  }
+
+  function editByHand(task: Task, title: string) {
+    writeFileSync(taskFilePath(dataDir, task.id), serializeTask({ ...task, title }))
+  }
+
+  it('sees an edit at the first getTask a second after the last look, not before', () => {
+    const task = service.createTask({ title: 'First' })
+    startPolled()
+    editByHand(task, 'Edited by hand')
+
+    clock = 999
+    expect(polled.getTask(task.id).title).toBe('First')
+
+    clock = 1000
+    expect(polled.getTask(task.id).title).toBe('Edited by hand')
+    expect(messages).toEqual([{ kind: 'task.changed', task: polled.getTask(task.id) }])
+
+    // The next look is a second after this one.
+    editByHand(task, 'Edited again')
+    clock = 1999
+    expect(polled.getTask(task.id).title).toBe('Edited by hand')
+    clock = 2000
+    expect(polled.getTask(task.id).title).toBe('Edited again')
+  })
+
+  it('finds a new file and an edit at listTasks every two seconds, and keeps a removed one', () => {
+    const edited = service.createTask({ title: 'First' })
+    const removed = service.createTask({ title: 'Second' })
+    startPolled()
+    editByHand(edited, 'Edited by hand')
+    writeFileSync(
+      taskFilePath(dataDir, 'T-0007'),
+      serializeTask({ ...edited, id: 'T-0007', title: 'Added by hand' }),
+    )
+    rmSync(taskFilePath(dataDir, removed.id))
+    const titles = () => polled.listTasks().map((task) => task.title)
+
+    clock = 1999
+    expect(titles().sort()).toEqual(['First', 'Second'])
+
+    clock = 2000
+    expect(titles().sort()).toEqual(['Added by hand', 'Edited by hand', 'Second'])
+    expect(polled.getTask('T-0007').title).toBe('Added by hand')
+    expect(messages).not.toContainEqual(expect.objectContaining({ kind: 'task.created' }))
+    expect(messages).not.toContainEqual(expect.objectContaining({ kind: 'task.deleted' }))
+  })
+
+  it('does not read back its own writes', () => {
+    const task = service.createTask({ title: 'First' })
+    startPolled()
+
+    clock = 500
+    polled.updateTask(task.id, { title: 'Renamed' })
+    const own = polled.createTask({ title: 'Own' })
+    messages = []
+    clock = 10_000
+    polled.listTasks()
+    polled.getTask(task.id)
+    polled.getTask(own.id)
+
+    expect(messages).toEqual([])
+    expect(polled.getTask(task.id).title).toBe('Renamed')
+  })
+
+  it('keeps the last good task while its file cannot be read, and logs it once', () => {
+    const task = service.createTask({ title: 'First' })
+    startPolled()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      writeFileSync(taskFilePath(dataDir, task.id), '---\nid: nope\n---\n')
+
+      clock = 1000
+      expect(polled.getTask(task.id)).toEqual(task)
+      clock = 5000
+      polled.listTasks()
+      expect(polled.getTask(task.id)).toEqual(task)
+
+      expect(errors).toHaveBeenCalledTimes(1)
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining(task.id))
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  it('still lists the tasks when the folder cannot be read', () => {
+    const task = service.createTask({ title: 'First' })
+    startPolled()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      // A file in place of the folder: readdir fails with ENOTDIR, not ENOENT.
+      rmSync(tasksDir(dataDir), { recursive: true })
+      writeFileSync(tasksDir(dataDir), '')
+
+      clock = 2000
+      expect(polled.listTasks()).toEqual([task])
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining('task folder'))
     } finally {
       errors.mockRestore()
     }

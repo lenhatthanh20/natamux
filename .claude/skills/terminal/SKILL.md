@@ -238,7 +238,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - xterm 6 scrolls with its own scrollable element. CSS on `.xterm-viewport` no longer reaches the scrollbar.
 - `reflowCursorLine` is false by default in xterm 6. Tests that resize narrower must not expect the cursor line to reflow.
 - Add a resize only where the size really changes. Each one costs a redraw, and in Claude Code's classic renderer a duplicate block.
-- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 64 KB per second per terminal; past it the terminal is behind until shown.
+- Hidden terminals still parse their output on the main thread. The hidden budget caps that at 256 KiB per second per terminal (`HIDDEN_BUDGET_BYTES`); past it the terminal is behind until shown.
 - A test client that never acks goes behind after 512 KB of live output, or past 512 KB of output during its snapshot. Use `ackingClient` when a test needs all the bytes.
 - In tests, find `.xterm-rows` inside a pane region. The holder has rows of the hidden terminals too.
 - Client code checks `typeof event.data !== 'string'`, not `instanceof ArrayBuffer`: a buffer from another realm (jsdom in tests) fails `instanceof`.

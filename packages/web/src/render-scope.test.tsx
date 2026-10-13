@@ -38,8 +38,10 @@ vi.mock('./components/WorkspaceRow', async (importOriginal) => {
   }
 })
 
-// The dashboard loads the terminal's code when idle; xterm needs a real browser.
+// The dashboard loads the terminal's and the diff's code when idle; xterm and Monaco need a real
+// browser.
 vi.mock('./components/TerminalView', () => ({ default: () => null }))
+vi.mock('./components/MonacoDiff', () => ({ default: () => null }))
 
 class FakeSocket {
   static instances: FakeSocket[] = []

@@ -63,7 +63,7 @@ describe('task shells', () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     expect(load).toHaveBeenCalledTimes(1)
 
-    await act(() => vi.advanceTimersByTimeAsync(59_000))
+    await act(() => vi.advanceTimersByTimeAsync(SHELLS_EVERY_MS - 1000))
     expect(load).toHaveBeenCalledTimes(1)
     await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(load).toHaveBeenCalledTimes(2)

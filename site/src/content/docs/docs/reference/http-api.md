@@ -61,8 +61,8 @@ A browser cannot set headers on a WebSocket, so:
 - `GET /events` (WebSocket) streams live task changes, including `task.deleted` when a task is deleted. Pass the token as `?token=<token>`. Each message is JSON with a `kind`. Besides the task messages it sends:
   - `repos.changed` when a project is added or removed, so a dashboard can read `GET /repos` again.
   - `activity.changed` with `{ taskId, activity }` when what an agent does changes. `activity` is the task's whole activity by terminal, as `GET /activity` gives it; `{}` means none.
-  - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends.
-  - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook, when its terminals go quiet, or after a commit. At most one per task every 750 ms.
+  - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends, when the program in front of a terminal changes (checked when its output goes quiet), or when a hook changes the state of an agent that works on no stage, unless the last `GET /tasks/<id>/terminals` found no agent in that terminal.
+  - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook for a tool that ran or for the end of a turn, when its terminals go quiet, or after a commit. Each comes 750 ms after a change. Up to 3 in a row come that soon; while changes go on after that, at most one per task every 10 s, and one more after the last change.
   - `resync` to one socket that missed messages because it read too slowly. The dashboard loads everything again.
 - Terminals open with a one-time ticket. Call `POST /tasks/:id/terminal/ticket` to get `{ ticket }`, then open `GET /tasks/:id/terminal?ticket=...` (WebSocket) within 30 seconds.
 

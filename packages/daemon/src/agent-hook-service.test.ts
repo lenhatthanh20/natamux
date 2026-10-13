@@ -719,15 +719,98 @@ describe('AgentHookService, pushed to the dashboards', () => {
     ])
   })
 
-  it('tells that the workspace may have changed after each hook of a task', () => {
+  it('tells that the workspace may have changed after a tool ran and at the end of a turn', () => {
     const service = hooks()
     const task = tasks.createTask({ title: 'Fix it' })
 
     service.handle('claude-code', edit('a.ts'), task.id)
     service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id)
+    service.handle('claude-code', { hook_event_name: 'StopFailure' }, task.id)
     service.handle('claude-code', { hook_event_name: 'Stop', cwd: '/elsewhere' }, undefined)
 
-    expect(touched).toEqual([task.id, task.id])
+    expect(touched).toEqual([task.id, task.id, task.id])
+  })
+
+  it.each([
+    ['claude-code', { hook_event_name: 'UserPromptSubmit' }],
+    ['claude-code', { hook_event_name: 'PreToolUse', tool_name: 'Bash' }],
+    ['claude-code', { hook_event_name: 'PermissionRequest' }],
+    ['claude-code', { hook_event_name: 'Notification', notification_type: 'permission_prompt' }],
+    ['cursor', { hook_event_name: 'preToolUse' }],
+    ['cursor', { hook_event_name: 'beforeShellExecution', command: 'ls' }],
+    ['gemini', { hook_event_name: 'BeforeTool', tool_name: 'read_file' }],
+  ])('does not tell for a %s hook that changes no file: %j', (agent, raw) => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    service.handle(agent, raw, task.id)
+
+    expect(touched).toEqual([])
+  })
+
+  it.each([
+    ['cursor', { hook_event_name: 'afterFileEdit' }],
+    ['cursor', { hook_event_name: 'afterShellExecution' }],
+    ['gemini', { hook_event_name: 'AfterTool', tool_name: 'write_file' }],
+    ['codex', { hook_event_name: 'PostToolUse' }],
+  ])('tells for a %s hook after a tool ran: %j', (agent, raw) => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+
+    service.handle(agent, raw, task.id)
+
+    expect(touched).toEqual([task.id])
+  })
+
+  it('sends shells.changed when a hook changes the state of an agent in a shell', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    const service = hooks({
+      laneFor: (current, terminal) =>
+        terminal === '2' ? null : { stage: current.stage, state: current.state },
+      takeReport: () => false,
+    })
+    const shellMessages = () => sent.filter((message) => message.kind === 'shells.changed')
+    const changed = { kind: 'shells.changed', taskId: task.id }
+
+    service.handle('claude-code', { hook_event_name: 'UserPromptSubmit' }, task.id, '2')
+    expect(shellMessages()).toEqual([changed])
+
+    // Still running: nothing new to show.
+    service.handle('claude-code', edit('a.ts'), task.id, '2')
+    service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id, '2')
+    expect(shellMessages()).toEqual([changed])
+
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id, '2')
+    expect(shellMessages()).toEqual([changed, changed])
+
+    // The agent of a stage shows the state of the task, which comes with the task.
+    service.handle('claude-code', { hook_event_name: 'UserPromptSubmit' }, task.id, '1')
+    expect(shellMessages()).toEqual([changed, changed])
+  })
+
+  it('sends no shells.changed for a shell whose agent the read of the shells did not see', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    const service = hooks({ laneFor: () => null, takeReport: () => false })
+    const shellMessages = () => sent.filter((message) => message.kind === 'shells.changed')
+    const prompt = { hook_event_name: 'UserPromptSubmit' }
+    service.handle('claude-code', prompt, task.id, '2')
+    expect(shellMessages()).toHaveLength(1)
+
+    // Each read of the shells drops the state, as no agent shows there (a shell on Windows).
+    for (let step = 0; step < 3; step += 1) {
+      service.forgetShellsExcept(task.id, [])
+      service.handle('claude-code', prompt, task.id, '2')
+    }
+    expect(shellMessages()).toHaveLength(1)
+    expect(service.shellState(task.id, '2')).toBe('running')
+
+    // Once a read shows an agent there, its next state is sent again.
+    service.forgetShellsExcept(task.id, ['2'])
+    service.handle('claude-code', { hook_event_name: 'Stop' }, task.id, '2')
+    expect(shellMessages()).toHaveLength(2)
   })
 
   it('sends nothing for a hook of no known task', () => {

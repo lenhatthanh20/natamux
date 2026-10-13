@@ -18,7 +18,9 @@ import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
   branchNameFor,
   DIFF_STATS_MAX_AGE_MS,
+  DIRTY_BURST,
   DIRTY_DEBOUNCE_MS,
+  DIRTY_MIN_INTERVAL_MS,
   FileNotChangedError,
   GIT_READ_MS,
   slugify,
@@ -1414,10 +1416,48 @@ describe('touch', () => {
     expect(sent).toEqual([])
     vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS - 500)
     expect(sent).toEqual([{ kind: 'workspace.dirty', taskId: task.id }])
+  })
+
+  it('tells a few changes in a row soon, as when a shell starts and runs a command', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const dirty = () => sent.filter((message) => message.kind === 'workspace.dirty').length
+
+    for (let change = 1; change <= DIRTY_BURST; change += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+      expect(dirty()).toBe(change)
+      vi.advanceTimersByTime(1000)
+    }
+  })
+
+  it('tells once per interval while changes go on, and once after the last', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const dirty = () => sent.filter((message) => message.kind === 'workspace.dirty').length
 
     touching.touch(task.id)
     vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
-    expect(sent).toHaveLength(2)
+    expect(dirty()).toBe(1)
+
+    // A busy agent: a change every second for 25 seconds. The first ones are told soon, then one
+    // per interval.
+    for (let second = 0; second < 25; second += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(1000)
+    }
+    expect(dirty()).toBe(DIRTY_BURST + 2)
+
+    // The changes after the last message are told once, at the end of the interval.
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS)
+    expect(dirty()).toBe(DIRTY_BURST + 3)
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS * (DIRTY_BURST + 1))
+    expect(dirty()).toBe(DIRTY_BURST + 3)
+
+    // After a quiet time, the first change is told soon again.
+    touching.touch(task.id)
+    vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    expect(dirty()).toBe(DIRTY_BURST + 4)
   })
 
   it('tells about each task apart', () => {
@@ -1445,6 +1485,21 @@ describe('touch', () => {
     vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
 
     expect(sent.filter((message) => message.kind === 'workspace.dirty')).toEqual([])
+  })
+
+  it('says nothing about a task deleted while it waited for the next interval', () => {
+    vi.useFakeTimers()
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    for (let change = 0; change < DIRTY_BURST; change += 1) {
+      touching.touch(task.id)
+      vi.advanceTimersByTime(DIRTY_DEBOUNCE_MS)
+    }
+
+    touching.touch(task.id)
+    tasks.deleteTask(task.id)
+    vi.advanceTimersByTime(DIRTY_MIN_INTERVAL_MS * 2)
+
+    expect(sent.filter((message) => message.kind === 'workspace.dirty')).toHaveLength(DIRTY_BURST)
   })
 
   it('follows each change made here, such as a commit', async () => {

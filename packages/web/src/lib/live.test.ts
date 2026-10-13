@@ -10,6 +10,7 @@ import {
   ACTIVITY_KEY,
   applyLiveMessages,
   closeSocket,
+  DIFFSTATS_EVERY_MS,
   FALLBACK_POLL_MS,
   liveSocketUrl,
   parseLiveMessage,
@@ -190,7 +191,7 @@ describe('applyLiveMessages', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
   })
 
-  it('reads the files, the shells and the sizes of a changed workspace again', () => {
+  it('reads the files and the sizes of a changed workspace again, not its shells', () => {
     const queryClient = client()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
@@ -201,13 +202,46 @@ describe('applyLiveMessages', () => {
 
     const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
     for (const id of ['T-0001', 'T-0002']) {
-      // The shells too: a hook's shell state, or a program started in a shell, sends no message.
-      for (const key of ['changes', 'file-diff', 'graph', 'stage-files', 'task-shells']) {
+      for (const key of ['changes', 'file-diff', 'graph', 'stage-files']) {
         expect(keys).toContainEqual([key, id])
       }
     }
+    // The daemon sends shells.changed for what the shells show.
+    expect(keys.filter((key) => key?.[0] === 'task-shells')).toEqual([])
     // The sizes of all tasks come in one answer, read once.
     expect(keys.filter((key) => key?.[0] === 'diffstats')).toEqual([['diffstats']])
+  })
+
+  it('reads the sizes at most once per interval, and once more after the last change', () => {
+    vi.useFakeTimers()
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const sizeReads = () =>
+      invalidate.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === 'diffstats').length
+    const dirty = (taskId: string) =>
+      applyLiveMessages(queryClient, [{ kind: 'workspace.dirty', taskId }])
+
+    dirty('T-0001')
+    expect(sizeReads()).toBe(1)
+
+    // Ten busy tasks, each changing every 10 seconds, for 40 seconds.
+    for (let second = 0; second < 40; second += 1) {
+      dirty(`T-${String(second % 10).padStart(4, '0')}`)
+      vi.advanceTimersByTime(1000)
+    }
+    expect(sizeReads()).toBe(3)
+    // The files of each task are still read at each change of that task.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['changes', 'T-0009'] })
+
+    vi.advanceTimersByTime(DIFFSTATS_EVERY_MS)
+    expect(sizeReads()).toBe(4)
+    vi.advanceTimersByTime(DIFFSTATS_EVERY_MS * 3)
+    expect(sizeReads()).toBe(4)
+
+    // After a quiet time, the next change is read at once.
+    dirty('T-0001')
+    expect(sizeReads()).toBe(5)
+    vi.useRealTimers()
   })
 
   it('reads everything again after a resync', () => {

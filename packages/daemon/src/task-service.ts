@@ -90,6 +90,11 @@ export const ACTIVITY_INTERVAL_MS = 30_000
 // How often a sign of life alone rewrites the task file at most. The index gets every one.
 const ACTIVITY_FILE_INTERVAL_MS = 60_000
 
+// How often a read looks at the task files at most, for an edit by hand that the watcher missed:
+// some file systems give no events. getTask stats one file; listTasks reads the folder.
+const STAT_CHECK_MS = 1000
+const LIST_CHECK_MS = 2000
+
 export type ActivityOptions = { minIntervalMs?: number; endsWait?: boolean }
 
 export const applyEventInputSchema = taskEventSchema
@@ -188,6 +193,8 @@ type TaskServiceOptions = {
   now?: () => Date
   // The settings of a repository (`.natamux.json`). Default: the legacy pipeline.
   settingsOf?: SettingsOf
+  // In milliseconds, for the checks of the task files. Default: Date.now.
+  clock?: () => number
 }
 
 export class TaskService {
@@ -204,6 +211,10 @@ export class TaskService {
   private readonly fileStats = new Map<string, FileStat>()
   // The `updatedAt` of each task when its file was last written.
   private readonly writtenAt = new Map<string, string>()
+  private readonly clock: () => number
+  // When each task file was last looked at for edits by hand, and the folder for new files.
+  private readonly checkedAt = new Map<string, number>()
+  private folderCheckedAt = 0
   private stopWatching: (() => void) | undefined
   private started = false
 
@@ -213,6 +224,7 @@ export class TaskService {
     this.bus = options.bus
     this.now = options.now ?? (() => new Date())
     this.settingsOf = options.settingsOf ?? (() => LEGACY_SETTINGS)
+    this.clock = options.clock ?? Date.now
   }
 
   // Loads every task into memory and brings the index in line with the files. A file with the
@@ -222,8 +234,11 @@ export class TaskService {
     const known = this.index.taskFiles()
     const indexed = this.indexedTasks()
     const files = new Map<string, TaskFiles>()
+    const now = this.clock()
     this.tasks.clear()
     this.fileStats.clear()
+    this.checkedAt.clear()
+    this.folderCheckedAt = now
     for (const id of listTaskIds(this.dataDir)) {
       const stat = statFile(taskFilePath(this.dataDir, id))
       const cached = sameStat(stat, known.get(id)?.task) ? indexed.get(id) : undefined
@@ -233,6 +248,7 @@ export class TaskService {
       }
       this.tasks.set(id, Object.freeze(task))
       this.fileStats.set(id, stat)
+      this.checkedAt.set(id, now)
       files.set(id, { task: stat, log: this.syncEventLog(id, known.get(id)?.log) })
     }
     this.index.replaceAllTasks([...this.tasks.values()], files)
@@ -240,12 +256,7 @@ export class TaskService {
     this.stopWatching?.()
     this.stopWatching = watchTaskFiles(this.dataDir, (ids) => {
       for (const id of ids) {
-        try {
-          this.reload(id)
-        } catch (error) {
-          // A half-written or broken file: the last good task stays until the file is fixed.
-          console.error(`Could not read the task file of ${id}: ${String(error)}`)
-        }
+        this.tryReload(id)
       }
     })
   }
@@ -297,15 +308,59 @@ export class TaskService {
     if (stat === undefined) {
       return
     }
+    // Before the read, so a broken file is read again only when it changes.
+    this.fileStats.set(taskId, stat)
     const task = readTaskFile(this.dataDir, taskId)
     if (task === undefined) {
       return
     }
     this.tasks.set(taskId, Object.freeze(task))
-    this.fileStats.set(taskId, stat)
     // Not task.created, even for a new file: that starts the context stage, and a file put there
     // by hand (or back from a backup) must not start an agent. A restart does not either.
     this.bus.publish({ kind: 'task.changed', task })
+  }
+
+  private tryReload(taskId: string): void {
+    try {
+      this.reload(taskId)
+    } catch (error) {
+      // A half-written or broken file: the last good task stays until the file is fixed.
+      console.error(`Could not read the task file of ${taskId}: ${String(error)}`)
+    }
+  }
+
+  // The watcher may miss an edit by hand, so a read stats the task file too, once a second at most.
+  private checkFile(taskId: string): void {
+    if (!this.started || !this.tasks.has(taskId)) {
+      return
+    }
+    const now = this.clock()
+    if (now - (this.checkedAt.get(taskId) ?? 0) < STAT_CHECK_MS) {
+      return
+    }
+    this.checkedAt.set(taskId, now)
+    this.tryReload(taskId)
+  }
+
+  // The same for every task file, and files added by hand, every two seconds at most.
+  private checkFolder(): void {
+    const now = this.clock()
+    if (!this.started || now - this.folderCheckedAt < LIST_CHECK_MS) {
+      return
+    }
+    this.folderCheckedAt = now
+    let ids: string[]
+    try {
+      ids = listTaskIds(this.dataDir)
+    } catch (error) {
+      // A read of the folder that fails (EMFILE, EACCES) must not fail listTasks: it has the tasks.
+      console.error(`Could not read the task folder: ${String(error)}`)
+      return
+    }
+    for (const id of ids) {
+      this.checkedAt.set(id, now)
+      this.tryReload(id)
+    }
   }
 
   // The steps of a task, with each stage's settings from its repository.
@@ -392,6 +447,7 @@ export class TaskService {
   }
 
   getTask(taskId: string): Task {
+    this.checkFile(taskId)
     const task = this.findTask(taskId)
     if (!task) {
       throw new TaskNotFoundError(taskId)
@@ -401,6 +457,7 @@ export class TaskService {
 
   // Newest first, as the index lists them.
   listTasks(state?: TaskState): Task[] {
+    this.checkFolder()
     const all = [...this.tasks.values()]
     const tasks = state === undefined ? all : all.filter((task) => task.state === state)
     return tasks.sort((a, b) => compareText(b.updatedAt, a.updatedAt) || compareText(a.id, b.id))
@@ -513,6 +570,7 @@ export class TaskService {
     this.tasks.delete(taskId)
     this.fileStats.delete(taskId)
     this.writtenAt.delete(taskId)
+    this.checkedAt.delete(taskId)
   }
 
   // Launch scripts are named agent-launch-T-0001.sh and agent-launch-T-0001-2.sh.

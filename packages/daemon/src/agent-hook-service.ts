@@ -52,10 +52,20 @@ const NO_STAGES: StageLookup = {
   takeReport: () => false,
 }
 
+// Only a tool that ran, or the end of a turn, can have changed files. A tool that is about to run
+// (PreToolUse, beforeShellExecution, BeforeTool) changed nothing yet.
+function changesFiles(hook: NormalizedHook): boolean {
+  if (hook.signal === 'activity') {
+    const name = hook.details.hook
+    return typeof name !== 'string' || !/^(pre|before)/i.test(name)
+  }
+  return hook.signal === 'turn-ended' || hook.signal === 'turn-paused' || hook.signal === 'failed'
+}
+
 type HookServiceOptions = {
-  // Dashboards hear of each change of the activity.
+  // Dashboards hear of each change of the activity, and of the state of an agent in a shell.
   bus?: EventBus
-  // Called after each hook of a task: the agent may have changed files in the workspace.
+  // Called after a hook that may have changed files in the task's workspace.
   workspaceChanged?: (taskId: string) => void
 }
 
@@ -68,6 +78,10 @@ export class AgentHookService {
   // The state of each agent in a shell that no stage uses, by task id, then terminal. In memory
   // only, like the activities.
   private readonly shellStates = new Map<string, Map<string, TaskState>>()
+  // "<task>/<terminal>" of the shells whose state the last read of the task's shells dropped, as
+  // no agent runs there for it (see forgetShellsExcept). No dashboard shows their state, so a hook
+  // there sends no shells.changed: each one would only read the shells, and drop it, again.
+  private readonly hiddenShells = new Set<string>()
   private readonly bus: EventBus | undefined
   private readonly workspaceChanged: (taskId: string) => void
 
@@ -137,7 +151,9 @@ export class AgentHookService {
     }
 
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
-    this.workspaceChanged(task.id)
+    if (changesFiles(hook)) {
+      this.workspaceChanged(task.id)
+    }
 
     const lane = this.stages.laneFor(task, terminal)
     // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned, not
@@ -153,8 +169,16 @@ export class AgentHookService {
       // An agent on no stage of the step: one the user started by hand, or a reviewer that sent
       // the task back. It has a state of its own and leaves the task alone.
       const states = this.shellStates.get(task.id) ?? new Map<string, TaskState>()
-      states.set(terminal ?? MAIN_TERMINAL, SHELL_STATES[hook.signal])
-      this.shellStates.set(task.id, states)
+      const state = SHELL_STATES[hook.signal]
+      const shell = terminal ?? MAIN_TERMINAL
+      if (states.get(shell) !== state) {
+        states.set(shell, state)
+        this.shellStates.set(task.id, states)
+        // The dashboards show this state with the task's shells.
+        if (!this.hiddenShells.has(`${task.id}/${shell}`)) {
+          this.bus?.publish({ kind: 'shells.changed', taskId: task.id })
+        }
+      }
       return { taskId: task.id, applied: [] }
     }
     const applied: EventType[] = []
@@ -185,7 +209,11 @@ export class AgentHookService {
     for (const terminal of states?.keys() ?? []) {
       if (!running.includes(terminal)) {
         states?.delete(terminal)
+        this.hiddenShells.add(`${taskId}/${terminal}`)
       }
+    }
+    for (const terminal of running) {
+      this.hiddenShells.delete(`${taskId}/${terminal}`)
     }
     if (states?.size === 0) {
       this.shellStates.delete(taskId)

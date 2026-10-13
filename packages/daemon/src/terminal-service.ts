@@ -545,6 +545,8 @@ type Session = {
   // The first bytes of a character that the last read cut, see wholeChars.
   partial?: Buffer
   writeTimer?: NodeJS.Timeout
+  // The program in the foreground when the output last went quiet, see noteForeground.
+  program?: string
 }
 
 // A piece of input for a shell. Pieces of another kind than the one before go a moment apart.
@@ -628,8 +630,25 @@ export class TerminalService {
       } catch {
         // A failing listener must not break the terminal.
       }
+      this.noteForeground(taskId)
     }
     setTimeout(check, WORKSPACE_QUIET_MS).unref()
+  }
+
+  // A program that starts or ends in a shell prints something. The dashboards show it, and an
+  // agent started by hand, with the shells: tell them when it changed.
+  private noteForeground(taskId: string): void {
+    let changed = false
+    for (const session of this.sessions.values()) {
+      if (session.taskId === taskId) {
+        const program = session.pty.foreground?.()
+        changed = changed || program !== session.program
+        session.program = program
+      }
+    }
+    if (changed) {
+      this.bus?.publish({ kind: 'shells.changed', taskId })
+    }
   }
 
   // A browser cannot set headers on a WebSocket. Instead of the daemon token in the URL, it asks
@@ -1437,6 +1456,7 @@ export class TerminalService {
       terminal,
       shellId: randomBytes(16).toString('base64url'),
       pty,
+      program: pty.foreground?.(),
       size,
       screen: new ScreenState(size, this.now, (full) => this.setPaused(session, full)),
       clients: new Map(),

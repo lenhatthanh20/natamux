@@ -73,6 +73,9 @@ export const FALLBACK_POLL_MS = 60_000
 
 export const ACTIVITY_KEY = ['activity']
 export const DIFFSTATS_KEY = ['diffstats']
+// The sizes of all tasks come in one read, and the daemon runs git for each workspace that changed.
+// With busy agents some workspace always changes, so the sizes are read at most once per this time.
+export const DIFFSTATS_EVERY_MS = 15_000
 // The queries of a workspace's files, by task id: the Changes, History and Docs tabs.
 const WORKSPACE_KEYS = ['changes', 'file-diff', 'graph', 'stage-files']
 
@@ -92,6 +95,31 @@ export function withTaskActivity(
   }
 }
 
+// By query cache: a read of the sizes ran within DIFFSTATS_EVERY_MS. `again`: a workspace changed
+// since, so the sizes are read once more when that time ends.
+const sizeWaits = new WeakMap<QueryClient, { again: boolean }>()
+
+function readSizes(client: QueryClient): void {
+  const waiting = sizeWaits.get(client)
+  if (waiting !== undefined) {
+    waiting.again = true
+    return
+  }
+  const wait = { again: false }
+  sizeWaits.set(client, wait)
+  void client.invalidateQueries({ queryKey: DIFFSTATS_KEY })
+  const end = () => {
+    if (!wait.again) {
+      sizeWaits.delete(client)
+      return
+    }
+    wait.again = false
+    void client.invalidateQueries({ queryKey: DIFFSTATS_KEY })
+    setTimeout(end, DIFFSTATS_EVERY_MS)
+  }
+  setTimeout(end, DIFFSTATS_EVERY_MS)
+}
+
 // Writes a batch of live messages into the query cache: the activity in one write, and each query
 // that went stale read again once.
 export function applyLiveMessages(client: QueryClient, messages: readonly LiveMessage[]): void {
@@ -103,19 +131,18 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   const add = (key: QueryKey) => stale.set(JSON.stringify(key), key)
   let activity = client.getQueryData<AgentActivity>(ACTIVITY_KEY)
   const before = activity
+  let sizesChanged = false
   for (const message of messages) {
     if (message.kind === 'activity.changed' && activity !== undefined) {
       activity = withTaskActivity(activity, message.taskId, message.lines, message.latest)
     } else if (message.kind === 'shells.changed') {
       add(['task-shells', message.taskId])
     } else if (message.kind === 'workspace.dirty') {
+      // Only the queries on screen are read again.
       for (const key of WORKSPACE_KEYS) {
         add([key, message.taskId])
       }
-      add(DIFFSTATS_KEY)
-      // A hook or quiet shell output comes with it. Neither starts nor ends a shell, but the state
-      // a hook gave a shell, or the program now in front, shows in the shells.
-      add(['task-shells', message.taskId])
+      sizesChanged = true
     }
   }
   // Before the first read there is nothing to change: that read brings the activity.
@@ -124,6 +151,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   }
   for (const queryKey of stale.values()) {
     void client.invalidateQueries({ queryKey })
+  }
+  if (sizesChanged) {
+    readSizes(client)
   }
 }
 

@@ -242,12 +242,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.isSuccess])
 
-  // The first terminal then does not wait for xterm's code.
+  // The first terminal then does not wait for xterm's code, and the first diff not for Monaco's.
   useEffect(() => {
     if (!tasksQuery.isSuccess) {
       return
     }
-    return prefetchWhenIdle(loadTerminalView)
+    const cancelTerminal = prefetchWhenIdle(loadTerminalView)
+    const cancelDiff = prefetchWhenIdle(() => import('./MonacoDiff'))
+    return () => {
+      cancelTerminal()
+      cancelDiff()
+    }
   }, [tasksQuery.isSuccess])
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })

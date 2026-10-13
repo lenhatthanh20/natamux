@@ -13,9 +13,11 @@ export type DaemonMessage =
   | { kind: 'repos.changed' }
   // The task's whole activity after the change, by terminal, as in GET /activity. {}: none.
   | { kind: 'activity.changed'; taskId: string; activity: Record<string, AgentActivity> }
-  // A shell of the task started or ended.
+  // A shell of the task started or ended, its foreground program changed, or a hook changed the
+  // state of an agent in it.
   | { kind: 'shells.changed'; taskId: string }
-  // Files in the task's workspace may have changed. At most one per task in DIRTY_DEBOUNCE_MS.
+  // Files in the task's workspace may have changed. A few soon, then at most one per task in
+  // DIRTY_MIN_INTERVAL_MS while changes go on (see WorkspaceService.touch).
   | { kind: 'workspace.dirty'; taskId: string }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }

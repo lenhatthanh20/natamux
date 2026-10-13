@@ -44,9 +44,9 @@ The dashboard runs for hours with many agents. A change of one task must render 
 - **Push, do not poll.** The daemon sends changes on `/events`. `lib/live.ts` parses each message once (`parseLiveMessage`) and writes the cache once per frame (`applyLiveMessages`):
   - `activity.changed` updates `['activity']` with `setQueryData`.
   - `shells.changed` invalidates `['task-shells', id]`.
-  - `workspace.dirty` invalidates the task's `changes`, `file-diff`, `graph`, `stage-files`, `task-shells` and `['diffstats']`. The shells, because a hook's shell state or a program started in a shell sends no `shells.changed`.
+  - `workspace.dirty` invalidates the task's `changes`, `file-diff`, `graph` and `stage-files`, and `['diffstats']` at most once per `DIFFSTATS_EVERY_MS` (15 s) for all tasks together: at once after a quiet time, else once at the end of the 15 s. The daemon sends up to 3 in a row soon, then at most one per task every 10 s while changes go on. Not `task-shells`: the daemon sends `shells.changed` for a hook's shell state and for a new program in front.
   - `resync`, or a reconnect, invalidates everything.
-- A `refetchInterval` is only a fallback: `FALLBACK_POLL_MS` (60 s). New data the daemon changes gets a message and a line in `applyLiveMessages`, not a faster poll.
+- A `refetchInterval` is only a fallback: `FALLBACK_POLL_MS` (60 s); the per-row shells poll `SHELLS_EVERY_MS` is 5 min. New data the daemon changes gets a message and a line in `applyLiveMessages`, not a faster poll.
 - **Store selectors.** `Dashboard` reads `useViewStore` with `useShallow` and only the fields it shows. Actions and values needed only in a handler come from `useViewStore.getState()`.
 - **Data at the leaves.** `Dashboard` owns the activity and diffstats queries but does not read them (`notifyOnChangeProps: []`, or a `select`). Parts read them with `useActivity(select)` and `useDiffStats()` from `hooks/useActivity.ts`; these never fetch. A sidebar row reads its own activity and question.
 - **Memo rows.** `WorkspaceRow` and `AgentRow` are `memo`. Give them stable props: callbacks through `useStableCallback`, strings and booleans instead of new objects, `tabStop` and `activate` instead of `roving.item(key)` (the row calls `rovingItem`), and no `children` when there is nothing under the row.

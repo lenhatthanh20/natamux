@@ -173,7 +173,7 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
   const row = tree(page).getByRole('button', { name: taskNamed(title) })
   const item = row.locator('xpath=ancestor::li[1]')
   const unknown = page.getByRole('button', { name: 'Shell 2, State not known', exact: true })
-  // The dashboard reads the shells again once the shell's output goes quiet (workspace.dirty).
+  // Once the shell's output goes quiet, the daemon sees the new program and sends shells.changed.
   await expect(unknown).toBeVisible({ timeout: 15_000 })
   await expect(unknown.locator('[data-tip="State not known yet"] svg')).toBeVisible()
   await testInfo.attach('shell-ring.png', {
