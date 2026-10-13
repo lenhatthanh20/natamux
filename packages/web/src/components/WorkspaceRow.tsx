@@ -64,7 +64,7 @@ type WorkspaceRowProps = {
   onAnswer?: () => void
   // The row was added after the list was first drawn, so it slides in.
   enter?: boolean
-  // The rows under the open fold.
+  // The rows under it: all of them while open, else only the subtasks that wait on the user.
   children?: ReactNode
   onOpen: (id: string) => void
   onViewChanges: (id: string) => void
@@ -435,7 +435,7 @@ export function WorkspaceRow({
           </span>
         )}
       </div>
-      {open && children}
+      {children}
       {removing && (
         <ConfirmDialog
           title="Remove the workspace?"

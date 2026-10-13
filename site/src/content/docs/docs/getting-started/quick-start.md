@@ -62,9 +62,9 @@ On the dashboard, the state of the task updates by itself, because Natamux's hoo
 
 ## 4. Answer when it needs you
 
-When an agent asks a question or waits for a permission, the task moves to **Needs your input**. The **Needs you** strip at the top of the dashboard names it, and the title bar shows a count such as "1 needs you".
+When an agent asks a question or waits for a permission, the task moves to **Needs your input**. Its row in the sidebar becomes a card with the agent's question, and the title bar shows a count such as "1 needs you".
 
-1. Click the task in the strip.
+1. Click the task in the sidebar.
 2. Click **Answer in terminal** on the banner.
 3. Type your answer in the terminal.
 

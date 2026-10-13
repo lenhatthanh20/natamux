@@ -67,7 +67,7 @@ Full reference: `docs/e2e.md`.
 
 - `signIn(page)` in `helpers.ts` sets `localStorage['natamux.auth']` and waits for the heading "All tasks".
 - `openTask(page, title)` switches to Table, double-clicks the row, and returns the tab list "View" (use `exact: true`, because "View of the details" also exists).
-- Task rows and cards are named `"<title>, <state>, <id>, <age>"`. Match them with `taskNamed(title)`, and scope to `taskTable(page)` to avoid strict-mode clashes with the sidebar and Needs you.
+- Task rows and cards are named `"<title>, <state>, <id>, <age>"`. Match them with `taskNamed(title)`, and scope to `taskTable(page)` to avoid strict-mode clashes with the sidebar.
 - Terminal:
   - The browser runs without WebGL, so text is in `.xterm-rows` inside the region "Terminal screen". Only `terminal-gpu.spec.ts` turns WebGL on (SwiftShader) and counts drawn pixels instead.
   - Wait for `$` before typing.

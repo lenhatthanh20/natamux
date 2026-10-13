@@ -16,7 +16,7 @@ The window has five parts.
 | Part | What it holds |
 |---|---|
 | Title bar | The sidebar toggle, where you are, **Search or run a command**, the "N need you" chip, **Start a task** and the details toggle |
-| Sidebar | A filter field, **All tasks**, **Agents**, **Needs you**, and **Workspaces** grouped by project |
+| Sidebar | A filter field, **All tasks**, **Agents** and **Workspaces** grouped by project |
 | Main area | The task list as a table, board or progress view, or the open workspace |
 | Details panel | The selected task, in two views: **Progress** (its stages, with Approve) and **Details** (notes, workspace, pull request, subtasks, tries) |
 | Status bar | The connection state, running count, **Projects**, **Import issues**, **Notify me**, shortcuts and the account menu |
@@ -31,7 +31,6 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 
 - **All tasks** shows the task list in the main area. The number is every task.
 - **Agents** opens a grid of agent terminals. It starts with the agents that work or wait. Use **Add a pane** to add a task (up to 6 panes), and **Columns** to pick 1, 2, 4 or Auto.
-- **Needs you** lists the tasks that wait for you. See [Needs you](#needs-you).
 - **Workspaces** lists workspaces in folders, one per project. How much room a row takes follows what it needs:
   - A task that waits on you, failed or is blocked is a tinted card. It shows the agent's question, or why the task failed, on up to two lines. On a task that asks, **Answer** opens the terminal of the agent that asked.
   - A task that works, waits for review or is ready has two lines: the title and age, then the task id, the step and stage (such as "3/5 Review"), the subtasks done, what the agent does now, the pull request and the agent's icon. Hover the id to see the branch.
@@ -43,7 +42,7 @@ In the workspace list:
 - Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
-- Only the open workspace shows the work under it: one row per shell, then its open subtasks. Click a task, or press `Right` on it, to open it; the task that was open before folds. A shell row shows the state, the agent's icon, the stage (or **Shell 2** for an agent you started yourself), what the agent does and the shell (**S1**). A shell with no agent shows a terminal icon and its program, such as **zsh**. Click a shell row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the shells of tasks that work or wait, and of the open workspace.
+- Only the open workspace shows the work under it: one row per shell, then its open subtasks. A folded task still shows its subtasks that wait on you, failed or are blocked. Click a task, or press `Right` on it, to open it; the task that was open before folds. A shell row shows the state, the agent's icon, the stage (or **Shell 2** for an agent you started yourself), what the agent does and the shell (**S1**). A shell with no agent shows a terminal icon and its program, such as **zsh**. Click a shell row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the shells of tasks that work or wait, and of the open workspace.
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path**, **Remove workspace** and **Delete task**. **Remove workspace** deletes the worktree and keeps the task. **Delete task** deletes the task, its notes and its history, and the worktree when there is one. Both ask first. Pinned workspaces move to a **Pinned** section at the top.
 - Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.
@@ -93,8 +92,6 @@ In the details panel you can edit a task (**Edit**, or `e`), add subtasks, and u
 - **Filter tasks** in the sidebar (press `/`) filters the list and the workspaces. It matches the id, title, agent, branch and labels. `Esc` clears the field.
 - When nothing matches, **Clear filter** resets both the search and the chip.
 
-The **Needs you** strip ignores the filter. It says **Not filtered** while a filter is on.
-
 ## Command palette
 
 Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search tasks, commands and projects.
@@ -132,11 +129,11 @@ See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 A task needs you when it is in Needs your input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
-- The **Needs you** strip at the top of the sidebar lists these tasks, longest wait first. While tasks wait, the strip has an amber frame and a bell. With none it stays calm. Each row has two lines: the title, then the stage and what the agent asks, or why the task failed, with how long it waits. It shows three rows. **Show all N** lists the rest. When the list is empty it says **Nothing needs you**.
-- The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks.
+- The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks, tasks without a workspace too. The chip ignores the filter.
+- In the sidebar, a task that waits on you, failed or is blocked is a tinted card with the agent's question. See [Sidebar](#sidebar).
 - The browser tab title shows the count: `(2) Natamux`.
 
-A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed leaves the strip.
+A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed no longer needs you.
 
 ## Notifications
 

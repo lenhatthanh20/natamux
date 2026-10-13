@@ -38,7 +38,7 @@ export function isFoldOpen(
   return folds[key] ?? fallback
 }
 
-// The order of the most urgent first, as the Needs you section reads it.
+// The order of the most urgent first.
 const URGENT: readonly TaskState[] = [
   'needs-input',
   'failed',

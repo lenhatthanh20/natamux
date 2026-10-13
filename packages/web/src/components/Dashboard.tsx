@@ -21,7 +21,6 @@ import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
-import { sidebarGroups } from '../lib/sidebar-groups'
 import {
   filterTasks,
   needsMeTasks,
@@ -43,7 +42,7 @@ import { ChangesView } from './ChangesView'
 import { CommandPalette, type PaletteMode } from './CommandPalette'
 import { DrawerFooter } from './DrawerFooter'
 import { IssueImport } from './IssueImport'
-import { NeedsMeStrip } from './NeedsMeStrip'
+import { NeedsYouAnnouncer } from './NeedsYouAnnouncer'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { NoWorkspace } from './NoWorkspace'
 import { ProgressBoard } from './ProgressBoard'
@@ -476,7 +475,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const detailGroup = detailTask === null ? null : tryGroup(detailTask)
   const detailTries = detailGroup === null ? [] : triesOf(detailGroup, tasks)
   // The tasks that need the user ignore the search: they must stay in sight.
-  const allGroups = useMemo(() => sidebarGroups(tasks, now), [tasks, now])
+  const waiting = useMemo(() => needsMeTasks(tasks, now), [tasks, now])
   const sidebar = useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)
   const details = useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)
   const viewportWidth = useViewportWidth()
@@ -706,7 +705,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   }
 
   const showSkeleton = useDelayedFlag(tasksQuery.isPending)
-  const waitingCount = needsMeTasks(tasks, now).length
+  const waitingCount = waiting.length
   const notifications = useTaskNotifications(tasks)
   useEffect(() => {
     document.title = waitingCount > 0 ? `(${waitingCount}) Natamux` : 'Natamux'
@@ -828,19 +827,6 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                 openAgents()
                 afterPick()
               }}
-              needsYou={
-                <NeedsMeStrip
-                  waiting={allGroups.needsMe}
-                  now={now}
-                  currentId={changesTaskId}
-                  filtered={search.trim() !== ''}
-                  questions={questions}
-                  onOpen={(id) => {
-                    openTask(id)
-                    afterPick()
-                  }}
-                />
-              }
               tree={
                 tasksQuery.isPending ? (
                   showSkeleton && (
@@ -1400,6 +1386,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         />
       )}
 
+      <NeedsYouAnnouncer waiting={waiting} />
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
       {palette !== null && (
         <CommandPalette

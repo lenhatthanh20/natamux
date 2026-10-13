@@ -258,6 +258,32 @@ describe('the jump palette', () => {
     expect(rows).toEqual(['T-0005', 'T-0004', 'T-0003', 'T-0006', 'T-0009'])
   })
 
+  // The title bar pill counts them and opens this list, so it must show them all.
+  it('lists a task that needs the user and has no workspace, but only in the needs-you scope', () => {
+    const waiting = [...tasks, task('T-0010', 'blocked', { workspace: null })]
+    const scoped = ids(
+      jumpSections({ query: '', tasks: waiting, recent: [], now: NOW, scope: 'needs-you' }),
+    )
+    expect(scoped).toContain('T-0010')
+    expect(scoped).not.toContain('T-0008')
+    const all = ids(jumpSections({ query: '', tasks: waiting, recent: [], now: NOW, scope: null }))
+    expect(all).not.toContain('T-0010')
+  })
+
+  it('finds a waiting task without a workspace by its title in the needs-you scope', () => {
+    const waiting = [task('T-0010', 'blocked', { workspace: null, title: 'Ship docs' })]
+    const rows = ids(
+      jumpSections({ query: 'ship', tasks: waiting, recent: [], now: NOW, scope: 'needs-you' }),
+    )
+    expect(rows).toEqual(['T-0010'])
+  })
+
+  it('lists nothing for no tasks, with or without a scope', () => {
+    for (const scope of ['needs-you', null] as const) {
+      expect(jumpSections({ query: '', tasks: [], recent: [], now: NOW, scope })).toEqual([])
+    }
+  })
+
   it('searches workspaces and offers a new one when nothing matches', () => {
     expect(
       ids(jumpSections({ query: 'T-0003', tasks, recent: [], now: NOW, scope: null })),

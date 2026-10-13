@@ -70,20 +70,16 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   const view = page.getByRole('region', { name: /^Changes of / })
 
-  // The reason: in Needs you, on the task's card in the tree, and in the banner.
+  // The reason: on the task's card in the tree, and in the banner.
   await expect(view.getByRole('status').filter({ hasText: STOPPED })).toBeVisible()
-  // The demo tasks wait longer, so the new one can be past the cap of 3 rows.
-  const needsYou = page.getByRole('region', { name: 'Needs you' })
-  const showAll = needsYou.getByRole('button', { name: /^Show all/ })
-  if ((await showAll.count()) > 0) {
-    await showAll.click()
-  }
-  await expect(needsYou.getByText(STOPPED)).toBeVisible()
-  const tree = page
-    .getByRole('navigation', { name: 'Workspaces' })
-    .getByRole('region', { name: 'Workspaces' })
+  const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
+  await expect(sidebar.getByRole('region', { name: 'Needs you' })).toHaveCount(0)
+  const tree = sidebar.getByRole('region', { name: 'Workspaces' })
   await expect(tree.getByText(STOPPED)).toHaveCount(1)
-  await expect(page.getByText(STOPPED)).toHaveCount(3)
+  await expect(page.getByText(STOPPED)).toHaveCount(2)
+  // The demo tasks wait too, so only the form of the count is known.
+  const pill = page.getByRole('banner').getByRole('button', { name: /^\d+ needs? you$/ })
+  await expect(pill).toBeVisible()
 
   // The banner stands for the state chip, and the only agent shell has no mark.
   await expect(view.locator('header .state-chip')).toHaveCount(0)

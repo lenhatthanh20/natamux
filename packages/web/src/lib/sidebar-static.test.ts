@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import needs from '../components/NeedsMeStrip.tsx?raw'
 import sidebar from '../components/Sidebar.tsx?raw'
 import list from '../components/WorkspaceList.tsx?raw'
 import row from '../components/WorkspaceRow.tsx?raw'
 
-const FILES = { list, row, needs, sidebar }
+const FILES = { list, row, sidebar }
 
 // The sidebar takes its colors from the tokens and its icons from lucide-react (docs/ui-spec.md).
 describe.each(Object.entries(FILES))('%s', (_name, source) => {

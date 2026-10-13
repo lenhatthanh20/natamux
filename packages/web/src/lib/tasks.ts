@@ -245,25 +245,6 @@ export function nextSort(current: TaskSort, key: SortKey): TaskSort {
   return current.direction === 'asc' ? { key, direction: 'desc' } : null
 }
 
-export type NeedsMeReason = 'asks' | 'review' | 'failed' | 'blocked' | 'quiet'
-
-// The one word that says why a task is in the "needs you" list.
-export function needsMeReason(task: Task, now: Date): NeedsMeReason {
-  if (isQuiet(task, now)) {
-    return 'quiet'
-  }
-  switch (task.state) {
-    case 'review':
-      return 'review'
-    case 'failed':
-      return 'failed'
-    case 'blocked':
-      return 'blocked'
-    default:
-      return 'asks'
-  }
-}
-
 export type AgeStyle = 'short' | 'long'
 
 const WEEK_SECONDS = 7 * 86400

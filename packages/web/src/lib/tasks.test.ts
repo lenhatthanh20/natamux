@@ -15,7 +15,6 @@ import {
   formatAge,
   isQuiet,
   laneSummary,
-  needsMeReason,
   needsMeTasks,
   nextSort,
   rowLabel,
@@ -225,7 +224,6 @@ describe('needsMeTasks', () => {
       }),
     ]
     expect(needsMeTasks(tasks, now)).toEqual([])
-    expect(needsMeReason(tasks[0] as Task, now)).not.toBe('quiet')
   })
 
   // The daemon moves the stage of an agent it ends with the workspace back to ready.
@@ -421,25 +419,6 @@ describe('nextSort', () => {
       key: 'id',
       direction: 'asc',
     })
-  })
-})
-
-describe('needsMeReason', () => {
-  const now = new Date('2026-10-08T12:00:00.000Z')
-
-  it.each<[TaskState, string]>([
-    ['needs-input', 'asks'],
-    ['review', 'review'],
-    ['failed', 'failed'],
-    ['blocked', 'blocked'],
-  ])('says %s as %s', (state, reason) => {
-    expect(needsMeReason(makeTask({ state }), now)).toBe(reason)
-  })
-
-  it('says quiet for a running task that went silent', () => {
-    expect(
-      needsMeReason(makeTask({ state: 'running', updatedAt: '2026-10-08T11:00:00.000Z' }), now),
-    ).toBe('quiet')
   })
 })
 
