@@ -21,6 +21,7 @@ import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
+import { runSmoke } from './smoke.js'
 import { freePort, loginPathLogLine, loginShellPath, waitForHealth } from './startup.js'
 import { Updater } from './updater.js'
 import { windowOptions } from './window-options.js'
@@ -196,8 +197,9 @@ function createWindow(): void {
     }
   })
   if (process.env.NATAMUX_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loads signed in, then the app quits. The
-    // exit code tells: on Windows the app's output may not reach the console.
+    // A check for CI and the codespace: the dashboard loads signed in, a terminal and an agent work
+    // (smoke.ts), then the app quits. The exit code tells: on Windows the app's output may not reach
+    // the console.
     created.webContents.once('did-finish-load', async () => {
       await new Promise((resolve) => setTimeout(resolve, 4000))
       const signedIn: unknown = await created.webContents.executeJavaScript(
@@ -208,9 +210,22 @@ function createWindow(): void {
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
       }
+      let passed = signedIn === true
+      if (passed) {
+        try {
+          await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
+          console.log('natamux-desktop: the terminal and the agent work')
+        } catch (error) {
+          passed = false
+          const message = error instanceof Error ? error.message : String(error)
+          const reason = `natamux-desktop: smoke failed: ${message}`
+          console.log(reason)
+          log(`${reason}\n`)
+        }
+      }
       quitConfirmed = true
       daemon?.kill()
-      app.exit(signedIn === true ? 0 : 1)
+      app.exit(passed ? 0 : 1)
     })
   }
   void created.loadURL(`${dashboardUrl}/`)

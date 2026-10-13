@@ -93,6 +93,7 @@ jobs:
           path: |
             ${{ runner.temp }}/desktop.png
             ${{ runner.temp }}/desktop-user/logs
+          retention-days: 7
           if-no-files-found: ignore
 
   coverage:
@@ -111,6 +112,7 @@ jobs:
         with:
           name: coverage
           path: packages/*/coverage
+          retention-days: 7
           if-no-files-found: error
 
   # No install here, so there is no pnpm store to cache.

@@ -1,6 +1,6 @@
 # @natamux/desktop
 
-The desktop app: an Electron shell. Releases are built for macOS on Apple silicon only; Intel Mac and Linux builds are paused, and there is no Windows build. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
+The desktop app: an Electron shell. Releases are built for macOS (Apple silicon and Intel), Windows x64 and Linux x64. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
 
 ## What it does
 
@@ -44,7 +44,7 @@ It builds the app for the machine it runs on, into `packages/desktop/release`: a
 
 ## Check it without a screen
 
-`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard and quits: exit code 0 when the page started signed in, 1 when not. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main). On Linux:
+`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard, then makes a task with a worktree and runs a command in a shell of it (`src/smoke.ts`), and quits: exit code 0 when all of it worked, 1 when not. When `NATAMUX_CLAUDE_COMMAND` names a stand-in agent, that agent must also run the app's own `natamux` command. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main), and on the packaged app of every system (`release.yml`, also on pull requests that change the packaging). On Linux:
 
 ```sh
 NATAMUX_DESKTOP_SMOKE=1 xvfb-run -a pnpm --filter @natamux/desktop start -- --no-sandbox

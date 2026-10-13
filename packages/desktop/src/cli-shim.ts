@@ -29,10 +29,12 @@ function writeOne(
   platform: NodeJS.Platform,
 ): string {
   if (platform === 'win32') {
+    // setlocal: run from cmd.exe, the variable would stay set there and turn the next Electron app
+    // started in it into plain Node.js.
     const file = join(binDir, `${name}.cmd`)
     writeFileSync(
       file,
-      `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${runtime}" "${cliMain}" %*\r\n`,
+      `@echo off\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${runtime}" "${cliMain}" %*\r\n`,
     )
     return file
   }

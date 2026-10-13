@@ -4,7 +4,7 @@
 
 Natamux is an open-source Agent Development Environment. Each task gets its own git worktree and terminal, so agents can work side by side while you follow their progress in one place.
 
-[Download for macOS (Apple silicon)](https://github.com/lenhatthanh20/natamux/releases/latest) · [Install guide](https://natamux.github.io/docs/getting-started/install/) · [Quick start](https://natamux.github.io/docs/getting-started/quick-start/) · [Try in Codespaces](https://codespaces.new/lenhatthanh20/natamux)
+[Download for macOS, Windows and Linux](https://github.com/lenhatthanh20/natamux/releases/latest) · [Install guide](https://natamux.github.io/docs/getting-started/install/) · [Quick start](https://natamux.github.io/docs/getting-started/quick-start/) · [Try in Codespaces](https://codespaces.new/lenhatthanh20/natamux)
 
 ![Natamux dashboard with a task table, workspace sidebar, and Needs you queue](site/public/screens/dashboard.png)
 
@@ -12,11 +12,19 @@ Natamux is an open-source Agent Development Environment. Each task gets its own 
 
 ### Install the desktop app
 
-1. Download the latest `Natamux-mac-arm64.dmg` from [Releases](https://github.com/lenhatthanh20/natamux/releases/latest).
-2. Install and open Natamux. The app is currently unsigned; the [install guide](https://natamux.github.io/docs/getting-started/install/) covers the first-open steps.
+1. Download the file for your system from [Releases](https://github.com/lenhatthanh20/natamux/releases/latest):
+
+   | System | File |
+   |---|---|
+   | macOS, Apple silicon | `Natamux-mac-arm64.dmg` |
+   | macOS, Intel | `Natamux-mac-x64.dmg` |
+   | Windows 10 and 11, x64 | `Natamux-win-x64.exe` |
+   | Linux, x64 | `Natamux-linux-x86_64.AppImage`, `Natamux-linux-amd64.deb` or `Natamux-linux-x64.tar.gz` |
+
+2. Install and open Natamux. The apps are not signed yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. The [install guide](https://natamux.github.io/docs/getting-started/install/) has the details.
 3. Add a git repository, create a task, and start an agent. Follow the [quick start](https://natamux.github.io/docs/getting-started/quick-start/) for a complete walkthrough.
 
-Current desktop releases support **macOS on Apple silicon**. Intel Mac and Linux builds are paused; there is no Windows release yet. For real work, you need git and an installed, logged-in coding agent such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, or Cursor. The GitHub CLI (`gh`) is optional for issues, pull requests, and CI status.
+Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS and Linux apps update themselves; on Windows the app links the new installer. For real work, you need git and an installed, logged-in coding agent such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, or Cursor. The GitHub CLI (`gh`) is optional for issues, pull requests, and CI status.
 
 ### Explore the demo in Codespaces
 

@@ -31,4 +31,5 @@ jobs:
           path: |
             packages/desktop/release/*.dmg
             packages/desktop/release/*.exe
+          retention-days: 3
           if-no-files-found: error

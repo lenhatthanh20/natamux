@@ -15,7 +15,7 @@ Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux starts ea
 
 ## Does it run on Windows?
 
-Not yet. The current release has a macOS build for Apple silicon only. The Intel Mac and Linux builds are paused; v0.1.2 has them.
+Yes, on Windows 10 (version 1809 or later) and Windows 11, x64. Download `Natamux-win-x64.exe`; task terminals run PowerShell. The installer is not signed yet, so SmartScreen asks first: click **More info**, then **Run anyway**. There are also builds for macOS (Apple silicon and Intel) and Linux. See [Install Natamux](/docs/getting-started/install/).
 
 ## What does it cost?
 
@@ -63,7 +63,7 @@ Yes, from version 0.1.2. The desktop app checks GitHub for a new release, downlo
 ## How do I uninstall it?
 
 1. Quit the app.
-2. macOS: drag Natamux from Applications to the Trash. Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
-3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
+2. macOS: drag Natamux from Applications to the Trash. Windows: **Settings → Apps → Installed apps → Natamux → Uninstall**. Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
+3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
 4. Optional: remove worktrees you no longer need. In each repository, `git worktree list` shows them and `git worktree remove <path>` removes one.
 5. Optional: remove the `PATH` line you added for the `natamux` command.

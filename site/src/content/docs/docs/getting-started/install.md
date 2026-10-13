@@ -1,15 +1,16 @@
 ---
 title: Install Natamux
-description: Download the desktop app for macOS on Apple silicon, or run Natamux from source or in Docker.
+description: Download the desktop app for macOS, Windows or Linux, or run Natamux from source or in Docker.
 sidebar:
   order: 1
 ---
 
-Natamux is a desktop app for macOS on Apple silicon. The Intel Mac and Linux builds are paused, and there is no Windows build yet. From version 0.1.2 the app [updates itself](/docs/guides/desktop-app/#updates).
+Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS and Linux apps [update themselves](/docs/guides/desktop-app/#updates); on Windows the app tells you about a new version and you run the new installer.
 
 ## Requirements
 
-- **git.** Natamux makes a git worktree for each task.
+- **git.** Natamux makes a git worktree for each task. On Windows, install [Git for Windows](https://git-scm.com/download/win).
+- **Windows only:** Windows 10 version 1809 or later, or Windows 11, on x64. Windows on Arm may run the x64 app, but it is not tested.
 - **At least one coding agent**, installed and logged in: `claude`, `codex`, `gemini`, `copilot` or `cursor-agent`. See [Agents](/docs/agents/claude-code/).
 - **`gh` (GitHub CLI)**, optional. Needed for opening pull requests, importing issues and CI status. Run `gh auth login` once.
 
@@ -20,19 +21,16 @@ Get the file for your system from the [latest release](https://github.com/lenhat
 | System | File |
 |---|---|
 | macOS, Apple silicon (M1 and later) | [`Natamux-mac-arm64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-arm64.dmg) |
-
-<!--
-Paused builds. Move these rows back into the table when they are released again.
 | macOS, Intel | [`Natamux-mac-x64.dmg`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-mac-x64.dmg) |
+| Windows 10 and 11, x64 | [`Natamux-win-x64.exe`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-win-x64.exe) |
 | Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
 | Debian, Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
--->
 
-The Intel Mac and Linux builds are paused. The last release with them is [v0.1.2](https://github.com/lenhatthanh20/natamux/releases/tag/v0.1.2). You can also build the app from source with `scripts/package-desktop.sh`; see `packages/desktop/README.md`.
+Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. You can also build the app from source with `scripts/package-desktop.sh`; see `packages/desktop/README.md`.
 
 :::caution
-The apps are **not signed** with an Apple certificate. Download them only from the Natamux releases page, and follow the first-open steps below.
+The apps are **not signed** with an Apple or Windows certificate yet. Download them only from the Natamux releases page, and follow the first-open steps for your system below.
 :::
 
 ## Install on macOS
@@ -46,11 +44,19 @@ The apps are **not signed** with an Apple certificate. Download them only from t
    xattr -dr com.apple.quarantine /Applications/Natamux.app
    ```
 
+## Install on Windows
+
+1. Run `Natamux-win-x64.exe`. Windows SmartScreen may show **Windows protected your PC**, because the installer is not signed.
+2. Click **More info**, then **Run anyway**.
+3. The installer needs no administrator rights. It installs Natamux for your user only, adds it to the Start menu and the desktop, and opens it.
+
+Terminals of your tasks run **PowerShell**. A project's setup script on Windows is `.natamux-setup.ps1`; see [Workspaces](/docs/concepts/workspaces/). Install your agents so that PowerShell finds them: open a new PowerShell window and run `claude --version` (or `codex`, `gemini`, `copilot`, `cursor-agent`).
+
 ## Install on Linux
 
-The Linux builds are paused. Use these steps for v0.1.2 or for an app you built from source.
-
 ### AppImage
+
+Make the file runnable, then start it:
 
 ```sh
 chmod +x Natamux-linux-x86_64.AppImage
@@ -87,7 +93,14 @@ shasum -a 256 -c SHA256SUMS.txt --ignore-missing
 sha256sum -c SHA256SUMS.txt --ignore-missing
 ```
 
-You should see `OK` for the file you downloaded.
+On Windows, in PowerShell, compare the hash with the line for `Natamux-win-x64.exe` in `SHA256SUMS.txt`:
+
+```powershell
+(Get-FileHash .\Natamux-win-x64.exe -Algorithm SHA256).Hash.ToLower()
+Select-String Natamux-win-x64.exe .\SHA256SUMS.txt
+```
+
+On macOS and Linux you should see `OK` for the file you downloaded. On Windows the two hashes must be the same.
 
 ## Run from source
 
@@ -118,9 +131,10 @@ The folder is `bin` inside the app's user data folder:
 | System | Folder |
 |---|---|
 | macOS | `~/Library/Application Support/Natamux/bin` |
+| Windows | `%APPDATA%\Natamux\bin` |
 | Linux | `~/.config/Natamux/bin` |
 
-Add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash).
+On macOS and Linux, add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash).
 
 macOS:
 
@@ -134,11 +148,25 @@ Linux:
 export PATH="$HOME/.config/Natamux/bin:$PATH"
 ```
 
+Windows, in PowerShell (for your user, once):
+
+```powershell
+[Environment]::SetEnvironmentVariable('Path', "$env:APPDATA\Natamux\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
+```
+
 Open a new shell. The command also needs the daemon's token and address:
 
 ```sh
 export NATAMUX_TOKEN="$(cat "$HOME/Library/Application Support/Natamux/daemon-token")"   # Linux: ~/.config/Natamux/daemon-token
 export NATAMUX_URL=http://127.0.0.1:4317
+natamux task list
+```
+
+In PowerShell:
+
+```powershell
+$env:NATAMUX_TOKEN = Get-Content "$env:APPDATA\Natamux\daemon-token"
+$env:NATAMUX_URL = 'http://127.0.0.1:4317'
 natamux task list
 ```
 
