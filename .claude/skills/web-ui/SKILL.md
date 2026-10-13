@@ -32,6 +32,8 @@ The spec is `docs/ui-spec.md` (tokens, layout, components). Read the section for
 - **Text in the UI:** sentence case, plain verbs. A button says what it does ("Start task", not "Submit"). An error says what failed and what to do.
 - **Icons:** one size per job, from `ICON`.
 - **Motion:** only for what changed. It respects reduced motion (`styles.css` has the media query).
+  - An endless animation moves `transform` or `opacity` only; `background-position` repaints every frame.
+  - List it under `:root[data-window="inactive"]` too, so it stops while the window has no focus (`window-focus.test.ts` checks).
 - **Dependencies:** ask before adding a package.
 
 ## Tests

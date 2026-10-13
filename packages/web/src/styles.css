@@ -1332,3 +1332,20 @@
     background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
   }
 }
+
+/* A window without focus shows the still look of reduced motion (lib/window-focus.ts). While any
+   endless animation runs, the browser draws every frame. */
+:root[data-window="inactive"] .stage-arc,
+:root[data-window="inactive"] .stage-halo,
+:root[data-window="inactive"] .stage-link[data-kind="flow"]::before,
+:root[data-window="inactive"] .stage-stripes::before,
+:root[data-window="inactive"] .stage-node[data-state="review"] .stage-core,
+:root[data-window="inactive"] .sb-breathe,
+:root[data-window="inactive"] .animate-spin,
+:root[data-window="inactive"] .comet[data-state="running"] .comet-halo,
+:root[data-window="inactive"] .comet[data-state="running"] .comet-spark {
+  animation: none;
+}
+:root[data-window="inactive"] .stage-arc {
+  background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
+}
