@@ -73,8 +73,11 @@ test('matches a group by the whole file name', () => {
 
 // Each job uploads its own terminal-measures.json, and only the timing job uploads it.
 test('keeps every writer of terminal-measures.json in the timing group', () => {
-  const writers = SPECS.filter((file) =>
-    readFileSync(new URL(file, import.meta.url), 'utf8').includes('recordMeasure'),
+  // This file names recordMeasure too, but only to look for it.
+  const writers = SPECS.filter(
+    (file) =>
+      file !== 'groups.spec.ts' &&
+      readFileSync(new URL(file, import.meta.url), 'utf8').includes('recordMeasure'),
   )
   expect(writers.length).toBeGreaterThan(0)
   expect(runIn('timing')).toEqual(expect.arrayContaining(writers))
