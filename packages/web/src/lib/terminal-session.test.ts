@@ -1193,11 +1193,12 @@ describe('the end of a catch-up by exit or dispose (C4)', () => {
     terminal.element?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
     socket.message({ type: 'replayed', offset: 6 })
     session.dispose()
-    // Only the one that frees xterm.
-    expect(vi.getTimerCount()).toBe(1)
+    // Only the one that frees xterm, and the GPU give-back, which that one clears.
+    expect(vi.getTimerCount()).toBe(2)
 
     terminal.parse()
     vi.advanceTimersByTime(CATCH_UP_TIMEOUT_MS)
+    expect(vi.getTimerCount()).toBe(0)
     expect(terminal.resets).toBe(0)
     expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
   })
