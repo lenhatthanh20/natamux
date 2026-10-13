@@ -2378,6 +2378,22 @@ describe('eventSender', () => {
     expect(socket.sent).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('stops looking at a skipped socket when its dashboard leaves', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('a')
+    expect(vi.getTimerCount()).toBe(1)
+
+    sender.stop()
+    socket.bufferedAmount = 0
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(socket.sent).toEqual([])
+  })
 })
 
 describe('branches', () => {

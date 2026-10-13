@@ -35,8 +35,9 @@ test('records the bytes of script and style on the first load', async ({ page })
     performance
       .getEntriesByType('resource')
       .map((entry) => {
-        const { name, encodedBodySize, decodedBodySize } = entry as PerformanceResourceTiming
-        return { path: new URL(name).pathname, encodedBodySize, decodedBodySize }
+        const { name, encodedBodySize, decodedBodySize, transferSize } =
+          entry as PerformanceResourceTiming
+        return { path: new URL(name).pathname, encodedBodySize, decodedBodySize, transferSize }
       })
       .filter(({ path }) => /\.(js|css)$/.test(path)),
   )
@@ -44,7 +45,10 @@ test('records the bytes of script and style on the first load', async ({ page })
     sizes.filter(({ path }) => path.endsWith(ext)).reduce((total, entry) => total + entry[key], 0)
 
   expect(sizes.length).toBeGreaterThan(0)
-  const note = `${sizes.length} files until the dashboard heading shows`
+  // A cold load: a new browser context has an empty cache, so every file came over the network.
+  // Chunks that load later are not in the list, as it is read when the dashboard heading shows.
+  expect(sizes.every(({ transferSize }) => transferSize > 0)).toBe(true)
+  const note = `cold load, ${sizes.length} files until the dashboard heading shows`
   recordMeasure({
     name: 'first-load-js-bytes',
     value: sum('encodedBodySize', '.js'),
@@ -137,6 +141,9 @@ test('records the HTTP requests per minute and the long tasks of an idle dashboa
   })
   const start = await pageNow(page)
   await page.waitForTimeout(IDLE_WINDOW_MS)
+  // Only fetch and XHR count: the live socket and the terminal sockets are not HTTP requests, and
+  // script or style files would be assets. The task history (/api/tasks/:id/events) is a fetch.
+  expect([...calls.keys()].filter((key) => /\.(js|css)$| \/api\/events$/.test(key))).toEqual([])
   const longTasks = await longTasksSince(page, start)
 
   const total = [...calls.values()].reduce((sum, count) => sum + count, 0)

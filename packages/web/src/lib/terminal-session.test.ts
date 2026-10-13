@@ -424,6 +424,17 @@ describe('showing a terminal session', () => {
     expect(socket.sent).toEqual([{ type: 'visible', visible: false }])
   })
 
+  it('sends no resize when the pane closes before it settles', async () => {
+    const { session, socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    session.dispose()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+
+    expect(socket.sent).not.toContainEqual(expect.objectContaining({ type: 'resize' }))
+  })
+
   it('keeps its size while the pane has no size, and fits once it has one', async () => {
     const { socket, terminal } = await shown()
     const observer = observers.at(-1)

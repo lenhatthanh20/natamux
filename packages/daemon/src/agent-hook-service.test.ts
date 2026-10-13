@@ -738,4 +738,16 @@ describe('AgentHookService, pushed to the dashboards', () => {
     expect(activityMessages()).toEqual([])
     expect(touched).toEqual([])
   })
+
+  it('sends the same line again for the same hook, which the dashboard just sets again', () => {
+    const service = hooks()
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+
+    service.handle('claude-code', edit('a.ts'), task.id, '1')
+    service.handle('claude-code', edit('a.ts'), task.id, '1')
+
+    const texts = activityMessages().map((message) => message.activity['1']?.text)
+    expect(texts).toEqual(['Edit a.ts', 'Edit a.ts'])
+  })
 })

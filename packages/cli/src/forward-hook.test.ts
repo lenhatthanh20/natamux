@@ -5,7 +5,7 @@ import {
 } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { FetchFunction } from './client.js'
-import { forwardHook, TASK_ID_HEADER, TERMINAL_HEADER } from './forward-hook.js'
+import { forwardHook, runHookCommand, TASK_ID_HEADER, TERMINAL_HEADER } from './forward-hook.js'
 import { EXIT_OK, runCli } from './run.js'
 
 type Call = { url: string; method: string; headers: Headers; body: string }
@@ -100,6 +100,23 @@ describe('forwardHook', () => {
     expect(calls).toEqual([])
   })
 
+  it('sends stdin that is not JSON as it is, and leaves the verdict to the daemon', async () => {
+    const { calls, run } = setup({ stdin: '{not json' })
+
+    await run()
+
+    expect(calls[0]?.body).toBe('{not json')
+  })
+
+  it('sends a very large stdin whole', async () => {
+    const big = `{"output":"${'x'.repeat(5 * 1024 * 1024)}"}`
+    const { calls, run } = setup({ stdin: big })
+
+    await run()
+
+    expect(calls[0]?.body).toBe(big)
+  })
+
   it('stays silent when the daemon cannot be reached or answers with an error', async () => {
     const answers = setup({ respond: () => new Response('no', { status: 500 }) })
     await expect(answers.run()).resolves.toBeUndefined()
@@ -179,6 +196,33 @@ describe('natamux hook', () => {
     expect((await runHook(['hook', 'codex'], {})).stdout).toBe('')
   })
 
+  it('exits 0 and prints nothing when the daemon is down or blocks the hook', async () => {
+    for (const respond of [
+      () => {
+        throw new TypeError('fetch failed')
+      },
+      () => new Response('blocked', { status: 403 }),
+    ]) {
+      let stdout = ''
+      let stderr = ''
+      const code = await runHookCommand(['claude-code'], {
+        env: { NATAMUX_TOKEN: 'secret' },
+        stdout: (text) => {
+          stdout += text
+        },
+        stderr: (text) => {
+          stderr += text
+        },
+        readStdin: async () => HOOK_JSON,
+        fetch: async () => respond(),
+      })
+
+      expect(code).toBe(EXIT_OK)
+      expect(stdout).toBe('')
+      expect(stderr).toBe('')
+    }
+  })
+
   it('exits 0 and prints nothing outside a Natamux session', async () => {
     const result = await runHook(['hook', 'claude-code'], {})
 
@@ -218,6 +262,12 @@ describe('natamux hook', () => {
       expect(result.stderr).toContain('Unexpected argument')
       expect(result.calls).toEqual([])
     }
+  })
+
+  it('names only the extra arguments, as the full parser did', async () => {
+    const result = await runHook(['hook', 'copilot', 'agentStop', 'a', 'b'], {})
+
+    expect(result.stderr).toBe('Unexpected argument: a b\nRun "natamux help" for usage.\n')
   })
 })
 
@@ -264,5 +314,22 @@ describe('the fast hook path', () => {
 
   it('has main.ts load run.js only on demand', () => {
     expect(valueImports('./main.ts')).not.toContain('./run.js')
+  })
+
+  it('has main.ts send only `hook` to forward-hook.js, and every other command to run.js', () => {
+    const source = readFileSync(new URL('./main.ts', dir), 'utf8')
+    expect(source).toContain("process.argv[2] === 'hook'")
+    expect(source).toMatch(/await import\('\.\/forward-hook\.js'\)/)
+    expect(source).toMatch(/else \{\s*const \{ runCli \} = await import\('\.\/run\.js'\)/)
+  })
+
+  it('has main.ts turn on the compile cache first, only where the runtime has it', () => {
+    const source = readFileSync(new URL('./main.ts', dir), 'utf8')
+    const guard = source.indexOf("typeof nodeModule.enableCompileCache === 'function'")
+    expect(guard).toBeGreaterThan(-1)
+    expect(source.indexOf('nodeModule.enableCompileCache()')).toBeGreaterThan(guard)
+    expect(source.indexOf('nodeModule.enableCompileCache()')).toBeLessThan(
+      source.indexOf('await import('),
+    )
   })
 })

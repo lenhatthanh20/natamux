@@ -1,6 +1,7 @@
 import { CLOSE_GONE, type TaskState } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireAppEvent } from '../lib/app-events'
 import { GIVE_BACK_DELAY_MS, gpuBudget } from '../lib/gpu-renderer'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../lib/terminal-cache'
@@ -638,5 +639,24 @@ describe('TerminalView before the shell opens', () => {
     expect(screen.getByRole('button', { name: 'Start a new shell' })).not.toBeNull()
     expect(newShell()).toBeNull()
     expect(dimmed()).toBe(false)
+  })
+})
+
+describe('TerminalView find', () => {
+  it('makes the search addon at the first find, and reuses it the next time', async () => {
+    const { terminal } = await openTerminal()
+    // Mod+F finds in the terminal that has the focus.
+    const openFind = () => {
+      act(() => terminal.textarea?.focus())
+      act(() => fireAppEvent('terminal-find'))
+      return screen.getByRole('textbox', { name: 'Find' })
+    }
+    expect(fakes.searches).toHaveLength(0)
+
+    fireEvent.keyDown(openFind(), { key: 'Escape' })
+    expect(screen.queryByRole('textbox', { name: 'Find' })).toBeNull()
+    openFind()
+
+    expect(fakes.searches).toHaveLength(1)
   })
 })

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { ACK_EVERY_BYTES, TASK_ID_HEADER } from '@natamux/core'
@@ -16,6 +16,7 @@ import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
 import { buildServer } from './server.js'
 import { StageRunner } from './stage-runner.js'
+import { taskFilePath } from './task-files.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
@@ -207,7 +208,7 @@ async function startServer() {
   const ids = seedTasks(service, dataDir, HOT_TASKS, HOT_EVENTS)
   // Syncs the index with the logs, as the start of the daemon does.
   service.init()
-  return { app, service, terminals, ptys: spawner.ptys, ids }
+  return { app, service, terminals, ptys: spawner.ptys, ids, repo }
 }
 
 // What an agent sends in one turn: the prompt, eight tools, the stop.
@@ -249,6 +250,8 @@ async function measureRun(
     })
     hookMs.push(performance.now() - at)
     expect(response.statusCode).toBe(200)
+    // The output of a flooding shell never reaches the answer of a hook.
+    expect(response.body).toBe('{}')
     if ((count + 1) % HOOKS_PER_LIST === 0) {
       const listAt = performance.now()
       const list = await app.inject({ method: 'GET', url: '/tasks', headers })
@@ -307,6 +310,19 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('daemon benchmark', () => {
       const { app, terminals, ptys, ids } = await startServer()
 
       results.push(await measureRun('hooks+lists, quiet', app, ids))
+      expect(results[0]).toEqual({
+        measure: 'hooks+lists, quiet',
+        hooks: HOOKS,
+        hookP50Ms: expect.any(Number),
+        hookP99Ms: expect.any(Number),
+        lists: HOOKS / HOOKS_PER_LIST,
+        listP50Ms: expect.any(Number),
+        listP99Ms: expect.any(Number),
+        loopDelayP99Ms: expect.any(Number),
+        loopDelayMaxMs: expect.any(Number),
+        seconds: expect.any(Number),
+        gitSpawns: expect.any(Number),
+      })
 
       // The shell of the last task, so the flood does not share a session with the first hooks.
       const floodedId = ids[ids.length - 1] as string
@@ -321,9 +337,61 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('daemon benchmark', () => {
       } finally {
         await stopFlood()
       }
+      expect(results[1]).toMatchObject({ measure: 'hooks+lists, shell flood', hooks: HOOKS })
     },
     BENCH_TEST_MS,
   )
+
+  it(
+    'answers a hook for an unknown task, and leaves no files after the run',
+    async () => {
+      const { app, repo } = await startServer()
+      const response = await app.inject({
+        method: 'POST',
+        url: '/hooks/claude-code',
+        headers: { authorization: `Bearer ${TOKEN}`, [TASK_ID_HEADER]: 'T-9999' },
+        payload: hookBody(1),
+      })
+      expect(response.statusCode).toBe(200)
+      expect(response.body).toBe('{}')
+      // The seeded data lives under the temp folder, which the cleanup removes whole.
+      expect(existsSync(repo.root)).toBe(true)
+      for (const cleanup of cleanups.splice(0)) {
+        await cleanup()
+      }
+      expect(existsSync(repo.root)).toBe(false)
+    },
+    BENCH_TEST_MS,
+  )
+
+  it('starts with no tasks at all', () => {
+    const repo = createTestRepo()
+    cleanups.push(() => repo.cleanup())
+    const dataDir = join(repo.root, 'data')
+    mkdirSync(dataDir)
+    const index = new TaskIndex(join(dataDir, 'index.sqlite'))
+    const service = new TaskService({ dataDir, index, bus: new EventBus() })
+    service.init()
+    expect(service.listTasks()).toEqual([])
+    service.close()
+    index.close()
+  })
+
+  // The start stops on a task file that does not parse, as it did before the cache; the bench
+  // only records it.
+  it('stops the start at a corrupt task file', () => {
+    const repo = createTestRepo()
+    cleanups.push(() => repo.cleanup())
+    const dataDir = join(repo.root, 'data')
+    mkdirSync(dataDir)
+    const index = new TaskIndex(join(dataDir, 'index.sqlite'))
+    const service = new TaskService({ dataDir, index, bus: new EventBus() })
+    const task = service.createTask({ title: 'Broken soon' })
+    writeFileSync(taskFilePath(dataDir, task.id), '---\ntitle: [unclosed\n---\n')
+    expect(() => new TaskService({ dataDir, index, bus: new EventBus() }).init()).toThrow()
+    service.close()
+    index.close()
+  })
 
   it(
     'starts with many tasks and events',

@@ -1,8 +1,10 @@
-import type { ChangeEntry, ChangeStatus } from '@natamux/core'
+import type { ChangeEntry, ChangeStatus, GitGraph as GitGraphData } from '@natamux/core'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import css from '../styles.css?raw'
 import { ChangedFiles, type ChangedFilesProps } from './ChangedFiles'
+import { GitGraph } from './GitGraph'
 
 // Counts how often each row draws its icon, to see which rows render again.
 const iconRenders = vi.hoisted(() => [] as string[])
@@ -168,5 +170,81 @@ describe('ChangedFiles', () => {
     expect(screen.getByText('+17')).toBeTruthy()
     expect(screen.getByText('−3', { selector: '[data-tip] > span' })).toBeTruthy()
     expect(screen.getByText('3 changed files')).toBeTruthy()
+  })
+})
+
+describe('a long list of changed files', () => {
+  const many = Array.from({ length: 500 }, (_, index) => entry(`src/file${index}.ts`))
+
+  it('renders two rows of 500 when the selection moves', () => {
+    const { update } = files({ mode: 'list', list: many, selectedPath: 'src/file1.ts' })
+    expect(items()).toHaveLength(500)
+    iconRenders.length = 0
+
+    update({ selectedPath: 'src/file400.ts' })
+
+    expect(iconRenders.sort()).toEqual(['src/file1.ts', 'src/file400.ts'])
+  })
+
+  it('renders no row again when the panel renders with the same files', () => {
+    const { update } = files({ mode: 'list', list: many, selectedPath: 'src/file1.ts' })
+    iconRenders.length = 0
+
+    update({ status: <p>Reading the changes again.</p> })
+
+    expect(screen.getByText('Reading the changes again.')).toBeTruthy()
+    expect(iconRenders).toEqual([])
+  })
+
+  it('shows no rows for no changes', () => {
+    files({ list: [] })
+    expect(items()).toHaveLength(0)
+    expect(screen.getByText('0 changed files')).toBeTruthy()
+  })
+})
+
+describe('rows far off screen', () => {
+  // The shared rule, as styles.css writes it.
+  const rule = /\.cv-row \{([^}]*)\}/.exec(css)?.[1] ?? ''
+
+  it('skip layout and paint through one shared class', () => {
+    expect(rule).toContain('content-visibility: auto')
+    expect(rule).toContain('contain-intrinsic-block-size: auto')
+  })
+
+  it('include every changed file row', () => {
+    files()
+    expect(items()).toHaveLength(5)
+    for (const row of items()) {
+      expect(row.classList.contains('cv-row')).toBe(true)
+    }
+  })
+
+  it('include every commit row, at the height of a commit', () => {
+    const graph: GitGraphData = {
+      branch: 'natamux/t-0001',
+      head: 'abc1234',
+      base: 'main',
+      ahead: 1,
+      behind: 0,
+      push: null,
+      commits: [
+        {
+          hash: 'abc1234',
+          parents: [],
+          author: 'Ann',
+          date: '2026-10-08T09:00:00.000Z',
+          subject: 'Parse dates',
+          refs: [],
+          onBranch: true,
+        },
+      ],
+      truncated: false,
+    }
+    render(<GitGraph graph={graph} onRefresh={vi.fn()} />)
+
+    const [row] = within(screen.getByRole('list', { name: 'Commits' })).getAllByRole('listitem')
+    expect(row?.classList.contains('cv-row')).toBe(true)
+    expect(row?.className).toContain('[--cv-h:28px]')
   })
 })

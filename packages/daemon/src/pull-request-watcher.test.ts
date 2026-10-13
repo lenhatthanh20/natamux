@@ -248,4 +248,38 @@ describe('PullRequestWatcher', () => {
     expect(calls).toBe(3)
     watcher.stop()
   })
+
+  it('asks every minute again once a settled pull request has a check that runs', async () => {
+    vi.useFakeTimers()
+    const task = taskWithPr(1)
+    let checks: object[] = []
+    let calls = 0
+    const gh: RunGh = async () => {
+      calls += 1
+      const commit = { statusCheckRollup: { contexts: { nodes: checks } } }
+      const node = { state: 'OPEN', isDraft: false, commits: { nodes: [{ commit }] } }
+      return JSON.stringify({ data: { repository: { pr1: node } } })
+    }
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      bus: busWithClient(),
+    })
+    watcher.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toBe(1)
+
+    // A new commit was pushed: GitHub runs its checks.
+    checks = [{ status: 'IN_PROGRESS', conclusion: null }]
+    await vi.advanceTimersByTimeAsync(SETTLED_INTERVAL_MS)
+    expect(calls).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(calls).toBe(3)
+    expect(tasks.getTask(task.id).prStatus).toEqual({ state: 'open', checks: 'pending' })
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(calls).toBe(4)
+    watcher.stop()
+  })
 })

@@ -1,9 +1,11 @@
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -600,6 +602,30 @@ describe('recordActivity', () => {
 
     expect(started(index).getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
   })
+
+  it('rewrites the task file at most once a minute for a sign of life every second', () => {
+    const task = startedTask()
+    const inFile = () => readTaskFile(dataDir, task.id)?.updatedAt ?? ''
+    const fileTimes = new Set([inFile()])
+
+    for (let second = 1; second <= 180; second += 1) {
+      later(1)
+      expect(activityService.recordActivity(task.id, { minIntervalMs: 1000 })).toBe(true)
+      const at = clock.toISOString()
+      expect(activityService.getTask(task.id).updatedAt).toBe(at)
+      expect(index.listTasks()[0]?.updatedAt).toBe(at)
+      // A stop now would lose less than a minute, and the index has the rest.
+      expect(clock.getTime() - Date.parse(inFile())).toBeLessThan(60_000)
+      fileTimes.add(inFile())
+    }
+
+    expect([...fileTimes]).toEqual([
+      '2026-10-08T09:00:00.000Z',
+      '2026-10-08T09:01:00.000Z',
+      '2026-10-08T09:02:00.000Z',
+      '2026-10-08T09:03:00.000Z',
+    ])
+  })
 })
 
 describe('init', () => {
@@ -674,6 +700,54 @@ describe('tasks in memory', () => {
     expect(() => service.getTask(task.id)).toThrow(TaskNotFoundError)
     expect(service.listTasks()).toEqual([])
   })
+
+  it('gives tasks that a caller cannot change', () => {
+    const task = service.createTask({ title: 'First' })
+    const restarted = started(index)
+    const given = [
+      task,
+      service.getTask(task.id),
+      restarted.getTask(task.id),
+      ...restarted.listTasks(),
+      makeService(index).getTask(task.id),
+    ]
+    expect(given).toHaveLength(5)
+
+    for (const each of given) {
+      expect(() => Object.assign(each, { title: 'Changed' })).toThrow(TypeError)
+    }
+    expect(service.getTask(task.id).title).toBe('First')
+    expect(restarted.getTask(task.id).title).toBe('First')
+  })
+
+  it('keeps the task as it was when its file cannot be written', () => {
+    const task = service.createTask({ title: 'First' })
+    // A folder where the temporary file goes makes the write fail on every platform.
+    mkdirSync(`${taskFilePath(dataDir, task.id)}.tmp`)
+
+    expect(() => service.updateTask(task.id, { title: 'Renamed' })).toThrow()
+
+    expect(service.getTask(task.id)).toEqual(task)
+    expect(index.listTasks()).toEqual([task])
+    expect(service.listEvents(task.id).map(({ event }) => event.type)).toEqual(['task.created'])
+  })
+
+  it('stores an accepted and a rejected event in one transaction each', () => {
+    const task = service.createTask({ title: 'First' })
+    const exec = vi.spyOn(DatabaseSync.prototype, 'exec')
+    const count = (sql: string) => exec.mock.calls.filter(([each]) => each === sql).length
+    try {
+      const rejected = service.applyEvent(task.id, { source: 'agent', type: 'agent.finished' })
+      expect(rejected.accepted).toBe(false)
+      expect([count('begin'), count('commit')]).toEqual([1, 1])
+
+      service.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+      expect([count('begin'), count('commit')]).toEqual([2, 2])
+    } finally {
+      exec.mockRestore()
+    }
+    expect(service.listEvents(task.id).map(({ accepted }) => accepted)).toEqual([true, false, true])
+  })
 })
 
 describe('init from the index of the last start', () => {
@@ -728,6 +802,58 @@ describe('init from the index of the last start', () => {
 
     expect(restarted.listTasks().map((task) => task.title)).toEqual(['Added'])
     expect(index.listTasks().map((task) => task.title)).toEqual(['Added'])
+  })
+
+  it('reads a task file again when only its size or only its time changed', () => {
+    const task = service.createTask({ title: 'First' })
+    const path = taskFilePath(dataDir, task.id)
+    // Whole seconds, so the time set again is exactly the one the index saw.
+    utimesSync(path, 1_000_000, 1_000_000)
+    started(index)
+
+    writeFileSync(path, serializeTask({ ...task, title: 'Edited by hand' }))
+    utimesSync(path, 1_000_000, 1_000_000)
+    expect(started(index).getTask(task.id).title).toBe('Edited by hand')
+
+    writeFileSync(path, serializeTask({ ...task, title: 'Edited by HAND' }))
+    utimesSync(path, 2_000_000, 2_000_000)
+    expect(started(index).getTask(task.id).title).toBe('Edited by HAND')
+  })
+
+  it('ends with the same tasks and events as a start with a new index', () => {
+    const kept = service.createTask({ title: 'Kept' })
+    const edited = service.createTask({ title: 'Edited' })
+    service.applyEvent(kept.id, { source: 'human', type: 'task.readied' })
+    started(index)
+    writeFileSync(
+      taskFilePath(dataDir, edited.id),
+      serializeTask({ ...edited, title: 'Edited by hand' }),
+    )
+    const line = {
+      taskId: kept.id,
+      source: 'human',
+      type: 'review.commented',
+      at: '2026-10-08T10:00:00.000Z',
+      payload: { text: 'Looks good' },
+      accepted: true,
+    }
+    appendFileSync(eventLogPath(dataDir, kept.id), `${JSON.stringify(line)}\n`)
+
+    const fresh = new TaskIndex(':memory:')
+    try {
+      const rebuilt = started(fresh)
+      const restarted = started(index)
+
+      expect(restarted.listTasks()).toEqual(rebuilt.listTasks())
+      expect(index.listTasks()).toEqual(fresh.listTasks())
+      const events = (from: TaskIndex, id: string) =>
+        from.listEvents(id).map(({ event, accepted }) => ({ event, accepted }))
+      for (const id of [kept.id, edited.id]) {
+        expect(events(index, id)).toEqual(events(fresh, id))
+      }
+    } finally {
+      fresh.close()
+    }
   })
 
   it('reads every file with an index from before the file stats', () => {
@@ -819,15 +945,22 @@ describe('task files edited outside Natamux', () => {
   it('keeps the last good task while its file cannot be read', async () => {
     const task = watching.createTask({ title: 'First' })
     watching.init()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      writeFileSync(taskFilePath(dataDir, task.id), '---\nid: nope\n---\n')
+      writeFileSync(
+        taskFilePath(dataDir, 'T-0009'),
+        serializeTask({ ...task, id: 'T-0009', title: 'Marker' }),
+      )
 
-    writeFileSync(taskFilePath(dataDir, task.id), '---\nid: nope\n---\n')
-    writeFileSync(
-      taskFilePath(dataDir, 'T-0009'),
-      serializeTask({ ...task, id: 'T-0009', title: 'Marker' }),
-    )
-
-    await vi.waitFor(() => expect(watching.getTask('T-0009').title).toBe('Marker'), SEEN)
-    expect(watching.getTask(task.id)).toEqual(task)
+      await vi.waitFor(() => {
+        expect(watching.getTask('T-0009').title).toBe('Marker')
+        expect(errors).toHaveBeenCalledWith(expect.stringContaining(task.id))
+      }, SEEN)
+      expect(watching.getTask(task.id)).toEqual(task)
+    } finally {
+      errors.mockRestore()
+    }
   })
 })
 

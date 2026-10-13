@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import type { Task, TaskEvent } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskIndex } from './task-index.js'
 
 function makeTask(overrides: Partial<Task>): Task {
@@ -172,5 +176,78 @@ describe('TaskIndex record', () => {
     )
 
     expect([...index.taskFiles()]).toEqual([['T-0005', { task: { mtimeMs: 5, size: 50 } }]])
+  })
+})
+
+describe('TaskIndex on the hot path', () => {
+  const event: TaskEvent = {
+    taskId: 'T-0001',
+    source: 'agent',
+    type: 'agent.active',
+    at: '2026-10-08T09:05:00.000Z',
+    payload: {},
+  }
+
+  it('writes ahead to a log and syncs to disk only at checkpoints', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'natamux-index-'))
+    const onDisk = new TaskIndex(join(folder, 'index.sqlite'))
+    try {
+      // The setting belongs to the connection, which the index keeps to itself.
+      const { db } = onDisk as unknown as { db: DatabaseSync }
+      expect(db.prepare('pragma journal_mode').get()).toEqual({ journal_mode: 'wal' })
+      // 1 is NORMAL. WAL alone would keep FULL (2).
+      expect(db.prepare('pragma synchronous').get()).toEqual({ synchronous: 1 })
+    } finally {
+      onDisk.close()
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('prepares its statements once, not on every call', () => {
+    const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare')
+    const own = new TaskIndex(':memory:')
+    try {
+      const prepared = prepare.mock.calls.length
+      expect(prepared).toBeGreaterThan(0)
+
+      for (let count = 0; count < 10; count += 1) {
+        own.record('T-0001', {
+          task: makeTask({}),
+          events: [{ event, accepted: true }],
+          files: { task: { mtimeMs: count, size: 10 }, log: { mtimeMs: count, size: 20 } },
+        })
+        own.listTasks()
+        own.listTasks('draft')
+        own.listEvents('T-0001')
+        own.countEvents('T-0001')
+        own.taskFiles()
+      }
+      own.replaceEvents('T-0001', [{ event, accepted: false }])
+      own.replaceAllTasks([makeTask({})], new Map([['T-0001', { task: { mtimeMs: 1, size: 1 } }]]))
+      own.deleteTask('T-0001')
+
+      expect(prepare).toHaveBeenCalledTimes(prepared)
+    } finally {
+      own.close()
+      prepare.mockRestore()
+    }
+  })
+
+  it('records a change in exactly one transaction', () => {
+    const exec = vi.spyOn(DatabaseSync.prototype, 'exec')
+    try {
+      index.record('T-0001', {
+        task: makeTask({}),
+        events: [
+          { event, accepted: true },
+          { event, accepted: false },
+        ],
+        files: { task: { mtimeMs: 1, size: 10 }, log: { mtimeMs: 2, size: 20 } },
+      })
+
+      expect(exec.mock.calls).toEqual([['begin'], ['commit']])
+    } finally {
+      exec.mockRestore()
+    }
   })
 })

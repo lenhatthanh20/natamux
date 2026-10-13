@@ -51,6 +51,25 @@ describe('task shells', () => {
     client.clear()
   })
 
+  it('reads the shells again after a minute without a message, not sooner', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const load = vi.fn(async (_taskId: string) => SHELLS)
+    render(
+      <QueryClientProvider client={client}>
+        <Sidebar load={load} />
+      </QueryClientProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(load).toHaveBeenCalledTimes(1)
+
+    await act(() => vi.advanceTimersByTimeAsync(59_000))
+    expect(load).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(load).toHaveBeenCalledTimes(2)
+    client.clear()
+  })
+
   it('reads a task once per poll however many parts show its shells', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

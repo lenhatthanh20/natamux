@@ -1,10 +1,16 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { TaskEvent } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { appendEventLine, eventLogPath, readEventLog } from './event-log.js'
 import { statFile, tasksDir } from './task-files.js'
+
+// Counts the folders the log makes. Everything else is the real file system.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return { ...actual, mkdirSync: vi.fn(actual.mkdirSync) }
+})
 
 const event: TaskEvent = {
   taskId: 'T-0001',
@@ -44,5 +50,18 @@ describe('appendEventLine', () => {
     appendEventLine(dataDir, event, true)
 
     expect(readEventLog(dataDir, event.taskId)).toHaveLength(1)
+  })
+
+  it('makes the folder once for many events of many tasks', () => {
+    vi.mocked(mkdirSync).mockClear()
+
+    for (let count = 0; count < 100; count += 1) {
+      appendEventLine(dataDir, event, true)
+    }
+    appendEventLine(dataDir, { ...event, taskId: 'T-0002' }, true)
+
+    expect(mkdirSync).toHaveBeenCalledTimes(1)
+    expect(readEventLog(dataDir, event.taskId)).toHaveLength(100)
+    expect(readEventLog(dataDir, 'T-0002')).toHaveLength(1)
   })
 })

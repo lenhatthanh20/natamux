@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRun } from './commit-drafter.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
-import { GitError, NothingToCommitError, type RunGh, worktreeState } from './git.js'
+import { GitError, gitSpawnCount, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
@@ -1320,6 +1320,52 @@ describe('diffStats', () => {
       [first.id]: { files: 1, added: 1, removed: 0 },
       [second.id]: none,
     })
+  })
+
+  it('runs git only for the workspaces that changed', { timeout: GIT_TEST_MS }, async () => {
+    const ids: string[] = []
+    for (const title of ['First', 'Second', 'Third']) {
+      ids.push((await workspaces.create(tasks.createTask({ title }).id)).id)
+    }
+    // The git processes of one read after the given workspaces changed.
+    const spawnsAfter = async (touched: readonly string[]) => {
+      for (const id of touched) {
+        workspaces.touch(id)
+      }
+      clock += GIT_READ_MS
+      const before = gitSpawnCount()
+      expect(Object.keys(await workspaces.diffStats())).toHaveLength(3)
+      return gitSpawnCount() - before
+    }
+
+    const all = await spawnsAfter([])
+    const two = await spawnsAfter(ids.slice(0, 2))
+    const one = await spawnsAfter(ids.slice(0, 1))
+    expect(await spawnsAfter([])).toBe(0)
+
+    // Each workspace read again costs the same number of git processes.
+    expect(two - one).toBeGreaterThan(0)
+    expect(all - two).toBe(two - one)
+  })
+
+  it('keeps the stats of the other workspaces when git fails for one', async () => {
+    const good = await workspaces.create(tasks.createTask({ title: 'Good' }).id)
+    const broken = await workspaces.create(tasks.createTask({ title: 'Broken' }).id)
+    const none = { files: 0, added: 0, removed: 0 }
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none, [broken.id]: none })
+
+    rmSync(broken.workspace ?? '', { recursive: true, force: true })
+    workspaces.touch(broken.id)
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none })
+
+    // Nothing told the service, so the good one still comes from the earlier read.
+    writeFileSync(join(good.workspace ?? '', 'notes.txt'), 'a\n')
+    runGit(good.workspace ?? '', 'add', 'notes.txt')
+    clock += GIT_READ_MS
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: none })
+
+    workspaces.touch(good.id)
+    expect(await workspaces.diffStats()).toEqual({ [good.id]: { files: 1, added: 1, removed: 0 } })
   })
 
   it('reads again at once after a workspace is made or removed here', async () => {

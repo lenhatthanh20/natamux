@@ -1344,3 +1344,15 @@ describe('test spec cases', () => {
     expect(rowOf('Parent').querySelector('[data-unseen]')).toBeNull()
   })
 })
+
+describe('rows far off screen', () => {
+  it('skip layout and paint, and count with the height of their tier', () => {
+    list()
+    const live = rowOf('Still going').parentElement
+    const quiet = rowOf('Pinned and done').parentElement
+    expect(live?.classList.contains('cv-row')).toBe(true)
+    expect(live?.className).toContain('[--cv-h:2.5rem]')
+    expect(quiet?.classList.contains('cv-row')).toBe(true)
+    expect(quiet?.className).toContain('[--cv-h:1.5rem]')
+  })
+})

@@ -1089,6 +1089,45 @@ describe('telling the dashboards', () => {
   })
 })
 
+describe('shells.changed', () => {
+  function watched() {
+    const { spawn, ptys } = fakeSpawner()
+    const bus = new EventBus()
+    const sent: DaemonMessage[] = []
+    bus.subscribe((message) => sent.push(message))
+    const service = new TerminalService({ spawn, workspaceOf: (taskId) => `/work/${taskId}`, bus })
+    services.push(service)
+    return { service, ptys, sent }
+  }
+
+  it('sends one message per shell when all shells of a task close, each for its task', () => {
+    const { service, sent } = watched()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    service.attach('T-0002', client(), size)
+    const changed = { kind: 'shells.changed', taskId: 'T-0001' }
+    expect(sent).toEqual([changed, changed, { kind: 'shells.changed', taskId: 'T-0002' }])
+
+    service.close('T-0001')
+
+    expect(sent.slice(3)).toEqual([changed, changed])
+  })
+
+  it('sends nothing more when a closed shell ends later', () => {
+    const { service, ptys, sent } = watched()
+    service.attach('T-0001', client(), size)
+    const pty = first(ptys)
+    // It ignores SIGHUP, so it ends after closeOne.
+    pty.stubborn = true
+
+    service.closeOne('T-0001', MAIN_TERMINAL)
+    expect(sent).toHaveLength(2)
+    pty.exit(0)
+
+    expect(sent).toHaveLength(2)
+  })
+})
+
 describe('input with DEL', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -2975,5 +3014,81 @@ describe('a client that comes back', () => {
     detach()
 
     expect(ptys[0]?.sizes).toEqual([large, middle])
+  })
+})
+
+describe('bytes from the pty', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps an escape sequence that two reads split', async () => {
+    const { service, ptys } = setup()
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const pty = first(ptys)
+
+    pty.emit('\x1b[3')
+    pty.emit('1mred\x1b[0m plain\r\n')
+    await service.settled('T-0001')
+
+    expect(outputOf(watching.frames)).toContain('\x1b[31mred\x1b[0m plain\r\n')
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+    expect(await screenOf(later.frames)).toEqual(['red plain'])
+  })
+
+  it('sends nothing for a read that is only the start of a character', async () => {
+    const heard: string[] = []
+    const { service, ptys } = setup({
+      onOutput: (_task, _terminal, data) => heard.push(data.toString()),
+    })
+    const watching = client()
+    service.attach('T-0001', watching, size)
+    await service.settled('T-0001')
+    const before = bytesOf(watching.frames).byteLength
+    const bytes = Buffer.from('中')
+    const pty = first(ptys)
+
+    pty.emit(bytes.subarray(0, 1))
+    await service.settled('T-0001')
+    expect(heard).toEqual([])
+    expect(bytesOf(watching.frames).byteLength).toBe(before)
+
+    pty.emit(bytes.subarray(1))
+    await service.settled('T-0001')
+    expect(heard).toEqual(['中'])
+    expect(bytesOf(watching.frames).subarray(before).toString()).toBe('中')
+  })
+
+  it('keeps every line of a flood while hidden, through a ring resume when shown', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const watching = ackingClient(service)
+    service.attach('T-0001', watching, size, MAIN_TERMINAL, { visible: false })
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    let printed = ''
+
+    // Twice the budget of one window: the second half is dropped while hidden.
+    for (let index = 0; index < (2 * HIDDEN_BUDGET_BYTES) / OUTPUT_FRAME_BYTES; index += 1) {
+      pty.emit(frameOf(index))
+      printed += frameOf(index)
+    }
+    await vi.advanceTimersByTimeAsync(RESYNC_MAX_WAIT_MS)
+    service.visible('T-0001', { visible: true }, MAIN_TERMINAL, watching)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(catchUps(watching.frames)).toEqual([{ type: 'resume', offset: HIDDEN_BUDGET_BYTES }])
+    expect(controls(watching.frames).at(-1)).toEqual({
+      type: 'replayed',
+      offset: 2 * HIDDEN_BUDGET_BYTES,
+    })
+    const attached = watching.frames.findIndex(
+      (frame) => !isBytes(frame) && frame.type === 'replayed',
+    )
+    expect(outputOf(watching.frames.slice(attached + 1))).toBe(printed)
   })
 })

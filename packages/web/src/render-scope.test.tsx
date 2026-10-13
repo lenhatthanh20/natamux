@@ -93,6 +93,9 @@ const TASKS = [
 
 const AT = '2026-10-08T09:00:00Z'
 
+// The shells the daemon sends for a task, when not the one shell every task has.
+const shellsOf = new Map<string, unknown>()
+
 function json(data: unknown): Response {
   return new Response(JSON.stringify(data), { status: 200 })
 }
@@ -119,8 +122,9 @@ function installDaemon() {
     if (route === '/api/git/branches') {
       return json({ branches: ['main'], current: 'main' })
     }
-    if (/^\/api\/tasks\/T-\d+\/terminals$/.test(route)) {
-      return json({ terminals: ['1'], agents: [], lanes: {} })
+    const shells = /^\/api\/tasks\/(T-\d+)\/terminals$/.exec(route)
+    if (shells !== null) {
+      return json(shellsOf.get(shells[1] ?? '') ?? { terminals: ['1'], agents: [], lanes: {} })
     }
     return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
   })
@@ -170,6 +174,7 @@ beforeEach(() => {
   Object.defineProperty(performance, 'mark', { configurable: true, writable: true, value: mark })
   renders.dashboard = 0
   renders.rows.clear()
+  shellsOf.clear()
 })
 
 afterEach(() => {
@@ -230,5 +235,62 @@ describe('render scope', () => {
     await user.click(screen.getByRole('button', { name: 'Connect' }))
 
     await waitFor(() => expect(mark).toHaveBeenCalledWith('natamux/first-tasks'))
+  })
+})
+
+describe('render scope of the open workspace, the view and the shells', () => {
+  it('re-renders only the open row when the activity of the open workspace changes', async () => {
+    const { fetchMock } = await openDashboard()
+    act(() => useViewStore.getState().openChanges('T-0002', 'terminal'))
+    await settle(fetchMock)
+    renders.dashboard = 0
+    renders.rows.clear()
+
+    send({
+      kind: 'activity.changed',
+      taskId: 'T-0002',
+      activity: { '1': { text: 'Bash: pnpm test', at: AT } },
+    })
+    await waitFor(() => expect(renders.rows.get('T-0002')).toBeGreaterThan(0))
+
+    expect(renders.dashboard).toBe(0)
+    expect([...renders.rows.keys()]).toEqual(['T-0002'])
+  })
+
+  it('does not re-render the dashboard when the tab kept for a task changes', async () => {
+    await openDashboard()
+    renders.dashboard = 0
+
+    act(() => useViewStore.getState().rememberTab('T-0001', 'history'))
+
+    expect(useViewStore.getState().tabByTask['T-0001']).toBe('history')
+    expect(renders.dashboard).toBe(0)
+  })
+
+  it('re-renders only the row of the task whose shells changed', async () => {
+    const { fetchMock } = await openDashboard()
+    renders.dashboard = 0
+    renders.rows.clear()
+    // The one shell of T-0002 ends, so its row has nothing left to unfold.
+    shellsOf.set('T-0002', { terminals: [], agents: [], lanes: {} })
+
+    send({ kind: 'shells.changed', taskId: 'T-0002' })
+    await waitFor(() => expect(renders.rows.get('T-0002')).toBeGreaterThan(0))
+    await settle(fetchMock)
+
+    expect(renders.dashboard).toBe(0)
+    expect([...renders.rows.keys()]).toEqual(['T-0002'])
+  })
+
+  it('keeps every row as it is when the dashboard renders for something else', async () => {
+    await openDashboard()
+    renders.dashboard = 0
+    renders.rows.clear()
+
+    // The dashboard reads this and gives the sidebar new callbacks; the rows get stable ones.
+    act(() => useViewStore.getState().setDetailsView('details'))
+
+    expect(renders.dashboard).toBeGreaterThan(0)
+    expect(renders.rows.size).toBe(0)
   })
 })

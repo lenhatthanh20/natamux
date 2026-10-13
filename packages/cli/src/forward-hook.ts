@@ -94,7 +94,7 @@ export async function runHookCommand(
     problem =
       'An agent name is required, in lower case letters, digits and "-": natamux hook claude-code'
   } else if (extra.length > 0) {
-    problem = `Unexpected argument: ${[event, ...extra].join(' ')}`
+    problem = `Unexpected argument: ${extra.join(' ')}`
   } else if (event !== undefined && !EVENT_NAME.test(event)) {
     problem = `Unexpected argument: ${event}`
   }

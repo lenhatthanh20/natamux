@@ -20,6 +20,7 @@ import {
   deleteRemoteRef,
   GitError,
   GitHubError,
+  gitSpawnCount,
   ImageSideMissingError,
   ImageTooLargeError,
   listChanges,
@@ -50,6 +51,7 @@ import {
   readPullRequestStatuses,
   readPushStatus,
   removeWorktree,
+  runGh,
   snapshotCommit,
   statusFromCodes,
   summarizeChecks,
@@ -1481,6 +1483,25 @@ describe('readPullRequestStatuses', () => {
   it('fails with a GitHubError on an answer that is not JSON', async () => {
     const gh: RunGh = async () => 'not json'
     await expect(readPullRequestStatuses('/repo', repo, [1], gh)).rejects.toThrow(GitHubError)
+  })
+})
+
+describe('gitSpawnCount', () => {
+  // The count is for the whole daemon, so a test reads what it added.
+  it('counts each git and gh process, also the ones that fail', async () => {
+    const before = gitSpawnCount()
+
+    await currentBranch(repo.dir)
+    await currentBranch(repo.dir)
+    // Not a repository: git exits with an error.
+    expect(await currentBranch(repo.root)).toBeNull()
+    expect(gitSpawnCount() - before).toBe(3)
+
+    // A folder that does not exist: the process cannot start.
+    const missing = join(repo.root, 'missing')
+    await expect(runGh(missing, ['--version'])).rejects.toThrow(GitHubError)
+    await expect(runGh(missing, ['--version'])).rejects.toThrow(GitHubError)
+    expect(gitSpawnCount() - before).toBe(5)
   })
 })
 

@@ -188,6 +188,42 @@ describe('useLiveTasks', () => {
     expect(invalidate).toHaveBeenCalledWith()
   })
 
+  it('writes the messages of one frame together, and nothing before the frame', () => {
+    const { socket } = live()
+    queryClient.setQueryData(ACTIVITY_KEY, { byTask: {}, byTerminal: {} })
+    const write = vi.spyOn(queryClient, 'setQueryData')
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const activity = { '1': { text: 'Grep', at: '2026-10-08T09:00:00Z' } }
+
+    socket.receive({ kind: 'shells.changed', taskId: 'T-0001' })
+    socket.receive({ kind: 'activity.changed', taskId: 'T-0001', activity })
+    socket.receive({ kind: 'shells.changed', taskId: 'T-0001' })
+    expect(write).not.toHaveBeenCalled()
+    expect(invalidate).not.toHaveBeenCalled()
+    flush()
+
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
+  })
+
+  it('opens a new socket after a drop, and reads everything again once it opens', () => {
+    const { socket, view } = live()
+    act(() => socket.onopen?.())
+    act(() => socket.onclose?.())
+    expect(FakeSocket.instances).toHaveLength(1)
+
+    act(() => vi.advanceTimersByTime(1000))
+    const next = FakeSocket.instances[1]
+    expect(next?.url).toBe(socket.url)
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    act(() => next?.onopen?.())
+
+    expect(view.result.current).toBe('live')
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith()
+  })
+
   it('drops the queued messages when it goes', () => {
     const { socket, view } = live()
     queryClient.setQueryData(ACTIVITY_KEY, { byTask: {}, byTerminal: {} })

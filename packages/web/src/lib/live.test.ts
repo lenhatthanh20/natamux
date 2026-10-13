@@ -1,14 +1,20 @@
 import type { Task } from '@natamux/core'
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
+import changesPanel from '../components/ChangesPanel.tsx?raw'
+import changesView from '../components/ChangesView.tsx?raw'
+import dashboard from '../components/Dashboard.tsx?raw'
+import docsTab from '../components/DocsTab.tsx?raw'
 import type { AgentActivity } from './api'
 import {
   ACTIVITY_KEY,
   applyLiveMessages,
   closeSocket,
+  FALLBACK_POLL_MS,
   liveSocketUrl,
   parseLiveMessage,
 } from './live'
+import taskShells from './task-shells.ts?raw'
 
 const task: Task = {
   id: 'T-0001',
@@ -244,5 +250,21 @@ describe('closeSocket', () => {
     expect(socket.onclose).toBeNull()
     socket.onopen?.()
     expect(socket.close).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The live feed brings activity, shells and workspace changes, so their queries only poll to catch
+// what it missed.
+describe('the fallback poll', () => {
+  it('runs once a minute', () => {
+    expect(FALLBACK_POLL_MS).toBe(60_000)
+  })
+
+  const sources = Object.entries({ changesPanel, changesView, dashboard, docsTab, taskShells })
+
+  it.each(sources)('is the only poll of %s', (_name, source) => {
+    // A number here would be a poll of its own, such as the old 3, 5, 10 or 15 seconds.
+    expect(source.match(/refetchInterval: \d/g)).toBeNull()
+    expect(source).toContain('FALLBACK_POLL_MS')
   })
 })

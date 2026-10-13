@@ -465,3 +465,148 @@ describe('startup marks', () => {
     )
   })
 })
+
+describe('the shim with spaces in the paths', () => {
+  it('quotes the runtime and the CLI on macOS and Linux', () => {
+    const file = writeCliShim(dir, '/Apps/My App/Natamux', '/app/my cli/main.js', 'linux')
+    expect(readFileSync(file, 'utf8')).toContain(
+      "exec '/Apps/My App/Natamux' '/app/my cli/main.js' \"$@\"",
+    )
+  })
+
+  it('quotes the runtime and the CLI in the .cmd file, for every command', () => {
+    const runtime = 'C:\\Program Files\\Natamux\\Natamux.exe'
+    const cli = 'C:\\Program Files\\Natamux\\cli\\main.js'
+    const file = writeCliShim(dir, runtime, cli, 'win32')
+    for (const name of [file, join(dir, 'nmx.cmd')]) {
+      expect(readFileSync(name, 'utf8')).toContain(`"${runtime}" "${cli}" %*`)
+    }
+  })
+
+  it('does not leave ELECTRON_RUN_AS_NODE in the shell that ran the .cmd file', () => {
+    const text = readFileSync(writeCliShim(dir, 'C:\\a.exe', 'C:\\m.js', 'win32'), 'utf8')
+    expect(text.indexOf('setlocal')).toBeLessThan(text.indexOf('set ELECTRON_RUN_AS_NODE=1'))
+  })
+})
+
+describe('the dashboard address', () => {
+  const origin = 'http://127.0.0.1:4317'
+
+  it('refuses other sites, ports, schemes and look-alike addresses', () => {
+    for (const url of [
+      'https://example.com/',
+      'http://127.0.0.1:4318/',
+      'https://127.0.0.1:4317/',
+      'http://127.0.0.1:4317@example.com/',
+      'http://localhost:4317/',
+      'file:///Users/me/index.html',
+      'data:text/html,hello',
+      'about:blank',
+      '',
+    ]) {
+      expect(isDashboardUrl(url, origin)).toBe(false)
+    }
+  })
+
+  it('takes a query and a hash on the dashboard, and none on the loading page', () => {
+    expect(isDashboardUrl(`${origin}/?a=1#b`, origin)).toBe(true)
+    expect(isDashboardUrl(`${loadingPageUrl(true)}#x`, origin)).toBe(false)
+    expect(isDashboardUrl(`${loadingPageUrl(false)}?x=1`, origin)).toBe(false)
+  })
+})
+
+// main.ts needs Electron, so these read its source for the order of the calls. A Windows checkout
+// may have CRLF line ends.
+const mainSource = () =>
+  readFileSync(new URL('./main.ts', import.meta.url), 'utf8').replaceAll('\r\n', '\n')
+
+describe('the start of the desktop app', () => {
+  const main = mainSource()
+  const at = (text: string) => {
+    const index = main.indexOf(text)
+    expect(index, text).toBeGreaterThan(-1)
+    return index
+  }
+
+  it('marks the start in the order it happens', () => {
+    const order = [
+      "marks.mark('module start')",
+      "marks.mark('whenReady')",
+      "marks.mark('daemon forked')",
+      "marks.mark('daemon ready')",
+      "marks.mark('window created')",
+      "marks.mark('ready-to-show')",
+      "marks.mark('did-finish-load')",
+    ].map(at)
+    // Only the pairs that run in a row: the daemon, then the window.
+    expect(order[0]).toBeLessThan(order[1] ?? 0)
+    expect(order[2]).toBeLessThan(order[3] ?? 0)
+    expect(order[4]).toBeLessThan(order[5] ?? 0)
+    expect(order[5]).toBeLessThan(order[6] ?? 0)
+  })
+
+  it('opens the window in the same tick as the fork, on the loading page', () => {
+    const forked = at("marks.mark('daemon forked')")
+    expect(main.slice(forked, forked + 80)).toContain('onForked()')
+    expect(main).toContain('settingsFile)), createWindow)')
+    expect(main).toContain('created.loadURL(loadingPageUrl(dark))')
+  })
+
+  it('loads the dashboard on ready, and logs the marks without ready-to-show', () => {
+    expect(main).toContain('daemonReady = true\n    void window?.loadURL(')
+    // The line is written at did-finish-load of the dashboard, not at ready-to-show.
+    const load = at("marks.mark('did-finish-load')")
+    expect(main.slice(load, load + 60)).toContain('log(marks.line())')
+  })
+
+  it('shows an error and quits when the daemon fails to start', () => {
+    const failed = at('quitConfirmed = true\n      await dialog.showMessageBox')
+    expect(main.slice(failed, failed + 500)).toContain('app.quit()')
+  })
+})
+
+describe('the preload', () => {
+  const preload = readFileSync(new URL('./preload.cts', import.meta.url), 'utf8')
+
+  it('asks the main process for the token and the font with sendSync, not window arguments', () => {
+    expect(preload).toContain("sendSync('natamux:daemon-token')")
+    expect(preload).toContain("sendSync('natamux:ghostty-font')")
+    expect(preload).not.toContain('additionalArguments')
+    expect(preload).not.toContain('process.argv')
+  })
+
+  it('does not print the token', () => {
+    expect(preload).not.toMatch(/console\./)
+  })
+
+  it('answers the token only to the dashboard, and the empty text otherwise', () => {
+    const main = mainSource()
+    const start = main.indexOf("ipcMain.on('natamux:daemon-token'")
+    expect(start).toBeGreaterThan(-1)
+    const handler = main.slice(start, main.indexOf('})', start))
+    expect(handler).toContain('isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken')
+    expect(handler).toContain(": ''")
+    expect(handler).toContain("event.senderFrame?.url ?? ''")
+  })
+})
+
+describe('startup marks without some marks', () => {
+  it('gives a line with only the marks that were made, as when ready-to-show never comes', () => {
+    const times = [10, 20, 35]
+    const marks = startupMarks(() => times.shift() ?? 0)
+    for (const name of ['module start', 'daemon forked', 'did-finish-load']) {
+      marks.mark(name)
+    }
+    expect(marks.line()).toBe(
+      'startup marks: module start 0 ms, daemon forked 10 ms, did-finish-load 25 ms\n',
+    )
+    expect(marks.line()).not.toContain('ready-to-show')
+  })
+
+  it('gives a line when the daemon failed before any other mark', () => {
+    const marks = startupMarks(() => 5)
+    marks.mark('module start')
+    expect(marks.line()).toBe('startup marks: module start 0 ms\n')
+    expect(startupMarks().line()).toBe('startup marks: \n')
+  })
+})

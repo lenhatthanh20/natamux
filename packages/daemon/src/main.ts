@@ -16,6 +16,7 @@ import { RepoService } from './repo-service.js'
 import { buildServer } from './server.js'
 import { setupCommand } from './setup-script.js'
 import { StageRunner } from './stage-runner.js'
+import { type Mark, startupLine } from './startup-marks.js'
 import { TaskIndex } from './task-index.js'
 import { isTaskEnded, TaskService } from './task-service.js'
 import { TemplateService } from './template-service.js'
@@ -24,7 +25,7 @@ import { WorkspaceService } from './workspace-service.js'
 
 // Marks of the start, logged as one line after the listen. performance.now() counts from the start
 // of the process, so the first mark also shows the time that the imports took.
-const marks: [name: string, at: number][] = []
+const marks: Mark[] = []
 function mark(name: string): void {
   performance.mark(`daemon:${name}`)
   marks.push([name, Math.round(performance.now())])
@@ -171,8 +172,7 @@ parentPort?.postMessage('ready')
 // After the listen, so the hooks of the agents reach the daemon.
 void ready.then(() => stages.resumeAgents())
 
-const startup = marks.map(([name, at]) => `${name} ${at}`).join(', ')
-console.log(`Startup, ms since the process began: ${startup}`)
+console.log(startupLine(marks))
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)
 console.log(`Projects: ${repos.list().length}`)

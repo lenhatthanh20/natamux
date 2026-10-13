@@ -196,7 +196,8 @@ export class TaskService {
   private readonly bus: EventBus
   private readonly now: () => Date
   readonly settingsOf: SettingsOf
-  // Every task by id, so a read touches no disk. A change replaces the task, never edits it.
+  // Every task by id, so a read touches no disk. A change replaces the task, never edits it;
+  // each is frozen, so a caller that gets one cannot change the map either.
   private readonly tasks = new Map<string, Task>()
   // The stat of each task file as this service last wrote or read it. Tells its own writes from
   // edits by hand.
@@ -230,7 +231,7 @@ export class TaskService {
       if (task === undefined || stat === undefined) {
         continue
       }
-      this.tasks.set(id, task)
+      this.tasks.set(id, Object.freeze(task))
       this.fileStats.set(id, stat)
       files.set(id, { task: stat, log: this.syncEventLog(id, known.get(id)?.log) })
     }
@@ -241,8 +242,9 @@ export class TaskService {
       for (const id of ids) {
         try {
           this.reload(id)
-        } catch {
+        } catch (error) {
           // A half-written or broken file: the last good task stays until the file is fixed.
+          console.error(`Could not read the task file of ${id}: ${String(error)}`)
         }
       }
     })
@@ -299,7 +301,7 @@ export class TaskService {
     if (task === undefined) {
       return
     }
-    this.tasks.set(taskId, task)
+    this.tasks.set(taskId, Object.freeze(task))
     this.fileStats.set(taskId, stat)
     // Not task.created, even for a new file: that starts the context stage, and a file put there
     // by hand (or back from a backup) must not start an agent. A restart does not either.
@@ -324,7 +326,7 @@ export class TaskService {
     for (const { event, accepted } of events) {
       files.log = appendEventLine(this.dataDir, event, accepted)
     }
-    this.tasks.set(task.id, task)
+    this.tasks.set(task.id, Object.freeze(task))
     this.index.record(task.id, { task, events, files })
   }
 
@@ -413,7 +415,7 @@ export class TaskService {
     }
     const read = readTaskFile(this.dataDir, taskId)
     if (read !== undefined) {
-      this.tasks.set(taskId, read)
+      this.tasks.set(taskId, Object.freeze(read))
     }
     return read
   }

@@ -287,4 +287,19 @@ describe('RepoService', () => {
 
     expect(repos.list()).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
   })
+
+  it('keeps the empty list of a missing repos.json, and makes the file on save', async () => {
+    const dataDir = join(repo.root, 'missing-data')
+    const file = join(dataDir, 'repos.json')
+    const empty = new RepoService({ dataDir })
+    expect(empty.list()).toEqual([])
+    mkdirSync(dataDir)
+    writeFileSync(file, JSON.stringify([{ id: 'other', name: 'other', path: repo.dir }]))
+
+    expect(empty.list()).toEqual([])
+
+    const added = await empty.add({ path: gitFolder('web') })
+    expect(empty.list()).toEqual([added])
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([added])
+  })
 })
