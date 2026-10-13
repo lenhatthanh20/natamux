@@ -15,8 +15,6 @@ import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { type TerminalFrame, TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
 
-const size = { cols: 80, rows: 24 }
-
 // What Windows types: the command between the window titles that tell its start and its end.
 const windowsLine = (command: string) =>
   `$Host.UI.RawUI.WindowTitle = 'natamux-agent'; ${command}; $Host.UI.RawUI.WindowTitle = 'natamux-agent-exited'\r`

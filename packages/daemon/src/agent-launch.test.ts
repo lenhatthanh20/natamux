@@ -490,7 +490,7 @@ describe('trustWorkspace', () => {
     expect(readFileSync(file, 'utf8')).toBe(first)
   })
 
-  it('keeps a Cursor trust marker that is there'
+  it('keeps a Cursor trust marker that is there', () => {
     mkdirSync(join(paths().cursorProjects, dirname(marker)), { recursive: true })
     writeFileSync(join(paths().cursorProjects, marker), 'mine')
     trustWorkspace('cursor', workspace, paths())
