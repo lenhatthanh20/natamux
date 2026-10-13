@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.19 (2026-10-14)
+
+- Mark a stage **Skip** in **Progress** before the task gets there, and the task skips it when it reaches it. See [Skip a stage](/docs/concepts/stages/#skip-a-stage).
+- Fix: when **Check on CI** found a failed run, the fix prompt could stay in the agent's input without being sent. Now it is sent at once, and the card says **Sent back by CI N×**. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+- Natamux no longer opens a GitHub issue for each task by itself; click **Create issue** in **Progress**. Choose another way in the new **Issues** tab of **Project settings**. Projects that set `tracker.createIssue` keep their choice. See [The Issues tab](/docs/guides/project-settings/#the-issues-tab).
+- The desktop window opens at once, agent hooks and the task list answer faster, and the dashboard gets changes as they happen. Pull requests are checked only while a dashboard is open.
+- Fix: every terminal pane showed a thin white line on the left of the scrollbar. It is gone.
+- New guide pages: [The review loop](/docs/concepts/review-loop/), [Project settings](/docs/guides/project-settings/) and [Use the command line](/docs/guides/command-line/).
+
 ## v0.1.18 (2026-10-14)
 
 - Natamux is available again for macOS on Intel and for Linux (AppImage, `.deb` and `.tar.gz`), and now for Windows 10 and 11 on x64. See [Install Natamux](/docs/getting-started/install/).
