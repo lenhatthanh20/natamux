@@ -7,7 +7,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act as actOn, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentId } from '../lib/agents'
 import type {
   LoadedSettings,
@@ -129,11 +129,17 @@ type Options = {
 
 type SetWorkflow = (stage: string, on: boolean) => Promise<Task>
 
+// Relative times read the clock, so the tests run at a set time.
+beforeEach(() => {
+  vi.setSystemTime(new Date('2026-10-10T08:30:00.000Z'))
+})
+
 afterEach(() => {
   cleanup()
   globalThis.localStorage.clear()
   useToasts.setState({ toasts: [] })
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 function progress(options: Options = {}) {

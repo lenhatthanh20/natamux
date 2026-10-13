@@ -8,7 +8,7 @@ import { useFrozenOrder } from '../hooks/useFrozenOrder'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { useLayoutMode, useViewportWidth } from '../hooks/useLayoutMode'
 import { useLiveTasks } from '../hooks/useLiveTasks'
-import { useNowValue } from '../hooks/useNow'
+import { clockNow, useNowValue } from '../hooks/useNow'
 import { useTaskNotifications } from '../hooks/useTaskNotifications'
 import { type AgentId, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import { createApi, isUnauthorized, type TaskChanges } from '../lib/api'
@@ -484,7 +484,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   )
   // The tasks that need the user ignore the search: they must stay in sight.
   // biome-ignore lint/correctness/useExhaustiveDependencies: quietIds is the trigger of the clock.
-  const waiting = useMemo(() => needsMeTasks(tasks, new Date()), [tasks, quietIds])
+  const waiting = useMemo(() => needsMeTasks(tasks, clockNow()), [tasks, quietIds])
   const sidebar = useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)
   const details = useStoredWidth('natamux.details-width', PANEL_WIDTH, 320, 560)
   const viewportWidth = useViewportWidth()

@@ -67,26 +67,24 @@ describe('useNow', () => {
     expect(renders.late).toBe(late + 1)
   })
 
-  it('stands still while the page is hidden and catches up when it shows', () => {
-    let state: DocumentVisibilityState = 'visible'
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+  it('keeps ticking while the page is hidden', () => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
     render(<Page />)
-    const time = renders.time
 
-    state = 'hidden'
-    act(() => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
     tick(3)
-    expect(renders.time).toBe(time)
-    expect(screen.getAllByText('2026-10-10T09:00:00.000Z')).toHaveLength(2)
-
-    state = 'visible'
-    act(() => {
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
     expect(screen.getAllByText('2026-10-10T09:01:30.000Z')).toHaveLength(2)
+    expect(screen.getByText('Early')).toBeTruthy()
     tick()
-    expect(screen.getAllByText('2026-10-10T09:02:00.000Z')).toHaveLength(2)
+    expect(screen.getByText('Late')).toBeTruthy()
+  })
+
+  it('gives the first reader after a pause the time again', () => {
+    const first = render(<Page />)
+    first.unmount()
+    act(() => vi.advanceTimersByTime(5 * 60_000))
+
+    render(<Page />)
+    expect(screen.getAllByText('2026-10-10T09:05:00.000Z')).toHaveLength(2)
+    expect(screen.getByText('Late')).toBeTruthy()
   })
 })

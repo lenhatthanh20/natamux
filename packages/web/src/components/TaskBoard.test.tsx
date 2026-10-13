@@ -1,10 +1,21 @@
 import type { Task } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskBoard } from './TaskBoard'
 
 afterEach(cleanup)
+
+const NOW = new Date('2026-10-10T08:30:00.000Z')
+
+// Relative times read the clock, so the tests run at a set time.
+beforeEach(() => {
+  vi.setSystemTime(NOW)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {

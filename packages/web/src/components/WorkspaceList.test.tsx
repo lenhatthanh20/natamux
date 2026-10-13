@@ -11,8 +11,12 @@ import { WorkspaceList } from './WorkspaceList'
 
 let queryClient: QueryClient
 
+const NOW = new Date('2026-10-10T09:00:00.000Z')
+
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // Relative times read the clock, so the tests run at a set time.
+  vi.setSystemTime(NOW)
 })
 
 afterEach(() => {
@@ -639,7 +643,9 @@ describe('the agents of a task', () => {
   })
 
   it('reads the terminals of a resting task only while it is the open workspace', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
+    // Fake timers do not start while the date is mocked, so the mock goes first.
+    vi.useRealTimers()
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const quiet = { ...lanes, state: 'review' as const, lanes: { alpha: 'review' as const } }
     const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     const { rerender } = list({ tasks: [quiet], pinnedIds: [], loadTerminals })
@@ -1137,7 +1143,8 @@ describe('test spec cases', () => {
 
   // D4: unmount, a hidden tab and an error.
   it('stops reading the terminals when the list goes', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.useRealTimers()
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
     const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     const { unmount } = list({ tasks: [checks], pinnedIds: [], loadTerminals })
@@ -1149,7 +1156,8 @@ describe('test spec cases', () => {
   })
 
   it('pauses while the tab is hidden', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.useRealTimers()
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running' } })
     const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
     list({ tasks: [checks], pinnedIds: [], loadTerminals })

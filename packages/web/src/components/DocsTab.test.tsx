@@ -120,12 +120,15 @@ beforeAll(async () => {
 
 beforeEach(() => {
   window.localStorage.clear()
+  // Relative times read the clock, so the tests run at a set time.
+  vi.setSystemTime(new Date('2026-10-11T10:00:00Z'))
 })
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   useToasts.setState({ toasts: [] })
+  vi.useRealTimers()
 })
 
 describe('DocsTab', () => {
