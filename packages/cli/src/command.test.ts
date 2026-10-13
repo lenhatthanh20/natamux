@@ -139,6 +139,11 @@ describe('parseCommand', () => {
       expect(() => parseCommand(['task', 'show', '42'])).toThrow(/not a task id/)
     })
 
+    it('shows a task with an id the user chose, and names both id forms on a bad id', () => {
+      expect(parseCommand(['task', 'show', 'TASK-0005'])).toMatchObject({ id: 'TASK-0005' })
+      expect(() => parseCommand(['task', 'show', 'task-0005'])).toThrow(/T-42 or ABC-42/)
+    })
+
     it('rejects an unknown task command', () => {
       expect(() => parseCommand(['task', 'remove', 'T-1'])).toThrow(/Unknown task command/)
     })

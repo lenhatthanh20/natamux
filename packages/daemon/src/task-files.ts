@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { type Task, taskSchema, upgradeTaskFields } from '@natamux/core'
 import matter from 'gray-matter'
 
-const TASK_FILE_NAME = /^(T-\d+)\.md$/
+const TASK_FILE_NAME = /^([A-Z]+-\d+)\.md$/
 
 export function tasksDir(dataDir: string): string {
   return join(dataDir, 'tasks')
@@ -54,6 +54,10 @@ export function readTaskFile(dataDir: string, id: string): Task | undefined {
   }
 }
 
+function idNumber(id: string): number {
+  return Number(id.slice(id.lastIndexOf('-') + 1))
+}
+
 export function listTaskIds(dataDir: string): string[] {
   let fileNames: string[]
   try {
@@ -68,7 +72,7 @@ export function listTaskIds(dataDir: string): string[] {
   return fileNames
     .map((fileName) => TASK_FILE_NAME.exec(fileName)?.[1])
     .filter((id): id is string => id !== undefined)
-    .sort((a, b) => Number(a.slice(2)) - Number(b.slice(2)))
+    .sort((a, b) => idNumber(a) - idNumber(b) || a.localeCompare(b))
 }
 
 export function listTaskFiles(dataDir: string): Task[] {
