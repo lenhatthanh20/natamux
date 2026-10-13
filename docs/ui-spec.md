@@ -527,7 +527,7 @@ Shared shell:
 - `* { scrollbar-width: thin; scrollbar-color: var(--scroll) transparent }`, hover `--scroll-hover` (keep). WebKit (Electron): 8px, thumb radius 4 with 2px transparent border, no track.
 - Scroll containers with content above the fold get a "scrolled" hairline: the sticky header shows a bottom `--line-strong` border only when `scrollTop > 0` (`data-scrolled`).
 - Horizontal overflow (table, filter chips, tabs, board) shows 16px edge fades in the container's background color.
-- Terminal: xterm scrollbar visible on pane hover, 8px, same tokens (WS-30).
+- Terminal: xterm scrollbar visible on pane hover, 8px, same tokens, no border line beside it (WS-30).
 
 ### 4.22 Resize handle (`ui/ResizeHandle.tsx`)
 - Hit area 8 (`-mx-1`), visual 1px line-strong. Hover after 150ms: 2px accent at 60%. Dragging / focused: 2px accent. Cursor `col-resize`.

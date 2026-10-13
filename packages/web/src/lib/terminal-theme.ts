@@ -14,6 +14,8 @@ const DARK: ITheme = {
   scrollbarSliderBackground: '#ffffff24',
   scrollbarSliderHoverBackground: '#ffffff42',
   scrollbarSliderActiveBackground: '#ffffff5c',
+  // Unset, xterm draws a light line left of the scrollbar.
+  overviewRulerBorder: '#00000000',
   black: '#343b52',
   brightBlack: '#7c86a8',
   red: '#f7768e',
@@ -42,6 +44,7 @@ const LIGHT: ITheme = {
   scrollbarSliderBackground: '#14181f33',
   scrollbarSliderHoverBackground: '#14181f5c',
   scrollbarSliderActiveBackground: '#14181f7a',
+  overviewRulerBorder: '#00000000',
   black: '#262d45',
   brightBlack: '#5d6684',
   red: '#c4304f',
