@@ -2,8 +2,15 @@ import type { Task } from '@natamux/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { rowLabel } from '../lib/tasks'
 import { TaskTable } from './TaskTable'
 import { ContextMenuHost } from './ui/Menu'
+
+// Each row names itself once per render, so the calls count the renders of each row.
+vi.mock('../lib/tasks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/tasks')>()
+  return { ...actual, rowLabel: vi.fn(actual.rowLabel) }
+})
 
 afterEach(cleanup)
 
@@ -145,5 +152,28 @@ describe('TaskTable', () => {
     expect(within(dialog).getByText(/worktree folder/)).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Delete task' }))
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0003' }))
+  })
+
+  it('re-renders only the row of the task that changed', () => {
+    // New handlers on every render, as the dashboard passes them.
+    const tableOf = (tasks: readonly Task[]) => (
+      <TaskTable
+        tasks={tasks}
+        mainWidth={null}
+        selectedId={null}
+        sort={null}
+        onSort={() => {}}
+        onSelect={() => {}}
+        onOpen={() => {}}
+        onToggleDetails={() => {}}
+      />
+    )
+    const { rerender } = render(tableOf(TASKS))
+    vi.mocked(rowLabel).mockClear()
+
+    rerender(tableOf([makeTask({ title: 'Fix the login test' }), ...TASKS.slice(1)]))
+
+    expect(vi.mocked(rowLabel).mock.calls.map(([task]) => task.id)).toEqual(['T-0001'])
+    expect(rowOf('Fix the login test')).toBeTruthy()
   })
 })

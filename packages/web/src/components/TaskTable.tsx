@@ -16,9 +16,10 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
-import { type MouseEvent, useState } from 'react'
+import { type MouseEvent, memo, useMemo, useState } from 'react'
 import { useNow } from '../hooks/useNow'
-import { findRoving, useRovingFocus } from '../hooks/useRovingFocus'
+import { findRoving, rovingItem, useRovingFocus } from '../hooks/useRovingFocus'
+import { useStableCallback } from '../hooks/useStableCallback'
 import { copyText } from '../lib/clipboard'
 import { shortcutOf } from '../lib/commands'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
@@ -121,6 +122,188 @@ function HeaderCell({
   )
 }
 
+// What every row gets. The handlers keep their identity, so a row re-renders only when its task
+// or its own values change.
+type RowProps = {
+  task: Task
+  selected: boolean
+  // The row holds the tab stop of the list.
+  tabStop: boolean
+  activate: (id: string) => void
+  onSelect: (id: string) => void
+  onOpen: (id: string) => void
+  onMenu: (event: MouseEvent, task: Task) => void
+}
+
+// A row of the narrow list. Rows off screen are not laid out or painted until they scroll near.
+const CardRow = memo(function CardRow({
+  task,
+  selected,
+  tabStop,
+  activate,
+  onSelect,
+  onOpen,
+  onMenu,
+}: RowProps) {
+  const now = useNow()
+  const quiet = isQuiet(task, now)
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the button inside takes the keys (roving focus).
+    <li
+      data-selected={selected}
+      onClick={() => onSelect(task.id)}
+      onDoubleClick={() => onOpen(task.id)}
+      onContextMenu={(event) => onMenu(event, task)}
+      className="h-14 border-b border-line [content-visibility:auto] last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
+    >
+      <button
+        type="button"
+        {...rovingItem(task.id, tabStop, activate)}
+        aria-label={rowLabel(task, now)}
+        aria-current={selected ? 'true' : undefined}
+        className="focus-inset flex h-full w-full items-center gap-2 px-3 text-left"
+      >
+        <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-medium">{task.title}</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="font-mono">{task.id}</span>
+            <span aria-hidden="true">·</span>
+            <span>{quiet ? 'Quiet' : stageStateLabel(task)}</span>
+            <span aria-hidden="true">·</span>
+            <span>{formatAge(task.updatedAt, now)}</span>
+          </span>
+        </span>
+      </button>
+    </li>
+  )
+})
+
+const TableRow = memo(function TableRow({
+  task,
+  columns,
+  selected,
+  tabStop,
+  activate,
+  stat,
+  note,
+  waits,
+  showRepo,
+  onSelect,
+  onOpen,
+  onMenu,
+}: RowProps & {
+  columns: readonly ColumnKey[]
+  stat: DiffStat | undefined
+  // What the agent does now, while it runs.
+  note: string | undefined
+  waits: string
+  showRepo: boolean
+}) {
+  const now = useNow()
+  const cell = (column: ColumnKey) => {
+    switch (column) {
+      case 'id':
+        return <span className="font-mono text-xs text-muted">{task.id}</span>
+      case 'task':
+        return (
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              {...rovingItem(task.id, tabStop, activate)}
+              aria-label={rowLabel(task, now)}
+              aria-current={selected ? 'true' : undefined}
+              data-tip-overflow
+              data-tip={task.title}
+              className="min-w-0 truncate text-left font-medium focus-visible:outline-none"
+            >
+              {task.title}
+            </button>
+            <TaskChips task={task} waits={waits} showRepo={showRepo} quiet={isQuiet(task, now)} />
+          </div>
+        )
+      case 'state':
+        return <StateBadge state={task.state} stage={stageLabel(task)} lanes={laneSummary(task)} />
+      case 'agent':
+        return note !== undefined ? (
+          <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">
+            {note}
+          </span>
+        ) : task.agent === null ? (
+          <span className="text-muted">-</span>
+        ) : (
+          <AgentName agent={task.agent} className="text-muted" />
+        )
+      case 'branch':
+        return task.branch === null ? (
+          <span className="text-muted">-</span>
+        ) : (
+          <span
+            data-tip-overflow
+            data-tip={task.branch}
+            className="block truncate font-mono text-xs text-muted"
+          >
+            {shortBranch(task)}
+          </span>
+        )
+      case 'changes':
+        return <DiffSize stat={stat} />
+      case 'pr':
+        return task.pr === null ? (
+          <span className="text-muted">-</span>
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <a
+              href={task.pr}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex shrink-0 items-center gap-1 text-link hover:underline"
+            >
+              {pullRequestNumber(task.pr)}
+              <ExternalLink size={ICON.xs} aria-hidden="true" />
+            </a>
+            {task.prStatus !== null && (
+              <span
+                data-tip={pullRequestSummary(task) ?? undefined}
+                className={`truncate text-xs ${CHECKS_COLOR[task.prStatus.checks]}`}
+              >
+                {task.prStatus.checks === 'none' ? task.prStatus.state : pullRequestSummary(task)}
+              </span>
+            )}
+          </span>
+        )
+      case 'activity':
+        return (
+          <span
+            data-tip={`Updated ${formatExact(task.updatedAt)}. Created ${formatExact(task.createdAt)}.`}
+            className="whitespace-nowrap text-muted"
+          >
+            {formatAge(task.updatedAt, now)}
+          </span>
+        )
+    }
+  }
+  return (
+    <tr
+      data-selected={selected}
+      onClick={() => onSelect(task.id)}
+      onDoubleClick={() => onOpen(task.id)}
+      onContextMenu={(event) => onMenu(event, task)}
+      className="group h-10 cursor-pointer has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-focus"
+    >
+      {columns.map((column) => (
+        <td
+          key={column}
+          className={`h-10 min-w-0 border-b border-line px-3 group-hover:bg-hover group-data-[selected=true]:bg-selected group-last:border-b-0 group-data-[selected=true]:group-focus-within/table:bg-selection-active first:group-last:rounded-bl-lg last:group-last:rounded-br-lg ${RIGHT.includes(column) ? 'text-right' : ''}`}
+        >
+          {cell(column)}
+        </td>
+      ))}
+    </tr>
+  )
+})
+
 export function TaskTable({
   tasks,
   mainWidth,
@@ -139,7 +322,6 @@ export function TaskTable({
   onStartAgent,
   onDelete,
 }: TaskTableProps) {
-  const now = useNow()
   const [cancelling, setCancelling] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
   const roving = useRovingFocus({
@@ -268,17 +450,26 @@ export function TaskTable({
     />
   )
 
-  const layout = tableLayout(mainWidth, {
-    changes: tasks.some((task) => diffStats[task.id] !== undefined && diffStats[task.id]?.files),
-    pr: tasks.some((task) => task.pr !== null),
-  })
+  const hasChanges = tasks.some((task) => diffStats[task.id]?.files)
+  const hasPr = tasks.some((task) => task.pr !== null)
+  const layout = useMemo(
+    () => tableLayout(mainWidth, { changes: hasChanges, pr: hasPr }),
+    [mainWidth, hasChanges, hasPr],
+  )
 
+  const select = useStableCallback((id: string) => onSelect(id, true))
+  const open = useStableCallback(onOpen)
+  const menu = useStableCallback((event: MouseEvent, task: Task) =>
+    openContextMenu(event, menuFor(task), `Actions for ${task.id}`),
+  )
   const rowProps = (task: Task) => ({
-    'data-selected': task.id === selectedId,
-    onClick: () => onSelect(task.id, true),
-    onDoubleClick: () => onOpen(task.id),
-    onContextMenu: (event: MouseEvent) =>
-      openContextMenu(event, menuFor(task), `Actions for ${task.id}`),
+    task,
+    selected: task.id === selectedId,
+    tabStop: task.id === roving.stop,
+    activate: roving.activate,
+    onSelect: select,
+    onOpen: open,
+    onMenu: menu,
   })
 
   if (layout.kind === 'cards') {
@@ -290,36 +481,9 @@ export function TaskTable({
           {...roving.containerProps}
           className="group/table flex flex-col overflow-hidden rounded-lg border border-line bg-surface"
         >
-          {tasks.map((task) => {
-            const quiet = isQuiet(task, now)
-            return (
-              <li
-                key={task.id}
-                {...rowProps(task)}
-                className="h-14 border-b border-line last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
-              >
-                <button
-                  type="button"
-                  {...roving.item(task.id)}
-                  aria-label={rowLabel(task, now)}
-                  aria-current={task.id === selectedId ? 'true' : undefined}
-                  className="focus-inset flex h-full w-full items-center gap-2 px-3 text-left"
-                >
-                  <StatusGlyph state={task.state} quiet={quiet} tip={laneSummary(task)} />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium">{task.title}</span>
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      <span className="font-mono">{task.id}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{quiet ? 'Quiet' : stageStateLabel(task)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{formatAge(task.updatedAt, now)}</span>
-                    </span>
-                  </span>
-                </button>
-              </li>
-            )
-          })}
+          {tasks.map((task) => (
+            <CardRow key={task.id} {...rowProps(task)} />
+          ))}
         </ul>
         {confirmCancel}
         {confirmDelete}
@@ -328,97 +492,6 @@ export function TaskTable({
   }
 
   const { columns, widths, minWidth } = layout
-  const cell = (column: ColumnKey, task: Task) => {
-    const stat = diffStats[task.id]
-    const note = task.state === 'running' ? activity[task.id] : undefined
-    switch (column) {
-      case 'id':
-        return <span className="font-mono text-xs text-muted">{task.id}</span>
-      case 'task':
-        return (
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              {...roving.item(task.id)}
-              aria-label={rowLabel(task, now)}
-              aria-current={task.id === selectedId ? 'true' : undefined}
-              data-tip-overflow
-              data-tip={task.title}
-              className="min-w-0 truncate text-left font-medium focus-visible:outline-none"
-            >
-              {task.title}
-            </button>
-            <TaskChips
-              task={task}
-              allTasks={allTasks}
-              showRepo={showRepo}
-              quiet={isQuiet(task, now)}
-            />
-          </div>
-        )
-      case 'state':
-        return <StateBadge state={task.state} stage={stageLabel(task)} lanes={laneSummary(task)} />
-      case 'agent':
-        return note !== undefined ? (
-          <span data-tip-overflow data-tip={note} className="block truncate text-xs text-muted">
-            {note}
-          </span>
-        ) : task.agent === null ? (
-          <span className="text-muted">-</span>
-        ) : (
-          <AgentName agent={task.agent} className="text-muted" />
-        )
-      case 'branch':
-        return task.branch === null ? (
-          <span className="text-muted">-</span>
-        ) : (
-          <span
-            data-tip-overflow
-            data-tip={task.branch}
-            className="block truncate font-mono text-xs text-muted"
-          >
-            {shortBranch(task)}
-          </span>
-        )
-      case 'changes':
-        return <DiffSize stat={stat} />
-      case 'pr':
-        return task.pr === null ? (
-          <span className="text-muted">-</span>
-        ) : (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <a
-              href={task.pr}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex shrink-0 items-center gap-1 text-link hover:underline"
-            >
-              {pullRequestNumber(task.pr)}
-              <ExternalLink size={ICON.xs} aria-hidden="true" />
-            </a>
-            {task.prStatus !== null && (
-              <span
-                data-tip={pullRequestSummary(task) ?? undefined}
-                className={`truncate text-xs ${CHECKS_COLOR[task.prStatus.checks]}`}
-              >
-                {task.prStatus.checks === 'none' ? task.prStatus.state : pullRequestSummary(task)}
-              </span>
-            )}
-          </span>
-        )
-      case 'activity':
-        return (
-          <span
-            data-tip={`Updated ${formatExact(task.updatedAt)}. Created ${formatExact(task.createdAt)}.`}
-            className="whitespace-nowrap text-muted"
-          >
-            {formatAge(task.updatedAt, now)}
-          </span>
-        )
-    }
-  }
-
   return (
     <div className="group/table rounded-lg border border-line bg-surface">
       <table
@@ -442,20 +515,15 @@ export function TaskTable({
         </thead>
         <tbody>
           {tasks.map((task) => (
-            <tr
+            <TableRow
               key={task.id}
               {...rowProps(task)}
-              className="group h-10 cursor-pointer has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-focus"
-            >
-              {columns.map((column) => (
-                <td
-                  key={column}
-                  className={`h-10 min-w-0 border-b border-line px-3 group-hover:bg-hover group-data-[selected=true]:bg-selected group-last:border-b-0 group-data-[selected=true]:group-focus-within/table:bg-selection-active first:group-last:rounded-bl-lg last:group-last:rounded-br-lg ${RIGHT.includes(column) ? 'text-right' : ''}`}
-                >
-                  {cell(column, task)}
-                </td>
-              ))}
-            </tr>
+              columns={columns}
+              stat={diffStats[task.id]}
+              note={task.state === 'running' ? activity[task.id] : undefined}
+              waits={waitingOn(task, allTasks).join(', ')}
+              showRepo={showRepo}
+            />
           ))}
         </tbody>
       </table>

@@ -73,20 +73,39 @@ export function deleteTaskDescription(task: Pick<Task, 'workspace'>): string {
   )
 }
 
+const byRecent = (a: Task, b: Task) =>
+  b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)
+
 export function sortByRecent(tasks: readonly Task[]): Task[] {
-  return [...tasks].sort(
-    (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
-  )
+  return [...tasks].sort(byRecent)
 }
 
 // A late answer to a request must not replace what the live feed already brought: keep the task
 // that was updated last. The same time counts as newer, so the answer of an edit still shows.
+// The daemon sends the list newest first, so the task goes into its place without a full sort.
 export function upsertTask(tasks: readonly Task[], task: Task): Task[] {
   const known = tasks.find((existing) => existing.id === task.id)
   if (known !== undefined && known.updatedAt > task.updatedAt) {
     return [...tasks]
   }
-  return sortByRecent([...tasks.filter((existing) => existing.id !== task.id), task])
+  const next = tasks.filter((existing) => existing.id !== task.id)
+  const at = next.findIndex((existing) => byRecent(task, existing) < 0)
+  next.splice(at === -1 ? next.length : at, 0, task)
+  return next
+}
+
+// A change from the live feed: a task that changed, or the id of one that was deleted.
+export type TaskChange = Task | { deleted: string }
+
+// The changes in the order they came.
+export function applyTaskChanges(tasks: readonly Task[], changes: readonly TaskChange[]): Task[] {
+  return changes.reduce<Task[]>(
+    (list, change) =>
+      'deleted' in change
+        ? list.filter((task) => task.id !== change.deleted)
+        : upsertTask(list, change),
+    [...tasks],
+  )
 }
 
 // A running task that has shown no sign of life for this long is probably stuck, interrupted or

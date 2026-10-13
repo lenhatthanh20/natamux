@@ -14,8 +14,9 @@ import {
 } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
-import { useState } from 'react'
-import { useNow } from '../hooks/useNow'
+import { memo, useState } from 'react'
+import { clockNow, useNow, useNowValue } from '../hooks/useNow'
+import { useStableCallback } from '../hooks/useStableCallback'
 import type { LoadedSettings } from '../lib/api'
 import { formatDuration, stepsKey } from '../lib/stage-view'
 import { isQuiet, laneSummary, STATE_LABEL } from '../lib/tasks'
@@ -64,6 +65,24 @@ const STICKY_TASK =
 const STICKY_NEXT =
   'sticky right-0 z-[1] bg-surface shadow-[-8px_0_8px_-8px_rgb(0_0_0/0.18)] group-hover:[background-image:linear-gradient(var(--hover),var(--hover))]'
 
+const NO_PIPELINE: Step[] = []
+// The same steps object for the same stages and pipeline, so the memoized rows see no change.
+const stepsCache = new WeakMap<readonly Step[], Map<string, Step[]>>()
+
+function cachedSteps(task: Pick<Task, 'stages'>, key: string, pipeline: Step[]): Step[] {
+  let byKey = stepsCache.get(pipeline)
+  if (byKey === undefined) {
+    byKey = new Map()
+    stepsCache.set(pipeline, byKey)
+  }
+  let steps = byKey.get(key)
+  if (steps === undefined) {
+    steps = resolveSteps(task.stages, pipeline)
+    byKey.set(key, steps)
+  }
+  return steps
+}
+
 // One section per repository, and one more for its tasks made before its pipeline changed.
 export function boardSections(
   tasks: readonly Task[],
@@ -78,7 +97,7 @@ export function boardSections(
     )
     // Without the settings (still loading, or failed) the tasks show the stages they carry.
     const loaded = pipelines.get(repo.id)
-    const pipeline = loaded ?? []
+    const pipeline = loaded ?? NO_PIPELINE
     if (own.length === 0) {
       continue
     }
@@ -92,7 +111,7 @@ export function boardSections(
       if (first === undefined) {
         return
       }
-      const steps = resolveSteps(first.stages, pipeline)
+      const steps = cachedSteps(first, key, pipeline)
       sections.push({
         key: `${repo.id}:${key}`,
         title:
@@ -112,6 +131,87 @@ export function boardSections(
   return sections
 }
 
+// One task against the stages. It re-renders only when its own values change, and reads the clock
+// itself for the time in its stage.
+const ProgressRow = memo(function ProgressRow({
+  task,
+  steps,
+  activity,
+  onOpenTask,
+}: {
+  task: Task
+  steps: Step[]
+  // What the agent does now.
+  activity: string | undefined
+  onOpenTask: (id: string) => void
+}) {
+  const now = useNow()
+  const progress = stageProgress(task, [], steps)
+  const label = NEXT_LABEL[task.state]
+  const waits = needsMe(task.state) || isQuiet(task, now)
+  return (
+    <div className="group contents">
+      <div
+        className={`flex min-w-0 flex-col justify-center gap-0.5 border-b border-line px-4 py-2 ${STICKY_TASK}`}
+      >
+        <button
+          type="button"
+          onClick={() => onOpenTask(task.id)}
+          className="focus-inset truncate text-left font-medium text-ink hover:underline"
+        >
+          {task.title}
+        </button>
+        <span className="flex items-center gap-2 text-xs text-muted">
+          <span className="font-mono">{task.id}</span>
+          <span className="state-chip" data-state={task.state} data-tip={laneSummary(task)}>
+            {STATE_LABEL[task.state]}
+          </span>
+          {task.stageSince !== null && task.state !== 'done' && (
+            <span className="tabular-nums">{formatDuration(task.stageSince, now)}</span>
+          )}
+        </span>
+      </div>
+      {progress.map((entry, index) => {
+        const group = entry.group
+        const before = progress[index - 1]
+        const after = progress[index + 1]
+        // Stages of one group sit side by side; no line runs between them.
+        const left =
+          before !== undefined && group !== null && before.group === group ? undefined : before
+        const right =
+          after !== undefined && group !== null && after.group === group ? undefined : after
+        return (
+          <div
+            key={entry.stage}
+            className={`flex items-center border-b border-line group-hover:bg-hover ${group !== null ? 'bg-raised' : ''}`}
+          >
+            <StageLink kind={linkKind(left, entry)} />
+            <StageMarker
+              status={entry.status}
+              state={entry.state}
+              label={`${entry.name}: ${entry.status === 'current' && entry.state !== null ? STATE_LABEL[entry.state] : entry.status}`}
+            />
+            <StageLink kind={linkKind(entry, right)} />
+          </div>
+        )
+      })}
+      <div
+        className={`flex items-center justify-end gap-2 border-b border-line px-4 ${STICKY_NEXT}`}
+      >
+        {waits && label !== undefined ? (
+          <Button size="xs" variant="primary" onClick={() => onOpenTask(task.id)}>
+            {label}
+          </Button>
+        ) : (
+          <span className="truncate text-xs text-muted">
+            {task.state === 'running' ? (activity ?? 'Working') : ''}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+})
+
 // Every open task against the stages of its pipeline: where it is, what is done, what waits.
 export function ProgressBoard({
   tasks,
@@ -120,8 +220,15 @@ export function ProgressBoard({
   loadSettings,
   onOpenTask,
 }: ProgressBoardProps) {
-  // Quiet tasks sort first, and the times in the rows grow.
-  const now = useNow()
+  // Quiet tasks sort first. The clock is read as the ids of the quiet tasks, so it re-renders the
+  // board only when one turns quiet; each row reads it itself for its time.
+  useNowValue((now) =>
+    tasks
+      .filter((task) => isQuiet(task, now))
+      .map((task) => task.id)
+      .join(' '),
+  )
+  const openTask = useStableCallback(onOpenTask)
   const settings = useQueries({
     queries: repos.map((repo) => ({
       queryKey: ['settings', repo.id],
@@ -135,7 +242,7 @@ export function ProgressBoard({
       pipelines.set(repo.id, data.settings.stages)
     }
   })
-  const sections = boardSections(tasks, repos, pipelines, now)
+  const sections = boardSections(tasks, repos, pipelines, clockNow())
   const [showDone, setShowDone] = useState<Record<string, boolean>>({})
   const failed = settings.find((query) => query.isError)
   const loading = settings.some((query) => query.isPending)
@@ -236,82 +343,15 @@ export function ProgressBoard({
                   </div>
                 </div>
 
-                {rows.map((task) => {
-                  const progress = stageProgress(task, [], section.steps)
-                  const label = NEXT_LABEL[task.state]
-                  const waits = needsMe(task.state) || isQuiet(task, now)
-                  return (
-                    <div key={task.id} className="group contents">
-                      <div
-                        className={`flex min-w-0 flex-col justify-center gap-0.5 border-b border-line px-4 py-2 ${STICKY_TASK}`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onOpenTask(task.id)}
-                          className="focus-inset truncate text-left font-medium text-ink hover:underline"
-                        >
-                          {task.title}
-                        </button>
-                        <span className="flex items-center gap-2 text-xs text-muted">
-                          <span className="font-mono">{task.id}</span>
-                          <span
-                            className="state-chip"
-                            data-state={task.state}
-                            data-tip={laneSummary(task)}
-                          >
-                            {STATE_LABEL[task.state]}
-                          </span>
-                          {task.stageSince !== null && task.state !== 'done' && (
-                            <span className="tabular-nums">
-                              {formatDuration(task.stageSince, now)}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      {progress.map((entry, index) => {
-                        const group = entry.group
-                        const before = progress[index - 1]
-                        const after = progress[index + 1]
-                        // Stages of one group sit side by side; no line runs between them.
-                        const left =
-                          before !== undefined && group !== null && before.group === group
-                            ? undefined
-                            : before
-                        const right =
-                          after !== undefined && group !== null && after.group === group
-                            ? undefined
-                            : after
-                        return (
-                          <div
-                            key={entry.stage}
-                            className={`flex items-center border-b border-line group-hover:bg-hover ${group !== null ? 'bg-raised' : ''}`}
-                          >
-                            <StageLink kind={linkKind(left, entry)} />
-                            <StageMarker
-                              status={entry.status}
-                              state={entry.state}
-                              label={`${entry.name}: ${entry.status === 'current' && entry.state !== null ? STATE_LABEL[entry.state] : entry.status}`}
-                            />
-                            <StageLink kind={linkKind(entry, right)} />
-                          </div>
-                        )
-                      })}
-                      <div
-                        className={`flex items-center justify-end gap-2 border-b border-line px-4 ${STICKY_NEXT}`}
-                      >
-                        {waits && label !== undefined ? (
-                          <Button size="xs" variant="primary" onClick={() => onOpenTask(task.id)}>
-                            {label}
-                          </Button>
-                        ) : (
-                          <span className="truncate text-xs text-muted">
-                            {task.state === 'running' ? (activity?.[task.id] ?? 'Working') : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                {rows.map((task) => (
+                  <ProgressRow
+                    key={task.id}
+                    task={task}
+                    steps={section.steps}
+                    activity={activity?.[task.id]}
+                    onOpenTask={openTask}
+                  />
+                ))}
               </div>
             </div>
             {section.done.length > 0 && (
