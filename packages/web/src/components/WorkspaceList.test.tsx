@@ -1009,7 +1009,7 @@ describe('a task row', () => {
     for (const [currentId, title] of [
       ['T-0001', 'No agent'],
       ['T-0002', 'Card'],
-    ]) {
+    ] as const) {
       rerender({ tasks: [none, card, done], pinnedIds: ['T-0003'], currentId, loadTerminals })
       await waitFor(() => expect(rowOf(title).getAttribute('aria-expanded')).toBe('true'))
       expect(icons(title)).toHaveLength(0)
@@ -1071,13 +1071,28 @@ describe('test spec cases', () => {
     expect(screen.queryByRole('button', { name: /^Other part,/ })).toBeNull()
   })
 
-  // A7: a child that starts to wait does not open its parent; the Needs you section has it.
-  it('keeps a row folded when a child starts to wait', () => {
+  // A7: a child that starts to wait does not open its parent, but its card shows under it.
+  it('keeps a row folded when a child starts to wait, and shows the waiting child', () => {
     const { rerender } = list({ tasks: [parent, child], pinnedIds: [] })
+    expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
 
     rerender({ tasks: [parent, { ...child, state: 'needs-input' }], pinnedIds: [] })
 
     expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('false')
+    expect(rowOf('Child')).toBeTruthy()
+  })
+
+  it.each(['failed', 'blocked'] as const)('shows a %s child under a folded row', (state) => {
+    list({ tasks: [parent, { ...child, state }], pinnedIds: [] })
+
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('false')
+    expect(rowOf('Child')).toBeTruthy()
+  })
+
+  it('keeps a child in review hidden under a folded row', () => {
+    list({ tasks: [parent, { ...child, state: 'review' }], pinnedIds: [] })
+
+    expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
   })
 
   // B3: every kind of fold is kept.

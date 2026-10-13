@@ -240,8 +240,9 @@ function shellRows(task: Task, terminals: JumpInput['terminals']): PaletteRow[] 
 // The rows of the jump palette (Mod+J): workspaces and their shells.
 export function jumpSections(input: JumpInput): PaletteSection[] {
   const { tasks, recent, now, scope, terminals } = input
+  // The needs-you pill counts the tasks without a workspace too, so its list shows them.
   const workspaces = scoped(
-    tasks.filter((task) => task.workspace !== null),
+    scope === 'needs-you' ? tasks : tasks.filter((task) => task.workspace !== null),
     scope,
     now,
   )

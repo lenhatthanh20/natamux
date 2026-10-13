@@ -18,6 +18,7 @@ import {
   FOLDS_KEY,
   isFoldOpen,
   parseFolds,
+  rowTier,
   shellRows,
   subtaskCount,
   taskGlyphState,
@@ -93,6 +94,9 @@ function savedFolds(): Record<string, boolean> {
 }
 
 const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
+
+// The guide sits under the task glyph; the rows' glyphs line up with the title.
+const GUIDE = 'ml-4 flex flex-col border-l border-line pl-[7px]'
 
 // Every workspace, grouped by repository, like folders in an editor's sidebar. The whole tree is
 // one tab stop: arrows move, Left and Right fold and unfold, F2 renames.
@@ -232,6 +236,9 @@ export function WorkspaceList({
   const rowsOf = (task: Task) => shellRows(task, terminalQueries[loading.indexOf(task.id)]?.data)
   const canFold = (task: Task) => (children[task.id]?.length ?? 0) > 0 || rowsOf(task).length > 0
   const taskOpen = (task: Task) => canFold(task) && holdsCurrent(task)
+  // A folded row still shows the subtasks that wait on the user: no other part of the sidebar does.
+  const waitingChildren = (task: Task) =>
+    (children[task.id] ?? []).filter((child) => rowTier(child.state) === 'attention')
 
   // The rows as they are on screen, for the keyboard.
   const entries: Entry[] = []
@@ -247,18 +254,17 @@ export function WorkspaceList({
       // A folded task opens when it becomes the open workspace; the open one does not fold.
       toggle: open ? undefined : () => onOpen(task.id),
     })
-    if (!open) {
-      return
+    if (open) {
+      for (const shell of rowsOf(task)) {
+        entries.push({
+          key: `agent:${task.id}:${shell.key}`,
+          parent: key,
+          expandable: false,
+          label: shell.label,
+        })
+      }
     }
-    for (const shell of rowsOf(task)) {
-      entries.push({
-        key: `agent:${task.id}:${shell.key}`,
-        parent: key,
-        expandable: false,
-        label: shell.label,
-      })
-    }
-    for (const child of children[task.id] ?? []) {
+    for (const child of open ? (children[task.id] ?? []) : waitingChildren(task)) {
       entries.push({ key: `task:${child.id}`, parent: key, expandable: false, label: child.title })
     }
   }
@@ -337,6 +343,7 @@ export function WorkspaceList({
 
   const row = (task: Task, prefix = false, nested = false) => {
     const open = !nested && taskOpen(task)
+    const waiting = open ? [] : waitingChildren(task)
     return (
       <WorkspaceRow
         key={task.id}
@@ -368,10 +375,7 @@ export function WorkspaceList({
         onDelete={onDelete}
       >
         {open && (
-          // The guide sits under the task glyph; the rows' glyphs line up with the title.
-          <ul
-            className={`ml-4 flex flex-col border-l border-line pl-[7px] ${painted.current ? 'sb-unfold' : ''}`}
-          >
+          <ul className={`${GUIDE} ${painted.current ? 'sb-unfold' : ''}`}>
             {rowsOf(task).map((shell) => (
               <AgentRow
                 key={shell.key}
@@ -385,6 +389,9 @@ export function WorkspaceList({
             ))}
             {(children[task.id] ?? []).map((child) => row(child, false, true))}
           </ul>
+        )}
+        {waiting.length > 0 && (
+          <ul className={GUIDE}>{waiting.map((child) => row(child, false, true))}</ul>
         )}
       </WorkspaceRow>
     )

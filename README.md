@@ -33,7 +33,7 @@ To see tasks in different states with agents at work, run `scripts/dev.sh seed`.
 ## What you can do
 
 - **Keep work separate.** Each task has a git worktree, branch, and terminal that keeps running when you close the dashboard. Run several tasks without agents editing the same checkout.
-- **See what needs you.** The **Needs you** queue highlights questions, reviews, blocked work, and failures. Switch between table, board, and progress views.
+- **See what needs you.** Tasks that ask a question, fail, or are blocked become cards in the sidebar, and the title bar counts everything that waits for you. Switch between table, board, and progress views.
 - **Use your own agent.** Natamux starts Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, or Cursor in a task terminal. Hooks report when an agent is working or waiting for input.
 - **Guide each task through stages.** The default flow is Context → Spec → Plan → Test spec and Implement → Review → Testing → Release. Configure stages and approval gates per repository. [How stages work](docs/design-task-stages.md).
 - **Review and deliver.** Inspect file diffs and branch history, send review comments back to the agent, then commit, push, and open a pull request from the dashboard.

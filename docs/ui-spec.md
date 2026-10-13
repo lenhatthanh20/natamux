@@ -10,7 +10,7 @@ Notation: `Mod` = Cmd on macOS, Ctrl on Windows. Sizes are CSS px at 100% zoom. 
 
 ## 1. Principles
 
-1. **Who needs me, in 3 seconds.** From any screen, at any width, the user sees how many tasks wait for them and which ones, without scrolling or opening anything. Needs-you count lives in the title bar, the sidebar top, the document title and system notifications. A waiting agent's question is shown as text, not hidden in an activity log.
+1. **Who needs me, in 3 seconds.** From any screen, at any width, the user sees how many tasks wait for them and which ones, without scrolling or opening anything. Needs-you count lives in the title bar, the status bar, the document title and system notifications; the sidebar tree shows each waiting workspace as a card. A waiting agent's question is shown as text, not hidden in an activity log.
 2. **Color means state.** Chrome is neutral gray. The 9 task states own the only strong hues. The blue accent is reserved for focus, keyboard selection, links and progress. Primary buttons are neutral (inverted ink), not blue. If something is colored, it is telling you something.
 3. **Keyboard first, mouse friendly.** Every action is a command in the palette (Mod+K). Frequent actions have one key. Every shortcut is visible where the action lives (tooltip, menu row, palette row). A terminal never loses a key it needs.
 4. **Calm density.** 13px body, 28px controls, 44px two-line rows. Quiet hover (a 5% wash), no movement, no reordering under the pointer, no layout jump when a status line appears. Live data updates in place.
@@ -310,10 +310,9 @@ Parts are flush (no floating cards): the shell color frames sidebar, title bar a
 **Sidebar** (`<nav aria-label="Workspaces">`), `bg-sidebar`, default 320 (the same as the details), min 220, max 440, resizable, collapsible (Mod+B or title bar toggle; dragging below 180 collapses). Structure top to bottom:
 1. Filter field 28px (`ListFilter` icon, placeholder "Filter tasks", clear button, `/` kbd hint). 8px gutter.
 2. Nav rows (28px): All tasks + count, Agents + count.
-3. Needs you section (compact, see 4.12).
-4. "Workspaces" header 28px, sticky (`position: sticky; top: 0`), with "Add a project" and "Start a task" icon buttons (24).
-5. Scrolling tree of repo groups and workspace rows. 12px bottom padding.
-Only part 5 scrolls (fixes NAV-16).
+3. "Workspaces" header 28px, sticky (`position: sticky; top: 0`), with "Add a project" and "Start a task" icon buttons (24).
+4. Scrolling tree of repo groups and workspace rows. 12px bottom padding.
+Only part 4 scrolls (fixes NAV-16).
 
 **Main** (`<main id="main">`), `bg-canvas`, `container-type: inline-size; container-name: main`. Min widths: terminal content 480, diff 560, table 360 (card list below 560).
 
@@ -412,7 +411,7 @@ quiet (done, cancelled, draft), min 24px:
 - Text column starts at 32px (10 pad + 14 glyph slot + 8 gap); lines 2 and 3 indent 22px from the row's content edge, so they start under the title.
 - Glyph (`components/ShapeGlyph.tsx`): one shape per state in a 14px slot, in `--chip-fg`: ready hollow circle, draft dashed circle, running filled disc that breathes (opacity 1 → 0.45, 2.4s, `.sb-breathe`; still with reduced motion), needs-input filled diamond, blocked hollow diamond, review rounded square, failed triangle, done check in a circle, cancelled dash in a circle. A quiet running task shows a hollow diamond in the needs-input color ("Running, but quiet"). Tooltip and screen readers get the state label, as with `StatusGlyph`.
 - Task glyph: `running` while any row or parallel stage under the task runs, else the task state (`taskGlyphState`).
-- Only the open workspace shows the rows under it, and the parent of an open subtask. No row opens by itself, and the user cannot fold the open one. The row carries `aria-expanded` when it has work under it. A click, Enter or Right on a folded row opens that task.
+- Only the open workspace shows the rows under it, and the parent of an open subtask. No row opens by itself, and the user cannot fold the open one. A folded row still shows its subtasks in an attention tier (needs-input, failed, blocked) as cards under it (T-0022). The row carries `aria-expanded` when it has work under it. A click, Enter or Right on a folded row opens that task.
 - Live line 2: repo chip (pinned rows), task id in mono (tooltip: branch), the step `n/m` (only with 2 steps or more; a parallel group is one step), the current stage (in a group the most urgent stage), subtasks `done/all`, what the agent does (running and folded only; open, the shell rows say it), pull request number in the checks color, the icon of the task's agent (icon only, tooltip: its name; folded and open, since the shell rows name the agent of each stage). Screen readers hear every step through `aria-describedby` ("Steps: Spec done, Implement needs your input, …").
 - Attention card: the question (needs-input; "Waiting for your answer" until it is known) or the reason (failed, blocked) on up to 2 lines, then id, step and stage. A needs-input card has an **Answer** button (`Answer T-0018`, not a tab stop) that opens the terminal of the waiting shell, or the first shell.
 - Under the open row, inside a 1px `--line` guide under the task glyph (`ml-4`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 22px (40 on touch), glyph lined up with the title: shape glyph 7 (muted ring, tooltip "State not known yet", for an agent with no state yet, such as one started by hand before a daemon restart; `SquareTerminal` 12 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, Claude Code, State not known"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read every 5 s while the tab is visible for tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
@@ -453,16 +452,11 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 - Label chip (task labels, relation "part of T-0014", "waits for T-0009"): 20px, pad x 6, radius 4, 12/400, 1px line, ink-2.
 - Kbd (`ui/Kbd.tsx`): height 18, min-width 18, pad x 4, radius 4, 11/500 mono, bg raised, 1px line, `box-shadow: inset 0 -1px 0 var(--line-strong)`, muted text. Renders platform keys: macOS glyphs joined (`⌘K`, `⇧⌘P`), Windows words with `+` (`Ctrl+K`). Source: `lib/keys.ts` `formatShortcut('Mod+K')`.
 
-### 4.12 Needs-you section (`components/NeedsMeStrip.tsx`, `SidebarTaskRow.tsx`)
-- Frame when count > 0: 1px `--signal-line` border on all sides, radius 8, `--signal-soft` background, pad 4. When 0 the border is transparent and there is no background, so the calm state stays calm and the text does not move. This replaces the earlier "left bar only, no amber background" rule (NAV-24) on purpose, at the user's request (T-0026): the section should stand out.
-- Header row 28: `BellRing` 14 in `--signal` + caps "Needs you" in `--signal` + signal count badge. When 0, no icon and the title is muted.
-- Rows are two lines, about 44px, pad 6 8, one button:
-  - Line 1: glyph 16, title 13/500, truncate. Only the title, so it has the whole width.
-  - Line 2, 12px, indented 24 to start under the title: stage muted (when there is one), reason in `--signal` ("asks", "review", "failed", "blocked", "quiet"), age muted at the right.
-- Cap at 3 rows + "Show all 5" link row. Ordered by longest wait. Rows here are not highlighted again in the tree below. The section is the one place in the sidebar with the question or reason as text; the tree row shows only the glyph (4.9, T-0015).
-- When 0: one muted line "Nothing needs you" (28px), so the section never jumps.
-- A polite live region (`role="status"`, sr-only) says "<title> needs you" when a task starts to wait. The tasks that wait when the page opens are not said.
-- The section ignores the sidebar filter on purpose (must stay in sight); a caps note "Not filtered" appears when a filter is active (NAV-15 count mismatch explained).
+### 4.12 Needs you (`components/NeedsYouAnnouncer.tsx`)
+- No sidebar section since T-0022. The tree's attention cards (4.9) name each waiting workspace once, with the question; a strip above the tree said it a second time and took up to 40% of the height.
+- Signals that stay: title bar pill (3.1), status bar / drawer footer count, document title "(N) Natamux", notifications, the palettes' Needs you group and scope (4.17).
+- The pill opens the jump palette scoped to needs-you. With that scope it lists tasks without a workspace too, because the pill counts them.
+- A polite live region (`role="status"`, sr-only), outside the sidebar, says "<title> needs you" when a task starts to wait. The tasks that wait when the page opens are not said.
 
 ### 4.13 Menu (`ui/Menu.tsx`)
 - Popup: min-width 200, max 320, pad 4, radius 8, bg popover, 1px line-strong, `--shadow-1`, z popover.
@@ -701,7 +695,7 @@ Rules:
 
 ### 5.2 Focus rules
 - One visible focus style: 2px `--focus` outline, offset 1px on buttons/controls; inset (`-2px`) on rows, cells and anything inside a scroll container that clips. Inputs use the 1px border+outline in 4.3.
-- Tab order follows the visual order: title bar, sidebar (filter, nav, needs-you, tree as one stop), main, details, status bar. A "Skip to main content" link is the first tab stop (visible on focus, top-left, `bg-popover`, `--shadow-1`) (RA-23).
+- Tab order follows the visual order: title bar, sidebar (filter, nav, tree as one stop), main, details, status bar. A "Skip to main content" link is the first tab stop (visible on focus, top-left, `bg-popover`, `--shadow-1`) (RA-23).
 - Each toolbar, tab list, segmented control, list and tree is ONE tab stop; arrows move inside (roving tabindex).
 - Opening a layer moves focus into it (first field, first menu item, palette input). Closing returns focus to the opener. If the opener is gone (row removed), focus goes to the list container.
 - After create: focus goes where the new thing is (started task: Shell 1 terminal; added task: its row; subtask: stays in the subtask field).
@@ -719,7 +713,7 @@ Rules:
 
 | Action | Result |
 |---|---|
-| Click a workspace row (sidebar, needs-you, jump palette) | Opens the workspace in main. Tab: Terminal when running/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state; never opened or closed, they open where they dock (see Details in 3.1). |
+| Click a workspace row (sidebar, jump palette) | Opens the workspace in main. Tab: Terminal when running/needs-input; otherwise the last tab used for THAT workspace; Terminal for a new one (WS-18). Details keep their per-task open state; never opened or closed, they open where they dock (see Details in 3.1). |
 | Click a table row / board card | Selects it and opens details (dock or sheet by 3.2). |
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Shell 1 to the Agents grid. |
@@ -769,7 +763,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 
 | Area | Orca | VS Code | Natamux target |
 |---|---|---|---|
-| Who needs me | `?` glyph on the row, jump palette ranks needs-you first | not a concept | Needs-you count in title bar + sidebar section + document title + notifications, AND the agent's question as text in a banner with Answer / Resume (WS-08) |
+| Who needs me | `?` glyph on the row, jump palette ranks needs-you first | not a concept | Needs-you count in title bar + status bar + document title + notifications, attention cards in the tree, AND the agent's question as text in a banner with Answer / Resume (WS-08) |
 | Task model | worktrees with optional linked issues | none | tasks are first class: 9 states, table and board, dependencies, subtasks, tries; workspace is one view of a task |
 | Stability | live lists | static lists | stable sort, frozen palette order, no reorder under the pointer, no layout shift (5.6) |
 | Responsive | desktop only; status bar condenses; mobile is a separate app | shrinks parts to minimums, then clips and scrolls the window under ~800px | one app from 390 to 2560 with drawer, sheet and page modes, container-query tables, stacked panes (3.2) |
@@ -874,10 +868,10 @@ No new npm package is needed for PR 1-5. Two optional items need the owner's OK 
 | L-06 | P1 | NAV-09, NAV-11, NAV-14 | `components/TaskDetail.tsx`, `TaskEditForm.tsx`, `CompareTries.tsx`, `FanOutForm.tsx` | Details per 4.27: 40px header, action row, banners, collapsible remembered sections in the new order, Notes section with empty state, edit mode replaces title/notes with focus in Title and sticky Save/Cancel footer, new copy for ports/tries/keep. |
 | L-07 | P1 | NAV-12, WS-32 | `components/Timeline.tsx`, `lib/tasks.ts`, `lib/events.ts`, all `formatAge` callers | One `formatAge(date, now, 'short' \| 'long')` per 5.7 with exact-time tooltip; Activity uses relative times, groups consecutive identical events ("×4"), actor "You"/"Agent"/"Daemon". |
 | L-08 | P1 | NAV-13 (details menu) | `TaskDetail.tsx` | "..." menu: Save as template, Run more tries..., separator, Cancel task, Delete task (both danger, confirm). Anchored under the button. |
-| L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in natamux (8 hidden)"); state counts follow the search; needs-you shows "Not filtered" note. |
+| L-09 | P1 | NAV-15, WS-24, RA-30 | `Dashboard.tsx`, `WorkspaceList.tsx`, `TaskTable.tsx`, `components/ui/SearchField.tsx` | SearchField with clear button; Esc clears then blurs; filter-miss empty states with exact copy from 4.19 ("No tasks match “zzzz”" + Clear filter; "No matches in natamux (8 hidden)"); state counts follow the search. |
 | L-10 | P1 | NAV-17, RA-23 | `WorkspaceList.tsx`, `WorkspaceRow.tsx`, new `hooks/useRovingFocus.ts` | Tree is one tab stop; keys per 4.9 (arrows, Home/End, Left/Right groups, Enter, F2, Shift+F10, Delete, type-ahead). Row "..." button gets `tabIndex={-1}`. |
 | L-11 | P1 | NAV-23, NAV-27 (anatomy) | `WorkspaceRow.tsx` | Row anatomy per 4.9: age on line 1 swapping with "..." on hover/focus; slug gets full line 2; rename field replaces only the title line (24px), select-all in both entry paths, focus returns to the row; finished rows use `--muted` color, no opacity. |
-| L-12 | P1 | NAV-24 | `components/NeedsMeStrip.tsx`, `components/SidebarTaskRow.tsx` | Section per 4.12: caps header + count, left signal bar instead of amber block, single-line 28px rows with reason chip, cap 3 + "Show all N". Since T-0026: amber frame and two-line rows instead (see 4.12). |
+| L-12 | P1 | NAV-24 | `components/NeedsYouAnnouncer.tsx`, `components/Dashboard.tsx` | Needs you per 4.12: no sidebar section since T-0022; the tree's attention cards and the title bar pill show who needs the user. |
 | L-13 | P1 | WS-23 | `Dashboard.tsx`, `components/NoWorkspace.tsx` | Enter / double-click / palette open a workspace-less task in the No-workspace main view (EmptyState with [Create workspace] + branch Combobox + [Start agent]); after "Create workspace" in details, open the new workspace on Terminal (same as the dialog path). |
 | L-14 | P1 | NAV-31 | `Dashboard.tsx` (view header), `AgentPanes.tsx` | View titles 15/600 + count badge; view header 44 per 4.29. |
 | L-15 | P2 | NAV-25, NAV-26 | `WorkspaceList.tsx`, `lib/workspace-groups.ts` | Pinned header count; repo prefix on pinned rows; collapsed group shows a state dot when it hides the current or a needs-you workspace. |

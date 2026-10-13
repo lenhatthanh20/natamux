@@ -13,15 +13,13 @@ type SidebarProps = {
   agentsActive: boolean
   onTasks: () => void
   onAgents: () => void
-  // The tasks that wait for the user. Stays in view, so it is not part of the scrolling tree.
-  needsYou: ReactNode
   // The workspaces. This is the only part that scrolls.
   tree: ReactNode
   // Under 768 the status items live here, because the status bar is hidden.
   footer?: ReactNode
 }
 
-// The left part: filter, the two lists, who needs you, and the tree of workspaces.
+// The left part: filter, the two lists, and the tree of workspaces.
 export function Sidebar({
   search,
   onSearch,
@@ -32,7 +30,6 @@ export function Sidebar({
   agentsActive,
   onTasks,
   onAgents,
-  needsYou,
   tree,
   footer,
 }: SidebarProps) {
@@ -64,7 +61,6 @@ export function Sidebar({
           </button>
         </div>
       </div>
-      <div className="max-h-[40%] shrink-0 overflow-y-auto px-2">{needsYou}</div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">{tree}</div>
       {footer}
     </nav>

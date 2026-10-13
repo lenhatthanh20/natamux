@@ -124,7 +124,7 @@ Add a subtask in the task details on the dashboard. A subtask is a normal task, 
 
 ## The Needs you list
 
-The dashboard shows a strip called **Needs you**. It lists the tasks that wait for a person:
+A task needs you when it waits for a person:
 
 | Reason | Which tasks |
 |---|---|
@@ -134,7 +134,7 @@ The dashboard shows a strip called **Needs you**. It lists the tasks that wait f
 | Blocked | State `blocked`. |
 | Quiet | State `running`, with no sign of life for 10 minutes. The agent may be stuck, interrupted or closed. A task whose agent waits for background work is never quiet. |
 
-The task that waited longest comes first. The command palette has a **Needs you** scope with the same list.
+The dashboard counts these tasks in the title bar ("2 need you"). Click the count to list them. The command palette has a **Needs you** scope with the same list. See [Needs you](/docs/guides/dashboard/#needs-you).
 
 ## Where Natamux stores tasks
 

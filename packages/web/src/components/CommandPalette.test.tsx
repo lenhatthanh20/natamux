@@ -273,6 +273,51 @@ describe('the jump palette', () => {
     expect(on.onOpenTask).toHaveBeenCalledWith('T-0002')
   })
 
+  describe('scoped to Needs you, with a task that has no workspace', () => {
+    const waiting = [
+      task('T-0004', 'needs-input', { updatedAt: '2026-10-09T09:00:00.000Z' }),
+      task('T-0005', 'blocked', { workspace: null, title: 'Ship docs' }),
+      task('T-0006', 'done', { workspace: null }),
+    ]
+    const scoped = () => palette({ mode: 'jump', initialScope: 'needs-you' }, handlers(), waiting)
+
+    it('lists it, and not a finished task without a workspace', () => {
+      scoped()
+      const text = optionText()
+      expect(text).toHaveLength(2)
+      expect(text.some((line) => line.includes('T-0005'))).toBe(true)
+      expect(text.some((line) => line.includes('T-0006'))).toBe(false)
+    })
+
+    it('opens it with Enter, with Shift+Enter, and with a click, and never adds it to Agents', async () => {
+      const { on } = scoped()
+      const user = userEvent.setup()
+      await user.keyboard('Ship')
+      await user.keyboard('{Shift>}{Enter}{/Shift}')
+      expect(on.onAddToAgents).not.toHaveBeenCalled()
+      expect(on.onOpenTask).toHaveBeenCalledWith('T-0005')
+      // The name has no spaces between its parts, so match the id.
+      await user.click(screen.getByRole('option', { name: /T-0005/ }))
+      expect(on.onOpenTask).toHaveBeenCalledTimes(2)
+    })
+
+    it('still adds a waiting workspace to Agents with Shift+Enter', async () => {
+      const { on } = scoped()
+      const user = userEvent.setup()
+      await user.keyboard('T-0004')
+      await user.keyboard('{Shift>}{Enter}{/Shift}')
+      expect(on.onAddToAgents).toHaveBeenCalledWith('T-0004')
+    })
+  })
+
+  it('says nothing needs you when only a finished task has no workspace', () => {
+    palette({ mode: 'jump', initialScope: 'needs-you' }, handlers(), [
+      task('T-0001', 'running', { updatedAt: '2026-10-09T11:59:00.000Z' }),
+      task('T-0002', 'done', { workspace: null }),
+    ])
+    expect(screen.getByText('Nothing needs you.')).toBeTruthy()
+  })
+
   it('lists the other shells of a workspace and opens that shell', async () => {
     const { on } = palette({ mode: 'jump', loadTerminals: async () => ['1', '2'] })
     const [row] = await screen.findAllByText('Shell 2')
