@@ -102,6 +102,15 @@ function loadWebgl(terminal: Terminal, onLost: () => void): WebglAddon | null {
   }
 }
 
+// check() throws on a font string it cannot parse; load() then fails too, and is ignored.
+function fontLoaded(spec: string): boolean {
+  try {
+    return document.fonts?.check(spec) === true
+  } catch {
+    return false
+  }
+}
+
 function fontKey(font: ResolvedTerminalFont, zoom: number): string {
   return `${font.stack}|${font.size * zoom}`
 }
@@ -433,8 +442,14 @@ export function createTerminalSession(options: {
   // The web font may still be loading when the terminal measures its cells. Once it is loaded,
   // the terminal measures again; a hidden one at its next show, as it cannot measure now.
   const whenFontLoads = (font: ResolvedTerminalFont) => {
+    const spec = `${Math.round(font.size)}px ${font.stack}`
+    // Already loaded: the cells were measured with it, and measuring again would only redraw
+    // every glyph, a long task when a view opens several terminals at once.
+    if (fontLoaded(spec)) {
+      return
+    }
     document.fonts
-      ?.load(`${Math.round(font.size)}px ${font.stack}`)
+      ?.load(spec)
       .then(() => {
         if (disposed) {
           return
@@ -488,8 +503,10 @@ export function createTerminalSession(options: {
     if (disposed || value === onScreen) {
       return
     }
-    onScreen = value
+    // Before onScreen changes: a renderer taken on show then needs no fit of its own, as the fit
+    // below covers it.
     gpu?.setVisible(value)
+    onScreen = value
     if (value) {
       applyTheme()
       applyFont()

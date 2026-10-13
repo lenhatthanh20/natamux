@@ -28,7 +28,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | `packages/web/src/components/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one (after the render without the "Connecting." strip, so a cached terminal fits once and sends no resize), shows status, find, "Jump to latest" |
 | `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load |
 | `packages/web/src/lib/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
-| `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (6), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
+| `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (6), `GIVE_BACK_DELAY_MS` (10 s), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
 | `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle |
 | `packages/web/src/lib/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
 | `packages/web/src/lib/fonts.ts`, `src/assets/fonts/` | `TERMINAL_FONT`: JetBrains Mono, then the bundled Nerd Font icons (`ICON_FONT`, `@font-face` in `styles.css`) |
@@ -61,10 +61,13 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - `show` fits once and calls `refresh`. Nothing fits while hidden: the `ResizeObserver` is off, because a fit of a box with no size sends a tiny resize.
   - Scroll state goes to React at most once per frame, and never while hidden. `state()` returns the same object until something changes (`useSyncExternalStore`).
 - **GPU budget (web).**
-  - At most 6 WebGL renderers per page. A hidden terminal keeps its renderer. When the budget is full, the terminal hidden longest gives its renderer back and draws with the DOM. With none hidden, a new terminal draws with the DOM.
+  - At most 6 WebGL renderers per page, one per pane of a full grid (`MAX_PANES`). Each holds a GPU context and glyph textures, tens of MB at Retina.
+  - A hidden terminal (in the holder, or off screen for `watchVisible`) keeps its renderer for `GIVE_BACK_DELAY_MS` (10 s), so a quick switch back is instant. Then it gives the renderer back and draws with the DOM. A show before that cancels the give-back; a show after it takes a renderer again if the budget allows.
+  - When the budget is full, the terminal hidden longest gives its renderer back at once. With none hidden, a new terminal draws with the DOM.
   - A slot is reserved before the load runs. A load that ends after a newer take or a dispose (load id) only disposes its result.
   - After 2 lost contexts, no WebGL for the rest of the page session.
-  - After a renderer switch, the terminal fits again on screen, or at its next show when hidden.
+  - After a renderer switch, the terminal fits again on screen, or at its next show when hidden. A renderer taken during `show` needs no fit of its own: `setOnScreen` calls the GPU before it marks the terminal on screen, and fits once after.
+  - A web font already loaded when the terminal opens (`document.fonts.check`) is not measured again: that would redraw every glyph of each terminal a view opens.
 
 ## Protocol
 

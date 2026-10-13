@@ -1,9 +1,12 @@
 export type Renderer = { dispose(): void }
 
-// A browser allows only a few WebGL contexts at once, so one page session shares this many.
+// A browser allows only a few WebGL contexts at once, so one page session shares this many. It
+// matches MAX_PANES (lib/panes.ts): a full grid of panes all draw with the GPU.
 export const GPU_CONTEXTS = 6
 // After this many lost contexts the GPU is not trusted for the rest of the page session.
 export const MAX_CONTEXT_LOSSES = 2
+// A terminal hidden this long gives its renderer back. A quick switch back keeps it.
+export const GIVE_BACK_DELAY_MS = 10_000
 
 // The WebGL renderers of one page session. Tests make their own.
 export type GpuBudget = {
@@ -68,9 +71,10 @@ function isThenable(value: LoadResult): value is Promise<Renderer | null> {
 // Counts hides across all handles, so "hidden longest" needs no clock.
 let hiddenClock = 0
 
-// Each WebGL renderer holds a GPU context and its glyph textures. A hidden terminal keeps its
-// renderer, so switching back is instant. Only when the budget is full does the terminal that has
-// been hidden longest give its renderer back and fall back to the DOM renderer.
+// Each WebGL renderer holds a GPU context and its glyph textures (tens of MB at Retina). A hidden
+// terminal keeps its renderer for GIVE_BACK_DELAY_MS, so a quick switch back is instant, then
+// gives it back and falls back to the DOM renderer; it takes one again when shown. Before that
+// delay, a full budget makes the terminal that has been hidden longest give its renderer back.
 // `load` returns null when WebGL cannot start, and calls `onLost` when the GPU drops the context.
 // `onSwitch` runs after the renderer type changed, so the caller can fit again.
 export function gpuRenderer(
@@ -90,6 +94,7 @@ export function gpuRenderer(
   let visible = true
   let hiddenAt = 0
   let loadId = 0
+  let giveBackTimer: ReturnType<typeof setTimeout> | undefined
 
   const slot: Slot = {
     isHidden: () => !visible,
@@ -185,11 +190,13 @@ export function gpuRenderer(
       }
       if (next) {
         visible = true
+        clearTimeout(giveBackTimer)
         take()
       } else if (visible) {
         visible = false
         hiddenClock += 1
         hiddenAt = hiddenClock
+        giveBackTimer = setTimeout(slot.giveBack, GIVE_BACK_DELAY_MS)
       }
     },
     dispose() {
@@ -197,6 +204,7 @@ export function gpuRenderer(
         return
       }
       disposed = true
+      clearTimeout(giveBackTimer)
       loadId += 1
       free()
       renderer?.dispose()

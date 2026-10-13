@@ -8,7 +8,7 @@ import {
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ICON_FONT } from './fonts'
-import { GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
+import { GIVE_BACK_DELAY_MS, GPU_CONTEXTS, gpuBudget } from './gpu-renderer'
 import type { TerminalConnectQuery } from './terminal'
 import { fontStack, saveTerminalFont, terminalFont } from './terminal-font'
 import {
@@ -129,14 +129,15 @@ function recordOptions(terminal: FakeTerminal): [string, unknown][] {
   return sets
 }
 
-// jsdom has no document.fonts. Each load waits until the test resolves it.
-function stubFontLoads(): (() => void)[] {
+// jsdom has no document.fonts. Each load waits until the test resolves it. `loaded` is what
+// check() answers.
+function stubFontLoads(loaded = false): (() => void)[] {
   const loads: (() => void)[] = []
   const load = () =>
     new Promise<void>((resolve) => {
       loads.push(resolve)
     })
-  const fonts = Object.assign(new EventTarget(), { load })
+  const fonts = Object.assign(new EventTarget(), { load, check: () => loaded })
   Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
   return loads
 }
@@ -677,6 +678,17 @@ describe('a web font that loads after the terminal opened (C7)', () => {
     expect(fitsOf()).toBe(fits + 1)
   })
 
+  it('does not measure again when the font was already loaded at open', async () => {
+    const loads = stubFontLoads(true)
+    const { terminal } = await shown()
+    const fits = fitsOf()
+    const sets = recordOptions(terminal)
+    await flush()
+    expect(loads).toHaveLength(0)
+    expect(sets).toEqual([])
+    expect(fitsOf()).toBe(fits)
+  })
+
   it('does nothing when it loads after the dispose', async () => {
     const loads = stubFontLoads()
     const { session, terminal } = await shown()
@@ -721,16 +733,31 @@ describe('the icon font, which loads on the first icon (spec 2)', () => {
 })
 
 describe('visibility', () => {
-  it('keeps its WebGL renderer while hidden, with no timer (AC 33)', async () => {
+  it('keeps its WebGL renderer when shown again before the give-back delay', async () => {
     const { session } = await shown()
     expect(fakes.webgl).toHaveLength(1)
 
-    session.setOnScreen(false)
-    vi.advanceTimersByTime(60_000)
-    expect(fakes.webgl[0]?.disposed).toBe(false)
-
-    session.setOnScreen(true)
+    session.hide(box())
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS - 1)
+    session.show(box())
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS)
     expect(fakes.webgl).toHaveLength(1)
+    expect(fakes.webgl[0]?.disposed).toBe(false)
+  })
+
+  it('gives its renderer back while hidden, and takes one again with one fit', async () => {
+    const { session } = await shown()
+    session.hide(box())
+    const fits = fitsOf()
+    vi.advanceTimersByTime(GIVE_BACK_DELAY_MS)
+    expect(fakes.webgl[0]?.disposed).toBe(true)
+    expect(gpuBudget.inUse()).toBe(0)
+    expect(fitsOf()).toBe(fits)
+
+    session.show(box())
+    expect(fakes.webgl).toHaveLength(2)
+    expect(fakes.webgl[1]?.disposed).toBe(false)
+    expect(fitsOf()).toBe(fits + 1)
   })
 
   it('fits a hidden terminal that gave its renderer back at its next show (C36)', async () => {
