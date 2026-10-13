@@ -16,7 +16,10 @@ function frames() {
       return last
     }),
   )
-  vi.stubGlobal('cancelAnimationFrame', vi.fn((handle: number) => callbacks.delete(handle)))
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((handle: number) => callbacks.delete(handle)),
+  )
   return () => {
     const due = [...callbacks.values()]
     callbacks.clear()

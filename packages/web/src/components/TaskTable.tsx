@@ -148,6 +148,7 @@ const CardRow = memo(function CardRow({
   const now = useNow()
   const quiet = isQuiet(task, now)
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the button inside takes the keys (roving focus).
     <li
       data-selected={selected}
       onClick={() => onSelect(task.id)}
