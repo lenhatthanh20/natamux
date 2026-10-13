@@ -144,6 +144,8 @@ function list(options: Options = {}) {
 }
 
 // What the daemon says of the shells of a task: the agent lanes, and the program of each shell.
+const rowOf = (title: string) => screen.getByRole('button', { name: new RegExp(`^${title},`) })
+
 function shells(lanes: TaskShells['lanes'], programs: TaskShells['programs'] = {}): TaskShells {
   const terminals = [...new Set([...Object.keys(lanes), ...Object.keys(programs)])]
   return { terminals, lanes, programs }
@@ -461,27 +463,43 @@ describe('after the removal', () => {
   })
 })
 
-describe('the line under a waiting or failed task', () => {
-  // The Needs you section has the question, so the tree row shows only the glyph.
-  it('says why a task failed, in the failed color, and leaves the question out', () => {
+describe('a task that waits on the user', () => {
+  it('is a card with the question, or the reason it failed, and an Answer button', async () => {
+    const user = userEvent.setup()
     const failed = makeTask({ id: 'T-0006', title: 'Broken', state: 'failed' })
     const asks = makeTask({ id: 'T-0007', title: 'Asking', state: 'needs-input' })
+    const handlers = callbacks()
     render(
       withHost(
         <WorkspaceList
-          {...props({ tasks: [failed, asks] })}
+          {...props({ tasks: [failed, asks] }, handlers)}
           questions={{ 'T-0006': 'claude: command not found', 'T-0007': 'Which test runner?' }}
         />,
       ),
     )
 
-    const reason = screen.getByText('claude: command not found')
-    expect(reason.getAttribute('data-state')).toBe('failed')
-    expect(reason.className).toContain('text-(--chip-fg)')
-    expect(screen.queryByText('Which test runner?')).toBeNull()
-    expect(screen.queryByText('Waiting for your answer')).toBeNull()
-    const row = screen.getByRole('button', { name: /^Asking,/ })
-    expect(row.querySelector('[data-state="needs-input"]')).toBeTruthy()
+    expect(within(rowOf('Broken')).getByText('claude: command not found')).toBeTruthy()
+    expect(within(rowOf('Asking')).getByText('Which test runner?')).toBeTruthy()
+    expect(rowOf('Asking').className).toContain('row-attn')
+    expect(rowOf('Asking').getAttribute('data-state')).toBe('needs-input')
+    expect(screen.queryByRole('button', { name: 'Answer T-0006' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Answer T-0007' }))
+    expect(handlers.onOpenShell).toHaveBeenCalledWith('T-0007', null)
+    expect(handlers.onOpen).not.toHaveBeenCalled()
+  })
+
+  it('says the agent waits when the question is not known yet', () => {
+    list({ tasks: [makeTask({ title: 'Asking', state: 'needs-input' })], pinnedIds: [] })
+
+    expect(within(rowOf('Asking')).getByText('Waiting for your answer')).toBeTruthy()
+  })
+
+  it('shrinks a finished task to one line', () => {
+    list({ tasks: [makeTask({ title: 'Shipped', state: 'done' })], pinnedIds: ['T-0001'] })
+
+    const row = rowOf('Shipped')
+    expect(row.className).toContain('min-h-6')
+    expect(within(row).queryByText('T-0001')).toBeNull()
   })
 })
 
@@ -492,49 +510,35 @@ const child = makeTask({
   parentId: 'T-0001',
   createdAt: '2026-10-10T07:30:00.000Z',
 })
-const rowOf = (title: string) => screen.getByRole('button', { name: new RegExp(`^${title},`) })
-const disclosure = (id: string) => screen.getByRole('button', { name: `Work under ${id}` })
 
 describe('subtasks under their parent', () => {
-  it('shows an open subtask inside its parent, which opens by itself while the child works', () => {
-    list({ tasks: [parent, child], pinnedIds: [] })
+  it('shows an open subtask inside its parent while the parent is the open workspace', () => {
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('true')
     const parentItem = rowOf('Parent').closest('li') as HTMLElement
     expect(within(parentItem).getByRole('button', { name: /^Child,/ })).toBeTruthy()
   })
 
-  it('stays folded when nothing works, waits or failed, and opens on a click', async () => {
+  it('stays folded while another task is open, also when the child works, and opens on a click', async () => {
     const user = userEvent.setup()
-    list({
-      tasks: [
-        { ...parent, state: 'review' },
-        { ...child, state: 'review' },
-      ],
-      pinnedIds: [],
-    })
+    const { onOpen } = list({ tasks: [parent, child], pinnedIds: [] })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
-    await user.click(disclosure('T-0001'))
-    expect(rowOf('Child')).toBeTruthy()
+    await user.click(rowOf('Parent'))
+    expect(onOpen).toHaveBeenCalledWith('T-0001')
   })
 
-  it('shows the most urgent child state on the chevron while the row is folded', async () => {
-    const user = userEvent.setup()
-    const failed = makeTask({ id: 'T-0003', title: 'Broken', parentId: 'T-0001', state: 'failed' })
-    list({ tasks: [{ ...parent, state: 'review' }, child, failed], pinnedIds: [] })
-    expect(disclosure('T-0001').querySelector('[data-state]')).toBeNull()
+  it('has no chevron on a task row', () => {
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
 
-    await user.click(disclosure('T-0001'))
-
-    const dot = disclosure('T-0001').querySelector('[data-state]')
-    expect(dot?.getAttribute('data-state')).toBe('failed')
+    expect(screen.queryByRole('button', { name: /^Work under/ })).toBeNull()
   })
 
   it('opens the subtask when it is picked', async () => {
     const user = userEvent.setup()
-    const { onOpen } = list({ tasks: [parent, child], pinnedIds: [] })
+    const { onOpen } = list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
 
     await user.click(rowOf('Child'))
     expect(onOpen).toHaveBeenCalledWith('T-0002')
@@ -547,19 +551,12 @@ describe('subtasks under their parent', () => {
     expect(within(parentItem).getByRole('button', { name: /^Child,/ })).toBeTruthy()
   })
 
-  it('remembers a fold after the list is shown again', async () => {
+  it('keeps no fold of a task in the browser', async () => {
     const user = userEvent.setup()
-    const { unmount } = list({ tasks: [parent, child], pinnedIds: [] })
-
-    await user.click(disclosure('T-0001'))
-    expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
-    unmount()
     list({ tasks: [parent, child], pinnedIds: [] })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
-    expect(JSON.parse(window.localStorage.getItem('natamux.sidebar-folds') ?? '{}')).toEqual({
-      'task:T-0001': false,
-    })
+    await user.click(rowOf('Parent'))
+    expect(window.localStorage.getItem('natamux.sidebar-folds')).toBeNull()
   })
 
   it('counts nested subtasks in the group, and in the hint of a folded group', async () => {
@@ -582,10 +579,10 @@ describe('the agents of a task', () => {
     lanes: { alpha: 'running', beta: 'needs-input' },
   })
 
-  it('lists each parallel stage, and opens by itself when one needs the user', () => {
-    list({ tasks: [lanes], pinnedIds: [] })
+  it('lists each parallel stage once the task is the open workspace', () => {
+    list({ tasks: [lanes], pinnedIds: [], currentId: 'T-0001' })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+    expect(rowOf('Checks').getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: 'Alpha, Running' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Beta, Needs your input' })).toBeTruthy()
   })
@@ -595,7 +592,12 @@ describe('the agents of a task', () => {
     const loadTerminals = vi.fn(async () =>
       shells({ '1': { stage: 'alpha', state: null }, '2': { stage: 'beta', state: null } }),
     )
-    const { onOpenShell } = list({ tasks: [lanes], pinnedIds: [], loadTerminals })
+    const { onOpenShell } = list({
+      tasks: [lanes],
+      pinnedIds: [],
+      currentId: 'T-0001',
+      loadTerminals,
+    })
 
     const shell = await screen.findByRole('button', { name: 'Beta, Shell 2, Needs your input' })
     expect(screen.queryByRole('button', { name: 'Beta, Needs your input' })).toBeNull()
@@ -605,15 +607,14 @@ describe('the agents of a task', () => {
 
   it('opens the first shell for a stage that has no terminal yet', async () => {
     const user = userEvent.setup()
-    const { onOpenShell } = list({ tasks: [lanes], pinnedIds: [] })
+    const { onOpenShell } = list({ tasks: [lanes], pinnedIds: [], currentId: 'T-0001' })
 
     await user.click(screen.getByRole('button', { name: 'Alpha, Running' }))
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', null)
   })
 
-  // The task spins while one of its agents works, also when another waits, folded or open.
-  it('spins the task glyph while one of its rows runs', async () => {
-    const user = userEvent.setup()
+  // The task glyph shows running while one of its agents works, also when another waits.
+  it('shows the task as running while one of its rows runs', async () => {
     const loadTerminals = vi.fn(async () =>
       shells({
         '1': { stage: 'alpha', state: null, agent: 'claude-code' },
@@ -621,39 +622,37 @@ describe('the agents of a task', () => {
       }),
     )
     const both = { ...lanes, lanes: { alpha: 'needs-input' as const, beta: 'running' as const } }
-    const { rerender } = list({ tasks: [both], pinnedIds: [], loadTerminals })
+    const { rerender } = list({ tasks: [both], pinnedIds: [], currentId: 'T-0001', loadTerminals })
     const taskGlyph = () =>
       screen.getByRole('button', { name: /^Checks,/ }).querySelector('[data-state]')
 
     await screen.findByRole('button', { name: 'Beta, Claude Code, Shell 2, Running' })
     expect(taskGlyph()?.getAttribute('data-state')).toBe('running')
-    await user.click(disclosure('T-0001'))
-    expect(taskGlyph()?.getAttribute('data-state')).toBe('running')
 
     rerender({
       tasks: [{ ...both, lanes: { alpha: 'needs-input', beta: 'done' } }],
       pinnedIds: [],
+      currentId: 'T-0001',
       loadTerminals,
     })
     expect(taskGlyph()?.getAttribute('data-state')).toBe('needs-input')
   })
 
-  it('loads the terminals only while the row is open, and stops asking when it folds', async () => {
+  it('reads the terminals of a resting task only while it is the open workspace', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const quiet = { ...lanes, state: 'review' as const, lanes: { alpha: 'review' as const } }
     const loadTerminals = vi.fn(async () => shells({ '1': { stage: 'alpha', state: null } }))
-    list({ tasks: [quiet], pinnedIds: [], loadTerminals })
+    const { rerender } = list({ tasks: [quiet], pinnedIds: [], loadTerminals })
 
     await act(() => vi.advanceTimersByTimeAsync(6000))
     expect(loadTerminals).not.toHaveBeenCalled()
 
-    await user.click(disclosure('T-0001'))
+    rerender({ tasks: [quiet], pinnedIds: [], currentId: 'T-0001', loadTerminals })
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(1))
     await act(() => vi.advanceTimersByTimeAsync(5000))
     await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(2))
 
-    await user.click(disclosure('T-0001'))
+    rerender({ tasks: [quiet], pinnedIds: [], currentId: null, loadTerminals })
     await act(() => vi.advanceTimersByTimeAsync(15000))
     expect(loadTerminals).toHaveBeenCalledTimes(2)
   })
@@ -665,11 +664,11 @@ describe('one row per shell', () => {
 
   it('shows the one agent of a task under it, and spins with it', async () => {
     const loadTerminals = vi.fn(async () => shells({ '1': claude }))
-    list({ tasks: [plain], pinnedIds: [], loadTerminals })
+    list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
     const shell = await screen.findByRole('button', { name: 'Spec, Claude Code, Shell 1, Running' })
     expect(shell.textContent).toContain('S1')
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+    expect(rowOf('Plain').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('shows a shell with no agent by its program, and an agent started there by hand', async () => {
@@ -695,42 +694,44 @@ describe('one row per shell', () => {
     expect(cursor.querySelector('[data-tip="Cursor"]')).toBeTruthy()
   })
 
-  it('reads the shells of the open workspace even when it rests, and keeps it folded', async () => {
-    const user = userEvent.setup()
+  it('reads and shows the shells of the open workspace even when it rests', async () => {
     const resting = { ...plain, state: 'review' as const }
     const loadTerminals = vi.fn(async () => shells({}, { '1': 'bash' }))
     list({ tasks: [resting], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
-    await waitFor(() => expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false'))
-    await user.click(disclosure('T-0001'))
-    expect(screen.getByRole('button', { name: 'Shell 1, bash' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Shell 1, bash' })).toBeTruthy()
+    expect(rowOf('Plain').getAttribute('aria-expanded')).toBe('true')
   })
 })
 
 describe('the keyboard in the tree', () => {
-  it('folds and unfolds a task with Left and Right, and moves between it and its children', async () => {
+  it('moves into the open task with Right and back with Left, and never folds it', async () => {
     const user = userEvent.setup()
-    list({ tasks: [parent, child], pinnedIds: [] })
-    const row = rowOf('Parent')
-    act(() => row.focus())
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
+    act(() => rowOf('Parent').focus())
 
-    await user.keyboard('{ArrowLeft}')
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByRole('button', { name: /^Child,/ })).toBeNull()
-    expect(document.activeElement).toBe(row)
-
-    await user.keyboard('{ArrowRight}')
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
     await user.keyboard('{ArrowRight}')
     expect(document.activeElement).toBe(rowOf('Child'))
     await user.keyboard('{ArrowLeft}')
     expect(document.activeElement).toBe(rowOf('Parent'))
+    await user.keyboard('{ArrowLeft}')
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^natamux/ }))
+  })
+
+  it('opens a folded task with Right', async () => {
+    const user = userEvent.setup()
+    const { onOpen } = list({ tasks: [parent, child], pinnedIds: [] })
+    act(() => rowOf('Parent').focus())
+
+    await user.keyboard('{ArrowRight}')
+    expect(onOpen).toHaveBeenCalledWith('T-0001')
   })
 
   it('reaches an agent row with the arrows and keeps one tab stop', async () => {
     const user = userEvent.setup()
     const lanes = makeTask({ id: 'T-0001', title: 'Checks', lanes: { alpha: 'running' } })
-    list({ tasks: [lanes], pinnedIds: [] })
+    list({ tasks: [lanes], pinnedIds: [], currentId: 'T-0001' })
     act(() => rowOf('Checks').focus())
 
     await user.keyboard('{ArrowDown}')
@@ -763,10 +764,8 @@ describe('a task row', () => {
     expect(row.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
     expect(within(row).getByText('Manual review')).toBeTruthy()
     expect(within(row).getByText('3/4')).toBeTruthy()
-    const comet = row.querySelector('.comet')
-    expect(comet?.getAttribute('data-state')).toBe('running')
-    expect(comet?.getAttribute('data-tip')).toBe(
-      'Spec done, Implement done, Manual review running, Release not started',
+    expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      'Steps: Spec done, Implement done, Manual review running, Release not started',
     )
     expect(within(row).getByText('#12')).toBeTruthy()
     expect(within(row).getByText('1/2')).toBeTruthy()
@@ -819,17 +818,13 @@ describe('test spec cases', () => {
     expect(screen.queryByRole('button', { name: /^Other part,/ })).toBeNull()
   })
 
-  // A7 and D8: the user's fold wins; the dot follows the children.
-  it('stays folded by the user when a child starts to wait, and shows it on the dot', async () => {
-    const user = userEvent.setup()
+  // A7: a child that starts to wait does not open its parent; the Needs you section has it.
+  it('keeps a row folded when a child starts to wait', () => {
     const { rerender } = list({ tasks: [parent, child], pinnedIds: [] })
-    await user.click(disclosure('T-0001'))
 
     rerender({ tasks: [parent, { ...child, state: 'needs-input' }], pinnedIds: [] })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('false')
-    const dot = disclosure('T-0001').querySelector('[data-state]')
-    expect(dot?.getAttribute('data-state')).toBe('needs-input')
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('false')
   })
 
   // B3: every kind of fold is kept.
@@ -850,22 +845,25 @@ describe('test spec cases', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked')
     })
-    list({ tasks: [parent, child], pinnedIds: [] })
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
 
-    expect(disclosure('T-0001').getAttribute('aria-expanded')).toBe('true')
+    expect(rowOf('Parent').getAttribute('aria-expanded')).toBe('true')
   })
 
   // D3: a lane that changes keeps its place.
   it('updates the rows of parallel stages in place', () => {
     const checks = makeTask({ title: 'Checks', lanes: { alpha: 'running', beta: 'running' } })
-    const { rerender } = list({ tasks: [checks], pinnedIds: [] })
+    const { rerender } = list({ tasks: [checks], pinnedIds: [], currentId: 'T-0001' })
     const names = () =>
       [...document.querySelectorAll('[data-roving^="agent:"]')].map((row) =>
         row.getAttribute('aria-label'),
       )
     expect(names()).toEqual(['Alpha, Running', 'Beta, Running'])
 
-    rerender({ tasks: [{ ...checks, lanes: { alpha: 'needs-input', beta: 'running' } }] })
+    rerender({
+      tasks: [{ ...checks, lanes: { alpha: 'needs-input', beta: 'running' } }],
+      currentId: 'T-0001',
+    })
 
     expect(names()).toEqual(['Alpha, Needs your input', 'Beta, Running'])
   })
@@ -913,7 +911,7 @@ describe('test spec cases', () => {
     const loadTerminals = vi.fn(async () => {
       throw new Error('daemon gone')
     })
-    list({ tasks: [checks], pinnedIds: [], loadTerminals })
+    list({ tasks: [checks], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
     await waitFor(() => expect(loadTerminals).toHaveBeenCalled())
     expect(screen.getByRole('button', { name: 'Alpha, Running' })).toBeTruthy()
@@ -927,7 +925,7 @@ describe('test spec cases', () => {
     render(
       withHost(
         <WorkspaceList
-          {...props({ tasks: [checks], pinnedIds: [] }, handlers)}
+          {...props({ tasks: [checks], pinnedIds: [], currentId: 'T-0001' }, handlers)}
           loadTerminals={async () =>
             shells({ '1': { stage: 'alpha', state: null }, '2': { stage: 'beta', state: null } })
           }
@@ -945,11 +943,11 @@ describe('test spec cases', () => {
     expect(handlers.onOpenShell).toHaveBeenCalledWith('T-0001', '2')
   })
 
-  // D7: the control only where something is under the row.
-  it('has no fold line on a row with nothing under it', () => {
-    list({ tasks: [makeTask({ title: 'Alone', lanes: {} })], pinnedIds: [] })
+  // D7: expanded only where something is under the row.
+  it('says nothing of a fold on a row with nothing under it', () => {
+    list({ tasks: [makeTask({ title: 'Alone', lanes: {} })], pinnedIds: [], currentId: 'T-0001' })
 
-    expect(screen.queryByRole('button', { name: /^Work under/ })).toBeNull()
+    expect(rowOf('Alone').hasAttribute('aria-expanded')).toBe(false)
   })
 
   // E1 and E2: the bar, no inset ring, and no amber in the tree.
@@ -963,18 +961,17 @@ describe('test spec cases', () => {
   })
 
   // G1 and G2: only what comes after the first paint moves.
-  it('slides in rows and unfolded lists that come after the first paint only', async () => {
-    const user = userEvent.setup()
+  it('slides in rows and unfolded lists that come after the first paint only', () => {
     const quiet = { ...child, state: 'review' as const }
     const resting = { ...parent, state: 'review' as const }
     const { rerender } = list({ tasks: [resting, quiet], pinnedIds: [] })
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
 
-    await user.click(disclosure('T-0001'))
+    rerender({ tasks: [resting, quiet], pinnedIds: [], currentId: 'T-0001' })
     expect(rowOf('Child').closest('ul')?.className).toContain('sb-unfold')
 
     const added = makeTask({ id: 'T-0005', title: 'Added', createdAt: '2026-10-10T08:30:00.000Z' })
-    rerender({ tasks: [resting, quiet, added], pinnedIds: [] })
+    rerender({ tasks: [resting, quiet, added], pinnedIds: [], currentId: 'T-0001' })
     expect(rowOf('Added').closest('li')?.className).toContain('hm-pop')
     expect(rowOf('Parent').closest('li')?.className ?? '').not.toContain('hm-pop')
   })
@@ -999,7 +996,7 @@ describe('test spec cases', () => {
   // H3: leaves, type-ahead and F2 on a child.
   it('does nothing on Right on a leaf row, and reaches a child by typing', async () => {
     const user = userEvent.setup()
-    list({ tasks: [parent, child], pinnedIds: [] })
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
     act(() => rowOf('Child').focus())
 
     await user.keyboard('{ArrowRight}')
@@ -1011,7 +1008,7 @@ describe('test spec cases', () => {
 
   it('renames the child, not its parent, with F2 on a child row', async () => {
     const user = userEvent.setup()
-    const { onRename } = list({ tasks: [parent, child], pinnedIds: [] })
+    const { onRename } = list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
     act(() => rowOf('Child').focus())
 
     await user.keyboard('{F2}')

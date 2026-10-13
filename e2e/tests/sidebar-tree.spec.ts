@@ -68,14 +68,16 @@ test('shows a subtask and the agents under their task', async ({ page, request }
 
   const parentRow = tree(page).getByRole('button', { name: taskNamed(parentTitle) })
   const parentItem = parentRow.locator('xpath=ancestor::li[1]')
-  const fold = tree(page).getByRole('button', { name: `Work under ${parentId}` })
-  // A child works, so the row opens by itself.
-  await expect(fold).toHaveAttribute('aria-expanded', 'true')
   const childRow = parentItem.getByRole('button', { name: taskNamed(childTitle) })
+  // Only the open workspace shows what works under it, so a pick on the row opens it.
+  await parentRow.click()
+  await expect(page.getByRole('region', { name: `Changes of ${parentId}` })).toBeVisible()
+  await expect(parentRow).toHaveAttribute('aria-expanded', 'true')
   await expect(childRow).toBeVisible()
   // The shell row names its stage first, then its agent and shell: "Spec, …, Shell 1, Running".
   const shell = parentItem.getByRole('button', { name: /^Spec, (.+, )?Shell 1,/ })
   await expect(shell).toBeVisible()
+  await expect(tree(page).getByRole('button', { name: /^Work under/ })).toHaveCount(0)
 
   for (const theme of ['dark', 'light'] as const) {
     await page.evaluate((value) => {
@@ -87,21 +89,21 @@ test('shows a subtask and the agents under their task', async ({ page, request }
     })
   }
 
-  // A pick on the child opens its workspace; on the shell, the terminal of the parent.
+  // A pick on the child opens its workspace and keeps its parent open; on the shell, the
+  // terminal of the parent.
   await childRow.click()
   await expect(page.getByRole('region', { name: `Changes of ${childId}` })).toBeVisible()
+  await expect(parentRow).toHaveAttribute('aria-expanded', 'true')
   await shell.click()
   await expect(page.getByRole('region', { name: `Changes of ${parentId}` })).toBeVisible()
   const tabs = page.getByRole('tablist', { name: 'View', exact: true })
   await expect(tabs.getByRole('tab', { name: 'Terminal' })).toHaveAttribute('aria-selected', 'true')
 
-  // The keyboard folds it, and the fold stays after a reload.
+  // Left moves to the group and never folds the open task.
   await parentRow.focus()
   await page.keyboard.press('ArrowLeft')
-  await expect(fold).toHaveAttribute('aria-expanded', 'false')
-  await expect(childRow).toHaveCount(0)
-  await page.reload()
-  await expect(fold).toHaveAttribute('aria-expanded', 'false')
+  await expect(parentRow).toHaveAttribute('aria-expanded', 'true')
+  await expect(childRow).toBeVisible()
 })
 
 // M1 and G6 of the test spec.
@@ -129,15 +131,10 @@ test('lists the stages of a parallel group, with reduced motion', async ({ page,
 
   const row = tree(page).getByRole('button', { name: taskNamed(title) })
   const agents = row.locator('xpath=ancestor::li[1]').locator('[data-roving^="agent:"]')
-  const fold = tree(page).getByRole('button', { name: `Work under ${id}` })
-  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await row.click()
+  await expect(row).toHaveAttribute('aria-expanded', 'true')
   // A stage shows as its own row, or as the shell that works on it.
   await expect(agents).toHaveCount(group.parallel.length, { timeout: 10_000 })
-
-  await fold.click()
-  await expect(agents).toHaveCount(0)
-  await fold.click()
-  await expect(agents.first()).toBeVisible({ timeout: 500 })
   const endless = await page.evaluate(() => {
     const nav = document.querySelector('nav[aria-label="Workspaces"]')
     const all = nav?.getAnimations({ subtree: true }) ?? []

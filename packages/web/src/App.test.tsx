@@ -801,10 +801,10 @@ describe('App', () => {
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(await within(view).findByText('The agent asks: Which test runner?')).toBeTruthy()
-    // Said once in the sidebar (Needs you) and once in the workspace (the banner), not in the
-    // tree row; the banner stands for the state chip.
+    // Said in Needs you, on the task's card in the tree, and in the workspace banner; the banner
+    // stands for the state chip.
     await waitFor(() =>
-      expect(screen.getAllByText('The agent asks: Which test runner?')).toHaveLength(2),
+      expect(screen.getAllByText('The agent asks: Which test runner?')).toHaveLength(3),
     )
     expect(
       within(screen.getByRole('region', { name: 'Needs you' })).getByText(/Which test/),

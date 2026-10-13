@@ -1,6 +1,5 @@
 import type { Task, TaskState } from '@natamux/core'
 import {
-  ChevronRight,
   Copy,
   FileDiff,
   FolderMinus,
@@ -16,7 +15,7 @@ import {
 import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { agentLabel } from '../lib/agents'
 import { CHECKS_COLOR, pullRequestNumber, pullRequestSummary } from '../lib/pull-request'
-import { cometOf, type ShellRow, shellRowName, shellTag } from '../lib/sidebar-tree'
+import { cometOf, rowTier, type ShellRow, shellRowName, shellTag } from '../lib/sidebar-tree'
 import {
   deleteTaskDescription,
   formatAge,
@@ -27,8 +26,7 @@ import {
 } from '../lib/tasks'
 import { toast } from '../lib/toasts'
 import { AgentIcon } from './AgentBadge'
-import { Comet } from './Comet'
-import { StatusGlyph } from './StatusGlyph'
+import { ShapeGlyph } from './ShapeGlyph'
 import { ConfirmDialog } from './ui/Dialog'
 import { Menu, type MenuItem, openContextMenu } from './ui/Menu'
 import { ICON } from './ui/styles'
@@ -37,14 +35,6 @@ type RovingTab = {
   tabIndex: number
   'data-roving': string
   onFocus: (event: FocusEvent<HTMLElement>) => void
-}
-
-// The chevron of a row that folds what works under it: its shells and open subtasks.
-export type RowFold = {
-  open: boolean
-  onToggle: () => void
-  // The most urgent state under the row, shown on the chevron while it is folded. Null: none.
-  state: TaskState | null
 }
 
 type WorkspaceRowProps = {
@@ -58,7 +48,7 @@ type WorkspaceRowProps = {
   glyph: TaskState
   // What the agent does now, for a running task.
   activity?: string
-  // Why the task failed. Null while it is not known. The Needs you section has the question.
+  // What the agent asked, or why the task failed. Null while it is not known.
   question?: string | null
   // The state changed since the user last opened this workspace.
   unseen: boolean
@@ -66,9 +56,12 @@ type WorkspaceRowProps = {
   tab: RovingTab
   // Done and all subtasks of the task. Null: it has none.
   subtasks?: { done: number; total: number } | null
-  fold?: RowFold
-  // A top-level row keeps a gutter for the chevron, so all titles line up.
-  gutter?: boolean
+  // Only the open workspace shows the rows under it: its shells and open subtasks.
+  open?: boolean
+  // It has rows under it, shown once it is the open workspace.
+  expandable?: boolean
+  // Opens the terminal of the agent that asked.
+  onAnswer?: () => void
   // The row was added after the list was first drawn, so it slides in.
   enter?: boolean
   // The rows under the open fold.
@@ -89,10 +82,19 @@ function copy(text: string, what: string) {
 }
 
 const ROW =
-  'flex min-h-11 w-full flex-col rounded-md py-1.5 pr-2 text-left text-xs leading-4 pointer-coarse:min-h-14 pointer-coarse:justify-center'
+  'flex w-full flex-col justify-center rounded-md px-2.5 text-left text-xs leading-4 pointer-coarse:min-h-14'
 
-// One workspace in the sidebar: its state, title and age, then its branch and the size of its
-// work, then what its agent does or asks. Double-click the title, or press F2, to rename it.
+// The height follows what the row needs: a card for what waits on the user, two lines for work
+// that goes on, one line for what is finished.
+const TIER = {
+  attention: 'row-attn my-0.5 min-h-[68px] rounded-lg py-2',
+  live: 'min-h-10 py-1.5',
+  quiet: 'min-h-6 py-1',
+} as const
+
+// One workspace in the sidebar: its state, title and age, then its id, step and what its agent
+// does. A task that waits on the user shows the question; a finished one is a single line.
+// Double-click the title, or press F2, to rename it.
 export function WorkspaceRow({
   task,
   now,
@@ -105,8 +107,9 @@ export function WorkspaceRow({
   unseen,
   tab,
   subtasks = null,
-  fold,
-  gutter = true,
+  open = false,
+  expandable = false,
+  onAnswer,
   enter = false,
   children,
   onOpen,
@@ -141,7 +144,7 @@ export function WorkspaceRow({
     lastState.current = task.state
   }, [task.state])
   const comet = cometOf(task)
-  const open = fold?.open === true
+  const tier = rowTier(task.state)
   // Screen readers hear every step, as the comet's tooltip shows them.
   const stepsId = useId()
 
@@ -211,15 +214,44 @@ export function WorkspaceRow({
         ]),
   ]
 
-  const titleClass = `min-w-0 flex-1 truncate text-sm ${unseen ? 'font-semibold' : 'font-medium'} ${
-    finished ? 'text-muted' : 'text-ink'
-  } ${finished && task.state === 'cancelled' ? 'line-through' : ''}`
+  const weight = unseen || tier === 'attention' ? 'font-semibold' : 'font-medium'
+  const size = tier === 'quiet' ? 'text-xs font-normal' : `text-sm ${weight}`
+  const tone = finished ? 'text-muted' : tier === 'quiet' ? 'text-ink-2' : 'text-ink'
+  const titleClass = `min-w-0 flex-1 truncate ${size} ${tone} ${task.state === 'cancelled' ? 'line-through' : ''}`
   const metaColor = 'text-muted'
+  const answers = task.state === 'needs-input' && onAnswer !== undefined
+  const step = comet.of > 1 ? `${comet.at}/${comet.of}` : null
+  // What a card says: the question, or why the task failed or waits.
+  const said = question ?? (task.state === 'needs-input' ? 'Waiting for your answer' : null)
+
+  // The branch is mostly the title, so it waits in the tooltip and the menu.
+  const id = (
+    <span data-tip={task.branch ?? undefined} className="shrink-0 font-mono text-2xs">
+      {task.id}
+    </span>
+  )
+  const stage = (
+    <>
+      {step !== null && <span className="shrink-0 font-mono text-2xs tabular-nums">{step}</span>}
+      {comet.stage !== null && <span className="min-w-0 shrink truncate">{comet.stage}</span>}
+    </>
+  )
+  // Open, the rows under it name the agents.
+  const agent = task.agent !== null && !open && (
+    <span data-tip={agentLabel(task.agent)} className="inline-flex shrink-0">
+      <AgentIcon agent={task.agent} />
+    </span>
+  )
 
   const body = (titleLine: ReactNode): ReactNode => (
     <>
       <span className="flex h-4 w-full items-center gap-2">
-        <StatusGlyph state={glyph} quiet={quiet} tip={laneSummary(task)} />
+        <ShapeGlyph
+          state={glyph}
+          quiet={quiet}
+          size={tier === 'attention' ? 9 : 8}
+          tip={laneSummary(task)}
+        />
         {titleLine}
         {unseen && (
           <span
@@ -237,58 +269,53 @@ export function WorkspaceRow({
           </span>
         )}
       </span>
-      <span className={`flex w-full min-w-0 items-center gap-2 pl-6 ${metaColor}`}>
-        {repoName !== undefined && (
-          <span className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2">
-            {repoName}
+      <span id={stepsId} className="sr-only">{`Steps: ${comet.summary}`}</span>
+      {tier === 'live' && (
+        <span className={`mt-0.5 flex w-full min-w-0 items-center gap-1.5 pl-5.5 ${metaColor}`}>
+          {repoName !== undefined && (
+            <span className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2">
+              {repoName}
+            </span>
+          )}
+          {id}
+          {stage}
+          {subtasks !== null && (
+            <span data-tip="Subtasks done" className="inline-flex shrink-0 items-center gap-0.5">
+              <ListTree size={ICON.xs} aria-hidden="true" />
+              {`${subtasks.done}/${subtasks.total}`}
+            </span>
+          )}
+          {/* Open, each shell row says what its agent does. */}
+          <span className="min-w-0 flex-1 truncate text-ink-2">
+            {task.state === 'running' && !open ? activity : null}
           </span>
-        )}
-        {/* Open, the rows under it name the agents. */}
-        {task.agent !== null && !open && (
-          <span data-tip={agentLabel(task.agent)} className="inline-flex shrink-0">
-            <AgentIcon agent={task.agent} />
-          </span>
-        )}
-        {/* The branch is mostly the title, so it waits in the tooltip and the menu. */}
-        <span data-tip={task.branch ?? undefined} className="shrink-0 font-mono">
-          {task.id}
+          {task.pr !== null && (
+            <span
+              data-tip={`Pull request ${pullRequestSummary(task) ?? ''}`.trim()}
+              className={`inline-flex shrink-0 items-center gap-0.5 ${
+                task.prStatus === null ? '' : CHECKS_COLOR[task.prStatus.checks]
+              }`}
+            >
+              <GitPullRequest size={ICON.xs} aria-hidden="true" />
+              {pullRequestNumber(task.pr)}
+            </span>
+          )}
+          {agent}
         </span>
-        {comet.of > 0 && (
-          <Comet progress={comet.progress} state={comet.state} summary={comet.summary} />
-        )}
-        <span id={stepsId} className="sr-only">{`Steps: ${comet.summary}`}</span>
-        <span className="min-w-0 flex-1 truncate text-ink-2">{comet.stage}</span>
-        {comet.of > 1 && <span className="shrink-0 tabular-nums">{`${comet.at}/${comet.of}`}</span>}
-        {task.pr !== null && (
-          <span
-            data-tip={`Pull request ${pullRequestSummary(task) ?? ''}`.trim()}
-            className={`inline-flex shrink-0 items-center gap-0.5 ${
-              task.prStatus === null ? '' : CHECKS_COLOR[task.prStatus.checks]
-            }`}
-          >
-            <GitPullRequest size={ICON.xs} aria-hidden="true" />
-            {pullRequestNumber(task.pr)}
-          </span>
-        )}
-        {subtasks !== null && (
-          <span data-tip="Subtasks done" className="inline-flex shrink-0 items-center gap-0.5">
-            <ListTree size={ICON.xs} aria-hidden="true" />
-            {`${subtasks.done}/${subtasks.total}`}
-          </span>
-        )}
-      </span>
-      {/* Open, each shell row says what its agent does. */}
-      {task.state === 'running' && !open && activity !== undefined && activity !== '' && (
-        <span className={`block h-4 w-full truncate pl-6 ${metaColor}`}>{activity}</span>
       )}
-      {/* Why it failed, so the user need not open each failed task to find out. */}
-      {task.state === 'failed' && typeof question === 'string' && (
-        <span
-          data-tip-overflow
-          data-state="failed"
-          className="block h-4 w-full truncate pl-6 text-(--chip-fg)"
-        >
-          {question}
+      {tier === 'attention' && said !== null && (
+        <span data-tip-overflow className="mt-1 line-clamp-2 w-full pl-5.5 text-ink">
+          {said}
+        </span>
+      )}
+      {tier === 'attention' && (
+        <span className={`mt-1.5 flex w-full min-w-0 items-center gap-1.5 pl-5.5 ${metaColor}`}>
+          {/* Room for the Answer button, which sits on top of the row. */}
+          {answers && <span className="h-5 w-14 shrink-0" />}
+          {id}
+          {stage}
+          <span className="flex-1" />
+          {agent}
         </span>
       )}
     </>
@@ -305,7 +332,10 @@ export function WorkspaceRow({
           />
         )}
         {renaming ? (
-          <div className={`${ROW} ${gutter ? 'pl-6' : 'pl-2'}`}>
+          <div
+            data-state={tier === 'attention' ? task.state : undefined}
+            className={`${ROW} ${TIER[tier]}`}
+          >
             {body(
               <form
                 onSubmit={(event) => {
@@ -360,9 +390,12 @@ export function WorkspaceRow({
               }
             }}
             aria-current={current ? 'true' : undefined}
+            aria-expanded={expandable ? open : undefined}
             aria-label={`${rowLabel(task, now)}${unseen ? ', unseen' : ''}`}
             aria-describedby={comet.of > 0 ? stepsId : undefined}
-            className={`${ROW} ${gutter ? 'pl-6' : 'pl-2'} sb-row focus-inset hover:bg-hover aria-[current=true]:bg-selected group-focus-within/tree:aria-[current=true]:bg-selection-active`}
+            // The card takes its tint from the state.
+            data-state={tier === 'attention' ? task.state : undefined}
+            className={`${ROW} ${TIER[tier]} sb-row focus-inset hover:bg-hover aria-[current=true]:bg-selected group-focus-within/tree:aria-[current=true]:bg-selection-active`}
           >
             {body(
               // biome-ignore lint/a11y/noStaticElementInteractions: the row around it is the button; a double click on the title is a shortcut for F2.
@@ -378,29 +411,17 @@ export function WorkspaceRow({
             )}
           </button>
         )}
-        {fold !== undefined && (
+        {answers && !renaming && (
           <button
             type="button"
-            // The row takes Left and Right for this, so the tree stays one tab stop.
+            // The row keeps the one tab stop of the tree; Enter on it opens the task.
             tabIndex={-1}
-            aria-expanded={fold.open}
-            aria-label={`Work under ${task.id}`}
-            onClick={fold.onToggle}
-            className="absolute top-1.5 left-1 flex size-4 items-center justify-center rounded-sm text-muted hover:text-ink pointer-coarse:top-4.5"
+            data-state={task.state}
+            aria-label={`Answer ${task.id}`}
+            onClick={onAnswer}
+            className="absolute bottom-2.5 left-8 h-5 rounded-md bg-[color-mix(in_srgb,var(--chip-fg)_15%,transparent)] px-1.5 text-2xs font-medium text-(--chip-fg) hover:bg-[color-mix(in_srgb,var(--chip-fg)_25%,transparent)]"
           >
-            <ChevronRight
-              size={ICON.xs}
-              aria-hidden="true"
-              className={`sb-chevron ${fold.open ? 'rotate-90' : ''}`}
-            />
-            {!fold.open && fold.state !== null && (
-              <span
-                className="state-dot absolute -right-0.5 -bottom-0.5"
-                style={{ width: 6, height: 6 }}
-                data-state={fold.state}
-                aria-hidden="true"
-              />
-            )}
+            Answer
           </button>
         )}
         {!renaming && (
@@ -449,15 +470,15 @@ type AgentRowProps = {
 function RowGlyph({ row }: { row: ShellRow }) {
   if (row.plain) {
     return (
-      <span className="inline-flex size-4 shrink-0 items-center justify-center text-muted">
-        <SquareTerminal size={ICON.sm} aria-hidden="true" />
+      <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted">
+        <SquareTerminal size={ICON.xs} aria-hidden="true" />
       </span>
     )
   }
   if (row.state === null) {
-    return <span className="size-4 shrink-0" aria-hidden="true" />
+    return <span className="size-3.5 shrink-0" aria-hidden="true" />
   }
-  return <StatusGlyph state={row.state} />
+  return <ShapeGlyph state={row.state} size={7} />
 }
 
 // One shell under a task, or a parallel stage with no shell yet: its state, its agent, what it
@@ -471,7 +492,7 @@ export function AgentRow({ row, activity, tab, onOpen }: AgentRowProps) {
         {...tab}
         aria-label={shellRowName(row)}
         onClick={onOpen}
-        className="focus-inset flex h-6.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-hover pointer-coarse:h-10"
+        className="focus-inset flex h-5.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-hover pointer-coarse:h-10"
       >
         <RowGlyph row={row} />
         {row.agent !== null && (

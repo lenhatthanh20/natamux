@@ -1,4 +1,4 @@
-import { type Task, taskSchema } from '@natamux/core'
+import { type Task, type TaskState, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { TaskShells } from './api'
 import {
@@ -7,6 +7,7 @@ import {
   isFoldOpen,
   opensByDefault,
   parseFolds,
+  rowTier,
   type ShellRow,
   shellRowName,
   shellRows,
@@ -80,6 +81,20 @@ describe('opensByDefault', () => {
     expect(opensByDefault(['needs-input'])).toBe(true)
     expect(opensByDefault(['failed'])).toBe(true)
     expect(opensByDefault(['ready', 'review', 'done'])).toBe(false)
+  })
+})
+
+describe('rowTier', () => {
+  const tiers = (states: TaskState[]) => states.map(rowTier)
+
+  it('makes a card of what needs the user and one line of what is finished', () => {
+    expect(tiers(['needs-input', 'failed', 'blocked'])).toEqual([
+      'attention',
+      'attention',
+      'attention',
+    ])
+    expect(tiers(['running', 'review', 'ready'])).toEqual(['live', 'live', 'live'])
+    expect(tiers(['done', 'cancelled', 'draft'])).toEqual(['quiet', 'quiet', 'quiet'])
   })
 })
 
