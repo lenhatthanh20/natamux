@@ -29,14 +29,21 @@ export function waitForLoginPath(
     return Promise.resolve(undefined)
   }
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(undefined), waitMs)
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      resolve(undefined)
+    }, waitMs)
     port.on('message', ({ data }) => {
+      // A late PATH would reach git and gh but not the shells, which keep the fallback.
       if (
+        !settled &&
         typeof data === 'object' &&
         data !== null &&
         'path' in data &&
         typeof data.path === 'string'
       ) {
+        settled = true
         clearTimeout(timer)
         env.PATH = data.path
         resolve(data.path)

@@ -32,9 +32,11 @@ describe('the login shell PATH from the desktop app', () => {
     expect(env.PATH).toBe('/opt/homebrew/bin:/usr/bin')
   })
 
-  it('keeps the PATH it has when the app sends none in time', async () => {
+  it('keeps the PATH it has when none comes in time, and ignores a late one', async () => {
     const env: NodeJS.ProcessEnv = { PATH: '/usr/bin', NATAMUX_PATH_PENDING: '1' }
-    expect(await waitForLoginPath(env, fakePort().port, 5)).toBeUndefined()
+    const { port, send } = fakePort()
+    expect(await waitForLoginPath(env, port, 5)).toBeUndefined()
+    send({ path: '/opt/homebrew/bin:/usr/bin' })
     expect(env.PATH).toBe('/usr/bin')
   })
 
