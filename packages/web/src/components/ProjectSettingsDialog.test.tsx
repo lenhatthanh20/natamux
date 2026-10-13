@@ -1636,6 +1636,8 @@ describe('ProjectSettingsDialog, Issues tab', () => {
 
   it('keeps the JSON tab while the JSON is broken', async () => {
     const { user } = open()
+    await screen.findByRole('tab', { name: 'Issues' })
+
     await jsonTab(user, '{ "tracker": ')
 
     await user.click(screen.getByRole('tab', { name: 'Issues' }))
