@@ -363,6 +363,9 @@ export function NewWorkspaceDialog({
               onChange={(event) => {
                 setRepo(event.target.value)
                 setBase('')
+                // The other project's agents may not have the picked skill.
+                setSkill('')
+                setSkillsOpen(false)
               }}
               aria-label="Project"
               fieldSize="md"

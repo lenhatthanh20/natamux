@@ -696,6 +696,24 @@ describe('a skill picked in the Start a task dialog', () => {
     await waitFor(() => expect(screen.queryByRole('option', { name: 'An agent skill' })).toBeNull())
     expect(screen.getByLabelText('Task notes')).toBeTruthy()
     expect(fieldLabels(contextGroup())).not.toContain('Skill')
+
+    await user.selectOptions(screen.getByLabelText('Project'), 'default')
+    expect(await screen.findByRole('button', { name: 'Pick a skill' })).toBeTruthy()
+    expect(screen.queryByLabelText('Task notes')).toBeNull()
+  })
+
+  it('clears the picked skill when the project changes', async () => {
+    dialog({ loadSettings: async () => WITH_ISSUES, loadSkills: async () => SKILLS })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await pickSkill(user, 'jira-ticket')
+    await user.type(screen.getByLabelText('Reference of the context'), 'ABC-1')
+    await user.selectOptions(screen.getByLabelText('Project'), 'web')
+
+    expect(await screen.findByRole('button', { name: 'Pick a skill' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'jira-ticket' })).toBeNull()
+    expect(startButton().getAttribute('aria-disabled')).toBe('true')
+    expect(startButton().getAttribute('data-tip')).toBe('Pick a skill')
   })
 
   it('says the picked skill reads the reference before a skill is picked', async () => {
