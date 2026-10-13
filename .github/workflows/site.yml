@@ -34,9 +34,9 @@ jobs:
         working-directory: site
       - run: pnpm build
         working-directory: site
-      # Lets a reviewer download the built site of a pull request and look at it.
-      - if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
+      # A pull request's build, to look at before it merges.
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'pull_request'
         with:
           name: site-dist
           path: site/dist
