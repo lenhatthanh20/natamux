@@ -468,6 +468,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 - **Reduced motion** (`prefers-reduced-motion`): nothing moves. Running shows a still three-quarter ring; the flowing line becomes a plain dashed line.
 - **Window without focus:** the same still look as reduced motion (`data-window="inactive"`, set by `lib/window-focus.ts`). While any endless animation runs, the browser draws every frame, so a dashboard left open on another screen used about 20% CPU.
+- **With focus,** `lib/motion-ticker.ts` pauses every endless CSS animation and moves them all to the same time 8 times a second (every 125 ms). The page draws 8 frames a second instead of 120 on a 120 Hz screen. A 900 ms spin moves 50° per tick.
 - **Moving stripes and dashes** slide a `::before` with `transform`. Animating `background-position` repaints every frame.
 - **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
 - **Mock-up:** the canvas "Natamux stage progress" shows both views, with a light and dark switch.
