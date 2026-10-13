@@ -99,9 +99,7 @@ describe('createTask', () => {
     const task = service.createTask({ title: '  Task-0005  :   Fix bug xxx  ' })
 
     expect(task).toMatchObject({ id: 'TASK-0005', title: 'Fix bug xxx' })
-    expect(service.listEvents('TASK-0005').map(({ event }) => event.type)).toEqual([
-      'task.created',
-    ])
+    expect(service.listEvents('TASK-0005').map(({ event }) => event.type)).toEqual(['task.created'])
     expect(messages).toEqual([{ kind: 'task.created', task }])
   })
 

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { signIn, taskTable, TOKEN } from './helpers'
+import { signIn, TOKEN, taskTable } from './helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 

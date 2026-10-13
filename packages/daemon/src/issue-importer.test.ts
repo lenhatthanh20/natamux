@@ -79,7 +79,12 @@ describe('IssueImporter', () => {
     })
 
     await expect(clashing.import([5, 6, 7])).rejects.toThrow(TaskEditError)
-    expect(tasks.listTasks().map((task) => task.title).sort()).toEqual(['Existing', 'One'])
+    expect(
+      tasks
+        .listTasks()
+        .map((task) => task.title)
+        .sort(),
+    ).toEqual(['Existing', 'One'])
   })
 
   it('lists the open issues with gh', async () => {
