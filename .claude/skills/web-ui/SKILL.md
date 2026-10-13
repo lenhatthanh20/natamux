@@ -33,6 +33,7 @@ The spec is `docs/ui-spec.md` (tokens, layout, components). Read the section for
 - **Icons:** one size per job, from `ICON`.
 - **Motion:** only for what changed. It respects reduced motion (`styles.css` has the media query).
   - An endless animation moves `transform` or `opacity` only; `background-position` repaints every frame.
+  - `lib/motion-ticker.ts` moves endless animations 8 times a second, so a smooth look needs no extra frames. Do not drive endless motion from JS with requestAnimationFrame.
   - List it under `:root[data-window="inactive"]` too, so it stops while the window has no focus (`window-focus.test.ts` checks).
 - **Dependencies:** ask before adding a package.
 

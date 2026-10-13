@@ -1333,8 +1333,8 @@
   }
 }
 
-/* A window without focus shows the still look of reduced motion (lib/window-focus.ts). While any
-   endless animation runs, the browser draws every frame. */
+/* A window without focus shows the still look of reduced motion (lib/window-focus.ts). With focus,
+   lib/motion-ticker.ts moves endless animations 8 times a second instead of every frame. */
 :root[data-window="inactive"] .stage-arc,
 :root[data-window="inactive"] .stage-halo,
 :root[data-window="inactive"] .stage-link[data-kind="flow"]::before,
