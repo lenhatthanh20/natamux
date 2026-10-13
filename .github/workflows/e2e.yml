@@ -113,6 +113,7 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
+          retention-days: 7
           if-no-files-found: ignore
 
       - name: Logs on failure
