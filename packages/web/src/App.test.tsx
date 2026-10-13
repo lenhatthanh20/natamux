@@ -2180,6 +2180,42 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Workspaces' })).toBeTruthy()
   })
 
+  it('says that a task needs the user while the sidebar is hidden', async () => {
+    installDaemon([reviewTask, runningTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+
+    act(() => {
+      FakeSocket.instances[0]?.onmessage?.({
+        data: JSON.stringify({
+          kind: 'task.updated',
+          task: { ...runningTask, state: 'needs-input' },
+        }),
+      })
+    })
+
+    const news = await screen.findByText('Add export needs you')
+    expect(news.getAttribute('role')).toBe('status')
+    expect(news.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('has no Needs you section in the phone drawer', async () => {
+    stubWindowWidth(390)
+    installDaemon([workspaceTask({ state: 'needs-input' })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await user.click(await screen.findByRole('button', { name: 'Open the menu' }))
+
+    const drawer = await screen.findByRole('navigation', { name: 'Workspaces' })
+    expect(within(drawer).queryByRole('region', { name: 'Needs you' })).toBeNull()
+    expect(within(drawer).getAllByRole('button', { name: /^Fix timezone bug,/ })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '1 needs you' })).toBeTruthy()
+  })
+
   it('counts every waiting task, with or without a workspace, whatever the filter', async () => {
     installDaemon([
       workspaceTask({ state: 'needs-input' }),

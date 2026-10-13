@@ -270,6 +270,19 @@ describe('the jump palette', () => {
     expect(all).not.toContain('T-0010')
   })
 
+  // Section 4.17 of the UI spec: how much a task needs the user comes before how long it waits.
+  it('sorts the needs-you scope by urgency, not by the longest wait, with or without a workspace', () => {
+    const waiting = [
+      task('T-0011', 'blocked', { workspace: null, updatedAt: '2026-10-09T08:00:00.000Z' }),
+      task('T-0012', 'review', { workspace: null, updatedAt: '2026-10-09T09:00:00.000Z' }),
+      task('T-0013', 'needs-input', { updatedAt: '2026-10-09T11:00:00.000Z' }),
+    ]
+    const rows = ids(
+      jumpSections({ query: '', tasks: waiting, recent: [], now: NOW, scope: 'needs-you' }),
+    )
+    expect(rows).toEqual(['T-0013', 'T-0012', 'T-0011'])
+  })
+
   it('finds a waiting task without a workspace by its title in the needs-you scope', () => {
     const waiting = [task('T-0010', 'blocked', { workspace: null, title: 'Ship docs' })]
     const rows = ids(

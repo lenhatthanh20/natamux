@@ -23,7 +23,7 @@ Coding agents are good at one job at a time. When you run several, you start to 
 - **Tasks.** Each piece of work is a task with notes, a priority and a state: draft, ready, running, needs input, review or done.
 - **A worktree and a terminal per task.** A task gets its own branch and folder, so agents never step on each other. The shell keeps running when you close the dashboard.
 - **Stages.** A task moves through stages: Context, Spec, Plan, Test spec and Implement side by side, Review, Testing, Release. Each stage checks its result, and you approve where a stage asks for it. You can change the stages per repository. See [Stages](/docs/concepts/stages/).
-- **Needs you.** A strip at the top of the dashboard lists the tasks that wait for you: an agent asked a question, a stage is ready for review, a task is blocked or failed.
+- **Needs you.** The title bar counts the tasks that wait for you: an agent asked a question, a stage is ready for review, a task is blocked or failed. Click the count to list them. In the sidebar, a question or a failure shows as a card. See [Needs you](/docs/guides/dashboard/#needs-you).
 - **Five agents.** Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor. Natamux adds hooks to each session, so the dashboard knows when an agent works, asks or finishes. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 - **Changes and history.** A file tree with side-by-side or inline diffs, commit, push, open a pull request, and a branch graph.
 - **A command line.** `natamux`, short name `nmx`, for you and for agents (`natamux done`, `natamux ask`). See the [CLI reference](/docs/reference/cli/).

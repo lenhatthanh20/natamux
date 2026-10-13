@@ -21,7 +21,7 @@ description: Which Natamux documents to update for a change, and how to write th
 | Change | Update |
 |---|---|
 | Terminal, shells, fonts | `guides/terminal.md` |
-| Board, table, panels, Needs you, dialogs | `guides/dashboard.md` |
+| Board, table, panels, dialogs | `guides/dashboard.md` |
 | Changes and History tabs, commit, push, PR | `guides/changes-and-history.md`, `guides/github.md` |
 | Several agents on one task | `guides/fan-out.md` |
 | Desktop app, updates | `guides/desktop-app.md`, `docs/design-desktop-update.md` |
