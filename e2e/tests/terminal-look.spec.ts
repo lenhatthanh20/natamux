@@ -211,6 +211,8 @@ test('shows the scrollbar on hover, and keeps the pill off it (C18, C22)', async
 test('does not dim the shells without the focus, and outlines the focused one (C19)', async ({
   page,
 }) => {
+  const regions = page.getByRole('region', { name: /^Shell \d+$/ })
+  const start = await regions.count()
   await addShells(page, 2)
   const shells = [pane(page, 'Shell 1'), pane(page, 'Shell 2'), pane(page, 'Shell 3')]
   const [first, second] = shells
@@ -235,7 +237,7 @@ test('does not dim the shells without the focus, and outlines the focused one (C
 
   // A pane added while another one has the focus is not dimmed either.
   await screenOf(first).click()
-  const before = await page.getByRole('region', { name: /^Shell \d+$/ }).count()
+  const before = await regions.count()
   await addShells(page, 1)
   expect(await dimOf(pane(page, `Shell ${before + 1}`))).toBe('none')
 
@@ -246,6 +248,13 @@ test('does not dim the shells without the focus, and outlines the focused one (C
     expect(await dimOf(shell)).toBe('none')
   }
   await expect(page.locator('.hm-pane, .hm-panes')).toHaveCount(0)
+
+  // The shells stay in the task: close the ones added here, so the next tests can add theirs
+  // under the limit of panes.
+  for (let index = await regions.count(); index > start; index--) {
+    await page.getByRole('button', { name: `Close Shell ${index}` }).click()
+    await expect(regions).toHaveCount(index - 1)
+  }
 })
 
 test('does not dim the agents without the focus, and outlines the focused one', async ({
