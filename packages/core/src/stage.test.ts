@@ -482,9 +482,9 @@ describe('a check on CI', () => {
   })
 
   it('finds the last stage that changes code before a stage', () => {
-    const before = (steps: Step[], id: string) => codeStageBefore(steps, id)?.id
-    expect(before(DEFAULT_PIPELINE, 'testing')).toBe('implement')
-    expect(before(DEFAULT_PIPELINE, 'implement')).toBeUndefined()
+    const target = (steps: Step[], id: string) => codeStageBefore(steps, id)?.id
+    expect(target(DEFAULT_PIPELINE, 'testing')).toBe('implement')
+    expect(target(DEFAULT_PIPELINE, 'implement')).toBeUndefined()
     const steps: Step[] = [
       { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
       {
@@ -496,9 +496,9 @@ describe('a check on CI', () => {
       },
       { id: 'testing', kind: 'testing', gate: 'auto', ci: true },
     ]
-    expect(before(steps, 'testing')).toBe('code')
-    expect(before(steps, 'spec')).toBeUndefined()
-    expect(before(steps, 'missing')).toBeUndefined()
+    expect(target(steps, 'testing')).toBe('code')
+    expect(target(steps, 'spec')).toBeUndefined()
+    expect(target(steps, 'missing')).toBeUndefined()
     // The last one wins; stages that write a file or wait for a person are skipped.
     const later: Step[] = [
       { id: 'implement', kind: 'agent', gate: 'auto' },
@@ -507,7 +507,7 @@ describe('a check on CI', () => {
       { id: 'review', kind: 'review', gate: 'manual' },
       { id: 'testing', kind: 'testing', gate: 'auto', ci: true },
     ]
-    expect(before(later, 'testing')).toBe('refactor')
+    expect(target(later, 'testing')).toBe('refactor')
   })
 })
 
