@@ -2,7 +2,7 @@
 title: Agents and hooks
 description: How Natamux starts an agent in a task terminal and learns what the agent is doing.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 Natamux does not replace your coding agent. It starts the agent in a terminal that it owns, and it listens to **hooks**, small callbacks that the agent runs when something happens. Hooks tell Natamux when the agent works, waits for you, finishes a turn, or fails.

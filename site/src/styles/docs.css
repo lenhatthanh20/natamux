@@ -49,3 +49,98 @@ header.header::after {
   background: linear-gradient(90deg, #f2b544 0 33.3%, #58d3a6 33.3% 66.6%, #7fa8ff 66.6% 100%);
   opacity: 0.85;
 }
+
+/* Screenshots: a dark and a light picture, shown for the current theme. */
+.sl-markdown-content figure.shot {
+  margin-block: 1.75rem;
+}
+.shot img,
+.shot video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 12px;
+  background: var(--sl-color-gray-6);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.25),
+    0 18px 40px -24px rgb(0 0 0 / 0.55);
+}
+:root[data-theme='light'] .shot img,
+:root[data-theme='light'] .shot video {
+  box-shadow:
+    0 1px 2px rgb(13 21 38 / 0.08),
+    0 18px 40px -26px rgb(13 21 38 / 0.35);
+}
+.shot figcaption {
+  margin-top: 0.6rem;
+  font-size: var(--sl-text-sm);
+  line-height: 1.5;
+  color: var(--sl-color-gray-3);
+}
+:root[data-theme='light'] .shot .shot-dark,
+:root:not([data-theme='light']) .shot .shot-light {
+  display: none;
+}
+
+/* A short rise as a screenshot scrolls into view, where the browser can tie it to scrolling. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .sl-markdown-content .shot {
+      animation: shot-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
+    }
+  }
+}
+@keyframes shot-rise {
+  from {
+    opacity: 0.2;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Download links as a grid of cards. */
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+.sl-markdown-content .downloads > a {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 12px;
+  color: var(--sl-color-white);
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    transform 0.15s;
+}
+.sl-markdown-content .downloads > a:hover {
+  border-color: var(--sl-color-accent);
+  background: var(--sl-color-accent-low);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sl-markdown-content .downloads > a:hover {
+    transform: translateY(-2px);
+  }
+}
+.downloads strong {
+  font-size: var(--sl-text-base);
+}
+.downloads span {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+.downloads .file {
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-xs);
+}

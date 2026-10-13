@@ -1,6 +1,6 @@
 import type { SearchAddon } from '@xterm/addon-search'
 import { CaseSensitive, ChevronDown, ChevronUp, Regex, X } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { type FindResults, findCountLabel } from '../lib/terminal-find'
 import { findDecorations } from '../lib/terminal-theme'
 import { useResolvedTheme } from '../lib/theme'
@@ -8,13 +8,15 @@ import { IconButton } from './ui/IconButton'
 import { fieldBox } from './ui/styles'
 
 type TerminalFindProps = {
-  search: SearchAddon
+  // Gives the terminal's addon, made at the first call (TerminalSession.search).
+  search: () => SearchAddon
   onClose: () => void
 }
 
 // The find bar of a terminal: 28px, at the top right. Enter and Shift+Enter step through the
 // matches, Escape closes it and gives the keys back to the shell.
-export function TerminalFind({ search, onClose }: TerminalFindProps) {
+export function TerminalFind({ search: searchOf, onClose }: TerminalFindProps) {
+  const search = useMemo(() => searchOf(), [searchOf])
   const [term, setTerm] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)

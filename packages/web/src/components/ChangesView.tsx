@@ -7,12 +7,14 @@ import type {
   ImageSide,
   Task,
 } from '@natamux/core'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useActivity } from '../hooks/useActivity'
 import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import type { StageFile, StoredEvent, TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import { FALLBACK_POLL_MS } from '../lib/live'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
@@ -27,8 +29,6 @@ import { SkeletonList } from './ui/Skeleton'
 import { Tabs, tabPanelProps } from './ui/Tabs'
 import { WorkspaceHeader } from './WorkspaceHeader'
 
-const REFRESH_MS = 10_000
-
 type ChangesViewProps = {
   task: Task
   initialTab?: WorkspaceTab
@@ -39,8 +39,6 @@ type ChangesViewProps = {
   // The file of the address bar, and where to report the one that shows.
   file?: string | null
   onFileChange?: (path: string | null) => void
-  // What the agent of each shell does now.
-  terminalActivity?: Readonly<Record<string, string>>
   // `fresh` (here and in loadGraph): the daemon reads git now, not the answer it kept.
   loadChanges: (fresh?: boolean) => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
@@ -90,7 +88,6 @@ export function ChangesView({
   onTabPicked,
   file,
   onFileChange,
-  terminalActivity,
   loadChanges,
   loadFile,
   loadImage,
@@ -121,6 +118,8 @@ export function ChangesView({
   const [tabActions, setTabActions] = useState<HTMLElement | null>(null)
   const [focusToken, setFocusToken] = useState(0)
   const queryClient = useQueryClient()
+  // What the agent of each shell does now.
+  const terminalActivity = useActivity((all) => all.byTerminal[task.id])
   const reportTab = useRef(onTabChange)
   reportTab.current = onTabChange
   useEffect(() => reportTab.current?.(tab), [tab])
@@ -151,7 +150,8 @@ export function ChangesView({
   const graph = useQuery({
     queryKey: ['graph', task.id],
     queryFn: () => loadGraph(freshGraph.current),
-    refetchInterval: REFRESH_MS,
+    // The daemon says when the workspace changed (workspace.dirty); see lib/live.ts.
+    refetchInterval: FALLBACK_POLL_MS,
   })
   const refreshGraph = () => {
     freshGraph.current = true
@@ -173,7 +173,7 @@ export function ChangesView({
   const changes = useQuery({
     queryKey: ['changes', task.id],
     queryFn: () => loadChanges(),
-    refetchInterval: REFRESH_MS,
+    refetchInterval: FALLBACK_POLL_MS,
   })
   const uncommitted = changes.data?.length ?? null
   // Commit… asks the commit box for a draft; the box says when it took the request.
@@ -187,11 +187,14 @@ export function ChangesView({
 
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
+  // A new question comes with a task change, so the time of the task is in the key. The last
+  // answer stays while the next one loads.
   const events = useQuery({
-    queryKey: ['question-events', task.id],
+    queryKey: ['question-events', task.id, task.updatedAt],
     queryFn: loadEvents,
     enabled: waiting,
-    refetchInterval: 5000,
+    placeholderData: keepPreviousData,
+    refetchInterval: FALLBACK_POLL_MS,
   })
 
   // The dashboard reports a failed start.

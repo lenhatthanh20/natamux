@@ -75,6 +75,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 natamux task create "Fix the login bug" --priority high --label bug
 natamux task create "Add export" --depends-on T-41 --context github-issue:42
 natamux task create "Update the docs" --repo my-app
+natamux task create "ABC-12: Fix the login bug"
 natamux task list --state running
 natamux task show T-42
 natamux task edit T-42 --title "Fix the login redirect" --label auth

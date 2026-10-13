@@ -739,16 +739,31 @@ describe('a check on CI', () => {
     expect(lastOf(task.id, 'stage.checked')?.payload.passes).toContain('CI passed: CI u')
   })
 
-  it('gives a CI failure with its log to the agent once, and logs only the run', async () => {
+  const failure: CiResult = {
+    passed: false,
+    reasons: ['CI E2E failure: u'],
+    logs: ['CI E2E failure: u\n\x1b[31mError: 2 tests failed\x1b[0m'],
+    passes: [],
+    final: false,
+  }
+
+  // The paste that holds `text`, and the Enter that went apart after it.
+  async function expectPromptSubmitted(text: string): Promise<string> {
+    let paste = ''
+    await vi.waitFor(() => {
+      const written = ptys[0]?.written ?? []
+      const at = written.findIndex((data) => data.startsWith('\x1b[200~') && data.includes(text))
+      expect(at).toBeGreaterThanOrEqual(0)
+      expect(written[at + 1]).toBe('\r')
+      paste = written[at] ?? ''
+    })
+    return paste
+  }
+
+  it('sends the stage back to its agent with the log, as a review does', async () => {
     const task = await reported(true)
 
-    finishCi({
-      passed: false,
-      reasons: ['CI E2E failure: u'],
-      logs: ['CI E2E failure: u\nError: 2 tests failed'],
-      passes: [],
-      final: false,
-    })
+    finishCi(failure)
     await runner.settle()
 
     expect(lastOf(task.id, 'stage.check-failed')?.payload).toEqual({
@@ -756,18 +771,153 @@ describe('a check on CI', () => {
       reasons: ['CI E2E failure: u'],
       final: false,
     })
-    await expectSubmitted(ptys[0], 'The checks of this stage failed')
-    expect(ptys[0]?.written.join('')).toContain('Error: 2 tests failed')
+    const reopened = lastOf(task.id, 'stage.reopened')?.payload
+    expect(reopened).toMatchObject({
+      to: 'implement',
+      from: 'implement',
+      byAgent: true,
+      ci: true,
+    })
+    expect(reopened?.reason).toMatch(/^CI failed on Implement:\n- CI E2E failure: u\n/)
+    expect(reopened?.reason).toContain('gh run view')
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    const starts = tasks.listEvents(task.id).filter(({ event }) => event.type === 'stage.started')
+    expect(starts).toHaveLength(2)
+
+    const paste = await expectPromptSubmitted('What to change: CI failed on Implement:')
+    expect(paste).toContain('Error: 2 tests failed')
+    expect(paste).not.toContain('\x1b[31m')
+    expect(ptys[0]?.written.join('')).not.toContain('The checks of this stage failed')
+    const prompts = (ptys[0]?.written ?? []).filter((data) => data.includes('What to change'))
+    expect(prompts).toHaveLength(1)
   })
 
-  it('waits for you when the agent cannot fix it', async () => {
+  it('names each failed run, keeps a run without a log, and uses the name of the stage', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', name: 'Build it', kind: 'agent', gate: 'manual', ci: true }],
+    }
     const task = await reported(true)
 
-    finishCi({ passed: false, reasons: ['No CI run started'], passes: [], final: true })
+    finishCi({
+      ...failure,
+      reasons: ['CI E2E failure: u1', 'CI Lint failure: u2'],
+      logs: ['CI E2E failure: u1\n\x1b[31mError: 2 tests failed\x1b[0m\r\n', 'CI Lint failure: u2'],
+    })
+    await runner.settle()
+
+    expect(lastOf(task.id, 'stage.reopened')?.payload.reason).toBe(
+      [
+        'CI failed on Build it:',
+        '- CI E2E failure: u1',
+        '- CI Lint failure: u2',
+        '',
+        'CI E2E failure: u1\nError: 2 tests failed',
+        'CI Lint failure: u2',
+        'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
+      ].join('\n'),
+    )
+    await expectPromptSubmitted('What to change: CI failed on Build it:')
+  })
+
+  it('starts the agent again with the failure when it ended meanwhile', async () => {
+    const task = await reported(true)
+    clock += LAUNCH_GRACE_MS + 1
+
+    finishCi(failure)
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    const typed = ptys[0]?.written.join('') ?? ''
+    expect(typed.split(`agent-launch-${task.id}.sh`)).toHaveLength(3)
+    expect(launchScript(task.id)).toContain('What to change: CI failed on Implement:')
+    expect(typed).not.toContain('What to change')
+  })
+
+  it('does not count send backs by a person toward the most times', async () => {
+    const task = await implementing()
+    tasks.setCi(task.id, 'implement', true)
+    for (let round = 0; round < MAX_AGENT_SEND_BACKS; round += 1) {
+      await runner.act(task.id, 'reopen', { to: 'implement', reason: 'Name it better' })
+      await runner.settle()
+    }
+    await runner.act(task.id, 'report', { terminal: '1' })
+
+    finishCi(failure)
+    await runner.settle()
+
+    expect(lastOf(task.id, 'stage.reopened')?.payload).toMatchObject({ ci: true })
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+  })
+
+  it('keeps one more try for failed local checks, then sends a CI failure back', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', kind: 'agent', gate: 'manual', ci: true, check: 'make test' }],
+    }
+    let code = 1
+    runCommand = async () => ({ code, output: 'lint failed' })
+    const task = await reported(true)
+
+    expect(ciCalls).toEqual([])
+    expect(tasks.getTask(task.id).state).toBe('running')
+    await expectSubmitted(ptys[0], 'The checks of this stage failed')
+    expect(lastOf(task.id, 'stage.reopened')).toBeUndefined()
+
+    code = 0
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(ciCalls).toHaveLength(1)
+    finishCi(failure)
+    await runner.settle()
+
+    expect(lastOf(task.id, 'stage.reopened')?.payload).toMatchObject({ ci: true })
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+  })
+
+  it('waits for you after CI sent the stage back the most times', async () => {
+    const task = await reported(true)
+    for (let round = 0; round < MAX_AGENT_SEND_BACKS; round += 1) {
+      finishCi(failure)
+      await runner.settle()
+      expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+      await runner.act(task.id, 'report', { terminal: '1' })
+    }
+
+    finishCi(failure)
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'needs-input' })
+    expect(lastOf(task.id, 'stage.check-failed')?.payload).toEqual({
+      stage: 'implement',
+      reasons: ['CI E2E failure: u'],
+      final: true,
+    })
+    const sendBacks = tasks
+      .listEvents(task.id)
+      .filter(({ event }) => event.type === 'stage.reopened')
+    expect(sendBacks).toHaveLength(MAX_AGENT_SEND_BACKS)
+    // A paste waits for the Enter of the one before it.
+    await vi.waitFor(() => {
+      const prompts = (ptys[0]?.written ?? []).filter((data) => data.includes('What to change'))
+      expect(prompts).toHaveLength(MAX_AGENT_SEND_BACKS)
+    })
+  })
+
+  it.each([
+    ['no run started', 'No CI run started for natamux-ci/x.'],
+    ['CI took too long', 'CI did not finish within 30 minutes: u'],
+  ])('waits for you at once when %s', async (_, reason) => {
+    const task = await reported(true)
+
+    finishCi({ passed: false, reasons: [reason], passes: [], final: true })
     await runner.settle()
 
     expect(lastOf(task.id, 'stage.check-failed')?.payload).toMatchObject({ final: true })
     expect(tasks.getTask(task.id).state).toBe('needs-input')
+    expect(lastOf(task.id, 'stage.reopened')).toBeUndefined()
+    const starts = tasks.listEvents(task.id).filter(({ event }) => event.type === 'stage.started')
+    expect(starts).toHaveLength(1)
+    expect(ptys[0]?.written.join('')).not.toContain(reason)
   })
 
   it('goes on with a CI check after a restart, and runs one at a time', async () => {
@@ -846,7 +996,7 @@ describe('a CI failure on a testing stage', () => {
       final: false,
     })
     const reopened = lastOf(task.id, 'stage.reopened')?.payload
-    expect(reopened).toMatchObject({ to: 'implement', from: 'testing', byAgent: true })
+    expect(reopened).toMatchObject({ to: 'implement', from: 'testing', byAgent: true, ci: true })
     expect(reopened?.reason).toContain('CI E2E failure: u')
     expect(reopened?.reason).toContain('gh run view')
     expect(reopened?.reason).not.toContain('Error: 2 tests failed')
@@ -1417,12 +1567,12 @@ describe('a prompt for a running agent', () => {
     expect(pty.written.join('').split(exited)).toHaveLength(2)
 
     // The shell echoes the typed line, which is no sign that the agent ended.
-    runner.onOutput(task.id, '1', exited)
+    runner.onOutput(task.id, '1', Buffer.from(exited))
     await runner.act(task.id, 'reopen', { to: 'spec' })
     expect(pty.written.join('')).toContain('\x1b[200~')
 
-    runner.onOutput(task.id, '1', '\x1b]0;natamux-ag')
-    runner.onOutput(task.id, '1', 'ent-exited\x07PS C:\\work> ')
+    runner.onOutput(task.id, '1', Buffer.from('\x1b]0;natamux-ag'))
+    runner.onOutput(task.id, '1', Buffer.from('ent-exited\x07PS C:\\work> '))
     await runner.act(task.id, 'reopen', { to: 'spec' })
     // The launch line waits for the Enter of the prompt pasted before.
     await vi.waitFor(() => expect(pty.written.join('').split(exited)).toHaveLength(3))

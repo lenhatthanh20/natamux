@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetailsMode } from '../lib/layout-mode'
 import type { DetailsView } from '../lib/view-store'
-import { TaskDetail } from './TaskDetail'
+import { labelText, TaskDetail } from './TaskDetail'
 
 const TASK: Task = {
   id: 'T-0001',
@@ -161,5 +161,17 @@ describe('TaskDetail views', () => {
 
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.getByText('No notes. Add some with Edit.')).toBeTruthy()
+  })
+})
+
+describe('labelText', () => {
+  it.each([
+    ['tries-t-0002', 'Tries of T-0002'],
+    ['tries-task-0005', 'Tries of TASK-0005'],
+    ['tries-a1-2', 'tries-a1-2'],
+    ['tries-task', 'tries-task'],
+    ['perf', 'perf'],
+  ])('shows %s as %s', (label, text) => {
+    expect(labelText(label)).toBe(text)
   })
 })

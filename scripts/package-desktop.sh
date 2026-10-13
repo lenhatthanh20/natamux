@@ -10,6 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT="${NATAMUX_PACKAGE_OUT:-$PWD/packages/desktop/release}"
+# On Windows, pnpm deploy fails when the temp folder (TMPDIR) is on another drive than the repository.
 STAGE="$(mktemp -d)"
 
 pnpm install --frozen-lockfile

@@ -1,44 +1,49 @@
 // Loads Monaco, the editor of VS Code, from this app and not from a CDN. This file is only imported
 // by the diff viewer, which is itself loaded the first time a diff is opened.
-import * as monaco from 'monaco-editor'
-import { typescript as monacoTypeScript } from 'monaco-editor'
+// The full entry (monaco-editor) brings about 80 languages, the TypeScript, CSS, HTML and JSON
+// services and every editor feature. The views here only show code, so this loads the editor API,
+// the parts the diff and file views use, and the colors of the languages in lib/language.ts.
+import 'monaco-editor/editor/browser/coreCommands'
+import 'monaco-editor/editor/browser/widget/diffEditor/diffEditor.contribution'
+import 'monaco-editor/editor/contrib/clipboard/browser/clipboard'
+import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu'
+import 'monaco-editor/editor/contrib/folding/browser/folding'
+import 'monaco-editor/editor/contrib/stickyScroll/browser/stickyScrollContribution'
+import 'monaco-editor/editor/contrib/wordOperations/browser/wordOperations'
+import * as monaco from 'monaco-editor/editor/editor.api'
 import editorWorker from 'monaco-editor/editor/editor.worker?worker'
-import cssWorker from 'monaco-editor/language/css/css.worker?worker'
-import htmlWorker from 'monaco-editor/language/html/html.worker?worker'
-import jsonWorker from 'monaco-editor/language/json/json.worker?worker'
-import tsWorker from 'monaco-editor/language/typescript/ts.worker?worker'
+import 'monaco-editor/features/find/register'
+import 'monaco-editor/languages/definitions/cpp/register'
+import 'monaco-editor/languages/definitions/csharp/register'
+import 'monaco-editor/languages/definitions/css/register'
+import 'monaco-editor/languages/definitions/dockerfile/register'
+import 'monaco-editor/languages/definitions/go/register'
+import 'monaco-editor/languages/definitions/html/register'
+import 'monaco-editor/languages/definitions/ini/register'
+import 'monaco-editor/languages/definitions/java/register'
+import 'monaco-editor/languages/definitions/javascript/register'
+import 'monaco-editor/languages/definitions/kotlin/register'
+import 'monaco-editor/languages/definitions/less/register'
+import 'monaco-editor/languages/definitions/markdown/register'
+import 'monaco-editor/languages/definitions/php/register'
+import 'monaco-editor/languages/definitions/python/register'
+import 'monaco-editor/languages/definitions/ruby/register'
+import 'monaco-editor/languages/definitions/rust/register'
+import 'monaco-editor/languages/definitions/scss/register'
+import 'monaco-editor/languages/definitions/shell/register'
+import 'monaco-editor/languages/definitions/sql/register'
+import 'monaco-editor/languages/definitions/swift/register'
+import 'monaco-editor/languages/definitions/typescript/register'
+import 'monaco-editor/languages/definitions/xml/register'
+import 'monaco-editor/languages/definitions/yaml/register'
+// The exports map has no path for CSS, so the icon font comes from the package folder.
+import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css'
+import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css'
 
-globalThis.MonacoEnvironment = {
-  getWorker(_workerId, label) {
-    switch (label) {
-      case 'json':
-        return new jsonWorker()
-      case 'css':
-      case 'scss':
-      case 'less':
-        return new cssWorker()
-      case 'html':
-      case 'handlebars':
-      case 'razor':
-        return new htmlWorker()
-      case 'typescript':
-      case 'javascript':
-        return new tsWorker()
-      default:
-        return new editorWorker()
-    }
-  },
-}
-
-// Monaco only shows code here. Its TypeScript checks do not know the rest of the project, so they
-// would report errors that are not real (modules that cannot be found, and more). Colors stay.
-const noDiagnostics = {
-  noSemanticValidation: true,
-  noSuggestionDiagnostics: true,
-  noSyntaxValidation: true,
-}
-monacoTypeScript.typescriptDefaults.setDiagnosticsOptions(noDiagnostics)
-monacoTypeScript.javascriptDefaults.setDiagnosticsOptions(noDiagnostics)
+// The diff runs in the editor worker. Without the language services no other worker is needed.
+// They are left out on purpose: a service loads later with editor parts (code lens, suggest) whose
+// services the editor set up without, and every editor after it fails.
+globalThis.MonacoEnvironment = { getWorker: () => new editorWorker() }
 
 export const LIGHT_THEME = 'natamux-light'
 export const DARK_THEME = 'natamux-dark'

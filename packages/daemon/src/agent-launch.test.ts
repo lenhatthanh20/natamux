@@ -375,6 +375,25 @@ describe('the hook settings', () => {
       hooks: { stop: [{ command: 'natamux hook cursor', timeout: 5 }] },
     })
   })
+
+  it('start every hook of the four agents with `natamux hook <agent>`, the fast path', () => {
+    // Matches `command="..."` in the Codex flags and `"command":"..."` in the JSON files.
+    const commandsOf = (text: string) =>
+      [...text.matchAll(/(?:command|bash|powershell)"?[:=]"([^"]+)"/g)].map((match) => match[1])
+    const agents = {
+      codex: codexHookArgs().join(' '),
+      gemini: JSON.stringify(geminiHookSettings()),
+      copilot: JSON.stringify(copilotHookFile()),
+      cursor: JSON.stringify(cursorHookFile()),
+    }
+    for (const [agent, text] of Object.entries(agents)) {
+      const commands = commandsOf(text)
+      expect(commands.length).toBeGreaterThan(0)
+      for (const command of commands) {
+        expect(command?.startsWith(`natamux hook ${agent}`)).toBe(true)
+      }
+    }
+  })
 })
 
 describe('prepareWorkspace', () => {

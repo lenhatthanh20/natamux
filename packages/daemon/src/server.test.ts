@@ -21,7 +21,14 @@ import { IssueLinker } from './issue-linker.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
-import { buildServer, isAuthorized, NO_PROGRAM_ROUTES } from './server.js'
+import {
+  buildServer,
+  DRAIN_CHECK_MS,
+  EVENTS_HIGH_WATER,
+  eventSender,
+  isAuthorized,
+  NO_PROGRAM_ROUTES,
+} from './server.js'
 import { archiveDir } from './stage-files.js'
 import { StageRunner } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
@@ -306,6 +313,34 @@ describe('tasks', () => {
     expect(fetched.statusCode).toBe(200)
     expect(fetched.json().task.id).toBe('T-0001')
 
+    const listed = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(listed.json().tasks).toHaveLength(1)
+  })
+
+  it('takes the id from the title, and refuses an id that is used with 400', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix bug xxx' },
+    })
+    expect(created.statusCode).toBe(201)
+    expect(created.json().task).toMatchObject({ id: 'TASK-0005', title: 'Fix bug xxx' })
+    const fetched = await app.inject({
+      method: 'GET',
+      url: '/tasks/TASK-0005',
+      headers: authorization,
+    })
+    expect(fetched.json().task.title).toBe('Fix bug xxx')
+
+    const clash = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'task-0005 Other' },
+    })
+    expect(clash.statusCode).toBe(400)
+    expect(clash.json().message).toBe('Task id TASK-0005 is already used')
     const listed = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
     expect(listed.json().tasks).toHaveLength(1)
   })
@@ -638,6 +673,49 @@ describe('workspaces', () => {
     expect(existsSync(workspace)).toBe(false)
   })
 
+  it('names the branch and folder of a task with a chosen id after that id', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix bug xxx' },
+    })
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/TASK-0005/workspace',
+      headers: authorization,
+    })
+
+    expect(created.statusCode).toBe(201)
+    const { workspace, branch } = created.json().task
+    expect(branch).toBe('natamux/task-0005-fix-bug-xxx')
+    expect(workspace).toMatch(/[/\\]TASK-0005$/)
+    expect(existsSync(workspace)).toBe(true)
+  })
+
+  it('refuses a new workspace whose id is used, and makes no task or branch', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'TASK-0005: First' },
+    })
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Task-0005: Other' },
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json().message).toBe('Task id TASK-0005 is already used')
+    const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
+    expect(tasks.json().tasks).toHaveLength(1)
+    expect(runGit(repo.dir, 'branch', '--list', 'natamux/*')).toBe('')
+  })
+
   it('removes a workspace whose folder was already deleted', async () => {
     await createTask()
     const created = await app.inject({
@@ -886,6 +964,21 @@ describe('Claude Code hooks', () => {
 
     await post({ hook_event_name: 'Stop' }, { 'x-natamux-task': 'T-0001' })
     expect(await stateOf('T-0001')).toBe('needs-input')
+  })
+
+  it('moves a task with a chosen id, but not for that id in lower case', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Task-0005: Fix the bug' },
+    })
+
+    await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-natamux-task': 'task-0005' })
+    expect(await stateOf('TASK-0005')).toBe('draft')
+
+    await post({ hook_event_name: 'UserPromptSubmit' }, { 'x-natamux-task': 'TASK-0005' })
+    expect(await stateOf('TASK-0005')).toBe('running')
   })
 
   it('keeps the task running when the agent stops with background work', async () => {
@@ -2185,6 +2278,159 @@ describe('agent activity', () => {
     const activity = response.json().activity['T-0001']
     expect(activity['1'].text).toBe('Edit a.ts')
     expect(activity['2'].text).toBe('Edit test-spec.md')
+  })
+})
+
+describe('pushed to the dashboards', () => {
+  type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
+
+  async function listen(): Promise<{ socket: Socket; texts: string[] }> {
+    const texts: string[] = []
+    // injectWS needs a ready app; no inject ran before it here.
+    await app.ready()
+    const socket = await app.injectWS(
+      `/events?token=${TOKEN}`,
+      {},
+      {
+        onInit: (ws) => {
+          ws.on('message', (data: Buffer) => texts.push(data.toString('utf8')))
+        },
+      },
+    )
+    return { socket, texts }
+  }
+
+  it('sends each message to every dashboard, made into text once', async () => {
+    const dashboards = [await listen(), await listen(), await listen()]
+    expect(bus.size()).toBe(3)
+    const message = { kind: 'shells.changed', taskId: 'T-0001' } as const
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      bus.publish(message)
+      expect(stringify.mock.calls.filter(([value]) => value === message)).toHaveLength(1)
+    } finally {
+      stringify.mockRestore()
+    }
+
+    for (const { texts } of dashboards) {
+      await vi.waitFor(() => expect(texts).toEqual([JSON.stringify(message)]))
+    }
+    for (const { socket } of dashboards) {
+      socket.terminate()
+    }
+    await vi.waitFor(() => expect(bus.size()).toBe(0))
+  })
+
+  it('wakes the pull request watcher for the first dashboard only', async () => {
+    const wake = vi.spyOn(serverOptions.pullRequests, 'wake')
+    const first = await listen()
+    const second = await listen()
+
+    expect(wake).toHaveBeenCalledTimes(1)
+    first.socket.terminate()
+    second.socket.terminate()
+  })
+
+  it('sends the activity after a hook, and touches the workspace after a tool ran', async () => {
+    const touch = vi.spyOn(serverOptions.workspaces, 'touch')
+    const sent: unknown[] = []
+    bus.subscribe((message) => sent.push(message))
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001' },
+      payload: {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: 'a.ts' },
+      },
+    })
+
+    expect(sent).toContainEqual({
+      kind: 'activity.changed',
+      taskId: 'T-0001',
+      activity: { '1': { text: 'Edit a.ts', at: expect.any(String) } },
+    })
+    // The tool did not run yet.
+    expect(touch).not.toHaveBeenCalled()
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001' },
+      payload: { hook_event_name: 'PostToolUse', tool_name: 'Edit' },
+    })
+    expect(touch).toHaveBeenCalledWith('T-0001')
+  })
+})
+
+describe('eventSender', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function fakeSocket() {
+    const sent: string[] = []
+    return { bufferedAmount: 0, readyState: 1, sent, send: (text: string) => sent.push(text) }
+  }
+
+  it('skips a socket that is too far behind, and sends it resync once it drained', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+
+    socket.bufferedAmount = EVENTS_HIGH_WATER
+    sender.send('a')
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('b')
+    socket.bufferedAmount = 0
+    sender.send('c')
+    expect(socket.sent).toEqual(['a'])
+
+    vi.advanceTimersByTime(DRAIN_CHECK_MS)
+    sender.send('d')
+    expect(socket.sent).toEqual(['a', '{"kind":"resync"}', 'd'])
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+    expect(socket.sent).toHaveLength(3)
+  })
+
+  it('sends nothing to a socket that closed while it was skipped', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('a')
+
+    socket.readyState = 3
+    socket.bufferedAmount = 0
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+    sender.send('b')
+
+    expect(socket.sent).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stops looking at a skipped socket when its dashboard leaves', () => {
+    vi.useFakeTimers()
+    const socket = fakeSocket()
+    const sender = eventSender(socket)
+    socket.bufferedAmount = EVENTS_HIGH_WATER + 1
+    sender.send('a')
+    expect(vi.getTimerCount()).toBe(1)
+
+    sender.stop()
+    socket.bufferedAmount = 0
+    vi.advanceTimersByTime(DRAIN_CHECK_MS * 4)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(socket.sent).toEqual([])
   })
 })
 

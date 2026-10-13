@@ -20,6 +20,7 @@ import {
   resolveSteps,
   type StagePosition,
   type Step,
+  splitTaskId,
   stageName,
   stagesOf,
   stepIndex,
@@ -36,16 +37,25 @@ import {
 import { z } from 'zod'
 import { type AttachmentFile, saveAttachments } from './attachments.js'
 import type { EventBus } from './event-bus.js'
-import { appendEventLine, eventLogPath, readEventLog, writeEventLog } from './event-log.js'
+import {
+  appendEventLine,
+  eventLogPath,
+  type LoggedEvent,
+  readEventLog,
+  writeEventLog,
+} from './event-log.js'
 import { archiveDir } from './stage-files.js'
 import {
-  listTaskFiles,
+  type FileStat,
   listTaskIds,
   readTaskFile,
+  sameStat,
+  statFile,
   taskFilePath,
+  watchTaskFiles,
   writeTaskFile,
 } from './task-files.js'
-import type { StoredEvent, TaskIndex } from './task-index.js'
+import type { StoredEvent, TaskFiles, TaskIndex } from './task-index.js'
 
 export const createTaskInputSchema = taskSchema
   .pick({
@@ -77,6 +87,14 @@ const EDITABLE_FIELDS = ['title', 'description', 'priority', 'labels', 'dependsO
 
 // How often a running task's sign of life is written down at most.
 export const ACTIVITY_INTERVAL_MS = 30_000
+
+// How often a sign of life alone rewrites the task file at most. The index gets every one.
+const ACTIVITY_FILE_INTERVAL_MS = 60_000
+
+// How often a read looks at the task files at most, for an edit by hand that the watcher missed:
+// some file systems give no events. getTask stats one file; listTasks reads the folder.
+const STAT_CHECK_MS = 1000
+const LIST_CHECK_MS = 2000
 
 export type ActivityOptions = { minIntervalMs?: number; endsWait?: boolean }
 
@@ -130,6 +148,14 @@ export function isTaskEnded(
 // each repository instead.
 const LEGACY_SETTINGS: ProjectSettings = { ...DEFAULT_PROJECT_SETTINGS, stages: LEGACY_PIPELINE }
 
+// Compares as SQLite compares text, so the order stays the one the index gave.
+function compareText(a: string, b: string): number {
+  if (a === b) {
+    return 0
+  }
+  return a < b ? -1 : 1
+}
+
 function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes'>): StagePosition {
   return { stage: task.stage, state: task.state, lanes: task.lanes }
 }
@@ -168,6 +194,8 @@ type TaskServiceOptions = {
   now?: () => Date
   // The settings of a repository (`.natamux.json`). Default: the legacy pipeline.
   settingsOf?: SettingsOf
+  // In milliseconds, for the checks of the task files. Default: Date.now.
+  clock?: () => number
 }
 
 export class TaskService {
@@ -176,6 +204,20 @@ export class TaskService {
   private readonly bus: EventBus
   private readonly now: () => Date
   readonly settingsOf: SettingsOf
+  // Every task by id, so a read touches no disk. A change replaces the task, never edits it;
+  // each is frozen, so a caller that gets one cannot change the map either.
+  private readonly tasks = new Map<string, Task>()
+  // The stat of each task file as this service last wrote or read it. Tells its own writes from
+  // edits by hand.
+  private readonly fileStats = new Map<string, FileStat>()
+  // The `updatedAt` of each task when its file was last written.
+  private readonly writtenAt = new Map<string, string>()
+  private readonly clock: () => number
+  // When each task file was last looked at for edits by hand, and the folder for new files.
+  private readonly checkedAt = new Map<string, number>()
+  private folderCheckedAt = 0
+  private stopWatching: (() => void) | undefined
+  private started = false
 
   constructor(options: TaskServiceOptions) {
     this.dataDir = options.dataDir
@@ -183,20 +225,153 @@ export class TaskService {
     this.bus = options.bus
     this.now = options.now ?? (() => new Date())
     this.settingsOf = options.settingsOf ?? (() => LEGACY_SETTINGS)
+    this.clock = options.clock ?? Date.now
   }
 
-  // Rebuild the index cache from the task files and their event logs. A task with no event log
-  // yet (made before there were logs) gets one from the index.
+  // Loads every task into memory and brings the index in line with the files. A file with the
+  // time and size the index saw last is not read again, so a restart reads only what changed.
+  // Then watches the task files for edits by hand, until close().
   init(): void {
-    const tasks = listTaskFiles(this.dataDir)
-    this.index.replaceAllTasks(tasks)
-    for (const task of tasks) {
-      const logged = readEventLog(this.dataDir, task.id)
-      if (logged === undefined) {
-        writeEventLog(this.dataDir, task.id, this.index.listEvents(task.id))
-      } else if (logged.length !== this.index.countEvents(task.id)) {
-        this.index.replaceEvents(task.id, logged)
+    const known = this.index.taskFiles()
+    const indexed = this.indexedTasks()
+    const files = new Map<string, TaskFiles>()
+    const now = this.clock()
+    this.tasks.clear()
+    this.fileStats.clear()
+    this.checkedAt.clear()
+    this.folderCheckedAt = now
+    for (const id of listTaskIds(this.dataDir)) {
+      const stat = statFile(taskFilePath(this.dataDir, id))
+      const cached = sameStat(stat, known.get(id)?.task) ? indexed.get(id) : undefined
+      let task: Task | undefined
+      try {
+        task = cached ?? readTaskFile(this.dataDir, id)
+      } catch (error) {
+        // One broken file must not stop the daemon: the task as the index saw it last stays, or
+        // none. The file is read again when it changes.
+        console.error(`Could not read the task file of ${id}: ${String(error)}`)
+        task = indexed.get(id)
       }
+      if (task === undefined || stat === undefined) {
+        if (stat !== undefined) {
+          this.fileStats.set(id, stat)
+        }
+        continue
+      }
+      this.tasks.set(id, Object.freeze(task))
+      this.fileStats.set(id, stat)
+      this.checkedAt.set(id, now)
+      files.set(id, { task: stat, log: this.syncEventLog(id, known.get(id)?.log) })
+    }
+    this.index.replaceAllTasks([...this.tasks.values()], files)
+    this.started = true
+    this.stopWatching?.()
+    this.stopWatching = watchTaskFiles(this.dataDir, (ids) => {
+      for (const id of ids) {
+        this.tryReload(id)
+      }
+    })
+  }
+
+  // Stops watching the task files. The daemon never does; tests do, before they remove the files.
+  close(): void {
+    this.stopWatching?.()
+    this.stopWatching = undefined
+  }
+
+  // The tasks as the index holds them. A row of an older version may not parse; then every file
+  // is read.
+  private indexedTasks(): Map<string, Task> {
+    try {
+      return new Map(this.index.listTasks().map((task) => [task.id, task]))
+    } catch {
+      return new Map()
+    }
+  }
+
+  // Brings the events of a task in the index in line with its event log, when the log changed
+  // since the index saw it. A task with no event log yet (made before there were logs) gets one
+  // from the index. Returns the stat of the log.
+  private syncEventLog(taskId: string, known: FileStat | undefined): FileStat | undefined {
+    const path = eventLogPath(this.dataDir, taskId)
+    const stat = statFile(path)
+    if (sameStat(stat, known)) {
+      return stat
+    }
+    const logged = readEventLog(this.dataDir, taskId)
+    if (logged === undefined) {
+      writeEventLog(this.dataDir, taskId, this.index.listEvents(taskId))
+      return statFile(path)
+    }
+    if (logged.length !== this.index.countEvents(taskId)) {
+      this.index.replaceEvents(taskId, logged)
+    }
+    return stat
+  }
+
+  // A task file changed on disk. Unless this service wrote it, the task is read again.
+  private reload(taskId: string): void {
+    const stat = statFile(taskFilePath(this.dataDir, taskId))
+    if (sameStat(stat, this.fileStats.get(taskId))) {
+      return
+    }
+    // A file gone from outside (an editor that saves by delete and write, a sync tool) keeps the
+    // task: task.deleted would end its agents. Delete a task in Natamux to end it.
+    if (stat === undefined) {
+      return
+    }
+    // Before the read, so a broken file is read again only when it changes.
+    this.fileStats.set(taskId, stat)
+    const task = readTaskFile(this.dataDir, taskId)
+    if (task === undefined) {
+      return
+    }
+    this.tasks.set(taskId, Object.freeze(task))
+    // Not task.created, even for a new file: that starts the context stage, and a file put there
+    // by hand (or back from a backup) must not start an agent. A restart does not either.
+    this.bus.publish({ kind: 'task.changed', task })
+  }
+
+  private tryReload(taskId: string): void {
+    try {
+      this.reload(taskId)
+    } catch (error) {
+      // A half-written or broken file: the last good task stays until the file is fixed.
+      console.error(`Could not read the task file of ${taskId}: ${String(error)}`)
+    }
+  }
+
+  // The watcher may miss an edit by hand, so a read stats the task file too, once a second at most.
+  private checkFile(taskId: string): void {
+    if (!this.started || !this.tasks.has(taskId)) {
+      return
+    }
+    const now = this.clock()
+    if (now - (this.checkedAt.get(taskId) ?? 0) < STAT_CHECK_MS) {
+      return
+    }
+    this.checkedAt.set(taskId, now)
+    this.tryReload(taskId)
+  }
+
+  // The same for every task file, and files added by hand, every two seconds at most.
+  private checkFolder(): void {
+    const now = this.clock()
+    if (!this.started || now - this.folderCheckedAt < LIST_CHECK_MS) {
+      return
+    }
+    this.folderCheckedAt = now
+    let ids: string[]
+    try {
+      ids = listTaskIds(this.dataDir)
+    } catch (error) {
+      // A read of the folder that fails (EMFILE, EACCES) must not fail listTasks: it has the tasks.
+      console.error(`Could not read the task folder: ${String(error)}`)
+      return
+    }
+    for (const id of ids) {
+      this.checkedAt.set(id, now)
+      this.tryReload(id)
     }
   }
 
@@ -205,18 +380,38 @@ export class TaskService {
     return resolveSteps(task.stages, this.settingsOf(task.repo).stages)
   }
 
-  // The event log file first, then the index: a crash between the two loses nothing.
-  private logEvent(event: TaskEvent, accepted: boolean): void {
-    appendEventLine(this.dataDir, event, accepted)
-    this.index.appendEvent(event, accepted)
+  // Stores a change of a task: its file, its event log, the map, then the index in one
+  // transaction. A crash in between loses nothing: the next start reads the files the index did
+  // not see. Without `writeFile` the file keeps the task as it was.
+  private store(task: Task, events: readonly LoggedEvent[], writeFile = true): void {
+    const files: TaskFiles = {}
+    if (writeFile) {
+      files.task = writeTaskFile(this.dataDir, task)
+      this.fileStats.set(task.id, files.task)
+      this.writtenAt.set(task.id, task.updatedAt)
+    }
+    for (const { event, accepted } of events) {
+      files.log = appendEventLine(this.dataDir, event, accepted)
+    }
+    this.tasks.set(task.id, Object.freeze(task))
+    this.index.record(task.id, { task, events, files })
   }
 
   // The attachments are written before the task is published, so its context stage, which starts
-  // at once, finds them.
-  createTask(rawInput: unknown, attachments: readonly AttachmentFile[] = []): Task {
+  // at once, finds them. A title that starts with an id, such as "ABC-12: Fix it", picks the id,
+  // unless `splitId` is false.
+  createTask(
+    rawInput: unknown,
+    attachments: readonly AttachmentFile[] = [],
+    { splitId = true }: { splitId?: boolean } = {},
+  ): Task {
     const input = createTaskInputSchema.parse(rawInput)
     if (input.parentId) {
       this.checkParent(input.parentId)
+    }
+    const chosen = splitId ? splitTaskId(input.title) : { id: null, title: input.title }
+    if (chosen.id && readTaskFile(this.dataDir, chosen.id)) {
+      throw new TaskEditError(`Task id ${chosen.id} is already used`)
     }
     const at = this.timestamp()
     // Stages that are off stay in the settings, but a new task does not get them.
@@ -224,7 +419,8 @@ export class TaskService {
     const start = firstPosition(steps)
     const task = taskSchema.parse({
       ...input,
-      id: this.nextTaskId(),
+      id: chosen.id ?? this.nextTaskId(),
+      title: chosen.title,
       stage: start.stage,
       state: start.state,
       lanes: start.lanes,
@@ -234,39 +430,63 @@ export class TaskService {
       updatedAt: at,
     })
 
-    writeTaskFile(this.dataDir, task)
-    this.index.upsertTask(task)
-    this.logEvent(
-      { taskId: task.id, source: 'system', type: 'task.created', at, payload: {} },
-      true,
-    )
+    const created: TaskEvent = {
+      taskId: task.id,
+      source: 'system',
+      type: 'task.created',
+      at,
+      payload: {},
+    }
+    this.store(task, [{ event: created, accepted: true }])
     saveAttachments(this.dataDir, task.id, attachments)
-    for (const { name, bytes } of attachments) {
-      this.logEvent(
-        {
-          taskId: task.id,
-          source: 'system',
-          type: 'attachment.added',
-          at,
-          payload: { name, size: bytes.length },
-        },
-        true,
+    if (attachments.length > 0) {
+      const added = attachments.map(
+        ({ name, bytes }): LoggedEvent => ({
+          event: {
+            taskId: task.id,
+            source: 'system',
+            type: 'attachment.added',
+            at,
+            payload: { name, size: bytes.length },
+          },
+          accepted: true,
+        }),
       )
+      this.store(task, added, false)
     }
     this.bus.publish({ kind: 'task.created', task })
     return task
   }
 
   getTask(taskId: string): Task {
-    const task = readTaskFile(this.dataDir, taskId)
+    this.checkFile(taskId)
+    const task = this.findTask(taskId)
     if (!task) {
       throw new TaskNotFoundError(taskId)
     }
     return task
   }
 
+  // Newest first, as the index lists them.
   listTasks(state?: TaskState): Task[] {
-    return this.index.listTasks(state)
+    this.checkFolder()
+    const all = [...this.tasks.values()]
+    const tasks = state === undefined ? all : all.filter((task) => task.state === state)
+    return tasks.sort((a, b) => compareText(b.updatedAt, a.updatedAt) || compareText(a.id, b.id))
+  }
+
+  // Before init() the map holds only the tasks this service wrote or read, so a task is looked
+  // for on disk too. Tests share a data folder between services this way.
+  private findTask(taskId: string): Task | undefined {
+    const task = this.tasks.get(taskId)
+    if (task !== undefined || this.started) {
+      return task
+    }
+    const read = readTaskFile(this.dataDir, taskId)
+    if (read !== undefined) {
+      this.tasks.set(taskId, Object.freeze(read))
+    }
+    return read
   }
 
   listEvents(taskId: string): StoredEvent[] {
@@ -299,9 +519,7 @@ export class TaskService {
     }
     const updated: Task = taskSchema.parse({ ...next, updatedAt: event.at })
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -348,9 +566,7 @@ export class TaskService {
         payload: { fields },
       }
       const updated = taskSchema.parse({ ...other, parentId, dependsOn, updatedAt: event.at })
-      writeTaskFile(this.dataDir, updated)
-      this.index.upsertTask(updated)
-      this.logEvent(event, true)
+      this.store(updated, [{ event, accepted: true }])
       this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
       changed.push(updated)
     }
@@ -363,6 +579,10 @@ export class TaskService {
     rmSync(archiveDir(this.dataDir, taskId), { recursive: true, force: true })
     this.removeLaunchScripts(taskId)
     this.index.deleteTask(taskId)
+    this.tasks.delete(taskId)
+    this.fileStats.delete(taskId)
+    this.writtenAt.delete(taskId)
+    this.checkedAt.delete(taskId)
   }
 
   // Launch scripts are named agent-launch-T-0001.sh and agent-launch-T-0001-2.sh.
@@ -387,7 +607,7 @@ export class TaskService {
 
   // Subtasks are one level deep: the parent must exist and must not be a subtask itself.
   private checkParent(parentId: string): void {
-    const parent = readTaskFile(this.dataDir, parentId)
+    const parent = this.findTask(parentId)
     if (!parent) {
       throw new TaskEditError(`No such task: ${parentId}`)
     }
@@ -428,11 +648,7 @@ export class TaskService {
         }
       : task
 
-    if (accepted) {
-      writeTaskFile(this.dataDir, updated)
-      this.index.upsertTask(updated)
-    }
-    this.logEvent(event, accepted)
+    this.store(updated, [{ event, accepted }], accepted)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted, moved })
     return { task: updated, accepted, moved }
   }
@@ -454,9 +670,7 @@ export class TaskService {
       updatedAt: event.at,
     }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -489,9 +703,7 @@ export class TaskService {
       updatedAt: event.at,
     }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -508,9 +720,7 @@ export class TaskService {
     }
     const updated: Task = { ...task, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -537,9 +747,7 @@ export class TaskService {
       updatedAt: event.at,
     }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -579,10 +787,8 @@ export class TaskService {
     }
     const updated: Task = { ...moving, prStatus: status, updatedAt: at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
+    this.store(updated, logged)
     for (const { event, accepted } of logged) {
-      this.logEvent(event, accepted)
       this.bus.publish({
         kind: 'task.updated',
         task: updated,
@@ -610,9 +816,7 @@ export class TaskService {
     }
     const updated: Task = { ...task, issue, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -650,9 +854,7 @@ export class TaskService {
     }
     const updated: Task = { ...task, workflowStages, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -685,9 +887,7 @@ export class TaskService {
     }
     const updated: Task = { ...task, ciStages, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -747,9 +947,7 @@ export class TaskService {
     const event: TaskEvent = { taskId, source, type, at: this.timestamp(), payload }
     const updated: Task = { ...task, updatedAt: event.at }
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return updated
   }
@@ -780,10 +978,14 @@ export class TaskService {
       backgroundSince: endsWait ? null : task.backgroundSince,
       updatedAt: at,
     }
+    // When only the time moves, the file can wait: the next real change writes it anyway.
+    const writtenAt = this.writtenAt.get(taskId)
+    const writeFile =
+      updated.backgroundSince !== task.backgroundSince ||
+      writtenAt === undefined ||
+      Date.parse(at) - Date.parse(writtenAt) >= ACTIVITY_FILE_INTERVAL_MS
 
-    writeTaskFile(this.dataDir, updated)
-    this.index.upsertTask(updated)
-    this.logEvent(event, true)
+    this.store(updated, [{ event, accepted: true }], writeFile)
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
     return true
   }
@@ -793,10 +995,10 @@ export class TaskService {
   }
 
   private nextTaskId(): string {
-    const highest = listTaskIds(this.dataDir).reduce(
-      (max, id) => Math.max(max, Number(id.slice(2))),
-      0,
-    )
+    // Ids the user chose with another prefix do not move the default numbers.
+    const highest = listTaskIds(this.dataDir)
+      .filter((id) => id.startsWith('T-'))
+      .reduce((max, id) => Math.max(max, Number(id.slice(2))), 0)
     return `T-${String(highest + 1).padStart(4, '0')}`
   }
 }

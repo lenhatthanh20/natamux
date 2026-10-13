@@ -19,12 +19,12 @@ export class FakePty implements PtyProcess {
   // pause() and resume() calls, in order. emit() still delivers output while paused.
   readonly flow: ('pause' | 'resume')[] = []
   paused = false
-  private dataListeners: ((data: string) => void)[] = []
+  private dataListeners: ((data: Buffer) => void)[] = []
   private exitListeners: ((code: number | null) => void)[] = []
 
   constructor(readonly options: Parameters<SpawnPty>[0]) {}
 
-  onData(listener: (data: string) => void): void {
+  onData(listener: (data: Buffer) => void): void {
     this.dataListeners.push(listener)
   }
 
@@ -68,9 +68,11 @@ export class FakePty implements PtyProcess {
     this.exit(null)
   }
 
-  emit(data: string): void {
+  // Bytes, as the real pty gives them. Text is encoded as UTF-8.
+  emit(data: string | Uint8Array): void {
+    const bytes = Buffer.from(data)
     for (const listener of this.dataListeners) {
-      listener(data)
+      listener(bytes)
     }
   }
 

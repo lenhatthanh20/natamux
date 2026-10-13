@@ -154,6 +154,30 @@ function asRecord(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value))
 }
 
+// One task's part of GET /activity, which the live feed sends too: the line of each terminal, and
+// the newest of them. Null: no line.
+export type TaskActivity = { lines: Record<string, string>; latest: string | null }
+
+export function readTaskActivity(terminals: unknown): TaskActivity {
+  const lines: Record<string, string> = {}
+  let latest: string | null = null
+  let latestAt = ''
+  for (const [terminal, entry] of Object.entries(asRecord(terminals))) {
+    const { text, at } = asRecord(entry)
+    if (typeof text !== 'string') {
+      continue
+    }
+    lines[terminal] = text
+    // ISO times sort as text.
+    const when = typeof at === 'string' ? at : ''
+    if (latest === null || when > latestAt) {
+      latest = text
+      latestAt = when
+    }
+  }
+  return { lines, latest }
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text)
@@ -370,20 +394,9 @@ export function createApi(
       const activity = asRecord(asRecord(await request('GET', '/activity')).activity)
       const result: AgentActivity = { byTask: {}, byTerminal: {} }
       for (const [taskId, terminals] of Object.entries(activity)) {
-        const lines: Record<string, string> = {}
-        let latest = ''
-        for (const [terminal, entry] of Object.entries(asRecord(terminals))) {
-          const { text, at } = asRecord(entry)
-          if (typeof text !== 'string') {
-            continue
-          }
-          lines[terminal] = text
-          // ISO times sort as text.
-          const when = typeof at === 'string' ? at : ''
-          if (result.byTask[taskId] === undefined || when > latest) {
-            result.byTask[taskId] = text
-            latest = when
-          }
+        const { lines, latest } = readTaskActivity(terminals)
+        if (latest !== null) {
+          result.byTask[taskId] = latest
         }
         result.byTerminal[taskId] = lines
       }

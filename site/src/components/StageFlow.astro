@@ -1,0 +1,717 @@
+---
+// An animated diagram of the default pipeline: two agents side by side, then the review agent
+// that sends the task back to Implement. One timeline drives the wide and the narrow drawing.
+// With reduced motion, or after Pause, it is a still diagram; the list below says it in words.
+interface Props {
+  id?: string
+}
+const { id = 'stage-flow' } = Astro.props
+
+const DURATION = 22 // seconds for one round of the story
+
+type Box = { x: number; y: number; w: number; h: number }
+type Node = {
+  key: string
+  title: string[]
+  agent?: 'A' | 'B' | 'C'
+  gate?: boolean
+  color: string
+}
+
+const nodes: Node[] = [
+  { key: 'context', title: ['Context'], color: 'var(--sf-accent)' },
+  { key: 'spec', title: ['Spec'], agent: 'A', gate: true, color: 'var(--sf-a)' },
+  { key: 'plan', title: ['Plan'], agent: 'A', gate: true, color: 'var(--sf-a)' },
+  { key: 'testspec', title: ['Test spec'], agent: 'B', gate: true, color: 'var(--sf-b)' },
+  { key: 'implement', title: ['Implement'], agent: 'A', color: 'var(--sf-a)' },
+  { key: 'tests', title: ['Automated', 'tests'], agent: 'A', color: 'var(--sf-a)' },
+  { key: 'review', title: ['Review'], agent: 'C', color: 'var(--sf-c)' },
+  { key: 'release', title: ['Release'], gate: true, color: 'var(--sf-you)' },
+]
+
+// Percent of the round in which each mark shows.
+const timeline: Record<string, [number, number][]> = {
+  'hl-context': [[0, 6]],
+  'ok-context': [[6, 97]],
+  'hl-spec': [[6, 18]],
+  'wait-spec': [[12, 18]],
+  'ok-spec': [[18, 97]],
+  'hl-plan': [[18, 30]],
+  'wait-plan': [[24, 30]],
+  'ok-plan': [[30, 97]],
+  'hl-testspec': [[30, 46]],
+  'wait-testspec': [[40, 46]],
+  'ok-testspec': [[46, 97]],
+  'hl-implement': [
+    [30, 42],
+    [64, 74],
+  ],
+  'ok-implement': [
+    [42, 58],
+    [74, 97],
+  ],
+  'hl-tests': [
+    [46, 52],
+    [74, 80],
+  ],
+  'ok-tests': [
+    [52, 58],
+    [80, 97],
+  ],
+  'hl-review': [
+    [52, 58],
+    [80, 88],
+  ],
+  'bad-review': [[58, 66]],
+  'ok-review': [[88, 97]],
+  'hl-release': [[88, 97]],
+  'wait-release': [[91, 97]],
+  'loop-on': [[58, 66]],
+  'chip-on': [[62, 97]],
+}
+
+const captions: [number, number, string][] = [
+  [0, 6, 'Context: Natamux collects the task into context.md.'],
+  [6, 18, 'Spec: agent A writes spec.md, then waits for your approval.'],
+  [18, 30, 'Plan: agent A writes plan.md in the same session. You approve it.'],
+  [30, 46, 'Two agents at once: agent B writes the test spec in Shell 2 while agent A implements in Shell 1.'],
+  [46, 52, 'Automated tests: agent A adds a test for each case and runs all tests.'],
+  [52, 58, 'Review: agent C reads the changes in Shell 5, in a session of its own.'],
+  [58, 66, 'Findings: the review agent sends the task back to Implement, with the reasons.'],
+  [66, 80, 'Implement runs again with “What to change: …”, then the tests. Test spec stays done.'],
+  [80, 88, 'Review runs again. A third send back is refused, and the task waits for you instead.'],
+  [88, 97, 'No findings: Release waits for you to open the pull request. The merge finishes the task.'],
+]
+captions.forEach(([a, b], i) => (timeline[`cap-${i}`] = [[a, b]]))
+
+// Keyframes that fade a mark in at the start of each span and out at its end.
+function keyframes(name: string, spans: [number, number][]): string {
+  const ramp = 0.6
+  const points: [number, number][] = [[0, 0]]
+  for (const [a, b] of spans) {
+    points.push([a, 0], [Math.min(a + ramp, 100), 1], [b, 1], [Math.min(b + ramp, 100), 0])
+  }
+  points.push([100, 0])
+  const seen = new Map<number, number>()
+  for (const [at, value] of points) seen.set(Number(at.toFixed(2)), value)
+  const steps = [...seen.entries()].sort((p, q) => p[0] - q[0])
+  return `@keyframes sf-${name}{${steps.map(([at, v]) => `${at}%{opacity:${v}}`).join('')}}`
+}
+const css =
+  Object.entries(timeline)
+    .map(([name, spans]) => keyframes(name, spans))
+    .join('') +
+  Object.keys(timeline)
+    .map((name) => `.sf [data-k="${name}"]{animation-name:sf-${name}}`)
+    .join('') +
+  `.sf .sf-anim{animation-duration:${DURATION}s}`
+
+type Layout = {
+  view: [number, number]
+  boxes: Record<string, Box>
+  frame: Box
+  frameLabel: { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
+  wires: string[]
+  loop: string
+  loopLabel: { x: number; y: number; lines: string[] }
+  chip: { x: number; y: number }
+}
+
+const H = 44
+const wide: Layout = {
+  view: [864, 300],
+  boxes: {
+    context: { x: 8, y: 98, w: 92, h: H },
+    spec: { x: 120, y: 98, w: 86, h: H },
+    plan: { x: 226, y: 98, w: 86, h: H },
+    testspec: { x: 344, y: 48, w: 124, h: H },
+    implement: { x: 344, y: 148, w: 124, h: H },
+    tests: { x: 500, y: 98, w: 124, h: H },
+    review: { x: 644, y: 98, w: 100, h: H },
+    release: { x: 764, y: 98, w: 92, h: H },
+  },
+  frame: { x: 332, y: 30, w: 148, h: 182 },
+  frameLabel: { x: 406, y: 22, anchor: 'middle' },
+  wires: [
+    'M100 120H118',
+    'M206 120H224',
+    'M312 120H322V70H342',
+    'M322 120V170H342',
+    'M468 70H490V120H498',
+    'M468 170H490V120',
+    'M624 120H642',
+    'M744 120H762',
+  ],
+  loop: 'M694 142V246Q694 258 682 258H418Q406 258 406 246V195',
+  loopLabel: { x: 550, y: 284, lines: ['Findings: back to Implement, at most 2 times'] },
+  chip: { x: 406, y: 120 },
+}
+const narrow: Layout = {
+  view: [360, 510],
+  boxes: {
+    context: { x: 130, y: 10, w: 120, h: H },
+    spec: { x: 130, y: 78, w: 120, h: H },
+    plan: { x: 130, y: 146, w: 120, h: H },
+    implement: { x: 40, y: 228, w: 140, h: H },
+    testspec: { x: 200, y: 228, w: 140, h: H },
+    tests: { x: 130, y: 316, w: 120, h: H },
+    review: { x: 130, y: 384, w: 120, h: H },
+    release: { x: 130, y: 452, w: 120, h: H },
+  },
+  frame: { x: 28, y: 204, w: 324, h: 86 },
+  frameLabel: { x: 34, y: 221, anchor: 'start' },
+  wires: [
+    'M190 54V76',
+    'M190 122V144',
+    'M190 190V214H110V226',
+    'M190 214H270V226',
+    'M110 272V300H190V314',
+    'M270 272V300H190',
+    'M190 360V382',
+    'M190 428V450',
+  ],
+  loop: 'M130 406H26Q14 406 14 394V262Q14 250 26 250H38',
+  loopLabel: { x: 72, y: 448, lines: ['Findings:', 'back, at most 2×'] },
+  chip: { x: 72, y: 330 },
+}
+
+function textLines(node: Node, box: Box): { x: number; y: number; text: string }[] {
+  const x = node.agent ? box.x + 34 + (box.w - 34) / 2 - 4 : box.x + box.w / 2
+  const mid = box.y + box.h / 2
+  const lineHeight = 16
+  const top = mid - ((node.title.length - 1) * lineHeight) / 2
+  return node.title.map((text, i) => ({ x, y: top + i * lineHeight, text }))
+}
+
+const check = (cx: number, cy: number) =>
+  `M${cx - 4} ${cy}l2.8 2.8 5.2-5.6`
+---
+
+<figure class="sf not-content" id={id} data-flow style={`--sf-duration:${DURATION}s`}>
+  <div class="sf-stage">
+    {
+      [
+        ['wide', wide],
+        ['narrow', narrow],
+      ].map(([name, layout]) => {
+        const l = layout as Layout
+        return (
+          <svg
+            class={`sf-svg sf-${name}`}
+            viewBox={`0 0 ${l.view[0]} ${l.view[1]}`}
+            role="img"
+            aria-labelledby={`${id}-title-${name}`}
+          >
+            <title id={`${id}-title-${name}`}>
+              The default stage pipeline: Context, Spec, Plan, then Test spec and Implement side by
+              side, Automated tests, Review and Release. Review sends the task back to Implement
+              when it finds problems, at most 2 times.
+            </title>
+            <defs>
+              <marker
+                id={`${id}-${name}-arrow`}
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0L8 4L0 8z" class="sf-arrow" />
+              </marker>
+              <marker
+                id={`${id}-${name}-arrow-bad`}
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M0 0L8 4L0 8z" class="sf-arrow-bad" />
+              </marker>
+            </defs>
+
+            <rect
+              class="sf-frame"
+              x={l.frame.x}
+              y={l.frame.y}
+              width={l.frame.w}
+              height={l.frame.h}
+              rx="14"
+            />
+            <text
+              class="sf-frame-label"
+              x={l.frameLabel.x}
+              y={l.frameLabel.y}
+              text-anchor={l.frameLabel.anchor}
+            >
+              side by side
+            </text>
+
+            {l.wires.map((d) => (
+              <path class="sf-wire" d={d} marker-end={`url(#${id}-${name}-arrow)`} />
+            ))}
+
+            <path class="sf-loop" d={l.loop} marker-end={`url(#${id}-${name}-arrow-bad)`} />
+            <path class="sf-loop-hl sf-anim" data-k="loop-on" d={l.loop} />
+            {l.loopLabel.lines.map((line, i) => (
+              <text
+                class="sf-loop-label"
+                x={l.loopLabel.x}
+                y={l.loopLabel.y + i * 14}
+                text-anchor="middle"
+              >
+                {line}
+              </text>
+            ))}
+
+            {nodes.map((node) => {
+              const b = l.boxes[node.key] as Box
+              return (
+                <g style={`--c:${node.color}`}>
+                  <rect
+                    class="sf-wait sf-anim"
+                    data-k={`wait-${node.key}`}
+                    x={b.x - 5}
+                    y={b.y - 5}
+                    width={b.w + 10}
+                    height={b.h + 10}
+                    rx="14"
+                  />
+                  <rect class="sf-node" x={b.x} y={b.y} width={b.w} height={b.h} rx="10" />
+                  <rect
+                    class="sf-hl sf-anim"
+                    data-k={`hl-${node.key}`}
+                    x={b.x}
+                    y={b.y}
+                    width={b.w}
+                    height={b.h}
+                    rx="10"
+                  />
+                  {node.key === 'review' && (
+                    <rect
+                      class="sf-bad sf-anim"
+                      data-k="bad-review"
+                      x={b.x}
+                      y={b.y}
+                      width={b.w}
+                      height={b.h}
+                      rx="10"
+                    />
+                  )}
+                  {node.agent && (
+                    <g class="sf-agent">
+                      <circle cx={b.x + 18} cy={b.y + b.h / 2} r="10" />
+                      <text x={b.x + 18} y={b.y + b.h / 2} text-anchor="middle">
+                        {node.agent}
+                      </text>
+                    </g>
+                  )}
+                  {textLines(node, b).map((t) => (
+                    <text class="sf-title" x={t.x} y={t.y} text-anchor="middle">
+                      {t.text}
+                    </text>
+                  ))}
+                  {node.gate && (
+                    <g class="sf-gate" transform={`translate(${b.x + b.w - 2} ${b.y + 2})`}>
+                      <circle r="8.5" />
+                      <circle cx="0" cy="-2.2" r="2.1" class="sf-gate-glyph" />
+                      <path d="M-3.6 4.2a3.6 3.2 0 0 1 7.2 0" class="sf-gate-glyph" />
+                    </g>
+                  )}
+                  <g class="sf-ok sf-anim" data-k={`ok-${node.key}`}>
+                    <circle cx={b.x + 2} cy={b.y + 2} r="8.5" />
+                    <path d={check(b.x + 1.5, b.y + 2)} />
+                  </g>
+                </g>
+              )
+            })}
+
+            <g class="sf-chip sf-anim" data-k="chip-on">
+              <rect x={l.chip.x - 50} y={l.chip.y - 11} width="100" height="22" rx="11" />
+              <text x={l.chip.x} y={l.chip.y} text-anchor="middle">
+                Sent back 1×
+              </text>
+            </g>
+          </svg>
+        )
+      })
+    }
+  </div>
+
+  <div class="sf-bar">
+    <p class="sf-captions" aria-hidden="true">
+      {
+        captions.map(([, , text], i) => (
+          <span class="sf-cap sf-anim" data-k={`cap-${i}`}>
+            {text}
+          </span>
+        ))
+      }
+      <span class="sf-cap-still">
+        Two agents build side by side; a third reviews and sends the task back until the review
+        passes.
+      </span>
+    </p>
+    <button class="sf-toggle" type="button" data-flow-toggle>
+      <span class="sf-toggle-pause">Pause</span><span class="sf-toggle-play">Play</span>
+    </button>
+  </div>
+
+  <ul class="sf-legend">
+    <li><span class="sf-dot" style="--c: var(--sf-a)">A</span> The task's agent, Shell 1</li>
+    <li><span class="sf-dot" style="--c: var(--sf-b)">B</span> Test spec agent, Shell 2</li>
+    <li><span class="sf-dot" style="--c: var(--sf-c)">C</span> Review agent, Shell 5</li>
+    <li><span class="sf-person" aria-hidden="true"></span> Waits for your approval</li>
+  </ul>
+
+  <details class="sf-words">
+    <summary>The flow in words</summary>
+    <ol>
+      <li>Context: Natamux writes <code>context.md</code> from your notes, a GitHub issue or a skill.</li>
+      <li>Spec: the task's agent (A) writes <code>spec.md</code> in Shell 1. You approve it.</li>
+      <li>Plan: agent A writes <code>plan.md</code> in the same session. You approve it.</li>
+      <li>
+        Test spec and Implement start together. Agent B writes <code>test-spec.md</code> in Shell 2
+        without reading the code; you approve it. Agent A writes the tests and the code in Shell 1.
+      </li>
+      <li>Automated tests: when both are done, agent A adds a test for each case and runs all tests.</li>
+      <li>Review: agent C starts in Shell 5 and writes <code>review.md</code>.</li>
+      <li>
+        With findings, agent C sends the task back to Implement with the reasons. Implement,
+        Automated tests and Review run again. A third send back is refused, and the task waits
+        for you instead.
+      </li>
+      <li>Without findings, the task goes to Release. You open the pull request; the merge finishes the task.</li>
+    </ol>
+  </details>
+</figure>
+
+<Fragment set:html={`<style>${css}</style>`} />
+
+<style is:global>
+  .sf {
+    --sf-a: #7fa8ff;
+    --sf-b: #58d3a6;
+    --sf-c: #b39cff;
+    --sf-you: #f2b544;
+    --sf-bad: #ff7a90;
+    --sf-ok: #58d3a6;
+    --sf-accent: var(--sl-color-accent);
+    --sf-node: var(--sl-color-gray-6);
+    --sf-line: var(--sl-color-gray-5);
+    --sf-wire-c: var(--sl-color-gray-4);
+    --sf-text: var(--sl-color-white);
+    --sf-muted: var(--sl-color-gray-3);
+    margin: 1.75rem 0;
+    padding: 1.25rem 1.25rem 1rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 16px;
+    background:
+      radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--sf-a) 9%, transparent), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--sf-c) 8%, transparent), transparent 60%),
+      var(--sl-color-black);
+  }
+  :root[data-theme='light'] .sf {
+    --sf-a: #2f5fd0;
+    --sf-b: #0f7a56;
+    --sf-c: #6a4bd6;
+    --sf-you: #9a5d00;
+    --sf-bad: #c4304b;
+    --sf-ok: #0f7a56;
+    --sf-node: #ffffff;
+    --sf-line: #c9d1df;
+    --sf-wire-c: #8a97ae;
+    background:
+      radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--sf-a) 7%, transparent), transparent 60%),
+      radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--sf-c) 6%, transparent), transparent 60%),
+      var(--sl-color-gray-7, #f3f5f9);
+  }
+  .sf * {
+    margin: 0;
+  }
+  .sf-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    font-family: var(--sl-font);
+    overflow: visible;
+  }
+  .sf-narrow {
+    display: none;
+    max-width: 380px;
+    margin-inline: auto;
+  }
+  @container sf (max-width: 560px) {
+    .sf-wide {
+      display: none;
+    }
+    .sf-narrow {
+      display: block;
+    }
+  }
+  .sf-stage {
+    container: sf / inline-size;
+  }
+  .sf-frame {
+    fill: color-mix(in srgb, var(--sf-a) 4%, transparent);
+    stroke: var(--sf-line);
+    stroke-dasharray: 5 5;
+  }
+  .sf-frame-label,
+  .sf-loop-label {
+    font-size: 13px;
+    fill: var(--sf-muted);
+    letter-spacing: 0.02em;
+  }
+  .sf-loop-label {
+    fill: var(--sf-bad);
+  }
+  .sf-wire {
+    fill: none;
+    stroke: var(--sf-wire-c);
+    stroke-width: 1.5;
+  }
+  .sf-arrow {
+    fill: var(--sf-wire-c);
+  }
+  .sf-arrow-bad {
+    fill: var(--sf-bad);
+  }
+  .sf-loop {
+    fill: none;
+    stroke: var(--sf-bad);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 5;
+    opacity: 0.6;
+  }
+  .sf-loop-hl {
+    fill: none;
+    stroke: var(--sf-bad);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 10 8;
+  }
+  .sf-node {
+    fill: var(--sf-node);
+    stroke: var(--sf-line);
+    stroke-width: 1;
+  }
+  .sf-hl {
+    fill: color-mix(in srgb, var(--c) 16%, transparent);
+    stroke: var(--c);
+    stroke-width: 2;
+  }
+  .sf-bad {
+    fill: color-mix(in srgb, var(--sf-bad) 16%, transparent);
+    stroke: var(--sf-bad);
+    stroke-width: 2;
+  }
+  .sf-wait {
+    fill: none;
+    stroke: var(--sf-you);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 4;
+  }
+  .sf-title {
+    font-size: 15.5px;
+    font-weight: 600;
+    fill: var(--sf-text);
+    dominant-baseline: central;
+  }
+  .sf-agent circle {
+    fill: color-mix(in srgb, var(--c) 22%, transparent);
+    stroke: var(--c);
+  }
+  .sf-agent text {
+    font-size: 12px;
+    font-weight: 700;
+    fill: var(--c);
+    dominant-baseline: central;
+  }
+  .sf-gate circle:first-child {
+    fill: var(--sf-node);
+    stroke: var(--sf-you);
+    stroke-width: 1.4;
+  }
+  .sf-gate-glyph {
+    fill: none;
+    stroke: var(--sf-you);
+    stroke-width: 1.3;
+  }
+  .sf-ok circle {
+    fill: var(--sf-ok);
+  }
+  .sf-ok path {
+    fill: none;
+    stroke: var(--sl-color-black);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .sf-chip rect {
+    fill: color-mix(in srgb, var(--sf-bad) 18%, var(--sf-node));
+    stroke: var(--sf-bad);
+  }
+  .sf-chip text {
+    font-size: 12px;
+    font-weight: 600;
+    fill: var(--sf-bad);
+    dominant-baseline: central;
+  }
+
+  .sf-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .sf-captions {
+    display: grid;
+    flex: 1;
+    min-height: 2.9em;
+    align-items: center;
+    font-size: var(--sl-text-sm);
+    line-height: 1.45;
+    color: var(--sl-color-gray-2);
+  }
+  .sf-cap,
+  .sf-cap-still {
+    grid-area: 1 / 1;
+  }
+  .sf-cap-still {
+    display: none;
+  }
+  .sf-toggle {
+    flex: none;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    font: inherit;
+    font-size: var(--sl-text-xs);
+    cursor: pointer;
+  }
+  .sf-toggle:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-3);
+  }
+  .sf-toggle-play,
+  .sf[data-paused] .sf-toggle-pause {
+    display: none;
+  }
+  .sf[data-paused] .sf-toggle-play {
+    display: inline;
+  }
+  .sf-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.1rem;
+    margin-top: 0.75rem;
+    padding: 0.75rem 0 0;
+    border-top: 1px solid var(--sl-color-hairline);
+    list-style: none;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .sf-legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+  }
+  .sf-dot {
+    display: inline-grid;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid var(--c);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--c) 20%, transparent);
+    color: var(--c);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .sf-person {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1.5px solid var(--sf-you);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 36%, var(--sf-you) 0 17%, transparent 19%),
+      radial-gradient(60% 40% at 50% 92%, var(--sf-you) 0 60%, transparent 63%);
+  }
+  .sf-words {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-sm);
+  }
+  .sf-words summary {
+    cursor: pointer;
+    color: var(--sl-color-gray-2);
+  }
+  .sf-words ol {
+    margin-top: 0.5rem;
+    padding-left: 1.4rem;
+    list-style: decimal;
+    color: var(--sl-color-gray-2);
+  }
+  .sf-words code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+  }
+  .sf-words li + li {
+    margin-top: 0.25rem;
+  }
+
+  .sf .sf-anim {
+    opacity: 0;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+  }
+  .sf .sf-loop-hl.sf-anim {
+    animation:
+      sf-loop-on var(--sf-duration, 22s) linear infinite,
+      sf-dash 0.9s linear infinite;
+  }
+  @keyframes sf-dash {
+    to {
+      stroke-dashoffset: -18;
+    }
+  }
+  .sf[data-paused] .sf-anim,
+  .sf[data-offscreen] .sf-anim {
+    animation-play-state: paused !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sf .sf-anim {
+      animation: none !important;
+      opacity: 0;
+    }
+    .sf .sf-cap {
+      display: none;
+    }
+    .sf .sf-cap-still {
+      display: block;
+    }
+    .sf-toggle {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Pause the diagram off screen, and let the reader pause it at any time.
+  for (const figure of document.querySelectorAll<HTMLElement>('[data-flow]')) {
+    const toggle = figure.querySelector<HTMLButtonElement>('[data-flow-toggle]')
+    toggle?.addEventListener('click', () => figure.toggleAttribute('data-paused'))
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(([entry]) => {
+        figure.toggleAttribute('data-offscreen', !entry?.isIntersecting)
+      }).observe(figure)
+    }
+  }
+</script>

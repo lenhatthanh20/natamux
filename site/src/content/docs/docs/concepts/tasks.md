@@ -9,6 +9,8 @@ A task is one unit of work for one agent. It has a title, notes, a state, and a 
 
 Task ids look like `T-0001`. The number grows by one for each new task.
 
+To choose the id yourself, start the title with it: `ABC-12: Fix the login bug` or `ABC-12 Fix the login bug` makes task `ABC-12` with the title `Fix the login bug`. The id is letters, a dash and a number, and is saved in upper case. It must not be used by another task.
+
 ## Task fields
 
 | Field | Meaning |

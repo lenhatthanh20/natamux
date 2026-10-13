@@ -1027,23 +1027,6 @@
 .stage-link[data-kind="hidden"] {
   visibility: hidden;
 }
-.stage-stripes {
-  position: relative;
-  overflow: hidden;
-}
-.stage-stripes::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 -17px;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--chip-fg) 0 6px,
-    color-mix(in srgb, var(--chip-fg) 55%, transparent) 6px 12px
-  );
-  background-size: 17px 17px;
-  animation: hm-stripes 1s linear infinite;
-}
-
 /* The pipeline preview of Project settings: left to right, top to bottom below 640px. It is still,
    so it reads the same with reduced motion. Lines meet the middle of the markers. */
 .pipeline {
@@ -1301,17 +1284,10 @@
     transform: translateX(12px);
   }
 }
-@keyframes hm-stripes {
-  to {
-    transform: translateX(17px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .stage-arc,
   .stage-halo,
   .stage-link[data-kind="flow"]::before,
-  .stage-stripes::before,
   .stage-node[data-state="review"] .stage-core {
     animation: none;
   }
@@ -1325,7 +1301,6 @@
 :root[data-window="inactive"] .stage-arc,
 :root[data-window="inactive"] .stage-halo,
 :root[data-window="inactive"] .stage-link[data-kind="flow"]::before,
-:root[data-window="inactive"] .stage-stripes::before,
 :root[data-window="inactive"] .stage-node[data-state="review"] .stage-core,
 :root[data-window="inactive"] .sb-breathe,
 :root[data-window="inactive"] .animate-spin,
@@ -1335,4 +1310,11 @@
 }
 :root[data-window="inactive"] .stage-arc {
   background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
+}
+
+/* Long lists skip layout and paint for rows far off screen. Set --cv-h to the row height when it
+   is not --row-h. Rows with a focus ring outside the box must not use it. */
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--cv-h, var(--row-h));
 }

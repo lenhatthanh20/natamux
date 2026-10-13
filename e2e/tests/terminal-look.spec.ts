@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { DEMO_TITLE, openTask, signIn } from './helpers'
+import { AGENT_TITLE, DEMO_TITLE, openTask, signIn } from './helpers'
 import { addShells, pane, rows, runIn } from './terminal-helpers'
 
 // The look of the terminal: docs/design-terminal-look.md, cases in the T-0005 test spec.
@@ -342,6 +342,87 @@ test('follows the app theme with the Night palette, as --terminal (C13)', async 
       .poll(() => shell.evaluate((element) => getComputedStyle(element).backgroundColor))
       .toBe(BACKGROUND[theme])
   }
+})
+
+// The highest alpha in each pixel column of the scrollbar's ruler canvas. xterm draws the ruler's
+// border line in column 0 and the find marks in the columns after it. Empty when there is no ruler.
+async function rulerAlphas(shell: Locator): Promise<number[]> {
+  return screenOf(shell).evaluate((element) => {
+    const canvas = element.querySelector<HTMLCanvasElement>(
+      'canvas.xterm-decoration-overview-ruler',
+    )
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context || canvas.height === 0) return []
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+    const alphas = new Array<number>(canvas.width).fill(0)
+    for (let index = 0; index < pixels.length; index += 4) {
+      const column = (index / 4) % canvas.width
+      alphas[column] = Math.max(alphas[column], pixels[index + 3])
+    }
+    return alphas
+  })
+}
+
+async function rulerEdgeAlpha(shell: Locator): Promise<number | undefined> {
+  return (await rulerAlphas(shell))[0]
+}
+
+test('draws no line beside the scrollbar, in both themes (T-0037)', async ({ page }) => {
+  const shell = pane(page, 'Shell 1')
+  // Before any scrollback too: xterm draws the border as soon as the ruler exists.
+  expect(await rulerEdgeAlpha(shell)).toBe(0)
+  await runIn(page, shell, 'seq 1 300')
+  await expect(rows(shell)).toContainText('300')
+  await screenOf(shell).hover()
+  for (const theme of ['Dark', 'Light', 'Dark'] as const) {
+    await setTheme(page, theme)
+    await expect.poll(() => rulerEdgeAlpha(shell)).toBe(0)
+  }
+
+  // A cached terminal takes the theme at its next show.
+  const view = page.getByRole('tablist', { name: 'View', exact: true })
+  await view.getByRole('tab', { name: 'Changes' }).click()
+  await setTheme(page, 'Light')
+  await view.getByRole('tab', { name: 'Terminal' }).click()
+  await expect(rows(shell)).toContainText('300')
+  await expect.poll(() => rulerEdgeAlpha(shell)).toBe(0)
+})
+
+test('keeps the find marks in the scrollbar, with no line beside it (T-0037)', async ({ page }) => {
+  const shell = pane(page, 'Shell 1')
+  await runIn(page, shell, 'for i in 1 2 3 4 5; do seq 1 60; echo rulermark$i; done')
+  await expect(rows(shell)).toContainText('rulermark5')
+  const hasMarks = async () => (await rulerAlphas(shell)).slice(1).some((alpha) => alpha > 0)
+  await screenOf(shell).click()
+  // Off macOS, Ctrl+F belongs to the shell; Mod+Shift+F reaches the app everywhere.
+  await page.keyboard.press('ControlOrMeta+Shift+F')
+  const find = page.getByRole('search', { name: 'Find in terminal' })
+  const field = find.getByRole('textbox', { name: 'Find' })
+
+  await field.fill('nomatchxyz')
+  await expect(find.getByRole('status')).toHaveText('No results')
+  expect(await hasMarks()).toBe(false)
+  expect(await rulerEdgeAlpha(shell)).toBe(0)
+
+  await field.fill('rulermark')
+  await expect(find.getByRole('status')).toHaveText(/^\d+ of \d+$/)
+  await expect.poll(hasMarks).toBe(true)
+  expect(await rulerEdgeAlpha(shell)).toBe(0)
+
+  await field.press('Escape')
+  await expect(find).toBeHidden()
+  expect(await rulerEdgeAlpha(shell)).toBe(0)
+})
+
+test('draws no line beside the scrollbar of an agent terminal (T-0037)', async ({ page }) => {
+  // The demo task is open from beforeEach; the task list holds the other tasks.
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
+  const tabs = await openTask(page, AGENT_TITLE)
+  await tabs.getByRole('tab', { name: 'Terminal' }).click()
+  const agent = pane(page, 'Shell 1')
+  await expect(rows(agent)).toContainText('Edit notes/', { timeout: 30_000 })
+  expect(await rulerEdgeAlpha(agent)).toBe(0)
 })
 
 test('loads the icon font once, only when an icon shows (C8, C9)', async ({ page }) => {

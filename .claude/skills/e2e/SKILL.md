@@ -16,7 +16,7 @@ Full reference: `docs/e2e.md`.
 - `e2e/`: the Playwright tests (`@playwright/test` 1.64.0, exact pin). They are outside the pnpm workspace and run only in CI.
 - `.github/workflows/e2e.yml`: runs on every PR and push to main. Three jobs:
   - `build`: builds, saves the images as an artifact, outputs their ids. No package write.
-  - `test`: loads the images, runs the Playwright tests. No package write.
+  - `test`: one job per group of `e2e/groups.ts` (`timing`, `terminal`, `rest`), each with its own daemon; `E2E_GROUP` picks the group. Loads the images, runs the Playwright tests. No package write.
   - `publish` (main only): checks the ids, pushes `ghcr.io/lenhatthanh20/natamux-{daemon,web}:main` and `:sha-<commit>`, attests build provenance. The only job with `packages: write`; installs nothing.
   - Keep it that way: never add a package install or a third-party action that runs code to `publish`, and never give `packages: write` to another job.
 
@@ -75,6 +75,7 @@ Full reference: `docs/e2e.md`.
   - Hidden terminals sit in `#terminal-holder` with their own rows. Use `rows(pane(page, 'Shell 1'))` from `terminal-helpers.ts`, never a page-wide `.xterm-rows`.
   - Terminal numbers: `terminal-measures.spec.ts` and `terminal-cache.spec.ts` record through `measures.ts` into `e2e/test-results/terminal-measures.json` (artifact `e2e-measures`, every run). `daemon-rss.ts` samples the daemon's memory. Assert limits on a median of `RUNS`, never on one sample. See `docs/e2e.md` "Terminal measures".
 - The tests share one daemon and run one at a time. Give any data a test adds a unique name (`Date.now()`).
+- A new spec file runs in the CI group `rest`. Add it to `GROUPS` in `e2e/groups.ts` only if it is slow. A file that calls `recordMeasure` must go in `timing`.
 - `phone.spec.ts` runs on Pixel 7. The other files run on desktop at 1440×900.
 - Selectors are accessible names. If a UI change renames a control, update the tests in the same PR.
 
@@ -82,7 +83,7 @@ Full reference: `docs/e2e.md`.
 
 ```sh
 gh run view <run-id> --log-failed | grep -E "Error|Expected|Received|✘|›" | head -40
-gh run download <run-id> -n e2e-report -D <scratchpad>/e2e-report
+gh run download <run-id> -n e2e-report-<group> -D <scratchpad>/e2e-report
 gh run download <run-id> -n e2e-measures -D <scratchpad>/e2e-measures
 ```
 

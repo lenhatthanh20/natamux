@@ -1,0 +1,39 @@
+---
+// A dashboard capture in both themes. The page shows the one that matches the
+// theme; lazy loading skips the hidden one, so each visitor loads one image.
+// With priority, the dark one (the default theme) loads eagerly as the LCP image.
+interface Props {
+  name: string
+  alt: string
+  // Full captures come in 1000 and 2000 px wide; crops are one file.
+  crop?: { width: number; height: number }
+  sizes?: string
+  priority?: boolean
+}
+
+const { name, alt, crop, sizes = '(min-width: 1240px) 1200px, 100vw', priority = false } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const dir = `${base}media/home/`
+const width = crop ? crop.width : 2000
+const height = crop ? crop.height : 1250
+const src = (theme: string) => (crop ? `${dir}${name}-${theme}.webp` : `${dir}${name}-${theme}-2000.webp`)
+const srcset = (theme: string) =>
+  crop ? undefined : `${dir}${name}-${theme}-1000.webp 1000w, ${dir}${name}-${theme}-2000.webp 2000w`
+---
+
+{
+  ['dark', 'light'].map((theme) => (
+    <img
+      class={`for-${theme}`}
+      src={src(theme)}
+      srcset={srcset(theme)}
+      sizes={crop ? undefined : sizes}
+      alt={alt}
+      width={width}
+      height={height}
+      loading={priority && theme === 'dark' ? 'eager' : 'lazy'}
+      decoding="async"
+      fetchpriority={priority && theme === 'dark' ? 'high' : undefined}
+    />
+  ))
+}

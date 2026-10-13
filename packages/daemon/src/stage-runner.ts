@@ -7,6 +7,7 @@ import {
   findStep,
   isGroup,
   offersCi,
+  plainText,
   RECORD_ONLY_EVENT_TYPES,
   runsWorkflow,
   type Stage,
@@ -811,12 +812,12 @@ export class StageRunner {
 
   // Output of a terminal of a task. On Windows an agent started here counts as running until its
   // launch line sets the window title that says it has ended (/exit, a crash).
-  onOutput(taskId: string, terminal: string, data: string): void {
+  onOutput(taskId: string, terminal: string, data: Buffer): void {
     const key = `${taskId}/${terminal}`
     if (this.platform !== 'win32' || !this.launched.has(key)) {
       return
     }
-    const text = (this.outputTails.get(key) ?? '') + data
+    const text = (this.outputTails.get(key) ?? '') + data.toString()
     if (AGENT_EXITED_MARKS.some((mark) => text.includes(mark))) {
       this.launched.delete(key)
       this.outputTails.delete(key)
@@ -1247,20 +1248,28 @@ export class StageRunner {
       })
       return
     }
-    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons)) {
+    if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons, ci.logs)) {
       return
     }
     this.failChecks(taskId, stageId, ci.reasons, ci.final, ci.logs)
   }
 
-  // A testing stage only runs the code, so its CI failure goes back to the stage that changes
-  // code, at most MAX_AGENT_SEND_BACKS times, as an agent's send back.
-  private sendBackForCi(taskId: string, stageId: string, reasons: string[]): boolean {
+  // A CI failure goes back to an agent as a send back, at most MAX_AGENT_SEND_BACKS times, so the
+  // stage starts a new round and its prompt is pasted as a review's would be. An agent stage gets
+  // it with the log. A testing stage only runs the code, so its failure goes to the stage that
+  // changes code, without the log.
+  private sendBackForCi(
+    taskId: string,
+    stageId: string,
+    reasons: string[],
+    logs = reasons,
+  ): boolean {
     const task = this.tasks.getTask(taskId)
     const steps = this.tasks.stepsOf(task)
     const stage = stagesOf(this.stepOf(task)).find((candidate) => candidate.id === stageId)
-    const to = codeStageBefore(steps, stageId)
-    if (stage?.kind !== 'testing' || to === undefined) {
+    const own = stage?.kind === 'agent'
+    const to = own ? stage : stage?.kind === 'testing' ? codeStageBefore(steps, stageId) : undefined
+    if (stage === undefined || to === undefined) {
       return false
     }
     if (this.sendBacksFrom(taskId, stageId) >= MAX_AGENT_SEND_BACKS) {
@@ -1273,15 +1282,18 @@ export class StageRunner {
       type: 'stage.check-failed',
       payload: { stage: stageId, reasons, final: false },
     })
+    // The stage card shows the lines before the first blank line.
     const reason = [
       `CI failed on ${stageName(stage)}:`,
       ...reasons.map((each) => `- ${each}`),
+      '',
+      ...(own ? logs.map((log) => plainText(log).trimEnd()) : []),
       'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
     ].join('\n')
     this.tasks.applyEvent(taskId, {
       source: 'system',
       type: 'stage.reopened',
-      payload: { to: to.id, reason, from: stageId, byAgent: true },
+      payload: { to: to.id, reason, from: stageId, byAgent: true, ci: true },
     })
     return true
   }

@@ -75,16 +75,30 @@ function readText(path: string): string | null {
   }
 }
 
-type Cached = { mtimeMs: number; loaded: LoadedSettings }
+const NOT_FOUND: LoadedSettings = {
+  settings: DEFAULT_PROJECT_SETTINGS,
+  error: null,
+  found: false,
+  text: null,
+  version: NO_FILE,
+}
+
+// How long a look at the file counts. Hooks ask for the settings on every tool call.
+const STAT_EVERY_MS = 1000
+
+// `mtimeMs` is null for a file that is not there.
+type Cached = { mtimeMs: number | null; checkedAt: number; loaded: LoadedSettings }
 
 // `.natamux.json` of each repository. Read again when the file changes, so an edit in the
-// editor counts at once.
+// editor counts within a second.
 export class ProjectSettingsService {
   private readonly repos: Pick<RepoService, 'pathOf'>
+  private readonly now: () => number
   private readonly cache = new Map<string, Cached>()
 
-  constructor(options: { repos: Pick<RepoService, 'pathOf'> }) {
+  constructor(options: { repos: Pick<RepoService, 'pathOf'>; now?: () => number }) {
     this.repos = options.repos
+    this.now = options.now ?? Date.now
   }
 
   pathOf(repo: string | null): string {
@@ -93,31 +107,20 @@ export class ProjectSettingsService {
 
   load(repo: string | null): LoadedSettings {
     const path = this.pathOf(repo)
-    let mtimeMs: number
+    const now = this.now()
+    const cached = this.cache.get(path)
+    if (cached !== undefined && now - cached.checkedAt < STAT_EVERY_MS) {
+      return cached.loaded
+    }
+    let mtimeMs: number | null
     try {
       mtimeMs = statSync(path).mtimeMs
     } catch {
-      return {
-        settings: DEFAULT_PROJECT_SETTINGS,
-        error: null,
-        found: false,
-        text: null,
-        version: NO_FILE,
-      }
+      mtimeMs = null
     }
-    const cached = this.cache.get(path)
-    if (cached !== undefined && cached.mtimeMs === mtimeMs) {
-      return cached.loaded
-    }
-    const text = readText(path)
-    const file = { found: true, text, version: versionOf(text) }
-    let loaded: LoadedSettings
-    try {
-      loaded = { settings: parseSettings(text ?? ''), error: null, ...file }
-    } catch (error) {
-      loaded = { settings: DEFAULT_PROJECT_SETTINGS, error: describe(error), ...file }
-    }
-    this.cache.set(path, { mtimeMs, loaded })
+    const unchanged = cached !== undefined && cached.mtimeMs === mtimeMs
+    const loaded = unchanged ? cached.loaded : this.read(path, mtimeMs)
+    this.cache.set(path, { mtimeMs, checkedAt: now, loaded })
     return loaded
   }
 
@@ -150,5 +153,18 @@ export class ProjectSettingsService {
     renameSync(temporary, path)
     this.cache.delete(path)
     return parsed.data
+  }
+
+  private read(path: string, mtimeMs: number | null): LoadedSettings {
+    if (mtimeMs === null) {
+      return NOT_FOUND
+    }
+    const text = readText(path)
+    const file = { found: true, text, version: versionOf(text) }
+    try {
+      return { settings: parseSettings(text ?? ''), error: null, ...file }
+    } catch (error) {
+      return { settings: DEFAULT_PROJECT_SETTINGS, error: describe(error), ...file }
+    }
   }
 }

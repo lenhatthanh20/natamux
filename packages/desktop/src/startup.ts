@@ -124,3 +124,19 @@ export function loginPathLogLine(
   }
   return `Could not read the login shell PATH (${login.problem}); using ${fallback ?? '(none)'}\n`
 }
+
+// Startup marks in the style of VS Code's perf.mark. The line shows each mark as the time since
+// the first one, so one line in daemon.log tells where the start spends its time.
+export function startupMarks(now: () => number = () => performance.now()) {
+  const marks: { name: string; at: number }[] = []
+  return {
+    mark(name: string): void {
+      marks.push({ name, at: now() })
+    },
+    line(): string {
+      const first = marks[0]?.at ?? 0
+      const parts = marks.map((entry) => `${entry.name} ${Math.round(entry.at - first)} ms`)
+      return `startup marks: ${parts.join(', ')}\n`
+    },
+  }
+}

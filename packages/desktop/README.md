@@ -1,6 +1,6 @@
 # @natamux/desktop
 
-The desktop app: an Electron shell. Releases are built for macOS on Apple silicon only; Intel Mac and Linux builds are paused, and there is no Windows build. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
+The desktop app: an Electron shell. Releases are built for macOS (Apple silicon and Intel), Windows x64 and Linux x64. It holds no logic of its own. It starts the daemon and shows the dashboard that the daemon serves.
 
 ## What it does
 
@@ -12,7 +12,7 @@ The desktop app: an Electron shell. Releases are built for macOS on Apple silico
   - data in `<user data>/data`;
   - the PATH of your login shell, so the agents installed with Homebrew, nvm and the like are found when the app starts from the Dock. When it cannot be read, the daemon log says why and which PATH is used instead;
   - a `natamux` command first on that PATH, for `natamux done` and `natamux ask` in the agents' terminals. It runs the CLI with the app's own runtime. Its folder is also in `NATAMUX_BIN_DIR`, so the daemon puts it first again for each agent after the shell's profile has run.
-- **Opens the dashboard** at `http://127.0.0.1:<port>/`. The preload script puts the token where the dashboard keeps it, so the page starts signed in.
+- **Opens the dashboard** at `http://127.0.0.1:<port>/`. The window opens as the daemon starts, on a blank page in the theme's background color, and loads the dashboard once the daemon is ready. The preload script puts the token where the dashboard keeps it, so the page starts signed in. The daemon log gets one `startup marks:` line with the times of the start.
 - **Keeps the window on the dashboard.** Links to other sites open in your browser; only `http`, `https` and `mailto` open at all. The page runs sandboxed, with no Node.js.
 - **Updates itself** from the latest GitHub release: checks 30 seconds after start and every 6 hours, downloads in the background, checks `SHA256SUMS.txt`, installs on restart (`updater.ts`, design in `docs/design-desktop-update.md`). Only a packaged app checks. `NATAMUX_UPDATE_AS_VERSION=0.0.0` makes it act as an older version, so a release can update to itself in a test. The log is `logs/update.log`.
 - **Quitting** asks first when agents are working, because it stops them. Tasks, worktrees and changes stay. On macOS, closing the window keeps the app and the agents running.
@@ -44,7 +44,7 @@ It builds the app for the machine it runs on, into `packages/desktop/release`: a
 
 ## Check it without a screen
 
-`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard and quits: exit code 0 when the page started signed in, 1 when not. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main). On Linux:
+`NATAMUX_DESKTOP_SMOKE=1` loads the dashboard, then makes a task with a worktree and runs a command in a shell of it (`src/smoke.ts`), and quits: exit code 0 when all of it worked, 1 when not. The task, its worktree and its branch stay in the configured project, so use a test repository. When `NATAMUX_CLAUDE_COMMAND` names a stand-in agent, that agent must also run the app's own `natamux` command. `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` also saves a picture of the window. CI runs it on macOS and Windows (the `os` job, on main), and on the packaged app of every system (`release.yml`, also on pull requests that change the packaging). On Linux:
 
 ```sh
 NATAMUX_DESKTOP_SMOKE=1 xvfb-run -a pnpm --filter @natamux/desktop start -- --no-sandbox

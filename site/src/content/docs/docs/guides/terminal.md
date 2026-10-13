@@ -1,13 +1,17 @@
 ---
-title: Terminal
-description: Work in the shells of a task, type to the agent, and use the ports and variables each shell gets.
+title: Terminal and Agents view
+description: Work in the shells of a task, type to the agent, watch every agent in one grid, and use the ports and variables each shell gets.
 sidebar:
   order: 2
 ---
 
-Every task with a workspace has a **Terminal** tab. It holds real shells that run in the task's worktree folder. An agent runs in one of them.
+Every task with a workspace has a **Terminal** tab. It holds real shells that run in the task's worktree folder. The task's agent runs in Shell 1; stages that run beside it start their own agents in Shell 2 and Shell 5. The **Agents** view puts the agents of many tasks in one grid.
 
-![The terminal tab with the agent in Shell 1](/screens/terminal.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/task-sent-back-dark.webp" alt="An open task on the Terminal tab with three panes: Shell 1 and Shell 2 side by side on top and Shell 5 below, where the Review agent works. The sidebar lists the shells under the task, and the Progress panel shows Implement running for the second time." width="1600" height="1000" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-sent-back-light.webp" alt="An open task on the Terminal tab with three panes: Shell 1 and Shell 2 side by side on top and Shell 5 below, where the Review agent works. The sidebar lists the shells under the task, and the Progress panel shows Implement running for the second time." width="1600" height="1000" decoding="async" />
+<figcaption>Three shells of one task. The sidebar lists them under the task as S1, S2 and S5.</figcaption>
+</figure>
 
 ## Open the terminal
 
@@ -105,6 +109,27 @@ This works only while an agent runs in Shell 1. Otherwise Natamux answers `No ag
 
 A failed task shows a banner with the reason. Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/docs/concepts/tasks/).
 
+## The Agents view
+
+Click **Agents** in the sidebar to watch the agents of many tasks at once. Each pane is Shell 1 of a task, live, and you can type in it as in the workspace.
+
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/agents-dark.webp" alt="The Agents view: four agent terminals in a two by two grid, each with the task id, title, agent and state in its header. The pane at the bottom right has a question mark icon because its agent waits for an answer." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/agents-light.webp" alt="The Agents view: four agent terminals in a two by two grid, each with the task id, title, agent and state in its header. The pane at the bottom right has a question mark icon because its agent waits for an answer." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>Four agents in one grid. The one at the bottom right waits for an answer.</figcaption>
+</figure>
+
+- Until you pick panes yourself, the grid shows the tasks that are running or need your input, in the order of their ids.
+- **Add a pane** adds a task. The grid holds up to 6 panes. `Shift+Enter` in the command palette also adds the selected task.
+- **Columns** sets the layout: **1**, **2**, **4** or **Auto**. Auto balances the rows, so five panes in four columns become 3 + 2.
+- The pane header shows the task id and title, the agent, and the state of its stage. Click the title, or the **Open workspace** button, to open the task.
+- When another shell of the task needs you, for example the Test spec agent in Shell 2, the pane says so.
+- Maximize a pane with its button or `Mod+Shift+Enter`.
+- The close button removes the pane from **Agents**. The agent keeps running.
+- With no pane, the view says **No agent is working** and offers **Add a pane**.
+
+Natamux keeps your choice of **Columns** in this browser. Panes keep their order when tasks change state.
+
 ## A shell after a daemon restart
 
 Shells belong to the daemon. When the daemon stops, it ends every shell, and an agent in a shell ends with it.
@@ -115,7 +140,7 @@ The agent of a running, waiting or in-review task starts again on its own, as in
 
 ## Ports
 
-Each task has its own block of 10 ports so dev servers of different tasks do not clash. The block starts at 20000 + 10 × the task number, and the number wraps after 1000 tasks. `T-0001` gets 20010 to 20019. The details panel shows the range as **Dev ports**, with a note that the first port is `$PORT`.
+Each task has its own block of 10 ports so dev servers of different tasks do not clash. The block starts at 20000 + 10 × the number at the end of the task id, and the number wraps after 1000 tasks. `T-0001` gets 20010 to 20019, and so does `ABC-1`. The details panel shows the range as **Dev ports**, with a note that the first port is `$PORT`.
 
 ## Environment variables
 

@@ -38,7 +38,23 @@ export const issueLinkSchema = z.object({
 
 export type IssueLink = z.infer<typeof issueLinkSchema>
 
-export const taskIdSchema = z.string().regex(/^T-\d+$/, 'Task id looks like T-42')
+export const taskIdSchema = z
+  .string()
+  .max(32)
+  .regex(/^[A-Z]+-\d+$/, 'Task id looks like T-42 or ABC-42')
+
+// A title that starts with a task id, such as "Task-0005: Fix bug" or "ABC-12 Fix it".
+const TITLE_WITH_ID = /^([A-Za-z]+-\d+)(?:\s*:|\s)\s*(.*)$/
+
+// Splits the id the user chose from the start of a title. The id is upper case, because task
+// files may live on a file system that does not tell `Task-5.md` from `TASK-5.md`.
+export function splitTaskId(title: string): { id: string | null; title: string } {
+  const trimmed = title.trim()
+  const match = TITLE_WITH_ID.exec(trimmed)
+  return match?.[1] && match[2]
+    ? { id: match[1].toUpperCase(), title: match[2] }
+    : { id: null, title: trimmed }
+}
 
 export const taskSchema = z.object({
   id: taskIdSchema,

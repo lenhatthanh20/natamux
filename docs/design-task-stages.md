@@ -2,6 +2,8 @@
 
 Status: built in the stage pull requests (#60 to #63). The notes at the end say where the code differs from this text.
 
+This is design history. Since v0.1.12 the default pipeline is `Context → Spec → Plan → [Test spec ‖ Implement] → Automated tests → Review → Release`: the tests run before Review, and Review is an agent stage that can send the task back to Implement. The user docs are current: [Stages](https://natamux.github.io/docs/concepts/stages/) and [The review loop](https://natamux.github.io/docs/concepts/review-loop/).
+
 ## 1. Goal
 
 A task moves through the steps of real work, not only "the agent runs, then I review":
@@ -487,7 +489,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 **Task progress page** (the Progress view of the details panel, beside the workspace). It shows what each stage did and the evidence that it is finished. The panel is narrow (320-560), so everything is one column.
 
-- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. A bar with one segment per stage, as wide as the time spent; a parallel step is two thin bars on top of each other; a running segment has moving stripes.
+- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
 - **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
   - Done stage: time, who approved and when, and evidence chips. **Show evidence** opens the passed checks and, for a stage that ran twice, each round with the comment that sent it back.
   - Current stage: everything the checks of 3.5 will look at, live. A parallel step shows its stages side by side, each in its own card.

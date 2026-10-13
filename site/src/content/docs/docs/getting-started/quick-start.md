@@ -49,7 +49,11 @@ For this guide, use **Start a task**. The dialog has two groups.
 
 Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
 
-![The Start a task dialog with a title, notes, a branch and an agent](/screens/new-workspace.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/start-task-dark.webp" alt="The Start a task dialog. The Context group has a title, Context from set to My notes, notes and attachments. The Workspace and agent group has the project, the branch to start from and the agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/start-task-light.webp" alt="The Start a task dialog. The Context group has a title, Context from set to My notes, notes and attachments. The Workspace and agent group has the project, the branch to start from and the agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The Start a task dialog: what the agent reads, and where and how the task runs.</figcaption>
+</figure>
 
 If you added a task to the backlog first, open it and click **Start agent** (or **Start task** with no agent if you only want a shell).
 
@@ -57,7 +61,11 @@ If you added a task to the backlog first, open it and click **Start agent** (or 
 
 Open the task. The **Terminal** tab shows the agent running in the task's worktree.
 
-![A task's terminal with an agent working](/screens/terminal.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/task-review-shell5-dark.webp" alt="An open task on the Terminal tab with three agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right, with Review running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-review-shell5-light.webp" alt="An open task on the Terminal tab with three agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right, with Review running." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>An open task: its shells in the middle, its stages on the right.</figcaption>
+</figure>
 
 On the dashboard, the state of the task updates by itself, because Natamux's hooks tell it when the agent works, asks or finishes. You can close the dashboard and the agent keeps running.
 
@@ -75,7 +83,10 @@ The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
 
 Each task moves through stages. The **Progress** view of the details panel shows them and the evidence of each one, beside the terminal.
 
-![The Progress view of tasks against their stages](/screens/progress.png)
+<figure class="shot">
+<img src="/screens/ui/task-spec-approve-dark.webp" alt="An open task at the Spec stage. A banner under the header says Ready for review: Spec, with Approve and Send back, and the Progress panel shows the Spec stage card with its Approve button." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>Spec is ready for review. Approve it from the banner or from the stage card.</figcaption>
+</figure>
 
 When a stage waits for you, the task is in review. Read what the agent produced, then:
 
@@ -83,13 +94,23 @@ When a stage waits for you, the task is in review. Read what the agent produced,
 - **Send back** returns the task to an earlier stage, with a note about what should change.
 - **Skip** leaves the stage out.
 
-See [Stages](/docs/concepts/stages/).
+With the default pipeline you approve three times: the spec, the plan and the test spec.
+
+- After you approve the plan, two agents work at once: the task's agent implements in Shell 1, and a second agent writes the test spec in Shell 2.
+- When both are done, the tests run, then a review agent reads the changes in Shell 5.
+- If the review finds problems, it sends the task back to Implement by itself, at most two times.
+
+See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/stages/).
 
 ## 6. Look at the changes
 
 Open the **Changes** tab. It lists the changed files and shows a diff for each one, side by side or inline. The **History** tab shows the task's branch as a graph.
 
-![The Changes tab with a file tree and a diff](/screens/changes.png)
+<figure class="shot">
+<img class="shot-dark" src="/screens/ui/changes-generate-dark.webp" alt="The Changes tab: the changed files on the left, a side by side diff on the right, and under the list the commit message box filled by Generate, with Commit all." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/changes-generate-light.webp" alt="The Changes tab: the changed files on the left, a side by side diff on the right, and under the list the commit message box filled by Generate, with Commit all." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>The Changes tab, with a commit message drafted by Generate.</figcaption>
+</figure>
 
 ## 7. Commit, push and open a pull request
 
@@ -101,7 +122,7 @@ Natamux never pushes or merges unless you click the button or run the command.
 
 ## 8. Finish
 
-Merge the pull request on GitHub. Natamux checks pull requests of open tasks once a minute, and when one is merged it moves a task in review to done.
+Merge the pull request on GitHub. While a dashboard is open, Natamux checks pull requests of open tasks once a minute (every 5 minutes once all their checks have finished), and when one is merged it moves a task in review to done.
 
 To clean up, open the task and remove its workspace. Natamux asks first and refuses if the worktree has changes that are not committed.
 
