@@ -40,8 +40,8 @@ Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests �
 You approve the spec, the plan and the test spec. After you approve the plan, two agents work at once: one writes test cases from the spec without reading the code, the other writes the code. Then the tests run, and a third agent reviews the changes in a session of its own. When the review finds problems, it sends the task back to Implement by itself, at most two times, and then asks you. See [The review loop](/docs/concepts/review-loop/).
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-two-agents-dark.webp" alt="An open task with two agent terminals side by side: Implement in Shell 1 and Test spec in Shell 2. A banner says Ready for review: Test spec, and the Progress panel lists the stages with Context, Spec and Plan done." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-two-agents-light.webp" alt="An open task with two agent terminals side by side: Implement in Shell 1 and Test spec in Shell 2. A banner says Ready for review: Test spec, and the Progress panel lists the stages with Context, Spec and Plan done." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/task-side-by-side-dark.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-side-by-side-light.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>Test spec and Implement run side by side, each agent in its own shell.</figcaption>
 </figure>
 

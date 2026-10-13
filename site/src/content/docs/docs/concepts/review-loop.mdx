@@ -42,9 +42,9 @@ When the task reaches the group, Natamux starts both stages at the same moment.
 - Each shell shows the state of its own stage in its pane header. The sidebar shows both stages under the task while it is open.
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-two-agents-dark.webp" alt="A task with two terminals side by side. Shell 1 holds the Implement agent and Shell 2 the Test spec agent. The banner says Ready for review: Test spec, with Approve and Send back. The Progress panel shows Implement done and Test spec in review." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-two-agents-light.webp" alt="A task with two terminals side by side. Shell 1 holds the Implement agent and Shell 2 the Test spec agent. The banner says Ready for review: Test spec, with Approve and Send back. The Progress panel shows Implement done and Test spec in review." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>Implement in Shell 1 is done. Test spec in Shell 2 waits for your approval, so the group is not finished yet.</figcaption>
+<img class="shot-dark" src="/screens/ui/task-side-by-side-dark.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-side-by-side-light.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
+<figcaption>Implement in Shell 1 is still running. Test spec in Shell 2 waits for your approval. The group ends when both are done.</figcaption>
 </figure>
 
 Test spec waits for your approval because the test cases decide what **Automated tests** checks. Read them in the **Docs** tab (key `4`) and fix them by hand before you approve, if you like.
@@ -59,7 +59,8 @@ Test spec waits for your approval because the test cases decide what **Automated
 - Its gate is `auto`. With no findings it runs `natamux done`, its checks pass, and the task goes on to **Release** without waiting for you.
 
 <figure class="shot">
-<img src="/screens/ui/task-review-agent-dark.webp" alt="A task with three terminals. Shell 5 at the bottom holds the Review agent, started on its own with the review prompt. The Progress panel shows the Review stage running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/task-review-shell5-dark.webp" alt="A task with three terminals. Shell 5 at the bottom holds the Review agent, which reads the diff. The Progress panel shows Automated tests done and Review running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-review-shell5-light.webp" alt="A task with three terminals. Shell 5 at the bottom holds the Review agent, which reads the diff. The Progress panel shows Automated tests done and Review running." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>The Review agent starts in Shell 5 with a new session, so it reads the work with fresh eyes.</figcaption>
 </figure>
 
@@ -113,16 +114,16 @@ and stops, without `natamux done`. Then:
 4. The Implement card in **Progress** shows **Sent back 1×**, and the panel counts the times the task was sent back.
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-review-loop-dark.webp" alt="A task after the review agent sent it back. The Implement stage is running for the second time, with a Sent back 1× label. Shell 5 shows the review prompt, and the progress summary says 1 time sent back." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-review-loop-light.webp" alt="A task after the review agent sent it back. The Implement stage is running for the second time, with a Sent back 1× label. Shell 5 shows the review prompt, and the progress summary says 1 time sent back." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/task-sent-back-dark.webp" alt="A task after the review agent sent it back. Shell 5 shows the review with one finding and the natamux stage back command. Shell 1 shows the Implement prompt again with What to change. The Implement card says Running, ×2 and Sent back 1×, and the summary says 1 time sent back." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-sent-back-light.webp" alt="A task after the review agent sent it back. Shell 5 shows the review with one finding and the natamux stage back command. Shell 1 shows the Implement prompt again with What to change. The Implement card says Running, ×2 and Sent back 1×, and the summary says 1 time sent back." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>Implement runs a second time (×2) with the review's reasons in its prompt.</figcaption>
 </figure>
 
 <figure class="shot">
-<video controls muted playsinline preload="none" poster="/screens/ui/task-review-loop-dark.webp" width="800" height="500" aria-label="Screen recording: the review agent sends the task back to Implement with a reason, the Sent back count appears, Implement runs again, then passes.">
-<source src="/media/review-loop.webm" type="video/webm" />
+<video controls muted playsinline preload="none" poster="/screens/ui/task-sent-back-dark.webp" width="800" height="500" aria-label="Screen recording: the review agent sends the task back to Implement with a reason, the Sent back count appears, Implement, Automated tests and Review run again, and the second review has no findings.">
+<source src="/media/review-loop-send-back.webm" type="video/webm" />
 </video>
-<figcaption>The loop in the dashboard: send back, Implement again, then the stages pass. About 25 seconds, no sound.</figcaption>
+<figcaption>The loop in the dashboard: the review sends the task back, Implement runs again, and the second review finds nothing. About 45 seconds, no sound.</figcaption>
 </figure>
 
 ## Limits

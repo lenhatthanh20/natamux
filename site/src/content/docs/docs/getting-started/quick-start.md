@@ -62,8 +62,8 @@ If you added a task to the backlog first, open it and click **Start agent** (or 
 Open the task. The **Terminal** tab shows the agent running in the task's worktree.
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-open-dark.webp" alt="An open task on the Terminal tab with agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-open-light.webp" alt="An open task on the Terminal tab with agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/task-review-shell5-dark.webp" alt="An open task on the Terminal tab with three agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right, with Review running." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-review-shell5-light.webp" alt="An open task on the Terminal tab with three agent shells, the shells listed under the task in the sidebar, and the stages in the Progress panel on the right, with Review running." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>An open task: its shells in the middle, its stages on the right.</figcaption>
 </figure>
 

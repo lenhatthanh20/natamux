@@ -6,7 +6,7 @@ Natamux is an open-source Agent Development Environment. Each task gets its own 
 
 [Download](https://github.com/lenhatthanh20/natamux/releases/latest) · [Install guide](https://natamux.github.io/docs/getting-started/install/) · [Quick start](https://natamux.github.io/docs/getting-started/quick-start/) · [Documentation](https://natamux.github.io/docs/) · [Try in Codespaces](https://codespaces.new/lenhatthanh20/natamux)
 
-![Natamux dashboard with an open task: three agent terminals, the workspace sidebar and the stage progress panel](site/public/screens/readme-hero.png)
+![Natamux dashboard with an open task: the review agent in Shell 5 sent the task back, Implement runs again in Shell 1, and the Progress panel shows Sent back 1×](site/public/screens/readme-review-loop.png)
 
 ## Get started
 
