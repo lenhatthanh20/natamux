@@ -21,15 +21,25 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, the run stops there, and the test job stops after 20 minutes.
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report-<group>` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, its group stops there and the other groups are cancelled. Each test job stops after 20 minutes.
 
 The workflow has three jobs:
 
 | Job | Does | Can write packages |
 |---|---|---|
 | `build` | `scripts/e2e.sh build`, then saves the images as an artifact and their ids as outputs | no |
-| `test` | loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests | no |
+| `test` | one job per group: loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests of its group | no |
 | `publish` | on `main` only: checks the image ids against `build`, pushes the images, attests their build provenance | yes |
+
+The tests share one daemon, so in one job they run one at a time. To save time, CI runs them in groups, each in its own `test` job with its own daemon and demo data. `e2e/groups.ts` names the groups, and the job sets `E2E_GROUP`:
+
+| Group | Spec files |
+|---|---|
+| `timing` | `terminal-cache.spec.ts`, `terminal-measures.spec.ts`: both write the terminal numbers, so `e2e-measures` stays one file |
+| `terminal` | `terminal-gpu.spec.ts`, `terminal-look.spec.ts`, `terminal-protocol.spec.ts` |
+| `rest` | every other spec file, so a new file runs with no change to the workflow |
+
+Without `E2E_GROUP`, `pnpm e2e` runs every spec file. `E2E_GROUP=<group> pnpm e2e` runs one group, as its CI job does. An unknown group stops the run with an error. `groups.spec.ts` checks that each test of a full run is in exactly one group, and that the workflow runs every group.
 
 Only `publish` can push images, and it installs no packages. A bad package in the Playwright install of `test` cannot push an image, and it cannot swap the artifact either, because `publish` checks the ids.
 

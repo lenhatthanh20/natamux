@@ -115,7 +115,7 @@ The agent of a running, waiting or in-review task starts again on its own, as in
 
 ## Ports
 
-Each task has its own block of 10 ports so dev servers of different tasks do not clash. The block starts at 20000 + 10 × the task number, and the number wraps after 1000 tasks. `T-0001` gets 20010 to 20019. The details panel shows the range as **Dev ports**, with a note that the first port is `$PORT`.
+Each task has its own block of 10 ports so dev servers of different tasks do not clash. The block starts at 20000 + 10 × the number at the end of the task id, and the number wraps after 1000 tasks. `T-0001` gets 20010 to 20019, and so does `ABC-1`. The details panel shows the range as **Dev ports**, with a note that the first port is `$PORT`.
 
 ## Environment variables
 

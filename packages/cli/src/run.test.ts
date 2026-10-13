@@ -184,6 +184,16 @@ describe('runCli', () => {
       })
     })
 
+    it('sends a title that starts with an id as typed, and prints the chosen id', async () => {
+      const task = makeTask({ id: 'TASK-0006', title: 'x' })
+      const result = await run(['task', 'create', 'Task-0006: x', '--repo', 'app'], {
+        handler: () => jsonResponse({ task }, 201),
+      })
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.stdout).toBe('Created TASK-0006  x\n')
+      expect(result.calls[0]?.body).toMatchObject({ title: 'Task-0006: x' })
+    })
+
     it('prints JSON with --json', async () => {
       const task = makeTask()
       const result = await run(['task', 'create', 'Fix the dashboard', '--json'], {
@@ -487,6 +497,18 @@ describe('runCli', () => {
   })
 
   describe('failures', () => {
+    it('shows the message of a task id that is used', async () => {
+      const result = await run(['task', 'create', 'Task-0005: Other', '--repo', 'app'], {
+        handler: () =>
+          jsonResponse(
+            { error: 'invalid_request', message: 'Task id TASK-0005 is already used' },
+            400,
+          ),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toBe('Error: Task id TASK-0005 is already used\n')
+    })
+
     it('shows the message of an unknown task', async () => {
       const result = await run(['task', 'show', 'T-0099'], {
         handler: () =>
@@ -604,6 +626,18 @@ describe('more commands', () => {
     // A terminal of another task says nothing about this one.
     const other = await run(['stage', 'approve', 'T-9'], { env, handler })
     expect(other.calls[0]?.body).toEqual({ action: 'approve' })
+  })
+
+  it('reports the stage done for the task of the terminal with a chosen id', async () => {
+    const result = await run(['done'], {
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'TASK-0005' },
+      handler: () => jsonResponse({ task: makeTask({ id: 'TASK-0005' }) }),
+    })
+    expect(result.code).toBe(EXIT_OK)
+    expect(result.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4317/tasks/TASK-0005/stage',
+      body: { action: 'report' },
+    })
   })
 
   it('reports the stage done for the task named with --task', async () => {
