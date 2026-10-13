@@ -8,6 +8,7 @@ import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
+import { type ParentPort, waitForLoginPath } from './login-path.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher, repoFolderOr } from './pull-request-watcher.js'
@@ -21,6 +22,12 @@ import { TemplateService } from './template-service.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
 
+// Set under the desktop app only.
+const parentPort = (process as NodeJS.Process & { parentPort?: ParentPort }).parentPort
+let loginPath: string | undefined
+const pathReady = waitForLoginPath(process.env, parentPort).then((path) => {
+  loginPath = path
+})
 const config = loadConfig(process.env, process.cwd())
 
 mkdirSync(config.dataDir, { recursive: true })
@@ -69,7 +76,9 @@ const terminals = new TerminalService({
   // An agent the user starts by hand in the shell finds its hooks there.
   spawn: (options) => {
     prepareAgentHooks(options.cwd)
-    return spawnShell(options)
+    // The service copied the environment before the login PATH came.
+    const env = loginPath === undefined ? options.env : { ...options.env, PATH: loginPath }
+    return spawnShell({ ...options, env })
   },
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
   env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
@@ -111,13 +120,15 @@ const stages = new StageRunner({
   dataDir: config.dataDir,
   repoPath: (repo) => repos.pathOf(repo),
 })
-stages.start()
-
 const pullRequests = new PullRequestWatcher({
   tasks: service,
   cwdOf: repoFolderOr(repos, config.dataDir),
 })
-pullRequests.start()
+// They run git, gh and the checks of stages.
+const ready = pathReady.then(() => {
+  stages.start()
+  pullRequests.start()
+})
 
 const app = await buildServer({
   service,
@@ -136,10 +147,13 @@ const app = await buildServer({
   token: config.token,
   webIndexPath: config.webIndexPath,
   webDir: config.webDir,
+  ready,
 })
 await app.listen({ host: config.host, port: config.port })
+// The desktop app opens its window now, instead of at its next look at /health.
+parentPort?.postMessage('ready')
 // After the listen, so the hooks of the agents reach the daemon.
-stages.resumeAgents()
+void ready.then(() => stages.resumeAgents())
 
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)

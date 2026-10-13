@@ -81,6 +81,9 @@ async function pickRepository(): Promise<string | undefined> {
 }
 
 async function startDaemon(repoDir: string | undefined): Promise<void> {
+  // Right after login the shell can take seconds, so the daemon starts meanwhile and gets the PATH
+  // later (see packages/daemon/src/login-path.ts).
+  const login = process.platform === 'win32' ? undefined : loginShellPath(process.env.SHELL)
   // The packaged app keeps the built dashboard in its resources (electron-builder.yml).
   const parts = findParts({
     ...process.env,
@@ -96,35 +99,52 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
 
   mkdirSync(dirname(logFile), { recursive: true })
   log(`\n--- ${new Date().toISOString()} starting the daemon on port ${port}\n`)
-  let loginPath: string | undefined
-  if (process.platform !== 'win32') {
-    const login = await loginShellPath(process.env.SHELL)
-    loginPath = 'path' in login ? login.path : undefined
-    const problem = loginPathLogLine(login, process.env.PATH)
-    if (problem !== undefined) {
-      log(problem)
-    }
+  const place = {
+    port,
+    dataDir: join(userData, 'data'),
+    repoDir,
+    webDir: parts.webDir,
+    binDir,
+    loginPath: undefined,
   }
   daemonExited = false
   // While it starts, the caller reports a failure, so the exit handler stays quiet.
   let starting = true
-  daemon = utilityProcess.fork(parts.daemonMain, [], {
-    env: daemonEnv(process.env, daemonToken, {
-      port,
-      dataDir: join(userData, 'data'),
-      repoDir,
-      webDir: parts.webDir,
-      binDir,
-      loginPath,
-    }),
+  const child = utilityProcess.fork(parts.daemonMain, [], {
+    env: {
+      ...daemonEnv(process.env, daemonToken, place),
+      ...(login === undefined ? {} : { NATAMUX_PATH_PENDING: '1' }),
+    },
     // Not a project folder: the daemon may run with none.
     cwd: app.getPath('home'),
     stdio: 'pipe',
     serviceName: 'Natamux daemon',
   })
-  daemon.stdout?.on('data', (chunk: Buffer) => log(chunk.toString()))
-  daemon.stderr?.on('data', (chunk: Buffer) => log(chunk.toString()))
-  daemon.on('exit', (code) => {
+  daemon = child
+  let ready = (): void => undefined
+  const readyMessage = new Promise<void>((resolve) => {
+    ready = resolve
+  })
+  child.on('message', (message: unknown) => {
+    if (message !== 'ready') {
+      return
+    }
+    ready()
+    void login?.then((answer) => {
+      const problem = loginPathLogLine(answer, process.env.PATH)
+      if (problem !== undefined) {
+        log(problem)
+      }
+      const loginPath = 'path' in answer ? answer.path : undefined
+      const env = daemonEnv(process.env, daemonToken, { ...place, loginPath })
+      if (!daemonExited) {
+        child.postMessage({ path: env.PATH })
+      }
+    })
+  })
+  child.stdout?.on('data', (chunk: Buffer) => log(chunk.toString()))
+  child.stderr?.on('data', (chunk: Buffer) => log(chunk.toString()))
+  child.on('exit', (code) => {
     daemonExited = true
     log(`--- the daemon exited with code ${code}\n`)
     if (!quitConfirmed && !starting) {
@@ -143,6 +163,7 @@ async function startDaemon(repoDir: string | undefined): Promise<void> {
     await waitForHealth(`${dashboardUrl}/health`, {
       timeoutMs: 30_000,
       exited: () => daemonExited,
+      ready: readyMessage,
     })
   } finally {
     starting = false

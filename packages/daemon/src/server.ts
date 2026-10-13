@@ -116,6 +116,9 @@ type ServerOptions = {
   webDir?: string
   // Where agents keep the user's skills. The home folder by default.
   skillsHome?: string
+  // API requests wait for it, as they may run the user's programs: under the desktop app the PATH
+  // of the login shell comes after the start (see login-path.ts). Ready at once by default.
+  ready?: Promise<unknown>
 }
 
 const taskParamsSchema = z.object({ id: taskIdSchema })
@@ -238,6 +241,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (url.pathname === '/health' || servesPage?.(request) === true) {
       return
     }
+    await options.ready
     if (
       request.method === 'GET' &&
       TERMINAL_PATH.test(url.pathname) &&

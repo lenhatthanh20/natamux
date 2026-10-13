@@ -41,6 +41,7 @@ let ptys: FakePty[]
 let bus: EventBus
 let webIndexPath: string
 let agentAnswer: () => Promise<string>
+let serverOptions: Parameters<typeof buildServer>[0]
 const PAGE = '<!doctype html><title>Natamux</title><div id="root"></div>'
 
 beforeEach(async () => {
@@ -88,7 +89,7 @@ beforeEach(async () => {
     cwdOf: () => repo.dir,
     gh: async () => JSON.stringify({ state: 'MERGED', isDraft: false, statusCheckRollup: [] }),
   })
-  app = await buildServer({
+  serverOptions = {
     service,
     workspaces,
     terminals,
@@ -121,7 +122,8 @@ beforeEach(async () => {
     webIndexPath,
     webDir: join(repo.root, 'web'),
     skillsHome: join(repo.root, 'home'),
-  })
+  }
+  app = await buildServer(serverOptions)
 })
 
 afterEach(async () => {
@@ -239,6 +241,37 @@ describe('authentication', () => {
   it('does not accept the token in the query string outside /events', async () => {
     const response = await app.inject({ method: 'GET', url: `/tasks?token=${TOKEN}` })
     expect(response.statusCode).toBe(401)
+  })
+})
+
+describe('before the login PATH came', () => {
+  it('serves /health and the page at once, and holds API requests until it came', async () => {
+    let ready = (): void => undefined
+    const waiting = await buildServer({
+      ...serverOptions,
+      ready: new Promise<void>((resolve) => {
+        ready = resolve
+      }),
+    })
+    try {
+      expect((await waiting.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200)
+      const page = await waiting.inject({ method: 'GET', url: '/index.html' })
+      expect(page.body).toBe(PAGE)
+
+      let answered = false
+      const tasks = waiting
+        .inject({ method: 'GET', url: '/tasks', headers: authorization })
+        .then((response) => {
+          answered = true
+          return response
+        })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(answered).toBe(false)
+      ready()
+      expect((await tasks).json()).toEqual({ tasks: [] })
+    } finally {
+      await waiting.close()
+    }
   })
 })
 
