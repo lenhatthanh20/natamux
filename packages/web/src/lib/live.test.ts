@@ -115,10 +115,7 @@ describe('parseLiveMessage', () => {
     ['a task that is not valid', '{"task":{"id":"nope"}}'],
     ['a delete message without an id', '{"kind":"task.deleted"}'],
     ['a shells message with an id that is not text', '{"kind":"shells.changed","taskId":3}'],
-    [
-      'an activity message without an activity',
-      '{"kind":"activity.changed","taskId":"T-0001"}',
-    ],
+    ['an activity message without an activity', '{"kind":"activity.changed","taskId":"T-0001"}'],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
   })

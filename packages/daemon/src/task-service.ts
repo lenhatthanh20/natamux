@@ -360,16 +360,18 @@ export class TaskService {
     this.store(task, [{ event: created, accepted: true }])
     saveAttachments(this.dataDir, task.id, attachments)
     if (attachments.length > 0) {
-      const added = attachments.map(({ name, bytes }): LoggedEvent => ({
-        event: {
-          taskId: task.id,
-          source: 'system',
-          type: 'attachment.added',
-          at,
-          payload: { name, size: bytes.length },
-        },
-        accepted: true,
-      }))
+      const added = attachments.map(
+        ({ name, bytes }): LoggedEvent => ({
+          event: {
+            taskId: task.id,
+            source: 'system',
+            type: 'attachment.added',
+            at,
+            payload: { name, size: bytes.length },
+          },
+          accepted: true,
+        }),
+      )
       this.store(task, added, false)
     }
     this.bus.publish({ kind: 'task.created', task })

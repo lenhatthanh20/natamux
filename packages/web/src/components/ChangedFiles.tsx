@@ -364,6 +364,7 @@ const ChangedRow = memo(function ChangedRow({
     <div
       role="treeitem"
       {...tab}
+      tabIndex={tab.tabIndex}
       onFocus={(event) => {
         tab.onFocus(event)
         if (event.target === event.currentTarget) {

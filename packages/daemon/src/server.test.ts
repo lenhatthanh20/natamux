@@ -2171,6 +2171,8 @@ describe('pushed to the dashboards', () => {
 
   async function listen(): Promise<{ socket: Socket; texts: string[] }> {
     const texts: string[] = []
+    // injectWS needs a ready app; no inject ran before it here.
+    await app.ready()
     const socket = await app.injectWS(
       `/events?token=${TOKEN}`,
       {},
