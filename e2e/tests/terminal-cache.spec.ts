@@ -426,7 +426,7 @@ test('keeps the heap of hidden terminals small in a narrow and a wide window', a
   })
 })
 
-// AC 45: a hidden terminal gets at most 64 KiB of live output per second, so task Y stays quick,
+// AC 45: a hidden terminal gets at most 256 KiB of live output per second, so task Y stays quick,
 // and task X catches up when it is shown again.
 const ECHO_P95_LIMIT_MS = 100
 const LONG_TASK_LIMIT_MS = 100

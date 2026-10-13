@@ -2440,8 +2440,9 @@ describe('a hidden client', () => {
     LONG_TEST_MS,
   )
 
-  it('gets 64 KiB per second', () => {
-    expect(HIDDEN_BUDGET_BYTES).toBe(64 * 1024)
+  // Less makes a terminal hidden during a 200 KB/s stream catch up slowly when shown (E2E).
+  it('gets 256 KiB per second', () => {
+    expect(HIDDEN_BUDGET_BYTES).toBe(256 * 1024)
     expect(HIDDEN_BUDGET_WINDOW_MS).toBe(1000)
   })
 

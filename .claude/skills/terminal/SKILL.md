@@ -136,7 +136,7 @@ Two separate limits. Only the daemon's own screen pauses a shell; a slow or hidd
 |---|---|---|
 | `SCREEN_HIGH_WATER` / `SCREEN_LOW_WATER` | 1,000,000 / 250,000 bytes | Pause the pty above, resume below |
 | `CLIENT_HIGH_WATER` | 512 KiB | Unacked bytes a live client may have |
-| `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 64 KiB / 1000 ms | Live output a hidden client gets per window. Past it, a resume from the ring (or a snapshot) catches it up when shown |
+| `HIDDEN_BUDGET_BYTES` / `HIDDEN_BUDGET_WINDOW_MS` | 256 KiB / 1000 ms | Live output a hidden client gets per window. Past it, a resume from the ring (or a snapshot) catches it up when shown |
 | `RESYNC_QUIET_WINDOW_MS` | 100 ms | Quiet = less than `cols * rows / 8` bytes in this window |
 | `RESYNC_MAX_WAIT_MS` | 2000 ms | Catch up anyway after this long behind; at most one snapshot per this long during a flood |
 | `ACK_STALL_MS` | 5000 ms | A behind client whose acks made no progress this long gets a snapshot once the shell is quiet |

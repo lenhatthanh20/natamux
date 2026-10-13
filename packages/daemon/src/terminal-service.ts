@@ -97,7 +97,7 @@ export const SCREEN_LOW_WATER = 250_000
 export const CLIENT_HIGH_WATER = 512 * 1024
 // A hidden client gets at most this much live output per window, counted from when it hid. Its
 // tab parses all of it on the main thread; past the budget a resume or snapshot catches it up.
-export const HIDDEN_BUDGET_BYTES = 64 * 1024
+export const HIDDEN_BUDGET_BYTES = 256 * 1024
 export const HIDDEN_BUDGET_WINDOW_MS = 1000
 // A behind client is caught up once the shell wrote less than cols * rows / 8 bytes in the last
 // RESYNC_QUIET_WINDOW_MS, or once it has been behind RESYNC_MAX_WAIT_MS. It gets at most one
