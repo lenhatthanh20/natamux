@@ -53,6 +53,19 @@ export function urgentState(states: readonly TaskState[]): TaskState | null {
   return URGENT.find((state) => states.includes(state)) ?? null
 }
 
+// How much room a row takes: what needs the user is a card, what is finished is one line.
+export type RowTier = 'attention' | 'live' | 'quiet'
+
+export function rowTier(state: TaskState): RowTier {
+  if (state === 'needs-input' || state === 'failed' || state === 'blocked') {
+    return 'attention'
+  }
+  if (state === 'done' || state === 'cancelled' || state === 'draft') {
+    return 'quiet'
+  }
+  return 'live'
+}
+
 // A row opens by itself while one of its children works, waits or failed.
 export function opensByDefault(states: readonly TaskState[]): boolean {
   return states.some(

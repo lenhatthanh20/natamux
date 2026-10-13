@@ -525,6 +525,22 @@
   animation: hm-pop var(--dur-modal) var(--ease-out);
 }
 
+/* Only a running glyph moves, and slowly. A row that needs the user is a tinted card. */
+@keyframes sb-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.sb-breathe {
+  animation: sb-breathe 2.4s ease-in-out infinite;
+}
+
+.row-attn {
+  background: color-mix(in srgb, var(--chip-fg) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-fg) 35%, transparent);
+}
+
 @keyframes sb-flash {
   to {
     opacity: 0;
@@ -911,6 +927,10 @@
 
   .sb-flash {
     display: none;
+  }
+
+  .sb-breathe {
+    animation: none;
   }
 
   .comet[data-state="running"] .comet-halo,

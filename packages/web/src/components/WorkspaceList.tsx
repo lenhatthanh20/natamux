@@ -17,12 +17,10 @@ import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import {
   FOLDS_KEY,
   isFoldOpen,
-  opensByDefault,
   parseFolds,
   shellRows,
   subtaskCount,
   taskGlyphState,
-  urgentState,
   withFold,
   withParents,
 } from '../lib/sidebar-tree'
@@ -51,8 +49,7 @@ type WorkspaceListProps = {
   questions?: Readonly<Record<string, string | null>>
   // The state each task had when the user last opened it.
   seenState?: Readonly<Record<string, TaskState>>
-  // The shells of a task, read while its row is open or its agents work, and always for the open
-  // workspace.
+  // The shells of a task, read while its agents work or wait, and for the open workspace.
   loadTerminals?: (taskId: string) => Promise<TaskShells>
   // What the agent in each shell does now, by task id and shell name.
   terminalActivity?: Readonly<Record<string, Readonly<Record<string, string>>>>
@@ -205,14 +202,11 @@ export function WorkspaceList({
   const repoOpen = (id: string) => isFoldOpen(folds, `repo:${id}`, true)
   const finishedShown = (id: string) => isFoldOpen(folds, `finished:${id}`, false)
 
-  // What works under a task row: its open subtasks and its parallel stages, then its shells.
-  const childStates = (task: Task) => [
-    ...(children[task.id] ?? []).map((child) => child.state),
-    ...Object.values(task.lanes),
-  ]
-  // A row opens by itself while its task, or something under it, works, waits or failed.
-  const wantsOpen = (task: Task) =>
-    isFoldOpen(folds, `task:${task.id}`, opensByDefault([task.state, ...childStates(task)]))
+  // Only the open workspace shows what works under it, or its parent when it is a subtask. A
+  // filter shows the subtasks it matched.
+  const holdsCurrent = (task: Task) =>
+    task.id === currentId ||
+    (children[task.id] ?? []).some((child) => child.id === currentId || filtered)
 
   const shownRows = [
     ...pinned,
@@ -220,12 +214,12 @@ export function WorkspaceList({
       repoOpen(repo.id) ? [...open, ...(finishedShown(repo.id) ? finished : [])] : [],
     ),
   ]
-  // The shells are read while a row is open, while its agents work or wait, and for the open
-  // workspace. A finished task, or one without a workspace, has none left.
+  // The shells are read while its agents work or wait, and for the open workspace. A finished
+  // task, or one without a workspace, has none left.
   const readsShells = (task: Task) =>
     !isFinished(task) &&
     task.workspace !== null &&
-    (wantsOpen(task) || task.id === currentId || ACTIVE.includes(task.state))
+    (holdsCurrent(task) || ACTIVE.includes(task.state))
   const loading =
     loadTerminals === undefined ? [] : shownRows.filter(readsShells).map((task) => task.id)
   const terminalQueries = useQueries({
@@ -237,12 +231,7 @@ export function WorkspaceList({
   })
   const rowsOf = (task: Task) => shellRows(task, terminalQueries[loading.indexOf(task.id)]?.data)
   const canFold = (task: Task) => (children[task.id]?.length ?? 0) > 0 || rowsOf(task).length > 0
-  const taskOpen = (task: Task) => canFold(task) && wantsOpen(task)
-  const urgentUnder = (task: Task) =>
-    urgentState([
-      ...childStates(task),
-      ...rowsOf(task).flatMap((shell) => (shell.state === null ? [] : [shell.state])),
-    ])
+  const taskOpen = (task: Task) => canFold(task) && holdsCurrent(task)
 
   // The rows as they are on screen, for the keyboard.
   const entries: Entry[] = []
@@ -255,7 +244,8 @@ export function WorkspaceList({
       expandable: canFold(task),
       label: task.title,
       open,
-      toggle: () => setFold(key, !open),
+      // A folded task opens when it becomes the open workspace; the open one does not fold.
+      toggle: open ? undefined : () => onOpen(task.id),
     })
     if (!open) {
       return
@@ -331,7 +321,7 @@ export function WorkspaceList({
         return true
       }
       if (event.key === 'ArrowLeft') {
-        if (expandable && isOpen) {
+        if (expandable && isOpen && entry?.toggle !== undefined) {
           entry?.toggle?.()
           return true
         }
@@ -362,15 +352,13 @@ export function WorkspaceList({
         tab={roving.item(`task:${task.id}`)}
         subtasks={subtaskCount(task.id, allTasks)}
         enter={painted.current}
-        gutter={!nested}
-        fold={
-          nested || !canFold(task)
-            ? undefined
-            : {
-                open,
-                onToggle: () => setFold(`task:${task.id}`, !open),
-                state: urgentUnder(task),
-              }
+        open={open}
+        expandable={!nested && canFold(task)}
+        onAnswer={() =>
+          onOpenShell(
+            task.id,
+            rowsOf(task).find((shell) => shell.state === 'needs-input')?.shell ?? null,
+          )
         }
         onOpen={onOpen}
         onViewChanges={onViewChanges}
@@ -382,7 +370,7 @@ export function WorkspaceList({
         {open && (
           // The guide sits under the task glyph; the rows' glyphs line up with the title.
           <ul
-            className={`ml-8 flex flex-col border-l border-line pl-[7px] ${painted.current ? 'sb-unfold' : ''}`}
+            className={`ml-4 flex flex-col border-l border-line pl-[7px] ${painted.current ? 'sb-unfold' : ''}`}
           >
             {rowsOf(task).map((shell) => (
               <AgentRow
