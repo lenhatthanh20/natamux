@@ -415,6 +415,9 @@ test('keeps the find marks in the scrollbar, with no line beside it (T-0037)', a
 })
 
 test('draws no line beside the scrollbar of an agent terminal (T-0037)', async ({ page }) => {
+  // The demo task is open from beforeEach; the task list holds the other tasks.
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
   const tabs = await openTask(page, AGENT_TITLE)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   const agent = pane(page, 'Shell 1')
