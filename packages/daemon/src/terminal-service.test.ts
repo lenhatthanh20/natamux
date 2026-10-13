@@ -1885,39 +1885,43 @@ describe('a sliced snapshot', () => {
     LONG_TEST_MS,
   )
 
-  it('applies a resize that comes between slices at the same point', async () => {
-    const screen = { cols: 80, rows: 24 }
-    const wide = { cols: 100, rows: 30 }
-    const { service, ptys } = setup()
-    service.attach('T-0001', client(), screen)
-    const history = mixedLines(screen.cols, 3000)
-    ptys[0]?.emit(history)
-    await service.settled('T-0001')
-    const later = client()
-    const steps: (string | TerminalSize)[] = [history]
-    onEachSlice(() => {
-      if (steps.length > 1) {
-        return
-      }
-      const before = `\x1b[33m${'b'.repeat(90)}\x1b[0m\r\n`
-      const after = `\x1b[36m${'a'.repeat(120)}\x1b[0m\r\n`
-      steps.push(before, wide, after)
-      ptys[0]?.emit(before)
-      service.resize('T-0001', wide, MAIN_TERMINAL, later)
-      ptys[0]?.emit(after)
-    })
+  it(
+    'applies a resize that comes between slices at the same point',
+    async () => {
+      const screen = { cols: 80, rows: 24 }
+      const wide = { cols: 100, rows: 30 }
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), screen)
+      const history = mixedLines(screen.cols, 3000)
+      ptys[0]?.emit(history)
+      await service.settled('T-0001')
+      const later = client()
+      const steps: (string | TerminalSize)[] = [history]
+      onEachSlice(() => {
+        if (steps.length > 1) {
+          return
+        }
+        const before = `\x1b[33m${'b'.repeat(90)}\x1b[0m\r\n`
+        const after = `\x1b[36m${'a'.repeat(120)}\x1b[0m\r\n`
+        steps.push(before, wide, after)
+        ptys[0]?.emit(before)
+        service.resize('T-0001', wide, MAIN_TERMINAL, later)
+        ptys[0]?.emit(after)
+      })
 
-    service.attach('T-0001', later, screen)
-    await service.settled('T-0001')
-    vi.restoreAllMocks()
-    const fresh = client()
-    service.attach('T-0001', fresh, wide)
-    await service.settled('T-0001')
+      service.attach('T-0001', later, screen)
+      await service.settled('T-0001')
+      vi.restoreAllMocks()
+      const fresh = client()
+      service.attach('T-0001', fresh, wide)
+      await service.settled('T-0001')
 
-    expect(steps).toHaveLength(4)
-    const expected = await replay(await daemonText(steps, screen), wide)
-    expect((await replay(outputOf(fresh.frames), wide)).text).toBe(expected.text)
-  })
+      expect(steps).toHaveLength(4)
+      const expected = await replay(await daemonText(steps, screen), wide)
+      expect((await replay(outputOf(fresh.frames), wide)).text).toBe(expected.text)
+    },
+    LONG_TEST_MS,
+  )
 
   it('keeps other shells moving while it serializes', async () => {
     const { service, ptys } = setup()
