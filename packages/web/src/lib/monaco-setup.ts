@@ -36,17 +36,14 @@ import 'monaco-editor/languages/definitions/swift/register'
 import 'monaco-editor/languages/definitions/typescript/register'
 import 'monaco-editor/languages/definitions/xml/register'
 import 'monaco-editor/languages/definitions/yaml/register'
-import { jsonDefaults } from 'monaco-editor/languages/features/json/register'
 // The exports map has no path for CSS, so the icon font comes from the package folder.
 import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css'
 import '../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css'
 
 // The diff runs in the editor worker. Without the language services no other worker is needed.
+// They are left out on purpose: a service loads later with editor parts (code lens, suggest) whose
+// services the editor set up without, and every editor after it fails.
 globalThis.MonacoEnvironment = { getWorker: () => new editorWorker() }
-
-// Monaco only shows code here. JSON gets its colors and nothing else: the rest of its features
-// would start a JSON worker.
-jsonDefaults.setModeConfiguration({ tokens: true })
 
 export const LIGHT_THEME = 'natamux-light'
 export const DARK_THEME = 'natamux-dark'

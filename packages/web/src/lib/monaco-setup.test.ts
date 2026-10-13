@@ -16,14 +16,11 @@ function languageIds(): string[] {
   return [...new Set([...languages.matchAll(/[:,] '([a-z]+)'/g)].map((match) => match[1] ?? ''))]
 }
 
-// The module that colors a language: most have their own, "c" comes with "cpp", and JSON is a
-// language feature, not a basic language. Monaco has no Makefile language, so it stays plain text.
+// The module that colors a language: most have their own, and "c" comes with "cpp". Monaco has no
+// Makefile language, so it stays plain text.
 function contributionOf(id: string): string | null {
   if (id === 'plaintext' || id === 'makefile') {
     return null
-  }
-  if (id === 'json') {
-    return 'monaco-editor/languages/features/json/register'
   }
   return `monaco-editor/languages/definitions/${id === 'c' ? 'cpp' : id}/register`
 }
@@ -44,7 +41,9 @@ describe('the Monaco imports', () => {
   })
 
   it('reads the language ids of lib/language.ts', () => {
-    expect(languageIds()).toEqual(expect.arrayContaining(['typescript', 'json', 'c', 'dockerfile']))
+    expect(languageIds()).toEqual(
+      expect.arrayContaining(['typescript', 'javascript', 'c', 'dockerfile']),
+    )
   })
 
   it('imports the colors of every language in lib/language.ts', () => {
@@ -71,8 +70,15 @@ describe('the Monaco imports', () => {
     expect(workers).toEqual(['monaco-editor/editor/editor.worker?worker'])
   })
 
-  // JSON colors come from its language feature. Anything more would ask a JSON worker.
-  it('keeps the JSON feature to colors only', () => {
-    expect(source).toContain('jsonDefaults.setModeConfiguration({ tokens: true })')
+  // A language service (JSON, TypeScript, CSS, HTML) loads later with code lens, suggest and other
+  // editor parts whose services the slim editor never set up, so every editor after it fails.
+  it('loads no language service', () => {
+    const services = monacoImports(source).filter((path) => path.includes('/languages/features/'))
+    expect(services).toEqual([])
+  })
+
+  it('colors JSON as JavaScript', () => {
+    expect(languages).toContain("json: 'javascript'")
+    expect(languages).toContain("jsonc: 'javascript'")
   })
 })
