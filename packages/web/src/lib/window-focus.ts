@@ -5,7 +5,7 @@ export function startWindowFocus(target: Window = window): () => void {
   const root = target.document.documentElement
   const sync = () => {
     if (target.document.hasFocus()) {
-      delete root.dataset.window
+      root.removeAttribute('data-window')
     } else {
       root.dataset.window = 'inactive'
     }

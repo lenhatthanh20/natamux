@@ -5,7 +5,7 @@ import { startWindowFocus } from './window-focus'
 describe('window focus', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-    delete document.documentElement.dataset.window
+    document.documentElement.removeAttribute('data-window')
   })
 
   it('marks the page inactive on blur and clears it on focus', () => {
