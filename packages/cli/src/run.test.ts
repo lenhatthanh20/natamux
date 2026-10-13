@@ -184,6 +184,16 @@ describe('runCli', () => {
       })
     })
 
+    it('sends a title that starts with an id as typed, and prints the chosen id', async () => {
+      const task = makeTask({ id: 'TASK-0006', title: 'x' })
+      const result = await run(['task', 'create', 'Task-0006: x', '--repo', 'app'], {
+        handler: () => jsonResponse({ task }, 201),
+      })
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.stdout).toBe('Created TASK-0006  x\n')
+      expect(result.calls[0]?.body).toMatchObject({ title: 'Task-0006: x' })
+    })
+
     it('prints JSON with --json', async () => {
       const task = makeTask()
       const result = await run(['task', 'create', 'Fix the dashboard', '--json'], {
@@ -487,6 +497,18 @@ describe('runCli', () => {
   })
 
   describe('failures', () => {
+    it('shows the message of a task id that is used', async () => {
+      const result = await run(['task', 'create', 'Task-0005: Other', '--repo', 'app'], {
+        handler: () =>
+          jsonResponse(
+            { error: 'invalid_request', message: 'Task id TASK-0005 is already used' },
+            400,
+          ),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toBe('Error: Task id TASK-0005 is already used\n')
+    })
+
     it('shows the message of an unknown task', async () => {
       const result = await run(['task', 'show', 'T-0099'], {
         handler: () =>

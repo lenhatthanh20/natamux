@@ -82,7 +82,7 @@ Rules:
 
 Each task gets its own block of 10 ports, so dev servers of tasks that run at the same time do not clash.
 
-The block comes from the task number. Task `T-0001` gets ports 20010 to 20019. `T-0002` gets 20020 to 20029. The numbers wrap after 1000 tasks.
+The block comes from the number at the end of the task id. Task `T-0001` gets ports 20010 to 20019. `T-0002` gets 20020 to 20029. The numbers wrap after 1000 tasks. A task with your own id, such as `ABC-1`, shares the block of `T-0001`.
 
 Natamux sets these variables in every shell of the task:
 

@@ -20,6 +20,7 @@ import {
   resolveSteps,
   type StagePosition,
   type Step,
+  splitTaskId,
   stageName,
   stagesOf,
   stepRefsOf,
@@ -211,11 +212,20 @@ export class TaskService {
   }
 
   // The attachments are written before the task is published, so its context stage, which starts
-  // at once, finds them.
-  createTask(rawInput: unknown, attachments: readonly AttachmentFile[] = []): Task {
+  // at once, finds them. A title that starts with an id, such as "ABC-12: Fix it", picks the id,
+  // unless `splitId` is false.
+  createTask(
+    rawInput: unknown,
+    attachments: readonly AttachmentFile[] = [],
+    { splitId = true }: { splitId?: boolean } = {},
+  ): Task {
     const input = createTaskInputSchema.parse(rawInput)
     if (input.parentId) {
       this.checkParent(input.parentId)
+    }
+    const chosen = splitId ? splitTaskId(input.title) : { id: null, title: input.title }
+    if (chosen.id && readTaskFile(this.dataDir, chosen.id)) {
+      throw new TaskEditError(`Task id ${chosen.id} is already used`)
     }
     const at = this.timestamp()
     // Stages that are off stay in the settings, but a new task does not get them.
@@ -223,7 +233,8 @@ export class TaskService {
     const start = firstPosition(steps)
     const task = taskSchema.parse({
       ...input,
-      id: this.nextTaskId(),
+      id: chosen.id ?? this.nextTaskId(),
+      title: chosen.title,
       stage: start.stage,
       state: start.state,
       lanes: start.lanes,
@@ -748,10 +759,10 @@ export class TaskService {
   }
 
   private nextTaskId(): string {
-    const highest = listTaskIds(this.dataDir).reduce(
-      (max, id) => Math.max(max, Number(id.slice(2))),
-      0,
-    )
+    // Ids the user chose with another prefix do not move the default numbers.
+    const highest = listTaskIds(this.dataDir)
+      .filter((id) => id.startsWith('T-'))
+      .reduce((max, id) => Math.max(max, Number(id.slice(2))), 0)
     return `T-${String(highest + 1).padStart(4, '0')}`
   }
 }

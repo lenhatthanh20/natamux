@@ -67,6 +67,106 @@ describe('createTask', () => {
     expect(() => service.createTask({ title: '  ' })).toThrow()
   })
 
+  it.each(['Task-0005: Fix bug xxx', 'task-0005 Fix bug xxx'])(
+    'takes the id from the start of the title %j',
+    (title) => {
+      const task = service.createTask({ title })
+
+      expect(task).toMatchObject({ id: 'TASK-0005', title: 'Fix bug xxx' })
+      expect(readTaskFile(dataDir, 'TASK-0005')).toEqual(task)
+    },
+  )
+
+  it('rejects an id that is already used, and writes nothing', () => {
+    const first = service.createTask({ title: 'TASK-0005: First' })
+    const published = messages.length
+
+    expect(() => service.createTask({ title: 'Task-0005: Other' })).toThrow(TaskEditError)
+    expect(readTaskFile(dataDir, 'TASK-0005')).toEqual(first)
+    expect(service.listTasks()).toHaveLength(1)
+    expect(service.listEvents('TASK-0005')).toHaveLength(1)
+    expect(messages).toHaveLength(published)
+  })
+
+  it('counts only T- ids for the next default id', () => {
+    service.createTask({ title: 'T-0003: Third' })
+    service.createTask({ title: 'TASK-0050: Custom' })
+
+    expect(service.createTask({ title: 'Next' }).id).toBe('T-0004')
+  })
+
+  it('logs and publishes the task with the id the user chose', () => {
+    const task = service.createTask({ title: '  Task-0005  :   Fix bug xxx  ' })
+
+    expect(task).toMatchObject({ id: 'TASK-0005', title: 'Fix bug xxx' })
+    expect(service.listEvents('TASK-0005').map(({ event }) => event.type)).toEqual([
+      'task.created',
+    ])
+    expect(messages).toEqual([{ kind: 'task.created', task }])
+  })
+
+  it('keeps the digits of the id as typed', () => {
+    const short = service.createTask({ title: 'Task-5: a: b' })
+    const long = service.createTask({ title: 'TASK-0005: fix T-12 parser' })
+
+    expect(short).toMatchObject({ id: 'TASK-5', title: 'a: b' })
+    expect(long).toMatchObject({ id: 'TASK-0005', title: 'fix T-12 parser' })
+  })
+
+  it('accepts an id of 32 characters and rejects a longer one with no side effects', () => {
+    const fits = `${'A'.repeat(29)}-12`
+    expect(service.createTask({ title: `${fits}: x` }).id).toBe(fits)
+
+    const published = messages.length
+    expect(() => service.createTask({ title: `A${fits}: x` })).toThrow()
+    expect(service.listTasks()).toHaveLength(1)
+    expect(messages).toHaveLength(published)
+  })
+
+  it.each(['', '   '])('rejects the empty title %j with no side effects', (title) => {
+    expect(() => service.createTask({ title })).toThrow()
+    expect(service.listTasks()).toEqual([])
+    expect(messages).toEqual([])
+  })
+
+  it.each([
+    ['task-0005: Other', 'TASK-0005: First'],
+    ['T-0003: Other', 'T-0003: First'],
+  ])('rejects %j when %j exists, ignoring case', (title, existing) => {
+    const first = service.createTask({ title: existing })
+    const before = readFileSync(join(dataDir, 'tasks', `${first.id}.md`), 'utf8')
+
+    expect(() => service.createTask({ title })).toThrow(`Task id ${first.id} is already used`)
+    expect(readFileSync(join(dataDir, 'tasks', `${first.id}.md`), 'utf8')).toBe(before)
+  })
+
+  it('treats TASK-5 and TASK-0005 as two ids', () => {
+    service.createTask({ title: 'TASK-0005: First' })
+
+    expect(service.createTask({ title: 'TASK-5: Second' }).id).toBe('TASK-5')
+  })
+
+  it.each([
+    [['TASK-0050: x', 'ABC-7: y'], 'T-0001'],
+    [['T-0100: x'], 'T-0101'],
+    [['T-0003: x', 'TT-0200: y'], 'T-0004'],
+    [['T-0003: x', 'T-5: y'], 'T-0006'],
+    [['T-0009: x'], 'T-0010'],
+    [['T-9999: x'], 'T-10000'],
+  ])('after %j the next default id is %s', (titles, next) => {
+    for (const title of titles) {
+      service.createTask({ title })
+    }
+
+    expect(service.createTask({ title: 'Fix bug' }).id).toBe(next)
+  })
+
+  it('keeps the whole title when asked not to split it', () => {
+    const task = service.createTask({ title: 'abc-2 y' }, [], { splitId: false })
+
+    expect(task).toMatchObject({ id: 'T-0001', title: 'abc-2 y' })
+  })
+
   it('keeps the attachments with the task and logs each one, before the task is published', () => {
     let listedOnPublish: string[] = []
     const bus = new EventBus()
@@ -474,6 +574,17 @@ describe('init', () => {
     ).toEqual(['First', 'Second'])
     freshIndex.close()
   })
+
+  it('rebuilds the index with the tasks whose id the user chose', () => {
+    service.createTask({ title: 'Task-0005: Fix bug xxx' })
+
+    const freshIndex = new TaskIndex(':memory:')
+    const freshService = makeService(freshIndex)
+    freshService.init()
+
+    expect(freshService.listTasks()).toMatchObject([{ id: 'TASK-0005', title: 'Fix bug xxx' }])
+    freshIndex.close()
+  })
 })
 
 describe('recordGit', () => {
@@ -504,6 +615,15 @@ describe('recordGit', () => {
 })
 
 describe('updateTask', () => {
+  it('keeps the id when the new title starts with an id', () => {
+    const task = service.createTask({ title: 'First' })
+
+    expect(service.updateTask(task.id, { title: 'Task-9: x' })).toMatchObject({
+      id: 'T-0001',
+      title: 'Task-9: x',
+    })
+  })
+
   it('changes the details and logs which fields changed', () => {
     const task = service.createTask({ title: 'First' })
 

@@ -6,7 +6,7 @@ import { EventBus } from './event-bus.js'
 import { GitHubError, type RunGh } from './git.js'
 import { IssueImporter, parseIssueList } from './issue-importer.js'
 import { TaskIndex } from './task-index.js'
-import { TaskService } from './task-service.js'
+import { TaskEditError, TaskService } from './task-service.js'
 
 const ISSUES = [
   {
@@ -62,6 +62,26 @@ describe('parseIssueList', () => {
 })
 
 describe('IssueImporter', () => {
+  it('stops at an issue whose title names an id that is used', async () => {
+    tasks.createTask({ title: 'ABC-9: Existing' })
+    const issue = (number: number, title: string) => ({
+      number,
+      title,
+      body: '',
+      url: `https://github.com/o/r/issues/${number}`,
+      labels: [],
+    })
+    const issues = [issue(5, 'One'), issue(6, 'ABC-9: Two'), issue(7, 'Three')]
+    const clashing = new IssueImporter({
+      tasks,
+      repoPath: () => '/repo',
+      gh: async () => JSON.stringify(issues),
+    })
+
+    await expect(clashing.import([5, 6, 7])).rejects.toThrow(TaskEditError)
+    expect(tasks.listTasks().map((task) => task.title).sort()).toEqual(['Existing', 'One'])
+  })
+
   it('lists the open issues with gh', async () => {
     const issues = await importer.list()
 

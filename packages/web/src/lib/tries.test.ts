@@ -36,4 +36,26 @@ describe('tries', () => {
     const tries = triesOf(group, all)
     expect(triesToCancel(tries[1] as Task, tries).map((entry) => entry.id)).toEqual(['T-0007'])
   })
+
+  it.each([
+    ['tries-t-0005', true],
+    ['tries-task-0005', true],
+    ['tries-a1-2', false],
+    ['tries-task', false],
+    ['tries-TASK-0005', false],
+  ])('reads %s as a group: %s', (label, isGroup) => {
+    expect(tryGroup({ labels: [label] })).toBe(isGroup ? label : null)
+  })
+
+  it('groups the tries of a task with its own id, and lists that task first', () => {
+    const custom = 'tries-task-0500'
+    const tries = [task('T-0012', [custom]), task('TASK-0500', [custom]), task('T-0011', [custom])]
+
+    expect(tryGroup(tries[1] as Task)).toBe(custom)
+    expect(triesOf(custom, tries).map((entry) => entry.id)).toEqual([
+      'TASK-0500',
+      'T-0011',
+      'T-0012',
+    ])
+  })
 })

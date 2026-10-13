@@ -89,10 +89,11 @@ describe('task files', () => {
 
   it('lists task ids in numeric order and ignores other files', () => {
     mkdirSync(tasksDir(dataDir), { recursive: true })
-    for (const name of ['T-10.md', 'T-2.md', 'T-3.md.tmp', 'notes.txt', 'T-x.md']) {
+    const names = ['T-10.md', 'T-2.md', 'T-3.md.tmp', 'notes.txt', 'T-x.md', 'abc-1.md', 'T42.md']
+    for (const name of [...names, 'A1-2.md', 'TASK-5.md.bak', 'TASK-5.md', 'ABC-2.md']) {
       writeFileSync(join(tasksDir(dataDir), name), '')
     }
-    expect(listTaskIds(dataDir)).toEqual(['T-2', 'T-10'])
+    expect(listTaskIds(dataDir)).toEqual(['ABC-2', 'T-2', 'TASK-5', 'T-10'])
   })
 
   it('lists no ids when the data directory has no tasks yet', () => {
@@ -103,5 +104,18 @@ describe('task files', () => {
     writeTaskFile(dataDir, task)
     writeTaskFile(dataDir, { ...task, id: 'T-0043', title: 'Second' })
     expect(listTaskFiles(dataDir).map((listed) => listed.id)).toEqual(['T-0042', 'T-0043'])
+  })
+
+  it('lists tasks with ids the user chose, by the number at the end of the id', () => {
+    for (const id of ['T-0010', 'ABC-12', 'TASK-0005', 'T-0003', 'T-0005']) {
+      writeTaskFile(dataDir, { ...task, id })
+    }
+    expect(listTaskFiles(dataDir).map((listed) => listed.id)).toEqual([
+      'T-0003',
+      'T-0005',
+      'TASK-0005',
+      'T-0010',
+      'ABC-12',
+    ])
   })
 })

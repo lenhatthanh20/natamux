@@ -57,6 +57,18 @@ afterEach(() => {
 })
 
 describe('fanOut', () => {
+  it('labels the tries of a task with a chosen id, and gives them default ids', async () => {
+    const source = tasks.createTask({ title: 'Task-0005: abc-2 y' })
+
+    const tries = await fanOut(parts, source.id, { count: 2, start: false })
+
+    expect(source).toMatchObject({ id: 'TASK-0005', title: 'abc-2 y' })
+    expect(tries.map((task) => [task.id, task.title, task.labels])).toEqual([
+      ['T-0001', 'abc-2 y (try 2)', ['tries-task-0005']],
+      ['T-0002', 'abc-2 y (try 3)', ['tries-task-0005']],
+    ])
+  })
+
   it('copies a task, and labels it and its tries alike', async () => {
     const source = tasks.createTask({
       title: 'Speed up search',
