@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.15 (2026-10-13)
+
+- A stage that was sent back shows only **Sent back N×** in its card. The long reason no longer fills the details panel; the agent still gets it in its prompt.
+
 ## v0.1.14 (2026-10-13)
 
 - The app no longer keeps the CPU busy while agents work. In a window without focus, every spinner, ring and stripe stands still, and the text in the title bar turns grey. With the focus, the moving stripes and dashes cost much less to draw.
