@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.14 (2026-10-13)
+
+- The app no longer keeps the CPU busy while agents work. In a window without focus, every spinner, ring and stripe stands still, and the text in the title bar turns grey. With the focus, the moving stripes and dashes cost much less to draw.
+- The **Needs you** strip at the top of the sidebar is gone; a task that waits on you is already a card with its question. The **N need you** pill still lists every task that waits. A folded row shows its subtasks that need you, failed or are blocked. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- The second line of a task row shows its agent's icon. Each project has a header band with its name and the number of workspaces.
+- **Generate** in the commit box (`Mod+Shift+G`) asks the task's agent for a commit message. **Commit…** drafts one too when the box is empty. See [Commit](/docs/guides/changes-and-history/#commit).
+- Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask. Cursor CLI and Copilot CLI get a file written outside the worktree. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
+- When Natamux starts again, the agents of running and waiting tasks start again on their own. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- A failed CI check shows one short line per failed run in the stage card. When CI fails on a testing stage, the task goes back to the code stage before it, such as Implement, at most twice. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+
 ## v0.1.13 (2026-10-13)
 
 - The sidebar gives each task the room it needs. A task that waits on you, failed or is blocked is a tinted card with the agent's question or the reason; **Answer** opens the terminal of the agent that asked. A task that works has two lines: id, step and stage, subtasks, what the agent does, the pull request and the agent. A finished task is one line. Each state has its own icon shape. See [Sidebar](/docs/guides/dashboard/#sidebar).
