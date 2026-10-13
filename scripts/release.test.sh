@@ -86,6 +86,7 @@ link_ok() {
   path=${path#/docs/}
   path=${path%/}
   page="site/src/content/docs/docs/$path.md"
+  [ -f "$page" ] || page="site/src/content/docs/docs/$path.mdx"
   [ -f "$page" ] || page="site/src/content/docs/docs/${path:+$path/}index.md"
   [ -f "$page" ] || return 1
   [ -z "$anchor" ] && return 0

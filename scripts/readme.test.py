@@ -153,7 +153,7 @@ class ReadmeAcceptance(unittest.TestCase):
                     if urlsplit(target).hostname == "natamux.github.io":
                         route = urlsplit(target).path.removeprefix("/docs/").strip("/")
                         page = ROOT / "site/src/content/docs/docs" / (route or "index")
-                        self.assertTrue(page.with_suffix(".md").is_file())
+                        self.assertTrue(page.with_suffix(".md").is_file() or page.with_suffix(".mdx").is_file())
 
 
 if __name__ == "__main__":
