@@ -77,7 +77,7 @@ In the desktop app, the default is your [Ghostty](https://ghostty.org) font: Nat
 
 Natamux bundles the [Nerd Font](https://www.nerdfonts.com) icons, as Ghostty does. Prompt themes such as Starship or Powerlevel10k and `eza --icons` show their icons with any font, without installing a Nerd Font.
 
-When several panes show, the panes that do not have the focus are dimmed. Click one to type in it.
+When several panes show, the pane that has the focus has an outline. Click a pane to type in it.
 
 ### Keys that belong to the shell
 

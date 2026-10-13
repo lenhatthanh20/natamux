@@ -254,7 +254,7 @@ export function ShellPanes({
       <div
         ref={gridRef}
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-        className="hm-panes grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
+        className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
         {names.map((name) => {
           const state = agentState(name)
