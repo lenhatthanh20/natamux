@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.17 (2026-10-13)
+
+- The app no longer waits for your login shell before it starts. The dashboard shows your tasks at once; changes, branches, terminals and agents start when the shell's `PATH` is read.
+- A terminal hidden for 10 s gives back its GPU memory. The daemon starts far fewer programs: it shares one process list and keeps git answers for 5 s. **Refresh** still reads at once.
+- The dashboard polls less and redraws less, also with many tasks. The Agents view loads its terminal code ahead.
+- **Start a task** can take its context from any agent skill (**Context from** → **An agent skill**).
+- After a restart, the agent of a stage in review starts again too.
+- Terminal panes without the focus are no longer dimmed. The focused pane keeps its outline.
+
 ## v0.1.16 (2026-10-13)
 
 - Spinners, stage rings, stripes and breathing icons move 8 times a second, all at once, not on every frame. With the window in front and tasks running, the app uses much less CPU.
