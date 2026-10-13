@@ -66,6 +66,9 @@ jobs:
           cache: pnpm
       - name: Package
         shell: bash
+        env:
+          # The temp folder of the runner is on the drive of the checkout (see package-desktop.sh).
+          TMPDIR: ${{ runner.temp }}
         run: scripts/package-desktop.sh ${{ matrix.args }} --publish never
       # Each start also opens a task: a shell in its worktree must answer, and a stand-in agent
       # must run the app's own `natamux` command (packages/desktop/src/smoke.ts).
