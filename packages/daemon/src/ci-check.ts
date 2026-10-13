@@ -1,3 +1,4 @@
+import { plainText } from '@natamux/core'
 import { pushRef, type RunGh, runGh, snapshotCommit } from './git.js'
 import type { CheckResult } from './stage-checks.js'
 
@@ -111,7 +112,7 @@ export async function checkOnCi(
   const logs: string[] = []
   for (const each of failed) {
     const view = ['run', 'view', String(each.databaseId), '--log-failed']
-    const log = await deps.gh(input.worktree, view).catch(() => '')
+    const log = plainText(await deps.gh(input.worktree, view).catch(() => ''))
     const tail = log.trim() === '' ? '' : `\n${log.slice(-LOG_TAIL_CHARS)}`
     const reason = `CI ${each.workflowName} ${each.conclusion}: ${each.url}`
     reasons.push(reason)

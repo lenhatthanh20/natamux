@@ -11,8 +11,8 @@ import {
   type Task,
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { ChevronRight, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, CircleAlert, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useNow, useNowValue } from '../hooks/useNow'
 import { type AgentId, agentLabel, DEFAULT_AGENT } from '../lib/agents'
 import type {
@@ -394,7 +394,7 @@ export function ProgressTab({
                 <Age at={event.at} />
               </span>
               <span className="truncate">
-                {describeEvent(event.type)}
+                {describeEvent(event.type, event.payload)}
                 {typeof event.payload.stage === 'string' ? (
                   <span className="text-muted">
                     {' '}
@@ -580,6 +580,9 @@ function StageCard({
       ? `Approved by ${progress.approvedBy === 'human' ? 'you' : progress.approvedBy}`
       : null,
   ].filter((fact) => fact !== null)
+  const sentBack = progress.rounds - 1
+  // The failed runs of a CI send back. The log after them is for the agent.
+  const ciRuns = progress.sentBackByCi ? progress.sentBackFor?.split('\n\n')[0] : undefined
 
   const title = (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -613,7 +616,7 @@ function StageCard({
   )
   // A stage that started already keeps its prompt; the choice is for its next start.
   const started = current && state !== 'draft' && state !== 'ready'
-  const ciBox = ci !== undefined && !finished && canAct && <CiBox choice={ci} />
+  const ciBox = ci !== undefined && !finished && canAct && <CiBox choice={ci} started={started} />
   const workflowBox = workflow !== undefined && !finished && canAct && (
     <WorkflowBox choice={workflow} started={started} />
   )
@@ -720,9 +723,15 @@ function StageCard({
               </span>
             )}
             {progress.sentBackFor !== null && progress.rounds > 1 && (
-              <span className={`${CHIP} text-ink-2`}>
+              <span className={`${CHIP} text-ink-2`} data-tip={ciRuns}>
                 <Undo2 size={13} aria-hidden="true" className="shrink-0" />
-                Sent back {progress.rounds - 1}×
+                {`${progress.sentBackByCi ? 'Sent back by CI' : 'Sent back'} ${sentBack}×`}
+              </span>
+            )}
+            {current && progress.reasons.length > 0 && state === 'running' && (
+              <span className={`${CHIP} text-ink-2`} data-tip={progress.reasons.join('\n')}>
+                <CircleAlert size={13} aria-hidden="true" className="shrink-0 text-signal" />
+                Checks failed, the agent fixes them
               </span>
             )}
             {pr !== null && (
@@ -740,7 +749,7 @@ function StageCard({
             )}
           </div>
 
-          {current && progress.reasons.length > 0 && (
+          {current && progress.reasons.length > 0 && state !== 'running' && (
             <ul
               // A failed stage is red, as its chip; checks that wait for the user are amber.
               data-state={state === 'failed' ? 'failed' : undefined}
@@ -748,7 +757,7 @@ function StageCard({
             >
               {progress.reasons.map((reason) => (
                 <li key={reason} className="whitespace-pre-wrap break-words text-ink">
-                  {reason}
+                  <ReasonText text={reason} />
                 </li>
               ))}
             </ul>
@@ -852,6 +861,42 @@ type WorkflowChoice = {
   onChange: (on: boolean) => void
 }
 
+// The punctuation that ends a sentence or closes a bracket is not part of the address.
+const ADDRESS = /https?:\/\/\S*[^\s.,;:!?)\]}'"]/g
+const RUN_ADDRESS = /\/actions\/runs\/\d+/
+
+// A reason with its addresses as links. A CI run address is a short "view run", so the reason
+// stays on one line.
+function ReasonText({ text }: { text: string }) {
+  const parts: ReactNode[] = []
+  let from = 0
+  for (const match of text.matchAll(ADDRESS)) {
+    const [address] = match
+    const at = match.index ?? 0
+    parts.push(
+      text.slice(from, at),
+      <a
+        key={at}
+        href={address}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-tip={address}
+        className="text-link hover:underline"
+      >
+        {RUN_ADDRESS.test(address) ? 'view run' : address}
+      </a>,
+    )
+    from = at + address.length
+  }
+  parts.push(text.slice(from))
+  return <>{parts}</>
+}
+
+// Once the stage started, a hint is a tip on its checkbox, so the running card stays short.
+function BoxHint({ hint, started }: { hint: string; started: boolean }) {
+  return started ? null : <span className="pl-5.5 text-xs text-muted">{hint}</span>
+}
+
 function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boolean }) {
   const hint = !choice.allowed
     ? 'Only Claude Code can run a workflow.'
@@ -860,7 +905,10 @@ function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boo
       : 'More accurate, uses many more tokens.'
   return (
     <div className="mt-2 flex flex-col gap-0.5">
-      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+      <label
+        className="flex w-fit items-center gap-2 text-sm text-ink-2"
+        data-tip={started && choice.allowed ? hint : undefined}
+      >
         <input
           type="checkbox"
           checked={choice.on}
@@ -871,7 +919,8 @@ function WorkflowBox({ choice, started }: { choice: WorkflowChoice; started: boo
         />
         Run with a workflow
       </label>
-      <span className="pl-5.5 text-xs text-muted">{hint}</span>
+      {/* The Claude Code hint stays in view: it says why the box is off. */}
+      <BoxHint hint={hint} started={started && choice.allowed} />
     </div>
   )
 }
@@ -882,10 +931,16 @@ type CiChoice = {
   onChange: (on: boolean) => void
 }
 
-function CiBox({ choice }: { choice: CiChoice }) {
+const CI_HINT =
+  'When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes once CI passes. A failure goes back to the agent.'
+
+function CiBox({ choice, started }: { choice: CiChoice; started: boolean }) {
   return (
     <div className="mt-2 flex flex-col gap-0.5">
-      <label className="flex w-fit items-center gap-2 text-sm text-ink-2">
+      <label
+        className="flex w-fit items-center gap-2 text-sm text-ink-2"
+        data-tip={started ? CI_HINT : undefined}
+      >
         <input
           type="checkbox"
           checked={choice.on}
@@ -895,10 +950,7 @@ function CiBox({ choice }: { choice: CiChoice }) {
         />
         Check on CI
       </label>
-      <span className="pl-5.5 text-xs text-muted">
-        When the agent is done, its work is pushed to a natamux-ci branch, and the stage passes once
-        CI passes. A failure goes back to the agent.
-      </span>
+      <BoxHint hint={CI_HINT} started={started} />
     </div>
   )
 }

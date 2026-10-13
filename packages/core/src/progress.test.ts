@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { EventType, TaskEvent } from './events.js'
 import { stageProgress } from './progress.js'
 import { DEFAULT_PIPELINE } from './stage.js'
+import type { Task } from './task.js'
 
 let minute = 0
 function event(
@@ -103,6 +104,51 @@ describe('stageProgress', () => {
     })
     expect(testSpec?.startedAt).toBe('2026-10-09T09:05:00.000Z')
     expect(implement).toMatchObject({ rounds: 2, sentBackFor: 'Fix the dates' })
+  })
+
+  it('tells a send back by CI from one by a review', () => {
+    minute = 0
+    const task: Pick<Task, 'stage' | 'state' | 'lanes'> = {
+      stage: 'build',
+      state: 'running',
+      lanes: { 'test-spec': 'review', implement: 'running' },
+    }
+    const byCi = [
+      event('stage.started', { stage: 'implement' }),
+      event('stage.reopened', {
+        to: 'implement',
+        from: 'implement',
+        reason: 'CI failed on Implement:',
+        ci: true,
+      }),
+      event('stage.started', { stage: 'implement' }),
+    ]
+    const implementOf = (events: TaskEvent[]) =>
+      stageProgress(task, events, DEFAULT_PIPELINE).find((stage) => stage.stage === 'implement')
+
+    expect(implementOf(byCi)).toMatchObject({ rounds: 2, sentBackByCi: true })
+
+    const byReview = [
+      ...byCi,
+      event('review.changes-requested', { to: 'implement', reason: 'Fix the dates' }, 'human'),
+      event('stage.started', { stage: 'implement' }),
+    ]
+    expect(implementOf(byReview)).toMatchObject({ rounds: 3, sentBackByCi: false })
+
+    const reviewThenCi = [
+      ...byReview,
+      event('stage.reopened', { to: 'implement', from: 'implement', reason: 'CI', ci: true }),
+      event('stage.started', { stage: 'implement' }),
+    ]
+    expect(implementOf(reviewThenCi)).toMatchObject({ rounds: 4, sentBackByCi: true })
+
+    expect(implementOf(byCi.slice(0, 1))).toMatchObject({ sentBackFor: null, sentBackByCi: false })
+    const old = [
+      event('stage.started', { stage: 'implement' }),
+      event('stage.reopened', { to: 'implement', reason: 'Before CI send backs' }),
+      event('stage.started', { stage: 'implement' }),
+    ]
+    expect(implementOf(old)).toMatchObject({ rounds: 2, sentBackByCi: false })
   })
 
   it('marks a skipped stage, and every stage of a done task', () => {
