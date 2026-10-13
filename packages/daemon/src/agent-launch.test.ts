@@ -426,12 +426,12 @@ describe('prepareWorkspace', () => {
 describe('trustPaths', () => {
   it("follows each agent's own folder variables", () => {
     expect(trustPaths({}, '/home/me')).toEqual({
-      cursorProjects: '/home/me/.cursor/projects',
-      copilotConfig: '/home/me/.copilot/config.json',
+      cursorProjects: join('/home/me', '.cursor', 'projects'),
+      copilotConfig: join('/home/me', '.copilot', 'config.json'),
     })
     expect(trustPaths({ CURSOR_DATA_DIR: '/c', COPILOT_HOME: '/p' }, '/home/me')).toEqual({
-      cursorProjects: '/c/projects',
-      copilotConfig: '/p/config.json',
+      cursorProjects: join('/c', 'projects'),
+      copilotConfig: join('/p', 'config.json'),
     })
   })
 })
