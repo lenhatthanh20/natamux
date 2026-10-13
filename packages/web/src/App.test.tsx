@@ -2418,7 +2418,7 @@ describe('App', () => {
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
   })
 
-  it("loads the terminal's code when the page is idle after the task list", async () => {
+  it("loads the terminal's and the diff's code when the page is idle after the task list", async () => {
     const idle = vi.fn((_callback: () => void) => 1)
     vi.stubGlobal('requestIdleCallback', idle)
     vi.stubGlobal('cancelIdleCallback', vi.fn())
@@ -2430,7 +2430,7 @@ describe('App', () => {
     await signIn(user)
     await screen.findByRole('table')
 
-    await waitFor(() => expect(idle).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(idle).toHaveBeenCalledTimes(2))
   })
 
   it('opens the shortcut list with the question mark key', async () => {

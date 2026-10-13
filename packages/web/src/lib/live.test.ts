@@ -15,6 +15,7 @@ import {
   liveSocketUrl,
   parseLiveMessage,
 } from './live'
+import { SHELLS_EVERY_MS } from './task-shells'
 import taskShells from './task-shells.ts?raw'
 
 const task: Task = {
@@ -294,11 +295,17 @@ describe('the fallback poll', () => {
     expect(FALLBACK_POLL_MS).toBe(60_000)
   })
 
-  const sources = Object.entries({ changesPanel, changesView, dashboard, docsTab, taskShells })
+  const sources = Object.entries({ changesPanel, changesView, dashboard, docsTab })
 
   it.each(sources)('is the only poll of %s', (_name, source) => {
     // A number here would be a poll of its own, such as the old 3, 5, 10 or 15 seconds.
     expect(source.match(/refetchInterval: \d/g)).toBeNull()
     expect(source).toContain('FALLBACK_POLL_MS')
+  })
+
+  // One poll per task row, so it waits longer than the others.
+  it('waits longer for the shells of each task', () => {
+    expect(taskShells.match(/refetchInterval: \d/g)).toBeNull()
+    expect(SHELLS_EVERY_MS).toBeGreaterThan(FALLBACK_POLL_MS)
   })
 })
