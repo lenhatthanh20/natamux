@@ -1119,9 +1119,8 @@ describe('paste', () => {
 
   it.each([
     ['LF line breaks', 'line 1\nline 2\n\nline 4'],
-    ['CRLF line breaks', 'line 1\r\nline 2'],
     ['a line break at the end', 'line 1\n'],
-    ['the end of a paste in it', 'a\x1b[201~b'],
+    ['tabs', 'a\tb'],
     ['no text', ''],
   ])('keeps text with %s in the paste, and presses Enter once', (_, text) => {
     const { service, pty } = pasting()
@@ -1130,6 +1129,25 @@ describe('paste', () => {
     vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS * 10)
 
     expect(pty.written).toEqual([`\x1b[200~${text}\x1b[201~`, '\r'])
+  })
+
+  // An escape in the text can end the paste early, and then the agent takes its Enter as a line
+  // break, not as a submit.
+  it.each([
+    ['CRLF line breaks', 'line 1\r\nline 2', 'line 1\nline 2'],
+    ['a lone CR', 'line 1\rline 2', 'line 1\nline 2'],
+    ['the end of a paste in it', 'a\x1b[201~b', 'ab'],
+    ['colors', '\x1b[31mFAIL\x1b[0m', 'FAIL'],
+    ['other control bytes', 'a\x00\x07\x08\x7fb', 'ab'],
+    ['tabs and line breaks among them', 'a\x1b[1m\tb\r\n\x00c', 'a\tb\nc'],
+    ['only control bytes', '\x1b[0m\x00\x07', ''],
+  ])('takes %s out of the paste, and still presses Enter once', (_, text, pasted) => {
+    const { service, pty } = pasting()
+
+    service.paste('T-0001', text)
+    vi.advanceTimersByTime(ENTER_AFTER_PASTE_MS * 10)
+
+    expect(pty.written).toEqual([`\x1b[200~${pasted}\x1b[201~`, '\r'])
   })
 
   it('drops the Enter of a paste when the shell is closed before it', () => {
