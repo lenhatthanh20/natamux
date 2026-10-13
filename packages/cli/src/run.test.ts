@@ -628,6 +628,18 @@ describe('more commands', () => {
     expect(other.calls[0]?.body).toEqual({ action: 'approve' })
   })
 
+  it('reports the stage done for the task of the terminal with a chosen id', async () => {
+    const result = await run(['done'], {
+      env: { NATAMUX_TOKEN: 'secret', NATAMUX_TASK_ID: 'TASK-0005' },
+      handler: () => jsonResponse({ task: makeTask({ id: 'TASK-0005' }) }),
+    })
+    expect(result.code).toBe(EXIT_OK)
+    expect(result.calls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4317/tasks/TASK-0005/stage',
+      body: { action: 'report' },
+    })
+  })
+
   it('reports the stage done for the task named with --task', async () => {
     const result = await run(['done', '--task', 'T-8'], {
       handler: () => jsonResponse({ task: makeTask({ id: 'T-8' }) }),

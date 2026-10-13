@@ -78,6 +78,16 @@ describe('TemplateService', () => {
     expect(task.repo).toBeNull()
   })
 
+  it('takes the id from the start of a title, and gives a plain title the next id', () => {
+    templates.save({ name: 'Bug fix', title: 'Fix' })
+
+    expect(templates.createTask('bug-fix', { title: 'abc-3: Fix it' })).toMatchObject({
+      id: 'ABC-3',
+      title: 'Fix it',
+    })
+    expect(templates.createTask('bug-fix', { title: 'Fix more' }).id).toBe('T-0001')
+  })
+
   it('puts a task from a template in the repository it is given', () => {
     templates.save({ name: 'Bug fix', title: 'Fix' })
 

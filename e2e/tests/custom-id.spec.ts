@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { signIn, TOKEN, taskTable } from './helpers'
+import { makeShellTask, pane, rows, runIn } from './terminal-helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 
@@ -58,4 +59,20 @@ test('a title that starts with an id makes a task with that id', async ({ page, 
         (await (await request.get(`/api/tasks/${waiting.id}`, { headers })).json()).task.dependsOn,
     )
     .toEqual([id])
+})
+
+test('a chosen id names the branch, and its terminal works', async ({ page, request }) => {
+  const stamp = Date.now()
+  const task = await makeShellTask(request, `shell-${stamp}: Custom id shell ${stamp}`)
+  made.push(task.id)
+  expect(task.id).toBe(`SHELL-${stamp}`)
+  const saved = (await (await request.get(`/api/tasks/${task.id}`, { headers })).json()).task
+  expect(saved.branch).toBe(`natamux/shell-${stamp}-custom-id-shell-${stamp}`)
+
+  await signIn(page)
+  await page.goto(`/w/${task.id}/terminal`)
+  const shell = pane(page, 'Shell 1')
+  await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
+  await runIn(page, shell, 'echo custom-$((6*7))')
+  await expect(rows(shell)).toContainText('custom-42')
 })
