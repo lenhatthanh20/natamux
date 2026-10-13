@@ -223,6 +223,75 @@ if (box) {
   setPaused(reduced)
 }
 
+// The hero recording. One video per theme; only the shown one loads and plays. It plays while it is
+// on screen and the tab is visible. With reduced motion it waits for the Play button.
+const hero = document.querySelector('[data-hero]')
+if (hero) {
+  const videos = [...hero.querySelectorAll('video')]
+  const button = hero.querySelector('[data-hero-play]')
+  const label = hero.querySelector('[data-hero-play-label]')
+  const steps = [...hero.querySelectorAll('[data-at]')]
+  let wanted = !reduced
+  let onScreen = false
+  let shown = null
+
+  const current = () => videos.find((v) => v.classList.contains(root.dataset.theme === 'light' ? 'for-light' : 'for-dark'))
+
+  // Before the first play the poster shows the send back, so that step is marked.
+  function mark(v) {
+    const t = v.played.length ? v.currentTime : Number(steps.at(-2).dataset.at)
+    let at = 0
+    steps.forEach((li, i) => {
+      if (t >= Number(li.dataset.at)) at = i
+    })
+    steps.forEach((li, i) => (i === at ? li.setAttribute('aria-current', 'step') : li.removeAttribute('aria-current')))
+  }
+
+  function sync() {
+    const v = current()
+    if (shown && shown !== v) {
+      shown.pause()
+      if (shown.played.length) v.currentTime = shown.currentTime
+    }
+    shown = v
+    if (wanted && onScreen && !document.hidden) {
+      v.preload = 'auto'
+      v.play().catch((error) => {
+        // Autoplay was blocked: offer the button instead. A pause that cuts a play short is fine.
+        if (error.name !== 'NotAllowedError') return
+        wanted = false
+        render()
+      })
+    } else {
+      v.pause()
+    }
+    render()
+  }
+
+  function render() {
+    button.hidden = false
+    button.toggleAttribute('data-paused', !wanted)
+    label.textContent = wanted ? 'Pause' : 'Play'
+    mark(shown)
+  }
+
+  button.addEventListener('click', () => {
+    wanted = !wanted
+    sync()
+  })
+  for (const v of videos) v.addEventListener('timeupdate', () => v === shown && mark(v))
+  document.addEventListener('visibilitychange', sync)
+  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+  new IntersectionObserver(
+    ([entry]) => {
+      onScreen = entry.isIntersecting
+      sync()
+    },
+    { threshold: 0.2 },
+  ).observe(hero)
+  sync()
+}
+
 // Reveal pictures once, when they come into view.
 const reveals = document.querySelectorAll('.reveal')
 if (!reduced && 'IntersectionObserver' in window) {

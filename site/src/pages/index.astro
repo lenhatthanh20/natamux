@@ -12,6 +12,15 @@ const site = 'https://natamux.github.io'
 const latest = (file: string) => `${repo}/releases/latest/download/${file}`
 const mac = latest('Natamux-mac-arm64.dmg')
 
+// The hero recording: where each step starts, in seconds. Both themes share the timing.
+const heroSteps = [
+  [0, 'Approve the spec'],
+  [3, 'Two agents start'],
+  [8.4, 'Review agent'],
+  [15.7, 'Sent back'],
+  [20.6, 'Review passes'],
+] as const
+
 const files = [
   { os: 'mac', label: 'macOS, Apple silicon (M1 and later)', file: 'Natamux-mac-arm64.dmg' },
   { os: 'mac', label: 'macOS, Intel', file: 'Natamux-mac-x64.dmg' },
@@ -162,6 +171,9 @@ const extras = [
     <meta name="theme-color" content="#070c18" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
     <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
+    <!-- The hero poster is the LCP image. -->
+    <link rel="preload" as="image" href={`${base}media/hero-flow-dark.webp`} media="not (prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href={`${base}media/hero-flow-light.webp`} media="(prefers-color-scheme: light)" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -249,18 +261,36 @@ const extras = [
         </div>
 
         <div class="wrap">
-          <figure class="hero-shot">
+          <figure class="hero-shot" data-hero>
             <div class="frame">
-              <Shot
-                name="progress"
-                priority
-                alt="The Natamux dashboard in the Progress view. Each task is a row across the stages Context, Spec, Plan, Test spec, Implement, Automated tests, Review and Release. The sidebar shows a question card with an Answer button, and the title bar counts the tasks that need you."
-              />
-              <span class="pin" style="--px: 92.2%; --py: 4.6%" data-side="left"><i></i><em>Tasks that wait for you</em></span>
-              <span class="pin" style="--px: 11%; --py: 29%" data-side="right"><i></i><em>An agent asks. You answer here.</em></span>
-              <span class="pin" style="--px: 61%; --py: 45%" data-side="below"><i></i><em>Each task against each stage</em></span>
+              {
+                ['dark', 'light'].map((theme) => (
+                  <video
+                    class={`for-${theme}`}
+                    muted
+                    loop
+                    playsinline
+                    preload="none"
+                    poster={`${base}media/hero-flow-${theme}.webp`}
+                    width="2400"
+                    height="1500"
+                    aria-label="Screen recording of the Natamux dashboard. You approve the spec. Test spec and Implement start side by side, each agent in its own shell. When both are done, a review agent opens in Shell 5, finds a problem and sends the task back to Implement. Implement runs again, the second review passes, and the task moves on to Release."
+                  >
+                    <source src={`${base}media/hero-flow-${theme}.webm`} type="video/webm" />
+                    <source src={`${base}media/hero-flow-${theme}.mp4`} type="video/mp4" />
+                  </video>
+                ))
+              }
+              <button class="btn small hero-play" type="button" data-hero-play aria-pressed="true" hidden>
+                <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+                <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z" /></svg>
+                <span data-hero-play-label>Play</span>
+              </button>
             </div>
-            <figcaption class="sr-only">The Progress view of the dashboard.</figcaption>
+            <ol class="hero-steps" aria-hidden="true">
+              {heroSteps.map(([at, label]) => <li data-at={at}>{label}</li>)}
+            </ol>
+            <figcaption class="sr-only">One task in the dashboard, from spec approval to a passed review.</figcaption>
           </figure>
         </div>
       </section>
