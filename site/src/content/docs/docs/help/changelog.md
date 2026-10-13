@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.13 (2026-10-13)
+
+- The sidebar gives each task the room it needs. A task that waits on you, failed or is blocked is a tinted card with the agent's question or the reason; **Answer** opens the terminal of the agent that asked. A task that works has two lines: id, step and stage, subtasks, what the agent does, the pull request and the agent. A finished task is one line. Each state has its own icon shape. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Only the open task shows its shells and subtasks. Click a task, or press `Right` on it, to open it. The chevron and the comet are gone, and rows no longer open by themselves.
+
 ## v0.1.12 (2026-10-13)
 
 - The default pipeline is Context, Spec, Plan, Test spec and Implement side by side, **Automated tests**, **Review** and Release. **Review** is an agent stage in its own shell: it writes `review.md` and sends the task back to Implement with the problems, at most twice, then waits for you. The review by a person is **Manual review** in the catalog, and **Manual QA** is now **Manual testing**. See [Review by an agent](/docs/concepts/stages/#review-by-an-agent).
