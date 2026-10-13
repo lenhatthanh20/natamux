@@ -136,6 +136,7 @@ describe('applyTaskEvent with a manual review', () => {
       'issue.linked',
       'context.fetched',
       'attachment.added',
+      'stage.skip-set',
     ] as const
     for (const type of types) {
       expect(run(at('plan', 'running'), event(type))).toEqual({

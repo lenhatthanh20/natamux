@@ -89,6 +89,9 @@ export const taskSchema = z.object({
   workflowStages: z.array(stageIdSchema).catch([]),
   // The stages the user chose to check on CI before they pass. Left out when none.
   ciStages: z.array(stageIdSchema).optional().catch(undefined),
+  // Later stages the user chose to skip: each is skipped when the task reaches it. Left out when
+  // none.
+  skipStages: z.array(stageIdSchema).optional().catch(undefined),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

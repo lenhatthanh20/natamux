@@ -52,6 +52,14 @@ describe('taskSchema', () => {
     expect(taskSchema.parse({ ...minimalTask, ciStages: 'implement' }).ciStages).toBeUndefined()
   })
 
+  it('reads the stages marked to skip, and a bad value as none', () => {
+    expect(taskSchema.parse({ ...minimalTask, skipStages: ['testing'] }).skipStages).toEqual([
+      'testing',
+    ])
+    expect(taskSchema.parse(minimalTask).skipStages).toBeUndefined()
+    expect(taskSchema.parse({ ...minimalTask, skipStages: 'testing' }).skipStages).toBeUndefined()
+  })
+
   it('trims the title', () => {
     expect(taskSchema.parse({ ...minimalTask, title: '  Fix it  ' }).title).toBe('Fix it')
   })

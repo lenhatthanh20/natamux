@@ -554,6 +554,35 @@ describe('task events', () => {
     expect(unknown.statusCode).toBe(404)
   })
 
+  it('marks a later stage to skip, and refuses the current one', async () => {
+    await createTask()
+    const set = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: '/tasks/T-0001/skip',
+        headers: authorization,
+        payload,
+      })
+
+    const on = await set({ stage: 'review', on: true })
+    expect(on.statusCode).toBe(200)
+    expect(on.json().task).toMatchObject({ id: 'T-0001', skipStages: ['review'] })
+
+    const refused = await set({ stage: 'implement', on: true })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().message).toContain('Skip')
+    expect((await set({ stage: 'review' })).statusCode).toBe(400)
+    expect((await set({ stage: 'review', on: 'yes' })).statusCode).toBe(400)
+    expect((await set({ stage: 3, on: true })).statusCode).toBe(400)
+    const unknown = await app.inject({
+      method: 'PUT',
+      url: '/tasks/T-0099/skip',
+      headers: authorization,
+      payload: { stage: 'review', on: true },
+    })
+    expect(unknown.statusCode).toBe(404)
+  })
+
   it('refuses a new workspace for an agent the daemon cannot start', async () => {
     const response = await app.inject({
       method: 'POST',

@@ -10,6 +10,11 @@ describe('describeEvent', () => {
     }
   })
 
+  it('names a change of the skip mark, and a planned skip as any skip', () => {
+    expect(describeEvent('stage.skip-set')).toBe('Skip choice changed')
+    expect(describeEvent('stage.skipped')).toBe('Stage skipped')
+  })
+
   it('does not give two kinds of event the same sentence', () => {
     const sentences = EVENT_TYPES.map((type) => describeEvent(type))
     expect(new Set(sentences).size).toBe(sentences.length)

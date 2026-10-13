@@ -596,6 +596,7 @@ Shared shell:
 ### 4.27 Details panel sections (`components/TaskDetail.tsx`)
 - Header 40: id mono 12 muted, then icon buttons 28: Edit (`Pencil`, `E`), More ("..."), Close (`X`, `Esc`). In page mode (< 768) Back (`ArrowLeft`) replaces Close.
 - View tabs under the header (36): **Progress** and **Details**. Progress is the task progress of `design-task-stages.md` 7.5, in one column, so the user can watch the terminal and approve a stage without a tab change. The view the user picks is remembered for all tasks (`natamux.details-view`). Until then, the details beside an open workspace show Progress, and beside the list show Details. Edit always shows Details. The palette command "Show the task progress" and Send back open Progress.
+- Progress, a stage card not reached yet: a ghost `xs` button **Skip** under its finish rule marks it to skip (`design-task-stages.md` 3.9). A marked card says **Will be skipped** in its chip, has a muted title, and the button reads **Don't skip**. No button on a task that is done or cancelled, or on the context stage.
 - Title block pad 16: title 16/600 (wraps), chips row (state, priority, labels) gap 6.
 - Action row: primary state action (`button primary`), secondary actions, agent action (Start agent / Restart agent / hidden while running, WS-17). Label above in caps "Actions" only in the narrow page mode.
 - Banners (when relevant), pad 10 12, radius 6: quiet ("No sign of life for 12m. The agent may be stuck.") and waiting ("Waits for T-0009 to be done"), bg signal-soft, 1px signal-line.

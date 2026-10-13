@@ -1015,6 +1015,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                           mergeTask(updated)
                           return updated
                         }}
+                        setSkip={async (stage, on) => {
+                          const updated = await api.setSkip(detailTask.id, stage, on)
+                          mergeTask(updated)
+                          return updated
+                        }}
                         createIssue={async () => {
                           const updated = await api.createIssue(detailTask.id)
                           mergeTask(updated)

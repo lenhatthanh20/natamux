@@ -49,6 +49,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'stage.workflow-set': 'Workflow choice changed',
   'stage.ci-set': 'CI check choice changed',
   'stage.ci-started': 'CI check started',
+  'stage.skip-set': 'Skip choice changed',
 }
 
 // A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.

@@ -65,6 +65,8 @@ type ProgressTabProps = {
   setWorkflow?: (stage: string, on: boolean) => Promise<Task>
   // Whether a stage waits for CI before it passes.
   setCi?: (stage: string, on: boolean) => Promise<Task>
+  // Whether a stage not reached yet is skipped when the task reaches it.
+  setSkip?: (stage: string, on: boolean) => Promise<Task>
 }
 
 const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -102,6 +104,7 @@ export function ProgressTab({
   startInBanner = false,
   setWorkflow,
   setCi,
+  setSkip,
 }: ProgressTabProps) {
   const settings = useQuery({
     queryKey: ['settings', task.repo ?? 'default'],
@@ -144,6 +147,12 @@ export function ProgressTab({
       setCi?.(stage, on) ?? Promise.resolve(task),
     onError: (error) =>
       toast('Could not change the CI check of the stage.', 'error', { detail: error.message }),
+  })
+  const skip = useMutation({
+    mutationFn: ({ stage, on }: { stage: string; on: boolean }) =>
+      setSkip?.(stage, on) ?? Promise.resolve(task),
+    onError: (error) =>
+      toast('Could not change the skip of the stage.', 'error', { detail: error.message }),
   })
   const issue = useMutation({
     mutationFn: createIssue,
@@ -247,6 +256,15 @@ export function ProgressTab({
               }
         }
         ciBranch={ciWaits.get(stage.id)}
+        skip={
+          setSkip === undefined || stage.kind === 'context'
+            ? undefined
+            : {
+                on: (task.skipStages ?? []).includes(stage.id),
+                busy: skip.isPending,
+                onChange: (on) => skip.mutate({ stage: stage.id, on }),
+              }
+        }
         activity={
           entry.status === 'current' &&
           entry.state === 'running' &&
@@ -536,6 +554,7 @@ function StageCard({
   workflow,
   ci,
   ciBranch,
+  skip,
 }: {
   activity?: string
   // The last start of the stage asked the agent for a workflow.
@@ -546,6 +565,8 @@ function StageCard({
   ci?: CiChoice
   // The CI branch of a check that runs now.
   ciBranch?: string
+  // The skip mark of a stage not reached yet.
+  skip?: SkipChoice
   agent: string | null
   // Skills the prompt named that the agent did not get at the latest start.
   missingSkills: readonly string[]
@@ -572,6 +593,7 @@ function StageCard({
   const current = progress.status === 'current'
   const upcoming = progress.status === 'upcoming'
   const finished = progress.status === 'done' || progress.status === 'skipped'
+  const marked = upcoming && skip?.on === true
   const state = progress.state
   const facts = [
     time,
@@ -586,7 +608,9 @@ function StageCard({
 
   const title = (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className={`text-md font-semibold ${upcoming ? 'text-ink-2' : ''}`}>
+      <span
+        className={`text-md font-semibold ${marked ? 'text-muted' : upcoming ? 'text-ink-2' : ''}`}
+      >
         {progress.name}
       </span>
       {current && state !== null ? (
@@ -599,7 +623,9 @@ function StageCard({
             ? 'Done'
             : progress.status === 'skipped'
               ? 'Skipped'
-              : 'Not started'}
+              : marked
+                ? 'Will be skipped'
+                : 'Not started'}
         </span>
       )}
       {progress.rounds > 1 && (
@@ -665,6 +691,17 @@ function StageCard({
           <p className="m-0 mt-1 text-sm text-muted">{finishedWhen(stage)}</p>
           {workflowBox}
           {ciBox}
+          {skip !== undefined && canAct && (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="mt-1.5"
+              disabled={skip.busy}
+              onClick={() => skip.onChange(!skip.on)}
+            >
+              {skip.on ? "Don't skip" : 'Skip'}
+            </Button>
+          )}
         </>
       ) : finished && !opened ? null : (
         <>
@@ -851,6 +888,12 @@ function StageCard({
       )}
     </article>
   )
+}
+
+type SkipChoice = {
+  on: boolean
+  busy: boolean
+  onChange: (on: boolean) => void
 }
 
 type WorkflowChoice = {

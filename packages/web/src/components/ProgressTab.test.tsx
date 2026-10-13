@@ -124,6 +124,7 @@ type Options = {
   startInBanner?: boolean
   setWorkflow?: SetWorkflow
   setCi?: SetWorkflow
+  setSkip?: SetWorkflow
   settings?: LoadedSettings
 }
 
@@ -164,6 +165,7 @@ function progress(options: Options = {}) {
         startInBanner={options.startInBanner}
         setWorkflow={setWorkflow}
         setCi={setCi}
+        setSkip={options.setSkip}
       />
     </QueryClientProvider>
   )
@@ -1310,5 +1312,83 @@ describe('ProgressTab workflow and the settings', () => {
     expect(box(screen.getByRole('article', { name: 'Spec' }))).toBeNull()
     const group = screen.getByRole('region', { name: 'Test spec and Implement' })
     expect(within(group).getAllByText('Workflow')).toHaveLength(1)
+  })
+})
+
+describe('ProgressTab skip a later stage', () => {
+  it('marks a stage not reached yet to skip', async () => {
+    const setSkip = vi.fn<SetWorkflow>(async () => TASK)
+    progress({ task: FULL_TASK, events: FULL_EVENTS, setSkip })
+    const user = userEvent.setup()
+
+    const review = await screen.findByRole('article', { name: 'Manual review' })
+    expect(within(review).getByText('Not started')).toBeTruthy()
+    await user.click(within(review).getByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(setSkip).toHaveBeenCalledWith('review', true))
+  })
+
+  it('shows a marked stage, and takes the mark off', async () => {
+    const setSkip = vi.fn<SetWorkflow>(async () => TASK)
+    progress({ task: { ...FULL_TASK, skipStages: ['review'] }, events: FULL_EVENTS, setSkip })
+    const user = userEvent.setup()
+
+    const review = await screen.findByRole('article', { name: 'Manual review' })
+    expect(within(review).getByText('Will be skipped')).toBeTruthy()
+    await user.click(within(review).getByRole('button', { name: "Don't skip" }))
+    await waitFor(() => expect(setSkip).toHaveBeenCalledWith('review', false))
+  })
+
+  it('offers the mark only on stages not reached yet', async () => {
+    const task = { ...FULL_TASK, skipStages: ['spec'] }
+    progress({ task, events: FULL_EVENTS, setSkip: vi.fn() })
+
+    for (const name of ['Test spec', 'Implement', 'Manual review']) {
+      const card = await screen.findByRole('article', { name })
+      expect(within(card).getByRole('button', { name: 'Skip' })).toBeTruthy()
+    }
+    // Spec was skipped: it says so, and has no mark to take off.
+    const spec = screen.getByRole('article', { name: 'Spec' })
+    expect(within(spec).getByText('Skipped')).toBeTruthy()
+    expect(within(spec).queryByText('Will be skipped')).toBeNull()
+    expect(within(spec).queryByRole('button', { name: "Don't skip" })).toBeNull()
+    const context = screen.getByRole('article', { name: 'Context' })
+    expect(within(context).queryByRole('button', { name: 'Skip' })).toBeNull()
+  })
+
+  it('turns the button off while the mark is saved', async () => {
+    const setSkip = vi.fn<SetWorkflow>(() => new Promise(() => undefined))
+    progress({ task: FULL_TASK, events: FULL_EVENTS, setSkip })
+    const user = userEvent.setup()
+
+    const review = await screen.findByRole('article', { name: 'Manual review' })
+    const button = within(review).getByRole('button', { name: 'Skip' })
+    await user.click(button)
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(true))
+    await user.click(button)
+    expect(setSkip).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the error and keeps the card as it was', async () => {
+    const setSkip = vi.fn<SetWorkflow>(async () => {
+      throw new Error('No such stage')
+    })
+    progress({ task: FULL_TASK, events: FULL_EVENTS, setSkip })
+    const user = userEvent.setup()
+
+    const review = await screen.findByRole('article', { name: 'Manual review' })
+    await user.click(within(review).getByRole('button', { name: 'Skip' }))
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.map((toast) => toast.text)).toContain(
+        'Could not change the skip of the stage.',
+      ),
+    )
+    expect(within(review).getByText('Not started')).toBeTruthy()
+  })
+
+  it('offers no mark on a task that is over', async () => {
+    progress({ task: { ...FULL_TASK, state: 'cancelled' }, events: FULL_EVENTS, setSkip: vi.fn() })
+
+    const review = await screen.findByRole('article', { name: 'Manual review' })
+    expect(within(review).queryByRole('button')).toBeNull()
   })
 })

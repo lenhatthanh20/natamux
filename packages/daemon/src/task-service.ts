@@ -23,6 +23,7 @@ import {
   splitTaskId,
   stageName,
   stagesOf,
+  stepIndex,
   stepRefsOf,
   TASK_PRIORITIES,
   type Task,
@@ -885,6 +886,48 @@ export class TaskService {
       payload: { stage: stageId, on },
     }
     const updated: Task = { ...task, ciStages, updatedAt: event.at }
+
+    this.store(updated, [{ event, accepted: true }])
+    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
+  // Marks a later stage to skip: the stage runner skips it each time the task reaches it. The
+  // current stage has its own Skip. A mark comes off at any stage, but not once the task is over.
+  setSkip(taskId: string, stageId: string, on: boolean): Task {
+    const task = this.getTask(taskId)
+    const steps = this.stepsOf(task)
+    const stage = steps.flatMap(stagesOf).find((each) => each.id === stageId)
+    if (stage === undefined) {
+      throw new TaskEditError(`${taskId} has no stage "${stageId}"`)
+    }
+    if (task.state === 'done' || task.state === 'cancelled') {
+      throw new TaskEditError(`${taskId} is ${task.state}, so it has no stage left to skip`)
+    }
+    if (on && stage.kind === 'context') {
+      throw new TaskEditError('The context stage comes first, so it cannot be skipped early')
+    }
+    if (on && stepIndex(steps, stageId) <= stepIndex(steps, task.stage)) {
+      throw new TaskEditError(
+        `${taskId} is at or past the ${stageName(stage)} stage. Use Skip on the current stage`,
+      )
+    }
+    const before = task.skipStages ?? []
+    const skipStages = on
+      ? [...new Set([...before, stageId])]
+      : before.filter((id) => id !== stageId)
+    if (skipStages.length === before.length) {
+      return task
+    }
+
+    const event: TaskEvent = {
+      taskId,
+      source: 'human',
+      type: 'stage.skip-set',
+      at: this.timestamp(),
+      payload: { stage: stageId, on },
+    }
+    const updated: Task = { ...task, skipStages, updatedAt: event.at }
 
     this.store(updated, [{ event, accepted: true }])
     this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
