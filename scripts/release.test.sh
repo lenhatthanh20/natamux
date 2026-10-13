@@ -32,6 +32,9 @@ notes="docs/releases/$tag.md"
 changelog="site/src/content/docs/docs/help/changelog.md"
 homepage="site/src/pages/index.astro"
 prev=$(ls docs/releases | sed 's/\.md$//' | sort -V | grep -vx "$tag" | tail -n 1)
+# The files .github/workflows/release.yml publishes, besides SHA256SUMS.txt.
+files="Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage
+  Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz"
 
 if [ "${1:-}" = "--published" ]; then
   tmp=$(mktemp -d)
@@ -60,7 +63,7 @@ if [ "${1:-}" = "--published" ]; then
   check "release is not a prerelease" '[ "$(field .isPrerelease)" = false ]'
   check "release body is $notes" \
     '[ "$(field .body | tr -d "\r" | sed -e "s/[[:space:]]*$//")" = "$(sed -e "s/[[:space:]]*$//" "$notes")" ]'
-  for file in Natamux-mac-arm64.dmg SHA256SUMS.txt; do
+  for file in $files SHA256SUMS.txt; do
     check "release has $file" 'field ".assets[].name" | grep -qx "$file"'
   done
   check "release is the latest" '[ "$(gh release view --json tagName --jq .tagName)" = "$tag" ]'
@@ -138,11 +141,17 @@ check "$notes has sections before ## Download" \
   '[ "$(sed "/^## Download$/,\$d" "$notes" | grep -c "^## ")" -gt 0 ]'
 check "$notes has ## Download" 'grep -qx "## Download" "$notes"'
 check "$notes has ## Before you open it" 'grep -qx "## Before you open it" "$notes"'
-check "$notes names the macOS download" 'grep -q "Natamux-mac-arm64.dmg" "$notes"'
-check "$notes says the Intel Mac and Linux builds are paused" 'grep -q "Intel Mac and Linux builds are paused" "$notes"'
-check "$notes has Download and Before you open it as in $prev" \
-  '[ -z "$prev" ] || diff -q <(sed -n "/^## Download$/,\$p" "$notes") \
-    <(sed -n "/^## Download$/,\$p" "docs/releases/$prev.md") >/dev/null'
+for file in $files; do
+  check "$notes names the download $file" 'grep -qF "\`$file\`" "$notes"'
+done
+check "$notes does not say builds are paused" '! grep -q "builds are paused" "$notes"'
+# v0.1.18 brought back every system, so the notes before it have another Download section.
+if [ -n "$prev" ] && grep -qF "Natamux-win-x64.exe" "docs/releases/$prev.md"; then
+  check "$notes has Download and Before you open it as in $prev" \
+    'diff -q <(sed -n "/^## Download$/,\$p" "$notes") <(sed -n "/^## Download$/,\$p" "docs/releases/$prev.md") >/dev/null'
+else
+  skip "$notes has Download and Before you open it as in $prev ($prev has not every system)"
+fi
 check "$notes closes every code block" '[ $(( $(grep -c "^ *\`\`\`" "$notes") % 2 )) = 0 ]'
 for link in $(links_in <"$notes"); do
   check "$notes links to a page: $link" 'link_ok "$link"'
