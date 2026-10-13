@@ -10,10 +10,12 @@ import { App } from './App'
 import { startRouting } from './lib/route-sync'
 import { startTheme } from './lib/theme'
 import { startUiSize } from './lib/ui-size'
+import { startWindowFocus } from './lib/window-focus'
 import './styles.css'
 
 startTheme()
 startUiSize()
+startWindowFocus()
 startRouting()
 
 const root = document.getElementById('root')
