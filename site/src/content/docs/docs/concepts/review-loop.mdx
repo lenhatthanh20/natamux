@@ -29,7 +29,7 @@ You approve three things: the spec, the plan and the test spec. Everything after
 | 6 | **Review** | Agent C reads the changes against the spec and writes `review.md` | Shell 5 | Nothing |
 | 7 | **Release** | Your git host | none | Open the pull request and merge it |
 
-Steps 4 run side by side as one group, **Test spec and Implement**. The group ends when both stages are done, so **Automated tests** starts only after you approve the test spec and Implement has finished.
+The two stages of step 4 run side by side as one group, **Test spec and Implement**. The group ends when both stages are done, so **Automated tests** starts only after you approve the test spec and Implement has finished.
 
 If you turn **Plan** off in [project settings](/docs/guides/project-settings/), the two agents start right after you approve the spec.
 
@@ -149,7 +149,7 @@ Everything here is the default pipeline. In [project settings](/docs/guides/proj
 
 - turn **Test spec** or **Review** off, or turn **Wait for my approval** on for Review;
 - add **Manual review** after Review, so a person reads the diff before release;
-- add more report stages, such as **Security review**, each in its own shell with its own agent;
+- add more report stages, such as **Security review**. All stages with their own shell share **Shell 5**: when the Review agent still runs there, a later report stage gets its prompt in that same session, not a new agent;
 - run a hard stage, such as Implement, as a [workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow) with Claude Code.
 
 ## Related

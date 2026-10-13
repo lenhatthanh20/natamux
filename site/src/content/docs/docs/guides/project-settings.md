@@ -10,8 +10,8 @@ Each project has its own settings: the [stages](/docs/concepts/stages/) every ta
 Open them from the sidebar: right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has two tabs, **Stages** (the default) and **JSON**.
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/settings-stages-dark.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with switches, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/settings-stages-light.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with switches, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/settings-stages-dark.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/settings-stages-light.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>The Stages tab: the pipeline preview, the stages in order, and the details of one stage.</figcaption>
 </figure>
 
@@ -81,7 +81,7 @@ Turn off **Plan** with its checkbox. After you approve the spec, Test spec and I
 
 ### Add a check stage
 
-Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one runs in its own shell with a new session, writes a report with a **Findings** section, and waits for your approval. Give it its own agent or model in **Agent** and **Arguments**.
+Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one writes a report with a **Findings** section and waits for your approval. Like Review, it runs in **Shell 5**, the one shell that all such stages share. When an agent still runs there, for example the Review agent, the stage gets its prompt in that session, so its own **Agent** and **Arguments** count only when Shell 5 has no agent yet.
 
 ### Run your own test command
 

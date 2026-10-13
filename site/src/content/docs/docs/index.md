@@ -99,7 +99,7 @@ Use the desktop app for macOS, Windows or Linux, which starts everything for you
 
 ### No account and no telemetry
 
-Natamux runs on your machine. It has no account, no server of its own and no analytics. The only request it makes by itself is the update check of the desktop app. Your agents and `gh` talk to their own services, with their own logins. See [Security and privacy](/docs/help/security-and-privacy/).
+Natamux runs on your machine, with no account, no server of its own and no analytics. Besides the update check of the desktop app, it talks to GitHub only through your own `git` and `gh` login, for example to follow your pull requests and CI. Your agents talk to their own services, with their own logins. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## How the parts fit
 

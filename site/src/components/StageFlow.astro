@@ -79,7 +79,7 @@ const captions: [number, number, string][] = [
   [52, 58, 'Review: agent C reads the changes in Shell 5, in a session of its own.'],
   [58, 66, 'Findings: the review agent sends the task back to Implement, with the reasons.'],
   [66, 80, 'Implement runs again with “What to change: …”, then the tests. Test spec stays done.'],
-  [80, 88, 'Review runs again. After 2 send backs, the task waits for you instead.'],
+  [80, 88, 'Review runs again. A third send back is refused, and the task waits for you instead.'],
   [88, 97, 'No findings: Release waits for you to open the pull request. The merge finishes the task.'],
 ]
 captions.forEach(([a, b], i) => (timeline[`cap-${i}`] = [[a, b]]))
@@ -354,7 +354,7 @@ const check = (cx: number, cy: number) =>
         passes.
       </span>
     </p>
-    <button class="sf-toggle" type="button" aria-pressed="false" data-flow-toggle>
+    <button class="sf-toggle" type="button" data-flow-toggle>
       <span class="sf-toggle-pause">Pause</span><span class="sf-toggle-play">Play</span>
     </button>
   </div>
@@ -380,7 +380,8 @@ const check = (cx: number, cy: number) =>
       <li>Review: agent C starts in Shell 5 and writes <code>review.md</code>.</li>
       <li>
         With findings, agent C sends the task back to Implement with the reasons. Implement,
-        Automated tests and Review run again. After 2 send backs the task waits for you.
+        Automated tests and Review run again. A third send back is refused, and the task waits
+        for you instead.
       </li>
       <li>Without findings, the task goes to Release. You open the pull request; the merge finishes the task.</li>
     </ol>
@@ -706,10 +707,7 @@ const check = (cx: number, cy: number) =>
   // Pause the diagram off screen, and let the reader pause it at any time.
   for (const figure of document.querySelectorAll<HTMLElement>('[data-flow]')) {
     const toggle = figure.querySelector<HTMLButtonElement>('[data-flow-toggle]')
-    toggle?.addEventListener('click', () => {
-      const paused = figure.toggleAttribute('data-paused')
-      toggle.setAttribute('aria-pressed', String(paused))
-    })
+    toggle?.addEventListener('click', () => figure.toggleAttribute('data-paused'))
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(([entry]) => {
         figure.toggleAttribute('data-offscreen', !entry?.isIntersecting)
