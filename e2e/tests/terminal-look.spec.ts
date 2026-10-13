@@ -394,7 +394,8 @@ test('keeps the find marks in the scrollbar, with no line beside it (T-0037)', a
   await expect(rows(shell)).toContainText('rulermark5')
   const hasMarks = async () => (await rulerAlphas(shell)).slice(1).some((alpha) => alpha > 0)
   await screenOf(shell).click()
-  await page.keyboard.press('ControlOrMeta+f')
+  // Off macOS, Ctrl+F belongs to the shell; Mod+Shift+F reaches the app everywhere.
+  await page.keyboard.press('ControlOrMeta+Shift+F')
   const find = page.getByRole('search', { name: 'Find in terminal' })
   const field = find.getByRole('textbox', { name: 'Find' })
 
