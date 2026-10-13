@@ -1,5 +1,6 @@
 import { LayoutGrid, ListTodo } from 'lucide-react'
 import type { ReactNode, Ref } from 'react'
+import { loadTerminalView } from './TerminalPane'
 import { SearchField } from './ui/SearchField'
 import { listRow } from './ui/styles'
 
@@ -17,6 +18,11 @@ type SidebarProps = {
   tree: ReactNode
   // Under 768 the status items live here, because the status bar is hidden.
   footer?: ReactNode
+}
+
+// A failed load is ignored here: the terminal shows its own error.
+const prefetchTerminal = () => {
+  loadTerminalView().catch(() => undefined)
 }
 
 // The left part: filter, the two lists, and the tree of workspaces.
@@ -54,7 +60,15 @@ export function Sidebar({
             <span className="flex-1 text-left">All tasks</span>
             <span className="text-xs">{tasksCount}</span>
           </button>
-          <button type="button" aria-pressed={agentsActive} onClick={onAgents} className={listRow}>
+          {/* The Agents view mounts several terminals at once: their code loads on the way. */}
+          <button
+            type="button"
+            aria-pressed={agentsActive}
+            onClick={onAgents}
+            onPointerEnter={prefetchTerminal}
+            onFocus={prefetchTerminal}
+            className={listRow}
+          >
             <LayoutGrid size={14} aria-hidden="true" />
             <span className="flex-1 text-left">Agents</span>
             <span className="text-xs">{agentsCount}</span>

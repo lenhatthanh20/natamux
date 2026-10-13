@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PREFETCH_FALLBACK_MS, prefetchWhenIdle } from './prefetch'
+import { PREFETCH_FALLBACK_MS, PREFETCH_TIMEOUT_MS, prefetchWhenIdle } from './prefetch'
 
 // A requestIdleCallback that a test runs by hand.
 function idleBrowser() {
@@ -35,6 +35,14 @@ describe('prefetchWhenIdle', () => {
 
     runIdle()
     expect(load).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not wait for an idle moment longer than the timeout', () => {
+    idleBrowser()
+    prefetchWhenIdle(async () => undefined)
+    expect(requestIdleCallback).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: PREFETCH_TIMEOUT_MS,
+    })
   })
 
   it('waits a fixed time where the browser has no idle callback', () => {
