@@ -93,7 +93,7 @@ Click in the pane and type. Your keys go straight to the agent. This is how you 
 
 When an agent asks something, the task goes to **Needs your input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs your input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
 
-After you quit and open the app again, Natamux starts the agent of each running or waiting task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
+After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
 
 ### Send a message to the agent
 
