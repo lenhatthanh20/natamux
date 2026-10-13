@@ -23,12 +23,7 @@ import {
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
-import {
-  agentOfCommand,
-  isLaunchable,
-  LAST_SESSION,
-  type LaunchableAgent,
-} from './agent-launch.js'
+import { agentOfCommand, isLaunchable, LAST_SESSION, type LaunchableAgent } from './agent-launch.js'
 import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-runner.js'
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
