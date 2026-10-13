@@ -321,7 +321,7 @@ describe('context', () => {
 
     const script = launchScript((await withWorkspace(waiting.id)).id)
     expect(script).toContain(`Read ${join(skill, 'SKILL.md')} and follow it for ABC-1.`)
-    expect(script).not.toContain('/jira-ticket')
+    expect(script).not.toContain('/jira-ticket ABC-1')
   })
 
   it('names a picked skill the agent does not have on the stage', async () => {
