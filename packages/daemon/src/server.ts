@@ -124,6 +124,8 @@ const hookQuerySchema = z.object({ event: z.string().min(1).max(64).optional() }
 const listQuerySchema = z.object({ state: taskStateSchema.optional() })
 const removeWorkspaceQuerySchema = z.object({ deleteBranch: z.enum(['true', 'false']).optional() })
 const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
+// A manual refresh: git is read now, not the answer kept from a timed read.
+const freshQuerySchema = z.object({ fresh: z.enum(['1']).optional() })
 const changedImageQuerySchema = changedFileQuerySchema.extend({ side: z.enum(IMAGE_SIDES) })
 const fanOutBodySchema = z.object({
   count: z.number().int().min(1).max(MAX_TRIES),
@@ -544,7 +546,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.get('/tasks/:id/changes', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
-    return { changes: await options.workspaces.changes(id) }
+    const { fresh } = freshQuerySchema.parse(request.query)
+    return { changes: await options.workspaces.changes(id, fresh === '1') }
   })
 
   app.get('/tasks/:id/changes/file', async (request) => {
@@ -569,7 +572,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.get('/tasks/:id/graph', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
-    return options.workspaces.graph(id)
+    const { fresh } = freshQuerySchema.parse(request.query)
+    return options.workspaces.graph(id, fresh === '1')
   })
 
   app.post('/tasks/:id/agent', async (request) => {

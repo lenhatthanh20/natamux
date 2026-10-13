@@ -278,9 +278,13 @@ export class WorkspaceService {
     })
   }
 
-  // The files of the workspace that differ from its last commit, with the lines of each.
-  async changes(taskId: string): Promise<ChangeEntry[]> {
+  // The files of the workspace that differ from its last commit, with the lines of each. `fresh`
+  // reads git now, and the answer replaces the kept one.
+  async changes(taskId: string, fresh = false): Promise<ChangeEntry[]> {
     const workspace = this.workspaceOf(taskId)
+    if (fresh) {
+      this.changesReads.forget(taskId)
+    }
     return this.changesReads.get(taskId, () => listChanges(workspace, { counts: true }))
   }
 
@@ -335,10 +339,14 @@ export class WorkspaceService {
     return Object.fromEntries(entries.flat())
   }
 
-  // The history of the task branch next to the branch that the main checkout is on.
-  async graph(taskId: string): Promise<GitGraph> {
+  // The history of the task branch next to the branch that the main checkout is on. `fresh` as
+  // for changes.
+  async graph(taskId: string, fresh = false): Promise<GitGraph> {
     const workspace = this.workspaceOf(taskId)
     const repoDir = this.repoDirOf(this.tasks.getTask(taskId).repo)
+    if (fresh) {
+      this.graphReads.forget(taskId)
+    }
     return this.graphReads.get(taskId, async () =>
       readGitGraph(workspace, await currentBranch(repoDir)),
     )

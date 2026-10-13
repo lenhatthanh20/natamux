@@ -880,6 +880,17 @@ describe('graph', () => {
     expect((await workspaces.graph(task.id)).ahead).toBe(2)
   })
 
+  it('reads git now when asked for a fresh graph, and keeps that one', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    await workspaces.graph(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'outside')
+
+    const fresh = await workspaces.graph(task.id, true)
+    expect(fresh.ahead).toBe(1)
+    expect(await workspaces.graph(task.id)).toBe(fresh)
+  })
+
   it('refuses a task that has no workspace', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await expect(workspaces.graph(task.id)).rejects.toThrow(WorkspaceConflictError)
@@ -914,6 +925,16 @@ describe('changes and fileDiff', () => {
     expect(await workspaces.changes(task.id)).toBe(first)
     clock += 1
     expect((await workspaces.changes(task.id)).map((entry) => entry.path)).toEqual(['notes.txt'])
+  })
+
+  it('reads git now when asked for a fresh list, and keeps that one', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    await workspaces.changes(task.id)
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    const fresh = await workspaces.changes(task.id, true)
+    expect(fresh.map((entry) => entry.path)).toEqual(['notes.txt'])
+    expect(await workspaces.changes(task.id)).toBe(fresh)
   })
 
   it('shares one read between callers that ask at the same time', async () => {

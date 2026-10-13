@@ -36,7 +36,8 @@ const NO_CHANGES: ChangeEntry[] = []
 
 type ChangesPanelProps = {
   taskId: string
-  loadChanges: () => Promise<ChangeEntry[]>
+  // `fresh`: the daemon reads git now, not the answer it kept for timed reads.
+  loadChanges: (fresh?: boolean) => Promise<ChangeEntry[]>
   loadFile: (path: string) => Promise<FileDiff>
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
   sendToAgent: (text: string) => Promise<unknown>
@@ -254,9 +255,11 @@ export function ChangesPanel({
   const files = useStoredWidth('natamux.files-width', 260, 200, 420)
   const queryClient = useQueryClient()
 
+  // Set while a refresh the user asked for runs.
+  const fresh = useRef(false)
   const changes = useQuery({
     queryKey: ['changes', taskId],
-    queryFn: loadChanges,
+    queryFn: () => loadChanges(fresh.current),
     refetchInterval: REFRESH_MS,
   })
   const list = changes.data ?? NO_CHANGES
@@ -309,7 +312,10 @@ export function ChangesPanel({
   const step = (by: 1 | -1) => choose(stepFile(order, current?.path ?? null, by))
   // Images are under 'file-diff' too, so they are read again as well.
   const refresh = () => {
-    void changes.refetch()
+    fresh.current = true
+    void changes.refetch().finally(() => {
+      fresh.current = false
+    })
     void queryClient.invalidateQueries({ queryKey: ['file-diff', taskId] })
   }
 

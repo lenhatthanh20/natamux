@@ -40,7 +40,8 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base? }` |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree |
 | `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base? }` |
-| `GET /tasks/:id/changes` | Files changed in the workspace |
+| `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
+| `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
 | `POST /workspaces` | Make a task with a worktree and optionally start an agent |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
