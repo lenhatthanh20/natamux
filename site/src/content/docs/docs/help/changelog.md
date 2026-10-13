@@ -10,7 +10,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 ## v0.1.17 (2026-10-13)
 
 - The app no longer waits for your login shell before it starts. The dashboard shows your tasks at once; changes, branches, terminals and agents start when the shell's `PATH` is read.
-- A terminal hidden for 10 s gives back its GPU memory. The daemon starts far fewer programs: it shares one process list and keeps git answers for 5 s. **Refresh** still reads at once.
+- A terminal hidden for 10 s gives back its GPU memory. The daemon starts far fewer programs: it shares one process list and keeps git answers for 5 s. **Refresh** still reads at once, and `Shift+R` now works in History too.
 - The dashboard polls less and redraws less, also with many tasks. The Agents view loads its terminal code ahead.
 - **Start a task** can take its context from any agent skill (**Context from** → **An agent skill**).
 - After a restart, the agent of a stage in review starts again too.
