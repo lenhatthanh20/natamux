@@ -33,6 +33,8 @@ Natamux writes `.cursor/hooks.json` in the task's worktree each time a shell ope
 
 If a file of your own with that name exists, Natamux leaves it alone, and the dashboard follows the terminal only.
 
+Natamux also writes the Cursor CLI's trust file for the worktree, so `cursor-agent` does not ask whether you trust it. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
+
 ## Events and states
 
 | Hook event | Meaning | Task state |

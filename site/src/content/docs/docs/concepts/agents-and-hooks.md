@@ -85,6 +85,20 @@ Notes:
 
 `natamux hooks claude-code` prints the Claude Code settings, for use in a setup that Natamux did not start.
 
+## Folder trust
+
+Most agents ask whether you trust a folder the first time they start in it. Each task has a new worktree, so Natamux marks it as trusted before it starts the agent.
+
+| Agent | What Natamux does |
+|---|---|
+| Claude Code | Nothing. It does not ask in a Natamux worktree. |
+| Codex | Passes `-c 'projects={"<worktree>"={trust_level="trusted"}}'` for this run. `~/.codex/config.toml` does not change. |
+| Gemini CLI | Sets `GEMINI_CLI_TRUST_WORKSPACE=true` for this run. It matters only when you turned on folder trust. |
+| Copilot CLI | Adds the worktree to `trustedFolders` in `~/.copilot/config.json` (or `$COPILOT_HOME`), unless the worktree or a parent is there. A missing or broken file is left alone. |
+| Cursor CLI | Writes `~/.cursor/projects/<folder>/.workspace-trusted` (or under `$CURSOR_DATA_DIR`), the file it writes when you trust the folder. One that exists is left alone. |
+
+If a file cannot be written, the agent starts and asks as before. Natamux does not remove these entries when it removes a task.
+
 ## Launch failures
 
 Natamux reads the terminal for 15 seconds after it types the launch line. If the shell prints that it cannot find the agent program (`command not found`, `not found`, `unknown command` or `is not recognized`), the task moves to `failed` with a message such as:

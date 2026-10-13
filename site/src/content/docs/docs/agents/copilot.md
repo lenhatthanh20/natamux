@@ -39,6 +39,8 @@ Natamux writes `.github/hooks/natamux.json` in the task's worktree and adds it t
 
 If a file of your own with that name exists, Natamux leaves it alone. The agent then runs without Natamux's hooks, and the dashboard follows its terminal only.
 
+Natamux also adds the worktree to `trustedFolders` in `~/.copilot/config.json`, so Copilot does not ask whether you trust it. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
+
 ## Events and states
 
 | Hook event | Meaning | Task state |
@@ -72,4 +74,4 @@ A real Copilot CLI 1.0.94 session.
 ## Limits
 
 - Copilot may ring the terminal bell when it starts. Natamux ignores a bell in the first 15 seconds after launch.
-- Copilot's hooks may be off until its folder is trusted. Until then, the terminal bell moves a running task to needs input.
+- Copilot's hooks may be off until its folder is trusted. Without `~/.copilot/config.json` (Copilot never ran), Natamux cannot trust the folder, and Copilot asks once. Until then, the terminal bell moves a running task to needs input.

@@ -20,12 +20,12 @@ Per `docs/agent-adapters.md`, the Gemini CLI free tier was replaced by the Antig
 | | |
 |---|---|
 | Program | `gemini` |
-| Command line | `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo [extra args] -i '<prompt>'` |
+| Command line | `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo [extra args] -i '<prompt>'` |
 | Permission flag | `--approval-mode yolo`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_GEMINI_COMMAND` |
 | Add arguments | `NATAMUX_GEMINI_ARGS` |
 
-On Windows, Natamux sets the variable with `$env:` in PowerShell. Start the agent from the dashboard, or:
+`GEMINI_CLI_TRUST_WORKSPACE` trusts the task's worktree, so Gemini does not ask when you turned on folder trust. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust). On Windows, Natamux sets the variables with `$env:` in PowerShell. Start the agent from the dashboard, or:
 
 ```sh
 natamux agent start T-42 --agent gemini

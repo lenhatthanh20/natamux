@@ -1,7 +1,16 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AUTO_FLAGS,
@@ -20,6 +29,8 @@ import {
   prepareAgentHooks,
   prepareWorkspace,
   quoteArgument,
+  trustPaths,
+  trustWorkspace,
 } from './agent-launch.js'
 
 const base: LaunchOptions = {
@@ -30,6 +41,7 @@ const base: LaunchOptions = {
   claudeSettingsPath: '/data/claude.json',
   geminiSettingsPath: '/data/gemini.json',
   permissionMode: 'ask',
+  workspace: null,
 }
 
 const auto: LaunchOptions = { ...base, permissionMode: 'auto' }
@@ -46,7 +58,7 @@ describe('launchCommand', () => {
       "cursor-agent --force --x 'Fix it'",
     )
     expect(launchCommand('gemini', { ...auto, program: 'gemini', extraArgs: '--x' })).toBe(
-      "GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini --approval-mode yolo --x -i 'Fix it'",
+      "GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini --approval-mode yolo --x -i 'Fix it'",
     )
     const codex = launchCommand('codex', { ...auto, program: 'codex', extraArgs: '--x' })
     expect(
@@ -72,7 +84,9 @@ describe('launchCommand', () => {
     ).toBe("claude --settings '/data/claude.json' --permission-mode auto 'it''s'")
     expect(
       launchCommand('gemini', { ...auto, program: 'gemini', platform: 'win32', prompt: '' }),
-    ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini --approval-mode yolo")
+    ).toBe(
+      "$env:GEMINI_CLI_TRUST_WORKSPACE='true'; $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini --approval-mode yolo",
+    )
   })
 
   it('goes on with a Claude Code session after the mode', () => {
@@ -136,7 +150,7 @@ describe('launchCommand', () => {
       "cursor-agent 'Fix it'",
     )
     expect(launchCommand('gemini', { ...base, program: 'gemini' })).toBe(
-      "GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini -i 'Fix it'",
+      "GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini -i 'Fix it'",
     )
     const codex = launchCommand('codex', { ...base, program: 'codex' })
     expect(codex.startsWith('codex --dangerously-bypass-hook-trust -c ')).toBe(true)
@@ -203,7 +217,35 @@ describe('launchCommand', () => {
   it('sets the Gemini settings in PowerShell on Windows, and leaves the prompt out when empty', () => {
     expect(
       launchCommand('gemini', { ...base, program: 'gemini', platform: 'win32', prompt: '' }),
-    ).toBe("$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini")
+    ).toBe(
+      "$env:GEMINI_CLI_TRUST_WORKSPACE='true'; $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json'; gemini",
+    )
+  })
+
+  it('trusts the workspace for this Codex run, before its hooks', () => {
+    const workspace = '/Users/me/Library/Application Support/Natamux/data/worktrees/T-0001'
+    const codex = launchCommand('codex', { ...auto, program: 'codex', workspace })
+    expect(codex).toContain(
+      `--ask-for-approval never -c 'projects={"${workspace}"={trust_level="trusted"}}' -c 'hooks.`,
+    )
+    expect(launchCommand('codex', { ...base, program: 'codex' })).not.toContain('projects=')
+  })
+
+  it('escapes a Windows path in the Codex trust override', () => {
+    const codex = launchCommand('codex', {
+      ...base,
+      program: 'codex',
+      platform: 'win32',
+      workspace: 'C:\\work\\T-0001',
+    })
+    expect(codex).toContain(`-c 'projects={"C:\\\\work\\\\T-0001"={trust_level="trusted"}}'`)
+  })
+
+  it('keeps a quote in the worktree path inside one shell word and one TOML string', () => {
+    const codex = launchCommand('codex', { ...base, program: 'codex', workspace: `/w/it's "x"` })
+    expect(codex).toContain(
+      ` -c 'projects={"/w/it'\\''s \\"x\\""={trust_level="trusted"}}' -c 'hooks.`,
+    )
   })
 })
 
@@ -378,5 +420,196 @@ describe('prepareWorkspace', () => {
   it('needs no file for agents that take their hooks another way', () => {
     expect(prepareWorkspace('codex', repo)).toBe(true)
     expect(existsSync(join(repo, '.codex'))).toBe(false)
+  })
+})
+
+describe('trustPaths', () => {
+  it("follows each agent's own folder variables", () => {
+    expect(trustPaths({}, '/home/me')).toEqual({
+      cursorProjects: '/home/me/.cursor/projects',
+      copilotConfig: '/home/me/.copilot/config.json',
+    })
+    expect(trustPaths({ CURSOR_DATA_DIR: '/c', COPILOT_HOME: '/p' }, '/home/me')).toEqual({
+      cursorProjects: '/c/projects',
+      copilotConfig: '/p/config.json',
+    })
+  })
+})
+
+describe('trustWorkspace', () => {
+  let home: string
+  const workspace = '/Users/me/Library/Application Support/x.y_z/T-0001'
+  const copilotHeader = '// This file is managed automatically.\n'
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'natamux-trust-'))
+  })
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  const paths = () => trustPaths({}, home)
+  const marker = join('Users-me-Library-Application-Support-x-y-z-T-0001', '.workspace-trusted')
+
+  function writeCopilot(text: string) {
+    mkdirSync(join(home, '.copilot'))
+    writeFileSync(paths().copilotConfig, text)
+  }
+
+  // Trusts the workspace with Copilot and tells whether the config changed.
+  function copilotChanged(text: string, folder = workspace): boolean {
+    writeCopilot(text)
+    trustWorkspace('copilot', folder, paths())
+    return readFileSync(paths().copilotConfig, 'utf8') !== text
+  }
+
+  it('writes the Cursor trust marker where cursor-agent looks for it', () => {
+    trustWorkspace('cursor', workspace, paths())
+    const file = join(paths().cursorProjects, marker)
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ workspacePath: workspace })
+  })
+
+  it.each([
+    ['/a/My  Repo/x', 'a-My-Repo-x'],
+    ['/a/b/', 'a-b'],
+    ['/a/x.y_z@\u00e9/T-1', 'a-x-y-z-T-1'],
+  ])('names the Cursor folder of %j %j, as cursor-agent does', (path, slug) => {
+    // cursor-agent turns each run of other characters into one `-` and trims the ends.
+    trustWorkspace('cursor', path, paths())
+    expect(existsSync(join(paths().cursorProjects, slug, '.workspace-trusted'))).toBe(true)
+  })
+
+  it('writes a valid time, and the same file on a second start', () => {
+    trustWorkspace('cursor', workspace, paths())
+    const file = join(paths().cursorProjects, marker)
+    const first = readFileSync(file, 'utf8')
+    const { trustedAt } = JSON.parse(first)
+    expect(new Date(trustedAt).toISOString()).toBe(trustedAt)
+    trustWorkspace('cursor', workspace, paths())
+    expect(readFileSync(file, 'utf8')).toBe(first)
+  })
+
+  it('keeps a Cursor trust marker that is there', () => {
+    mkdirSync(join(paths().cursorProjects, dirname(marker)), { recursive: true })
+    writeFileSync(join(paths().cursorProjects, marker), 'mine')
+    trustWorkspace('cursor', workspace, paths())
+    expect(readFileSync(join(paths().cursorProjects, marker), 'utf8')).toBe('mine')
+  })
+
+  it('names the Cursor folder of a Windows path as cursor-agent does', () => {
+    trustWorkspace('cursor', 'C:\\Users\\me\\T-0001', paths())
+    const file = join(paths().cursorProjects, 'C-Users-me-T-0001', '.workspace-trusted')
+    expect(existsSync(file)).toBe(true)
+  })
+
+  it('adds the workspace to the Copilot trusted folders once, and keeps the rest', () => {
+    writeCopilot(`${copilotHeader}{\n  "model": "x",\n  "trustedFolders": ["/elsewhere"]\n}\n`)
+    trustWorkspace('copilot', workspace, paths())
+    trustWorkspace('copilot', workspace, paths())
+    const text = readFileSync(paths().copilotConfig, 'utf8')
+    expect(text.startsWith(copilotHeader)).toBe(true)
+    expect(JSON.parse(text.slice(copilotHeader.length))).toEqual({
+      model: 'x',
+      trustedFolders: ['/elsewhere', workspace],
+    })
+  })
+
+  it('adds the workspace to an empty Copilot list, and keeps nested keys', () => {
+    const config = { trustedFolders: [], nested: { a: [1, { b: null }] } }
+    writeCopilot(JSON.stringify(config))
+    trustWorkspace('copilot', workspace, paths())
+    expect(JSON.parse(readFileSync(paths().copilotConfig, 'utf8'))).toEqual({
+      ...config,
+      trustedFolders: [workspace],
+    })
+  })
+
+  it('uses the Copilot config under COPILOT_HOME', () => {
+    const copilotHome = join(home, 'elsewhere')
+    mkdirSync(copilotHome)
+    writeFileSync(join(copilotHome, 'config.json'), '{}')
+    trustWorkspace('copilot', workspace, trustPaths({ COPILOT_HOME: copilotHome }, home))
+    const config = JSON.parse(readFileSync(join(copilotHome, 'config.json'), 'utf8'))
+    expect(config.trustedFolders).toEqual([workspace])
+    expect(existsSync(join(home, '.copilot'))).toBe(false)
+  })
+
+  it.each([
+    ['the workspace', [workspace]],
+    ['the workspace with a slash at the end', [`${workspace}/`]],
+    ['a parent with a slash at the end', ['/Users/me/']],
+    ['the root', ['/']],
+  ])('changes no Copilot config that lists %s', (_, folders) => {
+    expect(copilotChanged(JSON.stringify({ trustedFolders: folders }))).toBe(false)
+  })
+
+  it('adds the workspace when only a folder with the same start is listed', () => {
+    expect(copilotChanged('{"trustedFolders": ["/a/T-002"]}', '/a/T-0027')).toBe(true)
+    const config = JSON.parse(readFileSync(paths().copilotConfig, 'utf8'))
+    expect(config.trustedFolders).toEqual(['/a/T-002', '/a/T-0027'])
+  })
+
+  it.each([
+    ['a list that is not an array', '{"trustedFolders": "/a"}'],
+    ['an empty file', ''],
+    ['comments only', '// managed\n'],
+  ])('leaves a Copilot config with %s alone', (_, text) => {
+    expect(() => copilotChanged(text)).not.toThrow()
+    expect(readFileSync(paths().copilotConfig, 'utf8')).toBe(text)
+  })
+
+  it('does not throw when it cannot write', () => {
+    const file = join(home, 'a-file')
+    writeFileSync(file, '')
+    // A home below a file: every folder and file under it fails to open.
+    const broken = trustPaths({}, join(file, 'home'))
+    for (const agent of LAUNCHABLE_AGENTS) {
+      expect(() => trustWorkspace(agent, workspace, broken)).not.toThrow()
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('does not throw for a read-only Copilot config', () => {
+    writeCopilot('{}')
+    chmodSync(paths().copilotConfig, 0o444)
+    expect(() => trustWorkspace('copilot', workspace, paths())).not.toThrow()
+  })
+
+  it.skipIf(process.platform === 'win32')('does not throw for a read-only Cursor folder', () => {
+    mkdirSync(paths().cursorProjects, { recursive: true })
+    chmodSync(paths().cursorProjects, 0o555)
+    expect(() => trustWorkspace('cursor', workspace, paths())).not.toThrow()
+    chmodSync(paths().cursorProjects, 0o755)
+  })
+
+  it('adds the Copilot list when the config has none', () => {
+    writeCopilot('{"model": "x"}')
+    trustWorkspace('copilot', workspace, paths())
+    expect(JSON.parse(readFileSync(paths().copilotConfig, 'utf8')).trustedFolders).toEqual([
+      workspace,
+    ])
+  })
+
+  it('leaves the Copilot config alone when a parent is trusted already', () => {
+    const text = '{"trustedFolders": ["/Users/me/Library"]}'
+    writeCopilot(text)
+    trustWorkspace('copilot', workspace, paths())
+    expect(readFileSync(paths().copilotConfig, 'utf8')).toBe(text)
+  })
+
+  it('leaves a Copilot config it cannot read alone, and makes none', () => {
+    trustWorkspace('copilot', workspace, paths())
+    expect(existsSync(paths().copilotConfig)).toBe(false)
+    writeCopilot('{ not json')
+    expect(() => trustWorkspace('copilot', workspace, paths())).not.toThrow()
+    expect(readFileSync(paths().copilotConfig, 'utf8')).toBe('{ not json')
+  })
+
+  it.each(['claude-code', 'codex', 'gemini'] as const)('writes nothing for %s', (agent) => {
+    mkdirSync(join(home, '.codex'))
+    writeFileSync(join(home, '.codex/config.toml'), 'model = "x"\n')
+    trustWorkspace(agent, workspace, paths())
+    expect(readdirSync(home)).toEqual(['.codex'])
+    expect(readFileSync(join(home, '.codex/config.toml'), 'utf8')).toBe('model = "x"\n')
   })
 })

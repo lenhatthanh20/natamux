@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UnknownAgentError } from './agent-hook-service.js'
+import { trustPaths } from './agent-launch.js'
 import { AgentRunner, firstPrompt, quoteArgument, TaskWaitingError } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { ProjectSettingsService } from './project-settings.js'
@@ -13,8 +14,6 @@ import { TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { type TerminalFrame, TerminalService } from './terminal-service.js'
 import { WorkspaceConflictError } from './workspace-service.js'
-
-const size = { cols: 80, rows: 24 }
 
 // What Windows types: the command between the window titles that tell its start and its end.
 const windowsLine = (command: string) =>
@@ -48,6 +47,7 @@ beforeEach(() => {
     claudeSettingsPath: '/data/claude code.json',
     platform: 'linux',
     launchDir: dataDir,
+    trustPaths: trustPaths({}, dataDir),
   })
 })
 
@@ -292,6 +292,38 @@ describe('AgentRunner', () => {
     ).toBe(true)
   })
 
+  it('trusts the task workspace for Codex and Cursor', () => {
+    const task = taskWithWorkspace()
+    runner.start(task.id, 'codex', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toContain(
+      ` -c 'projects={"/work/T-0001"={trust_level="trusted"}}' `,
+    )
+    runner.start(task.id, 'cursor', 'Only this')
+    const marker = join(dataDir, '.cursor/projects/work-T-0001/.workspace-trusted')
+    expect(JSON.parse(readFileSync(marker, 'utf8')).workspacePath).toBe('/work/T-0001')
+    runner.start(task.id, 'gemini', 'Only this')
+    expect(readFileSync(script(task.id), 'utf8')).toMatch(/^GEMINI_CLI_TRUST_WORKSPACE=true /)
+  })
+
+  it('starts the agent when its trust cannot be written', () => {
+    const file = join(dataDir, 'a-file')
+    writeFileSync(file, '')
+    const broken = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+      trustPaths: trustPaths({}, join(file, 'home')),
+    })
+    const task = taskWithWorkspace()
+    for (const agent of ['cursor', 'copilot'] as const) {
+      broken.start(task.id, agent, 'Only this')
+      expect(tasks.getTask(task.id).agent).toBe(agent)
+    }
+    expect(readFileSync(script(task.id), 'utf8')).toBe("copilot --allow-all-tools -i 'Only this'\n")
+  })
+
   it.each(['', ' ', '  \t '])('adds no extra word for NATAMUX_CODEX_ARGS of %j', (words) => {
     const spaced = new AgentRunner({
       tasks,
@@ -390,6 +422,7 @@ describe('GitHub Copilot', () => {
       copilotArgs: '--model gpt-5',
       platform: 'linux',
       launchDir: dataDir,
+      trustPaths: trustPaths({}, dataDir),
     })
     const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import type { PermissionMode } from '@natamux/core'
 import { SHELLS } from './terminal-service.js'
 
@@ -168,6 +168,13 @@ const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
   }),
 }
 
+// Codex splits a `-c` key at each dot, so the path goes into a table value. That may hide the
+// user's other `projects` entries for this run, which needs only this one. A JSON string is a
+// valid TOML string.
+function codexTrustArg(workspace: string): string {
+  return `projects={${JSON.stringify(workspace)}={trust_level="trusted"}}`
+}
+
 // In place of a session id: the newest Claude Code session of the folder. No id looks like it.
 export const LAST_SESSION = '--continue'
 
@@ -182,6 +189,8 @@ export type LaunchOptions = {
   claudeSettingsPath: string
   geminiSettingsPath: string
   permissionMode: PermissionMode
+  // The task's worktree, which the agent is told to trust. Null: no trust is added.
+  workspace: string | null
 }
 
 // The command line that starts an agent in its interactive mode, with its first prompt and the
@@ -212,6 +221,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         options.program,
         '--dangerously-bypass-hook-trust',
         ...mode,
+        ...(options.workspace === null ? [] : ['-c', quote(codexTrustArg(options.workspace))]),
         ...codexHookArgs().map((arg) => (arg === '-c' ? arg : quote(arg))),
         ...extra,
         ...prompt,
@@ -224,9 +234,10 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         ...(prompt.length > 0 ? ['-i', ...prompt] : []),
       ]
       const settings = quote(options.geminiSettingsPath)
+      // Folder trust is off by default; when the user turned it on, this skips its question.
       return options.platform === 'win32'
-        ? `$env:GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings}; ${command.join(' ')}`
-        : `GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings} ${command.join(' ')}`
+        ? `$env:GEMINI_CLI_TRUST_WORKSPACE='true'; $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings}; ${command.join(' ')}`
+        : `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings} ${command.join(' ')}`
     }
     case 'copilot':
       return [
@@ -319,4 +330,63 @@ export function excludeFromGit(worktree: string, line: string): void {
   } catch {
     // Not a git worktree: there is nothing to keep the file out of.
   }
+}
+
+// Where Cursor and Copilot keep the folders the user trusted.
+export type TrustPaths = { cursorProjects: string; copilotConfig: string }
+
+export function trustPaths(env: NodeJS.ProcessEnv, home: string): TrustPaths {
+  return {
+    cursorProjects: join(env.CURSOR_DATA_DIR?.trim() || join(home, '.cursor'), 'projects'),
+    copilotConfig: join(env.COPILOT_HOME?.trim() || join(home, '.copilot'), 'config.json'),
+  }
+}
+
+// Marks the worktree as trusted, so Cursor and Copilot do not ask at start. Neither has a flag
+// for it in interactive mode. Codex and Gemini get theirs on the command line. Best effort: when
+// it fails, the agent asks as before.
+export function trustWorkspace(agent: LaunchableAgent, workspace: string, paths: TrustPaths): void {
+  try {
+    if (agent === 'cursor') {
+      // The folder name and marker file are those cursor-agent writes when the user trusts it.
+      const slug = workspace
+        .replace(/[^a-zA-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      const dir = join(paths.cursorProjects, slug)
+      mkdirSync(dir, { recursive: true })
+      const marker = { trustedAt: new Date().toISOString(), workspacePath: workspace }
+      writeFileSync(join(dir, '.workspace-trusted'), JSON.stringify(marker, null, 2), {
+        flag: 'wx',
+      })
+    } else if (agent === 'copilot') {
+      trustInCopilot(workspace, paths.copilotConfig)
+    }
+  } catch {
+    // Already trusted, or a file that cannot be written.
+  }
+}
+
+// Copilot trusts a listed folder and everything below it. Its config starts with comment lines,
+// kept as they are. A missing or broken config is left alone.
+function trustInCopilot(workspace: string, configPath: string): void {
+  const text = readFileSync(configPath, 'utf8')
+  const header = text.match(/^(\s*\/\/[^\n]*\n)*/)?.[0] ?? ''
+  const config = JSON.parse(text.slice(header.length))
+  const folders: unknown = config.trustedFolders ?? []
+  if (!Array.isArray(folders)) {
+    return
+  }
+  const covers = (folder: unknown) => {
+    if (typeof folder !== 'string') {
+      return false
+    }
+    const path = relative(folder, workspace)
+    return path.split(sep)[0] !== '..' && !isAbsolute(path)
+  }
+  if (folders.some(covers)) {
+    return
+  }
+  config.trustedFolders = [...folders, workspace]
+  writeFileSync(configPath, `${header}${JSON.stringify(config, null, 2)}\n`)
 }

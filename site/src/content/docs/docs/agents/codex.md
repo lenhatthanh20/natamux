@@ -16,7 +16,7 @@ Install Codex and log in. Follow the [Codex project page](https://github.com/ope
 | | |
 |---|---|
 | Program | `codex` |
-| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'hooks.<Event>=[…]' [extra args] '<prompt>'` |
+| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'projects={…}' -c 'hooks.<Event>=[…]' [extra args] '<prompt>'` |
 | Permission flag | `--sandbox workspace-write --ask-for-approval never`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_CODEX_COMMAND` |
 | Add arguments | `NATAMUX_CODEX_ARGS` |
@@ -30,6 +30,8 @@ natamux agent start T-42 --agent codex
 ## How hooks are added
 
 Natamux passes one `-c hooks.<Event>=…` override for each event. Each hook runs `natamux hook codex`. Your own Codex settings do not change.
+
+The `-c 'projects={…}'` override trusts the task's worktree for this run, so Codex does not ask. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
 
 :::caution
 Codex runs a hook only after you trust it. The hooks change with the daemon's address, so Natamux passes `--dangerously-bypass-hook-trust`. This flag also skips the review of the session's other hooks, including those of a project you already trust. To avoid the flag, start Codex by hand in the task's terminal. Its hooks then come from its own settings, and Natamux sees only the terminal.
