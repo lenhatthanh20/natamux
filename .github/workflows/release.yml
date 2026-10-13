@@ -162,6 +162,9 @@ jobs:
           mkdir -p "$user_dir"
           jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
           packages/desktop/release/win-unpacked/Natamux.exe --user-data-dir="$user_dir"
+          # The app's output does not reach this console; its log says what happened.
+          cat "$user_dir/logs/daemon.log"
+          grep -q 'smoke passed' "$user_dir/logs/daemon.log"
       - name: Keep the logs of a failed start
         if: failure()
         uses: actions/upload-artifact@v7

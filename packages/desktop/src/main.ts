@@ -212,16 +212,17 @@ function createWindow(): void {
       }
       let passed = signedIn === true
       if (passed) {
+        // Also in the daemon log, which CI reads on Windows.
+        let result = 'natamux-desktop: smoke passed, the terminal and the agent work'
         try {
           await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
-          console.log('natamux-desktop: the terminal and the agent work')
         } catch (error) {
           passed = false
           const message = error instanceof Error ? error.message : String(error)
-          const reason = `natamux-desktop: smoke failed: ${message}`
-          console.log(reason)
-          log(`${reason}\n`)
+          result = `natamux-desktop: smoke failed: ${message}`
         }
+        console.log(result)
+        log(`${result}\n`)
       }
       quitConfirmed = true
       daemon?.kill()
