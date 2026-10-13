@@ -251,7 +251,10 @@ if (hero) {
     const v = current()
     if (shown && shown !== v) {
       shown.pause()
-      if (shown.played.length) v.currentTime = shown.currentTime
+      // Go on from the same moment. A video that has not loaded yet takes the time once it can.
+      const t = shown.played.length ? shown.currentTime : 0
+      if (v.readyState) v.currentTime = t
+      else v.addEventListener('loadedmetadata', () => (v.currentTime = t), { once: true })
     }
     shown = v
     if (wanted && onScreen && !document.hidden) {

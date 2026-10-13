@@ -181,7 +181,7 @@ h1 .line { display: block; }
 .hero-shot .frame img { border-radius: 13px; }
 .hero-shot .frame video { border-radius: 13px; aspect-ratio: 8 / 5; }
 .hero-play {
-  position: absolute; right: 12px; bottom: 12px; z-index: 2;
+  position: absolute; left: 12px; bottom: 34px; z-index: 2;
   background: color-mix(in srgb, var(--panel) 85%, transparent); backdrop-filter: blur(6px);
 }
 .hero-play[hidden] { display: none; }
@@ -201,7 +201,7 @@ h1 .line { display: block; }
 .hero-steps li[aria-current]::after { transform: none; }
 @media (max-width: 560px) {
   .hero-steps { gap: 6px; font-size: 0.75rem; }
-  .hero-play { right: 8px; bottom: 8px; }
+  .hero-play { left: 8px; bottom: 14px; }
 }
 
 .pin { position: absolute; left: var(--px); top: var(--py); z-index: 2; pointer-events: none; }
