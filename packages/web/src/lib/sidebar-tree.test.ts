@@ -247,7 +247,12 @@ describe('shellRowName', () => {
   it('says the stage, the agent, the shell and the state', () => {
     expect(shellRowName(row({}))).toBe('Implement, Claude Code, Shell 1, Running')
     const byHand = row({ label: 'Shell 2', shell: '2', agent: 'cursor', state: null })
-    expect(shellRowName(byHand)).toBe('Shell 2, Cursor')
+    expect(shellRowName(byHand)).toBe('Shell 2, Cursor, State not known')
+    // Test spec C16: a known state is said as before, with no "State not known".
+    expect(shellRowName({ ...byHand, state: 'needs-input' })).toBe(
+      'Shell 2, Cursor, Needs your input',
+    )
+    expect(shellRowName({ ...byHand, state: 'failed' })).toBe('Shell 2, Cursor, Failed')
     const plain = row({ label: 'zsh', shell: '2', agent: null, state: null, plain: true })
     expect(shellRowName(plain)).toBe('Shell 2, zsh')
     expect(shellRowName(row({ label: 'Beta', shell: null, agent: null }))).toBe('Beta, Running')
