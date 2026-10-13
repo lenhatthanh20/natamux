@@ -11,6 +11,7 @@ import {
   cursorHookFile,
   DEFAULT_PROGRAMS,
   geminiHookSettings,
+  LAST_SESSION,
   LAUNCHABLE_AGENTS,
   type LaunchableAgent,
   type LaunchOptions,
@@ -77,6 +78,11 @@ describe('launchCommand', () => {
     expect(
       launchCommand('claude-code', { ...auto, program: 'claude', prompt: '', session: 's-1' }),
     ).toBe("claude --settings '/data/claude.json' --permission-mode auto --resume 's-1'")
+  })
+
+  it('goes on with the newest Claude Code session of the folder', () => {
+    const command = launchCommand('claude-code', { ...base, prompt: '', session: LAST_SESSION })
+    expect(command).toBe("x --settings '/data/claude.json' --continue")
   })
 
   it('quotes the session, so it cannot run as a command', () => {

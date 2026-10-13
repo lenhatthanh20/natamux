@@ -137,6 +137,8 @@ const app = await buildServer({
   webDir: config.webDir,
 })
 await app.listen({ host: config.host, port: config.port })
+// After the listen, so the hooks of the agents reach the daemon.
+stages.resumeAgents()
 
 console.log(`Natamux daemon listening on http://${config.host}:${config.port}`)
 console.log(`Data directory: ${config.dataDir}`)

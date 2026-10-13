@@ -168,12 +168,15 @@ const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
   }),
 }
 
+// In place of a session id: the newest Claude Code session of the folder. No id looks like it.
+export const LAST_SESSION = '--continue'
+
 export type LaunchOptions = {
   program: string
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
-  // A Claude Code session to go on with. Other agents start a new one.
+  // A Claude Code session to go on with, or LAST_SESSION. Other agents start a new one.
   session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
@@ -196,7 +199,11 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
-        ...(options.session === undefined ? [] : ['--resume', quote(options.session)]),
+        ...(options.session === undefined
+          ? []
+          : options.session === LAST_SESSION
+            ? [LAST_SESSION]
+            : ['--resume', quote(options.session)]),
         ...extra,
         ...prompt,
       ].join(' ')
