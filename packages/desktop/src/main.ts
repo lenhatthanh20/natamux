@@ -21,6 +21,7 @@ import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
+import { runSmoke } from './smoke.js'
 import {
   freePort,
   loginPathLogLine,
@@ -224,8 +225,9 @@ function createWindow(): void {
     }
   })
   if (process.env.NATAMUX_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loads signed in, then the app quits. The
-    // exit code tells: on Windows the app's output may not reach the console.
+    // A check for CI and the codespace: the dashboard loads signed in, a terminal and an agent work
+    // (smoke.ts), then the app quits. The exit code tells: on Windows the app's output may not reach
+    // the console.
     created.webContents.on('did-finish-load', async () => {
       // The loading page finishes first.
       if (!onDashboard()) {
@@ -240,9 +242,23 @@ function createWindow(): void {
       if (shot) {
         writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
       }
+      let passed = signedIn === true
+      if (passed) {
+        // Also in the daemon log, which CI reads on Windows.
+        let result = 'natamux-desktop: smoke passed, the terminal and the agent work'
+        try {
+          await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
+        } catch (error) {
+          passed = false
+          const message = error instanceof Error ? error.message : String(error)
+          result = `natamux-desktop: smoke failed: ${message}`
+        }
+        console.log(result)
+        log(`${result}\n`)
+      }
       quitConfirmed = true
       daemon?.kill()
-      app.exit(signedIn === true ? 0 : 1)
+      app.exit(passed ? 0 : 1)
     })
   }
   if (daemonReady) {

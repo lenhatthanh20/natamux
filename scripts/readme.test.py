@@ -97,7 +97,9 @@ class ReadmeAcceptance(unittest.TestCase):
             self.assertIn(value, self.docker)
         self.assertRegex(self.readme, r"(?s)scripts/dev\.sh seed.{0,80}fake agents")
         self.assertRegex(self.readme, r"(?s)development Docker images.{0,80}do not include a real coding agent")
-        self.assertNotRegex(self.readme, r"Natamux-(?:mac-x64|linux|win)[\w.-]*\.(?:dmg|deb|exe|AppImage)")
+        for name in ("Natamux-mac-x64.dmg", "Natamux-win-x64.exe", "Natamux-linux-x86_64.AppImage", "Natamux-linux-amd64.deb"):
+            self.assertIn(name, self.readme)
+            self.assertIn(name, self.install)
 
     def test_case_3_scannable_workflow_and_repository_map(self):
         headings = re.findall(r"^## (.+)$", self.readme, re.MULTILINE)
@@ -118,10 +120,11 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertLess(max(len(paragraph.split()) for paragraph in paragraphs), 100)
 
     def test_case_4_requirements_limits_and_trust(self):
-        for statement in ("Intel Mac and Linux builds are paused", "no Windows release", "installed, logged-in coding agent"):
-            self.assertIn(statement, self.readme)
-        self.assertIn("Intel Mac and Linux builds are paused", self.install)
-        self.assertIn("no Windows build", self.install)
+        self.assertIn("installed, logged-in coding agent", self.readme)
+        for text in (self.readme, self.install):
+            self.assertNotIn("paused", text)
+            for step in ("Open Anyway", "More info", "Run anyway", "chmod +x"):
+                self.assertIn(step, text)
         self.assertIn("installed and logged in", self.install)
         self.assertIn("need git", self.readme)
         self.assertIn("no account or telemetry", self.readme)
