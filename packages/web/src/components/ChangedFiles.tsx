@@ -342,7 +342,8 @@ type ChangedRowProps = {
 }
 
 // Memoized: all its props are values or stable functions, so a focus move or a new selection
-// renders only the rows that changed. content-visibility skips the rows far off screen.
+// renders only the rows that changed. A new list builds new rows, so rows are compared by what
+// they show (sameRowProps). content-visibility skips the rows far off screen.
 const ChangedRow = memo(function ChangedRow({
   row,
   index,
@@ -429,7 +430,61 @@ const ChangedRow = memo(function ChangedRow({
       )}
     </div>
   )
-})
+}, sameRowProps)
+
+function sameRowProps(before: ChangedRowProps, after: ChangedRowProps): boolean {
+  return (
+    sameRow(before.row, after.row) &&
+    before.index === after.index &&
+    before.mode === after.mode &&
+    before.selected === after.selected &&
+    before.isStop === after.isStop &&
+    before.ancestors.length === after.ancestors.length &&
+    // A guide line shows only the key and level of each folder above.
+    before.ancestors.every(
+      (row, at) => row.key === after.ancestors[at]?.key && row.level === after.ancestors[at]?.level,
+    ) &&
+    before.activate === after.activate &&
+    before.remember === after.remember &&
+    before.onSelect === after.onSelect &&
+    before.onToggle === after.onToggle
+  )
+}
+
+function sameRow(before: TreeRow, after: TreeRow): boolean {
+  if (before === after) {
+    return true
+  }
+  const one = before.node
+  const two = after.node
+  const sameNode =
+    one.kind === 'file' && two.kind === 'file'
+      ? sameEntry(one.entry, two.entry)
+      : one.kind === 'folder' &&
+        two.kind === 'folder' &&
+        one.fileCount === two.fileCount &&
+        one.added === two.added &&
+        one.removed === two.removed &&
+        one.status === two.status
+  return (
+    sameNode &&
+    one.key === two.key &&
+    one.name === two.name &&
+    before.key === after.key &&
+    before.level === after.level &&
+    before.posInSet === after.posInSet &&
+    before.setSize === after.setSize &&
+    before.expandable === after.expandable &&
+    before.expanded === after.expanded
+  )
+}
+
+function sameEntry(before: ChangeEntry, after: ChangeEntry): boolean {
+  const keys = Object.keys(after) as (keyof ChangeEntry)[]
+  return (
+    keys.length === Object.keys(before).length && keys.every((key) => before[key] === after[key])
+  )
+}
 
 function fileLabel(entry: ChangeEntry): string {
   const { folder, name } = splitPath(entry.path)

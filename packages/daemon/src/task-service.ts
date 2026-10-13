@@ -242,8 +242,19 @@ export class TaskService {
     for (const id of listTaskIds(this.dataDir)) {
       const stat = statFile(taskFilePath(this.dataDir, id))
       const cached = sameStat(stat, known.get(id)?.task) ? indexed.get(id) : undefined
-      const task = cached ?? readTaskFile(this.dataDir, id)
+      let task: Task | undefined
+      try {
+        task = cached ?? readTaskFile(this.dataDir, id)
+      } catch (error) {
+        // One broken file must not stop the daemon: the task as the index saw it last stays, or
+        // none. The file is read again when it changes.
+        console.error(`Could not read the task file of ${id}: ${String(error)}`)
+        task = indexed.get(id)
+      }
       if (task === undefined || stat === undefined) {
+        if (stat !== undefined) {
+          this.fileStats.set(id, stat)
+        }
         continue
       }
       this.tasks.set(id, Object.freeze(task))

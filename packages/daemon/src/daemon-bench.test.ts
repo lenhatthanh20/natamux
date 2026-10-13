@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { ACK_EVERY_BYTES, TASK_ID_HEADER } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { type LoggedEvent, writeEventLog } from './event-log.js'
@@ -377,9 +377,7 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('daemon benchmark', () => {
     index.close()
   })
 
-  // The start stops on a task file that does not parse, as it did before the cache; the bench
-  // only records it.
-  it('stops the start at a corrupt task file', () => {
+  it('starts past a corrupt task file', () => {
     const repo = createTestRepo()
     cleanups.push(() => repo.cleanup())
     const dataDir = join(repo.root, 'data')
@@ -388,7 +386,14 @@ describe.runIf(process.env.NATAMUX_BENCH === '1')('daemon benchmark', () => {
     const service = new TaskService({ dataDir, index, bus: new EventBus() })
     const task = service.createTask({ title: 'Broken soon' })
     writeFileSync(taskFilePath(dataDir, task.id), '---\ntitle: [unclosed\n---\n')
-    expect(() => new TaskService({ dataDir, index, bus: new EventBus() }).init()).toThrow()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const started = new TaskService({ dataDir, index, bus: new EventBus() })
+    started.init()
+    // The index saw the task before its file broke, so that copy stays.
+    expect(started.listTasks().map(({ title }) => title)).toEqual(['Broken soon'])
+    expect(errors).toHaveBeenCalledTimes(1)
+    errors.mockRestore()
+    started.close()
     service.close()
     index.close()
   })

@@ -1496,3 +1496,58 @@ describe('isTaskEnded', () => {
     expect(isTaskEnded(service, 'T-9999')).toBe(true)
   })
 })
+
+describe('a task file that is broken at the start', () => {
+  const BROKEN = '---\ntitle: [unclosed\n---\n'
+  let clock: number
+  let fresh: TaskService
+
+  beforeEach(() => {
+    clock = 0
+    fresh = new TaskService({ dataDir, index, bus: new EventBus(), clock: () => clock })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    fresh.close()
+    vi.restoreAllMocks()
+  })
+
+  it('starts with the other tasks, and leaves out a broken task the index never saw', () => {
+    const good = service.createTask({ title: 'Good' })
+    writeFileSync(taskFilePath(dataDir, 'T-0009'), BROKEN)
+
+    fresh.init()
+
+    expect(fresh.listTasks().map((task) => task.id)).toEqual([good.id])
+    expect(() => fresh.getTask('T-0009')).toThrow(TaskNotFoundError)
+    expect(console.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the task as the index saw it last', () => {
+    const task = service.createTask({ title: 'Last good' })
+    writeFileSync(taskFilePath(dataDir, task.id), BROKEN)
+
+    fresh.init()
+
+    expect(fresh.getTask(task.id).title).toBe('Last good')
+  })
+
+  it('reads the file again once it is fixed, and not before', () => {
+    const task = service.createTask({ title: 'First' })
+    writeFileSync(taskFilePath(dataDir, 'T-0009'), BROKEN)
+    fresh.init()
+
+    clock = 2000
+    fresh.listTasks()
+    expect(console.error).toHaveBeenCalledTimes(1)
+
+    writeFileSync(
+      taskFilePath(dataDir, 'T-0009'),
+      serializeTask({ ...task, id: 'T-0009', title: 'Fixed by hand' }),
+    )
+    clock = 4000
+    expect(fresh.listTasks().map((each) => each.title)).toContain('Fixed by hand')
+    expect(fresh.getTask('T-0009').title).toBe('Fixed by hand')
+  })
+})

@@ -196,6 +196,18 @@ describe('a long list of changed files', () => {
     expect(iconRenders).toEqual([])
   })
 
+  it('renders only the row of the file that changed when the list is read again', () => {
+    const { update } = files({ mode: 'list', list: many })
+    iconRenders.length = 0
+
+    // A new read gives new objects for every file.
+    update({
+      list: many.map((each, index) => (index === 7 ? { ...each, added: 3 } : { ...each })),
+    })
+
+    expect(iconRenders).toEqual(['src/file7.ts'])
+  })
+
   it('shows no rows for no changes', () => {
     files({ list: [] })
     expect(items()).toHaveLength(0)
