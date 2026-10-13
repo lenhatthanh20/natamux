@@ -13,6 +13,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - Intel Mac and Linux installs of v0.1.2 update themselves again. On Windows the app tells you about a new version and opens its release page; run the new installer. See [Updates](/docs/guides/desktop-app/#updates).
 - On Windows, task terminals run PowerShell, and closing the window quits the app, as on Linux.
 - Start a task's title with an id, such as `ABC-12: Fix the login bug`, to make task `ABC-12`. See [Tasks](/docs/concepts/tasks/).
+- The card with the figures at the top of the **Progress** tab no longer has a bar of stages, which redrew every second while a stage ran.
 
 ## v0.1.17 (2026-10-13)
 
