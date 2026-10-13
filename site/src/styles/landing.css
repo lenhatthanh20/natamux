@@ -33,8 +33,8 @@
   --text: #253250;
   --strong: #0d1526;
   --muted: #56637d;
-  --amber: #a46b00;
-  --mint: #0f7d58;
+  --amber: #8a5900;
+  --mint: #0b6e4d;
   --sky: #2f5fd0;
   --rose: #c22f4d;
   --btn-bg: #0d1526;
@@ -125,7 +125,6 @@ figure { margin: 0; }
 }
 @media (max-width: 420px) {
   .nav-row { gap: 14px; }
-  .nav nav { display: none; }
 }
 
 /* Hero */
@@ -240,6 +239,7 @@ h1 .line { display: block; }
 .rose { --c: var(--rose); }
 [data-flow-play] .i-play, [data-flow-play][aria-pressed='true'] .i-pause { display: none; }
 [data-flow-play][aria-pressed='true'] .i-play { display: block; }
+[data-flow-play], [data-flow-play] svg { flex: none; }
 [data-flow-play] svg { width: 15px; height: 15px; }
 [data-flow-play] .i-play { fill: currentColor; stroke: none; }
 

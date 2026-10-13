@@ -1,6 +1,7 @@
 ---
 // A dashboard capture in both themes. The page shows the one that matches the
 // theme; lazy loading skips the hidden one, so each visitor loads one image.
+// With priority, the dark one (the default theme) loads eagerly as the LCP image.
 interface Props {
   name: string
   alt: string
@@ -30,9 +31,9 @@ const srcset = (theme: string) =>
       alt={alt}
       width={width}
       height={height}
-      loading="lazy"
+      loading={priority && theme === 'dark' ? 'eager' : 'lazy'}
       decoding="async"
-      fetchpriority={priority ? 'high' : undefined}
+      fetchpriority={priority && theme === 'dark' ? 'high' : undefined}
     />
   ))
 }
