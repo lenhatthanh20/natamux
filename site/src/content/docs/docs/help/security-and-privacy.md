@@ -52,7 +52,12 @@ For each agent it starts, Natamux adds hook settings that call `natamux hook` or
 
 ## Folder trust
 
-Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask. For Copilot and Cursor this writes to their files in your home folder. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
+Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask. For two agents this writes files outside the worktree:
+
+- Cursor CLI: `~/.cursor/projects/<folder>/.workspace-trusted` (under `$CURSOR_DATA_DIR` when it is set).
+- Copilot CLI: `~/.copilot/config.json`, or `$COPILOT_HOME/config.json` when it is set. Natamux adds the worktree to its `trustedFolders`.
+
+Natamux does not remove these entries when it removes a task. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
 
 ## Permission prompts
 
