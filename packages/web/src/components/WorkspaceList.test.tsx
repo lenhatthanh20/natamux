@@ -643,7 +643,7 @@ describe('the agents of a task', () => {
   })
 
   it('reads the terminals of a resting task only while it is the open workspace', async () => {
-    // Fake timers do not start while the date is mocked, so the mock goes first.
+    // Fake timers do not start while the date is mocked, so the date mock is reset first.
     vi.useRealTimers()
     vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW })
     const quiet = { ...lanes, state: 'review' as const, lanes: { alpha: 'review' as const } }
