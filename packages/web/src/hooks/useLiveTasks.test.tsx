@@ -203,8 +203,10 @@ describe('useLiveTasks', () => {
     flush()
 
     expect(write).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    // Once per key, however many messages came: the shells, and the screens a finished task kept.
+    expect(invalidate).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ended-shells', 'T-0001'] })
   })
 
   it('opens a new socket after a drop, and reads everything again once it opens', () => {
