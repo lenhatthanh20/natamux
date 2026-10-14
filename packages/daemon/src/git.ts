@@ -610,6 +610,12 @@ function lines(output: string): string[] {
   return output.split('\n').filter((line) => line !== '')
 }
 
+// Whether origin has `branch`, by the remote-tracking ref that a push or a fetch left. No network.
+export async function hasRemoteBranch(worktreePath: string, branch: string): Promise<boolean> {
+  const ref = `refs/remotes/origin/${branch}`
+  return lines(await git(worktreePath, ['for-each-ref', '--format=%(refname)', ref])).includes(ref)
+}
+
 // Compares `branch` with its copy on origin. Uses the remote-tracking refs as they are: no fetch.
 // Not `@{upstream}`, because a branch made from origin/main tracks origin/main.
 export async function readPushStatus(worktreePath: string, branch: string): Promise<PushStatus> {
@@ -1061,6 +1067,25 @@ export async function readPullRequestStatus(
   } catch {
     throw new GitHubError(`could not read the pull request: ${output.slice(0, 200)}`)
   }
+}
+
+// The address of the newest pull request from `branch`, when it is open or merged. A closed one
+// is left out: the work it had was dropped.
+export async function findPullRequest(
+  cwd: string,
+  branch: string,
+  gh: RunGh = runGh,
+): Promise<string | undefined> {
+  const args = ['--head', branch, '--state', 'all', '--json', 'url,state', '--limit', '1']
+  const output = await gh(cwd, ['pr', 'list', ...args])
+  let found: { url?: unknown; state?: unknown }[]
+  try {
+    found = JSON.parse(output)
+  } catch {
+    throw new GitHubError(`could not read the pull requests: ${output.slice(0, 200)}`)
+  }
+  const pr = found[0]
+  return typeof pr?.url === 'string' && pr.state !== 'CLOSED' ? pr.url : undefined
 }
 
 // Sums `git diff --numstat`. Binary files count as files, without lines.

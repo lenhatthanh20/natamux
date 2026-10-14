@@ -105,7 +105,8 @@ Natamux looks for skills in the worktree of the task and on your machine:
 
 - A plugin is on when `enabledPlugins` has `"<plugin>@<marketplace>": true`. Natamux finds its install path in `~/.claude/plugins/installed_plugins.json`.
 - A plugin skill is called `/<plugin>:<skill>`. A plugin that is on but not installed on this machine gives no skills, and the picker says so.
-- `{skill:<name>}` becomes `/<name>` when Claude Code has the skill. Otherwise it becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+- `{skill:<name>}` becomes `/<name>` when Claude Code has the skill in the worktree. Otherwise it becomes the path of a `SKILL.md` of that name, or `the <name> skill` when none exists.
+- `.claude/settings.local.json` is usually not committed, so a new worktree does not have it. A plugin that only this file turns on is found in your main checkout, and `{skill:<plugin>:<skill>}` becomes the path of its `SKILL.md`.
 
 Sources: [skills](https://code.claude.com/docs/en/skills) and [plugins reference](https://code.claude.com/docs/en/plugins-reference), checked 2026-10-11.
 

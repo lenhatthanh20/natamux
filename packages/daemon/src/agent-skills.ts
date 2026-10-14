@@ -258,6 +258,9 @@ export type SkillContext = {
   agent: string
   // The task's worktree: its skills are the ones of the branch the agent works on.
   workspace: string
+  // The main checkout. Its untracked files, such as `.claude/settings.local.json`, are not in a
+  // new worktree.
+  repo: string
   home: string
 }
 
@@ -267,7 +270,9 @@ export type SkillResolution =
   | { kind: 'missing' }
 
 // How the task's agent gets a skill: its own call when it has the skill and a way to call it,
-// else the SKILL.md to read (of its own, or of another agent), else nothing.
+// else the SKILL.md to read (of its own, or of another agent, in the worktree and then in the
+// main checkout), else nothing. A skill of the main checkout only is never called: the agent in
+// the worktree may not have it.
 export function resolveSkill(name: string, context: SkillContext): SkillResolution {
   const own = agentSkills(context.agent, context.workspace, context.home).skills.find(
     (skill) => skill.name === name,
@@ -276,10 +281,16 @@ export function resolveSkill(name: string, context: SkillContext): SkillResoluti
   if (call !== null) {
     return { kind: 'call', text: call }
   }
+  const folders =
+    context.repo === context.workspace ? [context.workspace] : [context.workspace, context.repo]
   const file =
     own ??
-    Object.keys(SKILL_SOURCES)
-      .flatMap((agent) => agentSkills(agent, context.workspace, context.home).skills)
+    folders
+      .flatMap((folder) =>
+        Object.keys(SKILL_SOURCES).flatMap(
+          (agent) => agentSkills(agent, folder, context.home).skills,
+        ),
+      )
       .find((skill) => skill.name === name)
   return file === undefined
     ? { kind: 'missing' }
