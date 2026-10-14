@@ -891,8 +891,9 @@ describe('init from the index of the last start', () => {
 })
 
 describe('task files edited outside Natamux', () => {
-  // The spec asks for 1 s. More here, for slow CI runners.
-  const SEEN = { timeout: 2000 }
+  // macOS may drop the events of writes made right after init(), before its watch starts. Then
+  // listTasks() finds the files, two seconds after init() at most. watchTaskFiles has its own test.
+  const SEEN = { timeout: 4000 }
   let watching: TaskService
 
   beforeEach(() => {
@@ -920,6 +921,7 @@ describe('task files edited outside Natamux', () => {
     rmSync(taskFilePath(dataDir, removed.id))
 
     await vi.waitFor(() => {
+      watching.listTasks()
       expect(watching.getTask(edited.id).title).toBe('Edited by hand')
       expect(watching.getTask('T-0007').title).toBe('Added by hand')
     }, SEEN)
@@ -942,7 +944,10 @@ describe('task files edited outside Natamux', () => {
       serializeTask({ ...own, id: 'T-0009', title: 'Marker' }),
     )
 
-    await vi.waitFor(() => expect(watching.getTask('T-0009').title).toBe('Marker'), SEEN)
+    await vi.waitFor(() => {
+      watching.listTasks()
+      expect(watching.getTask('T-0009').title).toBe('Marker')
+    }, SEEN)
     const changed = messages.filter((message) => message.kind === 'task.changed')
     expect(changed).toEqual([{ kind: 'task.changed', task: watching.getTask('T-0009') }])
   })
@@ -959,6 +964,7 @@ describe('task files edited outside Natamux', () => {
       )
 
       await vi.waitFor(() => {
+        watching.listTasks()
         expect(watching.getTask('T-0009').title).toBe('Marker')
         expect(errors).toHaveBeenCalledWith(expect.stringContaining(task.id))
       }, SEEN)

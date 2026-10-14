@@ -24,6 +24,9 @@ jobs:
           cache: pnpm
       - name: Package
         shell: bash
+        env:
+          # The temp folder of the runner is on the drive of the checkout (see package-desktop.sh).
+          TMPDIR: ${{ runner.temp }}
         run: scripts/package-desktop.sh
       - uses: actions/upload-artifact@v7
         with:
