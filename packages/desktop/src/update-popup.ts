@@ -11,8 +11,7 @@ export type PopupView = {
   percent?: number
 }
 
-export const POPUP_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+export const POPUP_CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
 const WIDTH = 360
 const HEIGHT = 148
 const MB = 1_000_000
