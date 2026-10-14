@@ -35,6 +35,12 @@ previous_tag() {
     | awk -v tag="$1" '$0 == tag { print prev; exit } { prev = $0 }'
 }
 
+# tag_signed <tag> <allowed_signers>: the tag has a valid SSH signature by a key in the file.
+# -c wins over any git config. minTrustLevel makes a key that is not in the file fail on every git.
+tag_signed() {
+  git -c gpg.ssh.allowedSignersFile="$2" -c gpg.minTrustLevel=fully verify-tag "$1" >/dev/null 2>&1
+}
+
 # sums_of <dir>: a sorted "<sha256>  <name>" line for each file in <dir> and its subfolders.
 sums_of() {
   local file
@@ -83,6 +89,7 @@ main() {
     command -v "$tool" >/dev/null || fail "$tool is not installed"
   done
   [ -f "$secret" ] || fail "no minisign secret key at $secret (NATAMUX_MINISIGN_SECRET names another)"
+  local signers=${NATAMUX_TAG_SIGNERS:-$HOME/.ssh/allowed_signers}
   local signer
   signer=$(release_signer packages/desktop/src/release-signature.ts)
   [[ $signer =~ ^RW[A-Za-z0-9+/]{54}$ ]] \
@@ -93,12 +100,11 @@ main() {
   object=$(git rev-parse -q --verify "refs/tags/$tag") \
     || fail "there is no local tag $tag; sign only a tag you made and pushed from this repository"
   [ "$(git cat-file -t "$object")" = tag ] || fail "the local tag $tag is not annotated"
-  # A fetch can bring a tag from origin too; the tagger shows whether you made it.
-  local tagger me
-  tagger=$(git for-each-ref --format='%(taggeremail)' "refs/tags/$tag" | tr -d '<>')
-  me=$(git config user.email || true)
-  [ -n "$me" ] && [ "$tagger" = "$me" ] \
-    || fail "the local tag $tag was made by ${tagger:-nobody}, not by you (${me:-no user.email})"
+  # A fetch can bring a tag from origin too, with any tagger name. Only your SSH signature shows
+  # that you made it.
+  [ -f "$signers" ] || fail "no allowed signers file at $signers (NATAMUX_TAG_SIGNERS names another)"
+  tag_signed "$tag" "$signers" \
+    || fail "tag $tag is not signed by a key in $signers; make it with git tag -s"
   commit=$(git rev-parse "refs/tags/$tag^{commit}")
   # An annotated tag lists its own object, and the commit as <tag>^{}.
   [ "$(git ls-remote --tags origin "refs/tags/$tag" | cut -f 1)" = "$object" ] \

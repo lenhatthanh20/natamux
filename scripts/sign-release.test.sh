@@ -45,6 +45,26 @@ printf 'tgz' >"$tmp/run/natamux-linux-x64/Natamux-linux-x64.tar.gz"
 check "sums_of lists the files of every folder, as sha256sum does" \
   '[ "$(sums_of "$tmp/run")" = "$(sort "$tmp/run-sums.txt")" ]'
 
+# Tags signed with SSH keys made for this test, in a repository of their own.
+ssh-keygen -q -t ed25519 -N '' -C owner -f "$tmp/owner" </dev/null
+ssh-keygen -q -t ed25519 -N '' -C stranger -f "$tmp/stranger" </dev/null
+echo "owner@example.com $(cat "$tmp/owner.pub")" >"$tmp/signers"
+: >"$tmp/no-signers"
+tagged() {
+  git -C "$tmp/repo" -c user.name=Owner -c user.email=owner@example.com -c gpg.format=ssh "$@"
+}
+git init -q "$tmp/repo"
+tagged commit -q --allow-empty -m one
+tagged -c user.signingkey="$tmp/owner.pub" tag -s v1.0.0 -m signed
+tagged -c user.signingkey="$tmp/stranger.pub" tag -s v1.0.1 -m stranger
+tagged tag -a v1.0.2 -m unsigned
+in_repo() { (cd "$tmp/repo" && tag_signed "$@"); }
+check "tag_signed takes a tag signed by a listed key" 'in_repo v1.0.0 "$tmp/signers"'
+check "tag_signed refuses a key that is not listed" '! in_repo v1.0.1 "$tmp/signers"'
+check "tag_signed refuses an unsigned tag" '! in_repo v1.0.2 "$tmp/signers"'
+check "tag_signed refuses with an empty signers file" '! in_repo v1.0.0 "$tmp/no-signers"'
+check "tag_signed refuses without a signers file" '! in_repo v1.0.0 "$tmp/missing"'
+
 fixtures=packages/desktop/src/fixtures/minisign
 check "is_legacy takes a legacy signature" 'is_legacy "$fixtures/SHA256SUMS.txt.legacy.minisig"'
 check "is_legacy refuses a prehashed signature" '! is_legacy "$fixtures/SHA256SUMS.txt.minisig"'
