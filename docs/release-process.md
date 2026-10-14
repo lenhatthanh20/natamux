@@ -2,6 +2,17 @@
 
 How a version gets from `main` to users. The desktop app installs an update only when `SHA256SUMS.txt` of the release is signed with the release key, so every release has a signing step on the owner's Mac.
 
+## One command
+
+Once per Mac, run `scripts/setup-release-signing.sh` (see [The tag key](#the-tag-key)). Then, after the release pull request (step 1) is merged:
+
+```sh
+git fetch --no-tags origin main && git switch --detach origin/main
+scripts/release.sh vX.Y.Z
+```
+
+It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits for the Release run, and runs `scripts/sign-release.sh`, which asks y/N and the minisign password. Run it again with the same tag if it stops after the tag is pushed.
+
 ## Steps
 
 1. On a branch: set the version in `packages/{cli,core,daemon,desktop,web}/package.json` and the homepage, write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` must pass. Merge to `main`.
@@ -44,13 +55,14 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
 
 ## The tag key
 
-Release tags are signed with the owner's SSH key. Set it up once (use your own key file):
+Release tags are signed with the owner's SSH key. Set it up once:
 
 ```sh
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519.pub
-echo "$(git config user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+scripts/setup-release-signing.sh             # ~/.ssh/id_ed25519.pub
+scripts/setup-release-signing.sh <file.pub>  # another key
 ```
+
+It sets this repository to sign tags with the key (`gpg.format ssh`, `user.signingkey`), adds the key to `~/.ssh/allowed_signers` when it is not there, and signs and checks a tag in a new, empty repository.
 
 `scripts/sign-release.sh` checks the tag against `~/.ssh/allowed_signers` (or the file in `NATAMUX_TAG_SIGNERS`). Keep that file outside the repository: anyone who can push could add a key to a file in it.
 
