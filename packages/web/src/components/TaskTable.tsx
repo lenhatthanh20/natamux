@@ -27,6 +27,7 @@ import { COLUMN_LABEL, type ColumnKey, tableLayout } from '../lib/table-columns'
 import {
   actionsFor,
   agentAction,
+  cancelTaskDescription,
   deleteTaskDescription,
   formatAge,
   formatExact,
@@ -434,8 +435,9 @@ export function TaskTable({
   const confirmCancel = cancelling !== null && cancelAction !== undefined && (
     <ConfirmDialog
       title={`Cancel ${cancelling.id}?`}
-      description="A cancelled task cannot be started again."
+      description={cancelTaskDescription(cancelling)}
       confirmLabel="Cancel task"
+      cancelLabel="Keep working"
       onConfirm={() => onAction?.(cancelling, cancelAction)}
       onClose={() => setCancelling(null)}
     />

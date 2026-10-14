@@ -9,6 +9,7 @@ import {
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { copyText } from '../lib/clipboard'
+import { isFinishedState } from '../lib/finished'
 import { laneSummary } from '../lib/tasks'
 import { needsCommit, pullRequestButton, pushButton } from '../lib/workspace'
 import { StateBadge } from './StateBadge'
@@ -37,7 +38,8 @@ type WorkspaceHeaderProps = {
 }
 
 // One row: who, what, where, and the two git actions. Results of the actions are toasts, so
-// nothing here changes size when a push ends.
+// nothing here changes size when a push ends. A done or cancelled task keeps only Open pull
+// request: its finished banner offers the next git step.
 export function WorkspaceHeader({
   task,
   ahead,
@@ -58,8 +60,14 @@ export function WorkspaceHeader({
   const busy = pending !== null
   // With nothing to push, the next step is to commit, so that button takes Push's place.
   const commitFirst = needsCommit(pushStatus, uncommitted)
+  const finished = isFinishedState(task.state)
+  const openPullRequest: MenuItem = {
+    label: 'Open pull request',
+    icon: ExternalLink,
+    onSelect: () => window.open(task.pr ?? '', '_blank', 'noopener,noreferrer'),
+  }
 
-  const menu: MenuItem[] = [
+  const gitMenu: MenuItem[] = [
     commitFirst
       ? { label: 'Commit…', icon: GitCommitHorizontal, onSelect: onCommit }
       : {
@@ -77,12 +85,10 @@ export function WorkspaceHeader({
           hint: pullRequest.reason,
           onSelect: onPullRequest,
         }
-      : {
-          label: 'Open pull request',
-          icon: ExternalLink,
-          onSelect: () => window.open(task.pr ?? '', '_blank', 'noopener,noreferrer'),
-        },
+      : openPullRequest,
   ]
+  const finishedMenu: MenuItem[] = task.pr === null ? [] : [openPullRequest]
+  const menu = finished ? finishedMenu : gitMenu
 
   return (
     <header ref={ref} className="flex min-h-11 shrink-0 items-center gap-3 px-4 py-1.5">
@@ -110,59 +116,56 @@ export function WorkspaceHeader({
         </button>
       )}
       <span className="min-w-0 flex-1" />
-      {phone ? (
-        <Menu label="Git actions" items={menu} size="sm" />
-      ) : (
-        <>
-          {commitFirst ? (
-            <Button
-              icon={GitCommitHorizontal}
-              disabled={busy}
-              onClick={onCommit}
-              data-tip="Commit your changes in the Changes tab"
-            >
-              Commit…
-            </Button>
-          ) : (
-            <Button
-              icon={ArrowUpFromLine}
-              busy={pending === 'push'}
-              disabled={busy && pending !== 'push'}
-              disabledReason={push.reason}
-              onClick={onPush}
-              {...(push.tip === undefined ? {} : { 'data-tip': push.tip })}
-            >
-              {push.label}
-            </Button>
-          )}
-          {task.pr === null ? (
-            <Button
-              // Primary only when it works: a blocked primary would draw the eye to a control
-              // that does nothing, and the switch marks the moment the task is ready to ship.
-              variant={pullRequest.reason === undefined ? 'primary' : 'secondary'}
-              icon={GitPullRequest}
-              busy={pending === 'pull-request'}
-              disabled={busy && pending !== 'pull-request'}
-              disabledReason={pullRequest.reason}
-              aria-label="Create pull request"
-              onClick={onPullRequest}
-            >
-              {pullRequest.label}
-            </Button>
-          ) : (
-            <a
-              href={task.pr}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open pull request"
-              className={button('secondary')}
-            >
-              <GitPullRequest size={ICON.sm} aria-hidden="true" />
-              {compact ? 'Open PR' : 'Open pull request'}
-              <ExternalLink size={ICON.xs} aria-hidden="true" />
-            </a>
-          )}
-        </>
+      {phone && menu.length > 0 && <Menu label="Git actions" items={menu} size="sm" />}
+      {!phone && !finished && commitFirst && (
+        <Button
+          icon={GitCommitHorizontal}
+          disabled={busy}
+          onClick={onCommit}
+          data-tip="Commit your changes in the Changes tab"
+        >
+          Commit…
+        </Button>
+      )}
+      {!phone && !finished && !commitFirst && (
+        <Button
+          icon={ArrowUpFromLine}
+          busy={pending === 'push'}
+          disabled={busy && pending !== 'push'}
+          disabledReason={push.reason}
+          onClick={onPush}
+          {...(push.tip === undefined ? {} : { 'data-tip': push.tip })}
+        >
+          {push.label}
+        </Button>
+      )}
+      {!phone && !finished && task.pr === null && (
+        <Button
+          // Primary only when it works: a blocked primary would draw the eye to a control
+          // that does nothing, and the switch marks the moment the task is ready to ship.
+          variant={pullRequest.reason === undefined ? 'primary' : 'secondary'}
+          icon={GitPullRequest}
+          busy={pending === 'pull-request'}
+          disabled={busy && pending !== 'pull-request'}
+          disabledReason={pullRequest.reason}
+          aria-label="Create pull request"
+          onClick={onPullRequest}
+        >
+          {pullRequest.label}
+        </Button>
+      )}
+      {!phone && task.pr !== null && (
+        <a
+          href={task.pr}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open pull request"
+          className={button('secondary')}
+        >
+          <GitPullRequest size={ICON.sm} aria-hidden="true" />
+          {compact ? 'Open PR' : 'Open pull request'}
+          <ExternalLink size={ICON.xs} aria-hidden="true" />
+        </a>
       )}
     </header>
   )

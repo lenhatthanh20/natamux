@@ -27,7 +27,7 @@ type TerminalViewProps = {
   // `${taskId}/${terminal}`: the terminal stays alive in the cache while no view shows it.
   // Without it, the terminal belongs to this view and ends with it.
   cacheKey?: string
-  // The state of the shell's task. Done and cancelled tasks say so when the shell ends.
+  // The state of the shell's task. A shell of a done or cancelled task ends with its glyph.
   taskState?: TaskState
   // False: the terminal does not take the keyboard when it is shown.
   focusOnOpen?: boolean
@@ -51,14 +51,13 @@ const CONNECTING: TerminalSessionState = {
 }
 const noSubscribe = () => () => undefined
 
+// The finished banner says once how the task ended. The exit code of a shell it ended says
+// nothing useful.
 function endedText(taskState: TaskState | undefined, code: number | null): string {
-  if (taskState === 'done') {
-    return 'Task done. The agent and its shells were closed.'
-  }
-  if (taskState === 'cancelled') {
-    return 'Task cancelled. The agent and its shells were closed.'
-  }
-  return code === null || code === 0 ? STATUS_TEXT.ended : `${STATUS_TEXT.ended} Exit code ${code}.`
+  const finished = taskState === 'done' || taskState === 'cancelled'
+  return finished || code === null || code === 0
+    ? STATUS_TEXT.ended
+    : `${STATUS_TEXT.ended} Exit code ${code}.`
 }
 
 // A shell in the task's workspace. The default export is what ChangesView loads on demand.

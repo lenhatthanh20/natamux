@@ -147,6 +147,15 @@ describe('createApi', () => {
     })
   })
 
+  it('removes a workspace and keeps its branch when asked to', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task, branchDeleted: false }))
+
+    const result = await createApi('secret', fetchFunction).removeWorkspace('T-0001', false)
+
+    expect(result).toEqual({ task, branchDeleted: false })
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/workspace?deleteBranch=false')
+  })
+
   it('makes a task from a template in the project it is given', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ task }, 201))
 
@@ -430,6 +439,18 @@ describe('getFileImage', () => {
     expect(failure).toBeInstanceOf(ApiError)
     expect((failure as ApiError).status).toBe(413)
     expect((failure as ApiError).message).toBe('logo.png is larger than 5 MB')
+  })
+})
+
+describe('ended shells', () => {
+  it('lists the last screens of the shells of a finished task', async () => {
+    const shells = [
+      { name: '1', agent: null, stage: null, endedAt: '2026-10-15T00:07:00.000Z', text: 'Done.' },
+    ]
+    const { calls, fetchFunction } = fakeFetch(() => json({ shells }))
+
+    expect(await createApi('secret', fetchFunction).listEndedShells('T-0001')).toEqual(shells)
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/ended-shells')
   })
 })
 

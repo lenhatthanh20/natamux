@@ -33,6 +33,9 @@ import { isUnseen } from '../lib/view-store'
 import {
   collapsedHint,
   DEFAULT_REPO_ID,
+  type Hold,
+  heldId,
+  nextHold,
   type RepoGroup,
   workspaceGroups,
 } from '../lib/workspace-groups'
@@ -144,10 +147,14 @@ export function WorkspaceList({
   useEffect(() => {
     painted.current = true
   }, [])
+  // Read and kept during render, so the row stays put in the same render that finishes the task.
+  const hold = useRef<Hold>({ id: null, open: false })
+  hold.current = nextHold(hold.current, currentId, allTasks)
   const { pinned, groups, children } = workspaceGroups(
     repos,
     withParents(tasks, allTasks),
     pinnedIds,
+    heldId(hold.current),
   )
   const finishedIn = (id: string) => groups.find((group) => group.repo.id === id)?.finished ?? []
   const repoName = (task: Task) =>

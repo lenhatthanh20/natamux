@@ -70,6 +70,7 @@ type WorkspaceRowProps = {
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
   onTogglePin: (id: string) => void
+  // Opens the dialog that asks before the workspace is removed.
   onRemove: (id: string) => void
   onDelete?: (id: string) => void
 }
@@ -147,7 +148,6 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   const tab = rovingItem(`task:${task.id}`, tabStop, activate)
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(task.title)
-  const [removing, setRemoving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const field = useRef<HTMLInputElement>(null)
@@ -227,7 +227,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
       label: 'Remove workspace',
       icon: FolderMinus,
       danger: true,
-      onSelect: () => setRemoving(true),
+      onSelect: () => onRemove(task.id),
     },
     ...(onDelete === undefined
       ? []
@@ -404,7 +404,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
               } else if (event.key === 'Delete') {
                 event.preventDefault()
                 event.stopPropagation()
-                setRemoving(true)
+                onRemove(task.id)
               } else if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
                 event.stopPropagation()
                 openContextMenu(
@@ -464,15 +464,6 @@ export const WorkspaceRow = memo(function WorkspaceRow({
         )}
       </div>
       {children}
-      {removing && (
-        <ConfirmDialog
-          title="Remove the workspace?"
-          description={`This deletes the worktree folder of ${task.id}. The branch stays when it has commits that are not merged. The task stays too.`}
-          confirmLabel="Remove"
-          onConfirm={() => onRemove(task.id)}
-          onClose={() => setRemoving(false)}
-        />
-      )}
       {deleting && onDelete !== undefined && (
         <ConfirmDialog
           title={`Delete ${task.id}?`}

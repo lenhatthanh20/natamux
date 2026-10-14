@@ -130,6 +130,8 @@ describe('TaskTable', () => {
     expect(onAction).not.toHaveBeenCalled()
 
     const dialog = screen.getByRole('dialog', { name: 'Cancel T-0002?' })
+    expect(document.activeElement?.textContent).toBe('Keep working')
+    expect(dialog.textContent).toContain('A cancelled task cannot be started again.')
     await user.click(within(dialog).getByRole('button', { name: 'Cancel task' }))
     expect(onAction).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'T-0002' }),

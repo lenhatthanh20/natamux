@@ -46,7 +46,7 @@ A task is always in one of nine states. When the task has stages, the state desc
 | `done` | The task is finished. | The last stage finishes, or the pull request is merged. |
 | `cancelled` | You stopped the task. | You cancel it from any state except `done` and `cancelled`. |
 
-`done` and `cancelled` are final. A finished task cannot move again. When a task ends, Natamux closes its terminals.
+`done` and `cancelled` are final. A finished task cannot move again. When a task ends, Natamux keeps the last screen of each terminal, then closes them, except one where a program such as a dev server still runs. Its workspace stays until you remove it, see [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
 
 Each state has its own icon in the dashboard. See [Status icons](/docs/guides/status-icons/).
 

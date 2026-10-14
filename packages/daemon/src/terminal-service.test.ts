@@ -694,6 +694,40 @@ describe('shells of an ended task', () => {
     vi.advanceTimersByTime(ENDED_IDLE_MS * 3)
     expect(service.isOpen('T-0001')).toBe(true)
   })
+
+  it('ends a kept shell once its program is done, also when no client ever came', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup({ isEnded: ended })
+    service.run('T-0002', 'pnpm dev')
+    const pty = first(ptys)
+    pty.program = 'node'
+
+    service.endWhenIdle('T-0002', MAIN_TERMINAL)
+    vi.advanceTimersByTime(ENDED_IDLE_MS * 3)
+    expect(service.isOpen('T-0002')).toBe(true)
+
+    pty.program = 'zsh'
+    vi.advanceTimersByTime(ENDED_IDLE_MS)
+    expect(service.isOpen('T-0002')).toBe(false)
+  })
+})
+
+describe('the last screen of a shell', () => {
+  it('reads the last lines as plain text, without the empty rows under them', async () => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    first(ptys).emit('one\r\n\x1b[31mtwo\x1b[0m\r\nthree\r\n')
+    await service.settled('T-0001')
+
+    expect(service.lastScreen('T-0001', MAIN_TERMINAL, 2)).toBe('two\nthree')
+    expect(service.lastScreen('T-0001', MAIN_TERMINAL, 10)).toBe('one\ntwo\nthree')
+  })
+
+  it('reads nothing for a shell that is not open', () => {
+    const { service } = setup()
+
+    expect(service.lastScreen('T-0001', '7', 10)).toBeUndefined()
+  })
 })
 
 describe('attaching to a running shell', () => {

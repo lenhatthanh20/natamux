@@ -10,6 +10,7 @@ import {
   actionsFor,
   agentAction,
   applyTaskChanges,
+  cancelTaskDescription,
   contextText,
   countByState,
   filterTasks,
@@ -499,6 +500,18 @@ describe('contextText', () => {
     )
     expect(contextText({ source: 'skill', name: 'Ticket', skill: 'jira-ticket', ref: '' })).toBe(
       'jira-ticket (skill)',
+    )
+  })
+})
+
+describe('cancelTaskDescription', () => {
+  it('says what stops and what stays', () => {
+    expect(cancelTaskDescription({ workspace: '/work/T-0001' })).toBe(
+      'The agent and its shells stop now. The commits, the branch and the workspace stay. ' +
+        'A cancelled task cannot be started again.',
+    )
+    expect(cancelTaskDescription({ workspace: null })).toBe(
+      'A cancelled task cannot be started again.',
     )
   })
 })

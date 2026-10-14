@@ -264,6 +264,35 @@ describe('remove', () => {
     expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
   })
 
+  it('deletes the branch of a merged pull request once origin has all of it', async () => {
+    addBareOrigin(repo)
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+    runGit(created.workspace ?? '', 'push', 'origin', 'natamux/t-0001-fix-the-bug')
+    tasks.recordPullRequestStatus(task.id, { state: 'merged', checks: 'passing' })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: true })
+
+    expect(result.branchDeleted).toBe(true)
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(false)
+  })
+
+  it('keeps the branch of a merged pull request that has a commit origin lacks', async () => {
+    addBareOrigin(repo)
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const created = await workspaces.create(task.id)
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'work')
+    runGit(created.workspace ?? '', 'push', 'origin', 'natamux/t-0001-fix-the-bug')
+    runGit(created.workspace ?? '', 'commit', '--allow-empty', '-m', 'after the merge')
+    tasks.recordPullRequestStatus(task.id, { state: 'merged', checks: 'passing' })
+
+    const result = await workspaces.remove(task.id, { deleteBranch: true })
+
+    expect(result.branchDeleted).toBe(false)
+    expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
+  })
+
   it('refuses a worktree with changes not committed, before ending its shells', async () => {
     const closed: string[] = []
     const guarded = new WorkspaceService({

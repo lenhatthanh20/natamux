@@ -18,6 +18,7 @@ import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
 import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
+import { removedText } from '../lib/finished'
 import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
 import { ACTIVITY_KEY, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../lib/live'
 import type { PaletteScope } from '../lib/palette'
@@ -54,6 +55,7 @@ import { NoWorkspace } from './NoWorkspace'
 import { ProgressBoard } from './ProgressBoard'
 import { ProgressTab } from './ProgressTab'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+import { RemoveWorkspaceDialog } from './RemoveWorkspaceDialog'
 import { RepoPanel } from './RepoPanel'
 import { ShortcutSheet } from './ShortcutSheet'
 import { Sidebar } from './Sidebar'
@@ -331,39 +333,42 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   })
 
   const workspaceMutation = useMutation({
-    mutationFn: async ({
-      taskId,
-      action,
-      base,
-    }: {
-      taskId: string
-      action: 'create' | 'remove'
-      base?: string
-    }) => {
-      if (action === 'create') {
-        return { task: await api.createWorkspace(taskId, base), message: null }
-      }
-      const { task, branchDeleted } = await api.removeWorkspace(taskId)
-      return {
-        task,
-        message: branchDeleted
-          ? 'Workspace removed.'
-          : 'Workspace removed. The branch is kept because it has commits that are not merged.',
-      }
-    },
-    onSuccess: ({ task, message }, { action }) => {
+    mutationFn: ({ taskId, base }: { taskId: string; base?: string }) =>
+      api.createWorkspace(taskId, base),
+    // A new workspace opens on its terminal, like the one from the dialog.
+    onSuccess: (task) => {
       mergeTask(task)
-      if (message !== null) {
-        toast(message)
-      }
-      // A new workspace opens on its terminal, like the one from the dialog.
-      if (action === 'create') {
-        select(task.id)
-        openChanges(task.id, 'terminal')
-      }
+      select(task.id)
+      openChanges(task.id, 'terminal')
     },
     onError: (error) => toast(error.message, 'error'),
   })
+
+  // The task whose workspace the remove dialog asks about. The dialog waits for the daemon and
+  // shows its error itself, so this is no mutation.
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const removingTask = tasks.find((task) => task.id === removingId && task.workspace !== null)
+  // A workspace removed some other way closes the dialog for good, so a new workspace of the task
+  // does not bring it back.
+  useEffect(() => {
+    if (removingId !== null && removingTask === undefined) {
+      setRemovingId(null)
+    }
+  }, [removingId, removingTask])
+  const removeWorkspace = async (task: Task, deleteBranch: boolean) => {
+    const { task: updated, branchDeleted } = await api.removeWorkspace(task.id, deleteBranch)
+    mergeTask(updated)
+    toast(removedText(task, branchDeleted))
+  }
+  // The dialog sends the user to the changes of the task, to commit or discard them.
+  const showChangesOf = (taskId: string, commit: boolean) => {
+    setRemovingId(null)
+    select(taskId)
+    openChanges(taskId, 'changes')
+    if (commit) {
+      setTimeout(() => document.getElementById('commit-message')?.focus(), 80)
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: (taskId: string) => api.deleteTask(taskId),
@@ -912,7 +917,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       editMutation.mutate({ taskId: id, changes: { title } })
                     }
                     onTogglePin={togglePin}
-                    onRemove={(id) => workspaceMutation.mutate({ taskId: id, action: 'remove' })}
+                    onRemove={setRemovingId}
                     onDelete={(id) => deleteMutation.mutate(id)}
                     onRemoveFinished={(ids) => removeFinishedMutation.mutate(ids)}
                     removingFinished={removeFinishedMutation.isPending}
@@ -961,12 +966,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     loadEvents={() => api.listEvents(detailTask.id)}
                     onAction={(action) => runAction(detailTask, action)}
                     onCreateWorkspace={(base) => {
-                      workspaceMutation.mutate({ taskId: detailTask.id, action: 'create', base })
+                      workspaceMutation.mutate({ taskId: detailTask.id, base })
                     }}
                     branches={branchesQuery.data}
-                    onRemoveWorkspace={() => {
-                      workspaceMutation.mutate({ taskId: detailTask.id, action: 'remove' })
-                    }}
+                    onRemoveWorkspace={() => setRemovingId(detailTask.id)}
                     onViewChanges={() => openChanges(detailTask.id)}
                     onStartAgent={() => agentMutation.mutate({ task: detailTask })}
                     onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
@@ -1048,9 +1051,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             waitingFor={waitingOn(changesTask, tasks)}
             branches={branchesQuery.data}
             onCreateWorkspace={(base) => {
-              workspaceMutation.mutate({ taskId: changesTask.id, action: 'create', base })
+              workspaceMutation.mutate({ taskId: changesTask.id, base })
             }}
             onStartAgent={(base) => agentMutation.mutate({ task: changesTask, base })}
+            onShowProgress={() => showProgress(changesTask.id)}
+            loadEvents={() => api.listEvents(changesTask.id)}
+            onFollowUp={() =>
+              openNewWorkspace({
+                repo: changesTask.repo ?? undefined,
+                title: `Follow-up to ${changesTask.id}: `,
+              })
+            }
           />
         ) : changesTask ? (
           <ChangesView
@@ -1128,6 +1139,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               showProgress(changesTask.id)
               setTimeout(() => fireAppEvent('send-back'), 80)
             }}
+            loadEndedShells={() => api.listEndedShells(changesTask.id)}
+            onRemoveWorkspace={() => setRemovingId(changesTask.id)}
           />
         ) : agentsOpen ? (
           <LiveAgentPanes
@@ -1363,6 +1376,19 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       <Toaster />
       <Tooltip />
       <ContextMenuHost />
+      {removingTask !== undefined && (
+        <RemoveWorkspaceDialog
+          key={removingTask.id}
+          task={removingTask}
+          loadChanges={() => api.listChanges(removingTask.id)}
+          loadGraph={() => api.getGitGraph(removingTask.id)}
+          loadShells={(id) => api.listShells(id)}
+          remove={(deleteBranch) => removeWorkspace(removingTask, deleteBranch)}
+          onClose={() => setRemovingId(null)}
+          onViewChanges={() => showChangesOf(removingTask.id, false)}
+          onCommit={() => showChangesOf(removingTask.id, true)}
+        />
+      )}
       {newWorkspace !== null && (
         <NewWorkspaceDialog
           repos={repos}

@@ -122,6 +122,8 @@ The pull request gets the task title as its title and the task notes as its body
 
 After a pull request exists, **Create pull request** becomes **Open pull request** (**Open PR** in a narrow window). It opens the pull request in a new tab.
 
+A done or cancelled task keeps only **Open pull request** in its header. The banner under it offers the next step instead, see [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
+
 The pull request needs the GitHub CLI (`gh`) logged in on the machine that runs the daemon.
 
 ### Pull request status

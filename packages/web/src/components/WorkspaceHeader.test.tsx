@@ -207,4 +207,23 @@ describe('WorkspaceHeader', () => {
     header({ task: { ...TASK, state: 'needs-input' } })
     expect(document.querySelector('.state-chip')).toBeNull()
   })
+
+  it('leaves the git steps of a finished task to its banner, but keeps its pull request', () => {
+    header({ task: { ...TASK, state: 'done' }, ahead: 2, push: tracked(1), uncommitted: 1 })
+    expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Create pull request' })).toBeNull()
+    cleanup()
+
+    const pr = 'https://github.com/o/r/pull/7'
+    header({ task: { ...TASK, state: 'cancelled', pr } })
+    expect(screen.getByRole('link', { name: 'Open pull request' }).getAttribute('href')).toBe(pr)
+  })
+
+  it('has no git menu on a phone for a finished task without a pull request', () => {
+    stubPhone()
+    header({ task: { ...TASK, state: 'done' } })
+
+    expect(screen.queryByRole('button', { name: 'Git actions' })).toBeNull()
+  })
 })

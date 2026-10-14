@@ -9,7 +9,9 @@ import {
   commitMessageDraftSchema,
   type DiffStat,
   diffStatSchema,
+  type EndedShell,
   type EventType,
+  endedShellSchema,
   type FileDiff,
   fileDiffSchema,
   type GitGraph,
@@ -623,6 +625,16 @@ export function createApi(
       return body.attachments.map((entry) => attachmentSchema.parse(entry))
     },
 
+    // The last screens of the shells of a done or cancelled task.
+    async listEndedShells(taskId: string): Promise<EndedShell[]> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/ended-shells`
+      const body = asRecord(await request('GET', path))
+      if (!Array.isArray(body.shells)) {
+        throw new Error('The daemon sent an answer this dashboard does not understand.')
+      }
+      return body.shells.map((entry) => endedShellSchema.parse(entry))
+    },
+
     async readAttachment(taskId: string, name: string): Promise<Blob> {
       const id = encodeURIComponent(taskId)
       return requestBlob(`/tasks/${id}/attachments/${encodeURIComponent(name)}`)
@@ -697,10 +709,10 @@ export function createApi(
       return { id: typeof body.id === 'string' ? body.id : taskId, tasks }
     },
 
-    async removeWorkspace(taskId: string): Promise<RemoveWorkspaceResult> {
-      const body = asRecord(
-        await request('DELETE', `/tasks/${encodeURIComponent(taskId)}/workspace?deleteBranch=true`),
-      )
+    // A merged branch goes too, unless `deleteBranch` is false. The daemon keeps any other.
+    async removeWorkspace(taskId: string, deleteBranch = true): Promise<RemoveWorkspaceResult> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/workspace?deleteBranch=${deleteBranch}`
+      const body = asRecord(await request('DELETE', path))
       return { task: taskSchema.parse(body.task), branchDeleted: body.branchDeleted === true }
     },
   }

@@ -37,6 +37,7 @@ import {
   readAttachment,
 } from './attachments.js'
 import { COPILOT_EVENT_FIELD } from './copilot-hooks.js'
+import { readEndedShells } from './ended-shells.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { fanOut, MAX_TRIES } from './fan-out.js'
 import {
@@ -547,6 +548,13 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const { id } = taskParamsSchema.parse(request.params)
     options.service.getTask(id)
     return { attachments: listAttachments(options.dataDir, id) }
+  })
+
+  // The last screens of the shells of a done or cancelled task, for its wrap-up.
+  app.get('/tasks/:id/ended-shells', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    options.service.getTask(id)
+    return { shells: readEndedShells(options.dataDir, id) }
   })
 
   // An image the dashboard shows comes with its type. Any other file, SVG and HTML too, only

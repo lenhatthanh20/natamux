@@ -96,6 +96,12 @@ const defaultRepo = { id: 'default', name: 'natamux', path: '/work/natamux' }
 let stageFiles: { name: string; size: number; modifiedAt: string }[] = []
 // The shells each workspace has open next to the first one.
 let extraShells: string[] = []
+// The files that are not committed in every workspace.
+const CHANGED_FILES = [
+  { path: 'src/a.ts', status: 'M', originalPath: null },
+  { path: 'notes.md', status: 'U', originalPath: null },
+]
+let changedFiles = CHANGED_FILES
 const webRepo = { id: 'web', name: 'Web app', path: '/work/web' }
 
 function installDaemon(
@@ -200,12 +206,7 @@ function installDaemon(
       return creating ? json({ task: updated }, 201) : json({ task: updated, branchDeleted: true })
     }
     if (/^\/api\/tasks\/T-\d+\/changes$/.test(path) && method === 'GET') {
-      return json({
-        changes: [
-          { path: 'src/a.ts', status: 'M', originalPath: null },
-          { path: 'notes.md', status: 'U', originalPath: null },
-        ],
-      })
+      return json({ changes: changedFiles })
     }
     if (/^\/api\/tasks\/T-\d+\/changes\/file\?/.test(path) && method === 'GET') {
       const requested = new URL(path, 'http://daemon').searchParams.get('path') ?? ''
@@ -475,6 +476,7 @@ beforeEach(() => {
   window.localStorage.clear()
   stageFiles = []
   extraShells = []
+  changedFiles = CHANGED_FILES
   useViewStore.setState({ ...initialViewData, pinned: [] })
   useToasts.setState({ toasts: [] })
   FakeSocket.instances = []
@@ -578,12 +580,17 @@ describe('App', () => {
     await user.click(within(details).getByRole('tab', { name: 'Details' }))
     await waitFor(() => expect(byTip(details, '/work/T-0001')).toBeTruthy())
 
+    changedFiles = []
     await user.click(within(details).getByRole('button', { name: 'Remove workspace' }))
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
-    const confirm = screen.getByRole('dialog', { name: 'Remove the workspace?' })
-    await user.click(within(confirm).getByRole('button', { name: 'Remove' }))
+    // The workspace view cached its changed files; the dialog reads them again first.
+    const confirm = await screen.findByRole('dialog', { name: 'Remove the workspace of T-0001?' })
+    const remove = within(confirm).getByRole('button', { name: 'Remove workspace' })
+    await waitFor(() => expect(remove.getAttribute('aria-disabled')).toBeNull())
+    await user.click(remove)
 
-    expect(await screen.findByText('Workspace removed.')).toBeTruthy()
+    expect(await screen.findByText(/^Removed the workspace of T-0001/)).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(byTip(details, '/work/T-0001')).toBeNull()
     expect(calls.some((call) => call.method === 'DELETE')).toBe(true)
   })

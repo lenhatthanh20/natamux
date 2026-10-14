@@ -1,6 +1,12 @@
 import type { Task, TaskState } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { notificationFor, statesById, tasksThatStartedWaiting } from './notify'
+import {
+  finishedText,
+  notificationFor,
+  statesById,
+  tasksThatFinished,
+  tasksThatStartedWaiting,
+} from './notify'
 
 function task(id: string, state: TaskState): Task {
   return {
@@ -64,5 +70,30 @@ describe('notificationFor', () => {
       title: 'T-0001: Needs your input',
       body: 'Title of T-0001',
     })
+  })
+})
+
+describe('tasksThatFinished', () => {
+  it('lists tasks that became done, not cancelled ones', () => {
+    const before = statesById([
+      task('T-0001', 'review'),
+      task('T-0002', 'running'),
+      task('T-0003', 'done'),
+    ])
+    const now = [
+      task('T-0001', 'done'),
+      task('T-0002', 'cancelled'),
+      task('T-0003', 'done'),
+      task('T-0004', 'done'),
+    ]
+
+    expect(tasksThatFinished(before, now).map((entry) => entry.id)).toEqual(['T-0001'])
+  })
+})
+
+describe('finishedText', () => {
+  it('says how the task ended', () => {
+    expect(finishedText({ id: 'T-0058', state: 'done' })).toBe('T-0058 is done.')
+    expect(finishedText({ id: 'T-0058', state: 'cancelled' })).toBe('T-0058 was cancelled.')
   })
 })

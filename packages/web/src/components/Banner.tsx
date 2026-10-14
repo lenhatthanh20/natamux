@@ -3,7 +3,7 @@ import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ICON } from './ui/styles'
 
 // Amber asks for an answer; the other tones take the colors of their task state.
-export type BannerTone = 'signal' | 'failed' | 'review'
+export type BannerTone = 'signal' | 'failed' | 'review' | 'done' | 'cancelled'
 
 // A soft wash and line in the color of the state named by a data-state attribute.
 export const STATE_TONE =
@@ -13,6 +13,8 @@ const FRAME: Record<BannerTone, string> = {
   signal: 'border-signal-line bg-signal-soft',
   failed: STATE_TONE,
   review: STATE_TONE,
+  done: STATE_TONE,
+  cancelled: STATE_TONE,
 }
 
 type BannerProps = {

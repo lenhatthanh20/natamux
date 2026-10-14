@@ -36,6 +36,7 @@ import {
 } from '@natamux/core'
 import { z } from 'zod'
 import { type AttachmentFile, saveAttachments } from './attachments.js'
+import { deleteEndedShells } from './ended-shells.js'
 import type { EventBus } from './event-bus.js'
 import {
   appendEventLine,
@@ -577,6 +578,7 @@ export class TaskService {
     rmSync(taskFilePath(this.dataDir, taskId), { force: true })
     rmSync(eventLogPath(this.dataDir, taskId), { force: true })
     rmSync(archiveDir(this.dataDir, taskId), { recursive: true, force: true })
+    deleteEndedShells(this.dataDir, taskId)
     this.removeLaunchScripts(taskId)
     this.index.deleteTask(taskId)
     this.tasks.delete(taskId)

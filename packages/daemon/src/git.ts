@@ -1166,3 +1166,22 @@ export async function deleteMergedBranch(repoDir: string, branch: string): Promi
     throw error
   }
 }
+
+// Deletes a branch when origin has every commit of it, as last pushed or fetched, merged or not.
+// For a branch that GitHub merged with a squash or a rebase, which `git branch -d` keeps.
+export async function deletePushedBranch(repoDir: string, branch: string): Promise<boolean> {
+  try {
+    const range = `refs/remotes/origin/${branch}..refs/heads/${branch}`
+    const ahead = await git(repoDir, ['rev-list', '--count', range])
+    if (ahead.trim() !== '0') {
+      return false
+    }
+    await git(repoDir, ['branch', '-D', branch])
+    return true
+  } catch (error) {
+    if (error instanceof GitError) {
+      return false
+    }
+    throw error
+  }
+}

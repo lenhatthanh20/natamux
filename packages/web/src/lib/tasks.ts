@@ -73,6 +73,17 @@ export function deleteTaskDescription(task: Pick<Task, 'workspace'>): string {
   )
 }
 
+// What a cancel stops and what it keeps.
+export function cancelTaskDescription(task: Pick<Task, 'workspace'>): string {
+  const final = 'A cancelled task cannot be started again.'
+  if (task.workspace === null) {
+    return final
+  }
+  const stops = 'The agent and its shells stop now.'
+  const stays = 'The commits, the branch and the workspace stay.'
+  return `${stops} ${stays} ${final}`
+}
+
 const byRecent = (a: Task, b: Task) =>
   b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)
 

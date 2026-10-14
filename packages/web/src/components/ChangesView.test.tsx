@@ -67,9 +67,10 @@ type Options = {
   pushedGraph?: GitGraph
   pushFails?: boolean
   graph?: GitGraph
-  tab?: 'history' | 'changes'
+  tab?: 'history' | 'changes' | 'terminal'
   generate?: () => Promise<CommitMessageDraft>
   commit?: (message: string) => Promise<Task>
+  onRemoveWorkspace?: () => void
 }
 
 function view({
@@ -83,6 +84,7 @@ function view({
   tab = 'history',
   generate,
   commit = async () => task,
+  onRemoveWorkspace,
 }: Options = {}) {
   let graph = firstGraph
   const push = vi.fn(async () => {
@@ -97,10 +99,10 @@ function view({
   const loadGraph = vi.fn(async (_fresh?: boolean) => graph)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const reject = () => Promise.reject(new Error('Not in this test'))
-  render(
+  const ui = (shown: Task) => (
     <QueryClientProvider client={client}>
       <ChangesView
-        task={task}
+        task={shown}
         initialTab={tab}
         loadChanges={loadChanges}
         loadFile={reject}
@@ -122,10 +124,20 @@ function view({
         writeStageFile={async () => {}}
         approveStage={approveStage}
         onSendBack={onSendBack}
+        loadShells={async () => ({ terminals: [], lanes: {}, programs: {} })}
+        loadEndedShells={async () => []}
+        onRemoveWorkspace={onRemoveWorkspace}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { push, openPullRequest, loadChanges, loadGraph }
+  const { rerender } = render(ui(task))
+  return {
+    push,
+    openPullRequest,
+    loadChanges,
+    loadGraph,
+    rerender: (next: Task) => rerender(ui(next)),
+  }
 }
 
 describe('ChangesView', () => {
@@ -488,5 +500,43 @@ describe('ChangesView', () => {
     view({ approveStage: async () => TASK, onSendBack: () => {} })
 
     expect(screen.queryByText(/Ready for review/)).toBeNull()
+  })
+})
+
+describe('a finished task', () => {
+  const done = { ...TASK, state: 'done' as const }
+
+  it('says the task is done, once, when it finishes on screen', async () => {
+    const { rerender } = view({ tab: 'changes' })
+    expect(useToasts.getState().toasts).toEqual([])
+
+    rerender(done)
+    rerender({ ...done, updatedAt: '2026-10-10T08:30:00.000Z' })
+
+    await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1))
+    expect(useToasts.getState().toasts[0]?.text).toBe('T-0002 is done.')
+  })
+
+  it('says nothing for a task that was done when it opened', () => {
+    view({ task: done, tab: 'changes' })
+
+    expect(useToasts.getState().toasts).toEqual([])
+  })
+
+  it('shows the finished banner on every tab, with its next step', async () => {
+    const onRemoveWorkspace = vi.fn()
+    view({ task: done, tab: 'changes', onRemoveWorkspace })
+
+    const banner = await screen.findByText('Task done.')
+    expect(banner.closest('[role="status"]')?.getAttribute('data-state')).toBe('done')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Remove workspace' }))
+    expect(onRemoveWorkspace).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the wrap-up on the Terminal tab, not a shell', async () => {
+    view({ task: done, tab: 'terminal', onRemoveWorkspace: vi.fn() })
+
+    expect(await screen.findByRole('list', { name: 'Wrap-up' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: /^Shell / })).toBeNull()
   })
 })
