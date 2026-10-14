@@ -2,7 +2,6 @@ import { type Task, type TaskState, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import type { TaskShells } from './api'
 import {
-  cometHead,
   cometOf,
   isFoldOpen,
   opensByDefault,
@@ -348,13 +347,5 @@ describe('cometOf', () => {
     expect(comet.summary).toBe(
       'Context done, Spec done, Plan done, Test spec done, Implement needs your input, Automated tests not started, Manual review not started',
     )
-  })
-})
-
-describe('cometHead', () => {
-  it('keeps the head inside the track', () => {
-    expect(cometHead(0.5)).toBe(12)
-    expect(cometHead(0)).toBe(2.4)
-    expect(cometHead(1)).toBe(21.6)
   })
 })

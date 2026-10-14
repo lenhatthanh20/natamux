@@ -251,8 +251,3 @@ export function cometOf(task: Pick<Task, 'stage' | 'stages' | 'state' | 'lanes'>
     summary: steps.flatMap(names).join(', '),
   }
 }
-
-// The x of the comet's head on its 24-wide track, kept off the ends.
-export function cometHead(progress: number): number {
-  return Math.min(21.6, Math.max(2.4, progress * 24))
-}
