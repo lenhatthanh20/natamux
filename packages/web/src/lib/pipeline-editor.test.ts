@@ -22,6 +22,7 @@ import {
   pipelineLabel,
   removeStage,
   runAlone,
+  runsInShellOne,
   sameSettings,
   setEnabled,
   setGate,
@@ -29,6 +30,7 @@ import {
   setText,
   setWorkflow,
   shownDefaultPrompt,
+  takesOwnAgent,
   trackerOf,
   withCreateIssue,
   withSteps,
@@ -404,6 +406,29 @@ describe('stage fields', () => {
     expect(approvalLabel({ kind: 'release', gate: 'manual' })).toBe(
       'Opens the pull request when you click',
     )
+  })
+})
+
+describe('own agent', () => {
+  const steps = addCustomStage(DEFAULT_PIPELINE, {
+    name: 'Write docs',
+    id: 'write-docs',
+    kind: 'agent',
+    output: '',
+  })
+
+  it('is offered on a stage of your own in Shell 1, and not on a catalog stage there', () => {
+    expect(takesOwnAgent(steps, 'write-docs')).toBe(true)
+    expect(runsInShellOne(steps, 'write-docs')).toBe(true)
+    expect(takesOwnAgent(steps, 'spec')).toBe(false)
+    expect(takesOwnAgent(steps, 'implement')).toBe(false)
+  })
+
+  it('is offered as before on stages outside Shell 1', () => {
+    expect(takesOwnAgent(steps, 'test-spec')).toBe(true)
+    expect(runsInShellOne(steps, 'test-spec')).toBe(false)
+    expect(takesOwnAgent(steps, 'agent-review')).toBe(true)
+    expect(runsInShellOne(steps, 'agent-review')).toBe(false)
   })
 })
 

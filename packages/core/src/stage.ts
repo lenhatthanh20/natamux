@@ -40,7 +40,8 @@ export const stageSchema = z.object({
   // The stage offers its tasks a checkbox to run it as a workflow (agent stages only).
   workflow: z.boolean().optional(),
   // Another agent, and words added to its command line, for a stage that starts its own agent
-  // beside the stage in Shell 1. That one keeps the task's agent, so its session goes on.
+  // beside the stage in Shell 1, or for a stage of your own in any shell. A catalog stage in
+  // Shell 1 keeps the task's agent, so its session goes on.
   agent: z.string().trim().min(1).optional(),
   args: z.string().trim().min(1).optional(),
   // The stage offers its tasks a checkbox to check the work on CI before the stage passes.
@@ -129,7 +130,7 @@ export const pipelineSchema = z
         if (ownAgent && !canHaveOwnAgent(step, stage)) {
           context.addIssue({
             code: 'custom',
-            message: `Only a stage that runs in its own shell can have its own agent or arguments, and "${stage.id}" cannot`,
+            message: `Only a stage outside Shell 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${stage.id}" cannot`,
             path: isGroup(step) ? [index, 'parallel', lane] : [index],
           })
         }
@@ -449,10 +450,14 @@ export function terminalOfStage(step: Step, stageId: string): string {
 
 // A stage that starts its own agent may use another one: an agent stage of a group that does not
 // keep Shell 1 (that goes to the code stage of the stages that are on), or one in its own shell.
+// A stage of your own that an agent works on may use another one in Shell 1 too.
 export function canHaveOwnAgent(
   step: Step,
   stage: Pick<Stage, 'id' | 'kind' | 'ownShell'>,
 ): boolean {
+  if (isCustomAgentStage(stage)) {
+    return true
+  }
   if (stage.kind !== 'agent') {
     return false
   }
@@ -463,10 +468,16 @@ export function canHaveOwnAgent(
   return codeStage({ ...step, parallel: on.length > 0 ? on : step.parallel }).id !== stage.id
 }
 
-// The agent and words of a stage that starts its own agent. A stage in Shell 1 pastes into the
-// task's agent, so it has none.
+function isCustomAgentStage(stage: Pick<Stage, 'id' | 'kind'>): boolean {
+  return (
+    catalogEntry(stage.id) === undefined && (stage.kind === 'agent' || stage.kind === 'testing')
+  )
+}
+
+// The agent and words of a stage that starts its own agent. A catalog stage in Shell 1 pastes into
+// the task's agent, so it has none.
 export function stageAgent(step: Step, stage: Stage): Pick<Stage, 'agent' | 'args'> {
-  if (terminalOfStage(step, stage.id) === '1') {
+  if (terminalOfStage(step, stage.id) === '1' && !isCustomAgentStage(stage)) {
     return {}
   }
   return {

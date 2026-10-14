@@ -163,7 +163,7 @@ describe('pipelineSchema', () => {
       ],
     })
     const message = (id: string) =>
-      `Only a stage that runs in its own shell can have its own agent or arguments, and "${id}" cannot`
+      `Only a stage outside Shell 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${id}" cannot`
 
     it('takes them on a stage that runs beside the stage in Shell 1', () => {
       const parsed = pipelineSchema.parse([build(own)])
@@ -207,6 +207,37 @@ describe('pipelineSchema', () => {
       const [testSpec, implement] = stagesOf(step as Step)
       expect(stageAgent(step as Step, testSpec as Stage)).toEqual(own)
       expect(stageAgent(step as Step, implement as Stage)).toEqual({})
+    })
+
+    it('takes them on a stage of your own that an agent works on, in Shell 1 too', () => {
+      const docs = { id: 'write-docs', kind: 'agent', gate: 'auto', ...own }
+      const lint = { id: 'check-types', kind: 'testing', gate: 'auto', ...own }
+      expect(pipelineSchema.safeParse([docs]).success).toBe(true)
+      expect(pipelineSchema.safeParse([lint]).success).toBe(true)
+      // The stage of a group that keeps Shell 1.
+      const group = {
+        id: 'build',
+        parallel: [docs, { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md' }],
+      }
+      expect(pipelineSchema.safeParse([group]).success).toBe(true)
+    })
+
+    it('rejects them on a stage of your own that no agent works on', () => {
+      const messages = (kind: string) =>
+        pipelineSchema
+          .safeParse([{ id: 'my-step', kind, gate: 'manual', ...own }])
+          .error?.issues.map((issue) => issue.message)
+      for (const kind of ['context', 'review', 'release', 'manual']) {
+        expect(messages(kind)).toEqual([message('my-step')])
+      }
+    })
+
+    it('gives them to a stage of your own in Shell 1 when the task runs', () => {
+      const docs = { id: 'write-docs', kind: 'agent', gate: 'auto' } as const
+      expect(stageAgent({ ...docs, ...own }, { ...docs, ...own })).toEqual(own)
+      expect(stageAgent(docs, docs)).toEqual({})
+      const spec = { id: 'spec', kind: 'agent', gate: 'manual', agent: 'codex' } as const
+      expect(stageAgent(spec, spec)).toEqual({})
     })
   })
 

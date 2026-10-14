@@ -66,9 +66,11 @@ Natamux uses the model each agent picks. Set it in one of these places:
 |---|---|---|
 | The agent's own settings | Every session of that agent | Claude Code: `"model": "opus"` in `~/.claude/settings.json`. Codex: `model = "…"` in `~/.codex/config.toml`. |
 | `NATAMUX_<AGENT>_ARGS` | Every agent Natamux starts | `NATAMUX_CLAUDE_ARGS="--model opus"`. See [Environment variables](/docs/reference/environment-variables/). |
-| The stage's `args` | One stage that runs beside the stage in Shell 1 | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
+| The stage's `args` | One stage that runs beside the stage in Shell 1, or one stage of your own | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
 
-A stage in Shell 1 cannot change the model: that would need a new session and lose the context of the stages before it.
+A catalog stage in Shell 1 cannot change the model: that would need a new session and lose the context of the stages before it.
+
+A stage of your own (made with **Custom stage**) that an agent works on can change it, in Shell 1 too. When another agent runs in Shell 1, Natamux closes it and starts the stage's agent there. The next stage in Shell 1 gets the task's agent back, with a new session. A program in Shell 1 that is no agent Natamux knows stays, and gets the prompt.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -80,7 +82,7 @@ Open the menu of a project and click **Settings**. The **Stages** tab edits the 
 - **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The checkbox of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
-- **Agent.** A stage that runs beside the stage in Shell 1, such as Test spec, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
+- **Agent.** A stage that runs beside the stage in Shell 1, such as Test spec, or a stage of your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
 - **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
 - **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
