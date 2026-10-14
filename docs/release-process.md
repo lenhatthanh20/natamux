@@ -5,10 +5,10 @@ How a version gets from `main` to users. The desktop app installs an update only
 ## Steps
 
 1. On a branch: set the version in `packages/{cli,core,daemon,desktop,web}/package.json` and the homepage, write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` must pass. Merge to `main`.
-2. Tag the merge commit with an annotated tag and push it:
+2. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
    ```sh
-   git tag -a vX.Y.Z -m "Natamux vX.Y.Z" <commit on main>
+   git tag -s vX.Y.Z -m "Natamux vX.Y.Z" <commit on main>
    git push origin vX.Y.Z
    ```
 
@@ -20,7 +20,7 @@ How a version gets from `main` to users. The desktop app installs an update only
    ```
 
    It checks that:
-   - the tag is `vX.Y.Z`, annotated, made by you (its tagger email is your `git config user.email`), and the same object here and on GitHub. It trusts your local tag, not GitHub's: someone who can push could move the tag there. A plain `git fetch` or `git pull` can also bring tags from GitHub, so between tagging and signing use `git fetch --no-tags`, or do not fetch at all;
+   - the tag is `vX.Y.Z`, signed by a key in your allowed signers file (`git verify-tag`), and the same object here and on GitHub. It trusts your local, signed tag, not GitHub's: someone who can push could move the tag there, and a `git fetch` can bring their tag here, but they cannot sign it with your key;
    - the tag's commit is on `main`;
    - the release is a draft, not marked as a pre-release, with exactly the six files and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
    - the push Release run of the tag succeeded and built that commit;
@@ -41,6 +41,18 @@ Do not re-run the Release workflow once signing has started. A re-run replaces t
   ```
   RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
   ```
+
+## The tag key
+
+Release tags are signed with the owner's SSH key. Set it up once (use your own key file):
+
+```sh
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub
+echo "$(git config user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+```
+
+`scripts/sign-release.sh` checks the tag against `~/.ssh/allowed_signers` (or the file in `NATAMUX_TAG_SIGNERS`). Keep that file outside the repository: anyone who can push could add a key to a file in it.
 
 ## What the app checks
 
@@ -64,4 +76,4 @@ The comment check ties a signature to one release. An old signed `SHA256SUMS.txt
 - Windows copies do not update themselves; users check their download as the [install page](https://natamux.github.io/docs/getting-started/install/#verify-the-download) says.
 - The signature proves the files are what the Release run built from the tagged commit. It does not prove the build is clean: a bad action or a bad dependency inside the build makes artifacts that pass every check. Only an independent rebuild would catch that. Read the change list the script shows.
 - Freeze: GitHub, or someone who controls the repository, can keep serving an older signed release as the latest. Apps then see no update. They never go back to an older version, but they can miss a fix.
-- `main` and the `v*` tags have no branch or tag protection today. Turn on branch protection for `main` and a tag rule for `v*` in the repository settings, so a stolen token cannot push to `main` or move a release tag. The script's local-tag check covers the tag, not what is on `main`.
+- `main` and the `v*` tags have no branch or tag protection today. Turn on branch protection for `main` and a tag rule for `v*` in the repository settings, so a stolen token cannot push to `main` or move a release tag. The script's signed-tag check covers the tag, not what is on `main`.
