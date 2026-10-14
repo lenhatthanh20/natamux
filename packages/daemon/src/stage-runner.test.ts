@@ -1887,7 +1887,7 @@ describe('who a stage action came from', () => {
     tasks.applyEvent(task.id, {
       source: 'human',
       type: 'state.overridden',
-      payload: { to: 'draft', stage: 'implement' },
+      payload: { to: 'draft', stage: 'spec' },
     })
     await withWorkspace(task.id)
     const before = tasks.listEvents(task.id).length
@@ -1895,7 +1895,7 @@ describe('who a stage action came from', () => {
     await runner.settle()
     const after = tasks.listEvents(task.id).slice(before)
     expect(after.filter(({ event }) => event.source === 'human')).toEqual([])
-    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
   })
 })
 
