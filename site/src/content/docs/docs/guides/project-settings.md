@@ -37,7 +37,7 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
 
 - **Problems.** Each problem shows next to its stage, and **Save** is off until they are fixed. The rules are in [Rules for the pipeline](/docs/reference/configuration/#rules-for-the-pipeline).
-- **Footer.** **Reset to default** puts the default pipeline in the editor. **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
+- **Footer.** **Reset to default** puts the default pipeline in the editor. **Import…** and **Export** load and save a file; see [Import and export](#import-and-export). **Cancel** closes the screen. **Save** (`Mod+Enter`) writes the file. A line above them, except on the **Issues** tab, says: "New tasks use this pipeline. Tasks on their way keep their stages, but use the new prompts and approvals."
 - **Phone.** Below 640 px the list and the details are one column. A stage opens in place of the list, with **Back**.
 
 **Save** changes only `stages`. Other fields and keys it does not know stay in the file. When the stages equal the default pipeline, Save leaves `stages` out of the file, so the project follows later changes of the default.
@@ -58,6 +58,15 @@ The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON
 - `agents.permissionMode`, `auto` or `ask`.
 
 Every field is in the [configuration reference](/docs/reference/configuration/).
+
+## Import and export
+
+Use these to copy settings from one project to another, or to keep a copy.
+
+- **Export** downloads what the screen shows, edits included, as `<project>.natamux.json`. It is turned off while the **JSON** tab holds JSON that is not valid.
+- **Import…** opens a `.json` file (up to 1 MiB) in the screen, in place of the current settings. With edits not saved, it asks first. It does not save: check the settings, then click **Save**. A file with a problem opens on the **JSON** tab with the error.
+
+To use an exported file in another project, import it there, or copy it into the repository as `.natamux.json`.
 
 ## When the file changes
 
