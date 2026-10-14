@@ -593,7 +593,28 @@ export function defaultWorkflow(stage: Pick<Stage, 'id' | 'kind'>): boolean {
   return stage.kind === 'agent' && catalogEntry(stage.id)?.stage.workflow === true
 }
 
-export type TextField = 'name' | 'prompt' | 'command' | 'output' | 'doneWhen' | 'agent' | 'args'
+export type TextField =
+  | 'name'
+  | 'prompt'
+  | 'command'
+  | 'check'
+  | 'output'
+  | 'doneWhen'
+  | 'agent'
+  | 'args'
+
+export type ShellField = { stage: Stage; field: 'check' | 'command' | 'args'; value: string }
+
+// What a settings file would run in a shell or put on an agent's command line, so an import can
+// show it before it lands. Stages that are off count: they can be turned on later.
+export function shellFields(steps: readonly Step[]): ShellField[] {
+  return steps.flatMap(stagesOf).flatMap((stage) =>
+    (['check', 'command', 'args'] as const).flatMap((field) => {
+      const value = stage[field]
+      return value === undefined ? [] : [{ stage, field, value }]
+    }),
+  )
+}
 
 function stepOfStage(steps: readonly Step[], id: string): Step | undefined {
   return steps.find((candidate) => stagesOf(candidate).some((stage) => stage.id === id))

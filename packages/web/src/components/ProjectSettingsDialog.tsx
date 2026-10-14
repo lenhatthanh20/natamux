@@ -6,6 +6,7 @@ import {
   type Repo,
   type SkillList,
   type Step,
+  stageName,
   stagesOf,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -21,7 +22,9 @@ import {
   mergeChanges,
   parseDraft,
   type RawSettings,
+  type ShellField,
   sameSettings,
+  shellFields,
   trackerOf,
   withCreateIssue,
   withSteps,
@@ -77,6 +80,34 @@ function baseOf(loaded: LoadedSettings): Base {
       ? '{}'
       : (loaded.text ?? (loaded.found ? formatSettings(loaded.settings) : '{}'))
   return { text, version: loaded.version ?? undefined, broken: loaded.error, path: loaded.path }
+}
+
+const SHELL_FIELD_LABEL: Record<ShellField['field'], string> = {
+  check: 'Check command',
+  command: 'Command',
+  args: 'Arguments',
+}
+
+// The import question. A file with commands lists each one in full, since they run on this
+// computer once a task reaches the stage.
+function importQuestion(
+  name: string,
+  dirty: boolean,
+  fields: readonly ShellField[],
+): string | null {
+  const replace = `Replace your changes with ${name}?`
+  const later = 'Nothing is saved until you click Save.'
+  if (fields.length === 0) {
+    return dirty ? `${replace} ${later}` : null
+  }
+  const list = fields
+    .map(
+      ({ stage, field, value }) =>
+        `${stageName(stage)} (${stage.id}) · ${SHELL_FIELD_LABEL[field]}: ${value}`,
+    )
+    .join('\n')
+  const intro = dirty ? replace : `Import ${name}?`
+  return `${intro} It has commands that run in a shell on this computer:\n\n${list}\n\n${later}`
 }
 
 function countLabel(count: number, word: string): string {
@@ -273,19 +304,17 @@ export function ProjectSettingsDialog({
       setProblem(`${file.name} is too big for a settings file.`)
       return
     }
-    if (
-      dirty &&
-      !window.confirm(
-        `Replace your changes with ${file.name}? Nothing is saved until you click Save.`,
-      )
-    ) {
-      return
-    }
     let imported: string
     try {
       imported = await file.text()
     } catch {
       setProblem(`Could not read ${file.name}`)
+      return
+    }
+    // A file that does not parse lists nothing; it opens on the JSON tab, where all of it shows.
+    const parsed = parseDraft(imported)
+    const question = importQuestion(file.name, dirty, parsed.ok ? shellFields(parsed.steps) : [])
+    if (question !== null && !window.confirm(question)) {
       return
     }
     setText(imported)

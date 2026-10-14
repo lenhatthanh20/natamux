@@ -17,6 +17,7 @@ const FIELD_LABELS: Record<string, string> = {
   output: 'Output file',
   sections: 'Required sections',
   command: 'Command',
+  check: 'Check command',
   doneWhen: 'Finished when',
   agent: 'Agent',
   args: 'Arguments',
