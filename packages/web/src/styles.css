@@ -634,97 +634,6 @@
   animation: sb-flash 600ms var(--ease-out) forwards;
 }
 
-/* The comet on a sidebar row (Comet.tsx). Its head moves when a step changes, and it sends out a
-   halo and sparks only while its stage runs. */
-.comet {
-  --comet: var(--chip-fg);
-  --comet-ease: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.comet-track {
-  stroke: var(--line-strong);
-  stroke-width: 1;
-  stroke-dasharray: 0.6 1.8;
-  stroke-linecap: round;
-}
-
-.comet-from {
-  stop-color: var(--comet);
-  stop-opacity: 0;
-}
-
-.comet-to {
-  stop-color: color-mix(in oklab, var(--comet) 80%, white);
-}
-
-.comet-tail {
-  transform-box: view-box;
-  transform-origin: 0 0;
-  transition: transform 900ms var(--comet-ease);
-  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--comet) 70%, transparent));
-}
-
-.comet-head {
-  transition: transform 900ms var(--comet-ease);
-}
-
-.comet-core {
-  fill: color-mix(in oklab, var(--comet) 72%, white);
-  filter: drop-shadow(0 0 1.4px var(--comet))
-    drop-shadow(0 0 2.6px color-mix(in srgb, var(--comet) 60%, transparent));
-}
-
-.comet-shine {
-  fill: white;
-  opacity: 0.95;
-}
-
-.comet-spark {
-  fill: color-mix(in oklab, var(--comet) 55%, white);
-  opacity: 0;
-}
-
-.comet-halo {
-  fill: var(--comet);
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.comet[data-state="running"] .comet-halo {
-  animation: comet-halo 1.6s ease-out infinite;
-}
-
-.comet[data-state="running"] .comet-spark {
-  animation: comet-spark 1.1s linear infinite;
-}
-
-.comet[data-state="running"] .comet-spark-late {
-  animation-delay: 0.55s;
-}
-
-@keyframes comet-halo {
-  from {
-    transform: scale(1);
-    opacity: 0.85;
-  }
-  to {
-    transform: scale(3);
-    opacity: 0;
-  }
-}
-
-@keyframes comet-spark {
-  from {
-    transform: translateX(-1px);
-    opacity: 0.9;
-  }
-  to {
-    transform: translateX(-8px);
-    opacity: 0;
-  }
-}
-
 .hm-scrim {
   animation: hm-fade var(--dur-modal) var(--ease-out);
 }
@@ -1011,11 +920,6 @@
 
   .hm-spin8 .hm-spin-dots {
     display: inline;
-  }
-
-  .comet[data-state="running"] .comet-halo,
-  .comet[data-state="running"] .comet-spark {
-    animation: none;
   }
 }
 
@@ -1348,9 +1252,7 @@
 :root[data-window="inactive"] .hm-spin8,
 :root[data-window="inactive"] .hm-pulse,
 :root[data-window="inactive"] .stage-link[data-kind="flow"]::before,
-:root[data-window="inactive"] .sb-cue,
-:root[data-window="inactive"] .comet[data-state="running"] .comet-halo,
-:root[data-window="inactive"] .comet[data-state="running"] .comet-spark {
+:root[data-window="inactive"] .sb-cue {
   animation: none;
 }
 :root[data-window="inactive"] .hm-spin8 .hm-spin-dashes {
