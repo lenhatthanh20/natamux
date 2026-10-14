@@ -135,19 +135,20 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 
 ## Task states
 
-| State | Meaning |
-|---|---|
-| Draft | A task in the backlog. |
-| Ready | Marked ready to start. |
-| Running | An agent works on it. |
-| Needs your input | The agent asked a question, or ended its turn without `natamux done`. |
-| In review | Work is ready for you to review. |
-| Blocked | You or Natamux blocked it. |
-| Failed | The agent or a stage failed. |
-| Done | Finished. |
-| Cancelled | Cancelled. |
+| State | Icon | Meaning |
+|---|---|---|
+| Draft | Dashed ring | A task in the backlog. |
+| Ready | Ring | Marked ready to start. |
+| Running | Full disk that blinks | An agent works on it. |
+| Running, but quiet | Half disk in amber | It runs, but the agent has been silent for 10 minutes. |
+| Needs your input | Diamond | The agent asked a question, or ended its turn without `natamux done`. |
+| In review | Rounded square | Work is ready for you to review. |
+| Blocked | Two bars | You or Natamux blocked it. |
+| Failed | Triangle | The agent or a stage failed. |
+| Done | Check | Finished. |
+| Cancelled | Dash | Cancelled. |
 
-See [Tasks](/docs/concepts/tasks/) for how a task moves between states.
+See [Status icons](/docs/guides/status-icons/) for every icon and what to do about it, and [Tasks](/docs/concepts/tasks/) for how a task moves between states.
 
 ## Needs you
 

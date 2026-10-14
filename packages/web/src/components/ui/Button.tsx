@@ -1,4 +1,4 @@
-import { LoaderCircle, type LucideIcon } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
   type MouseEvent,
@@ -7,6 +7,7 @@ import {
   useRef,
 } from 'react'
 import { Kbd } from './Kbd'
+import { Spinner } from './Spinner'
 import { type ButtonSize, type ButtonVariant, button, ICON } from './styles'
 
 type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> & {
@@ -50,6 +51,8 @@ export function Button({
     }
   }, [busy, children, Icon, shortcut, size])
 
+  const iconSize = size === 'xs' ? ICON.xs : ICON.sm
+
   const click = (event: MouseEvent<HTMLButtonElement>) => {
     if (blocked) {
       event.preventDefault()
@@ -58,7 +61,6 @@ export function Button({
     onClick?.(event)
   }
 
-  const ShownIcon = busy ? LoaderCircle : Icon
   return (
     <button
       {...props}
@@ -80,12 +82,10 @@ export function Button({
       onClick={click}
       className={`${button(variant, size)} ${className}`}
     >
-      {ShownIcon !== undefined && (
-        <ShownIcon
-          size={size === 'xs' ? ICON.xs : ICON.sm}
-          aria-hidden="true"
-          className={busy ? 'animate-spin motion-reduce:animate-none' : ''}
-        />
+      {busy ? (
+        <Spinner size={iconSize} />
+      ) : (
+        Icon !== undefined && <Icon size={iconSize} aria-hidden="true" />
       )}
       {children}
       {shortcut !== undefined && (

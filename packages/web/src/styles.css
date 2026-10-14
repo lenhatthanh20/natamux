@@ -197,7 +197,6 @@
   --text-xl: 1.25rem;
   --text-xl--line-height: 1.75rem;
   --breakpoint-2xl: 90rem;
-  --animate-spin: spin 900ms linear infinite;
 }
 
 @theme inline {
@@ -284,8 +283,18 @@
     font-feature-settings: "ss01", "cv11";
   }
 
+  /* Lines keep the same width on screen at every icon size, as lucide's absoluteStrokeWidth. */
   .lucide {
-    stroke-width: 1.75;
+    stroke-width: 1.25px;
+  }
+
+  .lucide * {
+    vector-effect: non-scaling-stroke;
+  }
+
+  .lucide[width="20"],
+  .lucide[width="32"] {
+    stroke-width: 1.5px;
   }
 
   button,
@@ -494,12 +503,9 @@
   }
 }
 
-@keyframes hm-shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
+@keyframes hm-pulse {
+  50% {
+    opacity: 0.45;
   }
 }
 
@@ -540,16 +546,76 @@
   animation: hm-pop var(--dur-modal) var(--ease-out);
 }
 
-/* Only a running glyph moves, and slowly. A row that needs the user is a tinted card. */
-@keyframes sb-breathe {
+/* Only a running status glyph moves (ShapeGlyph.tsx): it holds still, then blinks once every 2 s.
+   The keyframes sit on the 125 ms ticks of lib/motion-ticker.ts, so the ticker shows the frames
+   as drawn, and every running glyph blinks on the same tick. */
+@keyframes hm-beat {
+  0%,
   50% {
-    opacity: 0.45;
+    opacity: 1;
+    transform: scale(1);
+  }
+  56.25% {
+    opacity: 0.35;
+    transform: scale(0.78);
+  }
+  62.5% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  68.75%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-.sb-breathe {
-  animation: sb-breathe 2.4s ease-in-out infinite;
+.hm-beat {
+  animation: hm-beat 2000ms linear infinite;
 }
+
+/* The busy spinner (ui/Spinner.tsx) steps one dash per tick. Still, it shows three dots. */
+.hm-spin8 {
+  animation: hm-spin 1000ms steps(8) infinite;
+}
+
+.hm-spin8 .hm-spin-dots {
+  display: none;
+}
+
+/* When a row starts to need the user, its diamond pops in and blinks twice, once. */
+@keyframes sb-cue {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  16% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  32% {
+    transform: scale(1);
+  }
+  48% {
+    opacity: 0.25;
+  }
+  64% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sb-cue {
+  animation: sb-cue 750ms linear;
+}
+
+/* A row that needs the user is a tinted card. */
 
 .row-attn {
   background: color-mix(in srgb, var(--chip-fg) 9%, transparent);
@@ -703,14 +769,12 @@
 }
 
 .hm-skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--skeleton) 0%,
-    color-mix(in srgb, var(--skeleton) 50%, var(--ink) 6%) 50%,
-    var(--skeleton) 100%
-  );
-  background-size: 200% 100%;
-  animation: hm-shimmer 1.5s linear infinite;
+  background: var(--skeleton);
+}
+
+/* One opacity pulse per list of skeleton bars (ui/Skeleton.tsx), so no bar repaints. */
+.hm-pulse {
+  animation: hm-pulse 2000ms ease-in-out infinite;
 }
 
 /* Behind a changed image, so that its transparent parts show. */
@@ -931,18 +995,27 @@
     display: none;
   }
 
-  .sb-breathe {
+  .sb-cue {
     animation: none;
+  }
+
+  .hm-beat,
+  .hm-spin8,
+  .hm-pulse {
+    animation: none;
+  }
+
+  .hm-spin8 .hm-spin-dashes {
+    display: none;
+  }
+
+  .hm-spin8 .hm-spin-dots {
+    display: inline;
   }
 
   .comet[data-state="running"] .comet-halo,
   .comet[data-state="running"] .comet-spark {
     animation: none;
-  }
-
-  .hm-skeleton {
-    animation: none;
-    background: var(--skeleton);
   }
 }
 
@@ -975,44 +1048,15 @@
   border: 1.5px dashed var(--muted);
   color: var(--muted);
 }
+.stage-node > svg[data-shape] {
+  width: auto;
+  height: auto;
+}
+/* The current stage is a tinted disk in a ring of its state color, with the state shape inside. */
 .stage-node[data-status="current"] {
   border: 2px solid var(--chip-fg);
+  background: var(--chip-bg);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--chip-fg) 16%, transparent);
-}
-.stage-node[data-status="current"][data-state="running"] {
-  border-color: color-mix(in srgb, var(--chip-fg) 22%, transparent);
-  box-shadow: none;
-}
-.stage-node[data-status="current"][data-state="needs-input"],
-.stage-node[data-status="current"][data-state="failed"] {
-  background: var(--chip-fg);
-  color: var(--surface);
-}
-.stage-arc {
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  background: conic-gradient(from 0deg, transparent 0deg 70deg, var(--chip-fg) 360deg);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
-  animation: hm-spin 900ms linear infinite;
-}
-.stage-halo {
-  position: absolute;
-  inset: -4px;
-  border-radius: 9999px;
-  background: var(--chip-fg);
-  opacity: 0;
-  animation: hm-halo 1.8s var(--ease-out) infinite;
-}
-.stage-core {
-  position: relative;
-  width: 32%;
-  height: 32%;
-  border-radius: 9999px;
-  background: currentColor;
-}
-.stage-node[data-state="review"] .stage-core {
-  animation: hm-breathe 2.4s ease-in-out infinite;
 }
 .stage-link {
   flex: 1 1 0;
@@ -1026,18 +1070,21 @@
 .stage-link[data-kind="upcoming"] {
   background-image: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 8px);
 }
-/* Moving stripes slide a wider ::before with transform. Animating background-position repaints every
-   frame: one striped bar cost about 20% CPU while the window was visible. */
+/* The link into a running stage fills toward it with scaleX, then fades as the node blinks: the
+   same 2 s clock as .hm-beat. Animating background-position repaints every frame: one striped bar
+   cost about 20% CPU while the window was visible. Still, it is a full line. */
 .stage-link[data-kind="flow"] {
   position: relative;
   overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .stage-link[data-kind="flow"]::before {
   content: "";
   position: absolute;
-  inset: 0 0 0 -12px;
-  background-image: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px);
-  animation: hm-flow 900ms linear infinite;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  animation: hm-fill 2000ms linear infinite;
 }
 .stage-link[data-kind="hidden"] {
   visibility: hidden;
@@ -1273,58 +1320,44 @@
     transform: rotate(360deg);
   }
 }
-@keyframes hm-halo {
-  from {
-    transform: scale(0.7);
-    opacity: 0.32;
+@keyframes hm-fill {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
   }
-  to {
-    transform: scale(1.45);
+  43.75%,
+  50% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  56.25%,
+  100% {
+    transform: scaleX(1);
     opacity: 0;
   }
 }
-@keyframes hm-breathe {
-  0%,
-  100% {
-    transform: scale(0.72);
-    opacity: 0.65;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-@keyframes hm-flow {
-  to {
-    transform: translateX(12px);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .stage-arc,
-  .stage-halo,
-  .stage-link[data-kind="flow"]::before,
-  .stage-node[data-state="review"] .stage-core {
+  .stage-link[data-kind="flow"]::before {
     animation: none;
-  }
-  .stage-arc {
-    background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
   }
 }
 
 /* A window without focus shows the still look of reduced motion (lib/window-focus.ts). With focus,
    lib/motion-ticker.ts moves endless animations 8 times a second instead of every frame. */
-:root[data-window="inactive"] .stage-arc,
-:root[data-window="inactive"] .stage-halo,
+:root[data-window="inactive"] .hm-beat,
+:root[data-window="inactive"] .hm-spin8,
+:root[data-window="inactive"] .hm-pulse,
 :root[data-window="inactive"] .stage-link[data-kind="flow"]::before,
-:root[data-window="inactive"] .stage-node[data-state="review"] .stage-core,
-:root[data-window="inactive"] .sb-breathe,
-:root[data-window="inactive"] .animate-spin,
+:root[data-window="inactive"] .sb-cue,
 :root[data-window="inactive"] .comet[data-state="running"] .comet-halo,
 :root[data-window="inactive"] .comet[data-state="running"] .comet-spark {
   animation: none;
 }
-:root[data-window="inactive"] .stage-arc {
-  background: conic-gradient(var(--chip-fg) 0 270deg, transparent 270deg);
+:root[data-window="inactive"] .hm-spin8 .hm-spin-dashes {
+  display: none;
+}
+:root[data-window="inactive"] .hm-spin8 .hm-spin-dots {
+  display: inline;
 }
 
 /* Long lists skip layout and paint for rows far off screen. Set --cv-h to the row height when it

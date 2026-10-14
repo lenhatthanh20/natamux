@@ -12,7 +12,7 @@ import { useObjectUrl } from './ImageDiff'
 import { Markdown, preloadMarkdown } from './Markdown'
 import { Button } from './ui/Button'
 import { Segmented } from './ui/Segmented'
-import { sectionTitle, textarea } from './ui/styles'
+import { ICON, sectionTitle, textarea } from './ui/styles'
 
 type Draft = { text: string; original: string; base: string | null }
 
@@ -78,9 +78,9 @@ function AttachmentList({
         >
           <span className="flex items-center gap-1.5 font-mono text-xs text-ink">
             {item.type === null ? (
-              <Download size={13} aria-hidden="true" className="text-muted" />
+              <Download size={ICON.sm} aria-hidden="true" className="text-muted" />
             ) : (
-              <FileImage size={13} aria-hidden="true" className="text-muted" />
+              <FileImage size={ICON.sm} aria-hidden="true" className="text-muted" />
             )}
             {item.name}
           </span>
@@ -296,7 +296,7 @@ export function DocsTab({
             className={NAV_ITEM}
           >
             <span className="flex items-center gap-1.5 font-mono text-xs text-ink">
-              <FileText size={13} aria-hidden="true" className="text-muted" />
+              <FileText size={ICON.sm} aria-hidden="true" className="text-muted" />
               {item.name}
               {dirty(item.name) && <span className="text-2xs text-signal">edited</span>}
             </span>

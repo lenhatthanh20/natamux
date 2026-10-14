@@ -1335,6 +1335,22 @@ describe('test spec cases', () => {
     expect(flash()).not.toBe(once)
   })
 
+  // The diamond pops once with the flash; the first paint stays still.
+  it('pops the needs-you diamond each time a row starts to wait', () => {
+    const asking = makeTask({ title: 'Asking', state: 'needs-input' })
+    const { rerender } = list({ tasks: [asking], pinnedIds: [] })
+    const cue = () => rowOf('Asking').querySelector('.sb-cue')
+    expect(cue()).toBeNull()
+
+    rerender({ tasks: [{ ...asking, state: 'running' }], pinnedIds: [] })
+    rerender({ tasks: [{ ...asking, state: 'needs-input' }], pinnedIds: [] })
+    expect(cue()?.getAttribute('data-state')).toBe('needs-input')
+    const once = cue()
+    rerender({ tasks: [{ ...asking, state: 'running' }], pinnedIds: [] })
+    rerender({ tasks: [{ ...asking, state: 'needs-input' }], pinnedIds: [] })
+    expect(cue()).not.toBe(once)
+  })
+
   // H3: leaves, type-ahead and F2 on a child.
   it('does nothing on Right on a leaf row, and reaches a child by typing', async () => {
     const user = userEvent.setup()

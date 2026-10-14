@@ -258,7 +258,8 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 ### 2.7 Icons
 
 - Library: `lucide-react` only. No second set. No emoji in UI labels.
-- Default stroke 1.75 via CSS: `.lucide { stroke-width: 1.75 }`. 12px icons use 2. Status glyphs use 2.25 (set on the component).
+- Stroke in screen pixels, the same at every size (CSS `vector-effect: non-scaling-stroke` on `.lucide *`, as lucide's `absoluteStrokeWidth`): 1.25px at 12, 14 and 16; 1.5px at 20 and 32. A `strokeWidth` prop does not win over it.
+- Action icons are outlined and neutral, never in a state color. State glyphs are filled shapes of their own (4.10), not lucide.
 - Sizes (export as constants in `ui/styles.ts`: `ICON = { xs: 12, sm: 14, md: 16, lg: 20, xl: 32 }`):
 
 | Size | Use |
@@ -285,11 +286,14 @@ z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer
 | `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | toggles, chevrons |
 
 - What moves: opacity; menus and tooltips +4px slide from the anchor side; dialog and palette scale 0.98 to 1; drawer and sheet slide on X. Never animate panel width while dragging. No bounce.
-- Spinner (running glyph) 900ms linear rotation. Remove the opacity pulse on chips (calm).
+- Endless motion is built for the 8 frames a second of `lib/motion-ticker.ts`: every duration is a whole number of 125 ms ticks, and keyframes sit on ticks. Details and the designs that were compared: `docs/design-icons.md`.
+- Running (`.hm-beat`): a running state glyph holds still and blinks once per 2000ms (opacity and scale on the outer svg; 3 of 16 frames differ). Every running glyph blinks on the same tick. Nothing else in a glyph moves; chips do not pulse.
+- Busy spinner (`ui/Spinner.tsx`, `.hm-spin8`): 8 dashes, a bright head and a fading tail, `rotate` with `steps(8)` over 1000ms: one dash per tick.
+- Link into a running stage: fills toward the node (`scaleX`, then fades), 2000ms, on the same clock as the blink.
 - Sidebar (`.sb-*` in `styles.css`): the current-row bar grows on Y over `--dur-pop`; chevrons turn over `--dur-hover`; an unfolded list slides in 4px over `--dur-modal`; a row added after the first paint slides in (`hm-pop`); a row that starts to need input flashes `--signal-soft` once over 600ms; a state glyph changes color over `--dur-modal`. The first paint does not move.
-- Skeleton shimmer 1.5s linear.
-- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; spinner becomes the static `CircleEllipsis` glyph; shimmer off; `scroll-behavior: auto`. Every `.sb-*` class is listed there too (a test checks it): unfold is an 80ms fade, the bar and chevrons do not move, no flash.
-- Window without focus: `lib/window-focus.ts` sets `data-window="inactive"` on `<html>`, in the app and in a browser tab. Every endless animation stops then (spinners, stage arcs, stripes, breathing glyphs), and the title bar text turns `--muted`. A test checks that each endless animation in `styles.css` is listed, except the loading shimmer, which is short. Endless motion animates `transform` or `opacity` only, never `background-position`.
+- Skeleton (`.hm-pulse`): one opacity pulse per list (1 → 0.45 → 1, 2000ms); the bars are still and do not repaint.
+- `@media (prefers-reduced-motion: reduce)`: all transitions become opacity only at 80ms; the running glyph is still (its own shape, not a frozen frame); the spinner shows three dots; the stage link is a full line; the skeleton does not pulse; `scroll-behavior: auto`. This is CSS only; no component reads the media query. Every `.sb-*` class is listed there too (a test checks it): unfold is an 80ms fade, the bar and chevrons do not move, no flash.
+- Window without focus: `lib/window-focus.ts` sets `data-window="inactive"` on `<html>`, in the app and in a browser tab. Every endless animation stops then and shows the still form of reduced motion (running glyphs, spinners, stage links, skeletons), and the title bar text turns `--muted`. A test checks that each endless animation in `styles.css` is listed. Endless motion animates `transform` or `opacity` only, never `background-position`.
 - With focus, `lib/motion-ticker.ts` moves every endless CSS animation 8 times a second (125 ms), all on one clock, so the page draws 8 frames a second however many things move. It does nothing while the page is hidden. Transitions and one-shot animations run as usual.
 - Feedback by wait time: under 100ms nothing; 100ms-1s the control is busy (disabled + label kept); 1-3s spinner in the control; over 3s a stage label ("Creating worktree...", "Pushing..."). Skeletons appear only after 200ms and stay at least 300ms (no flash, RA-29).
 
@@ -368,7 +372,7 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 ### 4.1 Button (`styles.ts` `button()` + `ui/Button.tsx`)
 - Variants: `primary` (bg ink, text canvas; one per view), `secondary` (bg raised, 1px control border, ink), `ghost` (transparent, ink-2 text, hover bg-hover + ink), `danger` (bg danger, white), `link` (no box, `--link`, underline on hover).
 - Sizes: `xs` 24 (pad x 8, icon 12, only inside rows/pane headers), `sm` 28 (default, pad x 10, icon 14), `md` 32 (dialogs, sign-in, empty states; pad x 12, icon 14). Text 13/500. Gap 6. Radius 6.
-- States: hover (primary 85% ink; secondary bg-hover + control-hover border), active (bg-active), focus-visible (2px `--focus` ring, offset 1), busy (spinner replaces the icon, label stays, width locked with `min-width` from first render), disabled (opacity 0.5).
+- States: hover (primary 85% ink; secondary bg-hover + control-hover border), active (bg-active), focus-visible (2px `--focus` ring, offset 1), busy (the 8-dash spinner of `ui/Spinner.tsx` replaces the icon, label stays, width locked with `min-width` from first render), disabled (opacity 0.5).
 - Disabled with a reason: use `aria-disabled="true"` (stays focusable) + tooltip with the reason ("Nothing to push: up to date with origin/<branch>"). Click does nothing. Use `disabled` only when no reason is useful.
 - Optional shortcut chip at the end (`Kbd` on-inverted variant for primary, 70% opacity). Never on Cancel.
 - Labels: verb first, sentence case, no period, max 3 words when possible.
@@ -412,24 +416,24 @@ Each lives in `packages/web/src/components/ui/` unless noted. "Keys" lists keybo
 The height follows what the row needs (`rowTier` in `lib/sidebar-tree.ts`). Pad 10 left and right, radius 6 (8 for a card), no chevron:
 ```
 attention (needs-input, failed, blocked), min 68px, card tinted with the state color (.row-attn):
-[glyph9] Title (13/600, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+[glyph10] Title (13/600, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
          Which test runner should I use? (12 ink, up to 2 lines)
          [Answer] T-0018 3/5 Review                                [agent]
 live (running, review, ready), min 40px:
-[glyph8] Title (13/500, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
+[glyph10] Title (13/500, ink, truncate)                [unseen dot] [age 12 muted | ... on hover]
          T-0018 3/5 Review [subtasks 1/3] Edit a.ts (ink-2, truncate)  [PR #12] [agent]
 quiet (done, cancelled, draft), min 24px:
-[glyph8] Title (12/400, ink-2; muted when finished, cancelled line-through)   [age 12 muted]
-   |  [glyph7] [agent12] Implement  Edit a.ts …                 S1
+[glyph10] Title (12/400, ink-2; muted when finished, cancelled line-through)   [age 12 muted]
+   |  [glyph8] [agent12] Implement  Edit a.ts …                 S1
    |  [term12] zsh                                              S2
 ```
 - Text column starts at 32px (10 pad + 14 glyph slot + 8 gap); lines 2 and 3 indent 22px from the row's content edge, so they start under the title.
-- Glyph (`components/ShapeGlyph.tsx`): one shape per state in a 14px slot, in `--chip-fg`: ready hollow circle, draft dashed circle, running filled disc that breathes (opacity 1 → 0.45, 2.4s, `.sb-breathe`; still with reduced motion), needs-input filled diamond, blocked hollow diamond, review rounded square, failed triangle, done check in a circle, cancelled dash in a circle. A quiet running task shows a hollow diamond in the needs-input color ("Running, but quiet"). Tooltip and screen readers get the state label, as with `StatusGlyph`.
+- Glyph (`components/ShapeGlyph.tsx`): the state shapes of 4.10 at 10px in a 14px slot, for every tier, in `--chip-fg`. 10px matches the cap height of 13px Inter; 8px read as a bullet and blurred the small shapes. Tooltip and screen readers get the state label.
 - Task glyph: `running` while any row or parallel stage under the task runs, else the task state (`taskGlyphState`).
 - Only the open workspace shows the rows under it, and the parent of an open subtask. No row opens by itself, and the user cannot fold the open one. A folded row still shows its subtasks in an attention tier (needs-input, failed, blocked) as cards under it (T-0022). The row carries `aria-expanded` when it has work under it. A click, Enter or Right on a folded row opens that task.
 - Live line 2: repo chip (pinned rows), task id in mono (tooltip: branch), the step `n/m` (only with 2 steps or more; a parallel group is one step), the current stage (in a group the most urgent stage), subtasks `done/all`, what the agent does (running and folded only; open, the shell rows say it), pull request number in the checks color, the icon of the task's agent (icon only, tooltip: its name; folded and open, since the shell rows name the agent of each stage). Screen readers hear every step through `aria-describedby` ("Steps: Spec done, Implement needs your input, …").
 - Attention card: the question (needs-input; "Waiting for your answer" until it is known) or the reason (failed, blocked) on up to 2 lines, then id, step and stage. A needs-input card has an **Answer** button (`Answer T-0018`, not a tab stop) that opens the terminal of the waiting shell, or the first shell.
-- Under the open row, inside a 1px `--line` guide under the task glyph (`ml-4`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 22px (40 on touch), glyph lined up with the title: shape glyph 7 (muted ring, tooltip "State not known yet", for an agent with no state yet, such as one started by hand before a daemon restart; `SquareTerminal` 12 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, Claude Code, State not known"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read again when the live feed says a shell started or ended, its program in front changed, or a hook changed its agent's state (`shells.changed`), and every 5 min as a fallback, for tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
+- Under the open row, inside a 1px `--line` guide under the task glyph (`ml-4`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 22px (40 on touch), glyph lined up with the title: shape glyph 8 (muted dot, tooltip "State not known yet", for an agent with no state yet, such as one started by hand before a daemon restart; `SquareTerminal` 12 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, Claude Code, State not known"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read again when the live feed says a shell started or ended, its program in front changed, or a hook changed its agent's state (`shells.changed`), and every 5 min as a fallback, for tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
 - A finished or pinned subtask stays where it was (finished list, pinned group). An open subtask of a finished parent stays at the top level, so it is never folded away in "N finished". A subtask whose parent is not shown stays at the top level. A filter that matches a subtask keeps its parent in view, open, with the subtask under it.
 - Folds of groups and "N finished" lists are kept per browser in `natamux.sidebar-folds` (only what the user picked; the newest 300). Task rows keep no fold.
 - Age moves to line 1 and swaps with the "..." button on hover/focus, so the slug gets the full line 2 (fixes NAV-27 truncation) and nothing overlaps.
@@ -443,21 +447,24 @@ quiet (done, cancelled, draft), min 24px:
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
 - Keys (roving tabindex, one tab stop for the whole tree, fixes NAV-17, RA-23): Up/Down move, Home/End, Right expands a group, opens a folded task / moves to first child, Left collapses a group / moves to parent (the open task does not fold), Enter opens, F2 renames, Shift+F10 or ContextMenu opens the row menu, Delete asks to remove the workspace, type-ahead by title.
 
-### 4.10 Status glyphs (`components/StatusGlyph.tsx`)
-16px box, 14px icon, stroke 2.25, color `--chip-fg` of the state. Every glyph has a different shape, so color is never the only cue (fixes WS-33, WS-35).
+### 4.10 Status glyphs (`components/ShapeGlyph.tsx`, `components/StatusGlyph.tsx`)
+One family of filled shapes for every place: the table, palette, pane tabs and terminal header (`StatusGlyph`: 10px shape in a 16px box), the sidebar (10px; shell rows 8px) and the stage markers. Color `--chip-fg` of the state. Every state has its own silhouette, so color is never the only cue (fixes WS-33, WS-35). Each art size is drawn on whole pixels (`ShapeSvg`, viewBox = size + padding). Hollow means not started, full means alive, half means running but quiet.
 
-| State | Icon | Motion | Label (sr-only + tooltip) |
+| State | Shape | Motion | Label (sr-only + tooltip) |
 |---|---|---|---|
-| draft | `CircleDashed` | — | Draft |
-| ready | `Circle` | — | Ready |
-| running | `LoaderCircle` | spins 900ms; reduced motion: `CircleEllipsis` | Running |
-| running but quiet | `CircleAlert` in signal color | — | Running, quiet for 12m |
-| needs-input | `CircleQuestionMark` (check the 1.x export name; older name `CircleHelp`) | — | Needs your input |
-| review | `CircleDot` | — | In review |
-| blocked | `CirclePause` | — | Blocked |
-| failed | `CircleX` | — | Failed |
-| done | `CircleCheck` | — | Done |
-| cancelled | `CircleSlash` | — | Cancelled |
+| draft | dashed ring (4 dashes) | — | Draft |
+| ready | ring | — | Ready |
+| running | full disk | blinks once per 2000ms (`.hm-beat`) | Running |
+| running but quiet | ring, lower half filled, needs-input color | — | Running, but quiet |
+| needs-input | diamond | — | Needs your input |
+| review | rounded square | — | In review |
+| blocked | two bars | — | Blocked |
+| failed | triangle | — | Failed |
+| done | check | — | Done |
+| cancelled | dash | — | Cancelled |
+| state not known yet | small dot, muted | — | State not known yet |
+
+Stage markers (`components/StageMarker.tsx`) use the same shapes: done is a green disk with the check; the current stage is a disk in `--chip-bg` with a 2px ring in `--chip-fg` and the state shape inside (only running blinks); upcoming is a muted ring; skipped is a muted dashed ring with the dash. Inner shapes are an even number of pixels.
 
 Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 1.5px ring.
 
@@ -532,7 +539,7 @@ Shared shell:
   - Error: icon `CircleAlert` danger-text, title "Could not load tasks", friendly sentence, [Retry], "Show details" disclosure with the raw message in mono 12 (NAV-18 pattern).
 
 ### 4.20 Loading skeleton (`ui/Skeleton.tsx`)
-- Bars radius 4, bg skeleton, heights 10 (meta) / 12 (title), widths from a fixed list (60%, 40%, 75%...) so it does not look random each render. Shimmer gradient 1.5s (off with reduced motion).
+- Bars radius 4, bg skeleton, heights 10 (meta) / 12 (title), widths from a fixed list (60%, 40%, 75%...) so it does not look random each render. The list pulses its opacity once per 2000ms (`.hm-pulse`); a bar that stands alone pulses by itself. Still with reduced motion and in a window without focus.
 - Same row heights as the real content: table 8 rows of 40, sidebar 5 rows of 44, details 3 sections, changes list 6 rows of 28, history 8 rows. Monaco and terminal loading use a skeleton block, not "Loading the viewer." text.
 - 200ms delay, 300ms minimum.
 

@@ -99,7 +99,7 @@ function ImagePanel({
         </p>
       ) : url === null ? (
         <div role="status" aria-label={`Loading the ${SHORT[side].toLowerCase()} image`}>
-          <span aria-hidden="true" className="hm-skeleton block h-40 rounded-md" />
+          <span aria-hidden="true" className="hm-skeleton hm-pulse block h-40 rounded-md" />
         </div>
       ) : (
         <div className="hm-checker flex min-h-24 items-center justify-center p-2">
