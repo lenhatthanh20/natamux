@@ -27,3 +27,8 @@ try {
 } catch {
   // Storage is off: the terminals use the built-in font.
 }
+
+// The page is isolated, so it gets this one function instead of ipcRenderer. Undefined: canceled.
+electron.contextBridge.exposeInMainWorld('natamux', {
+  pickFolder: (): Promise<string | undefined> => electron.ipcRenderer.invoke('natamux:pick-folder'),
+})

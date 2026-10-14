@@ -177,7 +177,7 @@ The button is gone once you decide. If you blocked notifications, the status bar
 
 Click **Projects** in the status bar, or **Add a project** in the sidebar, to see the projects (git repositories) the daemon manages. To add one:
 
-1. Enter the **Folder**, a full path on the machine that runs the daemon.
+1. Enter the **Folder**, a full path on the machine that runs the daemon. In the desktop app, **Browse…** picks it in a folder dialog.
 2. Optionally enter a **Name**. The folder name is used otherwise.
 3. Click **Add project**.
 

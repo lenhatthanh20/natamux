@@ -588,6 +588,18 @@ describe('the preload', () => {
     expect(handler).toContain(": ''")
     expect(handler).toContain("event.senderFrame?.url ?? ''")
   })
+
+  it('gives the page only a folder picker, which the main process opens for the dashboard only', () => {
+    expect(preload).toContain("contextBridge.exposeInMainWorld('natamux'")
+    expect(preload).toContain("invoke('natamux:pick-folder')")
+    const main = mainSource()
+    const start = main.indexOf("ipcMain.handle('natamux:pick-folder'")
+    expect(start).toBeGreaterThan(-1)
+    const handler = main.slice(start, main.indexOf('\n})', start))
+    expect(handler).toContain("event.senderFrame?.url ?? ''")
+    expect(handler).toContain('isDashboardUrl(')
+    expect(handler).toContain('pickRepository(')
+  })
 })
 
 describe('startup marks without some marks', () => {
