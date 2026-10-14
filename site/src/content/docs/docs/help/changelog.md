@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.20 (2026-10-14)
+
+- A pull request that the agent or you open another way, such as with `gh pr create`, is now linked to the task. A closed one is not. See [Pull requests](/docs/guides/github/#pull-requests).
+- A new task starts from the default branch (`origin/HEAD`, then `main`, then `master`), not from the branch of your main checkout. Any base branch is fetched first, and the branch pickers start on the default branch. See [Base branch](/docs/concepts/workspaces/#base-branch).
+- Fix: a stage could say that a skill was not found while **Insert skill** offered it, when only your main checkout had the skill, such as a plugin turned on in `.claude/settings.local.json`. Now Natamux also looks in your main checkout. See [Skills](/docs/agents/claude-code/#skills).
+- Natamux has a new icon: an N made of three lanes, with a cursor.
+
 ## v0.1.19 (2026-10-14)
 
 - Mark a stage **Skip** in **Progress** before the task gets there, and the task skips it when it reaches it. See [Skip a stage](/docs/concepts/stages/#skip-a-stage).
