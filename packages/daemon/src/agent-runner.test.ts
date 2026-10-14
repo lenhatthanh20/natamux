@@ -321,7 +321,9 @@ describe('AgentRunner', () => {
       broken.start(task.id, agent, 'Only this')
       expect(tasks.getTask(task.id).agent).toBe(agent)
     }
-    expect(readFileSync(script(task.id), 'utf8')).toBe("copilot --allow-all-tools -i 'Only this'\n")
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "copilot --no-alt-screen --allow-all-tools -i 'Only this'\n",
+    )
   })
 
   it.each(['', ' ', '  \t '])('adds no extra word for NATAMUX_CODEX_ARGS of %j', (words) => {
@@ -427,7 +429,7 @@ describe('GitHub Copilot', () => {
     const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "copilot --allow-all-tools --model gpt-5 -i 'Fix it'\n",
+      "copilot --no-alt-screen --allow-all-tools --model gpt-5 -i 'Fix it'\n",
     )
     expect(tasks.getTask(task.id).agent).toBe('copilot')
   })

@@ -93,7 +93,7 @@ Each agent starts from the dashboard (**Start a task**, or **Start agent** on a 
 | Claude Code | `claude --settings <file> --permission-mode auto '<prompt>'` | the settings file | `UserPromptSubmit` | `PermissionRequest`, `Notification` | `Stop` | `StopFailure` | real sessions |
 | Codex | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'projects={…}' -c 'hooks.<Event>=[…]' '<prompt>'` | `-c` overrides | `UserPromptSubmit` | `PermissionRequest` | `Stop`, `Interrupt` | none | its source, not run |
 | Gemini CLI | `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo -i '<prompt>'` | its system settings file, in the data folder | `BeforeAgent` | `Notification` (`ToolPermission`) | `AfterAgent` | none | its docs, not run |
-| GitHub Copilot CLI | `copilot --allow-all-tools -i '<prompt>'` | `.github/hooks/natamux.json` in the worktree, kept out of git | `userPromptSubmitted` | `permissionRequest` | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
+| GitHub Copilot CLI | `copilot --no-alt-screen --allow-all-tools -i '<prompt>'` | `.github/hooks/natamux.json` in the worktree, kept out of git | `userPromptSubmitted` | `permissionRequest` | `agentStop` | `errorOccurred` that is not recoverable | a real 1.0.94 session |
 | Cursor CLI | `cursor-agent --force '<prompt>'` | `.cursor/hooks.json` in the worktree, kept out of git | `beforeSubmitPrompt` | none (the bell instead) | `stop` | `stop` with `status: error` | its docs, not run |
 
 Notes:

@@ -242,6 +242,8 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
     case 'copilot':
       return [
         options.program,
+        // Its full screen draws its own scrollbar, a light line at the right edge.
+        '--no-alt-screen',
         ...mode,
         ...extra,
         ...(prompt.length > 0 ? ['-i', ...prompt] : []),
