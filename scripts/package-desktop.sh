@@ -21,9 +21,10 @@ pnpm --filter "@natamux/desktop..." build
 # files go in next to it and become the app's resources (electron-builder.yml).
 pnpm --filter @natamux/desktop deploy --prod --legacy --config.node-linker=hoisted "$STAGE/app"
 cp -R packages/web/dist "$STAGE/app/web-dist"
-# electron-builder takes the app icon from build/icon.png and makes the .icns from it.
+# electron-builder finds the icons in build/ by name: icon.icns for macOS (and the Linux sizes),
+# icon.ico for Windows. Made by scripts/make-icons.sh.
 mkdir -p "$STAGE/app/build"
-cp packages/desktop/build/icon.png "$STAGE/app/build/icon.png"
+cp packages/desktop/build/icon.{icns,ico,png} "$STAGE/app/build/"
 
 electron_version="$(cd packages/desktop && node -p "require('electron/package.json').version")"
 (
