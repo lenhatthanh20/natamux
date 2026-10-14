@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlert, Plus } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isConflict, type LoadedSettings } from '../lib/api'
+import { saveBlob } from '../lib/attachments'
 import {
   addCatalogStage,
   addCustomStage,
@@ -62,6 +63,9 @@ const CREATE_ISSUE_OPTIONS: readonly { value: CreateIssueWhen; label: string }[]
   { value: 'on-pr', label: 'Automatically, just before the pull request opens' },
   { value: 'never', label: 'Never' },
 ]
+
+// A settings file is a few KiB. A bigger pick is the wrong file, and would slow the textarea.
+const MAX_IMPORT_BYTES = 1024 * 1024
 
 // What the screen started from: the text of the file and its version. A broken file starts from
 // the defaults.
@@ -251,6 +255,44 @@ export function ProjectSettingsDialog({
     }
   }
 
+  const picker = useRef<HTMLInputElement>(null)
+
+  // Saves what the screen shows, edits included. The name has no leading dot, which browsers drop.
+  const exportFile = () => {
+    if (draft.ok) {
+      saveBlob(
+        new Blob([`${formatSettings(draft.raw)}\n`], { type: 'application/json' }),
+        `${repo.name}.natamux.json`,
+      )
+    }
+  }
+
+  // Puts the file in the draft only. The checks of the draft and of Save do the rest.
+  const importFile = async (file: File) => {
+    if (file.size > MAX_IMPORT_BYTES) {
+      setProblem(`${file.name} is too big for a settings file.`)
+      return
+    }
+    if (
+      dirty &&
+      !window.confirm(
+        `Replace your changes with ${file.name}? Nothing is saved until you click Save.`,
+      )
+    ) {
+      return
+    }
+    let imported: string
+    try {
+      imported = await file.text()
+    } catch {
+      setProblem(`Could not read ${file.name}`)
+      return
+    }
+    setText(imported)
+    setProblem(null)
+    toast(`Imported ${file.name}. Review it, then click Save.`)
+  }
+
   const select = (id: string) => {
     setSelected(id)
     setPicking(false)
@@ -290,6 +332,38 @@ export function ProjectSettingsDialog({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="md" disabled={current === null} onClick={reset}>
               Reset to default
+            </Button>
+            <Button
+              variant="ghost"
+              size="md"
+              disabled={current === null}
+              onClick={() => picker.current?.click()}
+            >
+              Import…
+            </Button>
+            <input
+              ref={picker}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              aria-label="Import settings file"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                // The same file can be picked again.
+                event.target.value = ''
+                if (file !== undefined) {
+                  void importFile(file)
+                }
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="md"
+              disabled={current === null}
+              disabledReason={current !== null && !draft.ok ? 'Fix the JSON first' : undefined}
+              onClick={exportFile}
+            >
+              Export
             </Button>
             <span className="flex-1" />
             <span role="status" className="flex items-center gap-2 text-xs empty:hidden">

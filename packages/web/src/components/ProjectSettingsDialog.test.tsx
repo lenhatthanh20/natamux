@@ -9,9 +9,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type LoadedSettings } from '../lib/api'
+import { saveBlob } from '../lib/attachments'
 import type { RawSettings } from '../lib/pipeline-editor'
 import { useToasts } from '../lib/toasts'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
+
+vi.mock('../lib/attachments', () => ({ saveBlob: vi.fn() }))
 
 const NO_FILE: LoadedSettings = {
   settings: DEFAULT_PROJECT_SETTINGS,
@@ -62,6 +65,7 @@ afterEach(() => {
   cleanup()
   useToasts.setState({ toasts: [] })
   vi.restoreAllMocks()
+  vi.mocked(saveBlob).mockClear()
 })
 
 function open(options: Options = {}) {
@@ -1697,5 +1701,172 @@ describe('ProjectSettingsDialog, Issues tab', () => {
     await jsonTab(user, '{ "tracker": { "type": "github", "createIssue": "on-pr" } }')
     expect(radio(await issuesTab(user), MANUAL).disabled).toBe(false)
     expect(screen.queryByText('Issues are off: tracker.type is none (JSON tab)')).toBeNull()
+  })
+})
+
+const importInput = () => screen.getByLabelText<HTMLInputElement>('Import settings file')
+const importButton = () => screen.getByRole('button', { name: 'Import…' })
+const exportButton = () => screen.getByRole('button', { name: 'Export' })
+
+function jsonFile(text: string, name = 'shared.json') {
+  return new File([text], name, { type: 'application/json' })
+}
+
+// Imports a file the person picked, and waits until it is read.
+async function importFile(user: User, file: File) {
+  useToasts.setState({ toasts: [] })
+  await user.upload(importInput(), file)
+  await waitFor(() =>
+    expect(useToasts.getState().toasts.map((item) => item.text)).toContain(
+      `Imported ${file.name}. Review it, then click Save.`,
+    ),
+  )
+}
+
+// The text and name of the file the last Export gave the browser.
+async function exported() {
+  const [blob, name] = vi.mocked(saveBlob).mock.lastCall ?? []
+  return { text: await blob?.text(), name }
+}
+
+const ONE_STAGE = JSON.stringify({
+  stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }],
+  tracker: { createIssue: 'on-pr' },
+})
+
+describe('ProjectSettingsDialog, import and export', () => {
+  it('shows Import and Export on every tab', async () => {
+    const { user } = open()
+
+    await stageList()
+    for (const tab of ['Stages', 'Issues', 'JSON']) {
+      await user.click(screen.getByRole('tab', { name: tab }))
+      expect(importButton()).toBeTruthy()
+      expect(exportButton()).toBeTruthy()
+    }
+  })
+
+  it('exports the draft as formatted JSON named after the project', async () => {
+    const { user } = open({
+      loaded: { found: true, text: '{"tracker":{"createIssue":"on-pr"}}', version: 'v1' },
+    })
+
+    await stageList()
+    await user.click(exportButton())
+
+    expect(await exported()).toEqual({
+      text: '{\n  "tracker": {\n    "createIssue": "on-pr"\n  }\n}\n',
+      name: 'Web app.natamux.json',
+    })
+  })
+
+  it('exports edits that are not saved yet', async () => {
+    const { save, user } = open()
+
+    await user.click(within(await stageList()).getByRole('switch', { name: 'Plan on' }))
+    await user.click(exportButton())
+
+    const plan = stageIn(JSON.parse((await exported()).text ?? '{}').stages, 'plan')
+    expect(plan?.enabled).toBe(false)
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('turns Export off for JSON it cannot read, but not for pipeline problems', async () => {
+    const { user } = open(withStages([]))
+
+    await stageList()
+    expect(exportButton().getAttribute('aria-disabled')).toBeNull()
+
+    await jsonTab(user, '{ "stages": [')
+    expect(exportButton().getAttribute('data-tip')).toBe('Fix the JSON first')
+    await user.click(exportButton())
+    expect(saveBlob).not.toHaveBeenCalled()
+  })
+
+  it('imports a file into the draft without saving it', async () => {
+    const { save, user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile(ONE_STAGE))
+
+    expect(await rowNames()).toEqual(['Implement'])
+    expect(saveButton().getAttribute('aria-disabled')).toBeNull()
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('saves an imported file with the version check', async () => {
+    const { save, user } = open({ loaded: { found: true, text: '{}', version: 'v1' } })
+
+    await stageList()
+    await importFile(user, jsonFile(ONE_STAGE))
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    expect(save.mock.calls[0]).toEqual([JSON.parse(ONE_STAGE), 'v1'])
+  })
+
+  it('asks before an import replaces edits, and keeps them on Cancel', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open()
+
+    await user.click(within(await stageList()).getByRole('switch', { name: 'Plan on' }))
+    await user.upload(importInput(), jsonFile(ONE_STAGE))
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Replace your changes with shared.json? Nothing is saved until you click Save.',
+    )
+    expect(await rowNames()).toHaveLength(8)
+    expect(within(await stageList()).getByRole('switch', { name: 'Plan on' })).toHaveProperty(
+      'checked',
+      false,
+    )
+  })
+
+  it('shows a file that is not JSON on the JSON tab, and blocks Save', async () => {
+    const { user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile('{ "stages": ['))
+
+    expect(screen.getByRole('tab', { name: 'JSON', selected: true })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toMatch(/^This is not JSON/)
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('refuses a file over 1 MiB and keeps the draft', async () => {
+    const { user } = open()
+
+    await stageList()
+    await user.upload(importInput(), jsonFile(' '.repeat(1024 * 1024 + 1), 'big.json'))
+
+    expect(screen.getByRole('alert').textContent).toBe('big.json is too big for a settings file.')
+    expect(await rowNames()).toHaveLength(8)
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+  })
+
+  it('imports the same file again after the draft changed', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile(ONE_STAGE))
+    expect(importInput().value).toBe('')
+    expect(await rowNames()).toEqual(['Implement'])
+    await jsonTab(user, '{}')
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+    expect(await rowNames()).toHaveLength(8)
+
+    await importFile(user, jsonFile(ONE_STAGE))
+    expect(await rowNames()).toEqual(['Implement'])
+  })
+
+  it('exports the same settings it imported', async () => {
+    const { user } = open()
+
+    await stageList()
+    await importFile(user, jsonFile(ONE_STAGE))
+    await user.click(exportButton())
+
+    expect(JSON.parse((await exported()).text ?? '')).toEqual(JSON.parse(ONE_STAGE))
   })
 })
