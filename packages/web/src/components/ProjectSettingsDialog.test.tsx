@@ -1468,17 +1468,17 @@ describe('ProjectSettingsDialog, shell commands of a stage', () => {
     const { save, user } = open()
 
     await user.click(await row('Spec'))
-    await user.type(textbox('Spec', 'Check command') as HTMLElement, 'pnpm typecheck')
+    const check = textbox('Spec', 'Check command') as HTMLElement
+    await user.type(check, 'pnpm typecheck')
+    // Emptied, the field is left out, so the draft is the default again.
+    await user.clear(check)
+    expect(saveButton().getAttribute('data-tip')).toBe('Nothing changed yet')
+
+    await user.type(check, 'pnpm typecheck')
     await user.click(saveButton())
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
     expect(stageIn(savedStages(save), 'spec')?.check).toBe('pnpm typecheck')
-
-    await user.clear(textbox('Spec', 'Check command') as HTMLElement)
-    await user.click(saveButton())
-
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
-    expect(stageIn(savedStages(save, 1), 'spec')).not.toHaveProperty('check')
   })
 
   it('shows a command and arguments of the file on a stage that does not use them', async () => {
