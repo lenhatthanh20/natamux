@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Task } from '@natamux/core'
+import type { Task, TaskEvent } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventBus } from './event-bus.js'
 import { GitHubError, type RunGh } from './git.js'
 import {
+  isCandidate,
   isWatched,
   PullRequestWatcher,
   repoFolderOr,
@@ -19,11 +20,14 @@ import { TaskService } from './task-service.js'
 let dataDir: string
 let index: TaskIndex
 let tasks: TaskService
+// The bus of the task service.
+let taskBus: EventBus
 
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), 'natamux-watch-'))
   index = new TaskIndex(':memory:')
-  tasks = new TaskService({ dataDir, index, bus: new EventBus() })
+  taskBus = new EventBus()
+  tasks = new TaskService({ dataDir, index, bus: taskBus })
 })
 
 afterEach(() => {
@@ -280,6 +284,231 @@ describe('PullRequestWatcher', () => {
     expect(tasks.getTask(task.id).prStatus).toEqual({ state: 'open', checks: 'pending' })
     await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
     expect(calls).toBe(4)
+    watcher.stop()
+  })
+})
+
+// A task with a workspace on `branch`, and no pull request yet.
+function taskOnBranch(branch: string): Task {
+  const task = tasks.createTask({ title: branch })
+  return tasks.recordWorkspace(task.id, { workspace: `/work/${branch}`, branch })
+}
+
+type FoundPullRequest = { url: string; state: string }
+
+// Answers `gh pr list --head` with the pull request of each branch, and `gh pr view` and
+// `gh api graphql` with the state of that pull request.
+function github(prs: Record<string, FoundPullRequest>, calls: GhCall[] = []): RunGh {
+  const byNumber = Object.fromEntries(
+    Object.values(prs).map((pr) => [Number(pr.url.split('/').at(-1)), pr.state]),
+  )
+  const batch = graphql(byNumber)
+  return async (cwd, args) => {
+    calls.push({ cwd, args })
+    if (args[0] === 'pr' && args[1] === 'list') {
+      const pr = prs[valuesOf({ cwd, args }, '--head')[0] ?? '']
+      return JSON.stringify(pr === undefined ? [] : [pr])
+    }
+    if (args[0] === 'pr' && args[1] === 'view') {
+      const pr = Object.values(prs).find((candidate) => candidate.url === args[2])
+      return JSON.stringify({ state: pr?.state ?? 'OPEN', isDraft: false, statusCheckRollup: [] })
+    }
+    return batch(cwd, args)
+  }
+}
+
+const onOrigin = async () => true
+
+describe('isCandidate', () => {
+  it('looks for a pull request of an active task that has a branch and none yet', () => {
+    const task = taskOnBranch('natamux/t-1')
+    expect(isCandidate(task)).toBe(true)
+    expect(isCandidate({ ...task, pr: 'https://github.com/o/r/pull/1' })).toBe(false)
+    expect(isCandidate({ ...task, branch: null })).toBe(false)
+    expect(isCandidate({ ...task, workspace: null })).toBe(false)
+    expect(isCandidate({ ...task, state: 'cancelled' })).toBe(false)
+    expect(isCandidate({ ...task, state: 'done' })).toBe(false)
+  })
+})
+
+describe('PullRequestWatcher finds a pull request opened outside Natamux', () => {
+  const url = 'https://github.com/o/r/pull/5'
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('links the pull request of the task branch and reads its status', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const calls: GhCall[] = []
+    const gh = github({ 'natamux/t-1': { url, state: 'OPEN' } }, calls)
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+    })
+
+    await watcher.checkAll()
+
+    const linked = tasks.getTask(task.id)
+    expect(linked.pr).toBe(url)
+    expect(linked.prStatus).toEqual({ state: 'open', checks: 'none' })
+    expect(calls[0]?.cwd).toBe('/work/natamux/t-1')
+    const opened = tasks.listEvents(task.id).filter(({ event }) => event.type === 'pr.opened')
+    expect(opened.map(({ event }) => event.payload)).toEqual([{ url, detected: 'true' }])
+  })
+
+  it('asks GitHub nothing while origin does not have the branch', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const calls: GhCall[] = []
+    const gh = github({ 'natamux/t-1': { url, state: 'OPEN' } }, calls)
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: async () => false,
+    })
+
+    await watcher.checkAll()
+
+    expect(calls).toHaveLength(0)
+    expect(tasks.getTask(task.id).pr).toBeNull()
+  })
+
+  it('does not link a closed pull request', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const gh = github({ 'natamux/t-1': { url, state: 'CLOSED' } })
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+    })
+
+    await watcher.checkAll()
+
+    expect(tasks.getTask(task.id).pr).toBeNull()
+  })
+
+  it('looks when asked to check a task without a pull request', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const gh = github({ 'natamux/t-1': { url, state: 'MERGED' } })
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+    })
+
+    const checked = await watcher.check(task.id)
+
+    expect(checked.pr).toBe(url)
+    expect(checked.prStatus?.state).toBe('merged')
+  })
+
+  it('looks when the agent of the task stops', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const gh = github({ 'natamux/t-1': { url, state: 'OPEN' } })
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+      bus: taskBus,
+    })
+    watcher.start()
+
+    const event: TaskEvent = {
+      taskId: task.id,
+      source: 'system',
+      type: 'agent.stopped',
+      at: new Date().toISOString(),
+      payload: {},
+    }
+    taskBus.publish({ kind: 'task.updated', task, event, accepted: true })
+
+    await vi.waitFor(() => expect(tasks.getTask(task.id).prStatus?.state).toBe('open'))
+    expect(tasks.getTask(task.id).pr).toBe(url)
+    watcher.stop()
+  })
+
+  it('asks every minute while origin has the branch of a task with no pull request', async () => {
+    vi.useFakeTimers()
+    taskOnBranch('natamux/t-1')
+    const calls: GhCall[] = []
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh: github({}, calls),
+      hasRemoteBranch: onOrigin,
+      bus: busWithClient(),
+    })
+
+    watcher.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(calls).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(calls).toHaveLength(3)
+    watcher.stop()
+  })
+
+  it('asks every 5 minutes while origin does not have the branch', async () => {
+    vi.useFakeTimers()
+    taskOnBranch('natamux/t-1')
+    let looks = 0
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh: github({}),
+      hasRemoteBranch: async () => {
+        looks += 1
+        return false
+      },
+      bus: busWithClient(),
+    })
+
+    watcher.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(looks).toBe(1)
+    await vi.advanceTimersByTimeAsync(SETTLED_INTERVAL_MS - WATCH_INTERVAL_MS)
+    expect(looks).toBe(1)
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(looks).toBe(2)
+    watcher.stop()
+  })
+
+  it('still slows down to 5 minutes while gh keeps failing for such a task', async () => {
+    vi.useFakeTimers()
+    taskOnBranch('natamux/t-1')
+    let calls = 0
+    const gh: RunGh = async () => {
+      calls += 1
+      throw new GitHubError('HTTP 502')
+    }
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+      bus: busWithClient(),
+      log: () => undefined,
+    })
+
+    watcher.start()
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 2)
+    expect(calls).toBe(2)
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS * 3)
+    expect(calls).toBe(2)
+    await vi.advanceTimersByTimeAsync(WATCH_INTERVAL_MS)
+    expect(calls).toBe(3)
+    // From here on, never longer than 5 minutes.
+    await vi.advanceTimersByTimeAsync(SETTLED_INTERVAL_MS)
+    expect(calls).toBe(4)
+    await vi.advanceTimersByTimeAsync(SETTLED_INTERVAL_MS)
+    expect(calls).toBe(5)
     watcher.stop()
   })
 })

@@ -1,7 +1,9 @@
-import type { Task } from '@natamux/core'
-import type { EventBus } from './event-bus.js'
+import type { EventType, Task } from '@natamux/core'
+import type { DaemonMessage, EventBus } from './event-bus.js'
 import {
+  findPullRequest,
   GitHubError,
+  hasRemoteBranch,
   type PullRequestRef,
   parsePullRequestRef,
   type RunGh,
@@ -27,7 +29,16 @@ type PullRequestWatcherOptions = {
   // Only dashboards show the status, so the timed checks rest while none listens. Without a bus
   // they always run.
   bus?: EventBus
+  hasRemoteBranch?: (worktreePath: string, branch: string) => Promise<boolean>
 }
+
+// An agent usually opens its pull request just before its turn ends.
+const AGENT_STOP_EVENTS: readonly EventType[] = [
+  'agent.finished',
+  'agent.waiting',
+  'agent.stopped',
+  'stage.reported',
+]
 
 // The folder of a task's repository for gh. A removed repository has none; the fallback (the data
 // folder) does, and a full pull request address works from there too.
@@ -55,6 +66,17 @@ export function isWatched(task: Task): boolean {
   return task.prStatus === null || task.prStatus.state === 'open' || task.prStatus.state === 'draft'
 }
 
+// A task whose pull request may have been opened outside Natamux, by its agent or on GitHub.
+export function isCandidate(task: Task): task is Task & { branch: string; workspace: string } {
+  return (
+    task.pr === null &&
+    task.branch !== null &&
+    task.workspace !== null &&
+    task.state !== 'cancelled' &&
+    task.state !== 'done'
+  )
+}
+
 // Settled: the status is known and no check runs, so it changes only by people.
 function isSettled(task: Task): boolean {
   return task.prStatus !== null && task.prStatus.checks !== 'pending'
@@ -68,7 +90,8 @@ type RepoBatch = {
 }
 
 // Asks GitHub about the pull requests of tasks once a minute, so a task shows its CI and moves to
-// done when its pull request is merged. One gh call per GitHub repository.
+// done when its pull request is merged. One gh call per GitHub repository. It also links a pull
+// request that the agent or a person opened from the task branch outside Natamux.
 export class PullRequestWatcher {
   private readonly tasks: TaskService
   private readonly cwdOf: (repo: string | null) => string
@@ -76,7 +99,14 @@ export class PullRequestWatcher {
   private readonly intervalMs: number
   private readonly log: (message: string) => void
   private readonly bus: EventBus | undefined
+  private readonly hasRemoteBranch: (worktreePath: string, branch: string) => Promise<boolean>
   private timer: NodeJS.Timeout | null = null
+  private unsubscribe: (() => void) | null = null
+  // Tasks whose pull request is being looked for now.
+  private readonly finding = new Set<string>()
+  // Tasks without a pull request whose branch origin had at the last look. Kept here because due()
+  // cannot ask git.
+  private readonly onOrigin = new Set<string>()
   private running = false
   private lastError: string | null = null
   private lastCheckAt = Number.NEGATIVE_INFINITY
@@ -90,6 +120,7 @@ export class PullRequestWatcher {
     this.intervalMs = options.intervalMs ?? WATCH_INTERVAL_MS
     this.log = options.log ?? ((message) => console.warn(message))
     this.bus = options.bus
+    this.hasRemoteBranch = options.hasRemoteBranch ?? hasRemoteBranch
   }
 
   // The timer looks every intervalMs; whether it asks GitHub depends on the dashboards, the
@@ -104,6 +135,7 @@ export class PullRequestWatcher {
       }
     }, this.intervalMs)
     this.timer.unref()
+    this.unsubscribe = this.bus?.subscribe((message) => this.onMessage(message)) ?? null
     if (this.hasClients()) {
       void this.checkAll()
     }
@@ -114,6 +146,8 @@ export class PullRequestWatcher {
       clearInterval(this.timer)
       this.timer = null
     }
+    this.unsubscribe?.()
+    this.unsubscribe = null
   }
 
   // A dashboard came while none listened: it gets fresh statuses, unless a check ran just now.
@@ -136,6 +170,10 @@ export class PullRequestWatcher {
       this.report(error)
     }
     try {
+      for (const task of this.tasks.listTasks().filter(isCandidate)) {
+        // The batch below reads the status of a pull request found here.
+        await this.findPullRequest(task.id).catch(report)
+      }
       const batches = new Map<string, RepoBatch>()
       for (const task of this.tasks.listTasks().filter(isWatched)) {
         const ref = parsePullRequestRef(task.pr ?? '')
@@ -170,12 +208,49 @@ export class PullRequestWatcher {
   }
 
   async check(taskId: string): Promise<Task> {
+    if (this.tasks.getTask(taskId).pr === null) {
+      await this.findPullRequest(taskId)
+    }
     const task = this.tasks.getTask(taskId)
     if (task.pr === null) {
       return task
     }
     const status = await readPullRequestStatus(this.cwdOf(task.repo), task.pr, this.gh)
     return this.tasks.recordPullRequestStatus(taskId, status)
+  }
+
+  // Links the pull request from the task branch, when there is one. Asks GitHub only once origin
+  // has the branch.
+  private async findPullRequest(taskId: string): Promise<void> {
+    const task = this.tasks.getTask(taskId)
+    if (!isCandidate(task) || this.finding.has(taskId)) {
+      return
+    }
+    this.finding.add(taskId)
+    try {
+      if (!(await this.hasRemoteBranch(task.workspace, task.branch))) {
+        this.onOrigin.delete(taskId)
+        return
+      }
+      this.onOrigin.add(taskId)
+      const url = await findPullRequest(task.workspace, task.branch, this.gh)
+      if (url !== undefined && this.tasks.getTask(taskId).pr === null) {
+        this.tasks.recordGit(taskId, 'pr.opened', { url, detected: 'true' })
+        this.onOrigin.delete(taskId)
+      }
+    } finally {
+      this.finding.delete(taskId)
+    }
+  }
+
+  private onMessage(message: DaemonMessage): void {
+    if (
+      message.kind === 'task.updated' &&
+      AGENT_STOP_EVENTS.includes(message.event.type) &&
+      isCandidate(message.task)
+    ) {
+      void this.check(message.task.id).catch((error: unknown) => this.report(error))
+    }
   }
 
   private hasClients(): boolean {
@@ -187,7 +262,10 @@ export class PullRequestWatcher {
     if (!this.hasClients()) {
       return false
     }
-    const settled = this.tasks.listTasks().filter(isWatched).every(isSettled)
+    const tasks = this.tasks.listTasks()
+    // A pushed branch without a pull request may get one any minute.
+    const pushed = tasks.some((task) => isCandidate(task) && this.onOrigin.has(task.id))
+    const settled = !pushed && tasks.filter(isWatched).every(isSettled)
     const base = settled ? SETTLED_INTERVAL_MS : this.intervalMs
     const wait = Math.min(base * 2 ** this.failures, SETTLED_INTERVAL_MS)
     // Half a tick of slack: by the wall clock, a tick may come a moment before the full wait.
