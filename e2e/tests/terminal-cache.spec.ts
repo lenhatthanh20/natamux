@@ -302,6 +302,8 @@ for (const layout of SWITCH_LAYOUTS) {
     const changes = watchSizeChanges(page)
     await signIn(page)
     for (const task of [taskA, taskB]) {
+      // openTerminal opens the task from the Tasks table, which a task view does not show.
+      await goToAllTasks(page)
       await openTerminal(page, task.title)
       await showDetails(page, layout.details)
       await addShells(page, 3)
