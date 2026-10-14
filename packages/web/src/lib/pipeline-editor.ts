@@ -23,6 +23,7 @@ import {
   stageName,
   stageSchema,
   stagesOf,
+  terminalOfStage,
   trackerSettingsSchema,
 } from '@natamux/core'
 
@@ -594,11 +595,21 @@ export function defaultWorkflow(stage: Pick<Stage, 'id' | 'kind'>): boolean {
 
 export type TextField = 'name' | 'prompt' | 'command' | 'output' | 'doneWhen' | 'agent' | 'args'
 
-// A stage beside the stage in Shell 1 starts its own agent, so it may pick another one.
+function stepOfStage(steps: readonly Step[], id: string): Step | undefined {
+  return steps.find((candidate) => stagesOf(candidate).some((stage) => stage.id === id))
+}
+
+// A stage beside the stage in Shell 1 starts its own agent, so it may pick another one. So may a
+// stage of your own in Shell 1.
 export function takesOwnAgent(steps: readonly Step[], id: string): boolean {
-  const step = steps.find((candidate) => stagesOf(candidate).some((stage) => stage.id === id))
+  const step = stepOfStage(steps, id)
   const stage = step === undefined ? undefined : stagesOf(step).find((item) => item.id === id)
   return step !== undefined && stage !== undefined && canHaveOwnAgent(step, stage)
+}
+
+export function runsInShellOne(steps: readonly Step[], id: string): boolean {
+  const step = stepOfStage(steps, id)
+  return step !== undefined && terminalOfStage(step, id) === '1'
 }
 
 // The default prompt as the agent gets it: the daemon puts the commit rule in `{commit}` of a

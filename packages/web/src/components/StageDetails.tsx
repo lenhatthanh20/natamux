@@ -21,6 +21,7 @@ import {
   isCatalogStage,
   isDefaultGate,
   KIND_LABEL,
+  runsInShellOne,
   setCi,
   setGate,
   setSections,
@@ -190,7 +191,11 @@ export function StageDetails({
           <Field
             label="Agent"
             htmlFor={`${id}-agent`}
-            help="This stage starts its own agent beside the one in Shell 1, so it may use another."
+            help={
+              runsInShellOne(steps, stage.id)
+                ? 'This stage runs this agent in Shell 1. If another agent runs there, it is closed and this one starts with a new session.'
+                : 'This stage starts its own agent beside the one in Shell 1, so it may use another.'
+            }
           >
             <Select
               id={`${id}-agent`}

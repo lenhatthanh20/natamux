@@ -1408,6 +1408,36 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     await user.click(await row('Review'))
     expect(agentSelect('Review')).not.toBeNull()
   })
+
+  it('offers an agent on a stage of your own in Shell 1, and saves it', async () => {
+    const file = {
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'write-docs', name: 'Write docs', kind: 'agent', gate: 'auto' },
+        { id: 'sign-off', name: 'Sign off', kind: 'manual', gate: 'manual' },
+      ],
+    }
+    const { save, user } = open({
+      loaded: { found: true, text: JSON.stringify(file), version: 'v1' },
+    })
+
+    await user.click(await row('Sign off'))
+    expect(agentSelect('Sign off')).toBeNull()
+    await user.click(await row('Implement'))
+    expect(agentSelect('Implement')).toBeNull()
+
+    await user.click(await row('Write docs'))
+    expect(
+      within(details('Write docs')).getByText(
+        'This stage runs this agent in Shell 1. If another agent runs there, it is closed and this one starts with a new session.',
+      ),
+    ).toBeTruthy()
+    await user.selectOptions(agentSelect('Write docs') as HTMLElement, 'codex')
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'write-docs')).toMatchObject({ agent: 'codex' })
+  })
 })
 
 describe('ProjectSettingsDialog, CI check', () => {

@@ -757,6 +757,144 @@ describe('an agent review', () => {
   })
 })
 
+describe('a stage of your own with its own agent in Shell 1', () => {
+  const docs: Stage = { id: 'write-docs', kind: 'agent', gate: 'auto', agent: 'codex' }
+
+  function withStages(stage: Stage): void {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        stage,
+        { id: 'finish', kind: 'agent', gate: 'auto' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  }
+
+  // Implement ran in Shell 1 with the task's agent and is done, so the stage of your own starts.
+  async function afterImplement(): Promise<Task> {
+    const task = await implementing()
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    return tasks.getTask(task.id)
+  }
+
+  const launches = (id: string) =>
+    tasks
+      .listEvents(id)
+      .filter((entry) => entry.event.type === 'agent.launched')
+      .map((entry) => entry.event.payload)
+
+  it('closes the task agent in Shell 1 and starts its own agent there, with its words', async () => {
+    withStages({ ...docs, args: '--model gpt-5' })
+    const task = await afterImplement()
+
+    expect(task).toMatchObject({ stage: 'write-docs', state: 'running', agent: 'claude-code' })
+    expect(ptys[0]?.killed).toBe(true)
+    expect(launchScript(task.id)).toMatch(/^codex /)
+    expect(launchScript(task.id)).toContain('--model gpt-5')
+    expect(launches(task.id).at(-1)).toMatchObject({ agent: 'codex', stage: 'write-docs' })
+  })
+
+  it("goes back to the task's agent, with a new session, for the next stage", async () => {
+    withStages(docs)
+    const task = await afterImplement()
+    const shell = ptys.at(-1)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
+    expect(shell?.killed).toBe(true)
+    expect(launchScript(task.id)).toMatch(/^claude /)
+    expect(launchScript(task.id)).not.toContain('--resume')
+    expect(tasks.getTask(task.id).agent).toBe('claude-code')
+  })
+
+  it('gives its prompt to the agent in Shell 1 when that is its own agent', async () => {
+    withStages({ ...docs, agent: 'claude-code' })
+    const task = await afterImplement()
+
+    expect(tasks.getTask(task.id).stage).toBe('write-docs')
+    expect(ptys[0]?.killed).toBe(false)
+    await expectSubmitted(ptys[0], 'Task: Export')
+  })
+
+  it('never closes a program in Shell 1 that is no agent Natamux knows', async () => {
+    withStages(docs)
+    const task = await implementing()
+    const pty = ptys[0] as FakePty
+    clock += LAUNCH_GRACE_MS + 1
+    pty.program = 'vim'
+    pty.commandLines = ['vim notes.md']
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).stage).toBe('write-docs')
+    expect(pty.killed).toBe(false)
+    await expectSubmitted(pty, 'Task: Export')
+  })
+
+  it('starts its own agent again in Shell 1 when the daemon starts', async () => {
+    withStages(docs)
+    const task = await afterImplement()
+    terminals.close(task.id)
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    const codex = launches(task.id).filter((payload) => payload.agent === 'codex')
+    expect(codex).toHaveLength(2)
+    expect(codex.at(-1)).toMatchObject({ stage: 'write-docs' })
+    expect(tasks.getTask(task.id).state).toBe('running')
+  })
+
+  it('counts its agent in Shell 1 as a switch, so Claude Code does not go on with an old session', async () => {
+    withStages(docs)
+    const task = await implementing()
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.waiting',
+      payload: { stage: 'implement', sessionId: 's-1' },
+    })
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('write-docs')
+
+    // Back to Implement: Claude Code starts in Shell 1 with a new session, which ends its turn.
+    await runner.act(task.id, 'reopen', { to: 'implement' })
+    await runner.settle()
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'implement' },
+    })
+    terminals.close(task.id)
+    tasks.applyEvent(task.id, { source: 'human', type: 'agent.resumed', payload: {} })
+    await runner.settle()
+
+    // Started for Implement, again after Write docs, and once more on the resume.
+    const claude = launches(task.id).filter((payload) => payload.agent === 'claude-code')
+    expect(claude).toHaveLength(3)
+    expect(launchScript(task.id)).toMatch(/^claude /)
+    expect(launchScript(task.id)).not.toContain('--resume')
+  })
+
+  it('asks no agent but Claude Code for a workflow', async () => {
+    withStages({ ...docs, workflow: true })
+    const task = await implementing()
+    tasks.setWorkflow(task.id, 'write-docs', true)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(launchScript(task.id)).toMatch(/^codex /)
+    expect(launchScript(task.id)).not.toContain(WORKFLOW_LINE)
+  })
+})
+
 describe('a check on CI', () => {
   beforeEach(() => {
     settings = {
