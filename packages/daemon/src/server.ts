@@ -417,7 +417,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   // What the agent of each task does now, from its last hook.
   app.get('/activity', async () => ({ activity: hooks.activity() }))
 
-  app.get('/repos', async () => ({ repos: options.repos.list() }))
+  app.get('/repos', async () => ({
+    repos: options.repos.list(),
+    worktreesDir: options.repos.worktreesDir,
+  }))
 
   app.post('/repos', async (request, reply) => {
     const repo = await options.repos.add(request.body)

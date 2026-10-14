@@ -179,7 +179,10 @@ Click **Projects** in the status bar, or **Add a project** in the sidebar, to se
 
 1. Enter the **Folder**, a full path on the machine that runs the daemon. In the desktop app, **Browse…** picks it in a folder dialog.
 2. Optionally enter a **Name**. The folder name is used otherwise.
-3. Click **Add project**.
+3. Optionally change the **Worktree folder**, where the worktrees of the project's tasks go. It starts with the daemon's worktree folder. Use a full path; Natamux makes the folder if it is not there. Workspaces made before keep their place. To change it later, remove the project and add it again.
+4. Click **Add project**.
+
+The list shows the worktree folder of each project that has its own.
 
 Each project has a **Settings** button (the gear next to **+**) and a **Settings** item in its menu. See [Project settings](#project-settings).
 

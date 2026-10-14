@@ -170,6 +170,85 @@ describe('RepoService', () => {
     expect((await repos.add({ path: gitFolder('api') })).name).toBe('api')
   })
 
+  it('keeps the worktree folder of a project, and makes the folder', async () => {
+    const trees = join(repo.root, 'trees', 'web')
+
+    const added = await repos.add({ path: gitFolder('web'), worktreesDir: trees })
+
+    expect(added.worktreesDir).toBe(trees)
+    expect(existsSync(trees)).toBe(true)
+    const reloaded = new RepoService({ dataDir: join(repo.root, 'data'), defaultPath: repo.dir })
+    expect(reloaded.get('web').worktreesDir).toBe(trees)
+  })
+
+  it('keeps no worktree folder when it is the default one, or empty', async () => {
+    const withDefault = new RepoService({
+      dataDir: join(repo.root, 'tree-data'),
+      worktreesDir: join(repo.root, 'worktrees'),
+    })
+
+    const same = await withDefault.add({
+      path: gitFolder('web'),
+      worktreesDir: `${join(repo.root, 'worktrees')}/`,
+    })
+    const empty = await withDefault.add({ path: gitFolder('api'), worktreesDir: '  ' })
+
+    expect(same).not.toHaveProperty('worktreesDir')
+    expect(empty).not.toHaveProperty('worktreesDir')
+    expect(withDefault.worktreesDir).toBe(join(repo.root, 'worktrees'))
+  })
+
+  it('refuses a worktree folder that is relative or cannot be made, and adds nothing', async () => {
+    const file = join(repo.root, 'a-file')
+    writeFileSync(file, 'not a folder\n')
+
+    await expect(repos.add({ path: gitFolder('web'), worktreesDir: 'trees/web' })).rejects.toThrow(
+      RepoInputError,
+    )
+    await expect(
+      repos.add({ path: gitFolder('api'), worktreesDir: join(file, 'trees') }),
+    ).rejects.toThrow(RepoInputError)
+    expect(repos.list().map((entry) => entry.id)).toEqual(['default'])
+  })
+
+  it("gives a project's own worktree folder, or else the daemon's", async () => {
+    const dataDir = join(repo.root, 'tree-data')
+    const withDefault = new RepoService({
+      dataDir,
+      defaultPath: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+    })
+    const trees = join(repo.root, 'trees', 'web')
+    await withDefault.add({ path: gitFolder('web'), worktreesDir: trees })
+
+    expect(withDefault.worktreesDirOf('web')).toBe(trees)
+    expect(withDefault.worktreesDirOf('default')).toBe(join(repo.root, 'worktrees'))
+    expect(withDefault.worktreesDirOf(null)).toBe(join(repo.root, 'worktrees'))
+    expect(withDefault.worktreesDirOf('nope')).toBe(join(repo.root, 'worktrees'))
+  })
+
+  it('reads a repos.json of an older version, and refuses a relative worktree folder in it', () => {
+    const dataDir = join(repo.root, 'old-data')
+    mkdirSync(dataDir)
+    const file = join(dataDir, 'repos.json')
+    const trees = join(repo.root, 'trees')
+    writeFileSync(
+      file,
+      JSON.stringify([
+        { id: 'old', name: 'old', path: repo.dir },
+        { id: 'new', name: 'new', path: join(repo.root, 'new'), worktreesDir: trees },
+      ]),
+    )
+    const old = new RepoService({ dataDir, worktreesDir: join(repo.root, 'worktrees') })
+
+    expect(old.list().map((entry) => entry.id)).toEqual(['old', 'new'])
+    expect(old.worktreesDirOf('old')).toBe(join(repo.root, 'worktrees'))
+    expect(old.worktreesDirOf('new')).toBe(trees)
+
+    writeFileSync(file, JSON.stringify([{ id: 'x', name: 'x', path: repo.dir, worktreesDir: 'x' }]))
+    expect(() => new RepoService({ dataDir }).list()).toThrow()
+  })
+
   it('refuses a folder inside a repository, a repeat, and an unknown id', async () => {
     const inside = join(repo.dir, 'sub')
     mkdirSync(inside)

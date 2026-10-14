@@ -180,8 +180,8 @@ export class WorkspaceService {
   }
 
   // The folder name is the task id only, to keep paths short.
-  worktreePathFor(taskId: string): string {
-    return join(this.worktreesDir, taskId)
+  worktreePathFor(task: Pick<Task, 'id' | 'repo'>): string {
+    return join(this.repos?.worktreesDirOf(task.repo) ?? this.worktreesDir, task.id)
   }
 
   // The repository folder of a task, or of a repository id (null: the default one).
@@ -220,7 +220,7 @@ export class WorkspaceService {
       }
       // A workspace removed with its branch kept leaves the task's work there: go on with it.
       const kept = task.branch !== null && branches.includes(task.branch) ? task.branch : null
-      const worktreePath = this.worktreePathFor(taskId)
+      const worktreePath = this.worktreePathFor(task)
       const branch = kept ?? branchNameFor(task)
       if (kept === null) {
         const from = base ?? defaultBranch

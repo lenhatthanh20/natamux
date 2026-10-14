@@ -6,7 +6,7 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { DEFAULT_REPO, type Repo, repoSchema, type Task } from '@natamux/core'
 import { z } from 'zod'
 import { repositoryRoot } from './git.js'
@@ -15,6 +15,7 @@ import { slugify } from './workspace-service.js'
 export const addRepoInputSchema = z.object({
   path: z.string().trim().min(1),
   name: z.string().trim().min(1).max(100).optional(),
+  worktreesDir: z.string().trim().optional(),
 })
 
 // One spelling of a folder: links followed, Windows short names (RUNNER~1) made long, and case
@@ -58,14 +59,18 @@ export class RepoService {
   private readonly tasks: () => readonly Pick<Task, 'repo' | 'workspace'>[]
   // repos.json as last read or saved. Every hook asks for a path, so it is not read each time.
   private cached: Repo[] | undefined
+  // The daemon's worktree folder, for projects that have none of their own.
+  readonly worktreesDir: string | undefined
 
   constructor(options: {
     dataDir: string
     // The repository the daemon was started with. Added once as "default", so the tasks of older
     // versions keep it.
     defaultPath?: string
+    worktreesDir?: string
     tasks?: () => readonly Pick<Task, 'repo' | 'workspace'>[]
   }) {
+    this.worktreesDir = options.worktreesDir
     this.file = join(options.dataDir, 'repos.json')
     this.defaultMarker = join(options.dataDir, 'repos-default-added')
     this.removedFile = join(options.dataDir, 'repos-removed.json')
@@ -95,6 +100,13 @@ export class RepoService {
     return this.get(id).path
   }
 
+  // A project's own worktree folder, or else the daemon's. An unknown id gets the daemon's too:
+  // a removed project's tasks still need a place.
+  worktreesDirOf(id: string | null): string | undefined {
+    const own = this.stored().find((repo) => repo.id === (id ?? DEFAULT_REPO))?.worktreesDir
+    return own ?? this.worktreesDir
+  }
+
   // Adds the repository at an absolute path. Its id comes from the name (or the folder name).
   async add(rawInput: unknown): Promise<Repo> {
     const input = addRepoInputSchema.parse(rawInput)
@@ -110,13 +122,20 @@ export class RepoService {
       throw new RepoInputError(`${root} is added already`)
     }
 
+    const worktreesDir = this.ownWorktreesDir(input.worktreesDir)
+
     const name = input.name ?? basename(root)
     const base = this.wasDefault(root) ? DEFAULT_REPO : slugify(name)
     let id = base
     for (let number = 2; !this.isFreeFor(id, root, known); number += 1) {
       id = `${base}-${number}`
     }
-    const repo = repoSchema.parse({ id, name, path: root })
+    const repo = repoSchema.parse({
+      id,
+      name,
+      path: root,
+      ...(worktreesDir === undefined ? {} : { worktreesDir }),
+    })
     this.save([...this.stored(), repo])
     return repo
   }
@@ -138,6 +157,28 @@ export class RepoService {
     }
     this.saveRemoved({ ...this.removed(), [id]: removed.path })
     this.save(stored.filter((repo) => repo.id !== id))
+  }
+
+  // The folder to keep for a new project, made now. Undefined when it is the daemon's own.
+  private ownWorktreesDir(raw: string | undefined): string | undefined {
+    if (raw === undefined || raw === '') {
+      return undefined
+    }
+    if (!isAbsolute(raw)) {
+      // The dashboard shows errors that start with "The worktree folder " under that field.
+      throw new RepoInputError(`The worktree folder ${raw} is not an absolute path`)
+    }
+    const folder = resolve(raw)
+    if (this.worktreesDir !== undefined && folder === resolve(this.worktreesDir)) {
+      return undefined
+    }
+    try {
+      mkdirSync(folder, { recursive: true })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new RepoInputError(`The worktree folder ${folder} cannot be made: ${reason}`)
+    }
+    return folder
   }
 
   // The tasks of a removed repository keep its id. Given to another folder, the id would move

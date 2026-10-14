@@ -68,6 +68,7 @@ beforeEach(async () => {
   const repos = new RepoService({
     dataDir,
     defaultPath: repo.dir,
+    worktreesDir: join(repo.root, 'worktrees'),
     tasks: () => service.listTasks(),
   })
   const workspaces = new WorkspaceService({
@@ -2477,6 +2478,7 @@ describe('repositories', () => {
   it('lists the default repository, adds another, and makes its tasks work there', async () => {
     const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
     expect(listed.json().repos).toEqual([{ id: 'default', name: 'repo', path: repo.dir }])
+    expect(listed.json().worktreesDir).toBe(join(repo.root, 'worktrees'))
 
     const other = join(repo.root, 'other')
     mkdirSync(other)
@@ -2553,6 +2555,39 @@ describe('repositories', () => {
       payload: { path: 'some/where' },
     })
     expect(relative.statusCode).toBe(400)
+
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'trunk')
+    const relativeTrees = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other, worktreesDir: 'trees' },
+    })
+    expect(relativeTrees.statusCode).toBe(400)
+    expect(relativeTrees.json().message).toMatch(/^The worktree folder /)
+    for (const worktreesDir of [join(repo.root, 'secret.txt', 'trees'), 42]) {
+      const bad = await app.inject({
+        method: 'POST',
+        url: '/repos',
+        headers: authorization,
+        payload: { path: other, worktreesDir },
+      })
+      expect(bad.statusCode).toBe(400)
+    }
+    const listed = await app.inject({ method: 'GET', url: '/repos', headers: authorization })
+    expect(listed.json().repos).toHaveLength(1)
+
+    const trees = join(repo.root, 'other-trees')
+    const added = await app.inject({
+      method: 'POST',
+      url: '/repos',
+      headers: authorization,
+      payload: { path: other, worktreesDir: trees },
+    })
+    expect(added.statusCode).toBe(201)
+    expect(added.json().repo.worktreesDir).toBe(trees)
   })
 
   it('removes a repository once it has no workspaces, and keeps its tasks', async () => {
