@@ -158,6 +158,11 @@ async function expectSubmitted(pty: FakePty | undefined, start: string): Promise
   })
 }
 
+// A paste reaches the shell later, once the shell is ready for it.
+async function expectWritten(pty: FakePty | undefined, text: string): Promise<void> {
+  await vi.waitFor(() => expect(pty?.written.join('')).toContain(text))
+}
+
 // A task of a pipeline that starts with Implement, ready and in its workspace, so Implement runs.
 async function implementing(stage = 'implement'): Promise<Task> {
   const task = await created({ title: 'Export', agent: 'claude-code' })
@@ -1012,7 +1017,7 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     await runner.act(task.id, 'reopen', { terminal: '7', reason: 'Fix the dates' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
-    expect(ptys[0]?.written.join('')).toContain('Fix the dates')
+    await expectWritten(ptys[0], 'What to change: Fix the dates')
     expect(launchesOf(task.id, 'claude-code')).toHaveLength(1)
 
     await report(task, '1')
@@ -1027,10 +1032,11 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     expect(task.stage).toBe('ci-watch')
     const watch = ptys.at(-1)
 
-    await runner.act(task.id, 'reopen', { terminal: '8', reason: 'CI failed' })
+    // Without `to` a send back goes to the step before, which is Review here.
+    await runner.act(task.id, 'reopen', { terminal: '8', to: 'implement', reason: 'CI failed' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
-    expect(ptys[0]?.written.join('')).toContain('CI failed')
+    await expectWritten(ptys[0], 'What to change: CI failed')
 
     // Review runs again in between; its agent in Shell 7 gets the prompt.
     await report(task, '1')
