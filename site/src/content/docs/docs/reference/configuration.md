@@ -99,7 +99,7 @@ Details:
 | Case | Text |
 |---|---|
 | The agent has the skill and a sure call: Claude Code and Copilot CLI (`/name`), Codex (`$name`) | The call, such as `/review-pr` |
-| A `SKILL.md` with that name exists for any agent (Gemini CLI and Cursor CLI always get this) | `the skill in <path> (read that file and follow it)` |
+| A `SKILL.md` with that name exists for any agent, in the worktree or in the main checkout (Gemini CLI and Cursor CLI, and a skill found only in the main checkout, always get this) | `the skill in <path> (read that file and follow it)` |
 | No such skill | `the <name> skill`. The stage card says "The skill <name> was not found for <agent>." |
 
 The stage starts in every case. Each agent page says where it finds skills, for example [Codex](/docs/agents/codex/#skills).

@@ -92,7 +92,7 @@ New tasks use the new pipeline. Tasks on their way keep their stages, but use th
 A prompt can name a skill with `{skill:<name>}`. A skill of a plugin is `<plugin>:<skill>`. The task can run with any agent, and each agent calls skills its own way, so Natamux fills the placeholder when the stage starts:
 
 1. The agent has the skill and a sure way to call it: Natamux writes that call. It is `/name` for Claude Code and Copilot CLI, and `$name` for Codex. Gemini CLI and Cursor CLI have no sure call, so they always get rule 2.
-2. Otherwise, a `SKILL.md` of that name exists for any agent: Natamux writes `the skill in <path> (read that file and follow it)`.
+2. Otherwise, a `SKILL.md` of that name exists for any agent: Natamux writes `the skill in <path> (read that file and follow it)`. Natamux looks in the task's worktree, then in your main checkout. A new worktree does not have your untracked files, such as `.claude/settings.local.json` that turns a plugin on, so a skill found only in the main checkout always gets this form.
 3. Otherwise Natamux writes `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>." The stage still starts.
 
 Each form reads well in a sentence such as "Use {skill:review-pr} on the diff". For where each agent keeps its skills, see the page of the agent, for example [Claude Code](/docs/agents/claude-code/#skills).

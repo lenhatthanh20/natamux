@@ -393,7 +393,7 @@ The catalog lives in `packages/core/src/stage-catalog.ts`, so the daemon and the
 `{skill:<name>}` (plugin skills `<plugin>:<skill>`) is filled by the daemon when a stage starts, for the task's agent (`agent-skills.ts`):
 
 1. The agent has the skill and a sure call: that call (`/name` for Claude Code and Copilot CLI, `$name` for Codex). Gemini CLI and Cursor CLI have no sure call.
-2. Otherwise a `SKILL.md` of that name exists for any agent: `the skill in <path> (read that file and follow it)`.
+2. Otherwise a `SKILL.md` of that name exists for any agent, in the worktree or then in the main checkout: `the skill in <path> (read that file and follow it)`.
 3. Otherwise `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>."
 
 The `skill` context source follows the same rules as a whole line. The folders each agent reads are in `docs/agent-adapters.md`. `GET /repos/:id/skills` lists the skills of all agents for the **Insert skill** picker.

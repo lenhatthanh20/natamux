@@ -546,7 +546,8 @@ export class StageRunner {
   }
 
   private skillContext(task: Task, agent: string): SkillContext {
-    return { agent, workspace: task.workspace ?? this.repoPath(task.repo), home: this.home }
+    const repo = this.repoPath(task.repo)
+    return { agent, workspace: task.workspace ?? repo, repo, home: this.home }
   }
 
   private withSkills(text: string, task: Task, agent: string): { text: string; missing: string[] } {

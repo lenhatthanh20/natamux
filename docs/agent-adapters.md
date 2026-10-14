@@ -125,7 +125,7 @@ Each skill is a folder with a `SKILL.md`. Its front matter has `name` and `descr
 How `{skill:<name>}` in a stage prompt, and the `skill` context source, is filled for the task's agent:
 
 1. The agent has the skill and a sure call: that call.
-2. Otherwise, a `SKILL.md` of that name exists for any agent (in the worktree, or on this machine): `the skill in <path> (read that file and follow it)`. This works for any agent, also one Natamux does not know.
+2. Otherwise, a `SKILL.md` of that name exists for any agent (in the worktree, in the main checkout, or on this machine): `the skill in <path> (read that file and follow it)`. This works for any agent, also one Natamux does not know. The main checkout counts because its untracked files, such as `.claude/settings.local.json` that turns a plugin on, are not in a new worktree. A skill found only there always gets this form: the agent in the worktree may not have it.
 3. Otherwise: `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>."
 
 The files of an agent that Natamux reads, such as `installed_plugins.json`, are Claude Code's own. A file that is missing or has an unknown shape gives no skills from that source, never an error. A plugin that is on but not installed gives a notice.
