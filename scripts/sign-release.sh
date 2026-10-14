@@ -198,7 +198,8 @@ main() {
 
   gh release upload "$tag" "$work/SHA256SUMS.txt.minisig" --clobber
   gh release edit "$tag" --draft=false --latest
-  echo "Published $page"
+  # A draft's address is untagged-…; the release gets its tag address once published.
+  echo "Published $(gh release view "$tag" --json url --jq .url)"
   echo "Check it: scripts/release.test.sh --published"
 }
 
