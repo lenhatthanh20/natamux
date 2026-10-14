@@ -21,6 +21,7 @@ import { pipeline } from 'node:stream/promises'
 import type { ReadableStream } from 'node:stream/web'
 import { promisify } from 'node:util'
 import { app, dialog, type MenuItemConstructorOptions, net, shell } from 'electron'
+import { RELEASE_SIGNER, verifySums } from './release-signature.js'
 import {
   assetName,
   type InstallKind,
@@ -31,6 +32,7 @@ import {
   macBundle,
   type Release,
   releaseFromUrl,
+  SIGNATURE_FILE,
   SUMS_FILE,
   sha256From,
 } from './update-check.js'
@@ -284,7 +286,31 @@ export class Updater {
     if (!sumsResponse.ok) {
       throw new Error(`Download of ${SUMS_FILE} failed: HTTP ${sumsResponse.status}`)
     }
-    const expected = sha256From(await sumsResponse.text(), name)
+    const sums = Buffer.from(await sumsResponse.arrayBuffer())
+    // No signature, no update: there is no fallback to the checksum alone.
+    const signatureResponse = await net.fetch(`${release.downloads}${SIGNATURE_FILE}`, {
+      headers: this.headers,
+    })
+    if (!signatureResponse.ok) {
+      throw new Error(
+        `Natamux ${release.version} is not installed: download of its signature ${SIGNATURE_FILE} failed: HTTP ${signatureResponse.status}`,
+      )
+    }
+    try {
+      verifySums({
+        sums,
+        signature: await signatureResponse.text(),
+        publicKey: RELEASE_SIGNER,
+        tag: release.tag,
+        current: this.options.version,
+      })
+    } catch (error) {
+      throw new Error(
+        `Natamux ${release.version} is not installed: its signature check failed. ${reason(error)}`,
+      )
+    }
+    this.log(`check: ${SUMS_FILE} is signed for natamux ${release.tag}`)
+    const expected = sha256From(sums.toString('utf8'), name)
     if (expected === undefined) {
       throw new Error(`${SUMS_FILE} has no line for ${name}`)
     }

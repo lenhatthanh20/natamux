@@ -3,8 +3,8 @@
 # Checks that the files of the next release agree with each other. The version comes from
 # packages/web/package.json. The Release workflow checks only the packages and the notes file,
 # and only after the tag is pushed; this finds the same mistakes, and more, on the pull request.
-# With --published, it checks the pushed tag, the Release run and the GitHub release instead.
-# That needs gh, signed in, and the network.
+# With --published, it checks the pushed tag, the Release run and the GitHub release instead,
+# with its signature. That needs gh, signed in, minisign, and the network.
 set -u
 cd "$(dirname "$0")/.."
 fails=0
@@ -63,9 +63,18 @@ if [ "${1:-}" = "--published" ]; then
   check "release is not a prerelease" '[ "$(field .isPrerelease)" = false ]'
   check "release body is $notes" \
     '[ "$(field .body | tr -d "\r" | sed -e "s/[[:space:]]*$//")" = "$(sed -e "s/[[:space:]]*$//" "$notes")" ]'
-  for file in $files SHA256SUMS.txt; do
+  for file in $files SHA256SUMS.txt SHA256SUMS.txt.minisig; do
     check "release has $file" 'field ".assets[].name" | grep -qx "$file"'
   done
+  # The app installs no update without this signature (packages/desktop/src/release-signature.ts).
+  signer=$(sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" packages/desktop/src/release-signature.ts)
+  if command -v minisign >/dev/null; then
+    check "SHA256SUMS.txt is signed by RELEASE_SIGNER for natamux $tag" \
+      'gh release download "$tag" --dir "$tmp/signed" --pattern "SHA256SUMS.txt*" \
+        && [ "$(minisign -V -Q -m "$tmp/signed/SHA256SUMS.txt" -P "$signer")" = "natamux $tag" ]'
+  else
+    check "SHA256SUMS.txt is signed (install minisign to check it: brew install minisign)" false
+  fi
   check "release is the latest" '[ "$(gh release view --json tagName --jq .tagName)" = "$tag" ]'
   check "SHA256SUMS.txt matches the .dmg" \
     'gh release download "$tag" --dir "$tmp" --pattern SHA256SUMS.txt --pattern Natamux-mac-arm64.dmg \

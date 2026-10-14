@@ -6,10 +6,13 @@
 // networks and CI runners reach.
 export const LATEST_URL = 'https://github.com/lenhatthanh20/natamux/releases/latest'
 export const SUMS_FILE = 'SHA256SUMS.txt'
+export const SIGNATURE_FILE = `${SUMS_FILE}.minisig`
 
 export type InstallKind = 'mac' | 'appimage' | 'deb' | 'manual'
 
 export type Release = {
+  // As in the address, such as v1.2.3. The signed SHA256SUMS.txt names it.
+  tag: string
   version: string
   // The release page.
   page: string
@@ -47,11 +50,17 @@ export function releaseFromUrl(url: string): Release | undefined {
     return undefined
   }
   const [, repo, tag] = match
-  const version = parseVersion(decodeURIComponent(tag ?? ''))
+  const name = decodeURIComponent(tag ?? '')
+  const version = parseVersion(name)
   if (repo === undefined || tag === undefined || version === undefined) {
     return undefined
   }
-  return { version: version.join('.'), page: url, downloads: `${repo}/releases/download/${tag}/` }
+  return {
+    tag: name,
+    version: version.join('.'),
+    page: url,
+    downloads: `${repo}/releases/download/${tag}/`,
+  }
 }
 
 // The Natamux.app folder that holds the running program, from process.execPath.

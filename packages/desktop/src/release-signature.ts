@@ -1,0 +1,100 @@
+// Checks the minisign signature of SHA256SUMS.txt before the updater trusts any hash in it. Node
+// crypto only, so it needs no Electron and no new package. See docs/design-desktop-update.md.
+import { createHash, createPublicKey, type KeyObject, verify } from 'node:crypto'
+import { isNewer, SIGNATURE_FILE, SUMS_FILE } from './update-check.js'
+
+// The minisign public key of the release signer. The secret key never leaves the owner's Mac.
+// scripts/sign-release.sh, scripts/release.test.sh and CI read this line.
+export const RELEASE_SIGNER = 'REPLACE_WITH_THE_RELEASE_PUBLIC_KEY'
+
+type Signer = { id: Buffer; key: KeyObject }
+
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/
+const UNTRUSTED = 'untrusted comment: '
+const TRUSTED = 'trusted comment: '
+
+function decode(text: string, length: number, what: string): Buffer {
+  const bytes = Buffer.from(text, 'base64')
+  if (!BASE64.test(text) || bytes.length !== length) {
+    throw new Error(`${what} is not valid base64 of ${length} bytes`)
+  }
+  return bytes
+}
+
+// minisign shows a key id as a hex number; the file holds it little-endian.
+function keyId(id: Buffer): string {
+  return Buffer.from(id).reverse().toString('hex').toUpperCase()
+}
+
+// A public key as `minisign -P` takes it: base64 of "Ed", an 8-byte key id and a 32-byte key.
+function readSigner(publicKey: string): Signer {
+  const bytes = decode(publicKey, 42, 'The release public key')
+  if (bytes.subarray(0, 2).toString('latin1') !== 'Ed') {
+    throw new Error('The release public key is not a minisign Ed25519 key')
+  }
+  const x = bytes.subarray(10).toString('base64url')
+  return {
+    id: bytes.subarray(2, 10),
+    key: createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x }, format: 'jwk' }),
+  }
+}
+
+// Throws unless `signature`, the text of SHA256SUMS.txt.minisig, is a signature of `sums` by
+// `publicKey` with the trusted comment "natamux <tag>", and the version of `tag` is newer than
+// `current`. The comment ties the signed file to one release, so an old signed SHA256SUMS.txt
+// cannot come back under a new tag.
+export function verifySums(input: {
+  sums: Uint8Array
+  signature: string
+  publicKey: string
+  tag: string
+  current: string
+}): void {
+  const { sums, signature, publicKey, tag, current } = input
+  const signer = readSigner(publicKey)
+  // minisign itself drops a \r at the end of each line, so a file saved with CRLF still verifies.
+  const lines = signature.split('\n').map((line) => line.replace(/\r$/, ''))
+  if (lines.at(-1) === '') {
+    lines.pop()
+  }
+  const [untrusted, signatureLine, trustedLine, globalLine] = lines
+  if (
+    lines.length !== 4 ||
+    !untrusted?.startsWith(UNTRUSTED) ||
+    signatureLine === undefined ||
+    !trustedLine?.startsWith(TRUSTED) ||
+    globalLine === undefined
+  ) {
+    throw new Error(`${SIGNATURE_FILE} is not a minisign signature`)
+  }
+
+  // "ED": Ed25519 over the BLAKE2b-512 of the file; "Ed": the legacy form, over the file itself.
+  const bytes = decode(signatureLine, 74, `The signature in ${SIGNATURE_FILE}`)
+  const algorithm = bytes.subarray(0, 2).toString('latin1')
+  if (algorithm !== 'ED' && algorithm !== 'Ed') {
+    throw new Error(`${SIGNATURE_FILE} uses an unknown algorithm`)
+  }
+  const id = bytes.subarray(2, 10)
+  if (!id.equals(signer.id)) {
+    throw new Error(
+      `${SIGNATURE_FILE} is signed by key ${keyId(id)}, not by the release key ${keyId(signer.id)}`,
+    )
+  }
+  const sig = bytes.subarray(10)
+  const signed = algorithm === 'ED' ? createHash('blake2b512').update(sums).digest() : sums
+  if (!verify(null, signed, signer.key, sig)) {
+    throw new Error(`The signature of ${SUMS_FILE} is not valid`)
+  }
+
+  const comment = trustedLine.slice(TRUSTED.length)
+  const global = decode(globalLine, 64, `The comment signature in ${SIGNATURE_FILE}`)
+  if (!verify(null, Buffer.concat([sig, Buffer.from(comment, 'utf8')]), signer.key, global)) {
+    throw new Error(`The trusted comment in ${SIGNATURE_FILE} is not signed`)
+  }
+  if (comment !== `natamux ${tag}`) {
+    throw new Error(`${SIGNATURE_FILE} is signed for "${comment}", not for "natamux ${tag}"`)
+  }
+  if (!isNewer(tag, current)) {
+    throw new Error(`${tag} is not newer than ${current}`)
+  }
+}

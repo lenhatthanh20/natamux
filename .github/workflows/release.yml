@@ -1,9 +1,11 @@
 name: Release
 
 # Pushing a tag such as v0.1.0 builds the desktop app for macOS (Apple silicon and Intel), Linux
-# x64 and Windows x64, then publishes one GitHub release with every file. The notes come from
-# docs/releases/<tag>.md. Not signed with a certificate yet (build order step 11). A pull request
-# that changes the packaging builds and starts the app on every system, without a release.
+# x64 and Windows x64, then makes one draft GitHub release with every file. The notes come from
+# docs/releases/<tag>.md. The owner signs SHA256SUMS.txt offline and publishes the draft with
+# scripts/sign-release.sh; apps install no update without that signature. The apps are not signed
+# with a certificate yet (build order step 11). A pull request that changes the packaging builds
+# and starts the app on every system, without a release.
 on:
   push:
     tags: ['v*']
@@ -72,7 +74,8 @@ jobs:
           TMPDIR: ${{ runner.temp }}
         run: scripts/package-desktop.sh ${{ matrix.args }} --publish never
       # Each start also opens a task: a shell in its worktree must answer, and a stand-in agent
-      # must run the app's own `natamux` command (packages/desktop/src/smoke.ts).
+      # must run the app's own `natamux` command. Then the app's own crypto must check a known
+      # minisign signature (packages/desktop/src/smoke.ts).
       - name: Start the packaged app (Linux)
         if: runner.os == 'Linux'
         env:
@@ -96,8 +99,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           asset=Natamux-linux-x86_64.AppImage
-          gh release view --json assets --jq '.assets[].name' | grep -qx "$asset" \
-            || { echo "::notice::The latest release has no $asset; the update check is skipped"; exit 0; }
+          for file in "$asset" SHA256SUMS.txt.minisig; do
+            gh release view --json assets --jq '.assets[].name' | grep -qx "$file" \
+              || { echo "::notice::The latest release has no $file; the update check is skipped"; exit 0; }
+          done
           user_dir="$RUNNER_TEMP/update-user"
           mkdir -p "$user_dir"
           jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
@@ -130,8 +135,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           asset=Natamux-${{ matrix.name }}.dmg
-          gh release view --json assets --jq '.assets[].name' | grep -qx "$asset" \
-            || { echo "::notice::The latest release has no $asset; the update check is skipped"; exit 0; }
+          for file in "$asset" SHA256SUMS.txt.minisig; do
+            gh release view --json assets --jq '.assets[].name' | grep -qx "$file" \
+              || { echo "::notice::The latest release has no $file; the update check is skipped"; exit 0; }
+          done
           user_dir="$RUNNER_TEMP/update-user"
           mkdir -p "$user_dir"
           jq -n --arg repoDir "$GITHUB_WORKSPACE" '{$repoDir}' > "$user_dir/settings.json"
@@ -210,10 +217,21 @@ jobs:
           done
       - name: Checksums
         run: cd artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ env.TAG }}
-          name: Natamux ${{ env.TAG }}
-          body_path: docs/releases/${{ env.TAG }}.md
-          files: artifacts/*
-          prerelease: ${{ contains(env.TAG, '-') }}
+      # A draft: /releases/latest skips it, so no app sees the release before the owner signs it.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)
+          if [ "$draft" = true ]; then
+            # A re-run: the draft of the first attempt gets this run's files.
+            gh release upload "$TAG" artifacts/* --clobber
+          elif [ -n "$draft" ]; then
+            echo "::error::Release $TAG is published already"
+            exit 1
+          else
+            prerelease=()
+            [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
+            gh release create "$TAG" --draft --verify-tag "${prerelease[@]}" \
+              --title "Natamux $TAG" --notes-file "docs/releases/$TAG.md" artifacts/*
+          fi
