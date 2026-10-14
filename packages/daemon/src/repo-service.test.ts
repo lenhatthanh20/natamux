@@ -202,9 +202,9 @@ describe('RepoService', () => {
     const file = join(repo.root, 'a-file')
     writeFileSync(file, 'not a folder\n')
 
-    await expect(
-      repos.add({ path: gitFolder('web'), worktreesDir: 'trees/web' }),
-    ).rejects.toThrow(RepoInputError)
+    await expect(repos.add({ path: gitFolder('web'), worktreesDir: 'trees/web' })).rejects.toThrow(
+      RepoInputError,
+    )
     await expect(
       repos.add({ path: gitFolder('api'), worktreesDir: join(file, 'trees') }),
     ).rejects.toThrow(RepoInputError)
