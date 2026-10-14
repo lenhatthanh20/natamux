@@ -16,7 +16,7 @@ Install Copilot CLI and sign in. Follow the [GitHub documentation](https://docs.
 | | |
 |---|---|
 | Program | `copilot` |
-| Command line | `copilot --allow-all-tools [extra args] -i '<prompt>'` |
+| Command line | `copilot --no-alt-screen --allow-all-tools [extra args] -i '<prompt>'` |
 | Permission flag | `--allow-all-tools`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_COPILOT_COMMAND` |
 | Add arguments | `NATAMUX_COPILOT_ARGS` |
@@ -73,5 +73,6 @@ A real Copilot CLI 1.0.94 session.
 
 ## Limits
 
+- Natamux starts Copilot with `--no-alt-screen`, so its output goes into the terminal history like the other agents. Copilot's full screen draws its own scrollbar as a light line at the right edge. To get the full screen back, set `NATAMUX_COPILOT_ARGS="--alt-screen on"`.
 - Copilot may ring the terminal bell when it starts. Natamux ignores a bell in the first 15 seconds after launch.
 - Copilot's hooks may be off until its folder is trusted. Without `~/.copilot/config.json` (Copilot never ran), Natamux cannot trust the folder, and Copilot asks once. Until then, the terminal bell moves a running task to needs input.
