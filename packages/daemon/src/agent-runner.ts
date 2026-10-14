@@ -150,7 +150,9 @@ export class AgentRunner {
       extraArgs: [this.extraArgs[agent], own.args].filter(Boolean).join(' '),
       prompt:
         session === undefined
-          ? plainText(prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
+          ? plainText(prompt ?? firstPrompt(task))
+              .replace(/\s+/g, ' ')
+              .trim()
           : '',
       session,
       platform: this.platform,

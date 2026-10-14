@@ -174,7 +174,9 @@ describe('AgentRunner', () => {
     windows.start(task.id, 'claude-code', 'a\x1bcalc.exe #\x03b')
 
     expect(spawner.ptys[0]?.written).toEqual([
-      windowsLine("claude --settings 'C:\\data\\settings.json' --permission-mode auto 'acalc.exe #b'"),
+      windowsLine(
+        "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'acalc.exe #b'",
+      ),
     ])
   })
 
