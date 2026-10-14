@@ -541,6 +541,26 @@ describe('runCli', () => {
       expect(result.stderr).toContain('Check NATAMUX_TOKEN')
     })
 
+    it('passes on why the daemon refused a task terminal with 403', async () => {
+      const message = 'Only a person can approve a stage. Use the dashboard.'
+      const result = await run(['stage', 'approve', 'T-1'], {
+        handler: () => jsonResponse({ error: 'forbidden', message }, 403),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toContain(message)
+    })
+
+    it.each([
+      { body: 'no body', text: null },
+      { body: 'a body that is not JSON', text: 'Forbidden' },
+    ])('explains a 403 with $body', async ({ text }) => {
+      const result = await run(['stage', 'approve', 'T-1'], {
+        handler: () => new Response(text, { status: 403 }),
+      })
+      expect(result.code).toBe(EXIT_FAILED)
+      expect(result.stderr).toContain('Only a person can do this')
+    })
+
     it('says when the daemon cannot be reached', async () => {
       const result = await run(['task', 'list'], {
         handler: () => {

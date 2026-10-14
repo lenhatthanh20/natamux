@@ -88,6 +88,8 @@ export type StageActionInput = {
   to?: string
   // reopen and fail: why, for the agent and the log.
   reason?: string
+  // The request came with the agent token of a task shell.
+  byAgent?: boolean
 }
 
 export class StageActionError extends Error {
@@ -1111,6 +1113,7 @@ export class StageRunner {
   async act(taskId: string, action: StageAction, input: StageActionInput = {}): Promise<Task> {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
+    const source = input.byAgent === true ? 'agent' : 'human'
     if (action === 'start') {
       this.withoutAgent.delete(taskId)
       await this.startLanes(taskId, ['draft', 'ready'])
@@ -1118,8 +1121,8 @@ export class StageRunner {
     }
     if (action === 'report') {
       const stage = this.resolveStage(task, step, input, ['running', 'needs-input'])
-      const source = input.terminal === undefined ? 'human' : 'agent'
-      await this.reportAndCheck(taskId, stage.id, source, input.terminal)
+      const reporter = input.terminal === undefined ? source : 'agent'
+      await this.reportAndCheck(taskId, stage.id, reporter, input.terminal)
       return this.tasks.getTask(taskId)
     }
     if (action === 'reopen') {
@@ -1129,11 +1132,16 @@ export class StageRunner {
       // A person can type the command in a task shell too; only an agent there counts.
       const byAgent = input.terminal !== undefined && this.agentRuns(taskId, input.terminal)
       const from = byAgent ? this.agentSendsBack(task, step, input.terminal ?? '') : undefined
-      this.apply(taskId, 'stage.reopened', {
-        ...(input.to === undefined ? {} : { to: input.to }),
-        ...(input.reason === undefined ? {} : { reason: input.reason }),
-        ...(from === undefined ? {} : { from, byAgent: true }),
-      })
+      this.apply(
+        taskId,
+        'stage.reopened',
+        {
+          ...(input.to === undefined ? {} : { to: input.to }),
+          ...(input.reason === undefined ? {} : { reason: input.reason }),
+          ...(from === undefined ? {} : { from, byAgent: true }),
+        },
+        source,
+      )
       if (from !== undefined) {
         // Its turn ends after this, as after `natamux done`.
         this.reported.set(`${taskId}/${input.terminal}`, from)
@@ -1151,10 +1159,12 @@ export class StageRunner {
     }
     const { type, states } = plan[action]
     const stage = this.resolveStage(task, step, input, states)
-    this.apply(taskId, type, {
-      stage: stage.id,
-      ...(input.reason === undefined ? {} : { reason: input.reason }),
-    })
+    this.apply(
+      taskId,
+      type,
+      { stage: stage.id, ...(input.reason === undefined ? {} : { reason: input.reason }) },
+      source,
+    )
     return this.afterStart(taskId)
   }
 
@@ -1202,8 +1212,13 @@ export class StageRunner {
       ).length
   }
 
-  private apply(taskId: string, type: TaskEvent['type'], payload: Record<string, unknown>): void {
-    const result = this.tasks.applyEvent(taskId, { source: 'human', type, payload })
+  private apply(
+    taskId: string,
+    type: TaskEvent['type'],
+    payload: Record<string, unknown>,
+    source: TaskEvent['source'],
+  ): void {
+    const result = this.tasks.applyEvent(taskId, { source, type, payload })
     if (!result.accepted) {
       throw new StageActionError(`${taskId} cannot take "${type}" now (${result.task.state})`)
     }

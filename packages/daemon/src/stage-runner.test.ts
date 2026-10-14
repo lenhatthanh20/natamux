@@ -1849,6 +1849,56 @@ describe('a stage of a group marked to skip', () => {
   })
 })
 
+describe('who a stage action came from', () => {
+  const sourceOf = (taskId: string, type: string) =>
+    tasks
+      .listEvents(taskId)
+      .filter(({ event }) => event.type === type)
+      .at(-1)?.event.source
+
+  it.each([
+    { byAgent: true, source: 'agent' },
+    { byAgent: false, source: 'human' },
+    { byAgent: undefined, source: 'human' },
+  ])('records reopen and fail with byAgent $byAgent as $source', async ({ byAgent, source }) => {
+    const task = await implementing()
+    await runner.act(task.id, 'reopen', { to: 'implement', byAgent })
+    expect(sourceOf(task.id, 'stage.reopened')).toBe(source)
+    await runner.settle()
+    await runner.act(task.id, 'fail', { byAgent })
+    expect(sourceOf(task.id, 'stage.failed')).toBe(source)
+  })
+
+  it('records a report with byAgent and no terminal as the agent', async () => {
+    const task = await implementing()
+    await runner.act(task.id, 'report', { byAgent: true })
+    expect(sourceOf(task.id, 'stage.reported')).toBe('agent')
+  })
+
+  it('records a report with no terminal and no byAgent as a person', async () => {
+    const task = await implementing()
+    await runner.act(task.id, 'report')
+    expect(sourceOf(task.id, 'stage.reported')).toBe('human')
+  })
+
+  // A start records the stage starting as the system; it must never look like a person's step.
+  it('records nothing as a person for a start by an agent', async () => {
+    const task = await created({ title: 'Export', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'draft', stage: 'implement' },
+    })
+    await withWorkspace(task.id)
+    const before = tasks.listEvents(task.id).length
+    await runner.act(task.id, 'start', { byAgent: true })
+    await runner.settle()
+    const after = tasks.listEvents(task.id).slice(before)
+    expect(after.filter(({ event }) => event.source === 'human')).toEqual([])
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+  })
+})
+
 describe('helpers', () => {
   it.each([
     ['#42', 42],

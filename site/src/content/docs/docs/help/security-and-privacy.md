@@ -33,6 +33,7 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 - Without `NATAMUX_TOKEN`, the daemon makes a random token for each run and prints it once.
 - The token travels in a header, never a cookie or a URL, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds.
 - Do not run the daemon on a network address without TLS. Put a reverse proxy with TLS in front of it.
+- Task terminals get an [agent token](/docs/reference/http-api/#the-agent-token), not the daemon's token. An agent cannot approve, skip or pass a stage, or change project settings, and what it does is recorded as the agent's. This stops an agent that follows bad instructions, for example from a web page or an issue. It is not a sandbox: an agent runs as your user, so a program that looks for the daemon's token, such as the desktop app's token file, can still find it.
 
 ## Secrets on disk
 

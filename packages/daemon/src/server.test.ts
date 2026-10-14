@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { CLOSE_GONE, SILENT_CLOSE_MS } from '@natamux/core'
+import { CLOSE_GONE, GATE_EVENT_TYPES, SILENT_CLOSE_MS } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
@@ -41,6 +41,8 @@ import { WorkspaceService } from './workspace-service.js'
 
 const TOKEN = 'test-token'
 const authorization = { authorization: `Bearer ${TOKEN}` }
+const AGENT_TOKEN = 'agent-test-token'
+const asAgent = { authorization: `Bearer ${AGENT_TOKEN}` }
 
 let repo: TestRepo
 let index: TaskIndex
@@ -128,6 +130,7 @@ beforeEach(async () => {
     issueLinker: new IssueLinker({ tasks: service, bus, dataDir, repoPath: () => repo.dir }),
     dataDir,
     token: TOKEN,
+    agentToken: AGENT_TOKEN,
     webIndexPath,
     webDir: join(repo.root, 'web'),
     skillsHome: join(repo.root, 'home'),
@@ -641,6 +644,171 @@ describe('task events', () => {
       expect(response.statusCode).toBe(400)
     },
   )
+})
+
+describe('the agent token of the task shells', () => {
+  async function createTask(): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Example' },
+    })
+  }
+
+  type Logged = { type: string; source: string }
+
+  async function eventsOf(taskId: string): Promise<Logged[]> {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tasks/${taskId}/events`,
+      headers: authorization,
+    })
+    const entries: { event: Logged }[] = response.json().events
+    return entries.map(({ event }) => ({ type: event.type, source: event.source }))
+  }
+
+  it('is accepted for what an agent does', async () => {
+    await createTask()
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: asAgent })
+    expect(task.statusCode).toBe(200)
+    const hook = await app.inject({
+      method: 'POST',
+      url: '/hooks/claude-code',
+      headers: { ...asAgent, 'x-natamux-task': 'T-0001' },
+      payload: { hook_event_name: 'Notification' },
+    })
+    expect(hook.statusCode).toBe(200)
+  })
+
+  it('records what it sends as the agent, whatever source it names', async () => {
+    await createTask()
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/events',
+      headers: asAgent,
+      payload: { source: 'human', type: 'task.readied' },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ accepted: true, task: { state: 'ready' } })
+    expect((await eventsOf('T-0001')).at(-1)).toEqual({ type: 'task.readied', source: 'agent' })
+  })
+
+  it.each(GATE_EVENT_TYPES)('may not send %s', async (type) => {
+    await createTask()
+    const before = await eventsOf('T-0001')
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/events',
+      headers: asAgent,
+      payload: { source: 'human', type, payload: { to: 'done' } },
+    })
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toMatchObject({ error: 'forbidden' })
+    expect(await eventsOf('T-0001')).toEqual(before)
+  })
+
+  it.each(['approve', 'skip', 'pass'])('may not %s a stage', async (action) => {
+    await createTask()
+    const before = await eventsOf('T-0001')
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/stage',
+      headers: asAgent,
+      payload: { action },
+    })
+    expect(response.statusCode).toBe(403)
+    expect(response.json().message).toContain('Only a person')
+    expect(await eventsOf('T-0001')).toEqual(before)
+  })
+
+  it('records a stage action it may take as the agent', async () => {
+    await createTask()
+    const send = (type: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/events',
+        headers: authorization,
+        payload: { source: 'human', type },
+      })
+    await send('task.readied')
+    await send('agent.started')
+    const failed = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/stage',
+      headers: asAgent,
+      payload: { action: 'fail', reason: 'Stuck' },
+    })
+    expect(failed.statusCode).toBe(200)
+    expect((await eventsOf('T-0001')).at(-1)).toEqual({ type: 'stage.failed', source: 'agent' })
+  })
+
+  async function running(): Promise<void> {
+    await createTask()
+    for (const type of ['task.readied', 'agent.started']) {
+      await app.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/events',
+        headers: authorization,
+        payload: { source: 'human', type },
+      })
+    }
+  }
+
+  const stageAction = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: '/tasks/T-0001/stage', headers: asAgent, payload })
+
+  it('records a question it sends as a person as the agent', async () => {
+    await running()
+    const asked = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/events',
+      headers: asAgent,
+      payload: { source: 'human', type: 'agent.asked', payload: { question: 'Which file?' } },
+    })
+    expect(asked.json()).toMatchObject({ accepted: true, task: { state: 'needs-input' } })
+    expect((await eventsOf('T-0001')).at(-1)).toEqual({ type: 'agent.asked', source: 'agent' })
+  })
+
+  it('records a report and a send back as the agent, and a start never as a person', async () => {
+    await running()
+    await stageAction({ action: 'report' })
+    const reported = (await eventsOf('T-0001')).filter(({ type }) => type === 'stage.reported')
+    expect(reported).toEqual([{ type: 'stage.reported', source: 'agent' }])
+
+    const before = (await eventsOf('T-0001')).length
+    expect((await stageAction({ action: 'reopen', to: 'implement' })).statusCode).toBe(200)
+    expect((await stageAction({ action: 'start' })).statusCode).toBe(200)
+    const after = (await eventsOf('T-0001')).slice(before)
+    expect(after).toContainEqual({ type: 'stage.reopened', source: 'agent' })
+    expect(after.filter(({ source }) => source === 'human')).toEqual([])
+  })
+
+  it('still answers 401 to a wrong token on a route the agent token may not use', async () => {
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/repos/default/settings',
+      headers: { authorization: 'Bearer nope' },
+      payload: { agents: { permissionMode: 'ask' } },
+    })
+    expect(response.statusCode).toBe(401)
+  })
+
+  it.each([
+    { url: '/tasks/T-0001/skip', payload: { stage: 'review', on: true } },
+    { url: '/tasks/T-0001/ci', payload: { stage: 'implement', on: false } },
+    { url: '/tasks/T-0001/workflow', payload: { stage: 'implement', on: false } },
+    { url: '/repos/default/settings', payload: { agents: { permissionMode: 'ask' } } },
+  ])('may not change $url', async ({ url, payload }) => {
+    await createTask()
+    const read = (path: string) => app.inject({ method: 'GET', url: path, headers: authorization })
+    const tasks = (await read('/tasks')).json()
+    const settings = (await read('/repos/default/settings')).json()
+    const response = await app.inject({ method: 'PUT', url, headers: asAgent, payload })
+    expect(response.statusCode).toBe(403)
+    expect((await read('/tasks')).json()).toEqual(tasks)
+    expect((await read('/repos/default/settings')).json()).toEqual(settings)
+  })
 })
 
 describe('workspaces', () => {
@@ -2317,12 +2485,12 @@ describe('agent activity', () => {
 describe('pushed to the dashboards', () => {
   type Socket = Awaited<ReturnType<FastifyInstance['injectWS']>>
 
-  async function listen(): Promise<{ socket: Socket; texts: string[] }> {
+  async function listen(token = TOKEN): Promise<{ socket: Socket; texts: string[] }> {
     const texts: string[] = []
     // injectWS needs a ready app; no inject ran before it here.
     await app.ready()
     const socket = await app.injectWS(
-      `/events?token=${TOKEN}`,
+      `/events?token=${token}`,
       {},
       {
         onInit: (ws) => {
@@ -2351,6 +2519,15 @@ describe('pushed to the dashboards', () => {
     for (const { socket } of dashboards) {
       socket.terminate()
     }
+    await vi.waitFor(() => expect(bus.size()).toBe(0))
+  })
+
+  it('sends the messages to the agent token of a task terminal too', async () => {
+    const { socket, texts } = await listen(AGENT_TOKEN)
+    const message = { kind: 'shells.changed', taskId: 'T-0001' } as const
+    bus.publish(message)
+    await vi.waitFor(() => expect(texts).toEqual([JSON.stringify(message)]))
+    socket.terminate()
     await vi.waitFor(() => expect(bus.size()).toBe(0))
   })
 

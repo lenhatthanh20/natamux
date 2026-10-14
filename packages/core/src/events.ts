@@ -76,6 +76,16 @@ export const taskEventSchema = z.object({
 export type TaskEvent = z.infer<typeof taskEventSchema>
 export type EventType = TaskEvent['type']
 
+// Events that pass a manual gate or set a state by hand. Only a person may send them, never the
+// agent token of a task terminal.
+export const GATE_EVENT_TYPES: readonly EventType[] = [
+  'review.approved',
+  'stage.approved',
+  'stage.passed',
+  'stage.skipped',
+  'state.overridden',
+]
+
 // Events the daemon records without a change of state.
 export const RECORD_ONLY_EVENT_TYPES: readonly EventType[] = [
   'task.created',

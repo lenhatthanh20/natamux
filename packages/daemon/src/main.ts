@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { claudeCodeHookSettings } from '@natamux/core'
 import { geminiHookSettings, LAUNCHABLE_AGENTS, prepareAgentHooks } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
-import { loadConfig } from './config.js'
+import { loadConfig, shellEnv } from './config.js'
 import { EventBus } from './event-bus.js'
 import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
@@ -81,8 +81,8 @@ const workspaces = new WorkspaceService({
   },
 })
 
-// Shells run on the same machine as the daemon, so they reach it on loopback. They get the token
-// and the address for `natamux` and for the hooks of the agents they start.
+// Shells run on the same machine as the daemon, so they reach it on loopback. They get the agent
+// token and the address for `natamux` and for the hooks of the agents they start.
 const daemonUrl = `http://127.0.0.1:${config.port}`
 const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
@@ -94,7 +94,7 @@ const terminals = new TerminalService({
     return spawnShell({ ...options, env })
   },
   workspaceOf: (taskId) => workspaces.workspaceOf(taskId),
-  env: { ...process.env, NATAMUX_TOKEN: config.token, NATAMUX_URL: daemonUrl },
+  env: shellEnv(process.env, config, daemonUrl),
   onOutput: (taskId, terminal, data) => {
     stages.onOutput(taskId, terminal, data)
     genericSignals.onOutput(taskId, terminal, data)
@@ -161,6 +161,7 @@ const app = await buildServer({
   issueLinker,
   dataDir: config.dataDir,
   token: config.token,
+  agentToken: config.agentToken,
   webIndexPath: config.webIndexPath,
   webDir: config.webDir,
   ready,

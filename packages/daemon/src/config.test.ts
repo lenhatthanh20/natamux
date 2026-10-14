@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PORT, LOOPBACK_HOST, loadConfig } from './config.js'
+import { DEFAULT_PORT, LOOPBACK_HOST, loadConfig, shellEnv } from './config.js'
 
 describe('loadConfig', () => {
   it('uses loopback, the default port and a data directory under the working directory', () => {
@@ -21,6 +21,23 @@ describe('loadConfig', () => {
     expect(first.tokenWasGenerated).toBe(true)
     expect(first.token.length).toBeGreaterThanOrEqual(32)
     expect(first.token).not.toBe(second.token)
+  })
+
+  it('makes a new agent token for each run, never the configured token', () => {
+    const first = loadConfig({ NATAMUX_TOKEN: 'secret' }, '/work/repo')
+    const second = loadConfig({ NATAMUX_TOKEN: 'secret' }, '/work/repo')
+    expect(first.agentToken.length).toBeGreaterThanOrEqual(32)
+    expect(first.agentToken).not.toBe(first.token)
+    expect(first.agentToken).not.toBe(second.agentToken)
+  })
+
+  it('gives task shells the agent token, never the token of the daemon', () => {
+    const env = { PATH: '/bin', NATAMUX_TOKEN: 'secret' }
+    const config = loadConfig(env, '/work/repo')
+    const shell = shellEnv(env, config, 'http://127.0.0.1:4317')
+    expect(shell).toMatchObject({ PATH: '/bin', NATAMUX_URL: 'http://127.0.0.1:4317' })
+    expect(shell.NATAMUX_TOKEN).toBe(config.agentToken)
+    expect(shell.NATAMUX_TOKEN).not.toBe(config.token)
   })
 
   it('uses the configured token, port and data directory', () => {

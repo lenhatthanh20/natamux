@@ -17,6 +17,8 @@ export type DaemonConfig = {
   webDir: string | undefined
   token: string
   tokenWasGenerated: boolean
+  // The token of the task shells. Only made here, so an agent cannot set it.
+  agentToken: string
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
@@ -43,5 +45,16 @@ export function loadConfig(env: NodeJS.ProcessEnv, cwd: string): DaemonConfig {
     webDir,
     token: configuredToken || randomBytes(24).toString('base64url'),
     tokenWasGenerated: !configuredToken,
+    agentToken: randomBytes(24).toString('base64url'),
   }
+}
+
+// The environment of task shells: the agent token, never the daemon's own, so an agent cannot pass
+// a gate as you.
+export function shellEnv(
+  env: NodeJS.ProcessEnv,
+  config: Pick<DaemonConfig, 'agentToken'>,
+  daemonUrl: string,
+): NodeJS.ProcessEnv {
+  return { ...env, NATAMUX_TOKEN: config.agentToken, NATAMUX_URL: daemonUrl }
 }

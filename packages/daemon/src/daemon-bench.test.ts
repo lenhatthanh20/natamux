@@ -194,6 +194,7 @@ async function startServer() {
     issueLinker: new IssueLinker({ tasks: service, bus, dataDir, repoPath: () => repo.dir }),
     dataDir,
     token: TOKEN,
+    agentToken: 'agent-token',
     webIndexPath,
     webDir: repo.root,
     skillsHome: join(repo.root, 'home'),
