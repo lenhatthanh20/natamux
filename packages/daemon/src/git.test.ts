@@ -18,9 +18,11 @@ import {
   currentBranch,
   deleteMergedBranch,
   deleteRemoteRef,
+  findPullRequest,
   GitError,
   GitHubError,
   gitSpawnCount,
+  hasRemoteBranch,
   ImageSideMissingError,
   ImageTooLargeError,
   listChanges,
@@ -821,6 +823,15 @@ describe('readPushStatus', () => {
     expect(await readPushStatus(worktreePath, branch)).toEqual({ remote: 'new', unpushed: 0 })
   })
 
+  it('tells whether origin has the branch, from the refs a push left', async () => {
+    originWithMain()
+    await addWorktree(repo.dir, worktreePath, branch)
+    expect(await hasRemoteBranch(worktreePath, branch)).toBe(false)
+
+    runGit(worktreePath, 'push', 'origin', branch)
+    expect(await hasRemoteBranch(worktreePath, branch)).toBe(true)
+  })
+
   it('counts the commits of the local base that origin does not have', async () => {
     originWithMain()
     commitFile(repo.dir, 'local-main')
@@ -1350,6 +1361,40 @@ describe('readPullRequestStatus', () => {
     const gh: RunGh = async () => 'not json'
     const reading = readPullRequestStatus('/repo', 'https://github.com/o/r/pull/1', gh)
     await expect(reading).rejects.toThrow(GitHubError)
+  })
+})
+
+describe('findPullRequest', () => {
+  const answer = (list: object[]): RunGh => async () => JSON.stringify(list)
+
+  it('asks gh for the newest pull request from the branch', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return JSON.stringify([{ url: 'https://github.com/o/r/pull/7', state: 'OPEN' }])
+    }
+
+    expect(await findPullRequest('/w', 'natamux/t-0001', gh)).toBe('https://github.com/o/r/pull/7')
+    expect(calls.map((args) => args.join(' '))).toEqual([
+      'pr list --head natamux/t-0001 --state all --json url,state --limit 1',
+    ])
+  })
+
+  it('finds a merged pull request', async () => {
+    const gh = answer([{ url: 'https://github.com/o/r/pull/8', state: 'MERGED' }])
+    expect(await findPullRequest('/w', 'b', gh)).toBe('https://github.com/o/r/pull/8')
+  })
+
+  it.each([
+    ['no pull request', []],
+    ['a closed one', [{ url: 'https://github.com/o/r/pull/9', state: 'CLOSED' }]],
+  ])('finds nothing for %s', async (_name, list) => {
+    expect(await findPullRequest('/w', 'b', answer(list))).toBeUndefined()
+  })
+
+  it('fails with a GitHubError on an answer that is not JSON', async () => {
+    const gh: RunGh = async () => 'not json'
+    await expect(findPullRequest('/w', 'b', gh)).rejects.toThrow(GitHubError)
   })
 })
 
