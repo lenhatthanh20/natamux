@@ -321,9 +321,7 @@ describe('AgentRunner', () => {
       broken.start(task.id, agent, 'Only this')
       expect(tasks.getTask(task.id).agent).toBe(agent)
     }
-    expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "copilot --allow-all-tools -i 'Only this'\n",
-    )
+    expect(readFileSync(script(task.id), 'utf8')).toBe("copilot --allow-all-tools -i 'Only this'\n")
   })
 
   it.each(['', ' ', '  \t '])('adds no extra word for NATAMUX_CODEX_ARGS of %j', (words) => {
