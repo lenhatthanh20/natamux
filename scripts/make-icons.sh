@@ -34,10 +34,11 @@ png() {
 }
 
 # macOS keeps the margin of the big icon at every size, so all entries come from icon.svg.
-# Each entry is a type, its length and a PNG.
+# Each entry is a type, its length and a PNG. No 1x 16 and 32 px entries: macOS
+# (iconutil) decodes a PNG there as noise. It scales the @2x ones down instead.
 entries="$tmp/icns-entries"
 : > "$entries"
-for pair in icp4:16 icp5:32 ic11:32 ic12:64 ic07:128 ic13:256 ic08:256 ic14:512 ic09:512 ic10:1024; do
+for pair in ic11:32 ic12:64 ic07:128 ic13:256 ic08:256 ic14:512 ic09:512 ic10:1024; do
   file=$(png icon "${pair#*:}")
   { printf %s "${pair%:*}"; be32 $((8 + $(size_of "$file"))); cat "$file"; } >> "$entries"
 done

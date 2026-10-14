@@ -65,7 +65,7 @@ check "icon.png is 1024x1024" '[ "$(png_size "$build/icon.png")" = 1024x1024 ]'
 
 check "icon.icns is an icns file of the right length" \
   '[ "$(head -c 4 "$build/icon.icns" 2>/dev/null)" = icns ] && [ "$(be32 "$build/icon.icns" 4)" = "$(wc -c < "$build/icon.icns" | tr -d " ")" ]'
-expected_icns="icp4:16x16 icp5:32x32 ic11:32x32 ic12:64x64 ic07:128x128 ic13:256x256 ic08:256x256 ic14:512x512 ic09:512x512 ic10:1024x1024"
+expected_icns="ic11:32x32 ic12:64x64 ic07:128x128 ic13:256x256 ic08:256x256 ic14:512x512 ic09:512x512 ic10:1024x1024"
 check "icon.icns has every macOS size" '[ "$(icns_entries "$build/icon.icns" | xargs)" = "$expected_icns" ]'
 
 expected_ico="16x16 24x24 32x32 48x48 64x64 128x128 256x256"
