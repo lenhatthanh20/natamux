@@ -157,6 +157,8 @@ check "$notes closes every code block" '[ $(( $(grep -c "^ *\`\`\`" "$notes") % 
 for link in $(links_in <"$notes"); do
   check "$notes links to a page: $link" 'link_ok "$link"'
 done
+# The GitHub release page is not on the site, so a link by path goes nowhere there.
+check "$notes links to the site by its full address" '! grep -qF "](/docs/" "$notes"'
 
 # Case 4: the changelog.
 check "changelog has one $tag heading" \
@@ -175,6 +177,7 @@ check "changelog $tag is not dated before $prev" \
 for link in $(links_in <<<"$section"); do
   check "changelog $tag links to a page: $link" 'link_ok "$link"'
 done
+check "changelog $tag links to the site by path" '! grep -qF "](https://natamux.github.io/" <<<"$section"'
 if [ -n "$prev" ] && git rev-parse -q --verify "refs/tags/$prev" >/dev/null; then
   check "changelog before $tag is as in tag $prev" \
     'diff -q <(sed -n "/^## $prev /,\$p" "$changelog") \
@@ -193,12 +196,12 @@ for text in notes section; do
   if [ "$text" = notes ]; then body=$(cat "$notes"); else body=$section; fi
   check "no banned names in the $text" '! grep -qiwE "orca|atlas" <<<"$body"'
   check "no developer-only changes in the $text" \
-    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|README|[Bb]enchmarks?|[Ll]anding page" <<<"$body"'
+    '! grep -qwE "#15[247]|[Pp]laywright|E2E|e2e|README|[Rr]eadme|[Bb]enchmarks?|[Ll]anding page" <<<"$body"'
   # A / or - before # is a heading anchor such as /#2-add-a-task, and a backtick is an example such as `#42`.
   check "no PR numbers in the $text" \
     '! grep -qE "(^|[^-/[:alnum:]\`])#[0-9]+|/pull/[0-9]+|\bPR ?[0-9]+" <<<"$body"'
   check "no marketing words in the $text" \
-    '! grep -qiwE "powerful|seamless|new and improved|blazing|effortless(ly)?|revolutionary" <<<"$body"'
+    '! grep -qiwE "amazing|powerful|seamless|new and improved|blazing|effortless(ly)?|revolutionary" <<<"$body"'
   # The UI writes labels such as Check for Updates… with one … character.
   check "no ... in bold labels in the $text" '! grep -qF "...**" <<<"$body"'
 done
