@@ -139,7 +139,12 @@ function StateShape({ kind, art }: { kind: ShapeKind; art: number }) {
       )
     }
     case 'unknown':
-      return <circle cx={half} cy={half} r={round(art * 0.22)} fill="currentColor" />
+      return (
+        <>
+          {ring}
+          <circle cx={half} cy={half} r={round(art / 8)} fill="currentColor" />
+        </>
+      )
   }
 }
 
@@ -166,7 +171,7 @@ const PAD = { 8: 1, 10: 2 } as const
 
 // The state of a task as a small shape in its own color: 10 px for tasks, 8 px for the shells
 // under them. A quiet agent shows a half disk in the "needs you" color; a state that is not
-// known yet is a muted dot. `tip` adds to the tooltip, such as the state of each stage of a group.
+// known yet is a muted ring with a dot. `tip` adds to the tooltip, such as the state of each stage of a group.
 export function ShapeGlyph({
   state,
   quiet = false,

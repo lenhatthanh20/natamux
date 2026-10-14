@@ -165,6 +165,23 @@ describe('AgentHookService', () => {
     expect(shells.shellState(task.id, '2')).toBeUndefined()
   })
 
+  it('forgets the state of a shell once its hooks reach a stage again', () => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    let onStage = false
+    const shells = new AgentHookService(tasks, {
+      laneFor: (current) => (onStage ? { stage: current.stage, state: current.state } : null),
+      takeReport: () => false,
+    })
+    shells.handle('cursor', { hook_event_name: 'beforeSubmitPrompt' }, task.id, '6')
+    expect(shells.shellState(task.id, '6')).toBe('running')
+
+    // The task came back to the stage of Shell 6.
+    onStage = true
+    shells.handle('cursor', { hook_event_name: 'beforeSubmitPrompt' }, task.id, '6')
+    expect(shells.shellState(task.id, '6')).toBeUndefined()
+  })
+
   it('drops the turn end that follows a report, and names the stage of the terminal', () => {
     const task = tasks.createTask({ title: 'Fix it' })
     tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })

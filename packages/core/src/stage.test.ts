@@ -526,7 +526,20 @@ describe('a stage with its own agent', () => {
     expect(stageOfTerminal(steps, steps[4] as Step, '1')).toBeUndefined()
     const position = { stage: 'ci-watch', state: 'running' as const, lanes: {} }
     expect(terminalLane(position, steps, '8')).toEqual({ stage: 'ci-watch', state: 'running' })
-    expect(terminalLane(position, steps, '1')).toEqual({ stage: null, state: null })
+    // Shell 1 served Spec and Implement; the last of them names it.
+    expect(terminalLane(position, steps, '1')).toEqual({ stage: 'implement', state: 'done' })
+  })
+
+  it('keeps the stage of a shell after its step is over', () => {
+    const atImplement = { stage: 'implement', state: 'running' as const, lanes: {} }
+    expect(terminalLane(atImplement, steps, '6')).toEqual({ stage: 'test-spec', state: 'done' })
+    // A stage that has not run yet does not name a shell.
+    expect(terminalLane(atImplement, steps, '7')).toEqual({ stage: null, state: null })
+    expect(terminalLane(atImplement, steps, '2')).toEqual({ stage: null, state: null })
+    const atSpec = { stage: 'spec', state: 'running' as const, lanes: {} }
+    expect(terminalLane(atSpec, steps, '6')).toEqual({ stage: null, state: null })
+    const finished = { stage: 'merge-pr', state: 'done' as const, lanes: {} }
+    expect(terminalLane(finished, steps, '6')).toEqual({ stage: 'test-spec', state: 'done' })
   })
 
   it('gets one for arguments alone, and keeps Shell 1 or 5 without either', () => {
@@ -685,6 +698,31 @@ describe('terminalLane', () => {
   it('gives no lane to a terminal the group does not use', () => {
     const position = inBuild({ implement: 'running', 'test-spec': 'review' })
     expect(terminalLane(position, [build], '3')).toEqual({ stage: null, state: null })
+  })
+
+  it('shows the shell of a stage before the group as done', () => {
+    const ownSpec: Step = {
+      id: 'spec',
+      kind: 'agent',
+      gate: 'manual',
+      output: 'spec.md',
+      ownShell: true,
+    }
+    const position = inBuild({ implement: 'running', 'test-spec': 'review' })
+    expect(terminalLane(position, [ownSpec, build], '5')).toEqual({ stage: 'spec', state: 'done' })
+  })
+
+  it('shows the shell of a group stage as done once the task is past the group', () => {
+    const position = { stage: 'testing', state: 'running' as const, lanes: {} }
+    expect(terminalLane(position, DEFAULT_PIPELINE, '2')).toEqual({
+      stage: 'test-spec',
+      state: 'done',
+    })
+    // Shell 1 is the shell of the current stage too.
+    expect(terminalLane(position, DEFAULT_PIPELINE, '1')).toEqual({
+      stage: 'testing',
+      state: 'running',
+    })
   })
 
   it('gives the task state to Shell 1 outside a group, and no lane to the others', () => {

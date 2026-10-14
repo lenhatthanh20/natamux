@@ -511,8 +511,8 @@ export function stageOfTerminal(
   return stagesOf(step).find((stage) => terminalOfStage(steps, stage.id) === terminal)
 }
 
-// The stage an agent terminal works on, and the state of that stage. Both are null for a terminal
-// that no stage uses, such as an extra shell where the user started an agent.
+// The stage an agent terminal works or worked on, and the state of that stage. Both are null for a
+// terminal that no stage up to now uses, such as an extra shell where the user started an agent.
 export const terminalLaneSchema = z.object({
   stage: z.string().min(1).nullable(),
   state: taskStateSchema.nullable(),
@@ -532,16 +532,31 @@ export function terminalLane(
   terminal: string,
 ): TerminalLane {
   const step = findStep(steps, position.stage)
-  if (step === undefined || !isGroup(step)) {
-    const stage = step?.id ?? position.stage
-    const shell = step === undefined ? '1' : terminalOfStage(steps, step.id)
-    return terminal === shell ? { stage, state: position.state } : NO_LANE
+  if (step === undefined) {
+    return terminal === '1' ? { stage: position.stage, state: position.state } : NO_LANE
   }
-  const stage = stageOfTerminal(steps, step, terminal)
-  if (stage === undefined) {
-    return NO_LANE
+  if (!isGroup(step)) {
+    if (terminal === terminalOfStage(steps, step.id)) {
+      return { stage: step.id, state: position.state }
+    }
+  } else {
+    const stage = stageOfTerminal(steps, step, terminal)
+    if (stage !== undefined) {
+      return { stage: stage.id, state: position.lanes[stage.id] ?? 'done' }
+    }
   }
-  return { stage: stage.id, state: position.lanes[stage.id] ?? 'done' }
+  return earlierLane(steps, step, terminal)
+}
+
+// A stage's shell stays open after its step, so it keeps the name of that stage. Shell 1 serves
+// many stages: the last one before the current step names it.
+function earlierLane(steps: readonly Step[], current: Step, terminal: string): TerminalLane {
+  const stage = steps
+    .slice(0, steps.indexOf(current))
+    .flatMap(stagesOf)
+    .filter((each) => terminalOfStage(steps, each.id) === terminal)
+    .at(-1)
+  return stage === undefined ? NO_LANE : { stage: stage.id, state: 'done' }
 }
 
 export const lanesSchema = z.record(stageIdSchema, taskStateSchema)

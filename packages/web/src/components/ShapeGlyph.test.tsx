@@ -54,13 +54,19 @@ describe('ShapeGlyph', () => {
     expect(glyph.querySelector('.hm-beat')).toBeNull()
   })
 
-  it('shows a state that is not known yet as a muted dot', () => {
+  it('shows a state that is not known yet as a muted ring with a dot, as wide as the ring', () => {
     const { container } = render(<ShapeGlyph state={null} size={8} />)
     const glyph = container.firstElementChild as HTMLElement
     expect(glyph.dataset.state).toBeUndefined()
     expect(glyph.dataset.tip).toBe('State not known yet')
     expect(glyph.className).toContain('text-muted')
     expect(glyph.querySelector('svg')?.getAttribute('data-shape')).toBe('unknown')
+    const [ring, dot] = [...glyph.querySelectorAll('circle')]
+    expect(ring?.getAttribute('fill')).toBe('none')
+    expect(ring?.getAttribute('r')).toBe('3.25')
+    expect(ring?.getAttribute('stroke-width')).toBe('1.5')
+    expect(dot?.getAttribute('fill')).toBe('currentColor')
+    expect(dot?.getAttribute('r')).toBe('1')
   })
 
   it.each([...TASK_STATES])('names the %s state for screen readers', (state) => {

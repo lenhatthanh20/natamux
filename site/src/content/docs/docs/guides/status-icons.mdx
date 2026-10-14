@@ -25,7 +25,7 @@ The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px 
 | <StatusIcon kind="failed" /> | <StatusIcon kind="failed" size={8} /> | Failed | Triangle | The agent or a stage command failed. | Read the reason, fix it, then **Retry**. | Yes |
 | <StatusIcon kind="done" /> | <StatusIcon kind="done" size={8} /> | Done | Check | The task is finished. | Nothing. | No |
 | <StatusIcon kind="cancelled" /> | <StatusIcon kind="cancelled" size={8} /> | Cancelled | Dash | You stopped the task. | Nothing. | No |
-| — | <StatusIcon kind="unknown" size={8} /> | State not known yet | Small grey dot | A shell runs an agent, but Natamux has no state for it yet, such as an agent started by hand before the daemon restarted. | Nothing. It changes at the agent's next event. | No |
+| — | <StatusIcon kind="unknown" size={8} /> | State not known yet | Grey ring with a dot | A shell runs an agent, but Natamux has no state for it yet: an agent you started by hand that has had no prompt yet, or one that ran when the daemon restarted. | Nothing. It changes at the agent's next event. | No |
 
 Hollow shapes have not started, a full disk is alive, and a half disk is alive but silent. A task with stages shows the state of its current stage. When stages run side by side, the task shows running while any of them runs.
 
