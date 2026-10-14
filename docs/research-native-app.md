@@ -29,7 +29,7 @@ Every option must meet these, or say what it gives up:
 1. Platforms: macOS arm64 and x64, Windows x64 and arm64. Linux is nice to have.
 2. Terminals for agent CLIs: a PTY on macOS and Linux, ConPTY on Windows, full xterm-compatible rendering, Vietnamese IME input, large scrollback.
 3. The dashboard still works in a plain browser tab and in Codespaces (`plan-tech-stack.md` section 1).
-4. One developer can maintain it, with few dependencies (`CLAUDE.md`).
+4. One developer can maintain it, with few dependencies (`AGENTS.md`).
 5. Signing, notarization, auto-update.
 6. Installer size, memory, start time.
 

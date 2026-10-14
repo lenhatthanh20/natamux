@@ -2,7 +2,7 @@
 
 Status: draft for the owner. Date: 2026-10-09.
 Inputs: `orca.md`, `vscode-guidelines.md`, `vscode-live.md`, `audit-navigation.md` (NAV-*), `audit-workspace.md` (WS-*), `audit-responsive.md` (RA-*), and the current code in `packages/web/src`.
-Rules from CLAUDE.md that bind this spec: no code or text copied from Orca (ideas only); keep dependencies few (no new package without the owner's OK); `pnpm` only; build order in `docs/plan-tech-stack.md` section 10 (this is all step 4/6/7 polish, no skipping ahead to the Electron shell; the title bar is made "Electron-ready" but runs in the browser now).
+Rules from AGENTS.md that bind this spec: no code or text copied from Orca (ideas only); keep dependencies few (no new package without the owner's OK); `pnpm` only; build order in `docs/plan-tech-stack.md` section 10 (this is all step 4/6/7 polish, no skipping ahead to the Electron shell; the title bar is made "Electron-ready" but runs in the browser now).
 
 Notation: `Mod` = Cmd on macOS, Ctrl on Windows. Sizes are CSS px at 100% zoom. "Main width" = width of the `<main>` element, not the window.
 
