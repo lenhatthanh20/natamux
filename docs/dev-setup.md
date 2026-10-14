@@ -33,6 +33,8 @@ Run `build` first: packages import each other through their built `dist` folders
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: frozen install, then `build`, `lint` and `test`, in that order. The root scripts use `--if-present`, so a package without one of them is skipped.
 
+Every action in `.github/workflows/` is pinned to a full commit SHA, with the version in a comment, for example `actions/checkout@<sha> # v7.0.1`. A moved tag then cannot change what a job runs. Dependabot updates the SHA and the comment together. When you add an action, pin it the same way.
+
 ## Run the daemon and the dashboard
 
 With Docker. The codespace starts it for you each time it starts. By hand:
