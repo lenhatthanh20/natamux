@@ -21,7 +21,7 @@ import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
 import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
-import { runSmoke } from './smoke.js'
+import { checkReleaseSignature, runSmoke } from './smoke.js'
 import {
   freePort,
   loginPathLogLine,
@@ -248,6 +248,7 @@ function createWindow(): void {
         let result = 'natamux-desktop: smoke passed, the terminal and the agent work'
         try {
           await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
+          result += `, ${checkReleaseSignature()}`
         } catch (error) {
           passed = false
           const message = error instanceof Error ? error.message : String(error)

@@ -23,7 +23,7 @@ Natamux is an open-source Agent Development Environment. Each task gets its own 
    | Debian and Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
    | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
 
-2. Open it. The apps are not signed yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. Check any file against `SHA256SUMS.txt` of the release. The [install guide](https://natamux.github.io/docs/getting-started/install/) has every step.
+2. Open it. The apps are not signed yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. Check any file against the signed `SHA256SUMS.txt` of the release. The [install guide](https://natamux.github.io/docs/getting-started/install/) has every step.
 
 Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS and Linux apps update themselves; on Windows the app opens the release page of the new version. For real work, you need git and an installed, logged-in coding agent: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI or Cursor. The GitHub CLI (`gh`) is optional, for pull requests, issues and CI.
 

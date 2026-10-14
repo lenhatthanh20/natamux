@@ -13,7 +13,7 @@ The desktop app finds a new release, downloads it in the background, and install
 - Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The app stops at each redirect (`net.request` with `redirect: 'manual'`; `net.fetch` leaves `Response.url` empty) and reads the tag from its address. When the repository moves, GitHub redirects the old address too.
 - Not the REST API (`api.github.com`): it allows 60 requests an hour for each address without a login, and shared networks and CI runners reach that. The dry run in CI got `403` from it.
 - Files: `https://github.com/<owner>/<repo>/releases/download/<tag>/<name>`, from the owner and repository in the address the redirect ends at.
-- The release must carry `SHA256SUMS.txt` (`release.yml` writes it) and the file for the platform:
+- The release must carry `SHA256SUMS.txt` (`release.yml` writes it), `SHA256SUMS.txt.minisig` (`scripts/sign-release.sh` adds it, see `docs/release-process.md`) and the file for the platform:
 
 | Install kind | How the app finds it | File |
 |---|---|---|
@@ -47,6 +47,7 @@ idle → checking → up-to-date
         any step → failed
 ```
 
+- Before `available`, the app checks the signature of `SHA256SUMS.txt` (see below), for every install kind. An unsigned release is not offered, not even as a link.
 - `available` with kind `manual`: the app shows a dialog with **Open the Release Page** and **Later**. It downloads nothing.
 - `available` with any other kind: the download starts at once.
 - `ready`: the app shows a dialog: "Natamux 0.1.5 is ready. Restart to update." with **Restart Now**, **Later** and **What's New** (opens the release page). The menu item becomes **Restart to Update to 0.1.5**.
@@ -55,9 +56,10 @@ idle → checking → up-to-date
 
 ## Download and checks
 
+- First the app downloads `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig` (each refused above 64 KB) and checks the signature (`fetchSignedSums` in `release-signature.ts`): by `RELEASE_SIGNER`, trusted comment exactly `natamux <tag>` of the release the redirect led to, and that version newer than the running one. A missing signature or any failed check stops here, with the reason in the log and, for a manual check, in the dialog. There is no unsigned fallback. `docs/release-process.md` lists every check.
 - Folder: `<user data>/updates/<version>/`. Before a download the app removes the other version folders there.
 - The file downloads to `<name>.part` with `net.fetch`, which uses the system proxy, then is renamed.
-- The app reads `SHA256SUMS.txt` from the same release and compares the SHA-256 of the file. A missing line or a different hash removes the file and fails.
+- The app compares the SHA-256 of the file with its line in the signed `SHA256SUMS.txt`. A missing line or a different hash removes the file and fails.
 - `mac` only:
   1. `hdiutil attach -nobrowse -readonly -mountpoint <folder>/mnt <dmg>`;
   2. `ditto` the `Natamux.app` from it to `<folder>/Natamux.app`;
@@ -83,11 +85,13 @@ idle → checking → up-to-date
 
 ## Log
 
-`<user data>/logs/update.log` gets one line for each step: check, version found, download start and end, hash result, install start, and every failure with its reason.
+`<user data>/logs/update.log` gets one line for each step: check, version found, signature result, download start and end, hash result, install start, and every failure with its reason.
 
 ## Security
 
-- Everything comes over HTTPS from GitHub. The checksum file comes from the same release, so it finds a broken download, not a forged release. Someone who can publish a release can publish a matching checksum.
+- Everything comes over HTTPS from GitHub. Someone who can publish a release can publish a matching checksum, so the checksum file alone finds a broken download, not a forged release.
+- The signature closes that gap: the minisign secret key is offline with the owner, never on GitHub, and the app trusts only the public key built into it. The comment `natamux <tag>` plus the version check stop an old signed release from coming back under a new tag (a downgrade, or an endless re-download on Linux).
+- Versions up to v0.1.23 have no signature check.
 - After signing (step 11): the Mac copy must also be signed by the same Team ID before the app installs it.
 
 ## Privacy
@@ -97,6 +101,7 @@ The check is one `HEAD` request to `github.com` without any data about you or yo
 ## Files
 
 - `packages/desktop/src/update-check.ts`: no Electron: version compare, install kind, file pick, checksum parse, the install script.
+- `packages/desktop/src/release-signature.ts`: no Electron: `RELEASE_SIGNER` and the minisign check.
 - `packages/desktop/src/updater.ts`: the Electron side: timers, network, dialogs, menu state, install.
 - `packages/desktop/src/main.ts`: the menu items and the quit hook.
 - `packages/desktop/src/settings.ts`: `autoUpdate`.

@@ -35,7 +35,28 @@ jobs:
           NATAMUX_BENCH: "1"
       - run: scripts/fake-agent.test.sh
       - run: scripts/release.test.sh
+      - run: scripts/sign-release.test.sh
       - run: scripts/icons.test.sh
+
+  # Apps trust updates signed by RELEASE_SIGNER only. Fails when it is not a minisign public key
+  # (a placeholder) or is a test key, or when the docs do not show it.
+  release-signer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The app embeds the real release public key
+        run: |
+          key=$(sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" packages/desktop/src/release-signature.ts)
+          echo "RELEASE_SIGNER: $key"
+          fails=0
+          error() { echo "::error::$1"; fails=$((fails + 1)); }
+          [[ $key =~ ^RW[A-Za-z0-9+/]{54}$ ]] || error "RELEASE_SIGNER is not a minisign public key (the placeholder?)"
+          grep -rqxF -- "$key" packages/desktop/src/fixtures && error "RELEASE_SIGNER is a test key from packages/desktop/src/fixtures"
+          for doc in SECURITY.md docs/release-process.md site/src/content/docs/docs/getting-started/install.md \
+            site/src/content/docs/docs/help/security-and-privacy.md; do
+            grep -qF -- "$key" "$doc" || error "$doc does not show RELEASE_SIGNER"
+          done
+          exit "$fails"
 
   # Node 24 is the next LTS line. Node 22 stays the one that the product targets.
   # Runs on main only, to save Actions minutes.

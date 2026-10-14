@@ -35,7 +35,7 @@ The app updates itself, the way other desktop apps do.
 
 1. About 30 seconds after it starts, and then every 6 hours, the app asks GitHub for the latest release.
 2. When there is a newer version, it downloads it in the background. The menu item shows **Downloading Update 0.1.5…**.
-3. It checks the download against `SHA256SUMS.txt` of the release. On macOS it also checks the new app's signature and version.
+3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version. A release without a valid signature is not installed.
 4. A dialog says **Natamux 0.1.5 is ready** with **Restart Now**, **Later** and **What's New**. The menu item becomes **Restart to Update to 0.1.5**.
 5. **Restart Now** asks first when agents are working, as quitting does. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
 

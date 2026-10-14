@@ -47,6 +47,7 @@ describe('releaseFromUrl', () => {
 
   it('reads the version, the page and the download folder of a stable release', () => {
     expect(releaseFromUrl(`${repo}/releases/tag/v0.1.2`)).toEqual({
+      tag: 'v0.1.2',
       version: '0.1.2',
       page: `${repo}/releases/tag/v0.1.2`,
       downloads: `${repo}/releases/download/v0.1.2/`,

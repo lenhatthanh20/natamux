@@ -1,0 +1,2 @@
+# Signed test files: a signature covers the exact bytes, so Windows checkouts must not add CRs.
+packages/desktop/src/fixtures/minisign/** -text
