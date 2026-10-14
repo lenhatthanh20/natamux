@@ -8,6 +8,7 @@ import {
   CLOSE_GONE,
   CLOSE_REFUSED,
   CLOSE_UNAUTHORIZED,
+  GATE_EVENT_TYPES,
   IMAGE_SIDES,
   issueLinkSchema,
   MAX_TASK_ATTACHMENT_SIZE,
@@ -25,7 +26,7 @@ import {
   terminalClientMessageSchema,
   terminalSizeSchema,
 } from '@natamux/core'
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
 import { type AgentRunner, LAUNCHABLE_AGENTS, TaskWaitingError } from './agent-runner.js'
@@ -73,11 +74,17 @@ import {
 } from './stage-files.js'
 import {
   STAGE_ACTIONS,
+  type StageAction,
   StageActionError,
   StageInputError,
   type StageRunner,
 } from './stage-runner.js'
-import { TaskEditError, TaskNotFoundError, type TaskService } from './task-service.js'
+import {
+  applyEventInputSchema,
+  TaskEditError,
+  TaskNotFoundError,
+  type TaskService,
+} from './task-service.js'
 import { TemplateNotFoundError, type TemplateService } from './template-service.js'
 import {
   MAIN_TERMINAL,
@@ -110,6 +117,8 @@ type ServerOptions = {
   // The daemon's data folder, where stage files are kept for tasks without a worktree.
   dataDir: string
   token: string
+  // The token of the task shells. What it sends counts as the agent's, and it may not pass a gate.
+  agentToken: string
   // The built dashboard's index.html. With it, an address of the dashboard that is not an API
   // route (a deep link) answers with that page when the browser asks for HTML.
   webIndexPath?: string
@@ -195,6 +204,8 @@ const stageBodySchema = z.object({
   to: z.string().min(1).max(40).optional(),
   reason: z.string().trim().min(1).max(20_000).optional(),
 })
+// What only a person may do, so an agent cannot pass a manual gate by itself.
+const AGENT_REFUSED_ACTIONS: readonly StageAction[] = ['approve', 'skip', 'pass']
 const workflowBodySchema = z.object({ stage: z.string().min(1).max(40), on: z.boolean() })
 const stageFileParamsSchema = z.object({ id: taskIdSchema, name: z.string().min(1).max(100) })
 const stageFileBodySchema = z.object({ text: z.string() })
@@ -266,6 +277,13 @@ export function isAuthorized(provided: string | undefined, token: string): boole
   return providedBytes.length === tokenBytes.length && timingSafeEqual(providedBytes, tokenBytes)
 }
 
+export class AgentRefusedError extends Error {
+  constructor(what: string) {
+    super(`Only a person can ${what}. Use the dashboard.`)
+    this.name = 'AgentRefusedError'
+  }
+}
+
 function singleHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
@@ -322,10 +340,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     }
     const queryToken = url.pathname === '/events' ? url.searchParams.get('token') : null
     const provided = bearerToken(request.headers.authorization) ?? queryToken ?? undefined
-    if (!isAuthorized(provided, options.token)) {
+    if (!isAuthorized(provided, options.token) && !isAuthorized(provided, options.agentToken)) {
       return reply.code(401).send({ error: 'unauthorized' })
     }
   })
+  const byAgent = (request: FastifyRequest) =>
+    isAuthorized(bearerToken(request.headers.authorization), options.agentToken)
+  const refuseAgent = (request: FastifyRequest, what: string) => {
+    if (byAgent(request)) {
+      throw new AgentRefusedError(what)
+    }
+  }
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof z.ZodError) {
@@ -333,6 +358,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     }
     if (error instanceof TaskEditError) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })
+    }
+    if (error instanceof AgentRefusedError) {
+      return reply.code(403).send({ error: 'forbidden', message: error.message })
     }
     if (error instanceof TaskNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
@@ -481,7 +509,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/tasks/:id/events', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
-    return options.service.applyEvent(id, request.body)
+    if (!byAgent(request)) {
+      return options.service.applyEvent(id, request.body)
+    }
+    const input = applyEventInputSchema.parse(request.body)
+    if (GATE_EVENT_TYPES.includes(input.type)) {
+      throw new AgentRefusedError(`send ${input.type}`)
+    }
+    return options.service.applyEvent(id, { ...input, source: 'agent' })
   })
 
   // An agent posts its hook here, with its name in the path. Always answer 200 with an empty object,
@@ -506,11 +541,16 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.post('/tasks/:id/stage', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const { action, ...input } = stageBodySchema.parse(request.body)
-    return { task: await options.stages.act(id, action, input) }
+    const agent = byAgent(request)
+    if (agent && AGENT_REFUSED_ACTIONS.includes(action)) {
+      throw new AgentRefusedError(`${action} a stage`)
+    }
+    return { task: await options.stages.act(id, action, { ...input, byAgent: agent }) }
   })
 
   // Whether a stage runs as a workflow the next time it starts.
   app.put('/tasks/:id/workflow', async (request) => {
+    refuseAgent(request, 'turn a workflow on or off')
     const { id } = taskParamsSchema.parse(request.params)
     const { stage, on } = workflowBodySchema.parse(request.body)
     return { task: options.service.setWorkflow(id, stage, on) }
@@ -518,6 +558,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   // Whether a stage waits for CI before it passes.
   app.put('/tasks/:id/ci', async (request) => {
+    refuseAgent(request, 'turn a CI check on or off')
     const { id } = taskParamsSchema.parse(request.params)
     const { stage, on } = workflowBodySchema.parse(request.body)
     return { task: options.service.setCi(id, stage, on) }
@@ -525,6 +566,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   // Whether a later stage is skipped when the task reaches it.
   app.put('/tasks/:id/skip', async (request) => {
+    refuseAgent(request, 'mark a stage to skip')
     const { id } = taskParamsSchema.parse(request.params)
     const { stage, on } = workflowBodySchema.parse(request.body)
     return { task: options.service.setSkip(id, stage, on) }
@@ -608,6 +650,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   // `If-Match` holds the version the editor read; a file that changed since is not replaced.
   app.put('/repos/:id/settings', async (request) => {
+    refuseAgent(request, 'change project settings')
     const { id } = repoParamsSchema.parse(request.params)
     const version = request.headers['if-match']
     const settings = options.settings.save(id, request.body, singleHeader(version))

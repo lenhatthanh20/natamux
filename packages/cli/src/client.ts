@@ -112,6 +112,9 @@ function describeError(status: number, body: unknown): string {
       return fields.message
     }
   }
+  if (status === 403) {
+    return 'Only a person can do this, not the agent token of a task terminal. Use the dashboard.'
+  }
   return `The daemon answered with status ${status}.`
 }
 

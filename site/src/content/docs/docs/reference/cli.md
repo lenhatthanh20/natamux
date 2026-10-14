@@ -61,7 +61,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--url <address>` | `task link` | Its address |
 | `--provider <name>` | `task link` | `github`, `jira` and so on. Default: `github` when the address contains `github.com`, else `tracker` |
 | `--state <state>` | `task list` | Only tasks in this state: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` |
-| `--source <name>` | `event` | `agent`, `human`, `git`, `ci` or `system`. Default: `human` |
+| `--source <name>` | `event` | `agent`, `human`, `git`, `ci` or `system`. Default: `human`. In a task terminal the daemon records `agent`, whatever you pass |
 | `--payload <json>` | `event` | A JSON object sent with the event |
 | `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the default branch of the repository, such as `main`. Natamux fetches the base first (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
 | `--yes` | `workspace remove` | Confirm that the worktree folder is deleted |

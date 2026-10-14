@@ -23,6 +23,22 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 - `GET /health` needs no token and answers `{"status":"ok"}`.
 - A wrong or missing token gets 401.
 
+### The agent token
+
+Task terminals get a second token, the agent token, in `NATAMUX_TOKEN`. The daemon makes a new one at each start and never prints it or writes it to disk. Agents and the `natamux` command in a task terminal use it, so the history shows what an agent did.
+
+With the agent token:
+
+- `POST /tasks/:id/events` records `source: agent`, whatever `source` the request names.
+- Stage actions record `source: agent`.
+- These answer 403 `forbidden` and change nothing:
+  - `POST /tasks/:id/events` with `review.approved`, `stage.approved`, `stage.passed`, `stage.skipped` or `state.overridden`
+  - `POST /tasks/:id/stage` with `approve`, `skip` or `pass`
+  - `PUT /tasks/:id/ci`, `PUT /tasks/:id/skip`, `PUT /tasks/:id/workflow`
+  - `PUT /repos/:id/settings`
+
+To do these from a script, use the daemon's own token, not the one in a task terminal.
+
 ## Main endpoints
 
 | Method and path | Meaning |

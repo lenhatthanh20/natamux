@@ -44,7 +44,7 @@ Every terminal of a task gets the daemon's environment plus:
 
 | Variable | Value |
 |---|---|
-| `NATAMUX_TOKEN` | The daemon's token |
+| `NATAMUX_TOKEN` | The agent token. It may not approve, skip or pass a stage, or change settings. See [The agent token](/docs/reference/http-api/#the-agent-token) |
 | `NATAMUX_URL` | `http://127.0.0.1:<daemon port>` |
 | `NATAMUX_TASK_ID` | The task id, such as `T-42` |
 | `NATAMUX_TERMINAL` | The terminal's name (`1`, `2`, ...). The agent runs in `1` |

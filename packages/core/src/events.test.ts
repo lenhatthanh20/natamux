@@ -4,6 +4,7 @@ import {
   completeEvent,
   deriveTaskState,
   type EventType,
+  GATE_EVENT_TYPES,
   type TaskEvent,
   taskEventSchema,
 } from './events.js'
@@ -448,5 +449,18 @@ describe('taskEventSchema', () => {
       at: 'yesterday',
     })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('GATE_EVENT_TYPES', () => {
+  // A change here changes what an agent may do by itself, so it must be on purpose.
+  it('holds exactly the events that pass a gate or set a state by hand', () => {
+    expect([...GATE_EVENT_TYPES].sort()).toEqual([
+      'review.approved',
+      'stage.approved',
+      'stage.passed',
+      'stage.skipped',
+      'state.overridden',
+    ])
   })
 })
