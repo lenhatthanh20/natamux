@@ -51,9 +51,9 @@ The default pipeline runs three agents. All are the task's agent unless a stage 
 | Context | none, or Shell 1 for a `skill` or `mcp` source | none, or agent A |
 | Spec, Plan | Shell 1 | Agent A. Each stage's prompt goes into the same session. |
 | Implement | Shell 1 | Agent A, same session |
-| Test spec | Shell 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model). |
+| Test spec | Shell 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model); then it gets a shell of its own. |
 | Automated tests | Shell 1 | Agent A, same session. With a `command`: a new shell and no agent. |
-| Review | Shell 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent. A later round goes into the same session. |
+| Review | Shell 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a shell of its own. A later round goes into the same session. |
 | Release | none | none |
 
 One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
@@ -70,7 +70,9 @@ Natamux uses the model each agent picks. Set it in one of these places:
 
 A catalog stage in Shell 1 cannot change the model: that would need a new session and lose the context of the stages before it.
 
-A stage of your own (made with **Custom stage**) that an agent works on can change it, in Shell 1 too. When another agent runs in Shell 1, Natamux closes it and starts the stage's agent there. The next stage in Shell 1 gets the task's agent back, with a new session. A program in Shell 1 that is no agent Natamux knows stays, and gets the prompt.
+A stage of your own (made with **Custom stage**) that an agent works on can change it too, also where it would run in Shell 1.
+
+A stage with its own agent or arguments runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux never closes an agent while the task runs, so Shell 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its shell, which still has the context of the last round. All shells of a task close when the task is done or cancelled.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -257,7 +259,7 @@ For a review by a person, add **Manual review** from the catalog, for example af
 
 ### Stages in their own shell
 
-A stage that only writes a report can run in its own shell with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Shell 5**, can have its own agent and arguments, and a turn of its agent does not touch the session in Shell 1.
+A stage that only writes a report can run in its own shell with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Shell 5**, and a turn of its agent does not touch the session in Shell 1. With its own agent or arguments, it runs in a shell of its own instead, from Shell 6; see [Choose a model](#choose-a-model).
 
 ## Check a stage on CI
 

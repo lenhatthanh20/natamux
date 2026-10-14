@@ -209,7 +209,7 @@ describe('pipelineSchema', () => {
       expect(stageAgent(step as Step, implement as Stage)).toEqual({})
     })
 
-    it('takes them on a stage of your own that an agent works on, in Shell 1 too', () => {
+    it('takes them on a stage of your own that an agent works on, also where Shell 1 is', () => {
       const docs = { id: 'write-docs', kind: 'agent', gate: 'auto', ...own }
       const lint = { id: 'check-types', kind: 'testing', gate: 'auto', ...own }
       expect(pipelineSchema.safeParse([docs]).success).toBe(true)
@@ -232,7 +232,7 @@ describe('pipelineSchema', () => {
       }
     })
 
-    it('gives them to a stage of your own in Shell 1 when the task runs', () => {
+    it('gives them to a stage of your own when the task runs', () => {
       const docs = { id: 'write-docs', kind: 'agent', gate: 'auto' } as const
       expect(stageAgent({ ...docs, ...own }, { ...docs, ...own })).toEqual(own)
       expect(stageAgent(docs, docs)).toEqual({})
@@ -494,10 +494,70 @@ describe('terminals of a group', () => {
     if (build === undefined) {
       throw new Error('The default pipeline changed')
     }
-    expect(terminalOfStage(build, 'implement')).toBe('1')
-    expect(terminalOfStage(build, 'test-spec')).toBe('2')
-    expect(stageOfTerminal(build, '2')?.id).toBe('test-spec')
-    expect(stageOfTerminal(build, '3')).toBeUndefined()
+    expect(terminalOfStage([build], 'implement')).toBe('1')
+    expect(terminalOfStage([build], 'test-spec')).toBe('2')
+    expect(stageOfTerminal([build], build, '2')?.id).toBe('test-spec')
+    expect(stageOfTerminal([build], build, '3')).toBeUndefined()
+  })
+})
+
+describe('a stage with its own agent', () => {
+  const own = (id: string, extra: object = {}): Stage => ({
+    id,
+    kind: 'agent',
+    gate: 'auto',
+    agent: 'copilot',
+    ...extra,
+  })
+  // The pipeline of the issue: the task's agent does Spec and Implement in Shell 1.
+  const steps: Step[] = [
+    { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
+    { ...own('test-spec', { output: 'test-spec.md', ownShell: true }), gate: 'manual' },
+    { id: 'implement', kind: 'agent', gate: 'auto' },
+    own('agent-review', { agent: 'cursor', output: 'review.md', ownShell: true }),
+    own('ci-watch'),
+    own('merge-pr'),
+  ]
+
+  it('gets a shell of its own from Shell 6, in pipeline order, and Shell 1 keeps the rest', () => {
+    const shells = steps.map((step) => terminalOfStage(steps, step.id))
+    expect(shells).toEqual(['1', '6', '1', '7', '8', '9'])
+    expect(stageOfTerminal(steps, steps[4] as Step, '8')?.id).toBe('ci-watch')
+    expect(stageOfTerminal(steps, steps[4] as Step, '1')).toBeUndefined()
+    const position = { stage: 'ci-watch', state: 'running' as const, lanes: {} }
+    expect(terminalLane(position, steps, '8')).toEqual({ stage: 'ci-watch', state: 'running' })
+    expect(terminalLane(position, steps, '1')).toEqual({ stage: null, state: null })
+  })
+
+  it('gets one for arguments alone, and keeps Shell 1 or 5 without either', () => {
+    const plain: Step[] = [
+      { id: 'write-docs', kind: 'agent', gate: 'auto', args: '--model opus' },
+      { id: 'notes', kind: 'agent', gate: 'auto' },
+      { id: 'agent-review', kind: 'agent', gate: 'auto', output: 'r.md', ownShell: true },
+    ]
+    expect(plain.map((step) => terminalOfStage(plain, step.id))).toEqual(['6', '1', '5'])
+  })
+
+  it('gives a lane of a group its own shell, and the other lanes keep theirs', () => {
+    const group: Step[] = [
+      {
+        id: 'build',
+        parallel: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          own('test-spec', { output: 'test-spec.md' }),
+          { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md' },
+          own('lint-notes', { output: 'lint.md' }),
+        ],
+      },
+    ]
+    const ids = ['implement', 'test-spec', 'notes', 'lint-notes']
+    expect(ids.map((id) => terminalOfStage(group, id))).toEqual(['1', '6', '3', '7'])
+    expect(stageOfTerminal(group, group[0] as Step, '7')?.id).toBe('lint-notes')
+  })
+
+  it('gives no shell to an agent the stage may not have', () => {
+    const invalid: Step[] = [{ id: 'spec', kind: 'agent', gate: 'manual', agent: 'codex' }]
+    expect(terminalOfStage(invalid, 'spec')).toBe('1')
   })
 })
 
@@ -564,12 +624,15 @@ describe('a stage in its own shell', () => {
   }
 
   it('runs in Shell 5, apart from the agent in Shell 1 and the stages of a group', () => {
-    expect(terminalOfStage(review, 'agent-review')).toBe('5')
-    expect(stageOfTerminal(review, '5')?.id).toBe('agent-review')
-    expect(stageOfTerminal(review, '1')).toBeUndefined()
+    expect(terminalOfStage([review], 'agent-review')).toBe('5')
+    expect(stageOfTerminal([review], review, '5')?.id).toBe('agent-review')
+    expect(stageOfTerminal([review], review, '1')).toBeUndefined()
     const position = { stage: 'agent-review', state: 'running' as const, lanes: {} }
-    expect(terminalLane(position, review, '5')).toEqual({ stage: 'agent-review', state: 'running' })
-    expect(terminalLane(position, review, '1')).toEqual({ stage: null, state: null })
+    expect(terminalLane(position, [review], '5')).toEqual({
+      stage: 'agent-review',
+      state: 'running',
+    })
+    expect(terminalLane(position, [review], '1')).toEqual({ stage: null, state: null })
     expect(stageAgent(review, { ...review, agent: 'codex' } as Stage)).toEqual({ agent: 'codex' })
   })
 
@@ -599,21 +662,21 @@ describe('terminalLane', () => {
   it('gives each terminal of a group the state of its own lane', () => {
     const position = inBuild({ implement: 'running', 'test-spec': 'review' })
     expect(position.state).toBe('review')
-    expect(terminalLane(position, build, '1')).toEqual({ stage: 'implement', state: 'running' })
-    expect(terminalLane(position, build, '2')).toEqual({ stage: 'test-spec', state: 'review' })
+    expect(terminalLane(position, [build], '1')).toEqual({ stage: 'implement', state: 'running' })
+    expect(terminalLane(position, [build], '2')).toEqual({ stage: 'test-spec', state: 'review' })
   })
 
   it('keeps the lanes apart when one needs input', () => {
     const position = inBuild({ implement: 'running', 'test-spec': 'needs-input' })
     expect(position.state).toBe('needs-input')
-    expect(terminalLane(position, build, '1').state).toBe('running')
-    expect(terminalLane(position, build, '2').state).toBe('needs-input')
+    expect(terminalLane(position, [build], '1').state).toBe('running')
+    expect(terminalLane(position, [build], '2').state).toBe('needs-input')
   })
 
   it('shows a finished lane as done, also when it is gone from the lanes', () => {
     const finished = inBuild({ implement: 'running', 'test-spec': 'done' })
-    expect(terminalLane(finished, build, '2')).toEqual({ stage: 'test-spec', state: 'done' })
-    expect(terminalLane({ stage: build.id, state: 'running', lanes: {} }, build, '2')).toEqual({
+    expect(terminalLane(finished, [build], '2')).toEqual({ stage: 'test-spec', state: 'done' })
+    expect(terminalLane({ stage: build.id, state: 'running', lanes: {} }, [build], '2')).toEqual({
       stage: 'test-spec',
       state: 'done',
     })
@@ -621,19 +684,19 @@ describe('terminalLane', () => {
 
   it('gives no lane to a terminal the group does not use', () => {
     const position = inBuild({ implement: 'running', 'test-spec': 'review' })
-    expect(terminalLane(position, build, '3')).toEqual({ stage: null, state: null })
+    expect(terminalLane(position, [build], '3')).toEqual({ stage: null, state: null })
   })
 
   it('gives the task state to Shell 1 outside a group, and no lane to the others', () => {
     const position = { stage: spec.id, state: 'running' as const, lanes: {} }
-    expect(terminalLane(position, spec, '1')).toEqual({ stage: 'spec', state: 'running' })
-    expect(terminalLane(position, spec, '2')).toEqual({ stage: null, state: null })
+    expect(terminalLane(position, [spec], '1')).toEqual({ stage: 'spec', state: 'running' })
+    expect(terminalLane(position, [spec], '2')).toEqual({ stage: null, state: null })
   })
 
   it('uses the stage of the task when its step is unknown', () => {
     const position = { stage: 'gone', state: 'review' as const, lanes: {} }
-    expect(terminalLane(position, undefined, '1')).toEqual({ stage: 'gone', state: 'review' })
-    expect(terminalLane(position, undefined, '2')).toEqual({ stage: null, state: null })
+    expect(terminalLane(position, [], '1')).toEqual({ stage: 'gone', state: 'review' })
+    expect(terminalLane(position, [], '2')).toEqual({ stage: null, state: null })
   })
 })
 

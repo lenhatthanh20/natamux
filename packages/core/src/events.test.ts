@@ -372,6 +372,53 @@ describe('completeEvent', () => {
   })
 })
 
+describe('events from the shell of a stage with its own agent', () => {
+  // Test spec and Notes start their own agents, so they run in Shells 6 and 7.
+  const steps: Step[] = [
+    {
+      id: 'build',
+      parallel: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        {
+          id: 'test-spec',
+          kind: 'agent',
+          gate: 'manual',
+          output: 'test-spec.md',
+          agent: 'copilot',
+        },
+        { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md', agent: 'cursor' },
+      ],
+    },
+  ]
+  const group = at('build', 'running', {
+    implement: 'running',
+    'test-spec': 'running',
+    notes: 'running',
+  })
+  const from = (terminal: string) =>
+    completeEvent(group, event('agent.asked', { terminal }), steps).payload.stage
+
+  it('names the stage of the shell the event came from', () => {
+    expect(from('1')).toBe('implement')
+    expect(from('6')).toBe('test-spec')
+    expect(from('7')).toBe('notes')
+  })
+
+  it('names no stage for a shell no stage uses', () => {
+    expect(from('2')).toBeUndefined()
+    expect(from('9')).toBeUndefined()
+  })
+
+  it('moves only the lane of that shell', () => {
+    const asked = applyTaskEvent(group, event('agent.asked', { terminal: '7' }), steps)
+    expect(asked.position.lanes).toEqual({
+      implement: 'running',
+      'test-spec': 'running',
+      notes: 'needs-input',
+    })
+  })
+})
+
 describe('taskEventSchema', () => {
   it('fills an empty payload by default', () => {
     const parsed = taskEventSchema.parse({

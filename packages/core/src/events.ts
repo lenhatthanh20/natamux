@@ -250,6 +250,7 @@ function moveOf(event: TaskEvent): Move | undefined {
 // The stage an event is about. Outside a group it is the current stage. Inside one: the stage it
 // names, else the stage of the terminal it came from, else the only stage the move fits.
 function laneOf(
+  steps: readonly Step[],
   step: Step,
   position: StagePosition,
   event: TaskEvent,
@@ -261,7 +262,7 @@ function laneOf(
   }
   const terminal = payloadString(event, 'terminal')
   if (terminal !== undefined) {
-    return stageOfTerminal(step, terminal)?.id
+    return stageOfTerminal(steps, step, terminal)?.id
   }
   const fitting = step.parallel.filter((stage) => {
     const state = position.lanes[stage.id]
@@ -296,7 +297,7 @@ export function completeEvent(
   if (move === undefined || payloadString(event, 'stage') !== undefined) {
     return event
   }
-  const lane = laneOf(step, position, event, move)
+  const lane = laneOf(steps, step, position, event, move)
   return lane === undefined ? event : { ...event, payload: { ...event.payload, stage: lane } }
 }
 
@@ -396,7 +397,7 @@ export function applyTaskEvent(
   }
 
   const group = isGroup(step)
-  const lane = laneOf(step, position, event, move)
+  const lane = laneOf(steps, step, position, event, move)
   const stage = stagesOf(step).find((candidate) => candidate.id === lane)
   if (lane === undefined || stage === undefined) {
     return keep(false)

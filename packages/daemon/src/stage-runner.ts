@@ -253,9 +253,8 @@ export class StageRunner {
   private readonly waitingForWorkspace = new Set<string>()
   // Tasks whose agent stage waits for the tasks it depends on to be done.
   private readonly waitingForTasks = new Set<string>()
-  // Terminals where this daemon started an agent: which one, when, and whether it was the own
-  // agent of a stage.
-  private readonly launched = new Map<string, { agent: string; at: number; own?: boolean }>()
+  // Terminals where this daemon started an agent: which one, and when.
+  private readonly launched = new Map<string, { agent: string; at: number }>()
   // The end of the output of those terminals, on Windows.
   private readonly outputTails = new Map<string, string>()
   // The agent a person picked, while the stage it starts is starting.
@@ -346,13 +345,13 @@ export class StageRunner {
   // uses, where the user started an agent by hand.
   laneFor(task: Task, terminal: string | undefined): { stage: string; state: TaskState } | null {
     const step = this.stepOf(task)
-    const stage = stageOfTerminal(step, terminal ?? MAIN_TERMINAL)
+    const stage = stageOfTerminal(this.tasks.stepsOf(task), step, terminal ?? MAIN_TERMINAL)
     return stage === undefined ? null : { stage: stage.id, state: laneState(task, step, stage.id) }
   }
 
   // The stage an agent in this terminal works on, and its own state, for the dashboard.
   laneOfTerminal(task: Task, terminal: string): TerminalLane {
-    return terminalLane(task, findStep(this.tasks.stepsOf(task), task.stage), terminal)
+    return terminalLane(task, this.tasks.stepsOf(task), terminal)
   }
 
   // True once for the turn end that follows a report from this terminal.
@@ -514,7 +513,7 @@ export class StageRunner {
           if (stage.command === undefined) {
             await this.startAgent(task, step, stage, this.promptOf(task, stage))
           } else {
-            await this.startCommand(task, step, stage, stage.command)
+            await this.startCommand(task, stage, stage.command)
           }
           return
         default:
@@ -526,12 +525,7 @@ export class StageRunner {
     }
   }
 
-  private markStarted(
-    task: Task,
-    step: Step,
-    stage: Stage,
-    payload: Record<string, unknown>,
-  ): boolean {
+  private markStarted(task: Task, stage: Stage, payload: Record<string, unknown>): boolean {
     const started = this.tasks.applyEvent(task.id, {
       source: 'system',
       type: 'stage.started',
@@ -539,7 +533,7 @@ export class StageRunner {
     }).accepted
     // The turn end of an earlier report of this stage never came; it must not swallow one of
     // this round.
-    const key = `${task.id}/${terminalOfStage(step, stage.id)}`
+    const key = `${task.id}/${terminalOfStage(this.tasks.stepsOf(task), stage.id)}`
     if (started && this.reported.get(key) === stage.id) {
       this.reported.delete(key)
     }
@@ -594,7 +588,7 @@ export class StageRunner {
     const head = await currentHead(task.workspace)
     const own = stageAgent(step, stage)
     const agent = own.agent ?? this.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
-    const terminal = terminalOfStage(step, stage.id)
+    const terminal = terminalOfStage(this.tasks.stepsOf(task), stage.id)
     // A prompt typed to the agent took the stage up again: the agent has its prompt. With no
     // agent left (the app restarted), Claude Code goes on with its last session of the stage.
     const running = resumed && this.agentRuns(task.id, terminal)
@@ -605,11 +599,8 @@ export class StageRunner {
     // for a workflow.
     const missing = prompt?.missing.length ? { missingSkills: prompt.missing, agent } : {}
     const workflow = prompt?.workflow === true ? { workflow: true } : {}
-    if (!this.markStarted(task, step, stage, { head, ...missing, ...workflow }) || running) {
+    if (!this.markStarted(task, stage, { head, ...missing, ...workflow }) || running) {
       return
-    }
-    if (await this.runsOtherAgent(task.id, terminal, agent, own)) {
-      this.terminals.closeOne(task.id, terminal)
     }
     this.launch(task.id, stage.id, agent, terminal, prompt?.text ?? '', session, own)
   }
@@ -659,7 +650,7 @@ export class StageRunner {
     if (!byAgent || task.workspace === null) {
       return
     }
-    const terminal = terminalOfStage(step, stage.id)
+    const terminal = terminalOfStage(this.tasks.stepsOf(task), stage.id)
     if (this.agentRuns(task.id, terminal)) {
       return
     }
@@ -670,26 +661,6 @@ export class StageRunner {
       (newest && agent === 'claude-code' ? LAST_SESSION : undefined)
     const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''
     this.launch(task.id, stage.id, agent, terminal, text, session, own)
-  }
-
-  // Another agent than the stage wants runs in the terminal, and the stage names its own, or the
-  // agent there is the own agent of a stage before. Else an agent a person started stays, and a
-  // program Natamux does not know always stays.
-  private async runsOtherAgent(
-    taskId: string,
-    terminal: string,
-    agent: string,
-    own: Pick<Stage, 'agent'>,
-  ): Promise<boolean> {
-    const before = this.launched.get(`${taskId}/${terminal}`)
-    if (own.agent === undefined && before?.own !== true) {
-      return false
-    }
-    if (!this.agentRuns(taskId, terminal)) {
-      return false
-    }
-    const running = await this.agentIn(taskId, terminal)
-    return running !== null && running !== agent
   }
 
   // The last session that Claude Code reported from this stage. Other agents start new ones.
@@ -704,8 +675,7 @@ export class StageRunner {
     }
     const steps = this.tasks.stepsOf(task)
     const shellOf = (id: string) => {
-      const step = findStep(steps, id)
-      return step === undefined ? undefined : terminalOfStage(step, id)
+      return findStep(steps, id) === undefined ? undefined : terminalOfStage(steps, id)
     }
     for (const { event } of [...this.tasks.listEvents(task.id)].reverse()) {
       // A session from before another agent was started in this shell is not this agent's. The
@@ -750,11 +720,7 @@ export class StageRunner {
           session,
           none ? {} : { args: own.args, stage: stageId },
         )
-        this.launched.set(`${taskId}/${terminal}`, {
-          agent,
-          at: this.now(),
-          ...(none ? {} : { own: true }),
-        })
+        this.launched.set(`${taskId}/${terminal}`, { agent, at: this.now() })
       }
     } catch (error) {
       this.failStage(taskId, stageId, error instanceof Error ? error.message : String(error))
@@ -871,12 +837,12 @@ export class StageRunner {
   }
 
   // A command whose exit code decides the stage, such as the test command.
-  private async startCommand(task: Task, step: Step, stage: Stage, command: string) {
+  private async startCommand(task: Task, stage: Stage, command: string) {
     if (task.workspace === null) {
       this.waitingForWorkspace.add(task.id)
       return
     }
-    if (!this.markStarted(task, step, stage, {})) {
+    if (!this.markStarted(task, stage, {})) {
       return
     }
     // The command runs in the same terminal each time, so testing again adds no shell.
@@ -951,7 +917,7 @@ export class StageRunner {
       })
       return
     }
-    if (!this.markStarted(task, step, stage, { source: source.type })) {
+    if (!this.markStarted(task, stage, { source: source.type })) {
       return
     }
     const output = stage.output ?? 'context.md'
@@ -1035,7 +1001,7 @@ export class StageRunner {
       return step
     }
     if (input.terminal !== undefined) {
-      const fromTerminal = stageOfTerminal(step, input.terminal)
+      const fromTerminal = stageOfTerminal(this.tasks.stepsOf(task), step, input.terminal)
       if (fromTerminal !== undefined) {
         return fromTerminal
       }
@@ -1113,7 +1079,7 @@ export class StageRunner {
   // An agent that reviews sends the task back by itself, at most MAX_AGENT_SEND_BACKS times from
   // its stage; then the stage waits for you, so two agents that disagree do not loop forever.
   private agentSendsBack(task: Task, step: Step, terminal: string): string {
-    const from = stageOfTerminal(step, terminal)?.id ?? task.stage
+    const from = stageOfTerminal(this.tasks.stepsOf(task), step, terminal)?.id ?? task.stage
     const before = this.sendBacksFrom(task.id, from)
     if (before >= MAX_AGENT_SEND_BACKS) {
       const name = stageName({ id: from })
@@ -1359,7 +1325,7 @@ export class StageRunner {
       return
     }
     const start = this.lastStart(taskId, stageId)
-    const terminal = terminalOfStage(step, stageId)
+    const terminal = terminalOfStage(this.tasks.stepsOf(task), stageId)
     const agentWorks =
       (stage.kind === 'agent' || stage.kind === 'testing' || this.isAgentContext(task)) &&
       this.agentRuns(taskId, terminal)
