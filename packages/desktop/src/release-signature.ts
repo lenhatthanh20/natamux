@@ -109,6 +109,7 @@ export const MAX_SIGNED_BYTES = 64 * 1024
 async function readSmall(response: Response, name: string): Promise<Buffer> {
   const tooBig = `${name} is larger than ${MAX_SIGNED_BYTES} bytes`
   if (Number(response.headers.get('content-length') ?? 0) > MAX_SIGNED_BYTES) {
+    await response.body?.cancel()
     throw new Error(tooBig)
   }
   const reader = response.body?.getReader()

@@ -93,6 +93,12 @@ main() {
   object=$(git rev-parse -q --verify "refs/tags/$tag") \
     || fail "there is no local tag $tag; sign only a tag you made and pushed from this repository"
   [ "$(git cat-file -t "$object")" = tag ] || fail "the local tag $tag is not annotated"
+  # A fetch can bring a tag from origin too; the tagger shows whether you made it.
+  local tagger me
+  tagger=$(git for-each-ref --format='%(taggeremail)' "refs/tags/$tag" | tr -d '<>')
+  me=$(git config user.email || true)
+  [ -n "$me" ] && [ "$tagger" = "$me" ] \
+    || fail "the local tag $tag was made by ${tagger:-nobody}, not by you (${me:-no user.email})"
   commit=$(git rev-parse "refs/tags/$tag^{commit}")
   # An annotated tag lists its own object, and the commit as <tag>^{}.
   [ "$(git ls-remote --tags origin "refs/tags/$tag" | cut -f 1)" = "$object" ] \
@@ -108,13 +114,14 @@ main() {
 
   # The REST API lists drafts to the owner; the address of one release by tag does not.
   gh api --paginate "repos/{owner}/{repo}/releases?per_page=100" \
-    --jq ".[] | select(.tag_name == \"$tag\") | \"\(.id) \(.draft) \(.html_url)\"" \
+    --jq ".[] | select(.tag_name == \"$tag\") | \"\(.id) \(.draft) \(.prerelease) \(.html_url)\"" \
     >"$work/releases"
   [ "$(grep -c . "$work/releases")" = 1 ] \
     || fail "expected one release for $tag, found $(grep -c . "$work/releases")"
-  local id draft page
-  read -r id draft page <"$work/releases"
+  local id draft prerelease page
+  read -r id draft prerelease page <"$work/releases"
   [ "$draft" = true ] || fail "release $tag is not a draft; it is published already"
+  [ "$prerelease" = false ] || fail "release $tag is marked as a pre-release; apps never take one"
 
   local run_id conclusion run_sha run_url
   read -r run_id conclusion run_sha run_url < <(gh run list --workflow release.yml --branch "$tag" \
@@ -164,13 +171,14 @@ main() {
     echo "Commits since $previous:"
     git log --oneline "$previous..$commit" | sed 's/^/  /'
     echo
-    echo "Changes since $previous to the build, the scripts and the desktop app:"
-    git diff --stat "$previous..$commit" -- .github scripts packages/desktop | sed 's/^/  /'
+    echo "Files changed since $previous:"
+    git diff --stat "$previous..$commit" | sed 's/^/  /'
   else
     echo "No release tag before $tag here, so there is no change list."
   fi
   echo
   local answer
+  echo "Sign only a tag you made yourself, from a commit you checked."
   read -r -p "Sign SHA256SUMS.txt as \"natamux $tag\" and publish the release? [y/N] " answer
   [[ $answer == [yY] ]] || fail "stopped; nothing was signed"
 

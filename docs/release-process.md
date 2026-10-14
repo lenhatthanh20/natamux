@@ -20,13 +20,13 @@ How a version gets from `main` to users. The desktop app installs an update only
    ```
 
    It checks that:
-   - the tag is `vX.Y.Z`, annotated, and the same object here and on GitHub. It trusts your local tag, not GitHub's: someone who can push could move the tag there;
+   - the tag is `vX.Y.Z`, annotated, made by you (its tagger email is your `git config user.email`), and the same object here and on GitHub. It trusts your local tag, not GitHub's: someone who can push could move the tag there. A plain `git fetch` or `git pull` can also bring tags from GitHub, so between tagging and signing use `git fetch --no-tags`, or do not fetch at all;
    - the tag's commit is on `main`;
-   - the release is a draft with exactly the six files and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
+   - the release is a draft, not marked as a pre-release, with exactly the six files and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
    - the push Release run of the tag succeeded and built that commit;
    - the build artifacts of that run hash to exactly the lines of `SHA256SUMS.txt`. A stolen token can replace release files and `SHA256SUMS.txt` together, but not the artifacts of a finished run. The artifacts last 3 days (`retention-days` in `release.yml`). After that the script stops; re-run the Release workflow, then sign within 3 days.
 
-   It shows the commit, the run, `SHA256SUMS.txt`, and from your local repository the commits and the changes to `.github`, `scripts` and `packages/desktop` since the previous release tag. Read them, then answer. On `y` it signs `SHA256SUMS.txt` in minisign's legacy form (`-l`) with the trusted comment `natamux vX.Y.Z`, checks the signature against `RELEASE_SIGNER`, uploads `SHA256SUMS.txt.minisig`, and publishes the draft as the latest release. minisign asks for the key's password. It works in a new `mktemp -d` folder and leaves it there.
+   It shows the commit, the run, `SHA256SUMS.txt`, and from your local repository the commits and the changed files since the previous release tag. Read them, then answer. On `y` it signs `SHA256SUMS.txt` in minisign's legacy form (`-l`) with the trusted comment `natamux vX.Y.Z`, checks the signature against `RELEASE_SIGNER`, uploads `SHA256SUMS.txt.minisig`, and publishes the draft as the latest release. minisign asks for the key's password. It works in a new `mktemp -d` folder and leaves it there.
 5. Check the published release: `scripts/release.test.sh --published` (needs `minisign`).
 
 Never publish the draft by hand: a release without `SHA256SUMS.txt.minisig` updates no app, and timed checks keep failing until it is signed.
