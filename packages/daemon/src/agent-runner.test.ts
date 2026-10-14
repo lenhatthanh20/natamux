@@ -158,6 +158,38 @@ describe('AgentRunner', () => {
     ])
   })
 
+  // PSReadLine takes these bytes as keys: ESC wipes the typed line and Ctrl+C cancels it, so
+  // an issue body could run its own command.
+  it('types no control bytes of the prompt on Windows', () => {
+    const spawner = fakeSpawner()
+    const windows = new AgentRunner({
+      tasks,
+      terminals: new TerminalService({ spawn: spawner.spawn, workspaceOf: () => '/work/T-0001' }),
+      claudeSettingsPath: 'C:\\data\\settings.json',
+      platform: 'win32',
+      launchDir: dataDir,
+    })
+    const task = taskWithWorkspace()
+
+    windows.start(task.id, 'claude-code', 'a\x1bcalc.exe #\x03b')
+
+    expect(spawner.ptys[0]?.written).toEqual([
+      windowsLine(
+        "claude --settings 'C:\\data\\settings.json' --permission-mode auto 'acalc.exe #b'",
+      ),
+    ])
+  })
+
+  it('takes escape sequences and control bytes out of the first prompt', () => {
+    const task = taskWithWorkspace('Fix\x1b[2K the bug', 'Do\x03 it\x1b]0;title\x07.')
+
+    runner.start(task.id, 'claude-code')
+
+    expect(readFileSync(script(task.id), 'utf8')).toBe(
+      "claude --settings '/data/claude code.json' --permission-mode auto 'Fix the bug - Do it.'\n",
+    )
+  })
+
   it('puts the natamux command first on the PATH of the agent', () => {
     const withBin = new AgentRunner({
       tasks,
