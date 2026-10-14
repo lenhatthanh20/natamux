@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.23 (2026-10-14)
+
+- When you add a project, **Worktree folder** sets where the worktrees of its tasks go. See [Repositories](/docs/guides/dashboard/#repositories).
+- A stage with its own agent or arguments now runs in a shell of its own, from Shell 6. Natamux never closes an agent while the task runs, so Shell 1 keeps the task's agent and its session. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- Natamux starts Copilot CLI with `--no-alt-screen`, so its output goes into the terminal history and the light line at the right edge is gone. See [What Natamux runs](/docs/agents/copilot/#what-natamux-runs).
+
 ## v0.1.22 (2026-10-14)
 
 - In the desktop app, **Browse…** in the Projects panel picks the project folder in a folder dialog. See [Repositories](/docs/guides/dashboard/#repositories).
