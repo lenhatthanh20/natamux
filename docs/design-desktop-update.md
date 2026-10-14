@@ -29,6 +29,7 @@ The desktop app finds a new release, downloads it in the background, and install
 
 - 30 seconds after the app starts, then every 6 hours while it runs.
 - **Check for Updates…** in the menu checks now. It is on the app menu on macOS and on the **Help** menu on Linux and Windows.
+- A manual check opens a small popup over the window at once (see Popup below). Timed checks show none.
 - **Check for Updates Automatically** (a tick in the same menu) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, on by default. A manual check always works.
 - No check when the app is not packaged (`pnpm start`) or in smoke mode (`NATAMUX_DESKTOP_SMOKE=1`).
 
@@ -53,6 +54,17 @@ idle → checking → up-to-date
 - `ready`: the app shows a dialog: "Natamux 0.1.5 is ready. Restart to update." with **Restart Now**, **Later** and **What's New** (opens the release page). The menu item becomes **Restart to Update to 0.1.5**.
 - A version the user answered with **Later** asks again only after the next start. The menu item stays.
 - A timed check that fails stays quiet; the next timed check tries again. A manual check shows the error.
+
+## Popup
+
+A manual check shows a small frameless window over the main window (on the screen when the main window is closed) until the first dialog:
+
+- `checking`: a spinner, **Checking for updates…** and the running version.
+- `downloading`: **Downloading Natamux 0.1.5…**, the MB done of the total, and a progress bar. Without a `content-length` the bar runs without an end.
+- **Hide** or `Esc` closes it. The check or download goes on, the menu shows the state, and the dialog still comes at the end.
+- It stays at least 600 ms, so a quick check does not flash it. It closes before any dialog.
+- The page is a `data:` URL (`update-popup.ts`): no preload, sandboxed, a CSP that loads nothing, no navigation, no new windows. The app sends each change with `executeJavaScript('show(<JSON>)')`, only when the text or percent changes.
+- Colors are the dashboard's popover colors, light or dark as the system. No animation with reduced motion.
 
 ## Download and checks
 
@@ -102,6 +114,7 @@ The check is one `HEAD` request to `github.com` without any data about you or yo
 
 - `packages/desktop/src/update-check.ts`: no Electron: version compare, install kind, file pick, checksum parse, the install script.
 - `packages/desktop/src/release-signature.ts`: no Electron: `RELEASE_SIGNER` and the minisign check.
+- `packages/desktop/src/update-popup.ts`: no Electron: the popup page, its texts and its window options.
 - `packages/desktop/src/updater.ts`: the Electron side: timers, network, dialogs, menu state, install.
 - `packages/desktop/src/main.ts`: the menu items and the quit hook.
 - `packages/desktop/src/settings.ts`: `autoUpdate`.

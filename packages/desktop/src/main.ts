@@ -375,6 +375,7 @@ function makeUpdater(): Updater | undefined {
       app.quit()
     },
     changed: buildMenu,
+    parent: () => window,
   })
 }
 
