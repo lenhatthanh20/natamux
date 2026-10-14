@@ -8,11 +8,16 @@ export const repoIdSchema = z
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'A repository id is lower case words joined by "-"')
   .max(60)
 
-// A git repository whose tasks Natamux manages. Its worktrees go to the daemon's worktree folder.
+// A git repository whose tasks Natamux manages.
 export const repoSchema = z.object({
   id: repoIdSchema,
   name: z.string().trim().min(1).max(100),
   path: z.string().min(1),
+  // Where the worktrees of its tasks go. Left out: the daemon's worktree folder.
+  worktreesDir: z
+    .string()
+    .regex(/^(\/|[A-Za-z]:[\\/]|\\\\)/, 'The worktree folder must be an absolute path')
+    .optional(),
 })
 
 export type Repo = z.infer<typeof repoSchema>

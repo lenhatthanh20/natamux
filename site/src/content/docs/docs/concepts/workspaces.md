@@ -65,6 +65,8 @@ If a task already has a branch from an earlier workspace, and the branch still e
 
 By default, worktrees go in `worktrees/` inside the data folder (`.natamux/worktrees`). To use another folder, set `NATAMUX_WORKTREES_DIR` when you start the daemon. There is one subfolder per task id. See [Environment variables](/docs/reference/environment-variables/).
 
+A project can also have its own worktree folder. Set it in **Worktree folder** when you add the project; see [Repositories](/docs/guides/dashboard/#repositories). Workspaces made before keep their place.
+
 ## Setup script
 
 A new worktree has only the files that git tracks. To install packages or prepare files, add a setup script to your repository.

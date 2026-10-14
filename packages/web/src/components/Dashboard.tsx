@@ -256,7 +256,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   }, [tasksQuery.isSuccess])
 
   const reposQuery = useQuery({ queryKey: ['repos'], queryFn: () => api.listRepos() })
-  const repos = reposQuery.data ?? []
+  const repos = reposQuery.data?.repos ?? []
   const noProjects = reposQuery.isSuccess && repos.length === 0
   // The repository picked for new tasks and issue imports. Empty: the first one.
   const [newRepo, setNewRepo] = useState('')
@@ -1388,8 +1388,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       {reposOpen && (
         <RepoPanel
           repos={repos}
-          onAdd={async (path, name) => {
-            await api.addRepo(path, name)
+          defaultWorktreesDir={reposQuery.data?.worktreesDir}
+          onAdd={async (path, name, worktreesDir) => {
+            await api.addRepo(path, name, worktreesDir)
             await reposQuery.refetch()
           }}
           onClose={() => setReposOpen(false)}

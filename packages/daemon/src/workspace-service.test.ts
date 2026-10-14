@@ -13,6 +13,7 @@ import type { AgentRun } from './commit-drafter.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { GitError, gitSpawnCount, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
+import { RepoService } from './repo-service.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
@@ -94,6 +95,26 @@ describe('create', () => {
     expect(existsSync(join(updated.workspace ?? '', '.git'))).toBe(true)
     expect(branchExists('natamux/t-0001-fix-the-bug')).toBe(true)
     expect(tasks.getTask(task.id)).toEqual(updated)
+  })
+
+  it("adds the worktree in the project's own worktree folder", async () => {
+    const repos = new RepoService({ dataDir: join(repo.root, 'repo-data'), defaultPath: repo.dir })
+    const other = join(repo.root, 'other')
+    mkdirSync(other)
+    runGit(other, 'init', '-b', 'main')
+    runGit(other, 'commit', '--allow-empty', '-m', 'first')
+    const trees = join(repo.root, 'other-trees')
+    await repos.add({ path: other, worktreesDir: trees })
+    const withRepos = new WorkspaceService({
+      tasks,
+      worktreesDir: join(repo.root, 'worktrees'),
+      repos,
+    })
+    const there = tasks.createTask({ title: 'Fix it there', repo: 'other' })
+    const here = tasks.createTask({ title: 'Fix it here' })
+
+    expect((await withRepos.create(there.id)).workspace).toBe(join(trees, there.id))
+    expect((await withRepos.create(here.id)).workspace).toBe(join(repo.root, 'worktrees', here.id))
   })
 
   it('logs a workspace.created event and publishes the change', async () => {
@@ -400,7 +421,7 @@ describe('remove', () => {
       const again = await workspaces.create(task.id)
       expect(again).toMatchObject({
         state: 'ready',
-        workspace: workspaces.worktreePathFor(task.id),
+        workspace: workspaces.worktreePathFor(task),
       })
       tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
 

@@ -46,8 +46,8 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
 | `POST /workspaces` | Make a task with a worktree and optionally start an agent |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
-| `GET /repos` | Projects Natamux manages |
-| `POST /repos` | Add a project `{ path, name? }` |
+| `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir` |
+| `POST /repos` | Add a project `{ path, name?, worktreesDir? }`. `worktreesDir` is an absolute folder for the project's worktrees; it is made when missing. Answers 400 when it is not absolute or cannot be made |
 | `DELETE /repos/:id` | Forget a project. Any project can be removed. Answers 409 while it has workspaces |
 | `GET /repos/:id/settings` | The settings of a project: `settings`, `error`, `path`, `text` (the text of `.natamux.json`, or `null` without a file) and `version` (`none` without a file) |
 | `PUT /repos/:id/settings` | Save the settings to `.natamux.json`. Send the version you read in the header `If-Match: <version>`. Answers `{ settings, version }`. Answers 409 `conflict` when the file changed since that version. Keys of the file that Natamux does not know are kept |

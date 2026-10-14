@@ -418,16 +418,20 @@ export function createApi(
       )
     },
 
-    async listRepos(): Promise<Repo[]> {
+    // `worktreesDir`: the daemon's worktree folder. An older daemon does not send it.
+    async listRepos(): Promise<{ repos: Repo[]; worktreesDir?: string }> {
       const body = asRecord(await request('GET', '/repos'))
       if (!Array.isArray(body.repos)) {
         throw new Error('The daemon sent an answer this dashboard does not understand.')
       }
-      return body.repos.map((repo) => repoSchema.parse(repo))
+      const repos = body.repos.map((repo) => repoSchema.parse(repo))
+      return typeof body.worktreesDir === 'string'
+        ? { repos, worktreesDir: body.worktreesDir }
+        : { repos }
     },
 
-    async addRepo(path: string, name?: string): Promise<Repo> {
-      const body = asRecord(await request('POST', '/repos', { path, name }))
+    async addRepo(path: string, name?: string, worktreesDir?: string): Promise<Repo> {
+      const body = asRecord(await request('POST', '/repos', { path, name, worktreesDir }))
       return repoSchema.parse(body.repo)
     },
 

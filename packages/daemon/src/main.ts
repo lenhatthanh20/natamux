@@ -46,6 +46,7 @@ const bus = new EventBus()
 const repos = new RepoService({
   dataDir: config.dataDir,
   ...(config.repoDir === undefined ? {} : { defaultPath: config.repoDir }),
+  worktreesDir: config.worktreesDir,
   tasks: () => service.listTasks(),
 })
 const settings = new ProjectSettingsService({ repos })
