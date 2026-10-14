@@ -193,7 +193,7 @@ export function StageDetails({
             htmlFor={`${id}-agent`}
             help={
               runsInShellOne(steps, stage.id)
-                ? 'This stage runs this agent in Shell 1. If another agent runs there, it is closed and this one starts with a new session.'
+                ? "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent."
                 : 'This stage starts its own agent beside the one in Shell 1, so it may use another.'
             }
           >

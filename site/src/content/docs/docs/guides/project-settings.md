@@ -28,7 +28,7 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
-| **Agent** | Stages that start their own agent: agent stages beside the stage in Shell 1, such as Test spec, stages in their own shell, such as Review, and agent or testing stages of your own | The agent this stage starts. **Task's agent** keeps the task's own. A stage of your own in Shell 1 closes another agent there while it works. See [Choose a model](/docs/concepts/stages/#choose-a-model). |
+| **Agent** | Stages that start their own agent: agent stages beside the stage in Shell 1, such as Test spec, stages in their own shell, such as Review, and agent or testing stages of your own | The agent this stage starts. **Task's agent** keeps the task's own. A stage with its own agent or arguments runs in a shell of its own, from Shell 6, and Shell 1 keeps the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model). |
 | **Arguments** | The same stages | Words added to that agent's command line, such as `--model sonnet`. |
 | **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits. |
 | **Command** | Testing stages | The command to run. **Lint and types** and **End-to-end tests** need one. |
@@ -96,7 +96,7 @@ Turn off **Plan** with its checkbox. After you approve the spec, Test spec and I
 
 ### Add a check stage
 
-Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one writes a report with a **Findings** section and waits for your approval. Like Review, it runs in **Shell 5**, the one shell that all such stages share. When an agent still runs there, for example the Review agent, the stage gets its prompt in that session, so its own **Agent** and **Arguments** count only when Shell 5 has no agent yet.
+Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one writes a report with a **Findings** section and waits for your approval. Like Review, it runs in **Shell 5**, the one shell that all such stages share. When an agent still runs there, for example the Review agent, the stage gets its prompt in that session. With its own **Agent** or **Arguments**, it runs in a shell of its own instead, from Shell 6.
 
 ### Run your own test command
 

@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Every task with a workspace has a **Terminal** tab. It holds real shells that run in the task's worktree folder. The task's agent runs in Shell 1; stages that run beside it start their own agents in Shell 2 and Shell 5. A custom stage can also run its own agent in Shell 1, in place of the task's agent while it works. See [Choose a model](/docs/concepts/stages/#choose-a-model). The **Agents** view puts the agents of many tasks in one grid.
+Every task with a workspace has a **Terminal** tab. It holds real shells that run in the task's worktree folder. The task's agent runs in Shell 1 for the whole task; stages that run beside it start their own agents in Shell 2 and Shell 5. A stage with its own agent or arguments runs it in a shell of its own, from Shell 6. See [Choose a model](/docs/concepts/stages/#choose-a-model). The **Agents** view puts the agents of many tasks in one grid.
 
 <figure class="shot">
 <img class="shot-dark" src="/screens/ui/task-sent-back-dark.webp" alt="An open task on the Terminal tab with three panes: Shell 1 and Shell 2 side by side on top and Shell 5 below, where the Review agent works. The sidebar lists the shells under the task, and the Progress panel shows Implement running for the second time." width="1600" height="1000" decoding="async" />

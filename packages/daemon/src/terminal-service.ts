@@ -68,7 +68,8 @@ export class TerminalLimitError extends Error {
   }
 }
 
-// A task of the default pipeline keeps three agent shells (1, 2 and 5), so ten tasks fit.
+// A task of the default pipeline keeps three agent shells (1, 2 and 5), so ten tasks fit. Each
+// stage with its own agent adds one more, from Shell 6, and none closes before the task ends.
 export const MAX_SESSIONS = 30
 export const TICKET_TTL_MS = 30_000
 // Output is sent in batches. A chunk that comes after a quiet moment and is small (typing echo)

@@ -424,6 +424,12 @@ describe('own agent', () => {
     expect(takesOwnAgent(steps, 'implement')).toBe(false)
   })
 
+  it('moves a stage of your own out of Shell 1 once it has its own agent', () => {
+    const withAgent = setText(steps, 'write-docs', 'agent', 'codex')
+    expect(runsInShellOne(withAgent, 'write-docs')).toBe(false)
+    expect(runsInShellOne(withAgent, 'implement')).toBe(true)
+  })
+
   it('is offered as before on stages outside Shell 1', () => {
     expect(takesOwnAgent(steps, 'test-spec')).toBe(true)
     expect(runsInShellOne(steps, 'test-spec')).toBe(false)

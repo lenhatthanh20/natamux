@@ -1429,7 +1429,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     await user.click(await row('Write docs'))
     expect(
       within(details('Write docs')).getByText(
-        'This stage runs this agent in Shell 1. If another agent runs there, it is closed and this one starts with a new session.',
+        "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent.",
       ),
     ).toBeTruthy()
     await user.selectOptions(agentSelect('Write docs') as HTMLElement, 'codex')

@@ -40,7 +40,7 @@ export const stageSchema = z.object({
   // The stage offers its tasks a checkbox to run it as a workflow (agent stages only).
   workflow: z.boolean().optional(),
   // Another agent, and words added to its command line, for a stage that starts its own agent
-  // beside the stage in Shell 1, or for a stage of your own in any shell. A catalog stage in
+  // beside the stage in Shell 1, or for a stage of your own. Such a stage gets a shell of its own;
   // Shell 1 keeps the task's agent, so its session goes on.
   agent: z.string().trim().min(1).optional(),
   args: z.string().trim().min(1).optional(),
@@ -436,7 +436,20 @@ export function codeStage(step: Step): Stage {
 // a group, so it does not take over the agent of one.
 export const OWN_SHELL = '5'
 
-export function terminalOfStage(step: Step, stageId: string): string {
+// Each stage that starts its own agent or arguments gets a shell of its own, from Shell 6 in
+// pipeline order. No shell ever holds two agents, so none is closed while the task runs.
+const FIRST_STAGE_SHELL = 6
+
+export function terminalOfStage(steps: readonly Step[], stageId: string): string {
+  const own = steps.flatMap((step) => stagesOf(step).filter((stage) => runsOwnAgent(step, stage)))
+  const index = own.findIndex((stage) => stage.id === stageId)
+  if (index !== -1) {
+    return String(FIRST_STAGE_SHELL + index)
+  }
+  const step = findStep(steps, stageId)
+  if (step === undefined) {
+    return '1'
+  }
   if (!isGroup(step)) {
     return step.ownShell === true ? OWN_SHELL : '1'
   }
@@ -450,7 +463,7 @@ export function terminalOfStage(step: Step, stageId: string): string {
 
 // A stage that starts its own agent may use another one: an agent stage of a group that does not
 // keep Shell 1 (that goes to the code stage of the stages that are on), or one in its own shell.
-// A stage of your own that an agent works on may use another one in Shell 1 too.
+// A stage of your own that an agent works on may use another one too.
 export function canHaveOwnAgent(
   step: Step,
   stage: Pick<Stage, 'id' | 'kind' | 'ownShell'>,
@@ -474,10 +487,14 @@ function isCustomAgentStage(stage: Pick<Stage, 'id' | 'kind'>): boolean {
   )
 }
 
-// The agent and words of a stage that starts its own agent. A catalog stage in Shell 1 pastes into
-// the task's agent, so it has none.
+function runsOwnAgent(step: Step, stage: Stage): boolean {
+  return (stage.agent !== undefined || stage.args !== undefined) && canHaveOwnAgent(step, stage)
+}
+
+// The agent and words of a stage that starts its own agent. A stage without them uses the task's
+// agent.
 export function stageAgent(step: Step, stage: Stage): Pick<Stage, 'agent' | 'args'> {
-  if (terminalOfStage(step, stage.id) === '1' && !isCustomAgentStage(stage)) {
+  if (!runsOwnAgent(step, stage)) {
     return {}
   }
   return {
@@ -486,8 +503,12 @@ export function stageAgent(step: Step, stage: Stage): Pick<Stage, 'agent' | 'arg
   }
 }
 
-export function stageOfTerminal(step: Step, terminal: string): Stage | undefined {
-  return stagesOf(step).find((stage) => terminalOfStage(step, stage.id) === terminal)
+export function stageOfTerminal(
+  steps: readonly Step[],
+  step: Step,
+  terminal: string,
+): Stage | undefined {
+  return stagesOf(step).find((stage) => terminalOfStage(steps, stage.id) === terminal)
 }
 
 // The stage an agent terminal works on, and the state of that stage. Both are null for a terminal
@@ -507,15 +528,16 @@ const NO_LANE: TerminalLane = { stage: null, state: null }
 // In a group each terminal has the state of its own lane, not the state of the whole task.
 export function terminalLane(
   position: StagePosition,
-  step: Step | undefined,
+  steps: readonly Step[],
   terminal: string,
 ): TerminalLane {
+  const step = findStep(steps, position.stage)
   if (step === undefined || !isGroup(step)) {
     const stage = step?.id ?? position.stage
-    const shell = step === undefined ? '1' : terminalOfStage(step, step.id)
+    const shell = step === undefined ? '1' : terminalOfStage(steps, step.id)
     return terminal === shell ? { stage, state: position.state } : NO_LANE
   }
-  const stage = stageOfTerminal(step, terminal)
+  const stage = stageOfTerminal(steps, step, terminal)
   if (stage === undefined) {
     return NO_LANE
   }

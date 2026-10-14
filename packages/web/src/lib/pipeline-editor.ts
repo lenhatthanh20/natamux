@@ -600,7 +600,7 @@ function stepOfStage(steps: readonly Step[], id: string): Step | undefined {
 }
 
 // A stage beside the stage in Shell 1 starts its own agent, so it may pick another one. So may a
-// stage of your own in Shell 1.
+// stage of your own, which then runs in a shell of its own.
 export function takesOwnAgent(steps: readonly Step[], id: string): boolean {
   const step = stepOfStage(steps, id)
   const stage = step === undefined ? undefined : stagesOf(step).find((item) => item.id === id)
@@ -608,8 +608,7 @@ export function takesOwnAgent(steps: readonly Step[], id: string): boolean {
 }
 
 export function runsInShellOne(steps: readonly Step[], id: string): boolean {
-  const step = stepOfStage(steps, id)
-  return step !== undefined && terminalOfStage(step, id) === '1'
+  return stepOfStage(steps, id) !== undefined && terminalOfStage(steps, id) === '1'
 }
 
 // The default prompt as the agent gets it: the daemon puts the commit rule in `{commit}` of a
