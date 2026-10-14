@@ -385,6 +385,15 @@ ipcMain.on('natamux:daemon-token', (event) => {
     dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
 })
 
+// The Browse button of the projects panel. Only the dashboard may open a dialog.
+ipcMain.handle('natamux:pick-folder', (event) => {
+  const from = event.senderFrame?.url ?? ''
+  if (dashboardUrl === '' || !isDashboardUrl(from, new URL(dashboardUrl).origin)) {
+    return undefined
+  }
+  return pickRepository()
+})
+
 // The terminals of the dashboard use Ghostty's font when the user has one and picked none.
 // Read again at each load, so a change in Ghostty shows after a reload.
 ipcMain.on('natamux:ghostty-font', (event) => {

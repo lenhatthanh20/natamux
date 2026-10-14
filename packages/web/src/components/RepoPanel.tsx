@@ -6,6 +6,13 @@ import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { inputLg } from './ui/styles'
 
+declare global {
+  interface Window {
+    // Set by the desktop app's preload. A plain browser tab has none.
+    natamux?: { pickFolder: () => Promise<string | undefined> }
+  }
+}
+
 type RepoPanelProps = {
   repos: readonly Repo[]
   onAdd: (path: string, name?: string) => Promise<unknown>
@@ -21,6 +28,8 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [touched, setTouched] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const pickFolder = window.natamux?.pickFolder
   const problemId = useId()
   // The full-path rule shows after the field was left; the daemon's answer shows at once.
   const problem = (touched ? repoPathProblem(path) : null) ?? error
@@ -44,6 +53,25 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setAdding(false)
+    }
+  }
+
+  const browse = async () => {
+    if (pickFolder === undefined || picking) {
+      return
+    }
+    setPicking(true)
+    try {
+      const picked = await pickFolder()
+      if (picked !== undefined) {
+        setPath(picked)
+        setError(null)
+        setTouched(true)
+      }
+    } catch {
+      // The picker is a help: the folder can still be typed.
+    } finally {
+      setPicking(false)
     }
   }
 
@@ -71,21 +99,29 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
         ))}
       </ul>
       <form onSubmit={submit} className="flex flex-col gap-2 border-t border-line pt-4">
-        <label className="flex flex-col gap-1">
+        {/* A div, not a label: the Browse button may not sit inside a label. */}
+        <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Folder</span>
-          <input
-            value={path}
-            onChange={(event) => {
-              setPath(event.target.value)
-              setError(null)
-            }}
-            onBlur={() => setTouched(true)}
-            placeholder="/path/to/the/git/repository"
-            aria-label="Project folder"
-            aria-invalid={problem !== null}
-            aria-describedby={problem === null ? undefined : problemId}
-            className={`${inputLg} font-mono ${problem === null ? '' : 'border-danger-text!'}`}
-          />
+          <div className="flex gap-2">
+            <input
+              value={path}
+              onChange={(event) => {
+                setPath(event.target.value)
+                setError(null)
+              }}
+              onBlur={() => setTouched(true)}
+              placeholder="/path/to/the/git/repository"
+              aria-label="Project folder"
+              aria-invalid={problem !== null}
+              aria-describedby={problem === null ? undefined : problemId}
+              className={`${inputLg} min-w-0 flex-1 font-mono ${problem === null ? '' : 'border-danger-text!'}`}
+            />
+            {pickFolder !== undefined && (
+              <Button size="md" busy={picking} disabled={adding} onClick={browse}>
+                Browse…
+              </Button>
+            )}
+          </div>
           {problem !== null && (
             <span
               id={problemId}
@@ -96,7 +132,7 @@ export function RepoPanel({ repos, onAdd, onClose, onSettings }: RepoPanelProps)
               {problem}
             </span>
           )}
-        </label>
+        </div>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted">Name</span>
           <input

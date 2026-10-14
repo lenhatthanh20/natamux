@@ -11,7 +11,7 @@ This walk-through uses the desktop app and one agent. It takes about ten minutes
 
 Open Natamux. The app starts its daemon and opens the dashboard, already signed in. On the first launch there is no project yet, and the sidebar says **No projects yet**.
 
-Add the repository whose tasks Natamux runs. Use **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux) and pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository. You can also click **Add project** in the sidebar and type the folder.
+Add the repository whose tasks Natamux runs. Use **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux) and pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository. You can also click **Add project** in the sidebar and type the folder, or pick it with **Browse…**.
 
 Add more projects the same way, at any time.
 
