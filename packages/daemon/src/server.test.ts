@@ -1839,9 +1839,7 @@ describe('terminal', () => {
   it('shows the shell of an earlier stage as done, until its agent gets a new prompt', async () => {
     await taskWithWorkspace()
     await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
-    await app.injectWS(
-      `/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24&terminal=2`,
-    )
+    await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24&terminal=2`)
     ;(ptys[1] as FakePty).program = 'node'
     ;(ptys[1] as FakePty).commands = async () => [
       '/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js',
