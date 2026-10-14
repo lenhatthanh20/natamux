@@ -1,5 +1,5 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
-import { openTask, signIn } from './helpers'
+import { openTask, signIn, taskNamed } from './helpers'
 import { recordMeasure, writeSummary } from './measures'
 import {
   addShells,
@@ -206,6 +206,174 @@ test('shows task A again at once after task B, without a new socket', async ({ p
     samples: times,
     note: `limit ${SHOW_LIMIT_MS} ms`,
   })
+})
+
+// A size message that changes a shell's size makes the program in it repaint.
+type SizeChanges = { count: number; seen: string[] }
+
+// Counts resize and visible messages that change the size the socket's shell had last.
+function watchSizeChanges(page: Page): SizeChanges {
+  const changes: SizeChanges = { count: 0, seen: [] }
+  page.on('websocket', (socket) => {
+    const url = new URL(socket.url())
+    if (!url.pathname.endsWith('/terminal')) {
+      return
+    }
+    let size = `${url.searchParams.get('cols')}x${url.searchParams.get('rows')}`
+    socket.on('framesent', ({ payload }) => {
+      if (typeof payload !== 'string') {
+        return
+      }
+      const message = JSON.parse(payload) as { type: string; cols?: number; rows?: number }
+      if ((message.type !== 'resize' && message.type !== 'visible') || message.cols === undefined) {
+        return
+      }
+      const next = `${message.cols}x${message.rows}`
+      if (next !== size) {
+        changes.count += 1
+        changes.seen.push(`${url.searchParams.get('terminal')}: ${size} -> ${next}`)
+        size = next
+      }
+    })
+  })
+  return changes
+}
+
+// Marks the panes on screen as old, then notes the boxes of the new panes on every frame for a
+// second. The panes of both tasks have the same names and boxes, so the mark tells them apart.
+async function samplePaneBoxes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const panes = 'section[aria-label^="Shell "]:not([hidden])'
+    for (const old of document.querySelectorAll(panes)) {
+      old.setAttribute('data-e2e-old', '')
+    }
+    const frames: string[] = []
+    ;(window as unknown as { __e2ePaneFrames: string[] }).__e2ePaneFrames = frames
+    const start = performance.now()
+    const tick = () => {
+      const boxes = [...document.querySelectorAll(`${panes}:not([data-e2e-old])`)].map((pane) => {
+        const { x, y, width, height } = pane.getBoundingClientRect()
+        const box = [x, y, width, height].map(Math.round).join(' ')
+        return `${pane.getAttribute('aria-label')} ${box}`
+      })
+      if (boxes.length > 0) {
+        frames.push(boxes.join(' | '))
+      }
+      if (performance.now() - start < 1000) {
+        requestAnimationFrame(tick)
+      }
+    }
+    requestAnimationFrame(tick)
+  })
+}
+
+async function paneFrames(page: Page): Promise<string[]> {
+  await page.waitForTimeout(1100)
+  return page.evaluate(() => (window as unknown as { __e2ePaneFrames: string[] }).__e2ePaneFrames)
+}
+
+// Opens or closes the details panel of the task on screen. Each task keeps its own.
+async function showDetails(page: Page, open: boolean): Promise<void> {
+  const toggle = page.getByRole('button', { name: open ? 'Show details' : 'Hide details' })
+  if (await toggle.isVisible()) {
+    await toggle.click()
+  }
+  const shown = open ? 'Hide details' : 'Show details'
+  await expect(page.getByRole('button', { name: shown })).toBeVisible()
+}
+
+// T-0066. A wide window with the details closed has 4 columns, where the grid guessed 2 × 2 before
+// it was measured. With the details open, 2 columns, the same as the guess. Shells 2-4 come from
+// "New shell", which the cached shell list missed, and every shell prints, as agents do.
+const SWITCH_LAYOUTS = [
+  { name: 'wide', width: 1920, height: 1080, details: false, columns: 4 },
+  { name: 'details', width: 1440, height: 900, details: true, columns: 2 },
+]
+
+for (const layout of SWITCH_LAYOUTS) {
+  test(`switches two tasks of 4 shells with no resize or jump (${layout.name})`, async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000)
+    await page.setViewportSize({ width: layout.width, height: layout.height })
+    const taskA = await newTask(request, `four A ${layout.name}`)
+    const taskB = await newTask(request, `four B ${layout.name}`)
+    const changes = watchSizeChanges(page)
+    await signIn(page)
+    for (const task of [taskA, taskB]) {
+      await openTerminal(page, task.title)
+      await showDetails(page, layout.details)
+      await addShells(page, 3)
+      for (let index = 1; index <= 4; index++) {
+        await runIn(
+          page,
+          pane(page, `Shell ${index}`),
+          'while :; do echo "tick $RANDOM"; sleep 0.2; done',
+        )
+      }
+    }
+
+    const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
+    const jumps: number[] = []
+    for (let run = 0; run < RUNS; run++) {
+      for (const task of [taskA, taskB]) {
+        const before = changes.count
+        await samplePaneBoxes(page)
+        await sidebar.getByRole('button', { name: taskNamed(task.title) }).click()
+        const frames = await paneFrames(page)
+        const last = frames.at(-1) ?? ''
+        const boxes = last.split(' | ')
+        expect(boxes).toHaveLength(4)
+        // "Shell 1 x y w h": as many columns as different x.
+        expect(new Set(boxes.map((box) => box.split(' ')[2])).size).toBe(layout.columns)
+        // Every frame with a new pane already has the final layout.
+        jumps.push(frames.filter((frame) => frame !== last).length)
+        expect(frames.filter((frame) => frame !== last)).toEqual([])
+        expect(changes.seen.slice(before)).toEqual([])
+      }
+    }
+    recordMeasure({
+      name: `cache-switch-4-shells-layout-jumps-${layout.name}`,
+      value: median(jumps),
+      unit: 'frames',
+      ac: 'T-0066 1-3',
+      pr: 2,
+      samples: jumps,
+      note: 'frames with another layout than the final one, after a switch; limit 0',
+    })
+  })
+}
+
+// T-0066 acceptance 6: opacity only, on the grid, and shorter with reduced motion.
+test('fades in the shells of a task, shorter with reduced motion', async ({ page, request }) => {
+  const task = await newTask(request, 'fade')
+  await signIn(page)
+  await openTerminal(page, task.title)
+  const grid = pane(page, 'Shell 1').locator('xpath=..')
+  const look = () =>
+    grid.evaluate((element) => {
+      const style = getComputedStyle(element)
+      const terminal = element.querySelector('.xterm')
+      return {
+        fade: element.classList.contains('hm-fade-in'),
+        name: style.animationName,
+        duration: style.animationDuration,
+        timing: style.animationTimingFunction,
+        transform: style.transform,
+        terminal: terminal === null ? 'none' : getComputedStyle(terminal).animationName,
+      }
+    })
+  expect(await look()).toEqual({
+    fade: true,
+    name: 'hm-fade',
+    duration: '0.2s',
+    timing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+    transform: 'none',
+    terminal: 'none',
+  })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await look()).toMatchObject({ name: 'hm-fade', duration: '0.08s', timing: 'linear' })
 })
 
 test('a hidden terminal keeps receiving a stream of output', async ({ page, request }) => {

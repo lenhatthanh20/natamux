@@ -1,8 +1,9 @@
 export type Renderer = { dispose(): void }
 
-// A browser allows only a few WebGL contexts at once, so one page session shares this many. It
-// matches MAX_PANES (lib/panes.ts): a full grid of panes all draw with the GPU.
-export const GPU_CONTEXTS = 6
+// A browser allows only a few WebGL contexts at once (Chrome 16), so one page session shares this
+// many. A full grid (MAX_PANES) draws with the GPU, and two tasks of 4 shells switch back and forth
+// without a new context.
+export const GPU_CONTEXTS = 8
 // After this many lost contexts the GPU is not trusted for the rest of the page session.
 export const MAX_CONTEXT_LOSSES = 2
 // A terminal hidden this long gives its renderer back. A quick switch back keeps it.

@@ -1,5 +1,5 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
-import { openTask, signIn } from './helpers'
+import { openTask, signIn, taskNamed } from './helpers'
 import { goToAllTasks, makeShellTask, pane, removeTasks, runIn } from './terminal-helpers'
 
 // The other specs run without WebGL, so their text is in the page. This one draws with WebGL
@@ -7,8 +7,10 @@ import { goToAllTasks, makeShellTask, pane, removeTasks, runIn } from './termina
 // its renderer back (to a new terminal, or after the give-back delay), the renderer changes while
 // the terminal has no size, and lost contexts turn WebGL off. The screen is then a canvas, so the test counts drawn pixels instead of reading text.
 
-// GPU_CONTEXTS of packages/web/src/lib/gpu-renderer.ts. e2e cannot import web code.
-const GPU_CONTEXTS = 6
+// GPU_CONTEXTS of packages/web/src/lib/gpu-renderer.ts and MAX_PANES of lib/panes.ts. e2e cannot
+// import web code.
+const GPU_CONTEXTS = 8
+const MAX_PANES = 6
 // GIVE_BACK_DELAY_MS of the same file (10 s), and a little more.
 const GIVE_BACK_WAIT_MS = 10_500
 // A pane with only a cursor has about 150 drawn pixels; a prompt and lines of text have thousands.
@@ -154,22 +156,26 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   )
   expect(hasWebgl, 'the browser must draw with WebGL for this test').toBe(true)
 
-  // Six shells take the whole budget.
-  await openShells(page, taskA.title, GPU_CONTEXTS)
-  for (let index = 1; index <= GPU_CONTEXTS; index++) {
+  // A full grid of shells.
+  await openShells(page, taskA.title, MAX_PANES)
+  for (let index = 1; index <= MAX_PANES; index++) {
     expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
   }
 
-  // A seventh terminal takes the renderer of a hidden one, which is in the display: none holder.
+  // The rest of the budget, and one more terminal, which takes the renderer of a hidden one in
+  // the display: none holder.
+  const shellsOfB = GPU_CONTEXTS - MAX_PANES + 1
   await goToAllTasks(page)
-  await openShells(page, taskB.title, 1)
-  expect(await rendererOf(pane(page, 'Shell 1'))).toBe('webgl')
+  await openShells(page, taskB.title, shellsOfB)
+  for (let index = 1; index <= shellsOfB; index++) {
+    expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+  }
 
   // Back and forth: each switch makes a hidden terminal give its renderer back.
   for (let round = 0; round < 3; round++) {
     await goToAllTasks(page)
     await openTask(page, taskA.title)
-    await expect(shellPanes(page)).toHaveCount(GPU_CONTEXTS)
+    await expect(shellPanes(page)).toHaveCount(MAX_PANES)
     await expectAllDrawn(page)
     await goToAllTasks(page)
     await openTask(page, taskB.title)
@@ -190,8 +196,8 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   await page.waitForTimeout(GIVE_BACK_WAIT_MS)
   expect(await heldWebglCanvases(page)).toBe(0)
   await openTask(page, taskA.title)
-  await expect(shellPanes(page)).toHaveCount(GPU_CONTEXTS)
-  for (let index = 1; index <= GPU_CONTEXTS; index++) {
+  await expect(shellPanes(page)).toHaveCount(MAX_PANES)
+  for (let index = 1; index <= MAX_PANES; index++) {
     expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
   }
   await expectAllDrawn(page)
@@ -214,4 +220,79 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   expect(await rendererOf(pane(page, 'Shell 1'))).toBe('dom')
 
   expect(errors).toEqual([])
+})
+
+// Keeps every WebGL context the page makes, so a test can count new ones and see that a context
+// given back is lost. Call before signIn.
+async function watchWebglContexts(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const made: WebGL2RenderingContext[] = []
+    ;(window as unknown as { __e2eWebgl: WebGL2RenderingContext[] }).__e2eWebgl = made
+    const original = HTMLCanvasElement.prototype.getContext as (...args: unknown[]) => unknown
+    const patched = function (this: HTMLCanvasElement, ...args: unknown[]) {
+      const context = original.apply(this, args)
+      if (context instanceof WebGL2RenderingContext && !made.includes(context)) {
+        made.push(context)
+      }
+      return context
+    }
+    HTMLCanvasElement.prototype.getContext = patched as HTMLCanvasElement['getContext']
+  })
+}
+
+async function webglMade(page: Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __e2eWebgl: unknown[] }).__e2eWebgl.length)
+}
+
+// isContextLost() of each context whose canvas left the page: a renderer given back or disposed.
+async function droppedContextsLost(page: Page): Promise<boolean[]> {
+  return page.evaluate(() => {
+    const made = (window as unknown as { __e2eWebgl: WebGL2RenderingContext[] }).__e2eWebgl
+    const dropped = made.filter((context) => !(context.canvas as HTMLCanvasElement).isConnected)
+    return dropped.map((context) => context.isContextLost())
+  })
+}
+
+// T-0066 acceptance 4 and 5. Two tasks of 4 shells fit the budget, so switching between them
+// makes no new context; a renderer given back loses its context at once, not at garbage
+// collection. The addon's link layer is a 2D canvas, so it never shows up here.
+test('keeps the renderers of two tasks of 4 shells, and frees a context given back', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(150_000)
+  const taskA = await newTask(request, 'four A')
+  const taskB = await newTask(request, 'four B')
+  await watchWebglContexts(page)
+  await signIn(page)
+  await openShells(page, taskA.title, 4)
+  await goToAllTasks(page)
+  await openShells(page, taskB.title, 4)
+
+  const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
+  const show = async (title: string) => {
+    await sidebar.getByRole('button', { name: taskNamed(title) }).click()
+    await expect(shellPanes(page)).toHaveCount(4)
+    for (let index = 1; index <= 4; index++) {
+      expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+    }
+  }
+  // The first visit of each: task A may have been hidden past the give-back delay meanwhile.
+  await show(taskA.title)
+  await show(taskB.title)
+  const made = await webglMade(page)
+  const start = Date.now()
+  for (const task of [taskA, taskB, taskA, taskB]) {
+    await show(task.title)
+  }
+  // Within the give-back delay, so no hidden renderer was given back for its age.
+  const took = Date.now() - start
+  expect(took).toBeLessThan(GIVE_BACK_WAIT_MS - 1000)
+  expect(await webglMade(page)).toBe(made)
+
+  await goToAllTasks(page)
+  await page.waitForTimeout(GIVE_BACK_WAIT_MS)
+  const lost = await droppedContextsLost(page)
+  expect(lost.length).toBeGreaterThanOrEqual(8)
+  expect(lost.every(Boolean)).toBe(true)
 })

@@ -237,6 +237,8 @@ export class FakeWebglAddon {
         : null,
   }
   private readonly canvas = document.createElement('canvas')
+  // The real addon also adds a 2D canvas for links, before its WebGL canvas.
+  private readonly linkLayer = document.createElement('canvas')
 
   constructor() {
     fakes.webgl.push(this)
@@ -244,11 +246,13 @@ export class FakeWebglAddon {
     Object.defineProperty(this.canvas, 'getContext', {
       value: (type: string) => (type === 'webgl2' ? this.gl : null),
     })
+    this.linkLayer.className = 'xterm-link-layer'
+    Object.defineProperty(this.linkLayer, 'getContext', { value: () => null })
   }
 
-  // As xterm: the canvas goes into the terminal's element, and leaves it on dispose.
+  // As xterm: the canvases go into the terminal's element, and leave it on dispose.
   activate(terminal: FakeTerminal): void {
-    terminal.element?.append(this.canvas)
+    terminal.element?.append(this.linkLayer, this.canvas)
   }
 
   onContextLoss(listener: () => void) {
@@ -258,6 +262,7 @@ export class FakeWebglAddon {
 
   dispose(): void {
     this.disposed = true
+    this.linkLayer.remove()
     this.canvas.remove()
   }
 }
