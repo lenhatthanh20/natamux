@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { type Task, waitingOn } from '@natamux/core'
+import { plainText, type Task, waitingOn } from '@natamux/core'
 import { UnknownAgentError } from './agent-hook-service.js'
 import {
   DEFAULT_PROGRAMS,
@@ -149,7 +149,9 @@ export class AgentRunner {
       program: this.programs[agent],
       extraArgs: [this.extraArgs[agent], own.args].filter(Boolean).join(' '),
       prompt:
-        session === undefined ? (prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim() : '',
+        session === undefined
+          ? plainText(prompt ?? firstPrompt(task)).replace(/\s+/g, ' ').trim()
+          : '',
       session,
       platform: this.platform,
       claudeSettingsPath: this.claudeSettingsPath,
