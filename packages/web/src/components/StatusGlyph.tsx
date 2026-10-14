@@ -1,49 +1,9 @@
 import type { TaskState } from '@natamux/core'
-import {
-  Circle,
-  CircleAlert,
-  CircleCheck,
-  CircleDashed,
-  CircleDot,
-  CircleEllipsis,
-  CirclePause,
-  CircleQuestionMark,
-  CircleSlash,
-  CircleX,
-  LoaderCircle,
-  type LucideIcon,
-} from 'lucide-react'
-import { useSyncExternalStore } from 'react'
-import { STATE_LABEL } from '../lib/tasks'
+import { ShapeGlyph } from './ShapeGlyph'
 
-const GLYPH: Record<TaskState, LucideIcon> = {
-  draft: CircleDashed,
-  ready: Circle,
-  running: LoaderCircle,
-  'needs-input': CircleQuestionMark,
-  review: CircleDot,
-  blocked: CirclePause,
-  failed: CircleX,
-  done: CircleCheck,
-  cancelled: CircleSlash,
-}
-
-const REDUCED = '(prefers-reduced-motion: reduce)'
-
-function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const query = globalThis.matchMedia?.(REDUCED)
-      query?.addEventListener('change', onChange)
-      return () => query?.removeEventListener('change', onChange)
-    },
-    () => globalThis.matchMedia?.(REDUCED).matches ?? false,
-    () => false,
-  )
-}
-
-// The state of a task as one small icon in its own color. A running agent spins; a quiet one
-// shows the "needs you" mark instead.
+// The state of a task in the table, the palette, pane tabs and the terminal header: the sidebar
+// shape at 10 px in a 16 px box, so the two read as one set. A running agent blinks; a quiet one
+// shows the "needs you" half disk instead. Reduced motion is CSS only (styles.css).
 // `tip` adds to the tooltip, such as the state of each stage of a group.
 export function StatusGlyph({
   state,
@@ -54,24 +14,5 @@ export function StatusGlyph({
   quiet?: boolean
   tip?: string
 }) {
-  const reduced = usePrefersReducedMotion()
-  const spinning = state === 'running' && !quiet && !reduced
-  // A still dotted circle stands in for the spinner when motion is reduced.
-  const Icon = quiet ? CircleAlert : state === 'running' && reduced ? CircleEllipsis : GLYPH[state]
-  const label = quiet ? 'Running, but quiet' : STATE_LABEL[state]
-  return (
-    <span
-      data-state={quiet ? 'needs-input' : state}
-      data-tip={tip === undefined ? label : `${label} · ${tip}`}
-      className="inline-flex size-4 shrink-0 items-center justify-center text-[var(--chip-fg)] transition-colors duration-(--dur-modal)"
-    >
-      <Icon
-        size={14}
-        strokeWidth={2.25}
-        aria-hidden="true"
-        className={spinning ? 'animate-spin' : ''}
-      />
-      <span className="sr-only">{label}</span>
-    </span>
-  )
+  return <ShapeGlyph state={state} quiet={quiet} tip={tip} className="size-4" />
 }

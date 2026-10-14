@@ -48,6 +48,8 @@ A task is always in one of nine states. When the task has stages, the state desc
 
 `done` and `cancelled` are final. A finished task cannot move again. When a task ends, Natamux closes its terminals.
 
+Each state has its own icon in the dashboard. See [Status icons](/docs/guides/status-icons/).
+
 ### How states change
 
 ```text

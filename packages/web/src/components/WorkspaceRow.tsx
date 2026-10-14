@@ -274,10 +274,11 @@ export const WorkspaceRow = memo(function WorkspaceRow({
     <>
       <span className="flex h-4 w-full items-center gap-2">
         <ShapeGlyph
+          key={flash}
           state={glyph}
           quiet={quiet}
-          size={tier === 'attention' ? 9 : 8}
           tip={laneSummary(task)}
+          className={flash > 0 ? 'sb-cue size-3.5' : undefined}
         />
         {titleLine}
         {unseen && (
@@ -494,7 +495,8 @@ type AgentRowProps = {
   onOpenShell: (taskId: string, shell: string | null) => void
 }
 
-// A shell with no agent shows a terminal; an agent with no state yet, a muted ring.
+// A shell with no agent shows a terminal; an agent with no state yet, a muted dot. Shell glyphs are
+// 8 px, a step below the 10 px of their task.
 function RowGlyph({ row }: { row: ShellRow }) {
   if (row.plain) {
     return (
@@ -503,20 +505,7 @@ function RowGlyph({ row }: { row: ShellRow }) {
       </span>
     )
   }
-  if (row.state === null) {
-    return (
-      <span
-        data-tip="State not known yet"
-        className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted"
-      >
-        {/* The ring of the ready state at the size of the other shell glyphs, in muted. */}
-        <svg width={9} height={9} viewBox="-1 -1 9 9" aria-hidden="true">
-          <circle cx={3.5} cy={3.5} r={2.75} fill="none" stroke="currentColor" strokeWidth={1.5} />
-        </svg>
-      </span>
-    )
-  }
-  return <ShapeGlyph state={row.state} size={7} />
+  return <ShapeGlyph state={row.state} size={8} />
 }
 
 // One shell under a task, or a parallel stage with no shell yet: its state, its agent, what it

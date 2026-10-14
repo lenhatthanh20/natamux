@@ -4,7 +4,7 @@ import { type FormEvent, useId, useState } from 'react'
 import { repoPathProblem } from '../lib/issues'
 import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
-import { inputLg } from './ui/styles'
+import { ICON, inputLg } from './ui/styles'
 
 declare global {
   interface Window {
@@ -139,7 +139,7 @@ export function RepoPanel({
       <ul className="-mx-2 mb-4 flex flex-col">
         {repos.map((repo) => (
           <li key={repo.id} className="flex items-center gap-3 rounded-md px-2 py-1.5">
-            <FolderGit2 size={15} aria-hidden="true" className="shrink-0 text-muted" />
+            <FolderGit2 size={ICON.md} aria-hidden="true" className="shrink-0 text-muted" />
             <span className="font-medium">{repo.name}</span>
             <span className="flex min-w-0 flex-1 flex-col text-right font-mono text-xs text-muted">
               <span className="truncate">{repo.path}</span>

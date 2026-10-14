@@ -740,7 +740,7 @@ function StageCard({
                 data-tip={stage.output}
                 className={`${CHIP} focus-inset text-ink-2 hover:text-ink disabled:opacity-60`}
               >
-                <FileText size={13} aria-hidden="true" className="shrink-0" />
+                <FileText size={ICON.sm} aria-hidden="true" className="shrink-0" />
                 <span className="truncate font-mono">{stage.output}</span>
                 {file === undefined ? (
                   <span className="shrink-0 text-muted">
@@ -757,19 +757,19 @@ function StageCard({
             )}
             {progress.passes.length > 0 && (
               <span className={`${CHIP} text-ink-2`}>
-                <CircleCheck size={13} aria-hidden="true" className="shrink-0 text-add" />
+                <CircleCheck size={ICON.sm} aria-hidden="true" className="shrink-0 text-add" />
                 {progress.passes.length} {progress.passes.length === 1 ? 'check' : 'checks'} passed
               </span>
             )}
             {progress.sentBackFor !== null && progress.rounds > 1 && (
               <span className={`${CHIP} text-ink-2`} data-tip={ciRuns}>
-                <Undo2 size={13} aria-hidden="true" className="shrink-0" />
+                <Undo2 size={ICON.sm} aria-hidden="true" className="shrink-0" />
                 {`${progress.sentBackByCi ? 'Sent back by CI' : 'Sent back'} ${sentBack}×`}
               </span>
             )}
             {current && progress.reasons.length > 0 && state === 'running' && (
               <span className={`${CHIP} text-ink-2`} data-tip={progress.reasons.join('\n')}>
-                <CircleAlert size={13} aria-hidden="true" className="shrink-0 text-signal" />
+                <CircleAlert size={ICON.sm} aria-hidden="true" className="shrink-0 text-signal" />
                 Checks failed, the agent fixes them
               </span>
             )}
@@ -781,7 +781,7 @@ function StageCard({
                 data-tip={pr}
                 className={`${CHIP} text-link`}
               >
-                <ExternalLink size={13} aria-hidden="true" className="shrink-0" />
+                <ExternalLink size={ICON.sm} aria-hidden="true" className="shrink-0" />
                 <span className="truncate">{pr.replace(/^https:\/\/github\.com\//, '')}</span>
                 {merged && <span className="shrink-0 text-muted">merged</span>}
               </a>

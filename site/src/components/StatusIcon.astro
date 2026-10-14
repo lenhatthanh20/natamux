@@ -1,0 +1,343 @@
+---
+// The state glyphs and stage markers of the dashboard, drawn the same way as the app, so the docs
+// stay sharp and follow the site theme.
+// shortcut: the geometry is copied from packages/web/src/components/ShapeGlyph.tsx and
+// StageMarker.tsx, so a shape change must touch both; move to one shared SVG source if they drift.
+type Kind =
+  | 'draft'
+  | 'ready'
+  | 'running'
+  | 'quiet'
+  | 'needs-input'
+  | 'review'
+  | 'blocked'
+  | 'failed'
+  | 'done'
+  | 'cancelled'
+  | 'unknown'
+type Marker = 'done' | 'current' | 'upcoming' | 'skipped'
+
+interface Props {
+  kind?: Kind
+  // Art size in px: 10 for the table and sidebar, 8 for shell rows.
+  size?: number
+  // Draw a stage marker instead of a glyph. `kind` is then the state of the current stage.
+  marker?: Marker
+  // Stage marker size in px.
+  node?: number
+  // Draw the busy button spinner instead (packages/web/src/components/ui/Spinner.tsx).
+  spinner?: boolean
+  label?: string
+}
+
+const { kind = 'ready', size = 10, marker, node = 20, spinner = false, label } = Astro.props
+
+const LABEL: Record<Kind, string> = {
+  draft: 'Draft',
+  ready: 'Ready',
+  running: 'Running',
+  quiet: 'Running, but quiet',
+  'needs-input': 'Needs your input',
+  review: 'In review',
+  blocked: 'Blocked',
+  failed: 'Failed',
+  done: 'Done',
+  cancelled: 'Cancelled',
+  unknown: 'State not known yet',
+}
+
+const RING: Record<number, number> = { 6: 1.25, 8: 1.5, 10: 2, 12: 2, 14: 2.5 }
+const CHECK: Record<number, number> = { 6: 1.5, 8: 2, 10: 2.5, 12: 2.5, 14: 3 }
+const SQUARE: Record<number, number> = { 6: 6, 8: 8, 10: 9, 12: 10, 14: 12 }
+const BARS: Record<number, [number, number, number]> = {
+  6: [2, 2, 6],
+  8: [3, 2, 8],
+  10: [3, 2, 10],
+  12: [4, 2, 12],
+  14: [4, 2, 12],
+}
+const DASH: Record<number, number> = { 6: 2, 8: 2, 10: 3, 12: 3, 14: 4 }
+const round = (value: number) => Math.round(value * 100) / 100
+
+function shape(of: Kind, art: number): string {
+  const half = art / 2
+  const stroke = RING[art] ?? art * 0.18
+  const r = round(half - stroke / 2)
+  const ring = `<circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="currentColor" stroke-width="${stroke}"/>`
+  switch (of) {
+    case 'running':
+      return `<circle cx="${half}" cy="${half}" r="${half}" fill="currentColor"/>`
+    case 'ready':
+      return ring
+    case 'draft':
+      return `<circle cx="${half}" cy="${half}" r="${r}" fill="none" stroke="currentColor" stroke-width="${stroke}" pathLength="16" stroke-dasharray="3 1" stroke-dashoffset="1.5"/>`
+    case 'quiet':
+      return `${ring}<path d="M0 ${half}H${art}A${half} ${half} 0 0 1 0 ${half}Z" fill="currentColor"/>`
+    case 'needs-input': {
+      const tip = round(art * 0.07)
+      return `<path d="M${half} ${-tip}L${art + tip} ${half}L${half} ${art + tip}L${-tip} ${half}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.1)}" stroke-linejoin="round"/>`
+    }
+    case 'review': {
+      const side = SQUARE[art] ?? Math.round(art * 0.86)
+      const at = (art - side) / 2
+      return `<rect x="${at}" y="${at}" width="${side}" height="${side}" rx="${round(side / 4)}" fill="currentColor"/>`
+    }
+    case 'blocked': {
+      const bars: [number, number, number] = BARS[art] ?? [art * 0.3, art * 0.2, art]
+      const [width, gap, height] = bars
+      const x = (art - (width * 2 + gap)) / 2
+      const y = (art - height) / 2
+      const rx = round(art * 0.09)
+      const bar = (left: number) =>
+        `<rect x="${left}" y="${y}" width="${width}" height="${height}" rx="${rx}" fill="currentColor"/>`
+      return bar(x) + bar(x + width + gap)
+    }
+    case 'failed': {
+      const tip = round(art * 0.08)
+      return `<path d="M${half} ${-tip}L${round(art + tip)} ${round(art - tip / 2)}H${-tip}Z" fill="currentColor" stroke="currentColor" stroke-width="${round(art * 0.12)}" stroke-linejoin="round"/>`
+    }
+    case 'done': {
+      const at = (x: number, y: number) => `${round(art * x)} ${round(art * y)}`
+      return `<path d="M${at(0.1, 0.54)}L${at(0.4, 0.82)}L${at(0.92, 0.22)}" fill="none" stroke="currentColor" stroke-width="${CHECK[art] ?? art * 0.2}" stroke-linecap="round" stroke-linejoin="round"/>`
+    }
+    case 'cancelled': {
+      const height = DASH[art] ?? Math.round(art * 0.25)
+      return `<rect x="0" y="${round(half - height / 2)}" width="${art}" height="${height}" rx="${height / 2}" fill="currentColor"/>`
+    }
+    case 'unknown':
+      return `<circle cx="${half}" cy="${half}" r="${round(art * 0.22)}" fill="currentColor"/>`
+  }
+}
+
+const svg = (of: Kind, art: number, pad: number) => {
+  const box = art + pad * 2
+  const moves = of === 'running' ? ' class="si-beat"' : ''
+  return `<svg${moves} width="${box}" height="${box}" viewBox="${-pad} ${-pad} ${box} ${box}" aria-hidden="true">${shape(of, art)}</svg>`
+}
+
+const evenPx = (px: number, share: number) => 2 * Math.round((px * share) / 2)
+const color = kind === 'quiet' ? 'needs-input' : kind
+const name = label ?? LABEL[kind]
+let inner = ''
+if (marker === 'done') inner = svg('done', evenPx(node, 0.5), 0)
+if (marker === 'current') inner = svg(kind, evenPx(node, 0.4), 1)
+if (marker === 'skipped') inner = svg('cancelled', evenPx(node, 0.4), 1)
+const markerState = marker === 'done' ? 'done' : marker === 'current' ? color : 'draft'
+
+const point = (angle: number) =>
+  `${(12 + 8 * Math.cos(angle)).toFixed(2)} ${(12 + 8 * Math.sin(angle)).toFixed(2)}`
+const dashes = [1, 0.3, 0.3, 0.3, 0.36, 0.48, 0.64, 0.82]
+  .map((opacity, index) => {
+    const angle = ((index * 45 - 90) * Math.PI) / 180
+    const half = (8 * Math.PI) / 180
+    return `<path d="M${point(angle - half)}A8 8 0 0 1 ${point(angle + half)}" opacity="${opacity}"/>`
+  })
+  .join('')
+const spinnerSvg = `<svg class="si-spin" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><g class="si-dashes" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">${dashes}</g><g class="si-dots" fill="currentColor"><circle cx="5" cy="12" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="19" cy="12" r="2.1"/></g></svg>`
+---
+
+{
+  spinner ? (
+    <span class="si si-busy" role="img" aria-label={label ?? 'Busy'}>
+      <Fragment set:html={spinnerSvg} />
+    </span>
+  ) : marker === undefined ? (
+    <span class="si" data-state={color} role="img" aria-label={name}>
+      <Fragment set:html={svg(kind, size, size < 10 ? 1 : 2)} />
+    </span>
+  ) : (
+    <span
+      class="si-node"
+      data-status={marker}
+      data-state={markerState}
+      role="img"
+      aria-label={name}
+      style={`--node: ${node}px`}
+    >
+      <Fragment set:html={inner} />
+    </span>
+  )
+}
+
+<style is:global>
+  /* The state colors of the app (packages/web/src/styles.css), dark first as the site. */
+  .si,
+  .si-node {
+    --si-fg: #8d919a;
+    --si-bg: #1d1f23;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    color: var(--si-fg);
+  }
+  .si svg,
+  .si-node svg {
+    display: block;
+    overflow: visible;
+  }
+  [data-state='draft'].si,
+  [data-state='draft'].si-node {
+    --si-fg: #9a9ea6;
+    --si-bg: #1d1f23;
+  }
+  [data-state='ready'].si,
+  [data-state='ready'].si-node {
+    --si-fg: #6cc4d6;
+    --si-bg: #13262b;
+  }
+  [data-state='running'].si,
+  [data-state='running'].si-node {
+    --si-fg: #8fb0ff;
+    --si-bg: #172140;
+  }
+  [data-state='needs-input'].si,
+  [data-state='needs-input'].si-node {
+    --si-fg: #f5b54a;
+    --si-bg: #33260f;
+  }
+  [data-state='review'].si,
+  [data-state='review'].si-node {
+    --si-fg: #b9a4ff;
+    --si-bg: #241d3d;
+  }
+  [data-state='blocked'].si,
+  [data-state='blocked'].si-node {
+    --si-fg: #f08fb3;
+    --si-bg: #331a26;
+  }
+  [data-state='failed'].si,
+  [data-state='failed'].si-node {
+    --si-fg: #ff8577;
+    --si-bg: #3a1a17;
+  }
+  [data-state='done'].si,
+  [data-state='done'].si-node {
+    --si-fg: #6fd19a;
+    --si-bg: #142a1e;
+  }
+  [data-state='cancelled'].si,
+  [data-state='cancelled'].si-node {
+    --si-fg: #8d919a;
+    --si-bg: #1d1f23;
+  }
+  :root[data-theme='light'] .si,
+  :root[data-theme='light'] .si-node {
+    --si-fg: #5f6570;
+    --si-bg: #eceef1;
+  }
+  :root[data-theme='light'] [data-state='ready'].si,
+  :root[data-theme='light'] [data-state='ready'].si-node {
+    --si-fg: #0b6274;
+    --si-bg: #e0f1f5;
+  }
+  :root[data-theme='light'] [data-state='running'].si,
+  :root[data-theme='light'] [data-state='running'].si-node {
+    --si-fg: #2448b8;
+    --si-bg: #e4ebff;
+  }
+  :root[data-theme='light'] [data-state='needs-input'].si,
+  :root[data-theme='light'] [data-state='needs-input'].si-node {
+    --si-fg: #8a5300;
+    --si-bg: #fdefd0;
+  }
+  :root[data-theme='light'] [data-state='review'].si,
+  :root[data-theme='light'] [data-state='review'].si-node {
+    --si-fg: #5634b8;
+    --si-bg: #ede7fc;
+  }
+  :root[data-theme='light'] [data-state='blocked'].si,
+  :root[data-theme='light'] [data-state='blocked'].si-node {
+    --si-fg: #a33b62;
+    --si-bg: #f9e4ec;
+  }
+  :root[data-theme='light'] [data-state='failed'].si,
+  :root[data-theme='light'] [data-state='failed'].si-node {
+    --si-fg: #b0321f;
+    --si-bg: #fbe3de;
+  }
+  :root[data-theme='light'] [data-state='done'].si,
+  :root[data-theme='light'] [data-state='done'].si-node {
+    --si-fg: #1c7442;
+    --si-bg: #e1f3e8;
+  }
+
+  .si {
+    width: 16px;
+    height: 16px;
+  }
+  .si-node {
+    box-sizing: border-box;
+    width: var(--node);
+    height: var(--node);
+    border-radius: 9999px;
+  }
+  .si-node[data-status='done'] {
+    background: var(--si-fg);
+    color: var(--sl-color-black);
+  }
+  .si-node[data-status='current'] {
+    border: 2px solid var(--si-fg);
+    background: var(--si-bg);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--si-fg) 16%, transparent);
+  }
+  .si-node[data-status='upcoming'] {
+    border: 1.5px solid var(--sl-color-gray-3);
+  }
+  .si-node[data-status='skipped'] {
+    border: 1.5px dashed var(--sl-color-gray-3);
+    color: var(--sl-color-gray-3);
+  }
+
+  /* As in the app: a running shape holds still, then blinks once every 2 s. */
+  @keyframes si-beat {
+    0%,
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    56.25% {
+      opacity: 0.35;
+      transform: scale(0.78);
+    }
+    62.5% {
+      opacity: 0.7;
+      transform: scale(0.9);
+    }
+    68.75%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .si-beat {
+    animation: si-beat 2000ms linear infinite;
+  }
+  /* The busy spinner steps one dash per 125 ms; still, it shows three dots. */
+  @keyframes si-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .si-busy {
+    color: var(--sl-color-gray-2);
+  }
+  .si-spin {
+    animation: si-spin 1000ms steps(8) infinite;
+  }
+  .si-spin .si-dots {
+    display: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .si-beat,
+    .si-spin {
+      animation: none;
+    }
+    .si-spin .si-dashes {
+      display: none;
+    }
+    .si-spin .si-dots {
+      display: inline;
+    }
+  }
+</style>

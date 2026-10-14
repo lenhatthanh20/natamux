@@ -1,0 +1,66 @@
+---
+title: Status icons
+description: What each status icon of the dashboard means, for task states, stage markers, busy buttons and loading, and how they move.
+sidebar:
+  order: 1
+---
+
+import StatusIcon from '../../../../components/StatusIcon.astro'
+
+Every task state has its own shape, so you can tell states apart without color. The same shapes show in the task table, the jump palette, the pane tabs, the terminal header, the sidebar and the stage markers. Only a running task moves.
+
+## Task states
+
+The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px next to each task, and at 8 px next to each shell under the open task.
+
+| Icon | Sidebar shell | State | Shape | What it means | What you do | Needs you |
+|---|---|---|---|---|---|---|
+| <StatusIcon kind="draft" /> | <StatusIcon kind="draft" size={8} /> | Draft | Dashed ring | Created, not started. | Mark it ready, or start it. | No |
+| <StatusIcon kind="ready" /> | <StatusIcon kind="ready" size={8} /> | Ready | Ring | The stage waits to start: for its agent, a workspace, or the tasks it depends on. | Nothing. It starts when it can. | No |
+| <StatusIcon kind="running" /> | <StatusIcon kind="running" size={8} /> | Running | Full disk that blinks | An agent or a command works on the stage. | Nothing. Open the workspace to watch. | No |
+| <StatusIcon kind="quiet" /> | <StatusIcon kind="quiet" size={8} /> | Running, but quiet | Ring, lower half filled, in the "needs you" color | The task runs, but its agent has shown no sign of life for 10 minutes. | Open its terminal and check that the agent is not stuck. | Yes |
+| <StatusIcon kind="needs-input" /> | <StatusIcon kind="needs-input" size={8} /> | Needs your input | Diamond | The agent asked a question or a permission, or ended its turn without `natamux done`. | Click **Answer** to open its terminal, then reply. | Yes |
+| <StatusIcon kind="review" /> | <StatusIcon kind="review" size={8} /> | In review | Rounded square | The stage is done and waits for your approval. | Read the changes, then **Approve** or **Send back**. | Yes |
+| <StatusIcon kind="blocked" /> | <StatusIcon kind="blocked" size={8} /> | Blocked | Two bars | You or Natamux paused the task. | Unblock it when it can go on. | Yes |
+| <StatusIcon kind="failed" /> | <StatusIcon kind="failed" size={8} /> | Failed | Triangle | The agent or a stage command failed. | Read the reason, fix it, then **Retry**. | Yes |
+| <StatusIcon kind="done" /> | <StatusIcon kind="done" size={8} /> | Done | Check | The task is finished. | Nothing. | No |
+| <StatusIcon kind="cancelled" /> | <StatusIcon kind="cancelled" size={8} /> | Cancelled | Dash | You stopped the task. | Nothing. | No |
+| — | <StatusIcon kind="unknown" size={8} /> | State not known yet | Small grey dot | A shell runs an agent, but Natamux has no state for it yet, such as an agent started by hand before the daemon restarted. | Nothing. It changes at the agent's next event. | No |
+
+Hollow shapes have not started, a full disk is alive, and a half disk is alive but silent. A task with stages shows the state of its current stage. When stages run side by side, the task shows running while any of them runs.
+
+In the dashboard, hover an icon to see its state as text. Screen readers read the state name. See [Tasks](/docs/concepts/tasks/#states) for how a task moves between states, and [Needs you](/docs/guides/dashboard/#needs-you) for where waiting tasks show up.
+
+## Stage markers
+
+The **Progress** views show one marker per stage, with the same shapes.
+
+| Marker | Stage | What it means |
+|---|---|---|
+| <StatusIcon marker="done" /> | Done | The stage was approved or passed its checks. |
+| <StatusIcon marker="current" kind="running" /> | Now, running | The current stage. Its agent works; the inner disk blinks. |
+| <StatusIcon marker="current" kind="needs-input" /> | Now, needs your input | The current stage waits for your answer. |
+| <StatusIcon marker="current" kind="review" /> | Now, in review | The current stage waits for your approval. |
+| <StatusIcon marker="current" kind="blocked" /> | Now, blocked | The current stage is paused. |
+| <StatusIcon marker="current" kind="failed" /> | Now, failed | The current stage failed. |
+| <StatusIcon marker="upcoming" /> | Not reached | The task has not got here yet. |
+| <StatusIcon marker="skipped" /> | Skipped | The task went past this stage without running it. |
+
+The current stage is a tinted disk in a ring of its state color, with the state shape inside. The line into a running stage fills toward it every 2 seconds. Lines behind the work are green, and lines ahead are dashed.
+
+## Busy buttons and loading
+
+| Icon | Where | What it means |
+|---|---|---|
+| <StatusIcon spinner /> | In a button, in place of its icon | Natamux is doing what you clicked, such as **Push**. The label stays, and the button keeps its width. |
+| Grey bars that fade in and out | Lists and panels | The content is loading. The bars have the size of the rows that come. They show only after 200 ms. |
+
+A row in the sidebar that starts to wait for you flashes once, so you notice it.
+
+## Motion
+
+- Only what is alive moves: a running task blinks once every 2 seconds, a busy button turns, a loading list fades in and out. Everything else is still.
+- All running tasks blink at the same moment, so a full board stays calm.
+- The dashboard draws moving icons 8 times a second, which keeps CPU use low. The icons are made for that rate, so they do not stutter.
+- With **Reduce motion** on in your system settings, nothing moves. A running task shows its still disk, a busy button shows three dots, and loading bars do not fade.
+- When the dashboard window is not in front, nothing moves either. It saves power on a dashboard left open on a second screen.

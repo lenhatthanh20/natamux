@@ -466,26 +466,26 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 | Marker | Meaning |
 |---|---|
-| Check, green | Done: approved or passed |
-| Ring in the state color | Current: running, waiting for approval, needs input, failed, blocked |
+| Check on a green disk | Done: approved or passed |
+| Tinted disk, ring in the state color, the state shape inside | Current: running, waiting for approval, needs input, failed, blocked |
 | Hollow circle | Not reached yet |
-| Circle with a dash | Skipped |
+| Dashed circle with a dash | Skipped |
 | "×2" beside a marker | The stage ran twice, because it was sent back |
 
-**Motion.** Motion shows only what is alive; everything else is still.
+**Motion.** Motion shows only what is alive; everything else is still. The shapes are the state glyphs of `docs/ui-spec.md` 4.10; the designs that were compared are in `docs/design-icons.md` (T-0058).
 
 | Marker | Look | Motion |
 |---|---|---|
-| Running | A ring with a faint track; an arc that fades along its tail; a dot in the middle | The arc turns once every 900 ms, linear. A soft halo grows out of the node and fades every 1.8 s |
-| Waits for approval | A ring in the review color with a dot in the middle | The dot breathes (scale 0.72 to 1) every 2.4 s, ease in and out |
-| Line into a running stage | A dashed line in the running color | The dashes move toward the stage, one dash every 0.9 s |
-| Needs input, failed | A filled circle with `?` or `×` and a soft outer ring | None |
-| Done | A filled circle with a check | None |
+| Running | Tinted disk, ring, a full disk inside | The inner disk blinks once every 2 s, with every running glyph of the app |
+| Waits for approval | Tinted disk, ring, a rounded square inside | None |
+| Line into a running stage | A line in the running color | It fills toward the stage, then fades as the node blinks, every 2 s |
+| Needs input, failed | Tinted disk, ring, a diamond or a triangle inside | None |
+| Done | A green disk with a check | None |
 
-- **Reduced motion** (`prefers-reduced-motion`): nothing moves. Running shows a still three-quarter ring; the flowing line becomes a plain dashed line.
+- **Reduced motion** (`prefers-reduced-motion`): nothing moves. Running shows its still disk; the line into it is a full line.
 - **Window without focus:** the same still look as reduced motion (`data-window="inactive"`, set by `lib/window-focus.ts`). While any endless animation runs, the browser draws every frame, so a dashboard left open on another screen used about 20% CPU.
-- **With focus,** `lib/motion-ticker.ts` pauses every endless CSS animation and moves them all to the same time 8 times a second (every 125 ms). The page draws 8 frames a second instead of 120 on a 120 Hz screen. A 900 ms spin moves 50° per tick.
-- **Moving stripes and dashes** slide a `::before` with `transform`. Animating `background-position` repaints every frame.
+- **With focus,** `lib/motion-ticker.ts` pauses every endless CSS animation and moves them all to the same time 8 times a second (every 125 ms). The page draws 8 frames a second instead of 120 on a 120 Hz screen. The blink and the fill have keyframes on those ticks, so they show the frames as drawn.
+- **Endless motion** animates `transform` or `opacity` only. Animating `background-position` repaints every frame.
 - **Colors:** the state colors of the app (`running`, `review`, `needs-input`, `failed`, `done`), in light and dark.
 - **Mock-up:** the canvas "Natamux stage progress" shows both views, with a light and dark switch.
 

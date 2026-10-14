@@ -1,7 +1,7 @@
 import type { StageStatus, TaskState } from '@natamux/core'
-import { Check, Minus, Pause, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { STATE_LABEL } from '../lib/tasks'
+import { ShapeSvg } from './ShapeGlyph'
 
 const STATUS_LABEL: Record<StageStatus, string> = {
   done: 'Done',
@@ -14,23 +14,12 @@ export function markerLabel(status: StageStatus, state: TaskState | null): strin
   return status === 'current' && state !== null ? STATE_LABEL[state] : STATUS_LABEL[status]
 }
 
-function Question() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M6 6.2a2.1 2.1 0 1 1 3 1.9c-.6.3-1 .8-1 1.4v.3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="8" cy="12.3" r="1.1" fill="currentColor" />
-    </svg>
-  )
-}
+// An even number of pixels near `size * share`, so the shape sits on whole pixels in the node.
+const evenPx = (size: number, share: number) => 2 * Math.round((size * share) / 2)
 
-// One stage as a dot: a check when done, a turning arc while an agent runs, a breathing dot while
-// it waits for approval. The state colors are the ones of the state chips.
+// One stage as a dot in the shapes of the state glyphs: a check when done, the shape of its state
+// inside a tinted ring while it is the current stage (only running blinks), the dash when skipped.
+// The state colors are the ones of the state chips.
 export function StageMarker({
   status,
   state,
@@ -55,28 +44,16 @@ export function StageMarker({
       data-tip={label}
       style={{ '--node': `${size}px` } as CSSProperties}
     >
-      {status === 'done' && <Check strokeWidth={3} aria-hidden="true" />}
-      {status === 'skipped' && <Minus strokeWidth={2.5} aria-hidden="true" />}
-      {status === 'current' && state === 'running' && (
-        <>
-          <span className="stage-halo" aria-hidden="true" />
-          <span className="stage-arc" aria-hidden="true" />
-          <span className="stage-core" aria-hidden="true" />
-        </>
-      )}
-      {status === 'current' && state === 'review' && (
-        <span className="stage-core" aria-hidden="true" />
-      )}
-      {status === 'current' && state === 'needs-input' && <Question />}
-      {status === 'current' && state === 'failed' && <X strokeWidth={3} aria-hidden="true" />}
-      {status === 'current' && state === 'blocked' && <Pause strokeWidth={3} aria-hidden="true" />}
+      {status === 'done' && <ShapeSvg kind="done" art={evenPx(size, 0.5)} pad={0} />}
+      {status === 'current' && <ShapeSvg kind={state ?? 'ready'} art={evenPx(size, 0.4)} pad={1} />}
+      {status === 'skipped' && <ShapeSvg kind="cancelled" art={evenPx(size, 0.4)} pad={1} />}
     </span>
   )
 }
 
 export type LinkKind = 'done' | 'flow' | 'upcoming' | 'hidden'
 
-// The line between two stages: green behind the work, moving into a running stage, dashed ahead.
+// The line between two stages: green behind the work, filling a running stage, dashed ahead.
 export function linkKind(
   before: { status: StageStatus; state: TaskState | null } | undefined,
   after: { status: StageStatus; state: TaskState | null } | undefined,
