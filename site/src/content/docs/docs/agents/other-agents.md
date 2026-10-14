@@ -22,7 +22,7 @@ The bell counts only for agents without hooks, or whose hooks do not report a wa
 
 Natamux does not know where another agent keeps its skills, so it has no sure call for one. For `{skill:<name>}` in a stage prompt, and for a `skill` context source, it follows two rules:
 
-1. When a `SKILL.md` of that name exists in the worktree or on your machine (in the folder of any of the five agents), the prompt says `the skill in <path> (read that file and follow it)`. Most agents can read a file and follow it.
+1. When a `SKILL.md` of that name exists in the worktree, in your main checkout or on your machine (in the folder of any of the five agents), the prompt says `the skill in <path> (read that file and follow it)`. Most agents can read a file and follow it.
 2. Otherwise the prompt says `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>." The stage still starts.
 
 See [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt).

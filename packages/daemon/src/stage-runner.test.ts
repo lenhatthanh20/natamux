@@ -348,6 +348,28 @@ describe('context', () => {
     expect(started.at(-1)?.payload).toMatchObject({ missingSkills: ['gone'], agent: 'claude-code' })
   })
 
+  it('reads a picked skill from the main checkout when the worktree does not have it', async () => {
+    // Not committed, so the new worktree does not have it.
+    const skill = join(repo.dir, '.claude', 'skills', 'jira-ticket')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: jira-ticket\n---\n')
+    const waiting = await created({
+      title: 'Export',
+      agent: 'claude-code',
+      context: { source: 'skill', skill: 'jira-ticket', ref: 'ABC-1' },
+    })
+
+    const task = await withWorkspace(waiting.id)
+    expect(launchScript(task.id)).toContain(
+      `Read ${join(skill, 'SKILL.md')} and follow it for ABC-1.`,
+    )
+    const started = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === 'context')
+    expect(started.at(-1)?.payload.missingSkills).toBeUndefined()
+  })
+
   it('writes the context into a workspace made while the issue was read', async () => {
     const task = tasks.createTask({
       title: 'Export',
@@ -504,6 +526,42 @@ describe('skills in stage prompts', () => {
       .map((entry) => entry.event)
       .filter((event) => event.type === 'stage.started' && event.payload.stage === 'spec')
     expect(started.at(-1)?.payload).toMatchObject({ missingSkills: ['gone'], agent: 'claude-code' })
+  })
+
+  it('reads a plugin that only the untracked settings of the main checkout turn on', async () => {
+    const home = join(repo.root, 'home')
+    const install = join(home, '.claude', 'plugins', 'cache', 'm', 'acme', '1.0')
+    const skill = join(install, 'skills', 'worktree')
+    mkdirSync(skill, { recursive: true })
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: worktree\n---\n')
+    writeFileSync(
+      join(home, '.claude', 'plugins', 'installed_plugins.json'),
+      JSON.stringify({
+        plugins: { 'acme@m': [{ scope: 'local', projectPath: repo.dir, installPath: install }] },
+      }),
+    )
+    mkdirSync(join(repo.dir, '.claude'), { recursive: true })
+    writeFileSync(
+      join(repo.dir, '.claude', 'settings.local.json'),
+      JSON.stringify({ enabledPlugins: { 'acme@m': true } }),
+    )
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        step.id === 'spec' ? { ...step, prompt: 'Use {skill:acme:worktree}.' } : step,
+      ),
+    }
+    const waiting = await created({ title: 'Export tasks', agent: 'claude-code' })
+    const task = await withWorkspace(waiting.id)
+
+    expect(launchScript(task.id)).toContain(
+      `Use the skill in ${join(skill, 'SKILL.md')} (read that file and follow it).`,
+    )
+    const started = tasks
+      .listEvents(task.id)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'stage.started' && event.payload.stage === 'spec')
+    expect(started.at(-1)?.payload.missingSkills).toBeUndefined()
   })
 
   it('gives an agent without the skill its file to read', async () => {
