@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.21 (2026-10-14)
+
+- Each project in the sidebar is a card in its own color, from the project id. A gear next to **+** opens its **Settings**. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- **Project settings** can export the settings as `<project>.natamux.json` and import a `.json` file. Import does not save until you click **Save**. See [Import and export](/docs/guides/project-settings/#import-and-export).
+
 ## v0.1.20 (2026-10-14)
 
 - A pull request that the agent or you open another way, such as with `gh pr create`, is now linked to the task. A closed one is not. See [Pull requests](/docs/guides/github/#pull-requests).
