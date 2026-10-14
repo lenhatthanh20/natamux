@@ -52,7 +52,7 @@ describe('launchCommand', () => {
       "claude --settings '/data/claude.json' --permission-mode auto --x 'Fix it'",
     )
     expect(launchCommand('copilot', { ...auto, program: 'copilot', extraArgs: '--x' })).toBe(
-      "copilot --no-alt-screen --allow-all-tools --x -i 'Fix it'",
+      "copilot --allow-all-tools --x -i 'Fix it'",
     )
     expect(launchCommand('cursor', { ...auto, program: 'cursor-agent', extraArgs: '--x' })).toBe(
       "cursor-agent --force --x 'Fix it'",
@@ -89,13 +89,12 @@ describe('launchCommand', () => {
     )
   })
 
-  it('starts Copilot on the main screen in every mode', () => {
-    expect(launchCommand('copilot', { ...base, program: 'copilot', prompt: '' })).toBe(
-      'copilot --no-alt-screen',
-    )
+  // Copilot CLI 1.0.97 dropped --alt-screen and --no-alt-screen and fails to start with either.
+  it('starts Copilot without an alt-screen flag in every mode', () => {
+    expect(launchCommand('copilot', { ...base, program: 'copilot', prompt: '' })).toBe('copilot')
     expect(
       launchCommand('copilot', { ...auto, program: 'copilot', platform: 'win32', prompt: "it's" }),
-    ).toBe("copilot --no-alt-screen --allow-all-tools -i 'it''s'")
+    ).toBe("copilot --allow-all-tools -i 'it''s'")
   })
 
   it('goes on with a Claude Code session after the mode', () => {
@@ -154,7 +153,7 @@ describe('launchCommand', () => {
     )
     expect(
       launchCommand('copilot', { ...base, program: 'copilot', extraArgs: '--allow-all-tools' }),
-    ).toBe("copilot --no-alt-screen --allow-all-tools -i 'Fix it'")
+    ).toBe("copilot --allow-all-tools -i 'Fix it'")
     expect(launchCommand('cursor', { ...base, program: 'cursor-agent' })).toBe(
       "cursor-agent 'Fix it'",
     )

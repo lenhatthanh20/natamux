@@ -322,7 +322,7 @@ describe('AgentRunner', () => {
       expect(tasks.getTask(task.id).agent).toBe(agent)
     }
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "copilot --no-alt-screen --allow-all-tools -i 'Only this'\n",
+      "copilot --allow-all-tools -i 'Only this'\n",
     )
   })
 
@@ -429,7 +429,7 @@ describe('GitHub Copilot', () => {
     const task = taskWithWorkspace('Fix the parser')
     copilot.start(task.id, 'copilot', 'Fix it')
     expect(readFileSync(script(task.id), 'utf8')).toBe(
-      "copilot --no-alt-screen --allow-all-tools --model gpt-5 -i 'Fix it'\n",
+      "copilot --allow-all-tools --model gpt-5 -i 'Fix it'\n",
     )
     expect(tasks.getTask(task.id).agent).toBe('copilot')
   })
