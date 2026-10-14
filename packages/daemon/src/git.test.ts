@@ -1448,7 +1448,10 @@ describe('readPullRequestStatus', () => {
 })
 
 describe('findPullRequest', () => {
-  const answer = (list: object[]): RunGh => async () => JSON.stringify(list)
+  const answer =
+    (list: object[]): RunGh =>
+    async () =>
+      JSON.stringify(list)
 
   it('asks gh for the newest pull request from the branch', async () => {
     const calls: (readonly string[])[] = []
