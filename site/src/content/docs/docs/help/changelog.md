@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.24 (2026-10-14)
+
+- The desktop app installs an update only when `SHA256SUMS.txt` of the release is signed with the Natamux release key. A missing or wrong signature stops the update. v0.1.23 and earlier do not check it. See [Updates](/docs/help/security-and-privacy/#updates).
+- Every task state has a status icon of its own, everywhere. A running task blinks once every 2 seconds instead of spinning. See [Status icons](/docs/guides/status-icons/).
+- Fix: Copilot CLI 1.0.97 refused to start, because Natamux added `--no-alt-screen`, which it no longer has. See [What Natamux runs](/docs/agents/copilot/#what-natamux-runs).
+
 ## v0.1.23 (2026-10-14)
 
 - When you add a project, **Worktree folder** sets where the worktrees of its tasks go. See [Repositories](/docs/guides/dashboard/#repositories).
