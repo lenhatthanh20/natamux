@@ -30,6 +30,5 @@ try {
 
 // The page is isolated, so it gets this one function instead of ipcRenderer. Undefined: canceled.
 electron.contextBridge.exposeInMainWorld('natamux', {
-  pickFolder: (): Promise<string | undefined> =>
-    electron.ipcRenderer.invoke('natamux:pick-folder'),
+  pickFolder: (): Promise<string | undefined> => electron.ipcRenderer.invoke('natamux:pick-folder'),
 })
