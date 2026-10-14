@@ -27,6 +27,10 @@ check "release_signer reads the constant" '[ "$(release_signer "$tmp/signer.ts")
 check "release_signer reads the app's constant" \
   '[ -n "$(release_signer packages/desktop/src/release-signature.ts)" ]'
 
+fixtures=packages/desktop/src/fixtures/minisign
+check "is_legacy takes a legacy signature" 'is_legacy "$fixtures/SHA256SUMS.txt.legacy.minisig"'
+check "is_legacy refuses a prehashed signature" '! is_legacy "$fixtures/SHA256SUMS.txt.minisig"'
+
 check "the sums match the digests" '[ "$(compare "$sums" "$tmp/assets")" = 0 ]'
 sort -r "$sums" >"$tmp/reordered"
 check "the order of lines does not matter" '[ "$(compare "$tmp/reordered" "$tmp/assets")" = 0 ]'

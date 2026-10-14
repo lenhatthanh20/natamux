@@ -1,11 +1,12 @@
 // Checks the minisign signature of SHA256SUMS.txt before the updater trusts any hash in it. Node
 // crypto only, so it needs no Electron and no new package. See docs/design-desktop-update.md.
-import { createHash, createPublicKey, type KeyObject, verify } from 'node:crypto'
+import { createPublicKey, type KeyObject, verify } from 'node:crypto'
 import { isNewer, SIGNATURE_FILE, SUMS_FILE } from './update-check.js'
 
-// The minisign public key of the release signer. The secret key never leaves the owner's Mac.
+// The minisign public key of the release signer, key id 3F449A1E170BB7A0. The secret key never
+// leaves the owner's Mac.
 // scripts/sign-release.sh, scripts/release.test.sh and CI read this line.
-export const RELEASE_SIGNER = 'REPLACE_WITH_THE_RELEASE_PUBLIC_KEY'
+export const RELEASE_SIGNER = 'RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo'
 
 type Signer = { id: Buffer; key: KeyObject }
 
@@ -68,10 +69,14 @@ export function verifySums(input: {
     throw new Error(`${SIGNATURE_FILE} is not a minisign signature`)
   }
 
-  // "ED": Ed25519 over the BLAKE2b-512 of the file; "Ed": the legacy form, over the file itself.
+  // Only "Ed", the legacy form (minisign -S -l): Ed25519 over the file itself. The default "ED"
+  // signs the BLAKE2b-512 of the file, and Electron's crypto (BoringSSL) has no BLAKE2b-512.
   const bytes = decode(signatureLine, 74, `The signature in ${SIGNATURE_FILE}`)
   const algorithm = bytes.subarray(0, 2).toString('latin1')
-  if (algorithm !== 'ED' && algorithm !== 'Ed') {
+  if (algorithm === 'ED') {
+    throw new Error(`${SIGNATURE_FILE} is prehashed; releases are signed with minisign -S -l`)
+  }
+  if (algorithm !== 'Ed') {
     throw new Error(`${SIGNATURE_FILE} uses an unknown algorithm`)
   }
   const id = bytes.subarray(2, 10)
@@ -81,8 +86,7 @@ export function verifySums(input: {
     )
   }
   const sig = bytes.subarray(10)
-  const signed = algorithm === 'ED' ? createHash('blake2b512').update(sums).digest() : sums
-  if (!verify(null, signed, signer.key, sig)) {
+  if (!verify(null, sums, signer.key, sig)) {
     throw new Error(`The signature of ${SUMS_FILE} is not valid`)
   }
 

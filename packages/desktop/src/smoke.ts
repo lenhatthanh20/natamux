@@ -1,4 +1,3 @@
-import { getHashes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifySums } from './release-signature.js'
@@ -24,9 +23,10 @@ export function hasSmokeOutput(output: string): boolean {
   return output.replace(ESCAPES, '').includes('42xyz')
 }
 
-// Made by the real minisign tool with a test key; the same files are in src/fixtures/minisign.
-// The smoke check runs it in the packaged app, so CI proves that Electron's crypto (BoringSSL, not
-// OpenSSL) checks release signatures on every system.
+// Made by the real minisign tool with a test key, in the legacy form that releases use
+// (minisign -S -l); the same files are in src/fixtures/minisign. The smoke check runs it in the
+// packaged app, so CI proves that Electron's crypto (BoringSSL, not OpenSSL) checks release
+// signatures on every system.
 export const SIGNATURE_FIXTURE = {
   publicKey: 'RWRlDDYUMCwx+Oo1OxIoyy7UaN2jSLqaEfEX9pmWdYLOJWE1WCES0Jkf',
   tag: 'v1.2.3',
@@ -39,47 +39,35 @@ export const SIGNATURE_FIXTURE = {
     '1e6e7727b0190c0bb0bcc8a7460595cf535a3d6bf886c2c3250555b271aeff85  Natamux-win-x64.exe',
     '',
   ].join('\n'),
-  signatures: {
-    ED: [
-      'untrusted comment: signature from minisign secret key',
-      'RURlDDYUMCwx+MAUAJZ5sAblZq9gM/EmLvmjiROJJor5wEZ50WnvBMFjkJR8Y9cASPNMFt1eEVmI+s6mrMjnbvApqjURr5O7FgU=',
-      'trusted comment: natamux v1.2.3',
-      '90jhZoxm5mHTijoh55DCPk4k1vabl3wzZBoaygbHsJedx4oo367SSVMiNIwpi0wqk+MQpuXa8/OsFiNB1oVZAQ==',
-      '',
-    ].join('\n'),
-    Ed: [
-      'untrusted comment: signature from minisign secret key',
-      'RWRlDDYUMCwx+LaEHd99fDk59rGxpBnK7QgvowzUsviMSX0/tO7lwaEccTYdHYsk68fqJOgyU6LNp9MhTsC5lCJLt2Fm93WhiwU=',
-      'trusted comment: natamux v1.2.3',
-      'RtSEQ8Umu5X2lgBppgcPsGTBZARBP+teDQG7LJGCCNg7rxpgQe05kRXlz2QMCQl+50JHQ0wooNeR1IUlvCmsCA==',
-      '',
-    ].join('\n'),
-  },
+  signature: [
+    'untrusted comment: signature from minisign secret key',
+    'RWRlDDYUMCwx+LaEHd99fDk59rGxpBnK7QgvowzUsviMSX0/tO7lwaEccTYdHYsk68fqJOgyU6LNp9MhTsC5lCJLt2Fm93WhiwU=',
+    'trusted comment: natamux v1.2.3',
+    'RtSEQ8Umu5X2lgBppgcPsGTBZARBP+teDQG7LJGCCNg7rxpgQe05kRXlz2QMCQl+50JHQ0wooNeR1IUlvCmsCA==',
+    '',
+  ].join('\n'),
 }
 
 // Throws what failed. Returns a line for the log.
 export function checkReleaseSignature(): string {
-  const { publicKey, tag, sums, signatures } = SIGNATURE_FIXTURE
-  const failures: string[] = []
-  for (const [algorithm, signature] of Object.entries(signatures)) {
-    const input = { publicKey, tag, signature, current: '0.0.0' }
-    try {
-      verifySums({ ...input, sums: Buffer.from(sums) })
-    } catch (error) {
-      failures.push(`${algorithm}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    try {
-      verifySums({ ...input, sums: Buffer.from(sums.replace('85158a9d', '85158a9e')) })
-      failures.push(`${algorithm}: a changed SHA256SUMS.txt passed`)
-    } catch {
-      // Expected.
-    }
+  const { sums, ...rest } = SIGNATURE_FIXTURE
+  const input = { ...rest, current: '0.0.0' }
+  try {
+    verifySums({ ...input, sums: Buffer.from(sums) })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`the release signature check failed: ${message}`)
   }
-  const blake2b = `blake2b512 ${getHashes().includes('blake2b512') ? 'is' : 'is not'} in getHashes()`
-  if (failures.length > 0) {
-    throw new Error(`the release signature check failed (${blake2b}): ${failures.join('; ')}`)
+  let changedPassed = true
+  try {
+    verifySums({ ...input, sums: Buffer.from(sums.replace('85158a9d', '85158a9e')) })
+  } catch {
+    changedPassed = false
   }
-  return `release signatures ED and Ed check out (${blake2b})`
+  if (changedPassed) {
+    throw new Error('the release signature check passed a changed SHA256SUMS.txt')
+  }
+  return 'the release signature check works'
 }
 
 export async function runSmoke(

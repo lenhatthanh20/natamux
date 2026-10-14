@@ -43,8 +43,14 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 ## Updates
 
 - Updates come over HTTPS from the latest GitHub release of the repository.
-- The app compares the SHA-256 of the download with `SHA256SUMS.txt` of the same release. On macOS it also checks the new app's signature and version before the swap.
-- The checksum file comes from the same release, so it catches a broken download, not a forged release. Until the app is signed with a certificate, the trust rests on the GitHub repository.
+- `SHA256SUMS.txt` of each release is signed with [minisign](https://jedisct1.github.io/minisign/). The secret key stays offline with the maintainer, never on GitHub, so a stolen GitHub account cannot sign a release. The public key is built into the app:
+
+  ```
+  RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
+  ```
+
+- Before it downloads an update, the app checks that signature, and that it was made for that release (`natamux <tag>`) and for a version newer than its own. A missing or wrong signature stops the update. Then the app compares the SHA-256 of the download with `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version before the swap.
+- Versions up to v0.1.23 do not check the signature, so update to a newer version. Until the app is signed with a certificate, a manual download is checked as in [Verify the download](/docs/getting-started/install/#verify-the-download).
 
 ## Hooks
 

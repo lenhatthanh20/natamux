@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { RELEASE_SIGNER, verifySums } from './release-signature.js'
 import { checkReleaseSignature, SIGNATURE_FIXTURE } from './smoke.js'
 
-// Made by minisign 0.12 (Docker image jedisct1/minisign) with two throwaway keys:
-//   minisign -G -W -p test-signer.pub -s test-signer.sec
-//   minisign -S -s test-signer.sec -t "natamux v1.2.3" -m SHA256SUMS.txt
-//   minisign -S -l -s test-signer.sec -t "natamux v1.2.3" -x SHA256SUMS.txt.legacy.minisig -m SHA256SUMS.txt
-//   minisign -S -s other-signer.sec -t "natamux v1.2.3" -x SHA256SUMS.txt.other.minisig -m SHA256SUMS.txt
+// Made by minisign 0.12 (Docker image jedisct1/minisign) with two throwaway keys, made with
+// minisign -G -W -p <name>.pub -s <name>.sec. Releases are signed in the legacy form (-l).
+//   SHA256SUMS.txt.legacy.minisig        -S -l -s test-signer.sec -t "natamux v1.2.3"
+//   SHA256SUMS.txt.minisig               -S -s test-signer.sec -t "natamux v1.2.3" (prehashed)
+//   SHA256SUMS.txt.other-legacy.minisig  -S -l -s other-signer.sec -t "natamux v1.2.3"
+//   SHA256SUMS.txt.other.minisig         -S -s other-signer.sec -t "natamux v1.2.3" (prehashed)
 function fixture(name: string): Buffer {
   return readFileSync(new URL(`./fixtures/minisign/${name}`, import.meta.url))
 }
@@ -19,10 +20,11 @@ function publicKeyOf(name: string): string {
 const testSigner = publicKeyOf('test-signer.pub')
 const otherSigner = publicKeyOf('other-signer.pub')
 const sums = fixture('SHA256SUMS.txt')
-const ed = fixture('SHA256SUMS.txt.minisig').toString('utf8')
-const legacy = fixture('SHA256SUMS.txt.legacy.minisig').toString('utf8')
-const other = fixture('SHA256SUMS.txt.other.minisig').toString('utf8')
-const valid = { sums, signature: ed, publicKey: testSigner, tag: 'v1.2.3', current: '1.2.2' }
+const signed = fixture('SHA256SUMS.txt.legacy.minisig').toString('utf8')
+const prehashed = fixture('SHA256SUMS.txt.minisig').toString('utf8')
+const other = fixture('SHA256SUMS.txt.other-legacy.minisig').toString('utf8')
+const otherPrehashed = fixture('SHA256SUMS.txt.other.minisig').toString('utf8')
+const valid = { sums, signature: signed, publicKey: testSigner, tag: 'v1.2.3', current: '1.2.2' }
 
 // Writes `bytes` into the signature line (alg 0-1, key id 2-9, signature 10-73) at `at`.
 function patchSignature(signature: string, at: number, bytes: Buffer): string {
@@ -38,10 +40,19 @@ function keyIdOf(publicKey: string): Buffer {
 }
 
 describe('verifySums', () => {
-  it('accepts a signature of minisign, prehashed (ED) and legacy (Ed)', () => {
+  it('accepts a legacy signature of minisign (-l)', () => {
     expect(() => verifySums(valid)).not.toThrow()
-    expect(() => verifySums({ ...valid, signature: legacy })).not.toThrow()
     expect(() => verifySums({ ...valid, signature: other, publicKey: otherSigner })).not.toThrow()
+  })
+
+  // Electron's crypto has no BLAKE2b-512, so the app could never check one.
+  it('refuses a prehashed signature, the default of minisign', () => {
+    expect(() => verifySums({ ...valid, signature: prehashed })).toThrow(
+      'SHA256SUMS.txt.minisig is prehashed; releases are signed with minisign -S -l',
+    )
+    expect(() =>
+      verifySums({ ...valid, signature: otherPrehashed, publicKey: otherSigner }),
+    ).toThrow(/is prehashed/)
   })
 
   it('fails without a signature', () => {
@@ -51,9 +62,6 @@ describe('verifySums', () => {
   it('fails when SHA256SUMS.txt changed', () => {
     const changed = Buffer.from(sums.toString('utf8').replace('85158a9d', '85158a9e'))
     expect(() => verifySums({ ...valid, sums: changed })).toThrow(/signature of SHA256SUMS.txt/)
-    expect(() => verifySums({ ...valid, signature: legacy, sums: changed })).toThrow(
-      /signature of SHA256SUMS.txt/,
-    )
     const withCrlf = Buffer.from(sums.toString('utf8').replaceAll('\n', '\r\n'))
     expect(() => verifySums({ ...valid, sums: withCrlf })).toThrow(/signature of SHA256SUMS.txt/)
     const longer = Buffer.concat([sums, Buffer.from('\n')])
@@ -61,7 +69,7 @@ describe('verifySums', () => {
   })
 
   it('fails when the trusted comment changed', () => {
-    const signature = ed.replace(
+    const signature = signed.replace(
       'trusted comment: natamux v1.2.3',
       'trusted comment: natamux v1.2.4',
     )
@@ -88,7 +96,7 @@ describe('verifySums', () => {
     expect(() => verifySums({ ...valid, signature: other })).toThrow(
       'SHA256SUMS.txt.minisig is signed by key 4823C61DA79D2A3F, not by the release key F8312C3014360C65',
     )
-    const wrongId = patchSignature(ed, 2, Buffer.alloc(8, 1))
+    const wrongId = patchSignature(signed, 2, Buffer.alloc(8, 1))
     expect(() => verifySums({ ...valid, signature: wrongId })).toThrow(/is signed by key/)
     // The other key's signature, labelled with the release key id.
     const relabelled = patchSignature(other, 2, keyIdOf(testSigner))
@@ -99,17 +107,17 @@ describe('verifySums', () => {
   })
 
   it('fails for an unknown algorithm, even one minisign might add later', () => {
-    const signature = patchSignature(ed, 0, Buffer.from('EX'))
+    const signature = patchSignature(signed, 0, Buffer.from('EX'))
     expect(() => verifySums({ ...valid, signature })).toThrow(/unknown algorithm/)
-    // The legacy signature passed off as prehashed, and the other way round.
-    const asPrehashed = patchSignature(legacy, 0, Buffer.from('ED'))
-    expect(() => verifySums({ ...valid, signature: asPrehashed })).toThrow(/not valid/)
-    const asLegacy = patchSignature(ed, 0, Buffer.from('Ed'))
-    expect(() => verifySums({ ...valid, signature: asLegacy })).toThrow(/not valid/)
+    // A prehashed signature passed off as legacy.
+    const asLegacy = patchSignature(prehashed, 0, Buffer.from('Ed'))
+    expect(() => verifySums({ ...valid, signature: asLegacy })).toThrow(
+      /signature of SHA256SUMS.txt is not valid/,
+    )
   })
 
   it('fails for a malformed signature file', () => {
-    const lines = ed.split('\n')
+    const lines = signed.split('\n')
     const withLines = (changed: string[]) => verifySums({ ...valid, signature: changed.join('\n') })
     expect(() => withLines(lines.slice(1))).toThrow(/not a minisign signature/)
     expect(() => withLines([...lines.slice(0, 4), 'extra', ''])).toThrow(/not a minisign signature/)
@@ -134,10 +142,10 @@ describe('verifySums', () => {
     expect(() => withLines([...lines.slice(0, 3), ` ${line3}`, ''])).toThrow(/not valid base64/)
   })
 
-  it('fails for a malformed public key, such as the placeholder', () => {
-    expect(() =>
-      verifySums({ ...valid, publicKey: 'REPLACE_WITH_THE_RELEASE_PUBLIC_KEY' }),
-    ).toThrow(/release public key is not valid base64 of 42 bytes/)
+  it('fails for a malformed public key, such as a placeholder', () => {
+    expect(() => verifySums({ ...valid, publicKey: 'PUT_THE_KEY_HERE' })).toThrow(
+      /release public key is not valid base64 of 42 bytes/,
+    )
     expect(() => verifySums({ ...valid, publicKey: '' })).toThrow(/release public key/)
     expect(() => verifySums({ ...valid, publicKey: testSigner.slice(0, -4) })).toThrow(
       /release public key/,
@@ -151,9 +159,9 @@ describe('verifySums', () => {
 
   // minisign drops a \r at the end of each line too, and the comment it signs has none.
   it('reads a signature file with CRLF line ends', () => {
-    expect(() => verifySums({ ...valid, signature: ed.replaceAll('\n', '\r\n') })).not.toThrow()
+    expect(() => verifySums({ ...valid, signature: signed.replaceAll('\n', '\r\n') })).not.toThrow()
     expect(() =>
-      verifySums({ ...valid, signature: ed.replace('v1.2.3\n', 'v1.2.3\r\r\n') }),
+      verifySums({ ...valid, signature: signed.replace('v1.2.3\n', 'v1.2.3\r\r\n') }),
     ).toThrow(/trusted comment in SHA256SUMS.txt.minisig is not signed/)
   })
 })
@@ -162,19 +170,24 @@ describe('the signature check of the smoke', () => {
   it('holds the fixture files as they are', () => {
     expect(SIGNATURE_FIXTURE.publicKey).toBe(testSigner)
     expect(SIGNATURE_FIXTURE.sums).toBe(sums.toString('utf8'))
-    expect(SIGNATURE_FIXTURE.signatures.ED).toBe(ed)
-    expect(SIGNATURE_FIXTURE.signatures.Ed).toBe(legacy)
+    expect(SIGNATURE_FIXTURE.signature).toBe(signed)
   })
 
   it('passes in Node.js', () => {
-    expect(checkReleaseSignature()).toMatch(/check out/)
+    expect(checkReleaseSignature()).toBe('the release signature check works')
   })
 })
 
 describe('RELEASE_SIGNER', () => {
-  // CI's release-signer job fails while the placeholder or this test key is embedded.
+  // CI's release-signer job also fails when a test key is embedded.
   it('is never the test key', () => {
     expect(RELEASE_SIGNER).not.toBe(testSigner)
     expect(RELEASE_SIGNER).not.toBe(otherSigner)
+  })
+
+  it('is a minisign key the check can read', () => {
+    expect(() => verifySums({ ...valid, publicKey: RELEASE_SIGNER })).toThrow(
+      'SHA256SUMS.txt.minisig is signed by key F8312C3014360C65, not by the release key 3F449A1E170BB7A0',
+    )
   })
 })

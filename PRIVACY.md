@@ -22,7 +22,7 @@ Only when you or an agent you start makes it happen:
 - **Coding agents.** Claude Code, Codex, Gemini CLI, Copilot CLI and Cursor send your prompts and code to their own companies, under those companies' terms. Natamux starts them; it does not see or change what they send.
 - **GitHub.** Pushing a branch, opening a pull request, importing issues, or a GitHub issue as task context uses your own `git` and `gh` login to talk to GitHub.
 - **Links.** Links in the dashboard open in your browser.
-- **Update check (desktop app).** About 30 seconds after the app starts, and every 6 hours, the app asks `github.com` for the latest Natamux release. The request has no data about you, your repositories or your tasks. GitHub sees your IP address and the app's version. When a new version exists, the app downloads it from GitHub. Untick **Check for Updates Automatically** in the app menu (macOS) or the **Help** menu (Linux) to turn the timed checks off.
+- **Update check (desktop app).** About 30 seconds after the app starts, and every 6 hours, the app asks `github.com` for the latest Natamux release. The request has no data about you, your repositories or your tasks. GitHub sees your IP address and the app's version. When a new version exists, the app downloads it and its signature from GitHub. Untick **Check for Updates Automatically** in the app menu (macOS) or the **Help** menu (Linux) to turn the timed checks off.
 
 ## The website
 

@@ -21,6 +21,11 @@ release_signer() {
   sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" "$1"
 }
 
+# is_legacy <file.minisig>: the signature is "Ed" (base64 "RW"), not prehashed "ED" ("RU").
+is_legacy() {
+  [ "$(sed -n 2p "$1" | cut -c 1-2)" = RW ]
+}
+
 # compare_digests <SHA256SUMS.txt> <assets>: <assets> has one "<name> <digest> <id>" line for each
 # file of the release, with the digest GitHub computed ("none" when it gave none).
 # Exit 0: SHA256SUMS.txt lists exactly the other files of the release, with those hashes.
@@ -127,7 +132,10 @@ main() {
   read -r -p "Sign SHA256SUMS.txt as \"natamux $tag\" and publish the release? [y/N] " answer
   [[ $answer == [yY] ]] || fail "stopped; nothing was signed"
 
-  minisign -S -s "$secret" -t "natamux $tag" -m "$work/SHA256SUMS.txt"
+  # -l: the legacy form, Ed25519 over the file. The app cannot check the default, prehashed form:
+  # Electron's crypto has no BLAKE2b-512.
+  minisign -S -l -s "$secret" -t "natamux $tag" -m "$work/SHA256SUMS.txt"
+  is_legacy "$work/SHA256SUMS.txt.minisig" || fail "the new signature is not in the legacy form"
   local comment
   comment=$(minisign -V -Q -m "$work/SHA256SUMS.txt" -P "$signer")
   [ "$comment" = "natamux $tag" ] || fail "the new signature has the comment \"$comment\""

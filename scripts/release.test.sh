@@ -72,6 +72,9 @@ if [ "${1:-}" = "--published" ]; then
     check "SHA256SUMS.txt is signed by RELEASE_SIGNER for natamux $tag" \
       'gh release download "$tag" --dir "$tmp/signed" --pattern "SHA256SUMS.txt*" \
         && [ "$(minisign -V -Q -m "$tmp/signed/SHA256SUMS.txt" -P "$signer")" = "natamux $tag" ]'
+    # The app takes only the legacy form, "Ed" (base64 "RW").
+    check "SHA256SUMS.txt.minisig is in the legacy form (minisign -S -l)" \
+      '[ "$(sed -n 2p "$tmp/signed/SHA256SUMS.txt.minisig" | cut -c 1-2)" = RW ]'
   else
     check "SHA256SUMS.txt is signed (install minisign to check it: brew install minisign)" false
   fi

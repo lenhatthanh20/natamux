@@ -92,7 +92,17 @@ Unpack `Natamux-linux-x64.tar.gz` anywhere and run the app from the folder. The 
 
 ## Verify the download
 
-Download `SHA256SUMS.txt` from the same release, put it next to your file and check it.
+Download `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig` from the same release and put them next to your file.
+
+First check that the release key signed `SHA256SUMS.txt`, with [minisign](https://jedisct1.github.io/minisign/) (`brew install minisign`, `apt install minisign`, or `scoop install minisign`):
+
+```sh
+minisign -Vm SHA256SUMS.txt -P RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
+```
+
+It must say `Signature and comment signature verified` and `Trusted comment: natamux v…` with the version you downloaded. Releases up to v0.1.23 have no signature.
+
+Then check your file against `SHA256SUMS.txt`:
 
 ```sh
 # macOS
