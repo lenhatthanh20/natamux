@@ -4,21 +4,22 @@ import type { ComboboxOption } from '../components/ui/Combobox'
 export const TASK_BRANCH_GROUP = 'Task branches'
 const TASK_BRANCH_PREFIX = 'natamux/'
 
-// The list of the "Branch from" picker: the branch of the checkout and the one used last come
-// first, then the other branches, then the task branches.
+// The list of the "Branch from" picker: the default branch, the branch of the checkout and the
+// one used last come first, then the other branches, then the task branches.
 export function branchOptions(
   branches: readonly string[],
   current: string | null,
   lastUsed: string | null,
+  defaultBranch: string | null = null,
 ): ComboboxOption[] {
-  const recent = [current, lastUsed]
+  const recent = [defaultBranch, current, lastUsed]
     .filter((name): name is string => name !== null && branches.includes(name))
     .filter((name, index, all) => all.indexOf(name) === index)
   const rest = branches.filter((name) => !recent.includes(name))
   return [
     ...recent.map((value) => ({
       value,
-      label: value === current ? `${value} (current)` : value,
+      label: labelOf(value, value === defaultBranch, value === current),
       group: 'Recent',
     })),
     ...rest
@@ -28,6 +29,11 @@ export function branchOptions(
       .filter((name) => name.startsWith(TASK_BRANCH_PREFIX))
       .map((value) => ({ value, label: value, group: TASK_BRANCH_GROUP })),
   ]
+}
+
+function labelOf(name: string, isDefault: boolean, isCurrent: boolean): string {
+  const marks = [isDefault ? 'default' : null, isCurrent ? 'current' : null].filter(Boolean)
+  return marks.length === 0 ? name : `${name} (${marks.join(', ')})`
 }
 
 const LAST_BASE_KEY = 'natamux.last-base'

@@ -18,11 +18,13 @@ import {
   currentBranch,
   deleteMergedBranch,
   deleteRemoteRef,
+  fetchUpstream,
   GitError,
   GitHubError,
   gitSpawnCount,
   ImageSideMissingError,
   ImageTooLargeError,
+  listBranches,
   listChanges,
   listWorktreePaths,
   MAX_IMAGE_BYTES,
@@ -53,6 +55,7 @@ import {
   removeWorktree,
   runGh,
   snapshotCommit,
+  startRef,
   statusFromCodes,
   summarizeChecks,
   withGitConfig,
@@ -646,6 +649,86 @@ describe('currentBranch', () => {
 
     runGit(repo.dir, 'checkout', '--detach')
     expect(await currentBranch(repo.dir)).toBeNull()
+  })
+})
+
+describe('listBranches', () => {
+  it('names main the default branch while the checkout is on another one', async () => {
+    runGit(repo.dir, 'checkout', '-b', 'feature')
+    expect(await listBranches(repo.dir)).toEqual({
+      branches: ['feature', 'main'],
+      current: 'feature',
+      defaultBranch: 'main',
+    })
+  })
+
+  it('takes the default branch of origin first, when it is a local branch', async () => {
+    addBareOrigin(repo)
+    runGit(repo.dir, 'branch', 'trunk')
+    runGit(repo.dir, 'push', 'origin', 'main', 'trunk')
+    runGit(repo.dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk')
+    expect((await listBranches(repo.dir)).defaultBranch).toBe('trunk')
+
+    // A default branch of origin with no local copy is passed over.
+    runGit(repo.dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop')
+    expect((await listBranches(repo.dir)).defaultBranch).toBe('main')
+  })
+
+  it('falls back to master, then the current branch, then none', async () => {
+    runGit(repo.dir, 'branch', '-m', 'main', 'master')
+    runGit(repo.dir, 'branch', 'other')
+    expect((await listBranches(repo.dir)).defaultBranch).toBe('master')
+
+    runGit(repo.dir, 'branch', '-m', 'master', 'trunk')
+    expect((await listBranches(repo.dir)).defaultBranch).toBe('trunk')
+
+    runGit(repo.dir, 'checkout', '--detach')
+    expect((await listBranches(repo.dir)).defaultBranch).toBeNull()
+  })
+})
+
+describe('the start of a branch', () => {
+  // A branch that is not checked out, and someone else pushed a commit to it.
+  function releaseBehindOrigin(): string {
+    const origin = addBareOrigin(repo)
+    runGit(repo.dir, 'branch', 'release')
+    runGit(repo.dir, 'push', '-u', 'origin', 'release')
+    const other = join(repo.root, 'other')
+    runGit(repo.root, 'clone', '--branch', 'release', origin, other)
+    runGit(other, 'commit', '--allow-empty', '-m', 'newer')
+    runGit(other, 'push', 'origin', 'release')
+    return runGit(other, 'rev-parse', 'HEAD').trim()
+  }
+
+  it('fetches a branch that is not checked out and starts from its remote copy', async () => {
+    const newer = releaseBehindOrigin()
+    const local = runGit(repo.dir, 'rev-parse', 'release').trim()
+
+    await fetchUpstream(repo.dir, 'release')
+
+    expect(await startRef(repo.dir, 'release')).toBe('origin/release')
+    expect(runGit(repo.dir, 'rev-parse', 'origin/release').trim()).toBe(newer)
+    // The local branch is not moved.
+    expect(runGit(repo.dir, 'rev-parse', 'release').trim()).toBe(local)
+  })
+
+  it('starts from the local branch when it has commits that are not pushed', async () => {
+    releaseBehindOrigin()
+    runGit(repo.dir, 'checkout', 'release')
+    runGit(repo.dir, 'commit', '--allow-empty', '-m', 'local only')
+    runGit(repo.dir, 'checkout', 'main')
+
+    await fetchUpstream(repo.dir, 'release')
+
+    expect(await startRef(repo.dir, 'release')).toBeNull()
+  })
+
+  it('starts from the local branch when it follows no remote branch', async () => {
+    runGit(repo.dir, 'branch', 'release')
+
+    await fetchUpstream(repo.dir, 'release')
+
+    expect(await startRef(repo.dir, 'release')).toBeNull()
   })
 })
 

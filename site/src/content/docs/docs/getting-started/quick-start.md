@@ -44,7 +44,7 @@ For this guide, use **Start a task**. The dialog has two groups.
 | Field | What to enter |
 |---|---|
 | Project | The project to work in |
-| Branch from | The branch to start from. It defaults to the current branch |
+| Branch from | The branch to start from. It defaults to the default branch, such as `main`. Natamux fetches it first, so the task starts from its newest commit |
 | Agent | Pick an agent, or "No agent, a plain shell" |
 
 Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.

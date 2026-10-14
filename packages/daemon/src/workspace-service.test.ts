@@ -1538,8 +1538,64 @@ describe('onCreated', () => {
 describe('base branch', () => {
   it('lists the local branches and the current one', async () => {
     runGit(repo.dir, 'branch', 'release')
-    expect(await workspaces.branches()).toEqual({ branches: ['main', 'release'], current: 'main' })
+    expect(await workspaces.branches()).toEqual({
+      branches: ['main', 'release'],
+      current: 'main',
+      defaultBranch: 'main',
+    })
   })
+
+  it('starts from the default branch when none is given, not from the checkout', async () => {
+    runGit(repo.dir, 'checkout', '-b', 'feature')
+    runGit(repo.dir, 'commit', '--allow-empty', '-m', 'on feature')
+
+    const created = await workspaces.create(tasks.createTask({ title: 'Fix the bug' }).id)
+
+    expect(runGit(created.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('init')
+  })
+
+  // The picked branch was not pulled: the task starts from its remote copy, fetched now.
+  it(
+    'starts a picked branch from its newest remote commit',
+    async () => {
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'branch', 'release')
+      runGit(repo.dir, 'push', '-u', 'origin', 'release')
+      const other = join(repo.root, 'other')
+      runGit(repo.root, 'clone', '--branch', 'release', origin, other)
+      runGit(other, 'commit', '--allow-empty', '-m', 'newer')
+      runGit(other, 'push', 'origin', 'release')
+      const newer = runGit(other, 'rev-parse', 'HEAD').trim()
+      const local = runGit(repo.dir, 'rev-parse', 'release').trim()
+
+      const created = await workspaces.create(tasks.createTask({ title: 'Fresh' }).id, 'release')
+
+      expect(runGit(created.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(newer)
+      expect(runGit(repo.dir, 'rev-parse', 'release').trim()).toBe(local)
+      expect(() => runGit(created.workspace ?? '', 'rev-parse', '@{upstream}')).toThrow()
+    },
+    GIT_TEST_MS,
+  )
+
+  it(
+    'starts a picked branch from its local commits that are not pushed, even offline',
+    async () => {
+      const origin = addBareOrigin(repo)
+      runGit(repo.dir, 'checkout', '-b', 'release')
+      runGit(repo.dir, 'push', '-u', 'origin', 'release')
+      runGit(repo.dir, 'commit', '--allow-empty', '-m', 'local only')
+      runGit(repo.dir, 'checkout', 'main')
+      const local = runGit(repo.dir, 'rev-parse', 'release').trim()
+
+      const first = await workspaces.create(tasks.createTask({ title: 'Ahead' }).id, 'release')
+      expect(runGit(first.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(local)
+
+      rmSync(origin, { recursive: true, force: true })
+      const second = await workspaces.create(tasks.createTask({ title: 'Offline' }).id, 'release')
+      expect(runGit(second.workspace ?? '', 'rev-parse', 'HEAD').trim()).toBe(local)
+    },
+    GIT_TEST_MS,
+  )
 
   it('starts a workspace from the branch it is given', async () => {
     runGit(repo.dir, 'checkout', '-b', 'release')

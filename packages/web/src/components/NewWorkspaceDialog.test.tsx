@@ -110,6 +110,7 @@ type DialogOptions = {
   create?: (input: NewWorkspaceInput) => Promise<Task>
   initialRepo?: string
   repos?: Repos
+  branches?: { branches: string[]; current: string | null; defaultBranch: string | null }
 }
 
 function dialog({
@@ -118,6 +119,7 @@ function dialog({
   create: makeTask,
   initialRepo,
   repos = REPOS,
+  branches = { branches: ['main'], current: 'main', defaultBranch: 'main' },
 }: DialogOptions = {}) {
   const create = vi.fn(makeTask ?? (async (_input: NewWorkspaceInput) => TASK))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -125,7 +127,7 @@ function dialog({
     <QueryClientProvider client={client}>
       <NewWorkspaceDialog
         repos={list}
-        loadBranches={async () => ({ branches: ['main'], current: 'main' })}
+        loadBranches={async () => branches}
         create={create}
         onCreated={vi.fn()}
         onClose={vi.fn()}
@@ -1058,6 +1060,35 @@ describe('the context area of the Start a task dialog', () => {
       repo: 'default',
       agent: 'claude-code',
     })
+  })
+
+  it('starts from the default branch, and sends no base while it is kept', async () => {
+    const { create } = dialog({
+      branches: { branches: ['dev', 'main'], current: 'dev', defaultBranch: 'main' },
+    })
+    const user = userEvent.setup()
+    await waitFor(() => expect(branch().value).toBe('main (default)'))
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty('base')
+  })
+
+  it('sends the picked branch as the base, even the current one', async () => {
+    const { create } = dialog({
+      branches: { branches: ['dev', 'main'], current: 'dev', defaultBranch: 'main' },
+    })
+    const user = userEvent.setup()
+    await waitFor(() => expect(branch().disabled).toBe(false))
+    await user.click(branch())
+    await user.keyboard('dev{Enter}')
+    expect(branch().value).toBe('dev (current)')
+    await user.type(screen.getByLabelText('Task title'), 'Fix the login')
+    await user.click(startButton())
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ base: 'dev' })
   })
 
   it('keeps the attachments line once files are attached', () => {

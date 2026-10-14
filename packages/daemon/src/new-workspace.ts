@@ -14,7 +14,7 @@ export type NewWorkspaceInput = {
   title: string
   // The repository id; none is the default repository.
   repo?: string
-  // A local branch to start from; none is the branch the checkout is on.
+  // A local branch to start from; none is the repository's default branch.
   base?: string
   // The agent that works on the task's stages; none leaves a plain shell.
   agent?: string

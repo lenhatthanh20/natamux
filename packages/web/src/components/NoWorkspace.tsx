@@ -1,6 +1,7 @@
 import type { Task } from '@natamux/core'
 import { FolderGit2, Play } from 'lucide-react'
 import { useState } from 'react'
+import type { BranchList } from '../lib/api'
 import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
 import { StateBadge } from './StateBadge'
 import { Button } from './ui/Button'
@@ -12,8 +13,8 @@ type NoWorkspaceProps = {
   busy: boolean
   // Tasks this one waits for. The agent cannot start before they are done.
   waitingFor: readonly string[]
-  // Local branches a workspace can start from, and the one the checkout is on.
-  branches?: { branches: string[]; current: string | null }
+  // Local branches a workspace can start from, the one the checkout is on, and the default one.
+  branches?: BranchList
   onCreateWorkspace: (base?: string) => void
   onStartAgent: (base?: string) => void
 }
@@ -29,7 +30,8 @@ export function NoWorkspace({
 }: NoWorkspaceProps) {
   const [base, setBase] = useState<string | undefined>(undefined)
   const finished = task.state === 'done' || task.state === 'cancelled'
-  const from = base ?? branches?.current ?? 'HEAD'
+  const start = branches?.defaultBranch ?? branches?.current ?? null
+  const from = base ?? start ?? 'HEAD'
   const blocked =
     waitingFor.length > 0 ? `Waits for ${waitingFor.join(', ')} to be done` : undefined
 
@@ -55,9 +57,9 @@ export function NoWorkspace({
                   <Combobox
                     label="Branch from"
                     placeholder={from}
-                    options={branchOptions(branches.branches, branches.current, null)}
-                    value={base ?? branches.current ?? ''}
-                    onChange={(name) => setBase(name === branches.current ? undefined : name)}
+                    options={branchOptions(branches.branches, branches.current, null, start)}
+                    value={base ?? start ?? ''}
+                    onChange={(name) => setBase(name === start ? undefined : name)}
                     collapsedGroups={[TASK_BRANCH_GROUP]}
                   />
                 </span>
