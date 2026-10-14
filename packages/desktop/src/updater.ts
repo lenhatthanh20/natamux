@@ -20,7 +20,15 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream } from 'node:stream/web'
 import { promisify } from 'node:util'
-import { app, dialog, type MenuItemConstructorOptions, net, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  type MenuItemConstructorOptions,
+  nativeTheme,
+  net,
+  shell,
+} from 'electron'
 import { fetchSignedSums } from './release-signature.js'
 import {
   assetName,
@@ -35,10 +43,20 @@ import {
   SUMS_FILE,
   sha256From,
 } from './update-check.js'
+import {
+  checkingView,
+  downloadingView,
+  type PopupView,
+  popupWindowOptions,
+  showScript,
+  updatePopupUrl,
+} from './update-popup.js'
 
 const run = promisify(execFile)
 const FIRST_CHECK_MS = 30_000
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000
+// A quick check would only flash the popup.
+const POPUP_MIN_MS = 600
 
 type State =
   | { name: 'idle' }
@@ -61,6 +79,8 @@ export type UpdaterOptions = {
   quit: () => void
   // The state changed: the menu shows it.
   changed: () => void
+  // The popup of a manual check sits over this window.
+  parent: () => BrowserWindow | undefined
 }
 
 function canWrite(path: string): boolean {
@@ -87,6 +107,12 @@ export class Updater {
   private readonly dir: string
   private readonly logFile: string
   private readonly headers: Record<string, string>
+  // The popup of a manual check. Undefined when closed, also by the user with Hide.
+  private popup: BrowserWindow | undefined
+  private popupOpenedAt = 0
+  private popupLoaded = false
+  private popupView: PopupView | undefined
+  private popupShown = ''
 
   constructor(private readonly options: UpdaterOptions) {
     this.auto = options.autoUpdate
@@ -150,6 +176,9 @@ export class Updater {
     if (state.name === 'checking' || state.name === 'downloading') {
       return
     }
+    if (manual) {
+      this.openPopup()
+    }
     const ready = state.name === 'ready' ? state : undefined
     if (ready !== undefined && !(await this.newerThanReady(ready.release))) {
       await this.offerRestart(ready.release, manual)
@@ -161,6 +190,7 @@ export class Updater {
       if (!isNewer(release.version, this.options.version)) {
         this.log(`check: ${release.version} is the latest`)
         this.set({ name: 'idle' })
+        await this.closePopup()
         if (manual) {
           await dialog.showMessageBox({
             type: 'info',
@@ -185,6 +215,7 @@ export class Updater {
         return
       }
       this.set({ name: 'downloading', release })
+      this.updatePopup(downloadingView(release.version, 0, undefined))
       const file = await this.download(release, name, sums)
       this.log(`ready: ${release.version} at ${file}`)
       this.set({ name: 'ready', release, file })
@@ -193,6 +224,7 @@ export class Updater {
       this.log(`failed: ${reason(error)}`)
       // A newer download that fails must not lose the update that is ready.
       this.set(ready ?? { name: 'idle' })
+      await this.closePopup()
       if (manual) {
         await dialog.showMessageBox({
           type: 'warning',
@@ -308,7 +340,9 @@ export class Updater {
         : join(folder, `${name}.part`)
 
     this.log(`download: ${url}`)
-    const actual = await this.save(url, part)
+    const actual = await this.save(url, part, (done, total) =>
+      this.updatePopup(downloadingView(release.version, done, total)),
+    )
     if (actual !== expected) {
       rmSync(part, { force: true })
       throw new Error(`The SHA-256 of ${name} does not match ${SUMS_FILE}`)
@@ -334,17 +368,26 @@ export class Updater {
   }
 
   // Streams a download to a file and returns its SHA-256.
-  private async save(url: string, file: string): Promise<string> {
+  private async save(
+    url: string,
+    file: string,
+    progress: (done: number, total: number | undefined) => void,
+  ): Promise<string> {
     const response = await net.fetch(url, { headers: this.headers })
     if (!response.ok || response.body === null) {
       throw new Error(`Download of ${url} failed: HTTP ${response.status}`)
     }
+    const length = Number(response.headers.get('content-length'))
+    const total = Number.isFinite(length) && length > 0 ? length : undefined
     const hash = createHash('sha256')
+    let received = 0
     await pipeline(
       Readable.fromWeb(response.body as unknown as ReadableStream),
       new Transform({
         transform(chunk: Buffer, _encoding, done) {
           hash.update(chunk)
+          received += chunk.length
+          progress(received, total)
           done(null, chunk)
         },
       }),
@@ -396,6 +439,7 @@ export class Updater {
   }
 
   private async offerPage(release: Release, manual: boolean): Promise<void> {
+    await this.closePopup()
     if (!manual && this.asked.has(release.version)) {
       return
     }
@@ -414,6 +458,7 @@ export class Updater {
   }
 
   private async offerRestart(release: Release, manual: boolean): Promise<void> {
+    await this.closePopup()
     if (!manual && this.asked.has(release.version)) {
       return
     }
@@ -430,6 +475,74 @@ export class Updater {
       await this.restart()
     } else if (answer.response === 2) {
       void shell.openExternal(release.page)
+    }
+  }
+
+  private openPopup(): void {
+    this.popupView = checkingView(app.getVersion())
+    if (this.popup !== undefined) {
+      this.sendPopup()
+      return
+    }
+    const parent = this.options.parent()
+    const popup = new BrowserWindow({
+      ...popupWindowOptions(nativeTheme.shouldUseDarkColors, parent?.getBounds()),
+      parent,
+    })
+    this.popup = popup
+    this.popupOpenedAt = Date.now()
+    this.popupLoaded = false
+    this.popupShown = ''
+    popup.webContents.on('will-navigate', (event) => event.preventDefault())
+    popup.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    popup.webContents.once('did-finish-load', () => {
+      this.popupLoaded = true
+      this.sendPopup()
+      popup.show()
+    })
+    popup.on('closed', () => {
+      if (this.popup === popup) {
+        this.popup = undefined
+      }
+    })
+    popup.loadURL(updatePopupUrl()).catch(() => undefined)
+  }
+
+  // Does nothing when the popup is closed, so Hide stays hidden.
+  private updatePopup(view: PopupView): void {
+    if (this.popup !== undefined) {
+      this.popupView = view
+      this.sendPopup()
+    }
+  }
+
+  // Sends only a change: the download reports every chunk, the view changes once a MB.
+  private sendPopup(): void {
+    const popup = this.popup
+    if (popup === undefined || !this.popupLoaded || this.popupView === undefined) {
+      return
+    }
+    const script = showScript(this.popupView)
+    if (script !== this.popupShown) {
+      this.popupShown = script
+      popup.webContents.executeJavaScript(script).catch(() => undefined)
+    }
+  }
+
+  private async closePopup(): Promise<void> {
+    const popup = this.popup
+    if (popup === undefined) {
+      return
+    }
+    const wait = POPUP_MIN_MS - (Date.now() - this.popupOpenedAt)
+    if (wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait))
+    }
+    if (this.popup === popup) {
+      this.popup = undefined
+    }
+    if (!popup.isDestroyed()) {
+      popup.destroy()
     }
   }
 
