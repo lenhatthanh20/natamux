@@ -20,3 +20,20 @@ export function statesById(tasks: readonly Task[]): Map<string, TaskState> {
 export function notificationFor(task: Task): { title: string; body: string } {
   return { title: `${task.id}: ${STATE_LABEL[task.state]}`, body: task.title }
 }
+
+// Tasks that became done since the last look. A cancel is always someone's own act, so it does not
+// ring.
+export function tasksThatFinished(
+  previous: ReadonlyMap<string, TaskState>,
+  tasks: readonly Task[],
+): Task[] {
+  return tasks.filter((task) => {
+    const before = previous.get(task.id)
+    return before !== undefined && before !== 'done' && task.state === 'done'
+  })
+}
+
+// The toast for the task on screen when it finishes.
+export function finishedText(task: Pick<Task, 'id' | 'state'>): string {
+  return task.state === 'cancelled' ? `${task.id} was cancelled.` : `${task.id} is done.`
+}

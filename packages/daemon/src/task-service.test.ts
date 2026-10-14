@@ -19,6 +19,7 @@ import {
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeAttachments, listAttachments } from './attachments.js'
+import { endedShellsPath, saveEndedShells } from './ended-shells.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
 import { readTaskFile, serializeTask, taskFilePath, tasksDir, writeTaskFile } from './task-files.js'
@@ -1287,6 +1288,9 @@ describe('event log files', () => {
     writeFileSync(join(dataDir, `agent-launch-${task.id}.sh`), 'echo hi\n')
     writeFileSync(join(dataDir, `agent-launch-${task.id}-2.sh`), 'echo hi\n')
     writeFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'keep\n')
+    saveEndedShells(dataDir, task.id, [
+      { name: '1', agent: null, stage: null, endedAt: '2026-10-15T00:07:00.000Z', text: 'done' },
+    ])
 
     expect(service.deleteTask(task.id)).toEqual([])
 
@@ -1295,6 +1299,7 @@ describe('event log files', () => {
     expect(existsSync(join(dataDir, 'tasks', task.id))).toBe(false)
     expect(existsSync(join(dataDir, `agent-launch-${task.id}.sh`))).toBe(false)
     expect(existsSync(join(dataDir, `agent-launch-${task.id}-2.sh`))).toBe(false)
+    expect(existsSync(endedShellsPath(dataDir, task.id))).toBe(false)
     expect(readFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'utf8')).toBe('keep\n')
     expect(service.listTasks()).toEqual([])
     expect(messages.at(-1)).toEqual({ kind: 'task.deleted', taskId: task.id })

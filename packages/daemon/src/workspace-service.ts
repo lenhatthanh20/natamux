@@ -6,6 +6,7 @@ import type {
   FileDiff,
   GitGraph,
   ImageSide,
+  PullRequestStatus,
   Task,
 } from '@natamux/core'
 import { DEFAULT_PROGRAMS, isLaunchable, type LaunchableAgent } from './agent-launch.js'
@@ -23,6 +24,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  deletePushedBranch,
   fetchUpstream,
   hasSubmodules,
   listBranches,
@@ -86,6 +88,19 @@ type WorkspaceServiceOptions = {
 export type RemoveWorkspaceResult = {
   task: Task
   branchDeleted: boolean
+}
+
+// `git branch -d` keeps a branch that GitHub merged with a squash or a rebase. A pull request that
+// says it is merged lets it go too, once origin has all of its commits, so no work is lost.
+async function deleteFinishedBranch(
+  repoDir: string,
+  branch: string,
+  pullRequest: PullRequestStatus | null,
+): Promise<boolean> {
+  if (await deleteMergedBranch(repoDir, branch)) {
+    return true
+  }
+  return pullRequest?.state === 'merged' && (await deletePushedBranch(repoDir, branch))
 }
 
 const MAX_SLUG_LENGTH = 40
@@ -299,7 +314,7 @@ export class WorkspaceService {
 
       const branchDeleted =
         options.deleteBranch && task.branch !== null
-          ? await deleteMergedBranch(repoDir, task.branch)
+          ? await deleteFinishedBranch(repoDir, task.branch, task.prStatus)
           : false
       this.tasks.recordWorkspace(taskId, {
         workspace: null,

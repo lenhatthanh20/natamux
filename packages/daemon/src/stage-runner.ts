@@ -4,6 +4,8 @@ import { basename, join } from 'node:path'
 import {
   type ContextSource,
   codeStageBefore,
+  ENDED_SHELL_LINES,
+  type EndedShell,
   findStep,
   isGroup,
   offersCi,
@@ -30,6 +32,7 @@ import { AGENT_EXITED_TITLE, type AgentRunner, quoteArgument } from './agent-run
 import { fillSkills, resolveSkill, type SkillContext } from './agent-skills.js'
 import { listAttachments, restoreAttachments, withAttachmentSection } from './attachments.js'
 import { type CiResult, checkOnCi, ciBranchOf } from './ci-check.js'
+import { readEndedShells, saveEndedShells } from './ended-shells.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { deleteRemoteRef, type RunGh, runGh } from './git.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
@@ -47,6 +50,18 @@ import { MAIN_TERMINAL, SHELLS, type TerminalService } from './terminal-service.
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
 export const LAUNCH_GRACE_MS = 30_000
+
+// How long a finishing task waits for a shell's output to reach its screen before it keeps the
+// screen as it is. A flood must not keep the agent running.
+const SCREEN_WAIT_MS = 1000
+
+function settledOrLate(settled: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, SCREEN_WAIT_MS)
+  })
+  return Promise.race([settled, late]).finally(() => clearTimeout(timer))
+}
 
 // The escape sequences that set the window title, as the Windows console passes them on.
 const AGENT_EXITED_MARKS = [`\x1b]0;${AGENT_EXITED_TITLE}`, `\x1b]2;${AGENT_EXITED_TITLE}`]
@@ -361,7 +376,7 @@ export class StageRunner {
 
   private onMessage(message: DaemonMessage): void {
     if (message.kind === 'task.deleted') {
-      this.finish(message.taskId)
+      this.finish(message.taskId, { keepScreens: false })
       return
     }
     if (message.kind === 'task.created') {
@@ -402,16 +417,28 @@ export class StageRunner {
     }
     const ended = task.state === 'done' || task.state === 'cancelled'
     if (ended && !RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
-      this.finish(task.id)
+      this.finish(task.id, { keepScreens: true })
     }
     if (task.state === 'done' || event.type === 'task.edited') {
       this.startWaiting()
     }
   }
 
-  // A task that is done or cancelled needs its agent and its shells no more.
-  private finish(taskId: string): void {
-    this.terminals.close(taskId)
+  // A task that is done or cancelled needs its agent and its shells no more. A deleted task keeps
+  // nothing; a finished one keeps the last screens of its shells for the wrap-up.
+  private finish(taskId: string, options: { keepScreens: boolean }): void {
+    const agents = new Map<string, string>()
+    for (const terminal of this.terminals.list(taskId)) {
+      const launched = this.launched.get(`${taskId}/${terminal}`)
+      if (launched !== undefined) {
+        agents.set(terminal, launched.agent)
+      }
+    }
+    if (options.keepScreens) {
+      this.background(this.endShells(taskId, agents))
+    } else {
+      this.terminals.close(taskId)
+    }
     for (const key of [...this.launched.keys(), ...this.reported.keys()]) {
       if (key.startsWith(`${taskId}/`)) {
         this.launched.delete(key)
@@ -423,6 +450,75 @@ export class StageRunner {
     this.waitingForWorkspace.delete(taskId)
     this.waitingForTasks.delete(taskId)
     this.withoutAgent.delete(taskId)
+  }
+
+  // Keeps the last screen of each shell, then ends it. A shell where a program that is no agent
+  // runs, such as a dev server, stays until it is idle. Without a list of processes nothing tells
+  // an agent from a dev server, so such a shell ends, as all of them did before.
+  private async endShells(taskId: string, launched: ReadonlyMap<string, string>): Promise<void> {
+    const endedAt = new Date(this.now()).toISOString()
+    const finishing = this.tasks.listTasks().find((each) => each.id === taskId)
+    const stages = finishing === undefined ? new Map<string, string>() : this.lastStages(finishing)
+    const shells: EndedShell[] = []
+    const kept = new Set<string>()
+    for (const terminal of this.terminals.list(taskId)) {
+      await settledOrLate(this.terminals.settled(taskId, terminal))
+      const commands = await this.terminals.commands(taskId, terminal).catch(() => undefined)
+      const text = this.terminals.lastScreen(taskId, terminal, ENDED_SHELL_LINES)
+      if (text === undefined) {
+        // Closed meanwhile.
+        continue
+      }
+      const agent = launched.get(terminal) ?? this.agentOfCommands(commands)
+      shells.push({ name: terminal, agent, stage: stages.get(terminal) ?? null, endedAt, text })
+      const program = this.terminals.foreground(taskId, terminal)
+      const busy = program !== undefined && !SHELLS.includes(basename(program))
+      if (busy && agent === null && commands !== undefined) {
+        kept.add(terminal)
+      }
+    }
+    // A task deleted meanwhile keeps nothing, and its shells are closed already. One started again
+    // meanwhile may use these shells.
+    const task = this.tasks.listTasks().find((each) => each.id === taskId)
+    if (task === undefined || (task.state !== 'done' && task.state !== 'cancelled')) {
+      return
+    }
+    // Before the shells end: their end tells the dashboards to read the screens. The first finish
+    // wins, so a later event does not replace the screens with newer, empty shells.
+    if (shells.length > 0 && readEndedShells(this.dataDir, taskId).length === 0) {
+      saveEndedShells(this.dataDir, taskId, shells)
+    }
+    for (const { name } of shells) {
+      if (kept.has(name)) {
+        this.terminals.endWhenIdle(taskId, name)
+      } else {
+        this.terminals.closeOne(taskId, name)
+      }
+    }
+  }
+
+  // The stage that started last in each shell, from the task's events.
+  private lastStages(task: Task): Map<string, string> {
+    const steps = this.tasks.stepsOf(task)
+    const stages = new Map<string, string>()
+    for (const { accepted, event } of this.tasks.listEvents(task.id)) {
+      const stage = event.payload.stage
+      if (accepted && event.type === 'stage.started' && typeof stage === 'string') {
+        stages.set(terminalOfStage(steps, stage), stage)
+      }
+    }
+    return stages
+  }
+
+  private agentOfCommands(commands: readonly string[] | undefined): string | null {
+    const programOf = (agent: LaunchableAgent) => this.agents.programOf(agent)
+    for (const line of commands ?? []) {
+      const agent = agentOfCommand(line, programOf)
+      if (agent !== undefined) {
+        return agent
+      }
+    }
+    return null
   }
 
   // A task made with no agent: its stages that need one stay ready, and no agent starts in its
@@ -803,12 +899,9 @@ export class StageRunner {
   async agentIn(taskId: string, terminal: string): Promise<string | null> {
     // A process that ends while `ps` runs must not fail the request.
     const commands = await this.terminals.commands(taskId, terminal).catch(() => undefined)
-    const programOf = (agent: LaunchableAgent) => this.agents.programOf(agent)
-    for (const line of commands ?? []) {
-      const agent = agentOfCommand(line, programOf)
-      if (agent !== undefined) {
-        return agent
-      }
+    const agent = this.agentOfCommands(commands)
+    if (agent !== null) {
+      return agent
     }
     const launched = this.launched.get(`${taskId}/${terminal}`)
     if (

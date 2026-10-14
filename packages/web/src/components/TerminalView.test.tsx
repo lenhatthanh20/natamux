@@ -462,39 +462,36 @@ async function openNewShell(made: FakeSocket[]) {
   act(() => made[1]?.open())
 }
 
-const DONE = 'Task done. The agent and its shells were closed.'
-const CANCELLED = 'Task cancelled. The agent and its shells were closed.'
-const REASONS = [
-  ['done', DONE],
-  ['cancelled', CANCELLED],
-] as const
+const ENDED = 'The shell ended.'
+const FINISHED = ['done', 'cancelled'] as const
 
 describe('TerminalView after the task ends', () => {
-  it.each(REASONS)('says the task is %s, whatever the exit code', async (state, text) => {
+  // The finished banner says how the task ended, once for all its shells.
+  it.each(FINISHED)('says only that the shell ended for a %s task', async (state) => {
     const { made } = await taskTerminal(state)
     exit(made[0], 137)
 
     expect(screen.getAllByRole('status')).toHaveLength(1)
-    expect(status()).toBe(text)
-    expect(screen.queryByText('The shell ended.')).toBeNull()
+    expect(status()).toBe(ENDED)
+    expect(screen.queryByText(/shells were closed/)).toBeNull()
     expect(newShell()).not.toBeNull()
   })
 
-  it.each(REASONS)('says the task is %s when the shell is gone', async (state, text) => {
+  it.each(FINISHED)('says the shell ended when it is gone, for a %s task', async (state) => {
     const { made } = await taskTerminal(state)
     act(() => made[0]?.drop(CLOSE_GONE))
 
-    expect(status()).toBe(text)
+    expect(status()).toBe(ENDED)
     expect(newShell()).not.toBeNull()
   })
 
-  it('follows a task state that arrives after the exit frame', async () => {
+  it('drops the exit code once the task state says the task finished', async () => {
     const { made, connect, view } = await taskTerminal('running')
-    exit(made[0])
-    expect(status()).toBe('The shell ended.')
+    exit(made[0], 1)
+    expect(status()).toBe('The shell ended. Exit code 1.')
 
     view.rerender(<TerminalView connect={connect} cacheKey={KEY} taskState="done" />)
-    expect(status()).toBe(DONE)
+    expect(status()).toBe(ENDED)
   })
 })
 
@@ -594,13 +591,13 @@ describe('TerminalView open a new shell', () => {
     expect(status()).toBe('The shell ended.')
   })
 
-  it('shows the task reason again when the new shell ends while the task is done', async () => {
+  it('says the new shell ended when it ends while the task is done', async () => {
     const { made } = await taskTerminal('done')
     exit(made[0])
     await openNewShell(made)
 
-    exit(made[1], 0)
-    expect(status()).toBe(DONE)
+    exit(made[1], 2)
+    expect(status()).toBe(ENDED)
   })
 
   it('shows the error at the top when the new shell cannot start', async () => {

@@ -55,7 +55,21 @@ In the workspace list:
 - Only the open workspace shows the work under it: one row per shell, then its open subtasks. A folded task still shows its subtasks that wait on you, failed or are blocked. Click a task, or press `Right` on it, to open it; the task that was open before folds. A shell row shows the state, the agent's icon, the stage (or **Shell 2** for an agent you started yourself), what the agent does and the shell (**S1**). A shell with no agent shows a terminal icon and its program, such as **zsh**. Click a shell row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the shells of tasks that work or wait, and of the open workspace.
 - Double-click a title, or press `F2`, to rename it.
 - Right-click a row, or press `Shift+F10`, for **View changes**, **Rename**, **Pin to the top**, **Copy branch name**, **Copy folder path**, **Remove workspace** and **Delete task**. **Remove workspace** deletes the worktree and keeps the task. **Delete task** deletes the task, its notes and its history, and the worktree when there is one. Both ask first. Pinned workspaces move to a **Pinned** section at the top.
-- Press `Delete` on a row to remove the workspace. Natamux asks first. The task stays. The branch stays when it has commits that are not merged.
+- Press `Delete` on a row to remove the workspace. Natamux asks first, as described in [When a task is finished](#when-a-task-is-finished).
+- A task that finishes while it is open keeps its row in place. It moves under "N finished" when you open another task.
+
+## When a task is finished
+
+When a task is done or cancelled, Natamux says so once with a message. When the tab is in the background, a task that is done also shows a notification.
+
+- A banner under the header says **Task done.** or **Task cancelled.** and what is left, with the next step as its main button: **Commit…** for files that are not committed, **Push** for commits that origin does not have, **Create pull request**, or **Open pull request** while it is open. When nothing is left, the main button is **Remove workspace**. The banner shows on every tab.
+- The **Terminal** tab shows the wrap-up instead of the shells. It lists the changes, the push, the pull request and the branch, each with a mark and a button when there is something to do. Under **Shells** are the shells that still run and the shells the task ended, with their agent and stage, and **Show last screen**.
+- **Remove workspace** asks first. The dialog lists what goes and what stays:
+  - Files that are not committed stop it. The dialog lists them and offers **View changes** and **Commit…**.
+  - It names a program that still runs, such as `node` in Shell 7, and the button then reads **Stop it and remove**.
+  - **Also delete the branch** is on when the branch is merged. A branch with commits that are not merged always stays. A branch that GitHub merged with a squash goes too, once origin has all of its commits.
+  - The task, its notes, docs and history stay.
+- The dialog stays open until the workspace is gone, and shows an error inside it. Then the task shows a summary with its pull request, its branch and when it finished, and **Open pull request**, **Show progress** and **Start a follow-up task**. **Start a follow-up task** opens **Start a task** in the same project, with a title that names the task.
 
 ## Task views
 
@@ -168,7 +182,7 @@ A running task whose agent waits for background work, such as a test run in a ba
 
 ## Notifications
 
-Click **Notify me** in the status bar to allow system notifications. When a task starts to wait for you while the dashboard is not in front, you get a notification titled with the task id and state, such as `T-0003: Needs input`, with the task title as text. Click it to bring the dashboard forward.
+Click **Notify me** in the status bar to allow system notifications. When a task starts to wait for you, or is done, while the dashboard is not in front, you get a notification titled with the task id and state, such as `T-0003: Needs input` or `T-0003: Done`, with the task title as text. Click it to bring the dashboard forward. A cancelled task does not notify.
 
 Natamux does not notify about tasks that already waited when you opened the dashboard.
 

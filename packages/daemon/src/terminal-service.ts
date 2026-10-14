@@ -4,6 +4,7 @@ import {
   ACK_EVERY_BYTES,
   plainText,
   portRange,
+  SHELL_PROGRAMS,
   scrollbackLines,
   TERMINAL_SCROLLBACK_MAX_LINES,
   type TerminalServerMessage,
@@ -129,19 +130,7 @@ export const WORKSPACE_QUIET_MS = 500
 // A task can have several terminals, named "1", "2" and so on. The agent runs in the first.
 export const MAIN_TERMINAL = '1'
 
-// The names of shells. Another program in the foreground means something runs in the terminal.
-export const SHELLS = [
-  'bash',
-  'zsh',
-  'sh',
-  'dash',
-  'fish',
-  'ksh',
-  'nu',
-  'pwsh',
-  'powershell.exe',
-  'cmd.exe',
-]
+export const SHELLS = SHELL_PROGRAMS
 
 // What a snapshot of the screen asks its owner to do, see ScreenState.snapshot.
 export type SnapshotSteps = {
@@ -255,6 +244,25 @@ export class ScreenState {
   // Resolves once all output so far is on the screen.
   settled(): Promise<void> {
     return new Promise((resolve) => (this.disposed ? resolve() : this.whenParsed(resolve)))
+  }
+
+  // The last lines of the screen and the history above it, as plain text, without the empty rows
+  // under the last output. Only the output parsed so far counts, see settled().
+  lastLines(max: number): string {
+    if (this.disposed) {
+      return ''
+    }
+    const buffer = this.terminal.buffer.active
+    const line = (row: number) => buffer.getLine(row)?.translateToString(true) ?? ''
+    let end = buffer.length
+    while (end > 0 && line(end - 1) === '') {
+      end -= 1
+    }
+    const lines: string[] = []
+    for (let row = Math.max(0, end - max); row < end; row += 1) {
+      lines.push(line(row))
+    }
+    return lines.join('\n')
   }
 
   dispose(): void {
@@ -1197,6 +1205,20 @@ export class TerminalService {
     }
     state.budgetBytes += bytes
     return true
+  }
+
+  // The last lines of a shell as plain text. Undefined when the shell is not open.
+  lastScreen(taskId: string, terminal: string, maxLines: number): string | undefined {
+    return this.sessions.get(sessionKey(taskId, terminal))?.screen.lastLines(maxLines)
+  }
+
+  // A shell that a finished task kept, because a program runs in it, ends once it is idle, also
+  // when no dashboard ever attaches to it.
+  endWhenIdle(taskId: string, terminal: string): void {
+    const session = this.sessions.get(sessionKey(taskId, terminal))
+    if (session !== undefined && session.clients.size === 0) {
+      this.closeWhenIdle(session)
+    }
   }
 
   // An ended task needs no shell that nobody looks at. One that runs a program, such as a dev

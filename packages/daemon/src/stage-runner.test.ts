@@ -12,6 +12,7 @@ import { trustPaths } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { decodeAttachments } from './attachments.js'
 import type { CiResult } from './ci-check.js'
+import { readEndedShells } from './ended-shells.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import type { RunCommand } from './stage-checks.js'
@@ -2022,9 +2023,49 @@ describe('a prompt for a running agent', () => {
     const { task, pty } = await atSpecWithShell('node')
 
     tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
 
     expect(pty.killed).toBe(true)
     expect(terminals.list(task.id)).toEqual([])
+  })
+
+  it('keeps the last screen of each shell of a task that is cancelled', async () => {
+    const { task } = await atSpecWithShell('node')
+    terminals.run(task.id, 'ls', '2')
+    await terminals.settled(task.id, '2')
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
+
+    const shells = readEndedShells(dataDir, task.id)
+    const at = '2026-10-09T09:00:00.000Z'
+    // Shell 1 ran the spec stage last; no stage used shell 2.
+    expect(shells.map(({ text: _, ...shell }) => shell)).toEqual([
+      { name: '1', agent: null, stage: 'spec', endedAt: at },
+      { name: '2', agent: null, stage: null, endedAt: at },
+    ])
+    expect(shells[0]?.text).toContain('echo ready')
+    expect(shells[1]?.text).toContain('ls')
+  })
+
+  it('keeps a shell where a program that is no agent runs, such as a dev server', async () => {
+    const { task, pty } = await atSpecWithShell('node')
+    pty.commandLines = ['node /work/node_modules/.bin/claude --settings x.json']
+    terminals.run(task.id, 'pnpm dev', '2')
+    const server = ptys.at(-1) as FakePty
+    server.program = 'node'
+    server.commandLines = ['node /work/node_modules/.bin/vite']
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
+
+    expect(pty.killed).toBe(true)
+    expect(server.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['2'])
+    expect(readEndedShells(dataDir, task.id).map((shell) => shell.agent)).toEqual([
+      'claude-code',
+      null,
+    ])
   })
 })
 

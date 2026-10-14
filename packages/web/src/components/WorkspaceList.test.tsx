@@ -532,6 +532,21 @@ const child = makeTask({
   createdAt: '2026-10-10T07:30:00.000Z',
 })
 
+describe('a task that finishes while it is open', () => {
+  it('keeps its row in place until another task is opened', () => {
+    const running = makeTask({ id: 'T-0001', title: 'Still going' })
+    const finished = { ...running, state: 'done' as const }
+    const view = list({ tasks: [running], pinnedIds: [], currentId: 'T-0001' })
+
+    view.rerender({ tasks: [finished], pinnedIds: [], currentId: 'T-0001' })
+    expect(rowOf('Still going')).toBeTruthy()
+    expect(screen.queryByText('1 finished')).toBeNull()
+
+    view.rerender({ tasks: [finished], pinnedIds: [], currentId: null })
+    expect(screen.getByText('1 finished')).toBeTruthy()
+  })
+})
+
 describe('subtasks under their parent', () => {
   it('shows an open subtask inside its parent while the parent is the open workspace', () => {
     list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })

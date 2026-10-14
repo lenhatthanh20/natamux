@@ -26,6 +26,7 @@ import { CHECKS_COLOR, pullRequestSummary } from '../lib/pull-request'
 import {
   actionsFor,
   agentAction,
+  cancelTaskDescription,
   deleteTaskDescription,
   formatExact,
   isQuiet,
@@ -122,7 +123,7 @@ export function TaskDetail({
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
   const start = branches?.defaultBranch ?? branches?.current ?? null
-  const [asking, setAsking] = useState<'cancel' | 'remove' | 'delete' | 'tries' | null>(null)
+  const [asking, setAsking] = useState<'cancel' | 'delete' | 'tries' | null>(null)
   const actions = actionsFor(task.state)
   const stateActions = actions.filter((action) => !action.confirm)
   const cancelAction = actions.find((action) => action.confirm)
@@ -398,7 +399,7 @@ export function TaskDetail({
                     variant="ghost"
                     icon={FolderMinus}
                     disabled={busy}
-                    onClick={() => setAsking('remove')}
+                    onClick={onRemoveWorkspace}
                   >
                     Remove workspace
                   </Button>
@@ -488,20 +489,12 @@ export function TaskDetail({
       {asking === 'tries' && onFanOut !== undefined && (
         <FanOutDialog busy={busy} onFanOut={onFanOut} onClose={() => setAsking(null)} />
       )}
-      {asking === 'remove' && (
-        <ConfirmDialog
-          title="Remove the workspace?"
-          description={`This deletes the worktree folder of ${task.id}. The branch stays when it has commits that are not merged.`}
-          confirmLabel="Remove"
-          onConfirm={onRemoveWorkspace}
-          onClose={() => setAsking(null)}
-        />
-      )}
       {asking === 'cancel' && cancelAction !== undefined && (
         <ConfirmDialog
           title={`Cancel ${task.id}?`}
-          description="A cancelled task cannot be started again."
+          description={cancelTaskDescription(task)}
           confirmLabel="Cancel task"
+          cancelLabel="Keep working"
           onConfirm={() => onAction(cancelAction)}
           onClose={() => setAsking(null)}
         />

@@ -2,6 +2,7 @@ import type {
   Attachment,
   ChangeEntry,
   CommitMessageDraft,
+  EndedShell,
   FileDiff,
   GitGraph as GitGraphData,
   ImageSide,
@@ -14,20 +15,25 @@ import { useActivity } from '../hooks/useActivity'
 import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import type { StageFile, StoredEvent, TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import { isFinishedState } from '../lib/finished'
 import { FALLBACK_POLL_MS } from '../lib/live'
+import { finishedText } from '../lib/notify'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { type ToastAction, toast } from '../lib/toasts'
 import type { WorkspaceTab } from '../lib/view-store'
-import { nextGitStep, waitReason } from '../lib/workspace'
+import { nextGitStep, pushButton, waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
+import { FinishedBanner } from './FinishedBanner'
 import { GitGraph } from './GitGraph'
 import { NeedsInputBanner } from './NeedsInputBanner'
 import { ReviewBanner } from './ReviewBanner'
 import { ShellPanes } from './ShellPanes'
+import { Button } from './ui/Button'
 import { SkeletonList } from './ui/Skeleton'
 import { Tabs, tabPanelProps } from './ui/Tabs'
 import { WorkspaceHeader } from './WorkspaceHeader'
+import { WrapUp } from './WrapUp'
 
 type ChangesViewProps = {
   task: Task
@@ -67,6 +73,10 @@ type ChangesViewProps = {
   // For a task in review: approve a stage, or open the form that sends the task back.
   approveStage?: (stage: string) => Promise<Task>
   onSendBack?: () => void
+  // For a done or cancelled task: the last screens of its shells, and the dialog that removes its
+  // workspace.
+  loadEndedShells?: () => Promise<EndedShell[]>
+  onRemoveWorkspace?: () => void
 }
 
 type GitAction = {
@@ -107,6 +117,8 @@ export function ChangesView({
   startAgent,
   approveStage,
   onSendBack,
+  loadEndedShells,
+  onRemoveWorkspace,
   loadStageFiles,
   readStageFile,
   writeStageFile,
@@ -184,6 +196,24 @@ export function ChangesView({
     // The commit box is drawn with the tab.
     requestAnimationFrame(() => document.getElementById('commit-message')?.focus())
   }
+
+  const finished = isFinishedState(task.state)
+  // The Terminal tab of a finished task is its wrap-up, until the user asks for a shell.
+  const [shellsWanted, setShellsWanted] = useState(false)
+  const showWrapUp =
+    finished && !shellsWanted && loadEndedShells !== undefined && loadShells !== undefined
+  // One toast when the task on screen finishes, however it happened. A task opened finished says
+  // nothing.
+  const lastState = useRef(task.state)
+  useEffect(() => {
+    const before = lastState.current
+    lastState.current = task.state
+    if (!isFinishedState(before) && isFinishedState(task.state)) {
+      toast(finishedText(task), 'success')
+    }
+  }, [task])
+  const facts = { uncommitted, graph: graph.data ?? null }
+  const pushControl = pushButton(task.branch, pushStatus, uncommitted)
 
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
@@ -327,13 +357,37 @@ export function ChangesView({
           onSendBack={onSendBack}
         />
       )}
+      {finished && onRemoveWorkspace !== undefined && (
+        <FinishedBanner
+          task={task}
+          facts={facts}
+          pushLabel={pushControl.label}
+          pushReason={pushControl.reason}
+          pending={pending}
+          onCommit={openCommit}
+          onPush={() => gitAction.mutate({ action: 'push' })}
+          onCreatePullRequest={() => gitAction.mutate({ action: 'pull-request' })}
+          onRemove={onRemoveWorkspace}
+        />
+      )}
       <Tabs
         label="View"
         idPrefix="workspace"
         value={tab}
         onChange={pickTab}
         className="px-2.5"
-        actions={tab === 'terminal' ? <div ref={setTabActions} className="flex" /> : undefined}
+        actions={
+          tab === 'terminal' ? (
+            <>
+              {finished && shellsWanted && (
+                <Button variant="link" onClick={() => setShellsWanted(false)}>
+                  Back to wrap-up
+                </Button>
+              )}
+              <div ref={setTabActions} className="flex" />
+            </>
+          ) : undefined
+        }
         tabs={[
           { id: 'terminal', label: 'Terminal', icon: Terminal },
           // The files the tab lists, so the user sees from any tab that the agent changed some.
@@ -354,16 +408,37 @@ export function ChangesView({
           {...tabPanelProps('workspace', 'terminal', 'Terminal')}
           className="flex min-h-0 flex-1 flex-col p-2"
         >
-          <ShellPanes
-            task={task}
-            activity={terminalActivity}
-            connect={connectTerminal}
-            loadTerminals={loadTerminals}
-            loadShells={loadShells}
-            closeTerminal={closeTerminal}
-            focusToken={focusToken}
-            actionsSlot={tabActions}
-          />
+          {showWrapUp ? (
+            <WrapUp
+              task={task}
+              facts={facts}
+              paths={(changes.data ?? []).map((change) => change.path)}
+              pushLabel={pushControl.label}
+              pushReason={pushControl.reason}
+              loadEndedShells={loadEndedShells}
+              loadShells={loadShells}
+              closeTerminal={closeTerminal}
+              onAction={(action) => {
+                if (action === 'view-changes') {
+                  pickTab('changes')
+                } else {
+                  gitAction.mutate({ action: action === 'push' ? 'push' : 'pull-request' })
+                }
+              }}
+              onOpenShells={() => setShellsWanted(true)}
+            />
+          ) : (
+            <ShellPanes
+              task={task}
+              activity={terminalActivity}
+              connect={connectTerminal}
+              loadTerminals={loadTerminals}
+              loadShells={loadShells}
+              closeTerminal={closeTerminal}
+              focusToken={focusToken}
+              actionsSlot={tabActions}
+            />
+          )}
         </div>
       )}
 

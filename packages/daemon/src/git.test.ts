@@ -17,6 +17,7 @@ import {
   createPullRequest,
   currentBranch,
   deleteMergedBranch,
+  deletePushedBranch,
   deleteRemoteRef,
   fetchUpstream,
   findPullRequest,
@@ -277,6 +278,43 @@ describe('deleteMergedBranch', () => {
 
   it('returns false for a branch that does not exist', async () => {
     expect(await deleteMergedBranch(repo.dir, 'natamux/nope')).toBe(false)
+  })
+})
+
+describe('deletePushedBranch', () => {
+  const branch = 'natamux/t-0001-example'
+
+  async function branchWithWork(): Promise<void> {
+    addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, branch)
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'work')
+  }
+
+  it('deletes a branch that is not merged here, when origin has all of it', async () => {
+    await branchWithWork()
+    runGit(worktreePath, 'push', 'origin', branch)
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await deletePushedBranch(repo.dir, branch)).toBe(true)
+    expect(branchExists(branch)).toBe(false)
+  })
+
+  it('keeps a branch with a commit that origin does not have', async () => {
+    await branchWithWork()
+    runGit(worktreePath, 'push', 'origin', branch)
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'more')
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await deletePushedBranch(repo.dir, branch)).toBe(false)
+    expect(branchExists(branch)).toBe(true)
+  })
+
+  it('keeps a branch that origin does not have', async () => {
+    await branchWithWork()
+    await removeWorktree(repo.dir, worktreePath)
+
+    expect(await deletePushedBranch(repo.dir, branch)).toBe(false)
+    expect(branchExists(branch)).toBe(true)
   })
 })
 

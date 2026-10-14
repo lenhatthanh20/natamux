@@ -13,6 +13,7 @@ import { CLOSE_GONE, SILENT_CLOSE_MS } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
+import { saveEndedShells } from './ended-shells.js'
 import { EventBus } from './event-bus.js'
 import { worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
@@ -1242,6 +1243,33 @@ describe('changed images', () => {
 
     expect(response.statusCode).toBe(413)
     expect(response.json().error).toBe('too_large')
+  })
+})
+
+describe('ended shells', () => {
+  const endedShells = (id: string) =>
+    app.inject({ method: 'GET', url: `/tasks/${id}/ended-shells`, headers: authorization })
+
+  it('lists the last screens kept for a task', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Example' },
+    })
+    expect((await endedShells('T-0001')).json()).toEqual({ shells: [] })
+
+    const shell = {
+      name: '1',
+      agent: null,
+      stage: null,
+      endedAt: '2026-10-15T00:07:00.000Z',
+      text: 'Done.',
+    }
+    saveEndedShells(join(repo.root, 'data'), 'T-0001', [shell])
+
+    expect((await endedShells('T-0001')).json()).toEqual({ shells: [shell] })
+    expect((await endedShells('T-0042')).statusCode).toBe(404)
   })
 })
 

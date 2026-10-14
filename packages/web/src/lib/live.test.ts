@@ -188,8 +188,9 @@ describe('applyLiveMessages', () => {
       { kind: 'shells.changed', taskId: 'T-0001' },
     ])
 
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ended-shells', 'T-0001'] })
   })
 
   it('reads the files and the sizes of a changed workspace again, not its shells', () => {

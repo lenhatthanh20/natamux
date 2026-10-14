@@ -25,7 +25,7 @@ function newestFirst(a: Task, b: Task): number {
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
 }
 
-const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
+const isFinishedTask = (task: Task) => task.state === 'done' || task.state === 'cancelled'
 const repoOf = (task: Task) => task.repo ?? DEFAULT_REPO_ID
 
 // The repositories, then the ones only tasks still name (removed ones). Their id is their name.
@@ -45,11 +45,14 @@ export function knownRepos(
 
 // The sidebar's workspaces: the pinned ones, then one group per repository. Every repository has a
 // group, an empty one too, so a workspace can be made in it.
+// `heldId`: a task that finished while it was open stays among the open rows, where it was.
 export function workspaceGroups(
   repos: readonly Pick<Repo, 'id' | 'name'>[],
   tasks: readonly Task[],
   pinnedIds: readonly string[],
+  heldId: string | null = null,
 ): WorkspaceGroups {
+  const isFinished = (task: Task) => isFinishedTask(task) && task.id !== heldId
   const withWorkspace = tasks.filter((task) => task.workspace !== null)
   const pinned = pinnedIds
     .map((id) => withWorkspace.find((task) => task.id === id))
@@ -87,6 +90,24 @@ export function workspaceGroups(
     }
   })
   return { pinned, groups, children }
+}
+
+// The current task, and whether it was still open while it was current. A task that finishes in
+// front of the user keeps its row in place, so the selection and the focus do not jump away.
+export type Hold = { id: string | null; open: boolean }
+
+export function nextHold(hold: Hold, currentId: string | null, tasks: readonly Task[]): Hold {
+  const task = currentId === null ? undefined : tasks.find((each) => each.id === currentId)
+  const open = task !== undefined && !isFinishedTask(task)
+  if (hold.id !== currentId) {
+    return { id: currentId, open }
+  }
+  // The tasks may come after the selection.
+  return open && !hold.open ? { id: currentId, open } : hold
+}
+
+export function heldId(hold: Hold): string | null {
+  return hold.open ? hold.id : null
 }
 
 // The branch without the "natamux/t-0001-" part, which the row shows already.

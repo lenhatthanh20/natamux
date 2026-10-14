@@ -212,6 +212,8 @@ type ConfirmDialogProps = {
   title: string
   description: ReactNode
   confirmLabel: string
+  // The safe answer. "Cancel" reads badly next to "Cancel task", so that dialog names it.
+  cancelLabel?: string
   onConfirm: () => void
   onClose: () => void
   // Shown under the description, such as a list of what is removed.
@@ -223,6 +225,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Cancel',
   onConfirm,
   onClose,
   children,
@@ -235,7 +238,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="ghost" data-autofocus onClick={onClose}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button
             variant="danger"

@@ -49,7 +49,8 @@ Things to know:
 - Closing a shell ends its process and everything that runs in it.
 - A shell keeps running when you close the dashboard. Open it later and the pane shows the last screen again, drawn for the pane's size.
 - When the connection to a shell drops, for example after your computer sleeps or the network changes, the pane shows **Reconnecting.** and connects again by itself. The screen stays as it was, and the output you missed follows.
-- When a task is done or cancelled, its shells end, with the agent and everything else in them. Each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.** Click **Open a new shell** to open a plain shell in its workspace. It does not start the agent. When no pane shows that shell for a minute, it ends too, unless a program such as a dev server runs in it.
+- When a task is done or cancelled, Natamux keeps the last screen of each shell, then ends the shells with the agent. A shell where another program runs, such as a dev server, keeps running until the program stops. The **Terminal** tab then shows the [wrap-up](/docs/guides/dashboard/#when-a-task-is-finished): click **Show last screen** to read what a shell printed last. Click **Open a new shell** to open a plain shell in the workspace; it does not start the agent, and **Back to wrap-up** returns. When no pane shows that shell for a minute, it ends too, unless a program runs in it.
+- An ended shell keeps its screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **The shell ended.** and offers **Open a new shell**.
 - When the same shell is open in two places, for example in **Agents** and in its workspace, the pane you type in or click in sets the shell's size. Programs such as agents draw for that size.
 - Natamux runs at most 30 shells in all.
 

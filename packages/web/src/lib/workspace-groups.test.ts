@@ -1,6 +1,13 @@
 import { type Task, taskSchema } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { collapsedHint, knownRepos, shortBranch, workspaceGroups } from './workspace-groups'
+import {
+  collapsedHint,
+  heldId,
+  knownRepos,
+  nextHold,
+  shortBranch,
+  workspaceGroups,
+} from './workspace-groups'
 
 function makeTask(overrides: Partial<Task>): Task {
   return taskSchema.parse({
@@ -60,6 +67,17 @@ describe('workspaceGroups', () => {
     expect(result.pinned).toEqual([pinned])
     expect(result.groups[0]?.open).toEqual([])
     expect(result.groups[0]?.finished).toEqual([done])
+  })
+
+  it('keeps a held task that finished among the open rows, in its place', () => {
+    const older = makeTask({ id: 'T-0001', createdAt: '2026-10-08T09:00:00.000Z' })
+    const held = makeTask({ id: 'T-0002', state: 'done', createdAt: '2026-10-08T10:00:00.000Z' })
+    const newer = makeTask({ id: 'T-0003', createdAt: '2026-10-08T11:00:00.000Z' })
+
+    const { groups } = workspaceGroups(repos, [older, held, newer], [], 'T-0002')
+
+    expect(groups[0]?.open.map((task) => task.id)).toEqual(['T-0003', 'T-0002', 'T-0001'])
+    expect(groups[0]?.finished).toEqual([])
   })
 
   it('drops a task when its workspace is removed, and lists it again in a new one', () => {
@@ -238,5 +256,35 @@ describe('collapsedHint', () => {
   it('shows nothing when the group hides nothing of interest', () => {
     const running = makeTask({ state: 'running', updatedAt: '2026-10-08T09:00:30.000Z' })
     expect(collapsedHint(group([running]), null, now)).toBeNull()
+  })
+})
+
+describe('nextHold', () => {
+  const running = makeTask({ id: 'T-0001' })
+  const done = { ...running, state: 'done' as const }
+
+  it('holds the current task when it finishes while it is current', () => {
+    const opened = nextHold({ id: null, open: false }, 'T-0001', [running])
+    const finished = nextHold(opened, 'T-0001', [done])
+
+    expect(heldId(finished)).toBe('T-0001')
+  })
+
+  it('lets it go once another task is current', () => {
+    const opened = nextHold({ id: null, open: false }, 'T-0001', [running])
+    const finished = nextHold(opened, 'T-0001', [done])
+
+    expect(heldId(nextHold(finished, 'T-0002', [done]))).toBeNull()
+  })
+
+  it('does not hold a task that was finished when it was opened', () => {
+    expect(heldId(nextHold({ id: null, open: false }, 'T-0001', [done]))).toBeNull()
+  })
+
+  it('holds a task whose row came after the selection', () => {
+    const early = nextHold({ id: null, open: false }, 'T-0001', [])
+    const loaded = nextHold(early, 'T-0001', [running])
+
+    expect(heldId(nextHold(loaded, 'T-0001', [done]))).toBe('T-0001')
   })
 })
