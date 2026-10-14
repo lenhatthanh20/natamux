@@ -74,7 +74,9 @@ describe('WrapUp', () => {
     wrapUp()
 
     const checks = screen.getByRole('list', { name: 'Wrap-up' })
-    const rows = within(checks).getAllByRole('listitem').map((row) => row.textContent)
+    const rows = within(checks)
+      .getAllByRole('listitem')
+      .map((row) => row.textContent)
     expect(rows[0]).toContain('All changes are committed')
     expect(rows[1]).toContain('Pushed to origin')
     expect(rows[2]).toContain('Pull request #310 merged into main')

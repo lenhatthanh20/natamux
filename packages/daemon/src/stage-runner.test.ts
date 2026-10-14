@@ -2030,7 +2030,10 @@ describe('a prompt for a running agent', () => {
   })
 
   it('keeps the last screen of each shell of a task that is cancelled', async () => {
-    const { task } = await atSpecWithShell('node')
+    const { task, pty } = await atSpecWithShell('node')
+    // The end of the screen is kept; the prompt pasted into shell 1 may be longer than that.
+    pty.emit('last line of shell 1\r\n')
+    await terminals.settled(task.id, '1')
     terminals.run(task.id, 'ls', '2')
     await terminals.settled(task.id, '2')
 
@@ -2044,7 +2047,7 @@ describe('a prompt for a running agent', () => {
       { name: '1', agent: null, stage: 'spec', endedAt: at },
       { name: '2', agent: null, stage: null, endedAt: at },
     ])
-    expect(shells[0]?.text).toContain('echo ready')
+    expect(shells[0]?.text.endsWith('last line of shell 1')).toBe(true)
     expect(shells[1]?.text).toContain('ls')
   })
 

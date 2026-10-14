@@ -185,9 +185,7 @@ export function WrapUp({
                     className="shrink-0 text-muted"
                   />
                   <span className="font-medium">Shell {shell.name}</span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted">
-                    {meta}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted">{meta}</span>
                   <Button
                     size="xs"
                     variant="link"
