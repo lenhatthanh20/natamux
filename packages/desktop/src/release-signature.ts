@@ -1,7 +1,7 @@
 // Checks the minisign signature of SHA256SUMS.txt before the updater trusts any hash in it. Node
 // crypto only, so it needs no Electron and no new package. See docs/design-desktop-update.md.
 import { createPublicKey, type KeyObject, verify } from 'node:crypto'
-import { isNewer, SIGNATURE_FILE, SUMS_FILE } from './update-check.js'
+import { isNewer, type Release, SIGNATURE_FILE, SUMS_FILE } from './update-check.js'
 
 // The minisign public key of the release signer, key id 3F449A1E170BB7A0. The secret key never
 // leaves the owner's Mac.
@@ -101,4 +101,63 @@ export function verifySums(input: {
   if (!isNewer(tag, current)) {
     throw new Error(`${tag} is not newer than ${current}`)
   }
+}
+
+// SHA256SUMS.txt is about 600 bytes and its signature about 300; a bigger answer is not ours.
+export const MAX_SIGNED_BYTES = 64 * 1024
+
+async function readSmall(response: Response, name: string): Promise<Buffer> {
+  const tooBig = `${name} is larger than ${MAX_SIGNED_BYTES} bytes`
+  if (Number(response.headers.get('content-length') ?? 0) > MAX_SIGNED_BYTES) {
+    throw new Error(tooBig)
+  }
+  const reader = response.body?.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const chunk = await reader?.read()
+    if (chunk === undefined || chunk.done) {
+      return Buffer.concat(chunks)
+    }
+    size += chunk.value.length
+    if (size > MAX_SIGNED_BYTES) {
+      await reader?.cancel()
+      throw new Error(tooBig)
+    }
+    chunks.push(chunk.value)
+  }
+}
+
+// Downloads SHA256SUMS.txt and its signature from `release` and returns SHA256SUMS.txt once
+// verifySums passed. The updater calls it before it offers or downloads anything, so an unsigned
+// release is never shown, not even as a link to its page.
+export async function fetchSignedSums(input: {
+  release: Release
+  current: string
+  fetch: (url: string) => Promise<Response>
+  publicKey?: string
+}): Promise<Buffer> {
+  const { release, current, fetch, publicKey = RELEASE_SIGNER } = input
+  const sumsResponse = await fetch(`${release.downloads}${SUMS_FILE}`)
+  if (!sumsResponse.ok) {
+    throw new Error(`Download of ${SUMS_FILE} failed: HTTP ${sumsResponse.status}`)
+  }
+  const sums = await readSmall(sumsResponse, SUMS_FILE)
+  // No signature, no update: there is no fallback to the checksum alone.
+  const signatureResponse = await fetch(`${release.downloads}${SIGNATURE_FILE}`)
+  if (!signatureResponse.ok) {
+    throw new Error(
+      `Natamux ${release.version} is not trusted: download of its signature ${SIGNATURE_FILE} failed: HTTP ${signatureResponse.status}`,
+    )
+  }
+  try {
+    const signature = (await readSmall(signatureResponse, SIGNATURE_FILE)).toString('utf8')
+    verifySums({ sums, signature, publicKey, tag: release.tag, current })
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `Natamux ${release.version} is not trusted: its signature check failed. ${reason}`,
+    )
+  }
+  return sums
 }

@@ -27,6 +27,24 @@ check "release_signer reads the constant" '[ "$(release_signer "$tmp/signer.ts")
 check "release_signer reads the app's constant" \
   '[ -n "$(release_signer packages/desktop/src/release-signature.ts)" ]'
 
+check "valid_tag takes v1.2.3" 'valid_tag v1.2.3 && valid_tag v10.0.31'
+check "valid_tag refuses other tags" \
+  '! valid_tag 1.2.3 && ! valid_tag v1.2 && ! valid_tag v1.2.3-rc.1 && ! valid_tag "v1.2.3 " && ! valid_tag "v1.2.3;x"'
+
+tags=$'v0.1.9\nv0.1.10\nv0.1.2\nv0.2.0-rc.1\nnot-a-tag\nv0.1.11'
+check "previous_tag compares versions as numbers" '[ "$(previous_tag v0.1.11 <<<"$tags")" = v0.1.10 ]'
+check "previous_tag works for a tag not made yet" '[ "$(previous_tag v0.2.0 <<<"$tags")" = v0.1.11 ]'
+check "previous_tag is empty for the first release" '[ -z "$(previous_tag v0.1.2 <<<"$tags")" ]'
+
+# The build files of a run, one artifact folder each, as gh run download leaves them.
+mkdir -p "$tmp/run/natamux-mac-arm64" "$tmp/run/natamux-linux-x64"
+printf 'dmg' >"$tmp/run/natamux-mac-arm64/Natamux-mac-arm64.dmg"
+printf 'deb' >"$tmp/run/natamux-linux-x64/Natamux-linux-amd64.deb"
+printf 'tgz' >"$tmp/run/natamux-linux-x64/Natamux-linux-x64.tar.gz"
+(cd "$tmp/run" && shasum -a 256 */* | sed 's|  [^/]*/|  |' | sort -r) >"$tmp/run-sums.txt"
+check "sums_of lists the files of every folder, as sha256sum does" \
+  '[ "$(sums_of "$tmp/run")" = "$(sort "$tmp/run-sums.txt")" ]'
+
 fixtures=packages/desktop/src/fixtures/minisign
 check "is_legacy takes a legacy signature" 'is_legacy "$fixtures/SHA256SUMS.txt.legacy.minisig"'
 check "is_legacy refuses a prehashed signature" '! is_legacy "$fixtures/SHA256SUMS.txt.minisig"'

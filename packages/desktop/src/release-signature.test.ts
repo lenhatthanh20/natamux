@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { RELEASE_SIGNER, verifySums } from './release-signature.js'
+import {
+  fetchSignedSums,
+  MAX_SIGNED_BYTES,
+  RELEASE_SIGNER,
+  verifySums,
+} from './release-signature.js'
 import { checkReleaseSignature, SIGNATURE_FIXTURE } from './smoke.js'
 
 // Made by minisign 0.12 (Docker image jedisct1/minisign) with two throwaway keys, made with
@@ -175,6 +180,92 @@ describe('the signature check of the smoke', () => {
 
   it('passes in Node.js', () => {
     expect(checkReleaseSignature()).toBe('the release signature check works')
+  })
+})
+
+describe('fetchSignedSums', () => {
+  const downloads = 'https://github.com/natamux/natamux/releases/download/v1.2.3/'
+  const release = { tag: 'v1.2.3', version: '1.2.3', page: '', downloads }
+  type Files = Record<string, (() => Response) | undefined>
+  const served: Files = {
+    'SHA256SUMS.txt': () => new Response(new Uint8Array(sums)),
+    'SHA256SUMS.txt.minisig': () => new Response(signed),
+  }
+
+  function fetchFrom(files: Files): (url: string) => Promise<Response> {
+    return async (url) => {
+      const file = files[url.slice(downloads.length)]
+      return file?.() ?? new Response('Not Found', { status: 404 })
+    }
+  }
+
+  function signedSums(files: Files, current = '1.2.2') {
+    return fetchSignedSums({ release, current, fetch: fetchFrom(files), publicKey: testSigner })
+  }
+
+  it('returns SHA256SUMS.txt of a signed release', async () => {
+    expect((await signedSums(served)).equals(sums)).toBe(true)
+  })
+
+  it('checks the embedded release key by default', async () => {
+    await expect(
+      fetchSignedSums({ release, current: '1.2.2', fetch: fetchFrom(served) }),
+    ).rejects.toThrow(/not by the release key 3F449A1E170BB7A0/)
+  })
+
+  it('fails without a signature, or when it cannot get one', async () => {
+    const unsigned = { ...served, 'SHA256SUMS.txt.minisig': undefined }
+    await expect(signedSums(unsigned)).rejects.toThrow(
+      'Natamux 1.2.3 is not trusted: download of its signature SHA256SUMS.txt.minisig failed: HTTP 404',
+    )
+    const offline = {
+      ...served,
+      'SHA256SUMS.txt.minisig': () => {
+        throw new Error('net::ERR_INTERNET_DISCONNECTED')
+      },
+    }
+    await expect(signedSums(offline)).rejects.toThrow(/ERR_INTERNET_DISCONNECTED/)
+    await expect(signedSums({ ...served, 'SHA256SUMS.txt': undefined })).rejects.toThrow(
+      'Download of SHA256SUMS.txt failed: HTTP 404',
+    )
+  })
+
+  it('fails for a bad signature, another release or an old version', async () => {
+    const tampered = { ...served, 'SHA256SUMS.txt.minisig': () => new Response(prehashed) }
+    await expect(signedSums(tampered)).rejects.toThrow(
+      /^Natamux 1.2.3 is not trusted: its signature check failed. .* is prehashed/,
+    )
+    await expect(signedSums(served, '1.2.3')).rejects.toThrow(/v1.2.3 is not newer than 1.2.3/)
+    const otherTag = { ...release, tag: 'v1.2.4', version: '1.2.4' }
+    await expect(
+      fetchSignedSums({
+        release: otherTag,
+        current: '1.2.2',
+        fetch: fetchFrom(served),
+        publicKey: testSigner,
+      }),
+    ).rejects.toThrow(/not for "natamux v1.2.4"/)
+  })
+
+  it('refuses an answer larger than 64 KB, by its header or by its body', async () => {
+    const big = new Uint8Array(MAX_SIGNED_BYTES + 1)
+    await expect(
+      signedSums({ ...served, 'SHA256SUMS.txt': () => new Response(big) }),
+    ).rejects.toThrow('SHA256SUMS.txt is larger than 65536 bytes')
+    const lying = () => new Response(signed, { headers: { 'content-length': '70000' } })
+    await expect(signedSums({ ...served, 'SHA256SUMS.txt.minisig': lying })).rejects.toThrow(
+      /SHA256SUMS.txt.minisig is larger than 65536 bytes/,
+    )
+  })
+
+  // The manual install kind (Windows and others) only opens the release page; it must not be
+  // offered an unsigned release either.
+  it('runs in the updater before the release page is offered or a file downloads', () => {
+    const source = readFileSync(new URL('./updater.ts', import.meta.url), 'utf8')
+    const check = source.indexOf('await fetchSignedSums(')
+    expect(check).toBeGreaterThan(-1)
+    expect(check).toBeLessThan(source.indexOf('await this.offerPage(release, manual)'))
+    expect(check).toBeLessThan(source.indexOf('await this.download(release, name, sums)'))
   })
 })
 

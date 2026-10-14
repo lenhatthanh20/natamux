@@ -43,7 +43,7 @@ jobs:
   release-signer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: The app embeds the real release public key
         run: |
           key=$(sed -n "s/^export const RELEASE_SIGNER = '\(.*\)'$/\1/p" packages/desktop/src/release-signature.ts)

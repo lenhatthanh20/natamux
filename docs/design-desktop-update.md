@@ -47,6 +47,7 @@ idle → checking → up-to-date
         any step → failed
 ```
 
+- Before `available`, the app checks the signature of `SHA256SUMS.txt` (see below), for every install kind. An unsigned release is not offered, not even as a link.
 - `available` with kind `manual`: the app shows a dialog with **Open the Release Page** and **Later**. It downloads nothing.
 - `available` with any other kind: the download starts at once.
 - `ready`: the app shows a dialog: "Natamux 0.1.5 is ready. Restart to update." with **Restart Now**, **Later** and **What's New** (opens the release page). The menu item becomes **Restart to Update to 0.1.5**.
@@ -55,7 +56,7 @@ idle → checking → up-to-date
 
 ## Download and checks
 
-- First the app downloads `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig` and checks the signature (`release-signature.ts`): by `RELEASE_SIGNER`, trusted comment exactly `natamux <tag>` of the release the redirect led to, and that version newer than the running one. A missing signature or any failed check stops here, with the reason in the log and, for a manual check, in the dialog. There is no unsigned fallback. `docs/release-process.md` lists every check.
+- First the app downloads `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig` (each refused above 64 KB) and checks the signature (`fetchSignedSums` in `release-signature.ts`): by `RELEASE_SIGNER`, trusted comment exactly `natamux <tag>` of the release the redirect led to, and that version newer than the running one. A missing signature or any failed check stops here, with the reason in the log and, for a manual check, in the dialog. There is no unsigned fallback. `docs/release-process.md` lists every check.
 - Folder: `<user data>/updates/<version>/`. Before a download the app removes the other version folders there.
 - The file downloads to `<name>.part` with `net.fetch`, which uses the system proxy, then is renamed.
 - The app compares the SHA-256 of the file with its line in the signed `SHA256SUMS.txt`. A missing line or a different hash removes the file and fails.

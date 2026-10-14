@@ -21,7 +21,7 @@ import { pipeline } from 'node:stream/promises'
 import type { ReadableStream } from 'node:stream/web'
 import { promisify } from 'node:util'
 import { app, dialog, type MenuItemConstructorOptions, net, shell } from 'electron'
-import { RELEASE_SIGNER, verifySums } from './release-signature.js'
+import { fetchSignedSums } from './release-signature.js'
 import {
   assetName,
   type InstallKind,
@@ -32,7 +32,6 @@ import {
   macBundle,
   type Release,
   releaseFromUrl,
-  SIGNATURE_FILE,
   SUMS_FILE,
   sha256From,
 } from './update-check.js'
@@ -172,6 +171,13 @@ export class Updater {
         return
       }
       this.log(`check: ${release.version} found`)
+      // Before anything is offered, even a link to the release page.
+      const sums = await fetchSignedSums({
+        release,
+        current: this.options.version,
+        fetch: (url) => net.fetch(url, { headers: this.headers }),
+      })
+      this.log(`check: ${SUMS_FILE} is signed for natamux ${release.tag}`)
       const name = assetName(this.kind, process.arch)
       if (name === undefined) {
         this.set({ name: 'manual', release })
@@ -179,7 +185,7 @@ export class Updater {
         return
       }
       this.set({ name: 'downloading', release })
-      const file = await this.download(release, name)
+      const file = await this.download(release, name, sums)
       this.log(`ready: ${release.version} at ${file}`)
       this.set({ name: 'ready', release, file })
       await this.offerRestart(release, manual)
@@ -278,38 +284,9 @@ export class Updater {
     })
   }
 
-  private async download(release: Release, name: string): Promise<string> {
+  // sums: SHA256SUMS.txt of the release, already checked by fetchSignedSums.
+  private async download(release: Release, name: string, sums: Buffer): Promise<string> {
     const url = `${release.downloads}${name}`
-    const sumsResponse = await net.fetch(`${release.downloads}${SUMS_FILE}`, {
-      headers: this.headers,
-    })
-    if (!sumsResponse.ok) {
-      throw new Error(`Download of ${SUMS_FILE} failed: HTTP ${sumsResponse.status}`)
-    }
-    const sums = Buffer.from(await sumsResponse.arrayBuffer())
-    // No signature, no update: there is no fallback to the checksum alone.
-    const signatureResponse = await net.fetch(`${release.downloads}${SIGNATURE_FILE}`, {
-      headers: this.headers,
-    })
-    if (!signatureResponse.ok) {
-      throw new Error(
-        `Natamux ${release.version} is not installed: download of its signature ${SIGNATURE_FILE} failed: HTTP ${signatureResponse.status}`,
-      )
-    }
-    try {
-      verifySums({
-        sums,
-        signature: await signatureResponse.text(),
-        publicKey: RELEASE_SIGNER,
-        tag: release.tag,
-        current: this.options.version,
-      })
-    } catch (error) {
-      throw new Error(
-        `Natamux ${release.version} is not installed: its signature check failed. ${reason(error)}`,
-      )
-    }
-    this.log(`check: ${SUMS_FILE} is signed for natamux ${release.tag}`)
     const expected = sha256From(sums.toString('utf8'), name)
     if (expected === undefined) {
       throw new Error(`${SUMS_FILE} has no line for ${name}`)

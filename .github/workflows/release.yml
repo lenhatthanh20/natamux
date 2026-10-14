@@ -181,7 +181,8 @@ jobs:
           path: ${{ runner.temp }}/desktop-user/logs
           retention-days: 3
           if-no-files-found: ignore
-      # The release job of the same run takes the files at once; they stay three days for a re-run.
+      # The release job of the same run takes the files at once; they stay three days for a re-run,
+      # and for scripts/sign-release.sh, which checks the release files against them.
       - uses: actions/upload-artifact@v7
         with:
           name: natamux-${{ matrix.name }}
