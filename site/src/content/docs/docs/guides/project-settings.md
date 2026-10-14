@@ -7,7 +7,7 @@ sidebar:
 
 Each project has its own settings: the [stages](/docs/concepts/stages/) every task goes through, where task context comes from, the issue tracker and how agents ask for permission. Natamux keeps them in `.natamux.json` at the root of the repository, so you can commit the file and share it with your team.
 
-Open them from the sidebar: right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
+Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
 
 <figure class="shot">
 <img class="shot-dark" src="/screens/ui/settings-stages-dark.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />

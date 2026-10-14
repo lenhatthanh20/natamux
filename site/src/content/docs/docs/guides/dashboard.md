@@ -49,7 +49,7 @@ Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the
 
 In the workspace list:
 
-- Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
+- Each project is a card in its own color, with its workspaces inside. The color comes from the project id, so it stays the same. Click a project to fold or unfold it. Click **+** next to it for **Start a task in** that project, or the gear for its **Settings**. **Add a project** and **Start a task** are in the section header. With no project, the sidebar says **No projects yet** and offers **Add project**.
 - Right-click a project, press `Shift+F10`, or click **...** next to it for **Start a task**, **Settings**, **Remove finished workspaces** and **Remove project**.
 - Finished workspaces (done or cancelled) are folded under "N finished". To clear them, click **Remove finished workspaces** on that row, or choose it in the menu of the project. Natamux asks first and lists the tasks. It removes the workspaces one after the other. A workspace with changes that are not committed is not removed, and the message names it. Pinned workspaces and other projects are not touched. One message reports the result. The tasks stay, and a branch with commits that are not merged stays.
 - Only the open workspace shows the work under it: one row per shell, then its open subtasks. A folded task still shows its subtasks that wait on you, failed or are blocked. Click a task, or press `Right` on it, to open it; the task that was open before folds. A shell row shows the state, the agent's icon, the stage (or **Shell 2** for an agent you started yourself), what the agent does and the shell (**S1**). A shell with no agent shows a terminal icon and its program, such as **zsh**. Click a shell row to open the task's terminal on it. While a subtask is open, its parent stays open too. Natamux reads the shells of tasks that work or wait, and of the open workspace.
@@ -181,13 +181,13 @@ Click **Projects** in the status bar, or **Add a project** in the sidebar, to se
 2. Optionally enter a **Name**. The folder name is used otherwise.
 3. Click **Add project**.
 
-Each project has a **Settings** item in its menu. See [Project settings](#project-settings).
+Each project has a **Settings** button (the gear next to **+**) and a **Settings** item in its menu. See [Project settings](#project-settings).
 
 To remove a project, choose **Remove project** in the menu of its group in the sidebar. Remove its workspaces first. Natamux only forgets the repository: the folder, its branches and its tasks stay. Add the folder again with the same name to get its tasks back. Any project can be removed. With no project left, the sidebar offers to add one.
 
 ## Project settings
 
-Click **Settings** in the menu of a project to open **Project settings of &lt;repo&gt;**. The **Stages** tab edits the pipeline of the project: add stages from the catalog, run stages side by side, choose which ones wait for you, and pick the agent of a stage such as **Review**. The **Issues** tab sets when Natamux opens a GitHub issue for a task. The **JSON** tab edits the whole `.natamux.json` file. See [Project settings](/docs/guides/project-settings/).
+Click the gear next to a project, or **Settings** in its menu, to open **Project settings of &lt;repo&gt;**. The **Stages** tab edits the pipeline of the project: add stages from the catalog, run stages side by side, choose which ones wait for you, and pick the agent of a stage such as **Review**. The **Issues** tab sets when Natamux opens a GitHub issue for a task. The **JSON** tab edits the whole `.natamux.json` file. See [Project settings](/docs/guides/project-settings/).
 
 ## Import issues
 

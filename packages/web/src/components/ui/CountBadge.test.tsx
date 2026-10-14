@@ -11,6 +11,7 @@ describe('CountBadge', () => {
     ['neutral', 'bg-badge text-ink-2'],
     ['signal', 'border border-signal-line bg-signal-soft text-signal'],
     ['accent', 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-link'],
+    ['project', 'bg-[color-mix(in_srgb,var(--project)_10%,transparent)] text-(--project)'],
   ] as const)('draws the %s tone', (tone, classes) => {
     render(<CountBadge count={3} tone={tone} label={`3 ${tone}`} />)
 
