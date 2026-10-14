@@ -1,5 +1,5 @@
 import type { Task, TaskState, TerminalLane } from '@natamux/core'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SquareSplitHorizontal, SquareTerminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -50,6 +50,7 @@ export function ShellPanes({
 }: ShellPanesProps) {
   const taskId = task.id
   const agent = task.agent
+  const queryClient = useQueryClient()
   const open = useQuery({ queryKey: ['terminals', taskId], queryFn: loadTerminals })
   const agentShells = useQuery({
     ...taskShellsQuery(taskId, (id) => loadShells?.(id) ?? Promise.resolve(NO_SHELLS)),
@@ -98,6 +99,9 @@ export function ShellPanes({
   const [shown, setShown] = useState('1')
   const [maximized, setMaximized] = useState<string | null>(null)
   const [gridRef, gridWidth] = useElementWidth<HTMLDivElement>()
+  // A terminal fits its pane when it is shown. In a guessed layout it would send a resize, and
+  // another once the grid is measured, so the panes wait for the width (before the first paint).
+  const measured = gridWidth !== null || typeof ResizeObserver === 'undefined'
   const phone = usePhone()
   const names = terminalNames(
     (open.data ?? []).filter((name) => !closing.includes(name)),
@@ -133,6 +137,10 @@ export function ShellPanes({
     }
     const name = nextTerminalName(names)
     setAdded((current) => [...current, name])
+    // The view mounts again on each task switch, and must list this shell before the list is read.
+    queryClient.setQueryData<string[]>(['terminals', taskId], (current) =>
+      current === undefined ? current : [...current, name],
+    )
     setClosing((current) => current.filter((item) => item !== name))
     setShown(name)
     setMaximized(null)
@@ -254,49 +262,50 @@ export function ShellPanes({
       <div
         ref={gridRef}
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-        className="grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
+        className="hm-fade-in grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
-        {names.map((name) => {
-          const state = agentState(name)
-          const isAgent = state !== undefined
-          const own = state ?? null
-          const glyph = own === null ? null : <StatusGlyph state={own} />
-          // The agent the daemon found in this shell; the task's when the daemon does not say.
-          const lane = agentShells.data?.[name]
-          const shellAgent = lane?.agent === undefined ? agent : (lane.agent ?? undefined)
-          const knowsAgent = agent !== null || typeof shellAgent === 'string'
-          const index = visible.indexOf(name)
-          return (
-            <TerminalPane
-              key={name}
-              hidden={index === -1}
-              style={
-                index === -1
-                  ? undefined
-                  : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
-              }
-              label={`Shell ${name}`}
-              icon={glyph ?? <SquareTerminal size={14} aria-hidden />}
-              title={`Shell ${name}`}
-              agent={isAgent ? shellAgent : undefined}
-              stateText={
-                own !== null && knowsAgent && (own !== 'needs-input' || markWaiting)
-                  ? paneStateText(own, activity?.[name])
-                  : undefined
-              }
-              needsInput={own === 'needs-input' && markWaiting}
-              connect={(size) => connect(size, name)}
-              cacheKey={terminalKey(taskId, name)}
-              focusToken={focusing?.name === name ? focusing.at : undefined}
-              focusOnOpen={!asked && name === visible[0]}
-              taskState={task.state}
-              maximized={focused === name}
-              onToggleMaximize={() => setMaximized(focused === name ? null : name)}
-              onClose={name === '1' ? undefined : () => void closeShell(name)}
-              closeTip="Close shell (ends the process)"
-            />
-          )
-        })}
+        {measured &&
+          names.map((name) => {
+            const state = agentState(name)
+            const isAgent = state !== undefined
+            const own = state ?? null
+            const glyph = own === null ? null : <StatusGlyph state={own} />
+            // The agent the daemon found in this shell; the task's when the daemon does not say.
+            const lane = agentShells.data?.[name]
+            const shellAgent = lane?.agent === undefined ? agent : (lane.agent ?? undefined)
+            const knowsAgent = agent !== null || typeof shellAgent === 'string'
+            const index = visible.indexOf(name)
+            return (
+              <TerminalPane
+                key={name}
+                hidden={index === -1}
+                style={
+                  index === -1
+                    ? undefined
+                    : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
+                }
+                label={`Shell ${name}`}
+                icon={glyph ?? <SquareTerminal size={14} aria-hidden />}
+                title={`Shell ${name}`}
+                agent={isAgent ? shellAgent : undefined}
+                stateText={
+                  own !== null && knowsAgent && (own !== 'needs-input' || markWaiting)
+                    ? paneStateText(own, activity?.[name])
+                    : undefined
+                }
+                needsInput={own === 'needs-input' && markWaiting}
+                connect={(size) => connect(size, name)}
+                cacheKey={terminalKey(taskId, name)}
+                focusToken={focusing?.name === name ? focusing.at : undefined}
+                focusOnOpen={!asked && name === visible[0]}
+                taskState={task.state}
+                maximized={focused === name}
+                onToggleMaximize={() => setMaximized(focused === name ? null : name)}
+                onClose={name === '1' ? undefined : () => void closeShell(name)}
+                closeTip="Close shell (ends the process)"
+              />
+            )
+          })}
       </div>
     </div>
   )

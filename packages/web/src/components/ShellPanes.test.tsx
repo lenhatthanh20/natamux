@@ -2,8 +2,17 @@ import type { Task, TaskState, TerminalLane, TerminalSize } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createElement, useEffect, useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockInstance,
+  vi,
+} from 'vitest'
 import type { TaskShells } from '../lib/api'
 import { MAX_PANES } from '../lib/panes'
 import { SHELLS_EVERY_MS } from '../lib/task-shells'
@@ -19,13 +28,24 @@ type StandInProps = {
   taskState?: TaskState
 }
 
+// The grid columns each stand-in saw when it was first shown. `order` has "pane" for each one
+// shown, and the tests of the grid width add "measure" for each read of the width.
+const shownAt = vi.hoisted(() => ({ columns: [] as string[], order: [] as string[] }))
+
 // The stand-in shows the focus token it gets, which makes the real terminal take the keyboard,
 // and its cache key. It also shows if it may take the keyboard on open, as it was when it
 // mounted: the real terminal reads it only when it is shown. It connects once when it mounts, as
-// the real terminal does, so a test can count the mounts.
+// the real terminal does, so a test can count the mounts. It notes the grid columns in a layout
+// effect, where the real terminal is shown and fits its pane.
 vi.mock('./TerminalView', () => ({
   default: ({ connect, focusToken, focusOnOpen = true, cacheKey, taskState }: StandInProps) => {
     const [focusAtMount] = useState(focusOnOpen)
+    const element = useRef<HTMLParagraphElement>(null)
+    useLayoutEffect(() => {
+      const grid = element.current?.closest<HTMLElement>('.grid')
+      shownAt.columns.push(grid?.style.gridTemplateColumns ?? '')
+      shownAt.order.push('pane')
+    }, [])
     // biome-ignore lint/correctness/useExhaustiveDependencies: the real terminal connects once per mount.
     useEffect(() => {
       void connect({ cols: 80, rows: 24 })
@@ -33,6 +53,7 @@ vi.mock('./TerminalView', () => ({
     return createElement(
       'p',
       {
+        ref: element,
         'data-focus-token': focusToken ?? '',
         'data-focus-on-open': String(focusAtMount),
         'data-cache-key': cacheKey ?? '',
@@ -855,6 +876,40 @@ describe('ShellPanes stage shells', () => {
     expect(shellNames()).toEqual(['Shell 1', 'Shell 3', 'Shell 4'])
   })
 
+  // A task switch mounts the view again. Without the new shell in the cached list, Shell 1 shows
+  // alone at full size and sends a resize, until the list is read again.
+  it('lists a new shell at once when the task is shown again', async () => {
+    const { client, state, loadTerminals, view } = daemon(['1'], { '1': IMPLEMENT })
+    client.setQueryData(['terminals', 'T-0002'], ['1'])
+    const user = typist()
+    render(view(implementing))
+    await agentShown('Shell 1')
+    await user.click(newShell())
+    await screen.findByRole('region', { name: 'Shell 2' })
+    expect(client.getQueryData(['terminals', 'T-0001'])).toEqual(['1', '2'])
+    expect(client.getQueryData(['terminals', 'T-0002'])).toEqual(['1'])
+    // The daemon opened the shell when its terminal connected.
+    state.terminals = ['1', '2']
+
+    cleanup()
+    render(view(implementing))
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+    // The list read again on mount has the shell too: it shows once.
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+  })
+
+  it('shows a new shell while the shell list is still being read', async () => {
+    const { client, loadTerminals, view } = daemon(['1'], { '1': IMPLEMENT })
+    loadTerminals.mockImplementation(() => new Promise<string[]>(() => {}))
+    const user = typist()
+    render(view(implementing))
+    await user.click(newShell())
+    expect(await screen.findByRole('region', { name: 'Shell 2' })).toBeTruthy()
+    expect(client.getQueryData(['terminals', 'T-0001'])).toBeUndefined()
+  })
+
   it('gives a stage shell a chip on a phone and keeps the shown shell', async () => {
     layout.phone = true
     const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
@@ -908,5 +963,112 @@ describe('ShellPanes stage shells', () => {
     await screen.findByRole('region', { name: `Shell ${MAX_PANES + 1}` })
     expect(shellNames()).toHaveLength(MAX_PANES + 1)
     expect(newShell().getAttribute('aria-disabled')).toBe('true')
+  })
+})
+
+describe('ShellPanes grid width', () => {
+  let width: MockInstance<() => number>
+  let gridWidth = 1400
+  // The terminal's code comes through React.lazy. Once it is loaded, a pane renders it at once, as
+  // on a task switch in the app, so these tests do not depend on the tests before them.
+  beforeAll(async () => {
+    renderShells(
+      { id: 'T-0009', state: 'running', stage: 'implement', lanes: {}, agent: null },
+      ['1'],
+      {},
+    )
+    await screen.findByText('Terminal stand-in')
+    cleanup()
+  })
+  // jsdom has no layout. The grid reports `gridWidth`, and ResizeObserver exists.
+  beforeEach(() => {
+    gridWidth = 1400
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = () => undefined
+        disconnect = () => undefined
+      },
+    )
+    width = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(() => {
+      shownAt.order.push('measure')
+      return gridWidth
+    })
+    shownAt.columns.length = 0
+    shownAt.order.length = 0
+  })
+  afterEach(() => {
+    width.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  // The style jsdom keeps for a grid of `count` columns.
+  const columnsStyle = (count: number) => {
+    const element = document.createElement('div')
+    element.style.gridTemplateColumns = `repeat(${count}, minmax(0, 1fr))`
+    return element.style.gridTemplateColumns
+  }
+
+  // The view of a task switch: the shell list is in the cache already.
+  function showShells(count: number) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const terminals = Array.from({ length: count }, (_, index) => String(index + 1))
+    client.setQueryData(['terminals', 'T-0001'], terminals)
+    render(
+      <QueryClientProvider client={client}>
+        <ShellPanes
+          task={{ id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: null }}
+          connect={() => new Promise<WebSocket>(() => {})}
+          loadTerminals={async () => terminals}
+          closeTerminal={async () => terminals}
+          actionsSlot={null}
+        />
+      </QueryClientProvider>,
+    )
+  }
+
+  const grid = () => screen.getAllByRole('region')[0]?.parentElement as HTMLElement
+
+  // A terminal fits its pane when it is shown. Shown before the measure, it fits the guess.
+  it('shows no terminal before the grid is measured', () => {
+    showShells(4)
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+    expect(shownAt.order.indexOf('measure')).toBeGreaterThanOrEqual(0)
+    expect(shownAt.order.indexOf('measure')).toBeLessThan(shownAt.order.indexOf('pane'))
+  })
+
+  it('shows the terminals of a grid that measures 0', () => {
+    gridWidth = 0
+    showShells(4)
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+  })
+
+  // A task switch mounts the view again. A terminal shown in the 2 × 2 guess fits it and sends a
+  // resize, then another when the grid is measured as 1 × 4. 1304 = 4 × 320 + 3 × 8.
+  it.each([
+    [1400, 4],
+    [1304, 4],
+    [1303, 2],
+    [942, 2],
+  ])('shows each terminal first in the columns of a %i px grid (%i)', (measured, columns) => {
+    expect(columnsStyle(4)).not.toBe(columnsStyle(2))
+    gridWidth = measured
+    showShells(4)
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+    expect(shownAt.columns).toEqual(Array(4).fill(columnsStyle(columns)))
+  })
+
+  it('shows the terminals at once where ResizeObserver is missing', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    showShells(4)
+    expect(screen.getAllByRole('region')).toHaveLength(4)
+    expect(shownAt.order).not.toContain('measure')
+  })
+
+  // Opacity only, on the grid: nothing moves or fades in a terminal itself.
+  it('fades in the grid, not the panes', () => {
+    showShells(4)
+    expect(grid().classList.contains('hm-fade-in')).toBe(true)
+    expect(grid().querySelectorAll('.hm-fade-in')).toHaveLength(0)
   })
 })

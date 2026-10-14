@@ -122,11 +122,14 @@ function loadWebgl(
   try {
     const webgl = new Webgl()
     webgl.onContextLoss(onLost)
-    // The addon adds one canvas, its own. Asking any other canvas for a context would make one.
+    // The addon adds two canvases: a 2D one for links, then its WebGL one. Asking any other canvas
+    // for a context would make one.
     const before = new Set(terminal.element?.querySelectorAll('canvas'))
     terminal.loadAddon(webgl)
     const after = terminal.element?.querySelectorAll('canvas') ?? []
-    const canvas = [...after].find((one) => !before.has(one))
+    const canvas = [...after].find(
+      (one) => !before.has(one) && !one.classList.contains('xterm-link-layer'),
+    )
     return {
       dispose() {
         webgl.dispose()

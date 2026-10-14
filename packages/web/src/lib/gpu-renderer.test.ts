@@ -411,9 +411,11 @@ describe('gpuRenderer', () => {
     expect(budget.inUse()).toBe(0)
   })
 
-  it('has 6 contexts by default, one per pane of a full grid', () => {
-    expect(createGpuBudget().size).toBe(6)
-    expect(GPU_CONTEXTS).toBe(MAX_PANES)
+  // Two tasks of 4 shells switch back and forth with no new context. Chrome allows 16 per page.
+  it('has 8 contexts by default: a full grid, and two tasks of 4 shells', () => {
+    expect(createGpuBudget().size).toBe(8)
+    expect(GPU_CONTEXTS).toBeGreaterThanOrEqual(MAX_PANES)
+    expect(GPU_CONTEXTS).toBeLessThan(16)
   })
 })
 
