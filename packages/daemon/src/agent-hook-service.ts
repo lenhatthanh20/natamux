@@ -181,6 +181,8 @@ export class AgentHookService {
       }
       return { taskId: task.id, applied: [] }
     }
+    // The task came back to the stage of this shell: a state from the time in between is old.
+    this.shellStates.get(task.id)?.delete(terminal ?? MAIN_TERMINAL)
     const applied: EventType[] = []
     for (const planned of planSignalEvents(lane.state, hook.signal, hook.details)) {
       this.tasks.applyEvent(task.id, {

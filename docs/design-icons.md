@@ -50,7 +50,7 @@ Design 2 for the shapes, the running blink and the stage markers; the spinner of
 | failed | triangle |
 | done | check |
 | cancelled | dash |
-| state not known yet | small muted dot |
+| state not known yet | ring with a dot, muted |
 
 | Item | Property | Duration | Frames that differ at 8 fps | Still form |
 |---|---|---|---|---|

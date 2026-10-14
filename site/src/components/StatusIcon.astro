@@ -105,7 +105,7 @@ function shape(of: Kind, art: number): string {
       return `<rect x="0" y="${round(half - height / 2)}" width="${art}" height="${height}" rx="${height / 2}" fill="currentColor"/>`
     }
     case 'unknown':
-      return `<circle cx="${half}" cy="${half}" r="${round(art * 0.22)}" fill="currentColor"/>`
+      return `${ring}<circle cx="${half}" cy="${half}" r="${round(art / 8)}" fill="currentColor"/>`
   }
 }
 

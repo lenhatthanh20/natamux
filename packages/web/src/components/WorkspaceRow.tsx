@@ -486,8 +486,8 @@ type AgentRowProps = {
   onOpenShell: (taskId: string, shell: string | null) => void
 }
 
-// A shell with no agent shows a terminal; an agent with no state yet, a muted dot. Shell glyphs are
-// 8 px, a step below the 10 px of their task.
+// A shell with no agent shows a terminal; an agent with no state yet, a muted ring with a dot.
+// Shell glyphs are 8 px, a step below the 10 px of their task.
 function RowGlyph({ row }: { row: ShellRow }) {
   if (row.plain) {
     return (

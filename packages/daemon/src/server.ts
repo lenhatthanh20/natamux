@@ -797,14 +797,16 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
     hooks.forgetShellsExcept(id, agents)
     // Each agent shows the state of its own stage, not the state of the whole task, and the agent
-    // that runs there, which may not be the task's. An agent on no stage has the state its hooks
-    // gave.
+    // that runs there, which may not be the task's. An agent on no stage of the current step has
+    // the state its hooks gave, if any.
     const lanes = Object.fromEntries(
       await Promise.all(
         agents.map(async (name) => {
           const agent = await options.stages.agentIn(id, name)
           const lane = options.stages.laneOfTerminal(task, name)
-          const state = lane.stage === null ? (hooks.shellState(id, name) ?? null) : lane.state
+          const current =
+            lane.stage !== null && (lane.stage === task.stage || lane.stage in task.lanes)
+          const state = current ? lane.state : (hooks.shellState(id, name) ?? lane.state)
           return [name, { ...lane, state, agent }] as const
         }),
       ),

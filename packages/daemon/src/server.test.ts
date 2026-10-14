@@ -2004,6 +2004,39 @@ describe('terminal', () => {
     expect(bad.statusCode).toBe(400)
   })
 
+  it('shows the shell of an earlier stage as done, until its agent gets a new prompt', async () => {
+    await taskWithWorkspace()
+    await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24`)
+    await app.injectWS(`/tasks/T-0001/terminal?ticket=${await ticket()}&cols=80&rows=24&terminal=2`)
+    ;(ptys[1] as FakePty).program = 'node'
+    ;(ptys[1] as FakePty).commands = async () => [
+      '/home/me/.local/bin/agent --use-system-ca /home/me/.local/share/cursor-agent/1/index.js',
+    ]
+    // The task is past the stage that opened Shell 2.
+    const stages = serverOptions.stages
+    const real = stages.laneOfTerminal.bind(stages)
+    vi.spyOn(stages, 'laneOfTerminal').mockImplementation((task, terminal) =>
+      terminal === '2' ? { stage: 'test-spec', state: 'done' } : real(task, terminal),
+    )
+    const list = async () => {
+      const listed = await app.inject({
+        method: 'GET',
+        url: '/tasks/T-0001/terminals',
+        headers: authorization,
+      })
+      return listed.json().lanes['2']
+    }
+
+    expect(await list()).toEqual({ stage: 'test-spec', state: 'done', agent: 'cursor' })
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor',
+      headers: { ...authorization, 'x-natamux-task': 'T-0001', 'x-natamux-terminal': '2' },
+      payload: { hook_event_name: 'beforeSubmitPrompt' },
+    })
+    expect(await list()).toEqual({ stage: 'test-spec', state: 'running', agent: 'cursor' })
+  })
+
   it('sends a review comment to the agent in the first terminal', async () => {
     await taskWithWorkspace()
     const none = await app.inject({
