@@ -486,7 +486,11 @@ export function WorkspaceList({
                   aria-hidden="true"
                   className={`sb-chevron shrink-0 text-muted ${isCollapsed ? '' : 'rotate-90'}`}
                 />
-                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-(--project)" />
+                <FolderGit2
+                  size={ICON.sm}
+                  aria-hidden="true"
+                  className="shrink-0 text-(--project)"
+                />
                 <span className="min-w-0 truncate text-sm font-semibold text-ink">{repo.name}</span>
                 <CountBadge
                   count={count}

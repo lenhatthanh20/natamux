@@ -832,7 +832,9 @@ describe('a project header', () => {
 
     expect(band.className).toContain('h-7')
     expect(band.className).toContain('from-[color-mix(in_srgb,var(--project)_16%,transparent)]')
-    expect(band.className).toContain('hover:from-[color-mix(in_srgb,var(--project)_20%,transparent)]')
+    expect(band.className).toContain(
+      'hover:from-[color-mix(in_srgb,var(--project)_20%,transparent)]',
+    )
     expect(band.className).toContain('rounded-t-[9px]')
     const name = within(natamux).getByText('natamux')
     expect(name.className).toContain('font-semibold text-ink')
