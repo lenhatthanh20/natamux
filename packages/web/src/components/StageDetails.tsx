@@ -108,6 +108,10 @@ function Field({
   )
 }
 
+// A command or arguments set in the file on a stage that does not run them stay visible, so a
+// shared file hides nothing.
+const NOT_USED = 'This stage does not use it. Clear it to remove it from the file.'
+
 // The settings of one stage. The fields depend on its kind.
 export function StageDetails({
   stage,
@@ -128,12 +132,14 @@ export function StageDetails({
 
   const nameField = useLocalText(name, write('name'))
   const command = useLocalText(stage.command ?? '', write('command'))
+  const check = useLocalText(stage.check ?? '', write('check'))
   const output = useLocalText(stage.output ?? '', write('output'))
   const doneWhen = useLocalText(stage.doneWhen ?? '', write('doneWhen'))
   const args = useLocalText(stage.args ?? '', write('args'))
   const sections = useLocalText((stage.sections ?? []).join('\n'), (text) =>
     onChange(setSections(steps, stage.id, text.split('\n'))),
   )
+  const ownAgent = takesOwnAgent(steps, stage.id)
 
   return (
     <section aria-label={`Settings of ${name}`} className="flex flex-col gap-4">
@@ -186,46 +192,49 @@ export function StageDetails({
 
       {checksOnCi(stage) && <CiOption stage={stage} steps={steps} onChange={onChange} />}
 
-      {takesOwnAgent(steps, stage.id) && (
-        <>
-          <Field
-            label="Agent"
-            htmlFor={`${id}-agent`}
-            help={
-              runsInShellOne(steps, stage.id)
-                ? "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent."
-                : 'This stage starts its own agent beside the one in Shell 1, so it may use another.'
-            }
+      {ownAgent && (
+        <Field
+          label="Agent"
+          htmlFor={`${id}-agent`}
+          help={
+            runsInShellOne(steps, stage.id)
+              ? "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent."
+              : 'This stage starts its own agent beside the one in Shell 1, so it may use another.'
+          }
+        >
+          <Select
+            id={`${id}-agent`}
+            value={stage.agent ?? ''}
+            onChange={(event) => onChange(setText(steps, stage.id, 'agent', event.target.value))}
+            fieldSize="md"
+            className="w-full"
           >
-            <Select
-              id={`${id}-agent`}
-              value={stage.agent ?? ''}
-              onChange={(event) => onChange(setText(steps, stage.id, 'agent', event.target.value))}
-              fieldSize="md"
-              className="w-full"
-            >
-              <option value="">Task's agent</option>
-              {AGENT_CHOICES.map((choice) => (
-                <option key={choice.id} value={choice.id}>
-                  {choice.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field
-            label="Arguments"
-            htmlFor={`${id}-args`}
-            help="Words added to the agent's command line, such as --model sonnet."
-          >
-            <input
-              id={`${id}-args`}
-              {...args}
-              placeholder="--model sonnet"
-              spellCheck={false}
-              className={`${inputLg} w-full font-mono text-xs`}
-            />
-          </Field>
-        </>
+            <option value="">Task's agent</option>
+            {AGENT_CHOICES.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+
+      {(ownAgent || stage.args !== undefined) && (
+        <Field
+          label="Arguments"
+          htmlFor={`${id}-args`}
+          help={
+            ownAgent ? "Words added to the agent's command line, such as --model sonnet." : NOT_USED
+          }
+        >
+          <input
+            id={`${id}-args`}
+            {...args}
+            placeholder="--model sonnet"
+            spellCheck={false}
+            className={`${inputLg} w-full font-mono text-xs`}
+          />
+        </Field>
       )}
 
       {takesPrompt(stage) && (
@@ -239,14 +248,16 @@ export function StageDetails({
         />
       )}
 
-      {stage.kind === 'testing' && (
+      {(stage.kind === 'testing' || stage.command !== undefined) && (
         <Field
           label="Command"
           htmlFor={`${id}-command`}
           help={
-            catalog?.needsCommand === true
-              ? 'Required. The stage passes when this command passes.'
-              : 'Empty: the agent writes the tests and runs them, as the prompt says.'
+            stage.kind !== 'testing'
+              ? NOT_USED
+              : catalog?.needsCommand === true
+                ? 'Required. The stage passes when this command passes.'
+                : 'Empty: the agent writes the tests and runs them, as the prompt says.'
           }
         >
           <input
@@ -258,6 +269,20 @@ export function StageDetails({
           />
         </Field>
       )}
+
+      <Field
+        label="Check command"
+        htmlFor={`${id}-check`}
+        help="Runs in a shell in the task's folder after the stage reports done. Exit code 0 passes. Empty: none."
+      >
+        <input
+          id={`${id}-check`}
+          {...check}
+          placeholder="pnpm typecheck"
+          spellCheck={false}
+          className={`${inputLg} w-full font-mono text-xs`}
+        />
+      </Field>
 
       {stage.kind === 'agent' && (
         <Field

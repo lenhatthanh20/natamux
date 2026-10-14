@@ -190,7 +190,7 @@ A stage is finished (✓) only after three steps, in this order: the stage repor
 | `stage.check-failed` | A check failed; `payload.reasons` lists why |
 | `stage.approved` / `stage.passed` | The gate let it through (`endedAt`; `approvedBy` for `stage.approved`) |
 
-**Settings.** Each stage can change its checks in `.natamux.json`: `output`, `sections`, `requireCommit`, `requireClean`, `check`. An empty `sections` list turns the section check off.
+**Settings.** Each stage can change its checks in `.natamux.json`: `output`, `sections`, `requireCommit`, `requireClean`, `check`. An empty `sections` list turns the section check off. The Stages tab edits `check` as **Check command** on every stage.
 
 ### 3.6 Parallel stages
 

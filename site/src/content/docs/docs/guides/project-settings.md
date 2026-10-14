@@ -29,9 +29,10 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | **Agent** | Stages that start their own agent: agent stages beside the stage in Shell 1, such as Test spec, stages in their own shell, such as Review, and agent or testing stages of your own | The agent this stage starts. **Task's agent** keeps the task's own. A stage with its own agent or arguments runs in a shell of its own, from Shell 6, and Shell 1 keeps the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model). |
-| **Arguments** | The same stages | Words added to that agent's command line, such as `--model sonnet`. |
+| **Arguments** | The same stages, and any stage whose file sets `args` | Words added to that agent's command line, such as `--model sonnet`. On a stage that does not use them, the field says so; clear it to remove it. |
 | **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits. |
-| **Command** | Testing stages | The command to run. **Lint and types** and **End-to-end tests** need one. |
+| **Command** | Testing stages, and any stage whose file sets `command` | The command to run. **Lint and types** and **End-to-end tests** need one. On another kind of stage it does not run; clear it to remove it. |
+| **Check command** | Every stage | A shell command the daemon runs in the task's folder after the stage reports done, such as `pnpm typecheck`. Exit code 0 passes. Empty: none. |
 | **Output file** | Agent stages | The Markdown file the stage writes. Fixed for a catalog stage. |
 | **Required sections** | Agent stages with an output file | Headings the file must have. |
 | **Finished when** | Every stage | The sentence the progress view shows before the stage starts. |
@@ -64,7 +65,7 @@ Every field is in the [configuration reference](/docs/reference/configuration/).
 Use these to copy settings from one project to another, or to keep a copy.
 
 - **Export** downloads what the screen shows, edits included, as `<project>.natamux.json`. It is turned off while the **JSON** tab holds JSON that is not valid.
-- **Import…** opens a `.json` file (up to 1 MiB) in the screen, in place of the current settings. With edits not saved, it asks first. It does not save: check the settings, then click **Save**. A file with a problem opens on the **JSON** tab with the error.
+- **Import…** opens a `.json` file (up to 1 MiB) in the screen, in place of the current settings. When the file has a **Check command**, **Command** or **Arguments** on any stage, it asks first and lists each one, with its stage, in full: they run on this computer. With edits not saved, it asks too, in the same question. It does not save: check the settings, then click **Save**. A file with a problem opens on the **JSON** tab with the error.
 
 To use an exported file in another project, import it there, or copy it into the repository as `.natamux.json`.
 
