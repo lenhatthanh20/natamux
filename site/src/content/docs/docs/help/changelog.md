@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.22 (2026-10-14)
+
+- In the desktop app, **Browse…** in the Projects panel picks the project folder in a folder dialog. See [Repositories](/docs/guides/dashboard/#repositories).
+- An agent or testing stage of your own can pick its **Agent** and **Arguments**, in Shell 1 too. There it closes another agent while it works, and the next stage in Shell 1 gets the task's agent back with a new session. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+
 ## v0.1.21 (2026-10-14)
 
 - Each project in the sidebar is a card in its own color, from the project id. A gear next to **+** opens its **Settings**. See [Sidebar](/docs/guides/dashboard/#sidebar).
