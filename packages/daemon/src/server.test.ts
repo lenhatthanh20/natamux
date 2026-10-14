@@ -281,7 +281,11 @@ describe('before the login PATH came', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(answered).toBe(false)
       ready()
-      expect((await branches).json()).toEqual({ branches: ['main'], current: 'main' })
+      expect((await branches).json()).toEqual({
+        branches: ['main'],
+        current: 'main',
+        defaultBranch: 'main',
+      })
     } finally {
       await waiting.close()
     }
@@ -2437,7 +2441,7 @@ describe('eventSender', () => {
 describe('branches', () => {
   it('lists branches and makes a workspace from one', async () => {
     const listed = await app.inject({ method: 'GET', url: '/git/branches', headers: authorization })
-    expect(listed.json()).toEqual({ branches: ['main'], current: 'main' })
+    expect(listed.json()).toEqual({ branches: ['main'], current: 'main', defaultBranch: 'main' })
 
     await app.inject({
       method: 'POST',
@@ -2493,7 +2497,11 @@ describe('repositories', () => {
       url: '/git/branches?repo=other-app',
       headers: authorization,
     })
-    expect(branches.json()).toEqual({ branches: ['trunk'], current: 'trunk' })
+    expect(branches.json()).toEqual({
+      branches: ['trunk'],
+      current: 'trunk',
+      defaultBranch: 'trunk',
+    })
 
     const created = await app.inject({
       method: 'POST',

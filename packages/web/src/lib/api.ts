@@ -44,6 +44,13 @@ export type NewWorkspaceInput = {
   attachments?: AttachmentUpload[]
 }
 
+export type BranchList = {
+  branches: string[]
+  current: string | null
+  // Where a new workspace starts when no branch is picked.
+  defaultBranch: string | null
+}
+
 export type StageAction = 'approve' | 'reopen' | 'skip' | 'pass' | 'fail' | 'report' | 'start'
 
 export type StageActionInput = { stage?: string; to?: string; reason?: string }
@@ -546,12 +553,13 @@ export function createApi(
       return taskSchema.parse(body.task)
     },
 
-    async listBranches(repo?: string): Promise<{ branches: string[]; current: string | null }> {
+    async listBranches(repo?: string): Promise<BranchList> {
       const query = repo === undefined ? '' : `?repo=${encodeURIComponent(repo)}`
       const body = asRecord(await request('GET', `/git/branches${query}`))
       return {
         branches: stringList(body.branches),
         current: typeof body.current === 'string' ? body.current : null,
+        defaultBranch: typeof body.defaultBranch === 'string' ? body.defaultBranch : null,
       }
     },
 

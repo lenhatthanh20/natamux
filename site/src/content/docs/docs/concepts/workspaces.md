@@ -41,12 +41,21 @@ The slug uses lower case letters, digits and `-`. It has at most 40 characters. 
 
 ### Base branch
 
-A new branch starts from the base branch. The base must be a local branch. In the new workspace dialog, pick it from the branch list.
+A new branch starts from the base branch. The base must be a local branch. In the new workspace dialog, pick it from the branch list. The list starts on the default branch.
 
-Without `--base`, the branch starts from the branch of your main checkout, as its remote has it now:
+Without `--base`, the base is the default branch of the repository, the first of these that is a local branch:
 
-- Natamux fetches that branch from its remote first, such as `origin/main`, so a checkout you did not pull does not start the task from old code. Your checkout itself does not change.
-- When your local branch has commits that are not pushed, or the fetch fails (no network, no remote), the branch starts from `HEAD` of your main checkout, as before.
+1. The default branch of `origin` (`origin/HEAD`, as the clone set it)
+2. `main`
+3. `master`
+4. The branch of your main checkout
+
+With no branch at all, the new branch starts from `HEAD` of your main checkout.
+
+The new branch starts from the base as its remote has it now:
+
+- Natamux fetches the base from its remote first, such as `origin/main`, so a branch you did not pull does not start the task from old code. Your checkout and your local branches do not change.
+- When the local base has commits that are not pushed, or the fetch fails (no network, no remote), the branch starts from the local base.
 - The new branch follows no remote branch until it is pushed.
 - The diff size of a workspace counts from the same point, so commits you did not pull do not count as the task's work.
 

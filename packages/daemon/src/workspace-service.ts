@@ -18,6 +18,7 @@ import {
 import type { EventBus } from './event-bus.js'
 import {
   addWorktree,
+  type BranchList,
   commitAll,
   createPullRequest,
   currentBranch,
@@ -114,7 +115,8 @@ type DirtyState = {
 
 // What the diff of a workspace counts from: where a new workspace starts, by name.
 async function baseForDiff(repoDir: string): Promise<string | null> {
-  return (await startRef(repoDir)) ?? currentBranch(repoDir)
+  const branch = await currentBranch(repoDir)
+  return branch === null ? null : ((await startRef(repoDir, branch)) ?? branch)
 }
 
 export function slugify(text: string): string {
@@ -194,14 +196,13 @@ export class WorkspaceService {
   }
 
   // The branches a workspace in that repository can start from.
-  async branches(
-    repo: string | null = null,
-  ): Promise<{ branches: string[]; current: string | null }> {
+  async branches(repo: string | null = null): Promise<BranchList> {
     return listBranches(this.repoDirOf(repo))
   }
 
-  // Makes the worktree from `base` when given (a local branch). Otherwise from the checkout's
-  // branch as its remote has it now, or its HEAD when that is newer or there is no remote.
+  // Makes the worktree from `base` when given (a local branch), or else from the default branch,
+  // as its remote has it now. The local branch when it has commits that are not pushed, or has no
+  // remote. HEAD when the repository has no branch to start from.
   async create(taskId: string, base?: string): Promise<Task> {
     return this.exclusive(taskId, async () => {
       const task = this.tasks.getTask(taskId)
@@ -213,7 +214,7 @@ export class WorkspaceService {
       }
 
       const repoDir = this.repoDirOf(task.repo)
-      const { branches } = await listBranches(repoDir)
+      const { branches, defaultBranch } = await listBranches(repoDir)
       if (base !== undefined && !branches.includes(base)) {
         throw new WorkspaceConflictError(`There is no local branch named ${base}`)
       }
@@ -222,11 +223,13 @@ export class WorkspaceService {
       const worktreePath = this.worktreePathFor(taskId)
       const branch = kept ?? branchNameFor(task)
       if (kept === null) {
-        if (base === undefined) {
-          await fetchUpstream(repoDir)
+        const from = base ?? defaultBranch
+        if (from === null) {
+          await addWorktree(repoDir, worktreePath, branch)
+        } else {
+          await fetchUpstream(repoDir, from)
+          await addWorktree(repoDir, worktreePath, branch, (await startRef(repoDir, from)) ?? from)
         }
-        const start = base ?? (await startRef(repoDir)) ?? undefined
-        await addWorktree(repoDir, worktreePath, branch, start)
       } else {
         await addWorktree(repoDir, worktreePath, branch, undefined, true)
       }

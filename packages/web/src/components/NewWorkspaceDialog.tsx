@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
 import { AGENT_CHOICES } from '../lib/agents'
-import type { LoadedSettings, NewWorkspaceInput } from '../lib/api'
+import type { BranchList, LoadedSettings, NewWorkspaceInput } from '../lib/api'
 import { readAsUpload } from '../lib/attachments'
 import { branchOptions, lastBase, rememberBase, TASK_BRANCH_GROUP } from '../lib/branches'
 import { createBlockedReason } from '../lib/workspace'
@@ -22,7 +22,7 @@ type NewWorkspaceDialogProps = {
   initialRepo?: string
   // A name to start with, from the palette.
   initialTitle?: string
-  loadBranches: (repo?: string) => Promise<{ branches: string[]; current: string | null }>
+  loadBranches: (repo?: string) => Promise<BranchList>
   create: (input: NewWorkspaceInput) => Promise<Task>
   onCreated: (task: Task) => void
   onClose: () => void
@@ -200,7 +200,9 @@ export function NewWorkspaceDialog({
   })
 
   const current = branches.data?.current ?? null
-  const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo))
+  // The daemon starts from the default branch when no base is sent.
+  const start = branches.data?.defaultBranch ?? current
+  const options = branchOptions(branches.data?.branches ?? [], current, lastBase(repo), start)
 
   const missing = createBlockedReason(
     title,
@@ -382,11 +384,11 @@ export function NewWorkspaceDialog({
             <span className={FIELD_LABEL}>Branch from</span>
             <Combobox
               label="Branch to start from"
-              placeholder={current ?? 'The current branch'}
+              placeholder={start ?? 'The default branch'}
               fieldSize="md"
               options={options}
-              value={base === '' ? (current ?? '') : base}
-              onChange={(name) => setBase(name === current ? '' : name)}
+              value={base === '' ? (start ?? '') : base}
+              onChange={(name) => setBase(name === start ? '' : name)}
               collapsedGroups={[TASK_BRANCH_GROUP]}
               disabled={branches.data === undefined}
             />

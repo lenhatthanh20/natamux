@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useNowValue } from '../hooks/useNow'
-import type { StoredEvent, TaskChanges } from '../lib/api'
+import type { BranchList, StoredEvent, TaskChanges } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { branchOptions, TASK_BRANCH_GROUP } from '../lib/branches'
 import { copyText } from '../lib/clipboard'
@@ -58,8 +58,8 @@ type TaskDetailProps = {
   loadEvents: () => Promise<StoredEvent[]>
   onAction: (action: TaskAction) => void
   onCreateWorkspace: (base?: string) => void
-  // Local branches a workspace can start from, and the one the checkout is on.
-  branches?: { branches: string[]; current: string | null }
+  // Local branches a workspace can start from, the one the checkout is on, and the default one.
+  branches?: BranchList
   onRemoveWorkspace: () => void
   onViewChanges: () => void
   onStartAgent: () => void
@@ -121,6 +121,7 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
+  const start = branches?.defaultBranch ?? branches?.current ?? null
   const [asking, setAsking] = useState<'cancel' | 'remove' | 'delete' | 'tries' | null>(null)
   const actions = actionsFor(task.state)
   const stateActions = actions.filter((action) => !action.confirm)
@@ -324,10 +325,10 @@ export function TaskDetail({
                 {!isFinished && branches !== undefined && branches.branches.length > 1 && (
                   <Combobox
                     label="Start from branch"
-                    placeholder={branches.current ?? 'HEAD'}
-                    options={branchOptions(branches.branches, branches.current, null)}
-                    value={base === '' ? (branches.current ?? '') : base}
-                    onChange={(name) => setBase(name === branches.current ? '' : name)}
+                    placeholder={start ?? 'HEAD'}
+                    options={branchOptions(branches.branches, branches.current, null, start)}
+                    value={base === '' ? (start ?? '') : base}
+                    onChange={(name) => setBase(name === start ? '' : name)}
                     collapsedGroups={[TASK_BRANCH_GROUP]}
                     className="w-48"
                   />

@@ -25,6 +25,28 @@ describe('branchOptions', () => {
     )
   })
 
+  it('puts the default branch first, then the current and the last used one', () => {
+    const options = branchOptions(branches, 'dev', 'feature/x', 'main')
+    expect(options.map((option) => [option.group, option.value])).toEqual([
+      ['Recent', 'main'],
+      ['Recent', 'dev'],
+      ['Recent', 'feature/x'],
+      [TASK_BRANCH_GROUP, 'natamux/t-0001-a'],
+      [TASK_BRANCH_GROUP, 'natamux/t-0002-b'],
+    ])
+    expect(options.slice(0, 2).map((option) => option.label)).toEqual([
+      'main (default)',
+      'dev (current)',
+    ])
+  })
+
+  it('lists the default branch once when it is the current one too', () => {
+    const options = branchOptions(branches, 'main', null, 'main')
+    expect(options.filter((option) => option.value === 'main')).toEqual([
+      { value: 'main', label: 'main (default, current)', group: 'Recent' },
+    ])
+  })
+
   it('works without a current branch', () => {
     expect(branchOptions(['a'], null, null)).toEqual([
       { value: 'a', label: 'a', group: 'Branches' },

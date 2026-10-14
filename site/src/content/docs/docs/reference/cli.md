@@ -63,7 +63,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--state <state>` | `task list` | Only tasks in this state: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` |
 | `--source <name>` | `event` | `agent`, `human`, `git`, `ci` or `system`. Default: `human` |
 | `--payload <json>` | `event` | A JSON object sent with the event |
-| `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the checkout's branch as its remote has it now, or `HEAD` (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
+| `--base <branch>` | `workspace create`, `agent start` | Start the new workspace from this local branch. Default: the default branch of the repository, such as `main`. Natamux fetches the base first (see [Base branch](/docs/concepts/workspaces/#base-branch)) |
 | `--yes` | `workspace remove` | Confirm that the worktree folder is deleted |
 | `--delete-branch` | `workspace remove` | Also delete the branch, when it is merged |
 | `--json` | most commands | Print JSON instead of text |

@@ -524,10 +524,10 @@ export async function currentBranch(cwd: string): Promise<string | null> {
   }
 }
 
-// The remote branch that the checkout's branch follows, such as "origin/main". Null without one.
-async function upstreamOf(repoDir: string): Promise<string | null> {
+// The remote branch that `branch` follows, such as "origin/main". Null without one.
+async function upstreamOf(repoDir: string, branch: string): Promise<string | null> {
   try {
-    const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']
+    const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`]
     const name = (await git(repoDir, args)).trim()
     return name === '' ? null : name
   } catch (error) {
@@ -538,16 +538,16 @@ async function upstreamOf(repoDir: string): Promise<string | null> {
   }
 }
 
-// Where new work starts: the remote branch of the checkout when the local branch is behind it,
-// so a checkout that was not pulled does not start tasks from old code. Local commits that are
-// not pushed win. Null: the checkout's HEAD.
-export async function startRef(repoDir: string): Promise<string | null> {
-  const upstream = await upstreamOf(repoDir)
+// Where new work from `branch` starts: its remote branch when the local branch is behind it, so
+// a branch that was not pulled does not start tasks from old code. Local commits that are not
+// pushed win. Null: the local branch.
+export async function startRef(repoDir: string, branch: string): Promise<string | null> {
+  const upstream = await upstreamOf(repoDir, branch)
   if (upstream === null) {
     return null
   }
   try {
-    await git(repoDir, ['merge-base', '--is-ancestor', 'HEAD', upstream])
+    await git(repoDir, ['merge-base', '--is-ancestor', branch, upstream])
     return upstream
   } catch (error) {
     if (error instanceof GitError) {
@@ -560,13 +560,9 @@ export async function startRef(repoDir: string): Promise<string | null> {
 // A fetch that hangs (no network) must not hold up a new workspace for long.
 const FETCH_TIMEOUT_MS = 20_000
 
-// Brings the remote branch of the checkout up to date. Without a network, or a remote, the work
-// starts from what is known, so a failure is not an error.
-export async function fetchUpstream(repoDir: string): Promise<void> {
-  const branch = await currentBranch(repoDir)
-  if (branch === null) {
-    return
-  }
+// Brings the remote branch of `branch` up to date. The local branch does not move. Without a
+// network, or a remote, the work starts from what is known, so a failure is not an error.
+export async function fetchUpstream(repoDir: string, branch: string): Promise<void> {
   try {
     const remote = (await git(repoDir, ['config', '--get', `branch.${branch}.remote`])).trim()
     const merge = (await git(repoDir, ['config', '--get', `branch.${branch}.merge`])).trim()
@@ -1119,17 +1115,43 @@ export async function repositoryRoot(path: string): Promise<string> {
   return (await git(path, ['rev-parse', '--show-toplevel'])).trim()
 }
 
-// The local branches of a repository, sorted, and the one its checkout is on.
-export async function listBranches(
-  repoDir: string,
-): Promise<{ branches: string[]; current: string | null }> {
+export type BranchList = {
+  branches: string[]
+  current: string | null
+  // Where a new workspace starts when no branch is picked.
+  defaultBranch: string | null
+}
+
+// The local branches of a repository, sorted, the one its checkout is on, and its default one.
+export async function listBranches(repoDir: string): Promise<BranchList> {
   const output = await git(repoDir, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])
   const branches = output
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '')
     .sort((a, b) => a.localeCompare(b))
-  return { branches, current: await currentBranch(repoDir) }
+  const current = await currentBranch(repoDir)
+  return { branches, current, defaultBranch: await defaultBranch(repoDir, branches, current) }
+}
+
+// The default branch of origin, then main, then master, then the checkout's branch. Reads
+// origin/HEAD as the clone left it: no network.
+async function defaultBranch(
+  repoDir: string,
+  branches: readonly string[],
+  current: string | null,
+): Promise<string | null> {
+  let fromOrigin: string | null = null
+  try {
+    const args = ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']
+    fromOrigin = (await git(repoDir, args)).trim().replace(/^origin\//, '')
+  } catch (error) {
+    if (!(error instanceof GitError)) {
+      throw error
+    }
+  }
+  const names = [fromOrigin, 'main', 'master']
+  return names.find((name) => name !== null && branches.includes(name)) ?? current
 }
 
 // Deletes the branch only when it is fully merged. Returns false when git keeps it.
