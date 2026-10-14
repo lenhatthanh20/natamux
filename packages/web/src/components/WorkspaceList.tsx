@@ -9,12 +9,13 @@ import {
   Plus,
   Settings,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type CSSProperties, useEffect, useRef, useState } from 'react'
 import { useNowValue } from '../hooks/useNow'
 import { useRovingFocus } from '../hooks/useRovingFocus'
 import { useStableCallback } from '../hooks/useStableCallback'
 import type { StoredEvent, TaskShells } from '../lib/api'
 import { shortcutOf } from '../lib/commands'
+import { projectColor } from '../lib/project-color'
 import { firstChildKey, parentKey, type TreeRow } from '../lib/roving'
 import {
   FOLDS_KEY,
@@ -444,9 +445,15 @@ export function WorkspaceList({
         // With the gap of the list, 8px between projects.
         const spaced = index > 0 ? 'mt-1' : ''
         return (
-          <div key={repo.id} className={`flex flex-col ${spaced}`}>
-            {/* A band, so each project reads as a block above its rows. */}
-            <div className="group flex h-7 items-center rounded-md bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] pr-0.5 hover:bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]">
+          // A card per project, in the project's color, so each one reads as a block.
+          <div
+            key={repo.id}
+            style={{ '--project': projectColor(repo.id) } as CSSProperties}
+            className={`flex flex-col rounded-[10px] border border-line bg-[color-mix(in_srgb,var(--surface)_55%,transparent)] ${spaced}`}
+          >
+            <div
+              className={`group flex h-7 items-center bg-linear-to-r from-[color-mix(in_srgb,var(--project)_16%,transparent)] to-transparent to-85% pr-0.5 hover:from-[color-mix(in_srgb,var(--project)_20%,transparent)] hover:to-[color-mix(in_srgb,var(--project)_4%,transparent)] ${isCollapsed ? 'rounded-[9px]' : 'rounded-t-[9px]'}`}
+            >
               <button
                 type="button"
                 {...roving.item(`repo:${repo.id}`)}
@@ -479,11 +486,15 @@ export function WorkspaceList({
                   aria-hidden="true"
                   className={`sb-chevron shrink-0 text-muted ${isCollapsed ? '' : 'rotate-90'}`}
                 />
-                <FolderGit2 size={ICON.sm} aria-hidden="true" className="shrink-0 text-ink-2" />
+                <FolderGit2
+                  size={ICON.sm}
+                  aria-hidden="true"
+                  className="shrink-0 text-(--project)"
+                />
                 <span className="min-w-0 truncate text-sm font-semibold text-ink">{repo.name}</span>
                 <CountBadge
                   count={count}
-                  tone="accent"
+                  tone="project"
                   label={`${count} workspace${count === 1 ? '' : 's'}`}
                 />
                 {isCollapsed && (
@@ -499,10 +510,19 @@ export function WorkspaceList({
                   className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
                 />
               )}
+              {!gone && (
+                <IconButton
+                  label={`Settings of ${repo.name}`}
+                  icon={Settings}
+                  size="xs"
+                  onClick={() => onRepoSettings(repo.id)}
+                  className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
+                />
+              )}
               {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
-              <ul className="mt-0.5 flex flex-col">
+              <ul className="flex flex-col px-0.5 pt-0.5 pb-1">
                 {open.map((task) => row(task))}
                 {open.length === 0 && !hiddenInGroup && (
                   <li className="py-1 pl-8 text-xs text-muted">

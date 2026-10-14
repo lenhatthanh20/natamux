@@ -152,6 +152,19 @@ One `data-state` attribute drives chip, dot, glyph, board column and filter. `--
 
 Running (blue) and needs-input (amber) are far apart in hue, so "working" never reads as "needs you".
 
+#### Project colors
+
+Each project gets one of six colors from a hash of its id (`lib/project-color.ts`), so the color stays the same with nothing stored. No amber or red, so a project color never reads as needs-you or failed. Contrast is the worst case: as the count text on its 10% tint, over the band at 20% (hover), over the card.
+
+| CSS variable | Dark | Light | Contrast (dark / light) |
+|---|---|---|---|
+| `--project-0` teal | `#4fd1c0` | `#0a5a54` | 5.4 / 4.9 |
+| `--project-1` violet | `#b39bff` | `#5b2fb0` | 4.7 / 5.0 |
+| `--project-2` fuchsia | `#f08ad0` | `#8e1f6c` | 4.8 / 4.8 |
+| `--project-3` green | `#9ad65a` | `#2f5f0b` | 5.6 / 4.7 |
+| `--project-4` sky | `#5cc0f0` | `#065580` | 5.1 / 4.8 |
+| `--project-5` indigo | `#9fa0ff` | `#3f3bb4` | 4.7 / 5.0 |
+
 #### Diff and git
 
 | CSS variable | Dark | Light | Contrast |
@@ -424,7 +437,7 @@ quiet (done, cancelled, draft), min 24px:
 - Finished rows: title and meta use `--muted` (no opacity, fixes RA-10/11); cancelled title `line-through` in the finished group only.
 - Unseen change (agent finished or asked since the user last opened it): title weight 600 and a 6px accent dot before the age; the row name ends with ", unseen" (P2).
 - Rename: F2 or double-click title or menu "Rename". Field replaces the title line only (the row keeps its height and other lines), height 24, all text selected in both paths, Enter saves, Esc cancels, focus returns to the row (fixes NAV-23).
-- Group header (repo): 28px band (radius 6, `--ink` 5%, 8% on hover; 8px between groups, 2px above the first row), chevron 12, `FolderGit2` 14 ink-2, name 13/600 ink, accent count badge (screen readers: "3 workspaces"), hover "+" (24), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (for every project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
+- Group (repo): a card around the header and its rows (radius 10, 1px `--line`, `--surface` 55%; 8px between groups; rows inset 2px, 4px below the last). The card sets `--project` to the project color (see Project colors). Header: 28px band with a gradient from `--project` 16% to transparent at 85% (20% to 4% on hover), chevron 12, `FolderGit2` 14 in `--project`, name 13/600 ink, project count badge (screen readers: "3 workspaces"), hover "+" (24), hover gear "Settings of <project>" (24, opens Project settings), hover "more" menu (24): Start a task, Settings, separator, Remove finished workspaces (only while the group has some), separator, Remove project (for every project; disabled with the line "Remove its workspaces first" while the project has workspaces; asks first). Right-click, Shift+F10 or ContextMenu on the header opens the same menu. Collapsed group with the current or a needs-you workspace inside shows a 6px dot in that state color after the count (NAV-26).
 - "N finished" disclosure: 24px row, 12 muted, chevron 12, indent 32. Hover `FolderMinus` button (24) "Remove finished workspaces in <project>": asks first, listing the task ids; removes the workspaces one after the other, skips any with changes that are not committed, and ends with one toast. Pinned workspaces are not part of it.
 - No projects: one 12 muted line "No projects yet" and an "Add project" text button that opens the projects panel. "Add task" is off with "Add a project first"; "Start a task" opens the projects panel with the toast "Add a project first."
 - Pinned group: caps header "Pinned" + count; pinned rows show the repo name as a prefix chip on line 2 (NAV-25).
@@ -450,7 +463,7 @@ Dots (`.state-dot`, 8px) stay for chips, filters and board headers. Draft dot = 
 
 ### 4.11 Chips and badges
 - State chip (`.state-chip`): 20px high, pad x 8, radius full, 12/500, 6px dot, `--chip-bg` / `--chip-fg`. No pulse animation.
-- Count badge: min-width 16, height 16, pad x 5, radius full, 11/600 tabular, bg badge, ink-2. Signal variant (needs-you): bg signal-soft, text signal, 1px signal-line. Accent variant (project headers): bg `--accent` 16%, text link (accent text is under 4.5:1 on it in light).
+- Count badge: min-width 16, height 16, pad x 5, radius full, 11/600 tabular, bg badge, ink-2. Signal variant (needs-you): bg signal-soft, text signal, 1px signal-line. Accent variant: bg `--accent` 16%, text link (accent text is under 4.5:1 on it in light). Project variant (project headers): bg `--project` 10%, text `--project`.
 - Label chip (task labels, relation "part of T-0014", "waits for T-0009"): 20px, pad x 6, radius 4, 12/400, 1px line, ink-2.
 - Kbd (`ui/Kbd.tsx`): height 18, min-width 18, pad x 4, radius 4, 11/500 mono, bg raised, 1px line, `box-shadow: inset 0 -1px 0 var(--line-strong)`, muted text. Renders platform keys: macOS glyphs joined (`⌘K`, `⇧⌘P`), Windows words with `+` (`Ctrl+K`). Source: `lib/keys.ts` `formatShortcut('Mod+K')`.
 

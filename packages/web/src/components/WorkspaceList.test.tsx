@@ -811,8 +811,8 @@ describe('a project header', () => {
     expect(within(web).getByRole('img', { name: '0 workspaces' })).toBeTruthy()
   })
 
-  // Test spec C7, C8 and C11: a band per project, a strong name, and room between projects.
-  it('draws each project as a band with a strong name, apart from the next one', async () => {
+  // Test spec C7, C8 and C11: a card per project, a strong name, and room between projects.
+  it('draws each project as a card in its own color, apart from the next one', async () => {
     const user = userEvent.setup()
     list({
       tasks: [makeTask({ id: 'T-0001', title: 'One' }), makeTask({ id: 'T-0002', repo: 'web' })],
@@ -821,28 +821,74 @@ describe('a project header', () => {
 
     const natamux = screen.getByRole('button', { name: /^natamux/ })
     const band = natamux.parentElement as HTMLElement
+    const card = band.parentElement as HTMLElement
+    // The card holds the band and the rows of the project.
+    expect(card.className).toContain('border border-line')
+    expect(within(card).getByRole('button', { name: /^One,/ })).toBeTruthy()
+    expect(card.style.getPropertyValue('--project')).toBe('var(--project-3)')
+    const web = screen.getByRole('button', { name: /^Web app/ })
+    const webCard = web.parentElement?.parentElement as HTMLElement
+    expect(webCard.style.getPropertyValue('--project')).toBe('var(--project-0)')
+
     expect(band.className).toContain('h-7')
-    expect(band.className).toContain('bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]')
-    expect(band.className).toContain('hover:bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]')
-    expect(band.className).not.toContain('hover:bg-hover')
+    expect(band.className).toContain('from-[color-mix(in_srgb,var(--project)_16%,transparent)]')
+    expect(band.className).toContain(
+      'hover:from-[color-mix(in_srgb,var(--project)_20%,transparent)]',
+    )
+    expect(band.className).toContain('rounded-t-[9px]')
     const name = within(natamux).getByText('natamux')
     expect(name.className).toContain('font-semibold text-ink')
     expect(name.className).not.toContain('font-medium')
     const folder = natamux.querySelector('svg.lucide-folder-git-2, svg.lucide-folder-git')
-    expect(folder?.getAttribute('class')).toContain('text-ink-2')
+    expect(folder?.getAttribute('class')).toContain('text-(--project)')
     const count = within(natamux).getByRole('img', { name: '1 workspace' })
-    expect(count.className).toContain('text-link')
+    expect(count.className).toContain('text-(--project)')
 
     // Only the projects after the first take the extra space.
-    const web = screen.getByRole('button', { name: /^Web app/ })
-    expect(band.parentElement?.className).not.toContain('mt-1')
-    expect(web.parentElement?.parentElement?.className).toContain('mt-1')
+    expect(card.className).not.toContain('mt-1')
+    expect(webCard.className).toContain('mt-1')
 
-    // Folded, the band and the count stay.
+    // Folded, the card is the band alone, and the count stays.
     await user.click(natamux)
     expect(natamux.getAttribute('aria-expanded')).toBe('false')
-    expect(band.className).toContain('bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]')
+    expect(card.children).toHaveLength(1)
+    expect(band.className).toContain('rounded-[9px]')
+    expect(band.className).not.toContain('rounded-t-')
     expect(within(natamux).getByRole('img', { name: '1 workspace' })).toBeTruthy()
+  })
+
+  it('opens the settings of the project from a button next to +', async () => {
+    const user = userEvent.setup()
+    const { onRepoSettings } = list({ pinnedIds: [] })
+
+    const plus = screen.getByRole('button', { name: 'Start a task in Web app' })
+    const settings = screen.getByRole('button', { name: 'Settings of Web app' })
+    expect(plus.nextElementSibling).toBe(settings)
+    // Shown like +: on hover or focus, always on touch screens.
+    expect(settings.className).toMatch(/opacity-0/)
+    expect(settings.className).toMatch(/group-hover:opacity-100/)
+    expect(settings.className).toMatch(/group-focus-within:opacity-100/)
+    expect(settings.className).toMatch(/pointer-coarse:opacity-100/)
+
+    await user.click(settings)
+    expect(onRepoSettings).toHaveBeenCalledOnce()
+    expect(onRepoSettings).toHaveBeenCalledWith('web')
+  })
+
+  it('keeps Settings in the menu of the project too', async () => {
+    const user = userEvent.setup()
+    const { onRepoSettings } = list({ pinnedIds: [] })
+
+    await user.click(screen.getByRole('button', { name: 'Actions for natamux' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Settings' }))
+    expect(onRepoSettings).toHaveBeenCalledWith('default')
+  })
+
+  it('has no settings button on a project that is gone', () => {
+    list({ tasks: [makeTask({ id: 'T-0007', repo: 'old' })], pinnedIds: [] })
+
+    expect(screen.queryByRole('button', { name: 'Settings of old' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Settings of natamux' })).toBeTruthy()
   })
 })
 

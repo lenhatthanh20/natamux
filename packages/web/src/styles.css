@@ -56,6 +56,14 @@
   --modified: #8a5a00;
   --renamed: var(--accent);
 
+  /* No amber or red: a project color must not read as "needs you" or "failed". */
+  --project-0: #0a5a54;
+  --project-1: #5b2fb0;
+  --project-2: #8e1f6c;
+  --project-3: #2f5f0b;
+  --project-4: #065580;
+  --project-5: #3f3bb4;
+
   --tooltip-bg: #24272d;
   --tooltip-fg: #ffffff;
   --scroll: rgb(20 24 31 / 0.2);
@@ -145,6 +153,13 @@
   --add-word: rgb(46 160 67 / 0.32);
   --remove-word: rgb(248 81 73 / 0.32);
   --modified: #e8c15a;
+
+  --project-0: #4fd1c0;
+  --project-1: #b39bff;
+  --project-2: #f08ad0;
+  --project-3: #9ad65a;
+  --project-4: #5cc0f0;
+  --project-5: #9fa0ff;
 
   --tooltip-bg: #2a2c31;
   --tooltip-fg: #e6e7ea;
