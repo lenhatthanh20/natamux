@@ -1,9 +1,17 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import {
+  DEFAULT_PIPELINE,
+  DEFAULT_PROJECT_SETTINGS,
+  findStep,
+  isGroup,
+  type Step,
+  stageOfTerminal,
+} from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { findAdapter, knownAgentIds } from './agent-adapters.js'
-import { AgentHookService, UnknownAgentError } from './agent-hook-service.js'
+import { AgentHookService, type StageLookup, UnknownAgentError } from './agent-hook-service.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { TaskIndex } from './task-index.js'
 import { TaskService } from './task-service.js'
@@ -131,6 +139,28 @@ describe('AgentHookService', () => {
     expect(tasks.getTask(task.id).state).toBe('running')
 
     // The agent did not run `natamux done`, so the turn end waits for you.
+    step('Stop')
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+  })
+
+  // An API error ends the turn, but the session lives on and the user can type to it again.
+  it.each([
+    ['UserPromptSubmit', {}],
+    ['PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }],
+    ['PostToolUse', { tool_name: 'Bash' }],
+  ])('takes a failed task up again on %s, then goes on as before', (name, extra) => {
+    const task = tasks.createTask({ title: 'Fix it' })
+    const step = (hookName: string, more: Record<string, unknown> = {}) =>
+      service.handle('claude-code', hook(hookName, more), task.id)
+    step('UserPromptSubmit')
+    step('StopFailure')
+    expect(tasks.getTask(task.id).state).toBe('failed')
+    // Not failed twice.
+    expect(step('StopFailure').applied).toEqual([])
+
+    expect(step(name, extra).applied).toEqual(['agent.resumed'])
+    expect(tasks.getTask(task.id).state).toBe('running')
+
     step('Stop')
     expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
@@ -529,6 +559,111 @@ describe('AgentHookService', () => {
 
   it('throws for input that is not a hook of the agent', () => {
     expect(() => service.handle('claude-code', { cwd: '/x' }, undefined)).toThrow()
+  })
+})
+
+// The stage runner's lookup, on the build group and a review by a person after it.
+describe('AgentHookService, a failed stage of a group', () => {
+  const pipeline: Step[] = DEFAULT_PIPELINE.flatMap((step): Step[] => {
+    if (step.id === 'agent-review') {
+      return []
+    }
+    return step.id === 'testing' ? [{ id: 'review', kind: 'review', gate: 'manual' }, step] : [step]
+  })
+  let root: string
+  let index: TaskIndex
+  let tasks: TaskService
+  let service: AgentHookService
+  // "<task>/<terminal>" of the agents that ran `natamux done` in this turn.
+  let reported: Set<string>
+
+  const stages: StageLookup = {
+    laneFor: (task, terminal) => {
+      const steps = tasks.stepsOf(task)
+      const step = findStep(steps, task.stage)
+      const stage = step === undefined ? undefined : stageOfTerminal(steps, step, terminal ?? '1')
+      if (step === undefined || stage === undefined) {
+        return null
+      }
+      const state = isGroup(step) ? (task.lanes[stage.id] ?? 'done') : task.state
+      return { stage: stage.id, state }
+    },
+    takeReport: (taskId, terminal) => reported.delete(`${taskId}/${terminal}`),
+  }
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'natamux-failed-lane-'))
+    const dataDir = join(root, 'data')
+    mkdirSync(dataDir)
+    index = new TaskIndex(':memory:')
+    const settings = { ...DEFAULT_PROJECT_SETTINGS, stages: pipeline }
+    tasks = new TaskService({ dataDir, index, bus: new EventBus(), settingsOf: () => settings })
+    service = new AgentHookService(tasks, stages)
+    reported = new Set()
+  })
+
+  afterEach(() => {
+    index.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  const send = (taskId: string, name: string, terminal: string) =>
+    service.handle('claude-code', { hook_event_name: name }, taskId, terminal)
+  const log = (taskId: string, source: string, type: string, stage: string) =>
+    tasks.applyEvent(taskId, { source, type, payload: { stage } })
+
+  // Test spec is done; an API error failed the turn of Implement in Shell 1.
+  function failedImplement(): string {
+    const { id } = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(id, { workspace: `/work/${id}`, branch: 'b' })
+    tasks.applyEvent(id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    send(id, 'UserPromptSubmit', '1')
+    send(id, 'UserPromptSubmit', '2')
+    log(id, 'system', 'stage.checked', 'test-spec')
+    log(id, 'human', 'stage.approved', 'test-spec')
+    send(id, 'StopFailure', '1')
+    expect(tasks.getTask(id)).toMatchObject({
+      stage: 'build',
+      state: 'failed',
+      lanes: { 'test-spec': 'done', implement: 'failed' },
+    })
+    return id
+  }
+
+  it('takes only Implement up again, then moves on to review after natamux done', () => {
+    const id = failedImplement()
+
+    expect(send(id, 'UserPromptSubmit', '1').applied).toEqual(['agent.resumed'])
+    expect(tasks.listEvents(id).at(-1)?.event.payload).toMatchObject({ stage: 'implement' })
+    expect(tasks.getTask(id)).toMatchObject({
+      stage: 'build',
+      state: 'running',
+      lanes: { 'test-spec': 'done', implement: 'running' },
+    })
+
+    // `natamux done`, as the stage runner logs it, then the turn end that follows it.
+    log(id, 'agent', 'stage.reported', 'implement')
+    reported.add(`${id}/1`)
+    log(id, 'system', 'stage.checked', 'implement')
+    expect(send(id, 'Stop', '1').applied).toEqual([])
+
+    expect(tasks.getTask(id)).toMatchObject({ stage: 'review', state: 'review' })
+  })
+
+  it('resumes nothing for a hook from a shell no stage uses, or from a finished stage', () => {
+    const id = failedImplement()
+    const events = tasks.listEvents(id).length
+
+    expect(send(id, 'UserPromptSubmit', '7').applied).toEqual([])
+    expect(service.shellState(id, '7')).toBe('running')
+    expect(send(id, 'UserPromptSubmit', '2').applied).toEqual([])
+
+    expect(tasks.listEvents(id)).toHaveLength(events)
+    expect(tasks.getTask(id).lanes).toEqual({ 'test-spec': 'done', implement: 'failed' })
   })
 })
 

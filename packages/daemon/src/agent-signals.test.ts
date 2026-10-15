@@ -13,8 +13,8 @@ describe('planSignalEvents', () => {
     ['needs-input', ['agent.resumed']],
     ['review', ['agent.resumed']],
     ['running', []],
+    ['failed', ['agent.resumed']],
     ['blocked', []],
-    ['failed', []],
     ['done', []],
     ['cancelled', []],
   ])('maps a prompt in a task that is %s', (state, expected) => {
@@ -56,6 +56,10 @@ describe('planSignalEvents', () => {
     expect(types('needs-input', 'failed')).toEqual(['agent.resumed', 'agent.failed'])
   })
 
+  it('does not fail a failed task twice', () => {
+    expect(types('failed', 'failed')).toEqual([])
+  })
+
   it('maps a question of a running agent to needs input, and ignores it otherwise', () => {
     expect(types('running', 'asking')).toEqual(['agent.asked'])
     expect(types('ready', 'asking')).toEqual([])
@@ -65,6 +69,11 @@ describe('planSignalEvents', () => {
   it('resumes a waiting task when the agent works, and ignores the call otherwise', () => {
     expect(types('needs-input', 'activity')).toEqual(['agent.resumed'])
     expect(types('running', 'activity')).toEqual([])
+  })
+
+  // After an API error the session lives on, so a tool that runs shows the agent works again.
+  it('resumes a failed task when the agent works again', () => {
+    expect(types('failed', 'activity')).toEqual(['agent.resumed'])
   })
 
   it('passes the payload to every event it plans', () => {

@@ -2262,6 +2262,131 @@ describe('a prompt for a running agent', () => {
     await expectSubmitted(pty, 'Also add a test')
   })
 
+  describe('on a stage whose agent failed', () => {
+    // An API error ended the turn of the spec agent, as StopFailure reports it.
+    async function failedSpec(): Promise<Task> {
+      const task = await withWorkspace(
+        (await created({ title: 'Export tasks', agent: 'claude-code' })).id,
+      )
+      tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.failed',
+        payload: { stage: 'spec', sessionId: 's-1' },
+      })
+      expect(tasks.getTask(task.id).state).toBe('failed')
+      return tasks.getTask(task.id)
+    }
+
+    // The events Start agent logged after the failure: one resume per failed stage, by a person.
+    function loggedAfterFailure(taskId: string) {
+      const events = tasks.listEvents(taskId)
+      const failed = events.map(({ event }) => event.type).lastIndexOf('agent.failed')
+      return events
+        .slice(failed + 1)
+        .filter(({ event }) => event.source === 'human')
+        .map(({ accepted, event }) => ({ accepted, type: event.type, stage: event.payload.stage }))
+    }
+
+    it('asks the agent that still runs to go on', async () => {
+      const task = await failedSpec()
+      const pty = ptys.at(-1) as FakePty
+      pty.program = 'node'
+      const written = pty.written.length
+
+      const after = await runner.startByHand(task.id, 'claude-code')
+      await runner.settle()
+
+      expect(after).toMatchObject({ stage: 'spec', state: 'running' })
+      expect(loggedAfterFailure(task.id)).toEqual([
+        { accepted: true, type: 'agent.resumed', stage: 'spec' },
+      ])
+      expect(ptys).toHaveLength(1)
+      const typed = pty.written.slice(written).join('')
+      expect(typed.split(`\x1b[200~${GO_ON_PROMPT}`)).toHaveLength(2)
+      expect(typed).not.toContain('agent-launch-')
+    })
+
+    // A quick double click sends it twice.
+    it('asks the agent to go on once when a person starts it twice', async () => {
+      const task = await failedSpec()
+      const pty = ptys.at(-1) as FakePty
+      pty.program = 'node'
+      const written = pty.written.length
+
+      await runner.startByHand(task.id, 'claude-code')
+      await runner.startByHand(task.id, 'claude-code')
+      await runner.settle()
+
+      expect(loggedAfterFailure(task.id)).toEqual([
+        { accepted: true, type: 'agent.resumed', stage: 'spec' },
+      ])
+      const typed = pty.written.slice(written).join('')
+      expect(typed.split(`\x1b[200~${GO_ON_PROMPT}`)).toHaveLength(2)
+      expect(ptys).toHaveLength(1)
+    })
+
+    it('starts the agent again on the session of the stage when none runs', async () => {
+      const task = await failedSpec()
+      terminals.close(task.id)
+
+      const after = await runner.startByHand(task.id, 'claude-code')
+      await runner.settle()
+
+      expect(after).toMatchObject({ stage: 'spec', state: 'running' })
+      expect(loggedAfterFailure(task.id)).toEqual([
+        { accepted: true, type: 'agent.resumed', stage: 'spec' },
+      ])
+      expect(terminals.list(task.id)).toEqual(['1'])
+      expect(launchScript(task.id)).toContain("--resume 's-1'")
+    })
+
+    // As Resume does: the stage goes on where it stopped, with its own agent.
+    it('goes on with the agent of the stage, whichever agent the person picked', async () => {
+      const task = await failedSpec()
+      terminals.close(task.id)
+
+      await runner.startByHand(task.id, 'codex')
+      await runner.settle()
+
+      expect(tasks.getTask(task.id).state).toBe('running')
+      expect(launchScript(task.id)).toContain("--resume 's-1'")
+    })
+
+    it('starts only the failed stage of a group, in its own terminal', async () => {
+      const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+      tasks.applyEvent(task.id, {
+        source: 'human',
+        type: 'state.overridden',
+        payload: { to: 'ready', stage: 'build' },
+      })
+      await withWorkspace(task.id)
+      tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.finished',
+        payload: { stage: 'test-spec', sessionId: 's-2' },
+      })
+      tasks.applyEvent(task.id, {
+        source: 'agent',
+        type: 'agent.failed',
+        payload: { stage: 'implement', sessionId: 's-1' },
+      })
+      terminals.close(task.id)
+
+      await runner.startByHand(task.id, 'claude-code')
+      await runner.settle()
+
+      expect(loggedAfterFailure(task.id)).toEqual([
+        { accepted: true, type: 'agent.resumed', stage: 'implement' },
+      ])
+      expect(tasks.getTask(task.id).lanes).toEqual({
+        'test-spec': 'needs-input',
+        implement: 'running',
+      })
+      expect(terminals.list(task.id)).toEqual(['1'])
+      expect(launchScript(task.id)).toContain("--resume 's-1'")
+    })
+  })
+
   it('ends the shells of a task that is cancelled', async () => {
     const { task, pty } = await atSpecWithShell('node')
 

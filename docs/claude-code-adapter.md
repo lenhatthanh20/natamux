@@ -22,9 +22,11 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `UserPromptSubmit` | draft | `task.readied`, `agent.started` | running |
 | `UserPromptSubmit` | ready | `agent.started` | running |
 | `UserPromptSubmit` | needs input or in review | `agent.resumed` | running |
+| `UserPromptSubmit` | failed | `agent.resumed` | running (the session goes on after an API error) |
 | `PermissionRequest` | running | `agent.asked` | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | running | `agent.asked` | needs input |
 | `PostToolUse` | needs input | `agent.resumed` | running (the permission was answered) |
+| `PreToolUse`, `PostToolUse` | failed | `agent.resumed` | running (the agent works again) |
 | `PreToolUse` | any | none (a sign of life) | unchanged; the tool and its file or command become the task's one-line summary, such as "Edit src/a.ts" |
 | `Stop` with no background work | running | `agent.finished` | needs input |
 | `Stop` with no background work | needs input | `agent.resumed`, `agent.finished` | needs input |
@@ -41,6 +43,8 @@ Everything else is ignored and not logged, so the event log does not fill with c
 
 - When the daemon starts, after it listens: each stage that is `running`, `needs-input` or `review`. The task keeps its state; a stage in review moves to running only when you type to the agent. A task no agent was started for, or whose agent Natamux cannot launch, is left alone.
 - When a person clicks **Resume** (or sends `agent.resumed` from the CLI or the API) and no agent runs in the stage's terminal.
+
+**A failed stage goes on.** `StopFailure` fails the stage, but the Claude Code session lives on. Typing to the agent takes the stage up again (table above). **Start agent** on a failed agent stage logs `agent.resumed` for that stage and goes on as **Resume** does: an agent that still runs is asked to go on; with none left, the stage's agent starts again in its terminal, on the stage's last session.
 
 A `testing` stage with a `command` has no agent. When the daemon starts and such a stage is `running` (and not waiting for CI), it goes back to `ready` (`agent.stopped`) and its command runs again in a new shell.
 

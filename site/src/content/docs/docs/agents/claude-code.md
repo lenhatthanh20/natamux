@@ -57,7 +57,7 @@ The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from th
 | `PermissionRequest` | Claude Code is about to ask for permission | needs input |
 | `Notification` (`permission_prompt`, `elicitation_dialog`, `agent_needs_input`) | Claude Code waits for you | needs input |
 | `Stop` | The agent finished its answer | needs input. When background work is still running (a background shell, a monitor or a scheduled prompt), the agent only paused: the task stays running and says `Waiting for Bash: pnpm test`, until the work wakes the agent again. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work) |
-| `StopFailure` | An API error ended the turn | failed |
+| `StopFailure` | An API error ended the turn | failed. The session goes on: type to the agent, or click **Start agent**, and the stage runs again |
 
 Other events are ignored. A stage is done only when the agent runs `natamux done` or you mark it done. See [Stages](/docs/concepts/stages/).
 

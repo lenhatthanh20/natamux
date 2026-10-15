@@ -159,6 +159,11 @@ function ciError(error: unknown): CiResult {
   return { passed: false, reasons: [reason], passes: [], final: true }
 }
 
+// A stage an agent works on: an agent stage, or a testing stage with no command.
+function runByAgent(stage: Stage): boolean {
+  return stage.kind === 'agent' || (stage.kind === 'testing' && stage.command === undefined)
+}
+
 // Why a send back asked for changes, for the agent's next prompt.
 function sendBackReason(cause: TaskEvent | undefined): string | undefined {
   if (
@@ -789,7 +794,8 @@ export class StageRunner {
       if (!accepted || otherStage || event.source !== 'agent' || KEEPS_TURN.includes(event.type)) {
         continue
       }
-      return event.type === 'agent.finished'
+      // After an API error the agent waits at its prompt, as after a turn end.
+      return event.type === 'agent.finished' || event.type === 'agent.failed'
     }
     return false
   }
@@ -841,9 +847,7 @@ export class StageRunner {
   // stage, or with `newest` the newest of the folder; other agents get the stage prompt again.
   // At the daemon's start (`restart`) its pane shows a spinner until the agent runs.
   private relaunch(task: Task, step: Step, stage: Stage, newest = false, restart = false): void {
-    const byAgent =
-      stage.kind === 'agent' || (stage.kind === 'testing' && stage.command === undefined)
-    if (!byAgent || task.workspace === null) {
+    if (!runByAgent(stage) || task.workspace === null) {
       return
     }
     const terminal = terminalOfStage(this.tasks.stepsOf(task), stage.id)
@@ -993,6 +997,9 @@ export class StageRunner {
     }
     // A new workspace may be starting the stage right now.
     await this.startWork.get(taskId)
+    if (prompt === undefined && this.continueFailed(taskId)) {
+      return this.tasks.getTask(taskId)
+    }
     if (prompt === undefined && !this.agentRuns(taskId)) {
       this.chosenAgents.set(taskId, agent)
       try {
@@ -1010,6 +1017,25 @@ export class StageRunner {
     const task = this.agents.start(taskId, agent, prompt)
     this.launched.set(`${taskId}/${MAIN_TERMINAL}`, { agent, at: this.now() })
     return task
+  }
+
+  // The stages of the current step whose agent failed go on where they stopped, as Resume does:
+  // resumeStage asks an agent that still runs to go on, or starts the stage's agent again on its
+  // last session. False when no such stage failed.
+  private continueFailed(taskId: string): boolean {
+    const task = this.tasks.getTask(taskId)
+    const step = this.stepOf(task)
+    const failed = stagesOf(step).filter(
+      (stage) => runByAgent(stage) && laneState(task, step, stage.id) === 'failed',
+    )
+    for (const stage of failed) {
+      this.tasks.applyEvent(taskId, {
+        source: 'human',
+        type: 'agent.resumed',
+        payload: { stage: stage.id },
+      })
+    }
+    return failed.length > 0
   }
 
   // A prompt goes into a running agent only. Pasted into a shell, its lines would run as

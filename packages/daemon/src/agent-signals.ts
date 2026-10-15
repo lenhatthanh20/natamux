@@ -70,13 +70,16 @@ export function planSignalEvents(
       if (state === 'ready') {
         return [{ type: 'agent.started', payload }]
       }
-      return state === 'needs-input' || state === 'review'
+      return state === 'needs-input' || state === 'review' || state === 'failed'
         ? [{ type: 'agent.resumed', payload }]
         : []
 
     case 'activity':
-      // A tool ran, so a permission that was asked for has been answered.
-      return state === 'needs-input' ? [{ type: 'agent.resumed', payload }] : []
+      // A tool ran, so a permission that was asked for has been answered, or the agent works
+      // again after an API error.
+      return state === 'needs-input' || state === 'failed'
+        ? [{ type: 'agent.resumed', payload }]
+        : []
 
     case 'asking':
       return state === 'running' ? [{ type: 'agent.asked', payload }] : []
