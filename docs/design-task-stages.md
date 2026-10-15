@@ -569,7 +569,7 @@ Step 5 needs the UI pull requests #54 to #58 merged first; it builds on their co
 
 ## 10. Open points
 
-- **One agent session for all stages, or a new one per stage?** The plan above keeps one session for the main line (less to set up, the agent remembers), and a new one for each extra lane of a group. Bigger tasks may need a fresh session for `implement`. That can be a later stage setting (`session: "new"`).
+- **One agent session for all stages, or a new one per stage?** The plan above keeps one session for the main line (less to set up, the agent remembers), and a new one for each extra lane of a group. Bigger tasks may need a fresh session for `implement`. That can be a later stage setting (`session: "new"`). See [design-agent-context.md](design-agent-context.md), C1.
 - **Two agents in one worktree:** safe in the default group, because Test spec writes only an ignored file. A custom group of two code-writing stages would clash; the settings page warns when a group has more than one stage without `output`.
 - **`testing` runs before the pull request,** so CI on the pull request is not part of it. CI stays visible in `release`, as today.
 - **Later:**
