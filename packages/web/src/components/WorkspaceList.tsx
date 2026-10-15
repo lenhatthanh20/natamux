@@ -2,6 +2,8 @@ import type { Repo, Task, TaskState } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import {
   ChevronRight,
+  Eye,
+  EyeOff,
   FolderGit2,
   FolderMinus,
   FolderPlus,
@@ -96,6 +98,18 @@ function savedFolds(): Record<string, boolean> {
   }
 }
 
+// The projects whose names are blurred, as repo ids. A per-browser choice, like the folds.
+const BLURRED_KEY = 'natamux.blurred-projects'
+
+function savedBlurred(): string[] {
+  try {
+    const value: unknown = JSON.parse(globalThis.localStorage?.getItem(BLURRED_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 const isFinished = (task: Task) => task.state === 'done' || task.state === 'cancelled'
 
 // The guide sits under the task glyph; the rows' glyphs line up with the title.
@@ -139,6 +153,7 @@ export function WorkspaceList({
   const deleteTask = useStableCallback((id: string) => onDelete?.(id))
   const readEvents = useStableCallback(async (id: string) => (await loadEvents?.(id)) ?? [])
   const [folds, setFolds] = useState(savedFolds)
+  const [blurred, setBlurred] = useState(savedBlurred)
   const [removing, setRemoving] = useState<Pick<Repo, 'id' | 'name' | 'path'> | null>(null)
   // The repository whose finished workspaces the user asked to remove.
   const [clearing, setClearing] = useState<string | null>(null)
@@ -165,6 +180,23 @@ export function WorkspaceList({
     allTasks.filter((task) => task.workspace !== null && (task.repo ?? DEFAULT_REPO_ID) === repoId)
       .length
 
+  const toggleBlur = (id: string) => {
+    const next = blurred.includes(id) ? blurred.filter((item) => item !== id) : [...blurred, id]
+    setBlurred(next)
+    try {
+      globalThis.localStorage?.setItem(BLURRED_KEY, JSON.stringify(next))
+    } catch {
+      // Not kept; the next visit shows the names.
+    }
+  }
+  // Labels show as tooltips, so a blurred project is not named in them.
+  const nameOf = (repo: Pick<Repo, 'id' | 'name'>) =>
+    blurred.includes(repo.id) ? 'this project' : repo.name
+  const blurItem = (id: string): MenuItem =>
+    blurred.includes(id)
+      ? { label: 'Show names', icon: Eye, onSelect: () => toggleBlur(id) }
+      : { label: 'Blur names', icon: EyeOff, onSelect: () => toggleBlur(id) }
+
   const clearItems = (id: string): MenuItem[] =>
     finishedIn(id).length === 0
       ? []
@@ -184,11 +216,12 @@ export function WorkspaceList({
   const repoItems = (id: string): MenuItem[] => {
     const known = repos.find((repo) => repo.id === id)
     if (known === undefined) {
-      return clearItems(id).slice(1)
+      return [blurItem(id), ...clearItems(id)]
     }
     const items: MenuItem[] = [
       { label: 'Start a task', icon: Plus, onSelect: () => onNewWorkspace(id) },
       { label: 'Settings', icon: Settings, onSelect: () => onRepoSettings(id) },
+      blurItem(id),
       ...clearItems(id),
     ]
     // Every workspace counts, also the ones the filter hides: the daemon refuses them all.
@@ -383,6 +416,7 @@ export function WorkspaceList({
         current={task.id === currentId}
         pinned={pinnedIds.includes(task.id)}
         repoName={prefix ? repoName(task) : undefined}
+        blurred={prefix && blurred.includes(task.repo ?? DEFAULT_REPO_ID)}
         glyph={taskGlyphState(task, rowsOf(task))}
         unseen={isUnseen(seenState, task)}
         tabStop={roving.stop === key}
@@ -446,7 +480,9 @@ export function WorkspaceList({
         const hidden = totalIn(repo.id) - open.length - finished.length - nested.length
         const hiddenInGroup = filtered && open.length + finished.length === 0 && hidden > 0
         const items = repoItems(repo.id)
-        const menuLabel = `Actions for ${repo.name}`
+        const isBlurred = blurred.includes(repo.id)
+        const name = nameOf(repo)
+        const menuLabel = `Actions for ${name}`
         // A project that is gone takes no new tasks.
         const gone = !repos.some((known) => known.id === repo.id)
         // With the gap of the list, 8px between projects.
@@ -456,6 +492,7 @@ export function WorkspaceList({
           <div
             key={repo.id}
             style={{ '--project': projectColor(repo.id) } as CSSProperties}
+            data-blurred={isBlurred || undefined}
             className={`flex flex-col rounded-[10px] border border-line bg-[color-mix(in_srgb,var(--surface)_55%,transparent)] ${spaced}`}
           >
             <div
@@ -498,19 +535,21 @@ export function WorkspaceList({
                   aria-hidden="true"
                   className="shrink-0 text-(--project)"
                 />
-                <span className="min-w-0 truncate text-sm font-semibold text-ink">{repo.name}</span>
+                <span data-private className="min-w-0 truncate text-sm font-semibold text-ink">
+                  {repo.name}
+                </span>
                 <CountBadge
                   count={count}
                   tone="project"
                   label={`${count} workspace${count === 1 ? '' : 's'}`}
                 />
                 {isCollapsed && (
-                  <HiddenDot group={group} currentId={currentId} repoName={repo.name} />
+                  <HiddenDot group={group} currentId={currentId} repoName={name} />
                 )}
               </button>
               {!gone && (
                 <IconButton
-                  label={`Start a task in ${repo.name}`}
+                  label={`Start a task in ${name}`}
                   icon={Plus}
                   size="xs"
                   onClick={() => onNewWorkspace(repo.id)}
@@ -519,13 +558,26 @@ export function WorkspaceList({
               )}
               {!gone && (
                 <IconButton
-                  label={`Settings of ${repo.name}`}
+                  label={`Settings of ${name}`}
                   icon={Settings}
                   size="xs"
                   onClick={() => onRepoSettings(repo.id)}
                   className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
                 />
               )}
+              <IconButton
+                label={isBlurred ? 'Show names' : 'Blur names'}
+                icon={isBlurred ? Eye : EyeOff}
+                size="xs"
+                aria-pressed={isBlurred}
+                onClick={() => toggleBlur(repo.id)}
+                // Always on screen while blurred, so the user sees why the names are gone.
+                className={
+                  isBlurred
+                    ? ''
+                    : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100'
+                }
+              />
               {items.length > 0 && <Menu label={menuLabel} items={items} revealOnHover />}
             </div>
             {!isCollapsed && (
@@ -546,7 +598,7 @@ export function WorkspaceList({
                   </li>
                 )}
                 {hiddenInGroup && (
-                  <li className="py-1 pl-8 text-xs text-muted">
+                  <li data-private className="py-1 pl-8 text-xs text-muted">
                     No matches in {repo.name} ({hidden} hidden)
                   </li>
                 )}

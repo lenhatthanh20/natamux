@@ -43,6 +43,8 @@ type WorkspaceRowProps = {
   pinned: boolean
   // Pinned rows come from several repositories, so they name theirs.
   repoName?: string
+  // A pinned row of a blurred project: it sits outside the project card, so it marks itself.
+  blurred?: boolean
   // What the task glyph shows: the task state, or running while one of its agents works.
   glyph: TaskState
   // The state changed since the user last opened this workspace.
@@ -112,6 +114,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   current,
   pinned,
   repoName,
+  blurred = false,
   glyph,
   unseen,
   tabStop,
@@ -253,14 +256,18 @@ export const WorkspaceRow = memo(function WorkspaceRow({
 
   // The branch is mostly the title, so it waits in the tooltip and the menu.
   const id = (
-    <span data-tip={task.branch ?? undefined} className="shrink-0 font-mono text-2xs">
+    <span data-private data-tip={task.branch ?? undefined} className="shrink-0 font-mono text-2xs">
       {task.id}
     </span>
   )
   const stage = (
     <>
-      {step !== null && <span className="shrink-0 font-mono text-2xs tabular-nums">{step}</span>}
-      {comet.stage !== null && <span className="min-w-0 shrink truncate">{comet.stage}</span>}
+      {step !== null && (
+        <span data-private className="shrink-0 font-mono text-2xs tabular-nums">{step}</span>
+      )}
+      {comet.stage !== null && (
+        <span data-private className="min-w-0 shrink truncate">{comet.stage}</span>
+      )}
     </>
   )
   // The agent that drives the task. Open, the rows under it name the agent of each stage.
@@ -301,7 +308,10 @@ export const WorkspaceRow = memo(function WorkspaceRow({
       {tier === 'live' && (
         <span className={`mt-0.5 flex w-full min-w-0 items-center gap-1.5 pl-5.5 ${metaColor}`}>
           {repoName !== undefined && (
-            <span className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2">
+            <span
+              data-private
+              className="shrink-0 rounded-sm bg-badge px-1 text-2xs font-medium text-ink-2"
+            >
               {repoName}
             </span>
           )}
@@ -314,7 +324,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
             </span>
           )}
           {/* Open, each shell row says what its agent does. */}
-          <span className="min-w-0 flex-1 truncate text-ink-2">
+          <span data-private className="min-w-0 flex-1 truncate text-ink-2">
             {task.state === 'running' && !open ? activity : null}
           </span>
           {task.pr !== null && (
@@ -332,7 +342,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
         </span>
       )}
       {tier === 'attention' && said !== null && (
-        <span data-tip-overflow className="mt-1 line-clamp-2 w-full pl-5.5 text-ink">
+        <span data-private data-tip-overflow className="mt-1 line-clamp-2 w-full pl-5.5 text-ink">
           {said}
         </span>
       )}
@@ -350,7 +360,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   )
 
   return (
-    <li className={slides ? 'hm-pop' : undefined}>
+    <li className={slides ? 'hm-pop' : undefined} data-blurred={blurred || undefined}>
       <div className={`group relative cv-row ${OFF_SCREEN[tier]}`}>
         {flash > 0 && (
           <span
@@ -432,6 +442,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
                   event.stopPropagation()
                   startRename()
                 }}
+                data-private
                 className={titleClass}
               >
                 {task.title}
@@ -528,12 +539,19 @@ export const AgentRow = memo(function AgentRow({
             <AgentIcon agent={row.agent} />
           </span>
         )}
-        <span className={`shrink-0 font-medium ${row.plain ? 'text-muted' : 'text-ink-2'}`}>
+        <span
+          data-private
+          className={`shrink-0 font-medium ${row.plain ? 'text-muted' : 'text-ink-2'}`}
+        >
           {row.label}
         </span>
-        <span className="min-w-0 flex-1 truncate text-muted">{activity}</span>
+        <span data-private className="min-w-0 flex-1 truncate text-muted">{activity}</span>
         {tag !== null && (
-          <span data-tip={`Shell ${row.shell}`} className="shrink-0 font-mono text-2xs text-muted">
+          <span
+            data-private
+            data-tip={`Shell ${row.shell}`}
+            className="shrink-0 font-mono text-2xs text-muted"
+          >
             {tag}
           </span>
         )}
