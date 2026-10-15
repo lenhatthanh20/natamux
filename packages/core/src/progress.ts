@@ -1,6 +1,7 @@
 import type { TaskEvent } from './events.js'
 import {
   type Gate,
+  isBranch,
   isGroup,
   type StageKind,
   type Step,
@@ -11,7 +12,8 @@ import {
 import type { Task } from './task.js'
 import type { TaskState } from './task-state.js'
 
-export type StageStatus = 'done' | 'current' | 'upcoming' | 'skipped'
+// `not-taken`: a stage of a branch where the task took another path, or none.
+export type StageStatus = 'done' | 'current' | 'upcoming' | 'skipped' | 'not-taken'
 
 // One stage as the progress views show it: where it is, and what proves it.
 export type StageProgress = {
@@ -22,6 +24,10 @@ export type StageProgress = {
   output: string | null
   // The group the stage runs in, side by side with others.
   group: string | null
+  // The path of a branch the stage is on.
+  path: string | null
+  // Why the task took the path, on the first stage of the path it took.
+  because: string | null
   status: StageStatus
   // The state of a current stage.
   state: TaskState | null
@@ -64,32 +70,62 @@ function strings(value: unknown): string[] {
     : []
 }
 
+// The ids of the stages whose end enters step `index`. The end of the step before a skipped
+// branch enters the step after it.
+function endersOf(
+  steps: readonly Step[],
+  index: number,
+  paths: Task['paths'] | undefined,
+): string[] {
+  const before = steps[index - 1]
+  if (before === undefined) {
+    return []
+  }
+  const ids = stagesOf(before).map((stage) => stage.id)
+  return isBranch(before) && paths?.[before.id] === ''
+    ? [...ids, ...endersOf(steps, index - 1, paths)]
+    : ids
+}
+
 // The progress of every stage of a task, in order. `events` are the task's accepted events,
 // oldest first.
 export function stageProgress(
-  task: Pick<Task, 'stage' | 'state' | 'lanes'>,
+  task: Pick<Task, 'stage' | 'state' | 'lanes'> & { paths?: Task['paths'] },
   events: readonly TaskEvent[],
   steps: readonly Step[],
 ): StageProgress[] {
   const current = stepIndex(steps, task.stage)
-  // When a step began: the end of the step before it, or a send back into it. Stages that only
-  // wait for a person (review, release) have no start event of their own.
-  const entered = steps.map((step, index) => {
-    const before = steps[index - 1]
-    const ids = new Set(stagesOf(step).map((stage) => stage.id))
-    const previous = new Set(before === undefined ? [] : stagesOf(before).map((stage) => stage.id))
-    return (
-      events
-        .filter(
-          (event) =>
-            (ENDS.includes(event.type) && previous.has(String(event.payload.stage))) ||
-            ids.has(sendsBackTo(event) ?? ''),
-        )
-        .at(-1)?.at ?? null
-    )
-  })
+  // When a stage began: the end of the stage or step before it, or a send back into it. Stages
+  // that only wait for a person (review, release) have no start event of their own.
+  const enteredAt = (into: readonly string[], from: readonly string[]) =>
+    events
+      .filter(
+        (event) =>
+          (ENDS.includes(event.type) && from.includes(String(event.payload.stage))) ||
+          into.includes(sendsBackTo(event) ?? ''),
+      )
+      .at(-1)?.at ?? null
   return steps.flatMap((step, index) =>
     stagesOf(step).map((stage) => {
+      // A stage in a path runs like a step of its own, after the stage before it in the path.
+      const path = isBranch(step)
+        ? step.paths.find((each) => each.stages.includes(stage))
+        : undefined
+      const place = path?.stages.indexOf(stage) ?? -1
+      const previous = path?.stages[place - 1]
+      const taken = isBranch(step) ? task.paths?.[step.id] : undefined
+      const notTaken = taken !== undefined && taken !== path?.id
+      const here = path?.stages.findIndex((each) => each.id === task.stage) ?? -1
+      // The event that chose the path the task took.
+      const chosen =
+        path !== undefined && place === 0 && taken === path.id
+          ? events.filter((event) => event.payload.path === path.id).at(-1)
+          : undefined
+      const entered = enteredAt(
+        path === undefined ? stagesOf(step).map((each) => each.id) : [stage.id],
+        previous === undefined ? endersOf(steps, index, task.paths) : [previous.id],
+      )
+
       const own = events.filter((event) => event.payload.stage === stage.id)
       const starts = own.filter((event) => event.type === 'stage.started')
       const lastStart = starts.at(-1)
@@ -108,9 +144,11 @@ export function stageProgress(
       const laneState = isGroup(step) ? task.lanes[stage.id] : task.state
       let status: StageStatus
       let state: TaskState | null = null
-      if (index < current || task.state === 'done') {
+      if (notTaken) {
+        status = 'not-taken'
+      } else if (index < current || task.state === 'done' || (here >= 0 && place < here)) {
         status = skipped ? 'skipped' : 'done'
-      } else if (index > current || current < 0) {
+      } else if (index > current || current < 0 || (path !== undefined && place > here)) {
         status = 'upcoming'
       } else if (laneState === 'done') {
         status = skipped ? 'skipped' : 'done'
@@ -126,10 +164,14 @@ export function stageProgress(
         gate: stage.gate,
         output: stage.output ?? null,
         group: isGroup(step) ? step.id : null,
+        path: path?.id ?? null,
+        because: typeof chosen?.payload.because === 'string' ? chosen.payload.because : null,
         status,
         state,
-        rounds: status === 'upcoming' ? 0 : Math.max(starts.length, 1),
-        startedAt: lastStart?.at ?? (status === 'upcoming' ? null : (entered[index] ?? null)),
+        rounds: status === 'upcoming' || notTaken ? 0 : Math.max(starts.length, 1),
+        startedAt: notTaken
+          ? null
+          : (lastStart?.at ?? (status === 'upcoming' ? null : (chosen?.at ?? entered))),
         endedAt: status === 'done' || status === 'skipped' ? (ended?.at ?? null) : null,
         approvedBy: approved?.source ?? null,
         passes: strings(checked?.payload.passes),

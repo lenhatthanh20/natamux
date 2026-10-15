@@ -82,7 +82,7 @@ function DefaultMark({ isDefault, onReset }: { isDefault: boolean; onReset: () =
   )
 }
 
-function Field({
+export function Field({
   label,
   htmlFor,
   mark,

@@ -312,6 +312,83 @@ A group holds 2 to 4 stages that are on and work at the same time. Only `agent` 
 - A stage in another shell can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file).
 - The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`, `draft`, in that order.
 
+## Paths with a condition
+
+A branch splits the pipeline into 2 to 4 paths. Each path has a condition and its own stages. When the task gets to the branch, Natamux checks the conditions in order. The task takes the first path that holds, runs its stages one after another, and then goes on to the step after the branch. The stages of the other paths never run for that task.
+
+For example, after Plan: a small change goes the Implement way, and a change that needs a review goes the Review PR way.
+
+```json
+{
+  "id": "after-plan",
+  "name": "After plan",
+  "paths": [
+    {
+      "id": "small",
+      "name": "Small change",
+      "when": { "type": "output", "file": "plan.md", "section": "Size", "contains": "small" },
+      "stages": [
+        { "id": "implement", "kind": "agent", "gate": "auto" },
+        { "id": "testing", "kind": "testing", "gate": "auto" }
+      ]
+    },
+    {
+      "id": "pr-review",
+      "name": "Review PR",
+      "when": { "type": "command", "run": "test -f .no-review" },
+      "not": true,
+      "stages": [{ "id": "review", "kind": "review", "gate": "manual" }]
+    }
+  ]
+}
+```
+
+If `plan.md` has "small" under `## Size`, the task goes Implement, Testing, and then on. Review never starts. If not, and `.no-review` does not exist, it goes the Review PR way and never starts Implement or Testing.
+
+### Conditions
+
+| Type | Holds when |
+|---|---|
+| `output` | The file in the task's stage folder has the text. `file` is a markdown file name. With `section`, only the lines under that heading count. The match ignores case |
+| `command` | The command exits with 0. It runs in the worktree (the task folder without one), with the shell of your system, and stops after 10 minutes |
+
+- `"not": true` turns a condition around: the path is taken when it does not hold.
+- The last path can leave out `when`. It is the **Otherwise** path, taken when no other path holds.
+- No path holds and there is no Otherwise path: the task skips the branch.
+- A missing file, a command that fails to start, and a command that times out all mean "does not hold". The stage before the branch still ends as usual.
+- The check happens when the stage before the branch ends. For a stage that waits for your approval, that is when you approve, so your edits to its files count.
+
+### Build a branch in Project settings
+
+1. Open **Project settings → Stages** and pick the step the branch comes after.
+2. Click **Add branch**. Give it a **Branch name**.
+3. In each path card, set the **Path name**, the condition (**File has text** or **Command succeeds**, **holds** or **does not hold**), and add stages from the list.
+4. **Add path** adds a path (up to 4). **Make this the Otherwise path** is on the last path.
+
+The chart shows the branch as an **If** node with one lane per path, each with its condition, and a dashed line for the skip when there is no Otherwise path. Command conditions are listed in the notice before you save, like other commands.
+
+Natamux shows an error on the branch and keeps **Save** off when:
+
+- a path has no stage, or a path that is not the last has no condition;
+- a path holds a group, another branch, a context stage or a release stage;
+- the branch is the first step, or comes right after another branch (put a stage between them);
+- a file name is not a markdown file, or a text or command is empty;
+- a branch has only one path left with a condition: turn on a stage in another path, or remove the branch.
+
+Stage ids are unique in the whole pipeline, so each stage is on exactly one path.
+
+### In the Progress view
+
+The card of the first stage of the path taken says **Took Small change** and the reason, such as `plan.md "Size" contains "small"`. The stages of the other paths say **Not taken**. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
+
+### Send back
+
+- You can send a task back to a stage of the path it took, or to a stage before the branch. A stage of a path not taken is refused.
+- Without `--to`, Natamux goes back to the last agent stage on the way the task went.
+- A send back to a stage before the branch clears the choice. The conditions are checked again when the task gets to the branch.
+
+A task keeps the paths it was made with. If you change the branch later, a path the task does not have is passed over.
+
 ## Testing with a command
 
 A `testing` stage with a `command` runs it in a shell. Without a command, an agent does the testing.

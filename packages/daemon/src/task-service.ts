@@ -16,6 +16,7 @@ import {
   offersWorkflow,
   type ProjectSettings,
   type PullRequestStatus,
+  pathOf,
   RECORD_ONLY_EVENT_TYPES,
   resolveSteps,
   type StagePosition,
@@ -158,8 +159,8 @@ function compareText(a: string, b: string): number {
   return a < b ? -1 : 1
 }
 
-function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes'>): StagePosition {
-  return { stage: task.stage, state: task.state, lanes: task.lanes }
+function positionOf(task: Pick<Task, 'stage' | 'state' | 'lanes' | 'paths'>): StagePosition {
+  return { stage: task.stage, state: task.state, lanes: task.lanes, paths: task.paths }
 }
 
 // The task at its new position. Entering a new step starts its clock.
@@ -169,6 +170,7 @@ function moveTask(task: Task, position: StagePosition, moved: boolean, at: strin
     stage: position.stage,
     state: position.state,
     lanes: position.lanes,
+    paths: position.paths ?? task.paths,
     stageSince: moved ? at : task.stageSince,
   }
 }
@@ -919,7 +921,11 @@ export class TaskService {
     if (on && stage.kind === 'context') {
       throw new TaskEditError('The context stage comes first, so it cannot be skipped early')
     }
-    if (on && stepIndex(steps, stageId) <= stepIndex(steps, task.stage)) {
+    const target = stepIndex(steps, stageId)
+    const at = stepIndex(steps, task.stage)
+    // Stages of one path share the index of their branch.
+    const earlier = (pathOf(steps, stageId)?.index ?? 0) <= (pathOf(steps, task.stage)?.index ?? 0)
+    if (on && (target < at || (target === at && earlier))) {
       throw new TaskEditError(
         `${taskId} is at or past the ${stageName(stage)} stage. Use Skip on the current stage`,
       )

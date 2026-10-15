@@ -5,12 +5,18 @@ import {
   type ContextSource,
   canEndShell,
   codeStageBefore,
+  completeEvent,
   ENDED_SHELL_LINES,
   type EndedShell,
   type EventType,
+  entersBranch,
   findStep,
+  isBranch,
   isGroup,
+  isNotTaken,
+  isStage,
   offersCi,
+  pathOf,
   plainText,
   RECORD_ONLY_EVENT_TYPES,
   runsWorkflow,
@@ -21,6 +27,7 @@ import {
   stageOfTerminal,
   stagesOf,
   stepIndex,
+  stepToRun,
   type Task,
   type TaskEvent,
   type TaskState,
@@ -47,8 +54,9 @@ import {
   workingDir,
   writeStageFile,
 } from './stage-files.js'
+import { pickPath } from './stage-paths.js'
 import { contextPrompt, manualContext, stagePrompt } from './stage-prompts.js'
-import type { TaskService } from './task-service.js'
+import type { ApplyEventResult, TaskService } from './task-service.js'
 import { MAIN_TERMINAL, SHELLS, type TerminalService } from './terminal-service.js'
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
@@ -115,6 +123,9 @@ export class StageInputError extends Error {
     this.name = 'StageInputError'
   }
 }
+
+// An event as a client or the runner sends it, before the task service logs it.
+type EventInput = Pick<TaskEvent, 'source' | 'type' | 'payload'>
 
 // The states of a stage whose agent starts again when the daemon starts.
 const RESUMED_STATES: readonly TaskState[] = ['running', 'needs-input', 'review']
@@ -371,9 +382,10 @@ export class StageRunner {
     )
   }
 
+  // The step the task runs now. In a branch, that is the stage of the path it is at.
   private stepOf(task: Task): Step {
-    const step = findStep(this.tasks.stepsOf(task), task.stage)
-    if (step === undefined) {
+    const step = stepToRun(this.tasks.stepsOf(task), task.stage)
+    if (step === undefined || isBranch(step)) {
       throw new StageActionError(`${task.id} is at an unknown stage "${task.stage}"`)
     }
     return step
@@ -463,7 +475,7 @@ export class StageRunner {
       return
     }
     const steps = this.tasks.stepsOf(task)
-    const step = findStep(steps, stageId)
+    const step = stepToRun(steps, stageId)
     const stage = step && stagesOf(step).find((each) => each.id === stageId)
     if (step === undefined || stage?.endShell !== true || !canEndShell(stage)) {
       return
@@ -616,7 +628,7 @@ export class StageRunner {
     if (forward && this.markedLanes(taskId).length > 0) {
       // After the message of the move has reached every listener, so its events come in order.
       await Promise.resolve()
-      if (this.skipMarked(taskId)) {
+      if (await this.skipMarked(taskId)) {
         // The skips ended the step. The message of that move starts the next one.
         return
       }
@@ -641,10 +653,10 @@ export class StageRunner {
   }
 
   // Skips the marked stages of the current step. True when that ended the step.
-  private skipMarked(taskId: string): boolean {
+  private async skipMarked(taskId: string): Promise<boolean> {
     const before = this.tasks.getTask(taskId)
     for (const stage of this.markedLanes(taskId)) {
-      this.tasks.applyEvent(taskId, {
+      await this.applyEnding(taskId, {
         source: 'system',
         type: 'stage.skipped',
         payload: { stage: stage.id, planned: true },
@@ -1206,7 +1218,7 @@ export class StageRunner {
     // approval would put every new backlog task in Needs you.
     const now = this.tasks.getTask(task.id)
     if (source.type === 'manual' && now.stage === stage.id && now.state === 'review') {
-      this.tasks.applyEvent(task.id, {
+      await this.applyEnding(task.id, {
         source: 'system',
         type: 'stage.passed',
         payload: { stage: stage.id },
@@ -1262,7 +1274,7 @@ export class StageRunner {
       }
       return named
     }
-    if (!isGroup(step)) {
+    if (isStage(step)) {
       return step
     }
     if (input.terminal !== undefined) {
@@ -1302,7 +1314,7 @@ export class StageRunner {
       // A person can type the command in a task shell too; only an agent there counts.
       const byAgent = input.terminal !== undefined && this.agentRuns(taskId, input.terminal)
       const from = byAgent ? this.agentSendsBack(task, step, input.terminal ?? '') : undefined
-      this.apply(
+      await this.apply(
         taskId,
         'stage.reopened',
         {
@@ -1329,7 +1341,7 @@ export class StageRunner {
     }
     const { type, states } = plan[action]
     const stage = this.resolveStage(task, step, input, states)
-    this.apply(
+    await this.apply(
       taskId,
       type,
       { stage: stage.id, ...(input.reason === undefined ? {} : { reason: input.reason }) },
@@ -1338,11 +1350,17 @@ export class StageRunner {
     return this.afterStart(taskId)
   }
 
-  // A send back goes to this stage or one before it.
+  // A send back goes to this stage or one before it, on the way the task went.
   private checkTarget(task: Task, to: string): void {
     const steps = this.tasks.stepsOf(task)
-    const at = stepIndex(steps, to)
-    if (at < 0 || at > stepIndex(steps, task.stage)) {
+    if (isNotTaken(steps, task.paths, to)) {
+      throw new StageInputError(`${to} is on a path this task did not take`)
+    }
+    const target = stepIndex(steps, to)
+    const at = stepIndex(steps, task.stage)
+    // Stages of one path share the index of their branch.
+    const later = (pathOf(steps, to)?.index ?? 0) > (pathOf(steps, task.stage)?.index ?? 0)
+    if (target < 0 || target > at || (target === at && later)) {
       throw new StageInputError(
         `${task.id} has no stage "${to}" to go back to. Name this stage or one before it`,
       )
@@ -1382,16 +1400,50 @@ export class StageRunner {
       ).length
   }
 
-  private apply(
+  private async apply(
     taskId: string,
     type: TaskEvent['type'],
     payload: Record<string, unknown>,
     source: TaskEvent['source'],
-  ): void {
-    const result = this.tasks.applyEvent(taskId, { source, type, payload })
+  ): Promise<void> {
+    const result = await this.applyEnding(taskId, { source, type, payload })
     if (!result.accepted) {
       throw new StageActionError(`${taskId} cannot take "${type}" now (${result.task.state})`)
     }
+  }
+
+  // A move into a branch takes the first path whose condition holds. The conditions are checked
+  // here, before the move, and the event keeps the choice, so a replay of the log never runs them.
+  async withPath(taskId: string, input: EventInput): Promise<EventInput> {
+    const task = this.tasks.getTask(taskId)
+    const steps = this.tasks.stepsOf(task)
+    const position = { stage: task.stage, state: task.state, lanes: task.lanes, paths: task.paths }
+    const at = new Date(this.now()).toISOString()
+    const event = completeEvent(position, { ...input, taskId, at }, steps)
+    const branch = entersBranch(position, event, steps)
+    if (branch === undefined) {
+      const { path: _path, because: _because, ...payload } = input.payload
+      return { ...input, payload }
+    }
+    // The conditions and their order come from the settings now, as names and gates do. A path
+    // whose stages are all off now still runs for a task that has it, so it is checked too.
+    const current = this.tasks.settingsOf(task.repo).stages.find((step) => step.id === branch.id)
+    const folder = workingDir(this.dataDir, task)
+    const picked = await pickPath(
+      current !== undefined && isBranch(current) ? current : branch,
+      { folder, cwd: task.workspace ?? folder, paths: branch.paths.map((path) => path.id) },
+      this.runCommand,
+    )
+    // Only the daemon picks the path. The stage stays the one the event was for, though the
+    // conditions took a while.
+    const { path: _path, because: _because, ...payload } = event.payload
+    const path = picked.path === undefined ? {} : { path: picked.path }
+    return { ...input, payload: { ...payload, ...path, because: picked.because } }
+  }
+
+  // An event that may end a stage, with the path it takes at a branch it enters.
+  private async applyEnding(taskId: string, input: EventInput): Promise<ApplyEventResult> {
+    return this.tasks.applyEvent(taskId, await this.withPath(taskId, input))
   }
 
   // The task once the stages the action moved it to have started, so the answer shows a stage
@@ -1493,14 +1545,23 @@ export class StageRunner {
       return
     }
     if (result.passed) {
-      this.tasks.applyEvent(taskId, {
-        source: 'system',
-        type: 'stage.checked',
-        payload: { stage: stageId, passes: result.passes },
-      })
+      await this.applyChecked(taskId, stageId, start.seq, result.passes)
       return
     }
     this.failChecks(taskId, stageId, result.reasons)
+  }
+
+  // The conditions of a branch after the stage can take minutes, and the stage may start again
+  // meanwhile: then the checks are about the round before.
+  private async applyChecked(taskId: string, stageId: string, seq: number, passes: string[]) {
+    const event = await this.withPath(taskId, {
+      source: 'system',
+      type: 'stage.checked',
+      payload: { stage: stageId, passes },
+    })
+    if (this.lastStart(taskId, stageId).seq === seq) {
+      this.tasks.applyEvent(taskId, event)
+    }
   }
 
   // The task asked for CI on this stage, and has the branch to push.
@@ -1529,11 +1590,7 @@ export class StageRunner {
       return
     }
     if (ci.passed) {
-      this.tasks.applyEvent(taskId, {
-        source: 'system',
-        type: 'stage.checked',
-        payload: { stage: stageId, passes: [...passes, ...ci.passes] },
-      })
+      await this.applyChecked(taskId, stageId, seq, [...passes, ...ci.passes])
       return
     }
     if (!ci.final && this.sendBackForCi(taskId, stageId, ci.reasons, ci.logs)) {
@@ -1556,7 +1613,11 @@ export class StageRunner {
     const steps = this.tasks.stepsOf(task)
     const stage = stagesOf(this.stepOf(task)).find((candidate) => candidate.id === stageId)
     const own = stage?.kind === 'agent'
-    const to = own ? stage : stage?.kind === 'testing' ? codeStageBefore(steps, stageId) : undefined
+    const to = own
+      ? stage
+      : stage?.kind === 'testing'
+        ? codeStageBefore(steps, stageId, task.paths)
+        : undefined
     if (stage === undefined || to === undefined) {
       return false
     }

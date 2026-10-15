@@ -48,6 +48,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     stage: 'implement',
     stages: ['implement', 'review', 'release'],
     lanes: {},
+    paths: {},
     stageSince: null,
     backgroundSince: null,
     workflowStages: [],

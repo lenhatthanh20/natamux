@@ -514,14 +514,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.post('/tasks/:id/events', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
-    if (!byAgent(request)) {
-      return options.service.applyEvent(id, request.body)
-    }
     const input = applyEventInputSchema.parse(request.body)
+    // Any event may end the step before a branch, whose conditions are checked first. Only the
+    // daemon picks the path.
+    if (!byAgent(request)) {
+      return options.service.applyEvent(id, await options.stages.withPath(id, input))
+    }
     if (GATE_EVENT_TYPES.includes(input.type)) {
       throw new AgentRefusedError(`send ${input.type}`)
     }
-    return options.service.applyEvent(id, { ...input, source: 'agent' })
+    const event = await options.stages.withPath(id, { ...input, source: 'agent' })
+    return options.service.applyEvent(id, event)
   })
 
   // An agent posts its hook here, with its name in the path. Always answer 200 with an empty object,

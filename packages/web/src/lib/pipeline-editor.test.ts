@@ -1,15 +1,29 @@
-import { DEFAULT_PIPELINE, defaultPrompt, type Step, stepRefsOf } from '@natamux/core'
+import {
+  DEFAULT_PIPELINE,
+  defaultPrompt,
+  pipelineIssues,
+  type Step,
+  stepRefsOf,
+} from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import {
+  addBranch,
   addCatalogStage,
   addCustomStage,
+  addPath,
   approvalLabel,
+  blankCondition,
+  branchLabel,
   canMove,
   catalogChoices,
+  conditionProblems,
   customStageProblems,
   defaultGate,
   defaultWorkflow,
   dropStage,
+  editCondition,
+  findBranch,
+  findPlace,
   findStage,
   groupOf,
   idFromName,
@@ -20,13 +34,19 @@ import {
   moveStage,
   parseDraft,
   pipelineLabel,
+  removePath,
   removeStage,
+  retypeCondition,
   runAlone,
   runsInShellOne,
   sameSettings,
+  setBranchName,
   setEnabled,
   setEndShell,
   setGate,
+  setOtherwise,
+  setPathCondition,
+  setPathName,
   setSections,
   setText,
   setWorkflow,
@@ -34,6 +54,8 @@ import {
   shownDefaultPrompt,
   takesOwnAgent,
   trackerOf,
+  uniqueIssues,
+  usedIds,
   withCreateIssue,
   withSteps,
 } from './pipeline-editor'
@@ -610,5 +632,510 @@ describe('test spec cases', () => {
     const draft = { tracker: { type: 'none' } }
     const now = { stages: [{ id: 'spec' }], tracker: { type: 'github', linkInPr: false } }
     expect(mergeChanges(start, draft, now)).toEqual({ tracker: { type: 'none' } })
+  })
+})
+
+// Context, Plan, a branch of two paths, Release.
+const BRANCHED: Step[] = [
+  { id: 'context', kind: 'context', gate: 'manual' },
+  { id: 'plan', kind: 'agent', gate: 'manual' },
+  {
+    id: 'after-plan',
+    name: 'After plan',
+    paths: [
+      {
+        id: 'small',
+        name: 'Small change',
+        when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+        stages: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'testing', kind: 'testing', gate: 'auto' },
+        ],
+      },
+      {
+        id: 'pr-review',
+        name: 'Review PR',
+        when: { type: 'command', run: 'test -f .no-review' },
+        not: true,
+        stages: [{ id: 'review', kind: 'review', gate: 'manual' }],
+      },
+    ],
+  },
+  { id: 'release', kind: 'release', gate: 'manual' },
+]
+
+const branchRef = (small: string[], review: string[]) => ({
+  id: 'after-plan',
+  paths: [
+    { id: 'small', stages: small },
+    { id: 'pr-review', stages: review },
+  ],
+})
+
+describe('branches: reading', () => {
+  it('reads a branch from the JSON, and refuses one the list cannot draw', () => {
+    const draft = parseDraft(JSON.stringify({ stages: BRANCHED }))
+    expect(draft.ok && draft.steps).toEqual(BRANCHED)
+    const noStages = parseDraft(
+      '{ "stages": [{ "id": "after-plan", "paths": [{ "id": "small" }, { "id": "other", "stages": [] }] }] }',
+    )
+    expect(!noStages.ok && noStages.error).toMatch(
+      /^stages, item 1: a branch needs an id and paths/,
+    )
+    const group = parseDraft(
+      '{ "stages": [{ "id": "b", "paths": [{ "id": "p", "stages": [{ "id": "g", "parallel": [] }] }] }] }',
+    )
+    expect(group.ok).toBe(false)
+  })
+
+  it('keeps a path with no stage and a condition with a wrong value, for the issues to name', () => {
+    const draft = parseDraft(
+      '{ "stages": [{ "id": "b", "paths": [{ "id": "p", "when": { "type": "command", "run": "" }, "stages": [] }, { "id": "q", "stages": [] }] }] }',
+    )
+    expect(draft.ok).toBe(true)
+  })
+
+  it('lists every id: stages, branches and paths', () => {
+    expect([...usedIds(BRANCHED)].sort()).toEqual(
+      [
+        'after-plan',
+        'context',
+        'implement',
+        'plan',
+        'pr-review',
+        'release',
+        'review',
+        'small',
+        'testing',
+      ].sort(),
+    )
+  })
+
+  it('finds a stage of a path, its path, and its place in it', () => {
+    expect(findPlace(BRANCHED, 'testing')).toEqual({ index: 2, lane: null, path: 0, slot: 1 })
+    expect(findPlace(BRANCHED, 'review')).toEqual({ index: 2, lane: null, path: 1, slot: 0 })
+    expect(findPlace(BRANCHED, 'after-plan')).toEqual({
+      index: 2,
+      lane: null,
+      path: null,
+      slot: null,
+    })
+    expect(findPlace(BRANCHED, 'small')).toBeNull()
+    expect(groupOf(BRANCHED, 'testing')).toBeUndefined()
+    expect(findStage(BRANCHED, 'review')?.kind).toBe('review')
+    expect(findBranch(BRANCHED, 'after-plan')?.paths).toHaveLength(2)
+    expect(findBranch(BRANCHED, 'plan')).toBeUndefined()
+  })
+})
+
+describe('addBranch', () => {
+  it('adds a branch after the step of the id, with a path with a condition and an Otherwise path', () => {
+    const steps = addBranch(DEFAULT_PIPELINE, 'plan')
+    expect(ids(steps).slice(2, 5)).toEqual([
+      'plan',
+      {
+        id: 'branch',
+        paths: [
+          { id: 'path-1', stages: [] },
+          { id: 'path-2', stages: [] },
+        ],
+      },
+      { id: 'build', parallel: ['test-spec', 'implement'] },
+    ])
+    const branch = findBranch(steps, 'branch')
+    expect(branch?.paths[0]?.when).toEqual({ type: 'output', file: 'plan.md', contains: '' })
+    expect(branch?.paths[1]?.when).toBeUndefined()
+  })
+
+  it('goes after the branch when the stage is in a path, and before the release at the end', () => {
+    expect(ids(addBranch(BRANCHED, 'testing'))[3]).toMatchObject({ id: 'branch' })
+    expect(ids(addBranch(BRANCHED, 'release')).slice(-2)).toEqual([
+      expect.objectContaining({ id: 'branch' }),
+      'release',
+    ])
+    expect(ids(addBranch(BRANCHED)).slice(-2)).toEqual([
+      expect.objectContaining({ id: 'branch' }),
+      'release',
+    ])
+  })
+
+  it('gives ids no stage, group or path uses', () => {
+    const once = addBranch(BRANCHED, 'plan')
+    const twice = addBranch(once, 'plan')
+    const all = twice.flatMap((step) =>
+      'paths' in step ? [step.id, ...step.paths.map((path) => path.id)] : [],
+    )
+    expect(new Set(all).size).toBe(all.length)
+    const branch = findBranch(twice, 'branch-2')
+    expect(branch?.paths.map((path) => path.id)).toEqual(['path-3', 'path-4'])
+  })
+
+  it('is an error until each path has a stage', () => {
+    const issues = pipelineIssues(addBranch(BRANCHED.slice(0, 2), 'plan'))
+    expect(issues.some((issue) => issue.stage === 'branch' && issue.level === 'error')).toBe(true)
+  })
+})
+
+describe('addPath and removePath', () => {
+  it('adds a path with a condition at the end, before an Otherwise path', () => {
+    const three = addPath(BRANCHED, 'after-plan')
+    expect(findBranch(three, 'after-plan')?.paths.map((path) => path.id)).toEqual([
+      'small',
+      'pr-review',
+      'path-3',
+    ])
+    expect(findBranch(three, 'after-plan')?.paths[2]?.when?.type).toBe('output')
+    const otherwise = setOtherwise(BRANCHED, 'after-plan', 'pr-review', true)
+    const added = addPath(otherwise, 'after-plan')
+    expect(findBranch(added, 'after-plan')?.paths.map((path) => path.id)).toEqual([
+      'small',
+      'path-3',
+      'pr-review',
+    ])
+  })
+
+  it('stops at 4 paths, and for a branch that is not there', () => {
+    const four = addPath(addPath(BRANCHED, 'after-plan'), 'after-plan')
+    expect(findBranch(four, 'after-plan')?.paths).toHaveLength(4)
+    expect(addPath(four, 'after-plan')).toBe(four)
+    expect(addPath(BRANCHED, 'plan')).toBe(BRANCHED)
+  })
+
+  it('removes a path with its stages', () => {
+    const steps = removePath(BRANCHED, 'after-plan', 'small')
+    expect(ids(steps)[2]).toEqual({
+      id: 'after-plan',
+      paths: [{ id: 'pr-review', stages: ['review'] }],
+    })
+    expect(findStage(steps, 'implement')).toBeUndefined()
+  })
+
+  it('keeps the last path, and ignores an unknown branch', () => {
+    const one = removePath(BRANCHED, 'after-plan', 'small')
+    expect(removePath(one, 'after-plan', 'pr-review')).toBe(one)
+    expect(removePath(BRANCHED, 'nope', 'small')).toBe(BRANCHED)
+  })
+})
+
+describe('conditions', () => {
+  const when = { type: 'output', file: 'plan.md', contains: 'small' } as const
+
+  it('sets the condition, and does not hold with not true', () => {
+    const command = { type: 'command', run: 'true' } as const
+    const steps = setPathCondition(BRANCHED, 'after-plan', 'small', command, true)
+    expect(findBranch(steps, 'after-plan')?.paths[0]).toMatchObject({
+      when: { type: 'command', run: 'true' },
+      not: true,
+    })
+    const holds = setPathCondition(steps, 'after-plan', 'small', when)
+    expect(findBranch(holds, 'after-plan')?.paths[0]).not.toHaveProperty('not')
+    expect(findBranch(holds, 'after-plan')?.paths[0]?.when).toEqual(when)
+  })
+
+  it('leaves the other paths and an unknown branch alone', () => {
+    const steps = setPathCondition(BRANCHED, 'after-plan', 'small', when)
+    expect(findBranch(steps, 'after-plan')?.paths[1]).toEqual(
+      findBranch(BRANCHED, 'after-plan')?.paths[1],
+    )
+    expect(setPathCondition(BRANCHED, 'nope', 'small', when)).toBe(BRANCHED)
+  })
+
+  it('edits one field, and leaves an empty section out', () => {
+    expect(editCondition(when, 'file', 'notes.md')).toEqual({ ...when, file: 'notes.md' })
+    expect(editCondition(when, 'contains', 'big')).toEqual({ ...when, contains: 'big' })
+    expect(editCondition(when, 'section', 'Size')).toEqual({ ...when, section: 'Size' })
+    expect(editCondition({ ...when, section: 'Size' }, 'section', ' ')).toEqual(when)
+    const command = { type: 'command', run: 'a' } as const
+    expect(editCondition(command, 'run', 'b')).toEqual({ type: 'command', run: 'b' })
+    expect(editCondition(command, 'file', 'b')).toEqual(command)
+  })
+
+  it('starts a blank condition of a type, and keeps the one of the same type', () => {
+    expect(blankCondition('command')).toEqual({ type: 'command', run: '' })
+    expect(blankCondition('output')).toEqual({ type: 'output', file: 'plan.md', contains: '' })
+    expect(retypeCondition(when, 'output')).toBe(when)
+    expect(retypeCondition(when, 'command')).toEqual({ type: 'command', run: '' })
+    expect(retypeCondition(undefined, 'command')).toEqual({ type: 'command', run: '' })
+  })
+
+  it('names what is wrong in a condition, by field', () => {
+    expect(conditionProblems(when)).toEqual({})
+    expect(conditionProblems({ type: 'output', file: 'plan', contains: ' ' })).toEqual({
+      file: 'A condition file is a markdown file, such as plan.md',
+      contains: 'Give the text to look for',
+    })
+    expect(conditionProblems({ type: 'command', run: '' })).toEqual({
+      run: 'Give the command to run',
+    })
+  })
+})
+
+describe('setOtherwise and names', () => {
+  it('makes the last path the Otherwise path: no condition, no not', () => {
+    const steps = setOtherwise(BRANCHED, 'after-plan', 'pr-review', true)
+    const last = findBranch(steps, 'after-plan')?.paths[1]
+    expect(last).not.toHaveProperty('when')
+    expect(last).not.toHaveProperty('not')
+    expect(last?.stages).toHaveLength(1)
+  })
+
+  it('gives a blank condition back when it is turned off', () => {
+    const otherwise = setOtherwise(BRANCHED, 'after-plan', 'pr-review', true)
+    const off = setOtherwise(otherwise, 'after-plan', 'pr-review', false)
+    expect(findBranch(off, 'after-plan')?.paths[1]?.when).toEqual(blankCondition('output'))
+  })
+
+  it('works on the last path only, and does nothing when it is already so', () => {
+    expect(setOtherwise(BRANCHED, 'after-plan', 'small', true)).toBe(BRANCHED)
+    expect(setOtherwise(BRANCHED, 'after-plan', 'pr-review', false)).toBe(BRANCHED)
+    const otherwise = setOtherwise(BRANCHED, 'after-plan', 'pr-review', true)
+    expect(setOtherwise(otherwise, 'after-plan', 'pr-review', true)).toBe(otherwise)
+  })
+
+  it('names a branch and a path, and an empty name leaves the field out', () => {
+    const branched = setBranchName(BRANCHED, 'after-plan', 'Choose')
+    const named = setPathName(branched, 'after-plan', 'small', 'Tiny')
+    expect(findBranch(named, 'after-plan')).toMatchObject({ name: 'Choose' })
+    expect(findBranch(named, 'after-plan')?.paths[0]?.name).toBe('Tiny')
+    const plain = setPathName(setBranchName(named, 'after-plan', ' '), 'after-plan', 'small', '')
+    expect(findBranch(plain, 'after-plan')).not.toHaveProperty('name')
+    expect(findBranch(plain, 'after-plan')?.paths[0]).not.toHaveProperty('name')
+    expect(setPathName(BRANCHED, 'nope', 'small', 'x')).toBe(BRANCHED)
+  })
+})
+
+describe('branches: moving stages', () => {
+  it('moves a stage within its path', () => {
+    const swapped = branchRef(['testing', 'implement'], ['review'])
+    expect(ids(moveStage(BRANCHED, 'implement', 1))[2]).toEqual(swapped)
+    expect(ids(moveStage(BRANCHED, 'testing', -1))[2]).toEqual(swapped)
+  })
+
+  it('moves a stage to the next path at the end of its path, and back', () => {
+    expect(ids(moveStage(BRANCHED, 'testing', 1))[2]).toEqual(
+      branchRef(['implement'], ['testing', 'review']),
+    )
+    expect(ids(moveStage(BRANCHED, 'review', -1))[2]).toEqual(
+      branchRef(['implement', 'testing', 'review'], []),
+    )
+  })
+
+  it('moves a stage out of the branch at the edge of the first or last path', () => {
+    expect(ids(moveStage(BRANCHED, 'review', 1)).slice(2, 5)).toEqual([
+      branchRef(['implement', 'testing'], []),
+      'review',
+      'release',
+    ])
+    expect(ids(moveStage(BRANCHED, 'implement', -1)).slice(1, 4)).toEqual([
+      'plan',
+      'implement',
+      branchRef(['testing'], ['review']),
+    ])
+  })
+
+  it('moves a stage next to a branch into its nearest path', () => {
+    const steps = moveStage(BRANCHED, 'plan', 1)
+    expect(ids(steps)).toEqual([
+      'context',
+      branchRef(['plan', 'implement', 'testing'], ['review']),
+      'release',
+    ])
+    const after: Step[] = [
+      ...BRANCHED.slice(0, 3),
+      { id: 'docs', kind: 'agent', gate: 'auto' },
+      ...BRANCHED.slice(3),
+    ]
+    expect(ids(moveStage(after, 'docs', -1))[2]).toEqual(
+      branchRef(['implement', 'testing'], ['review', 'docs']),
+    )
+  })
+
+  it('moves the release over a branch, and the branch like any step', () => {
+    expect(ids(moveStage(BRANCHED, 'release', -1)).slice(2)).toEqual([
+      'release',
+      branchRef(['implement', 'testing'], ['review']),
+    ])
+    expect(ids(moveStage(BRANCHED, 'after-plan', -1)).slice(1, 3)).toEqual([
+      branchRef(['implement', 'testing'], ['review']),
+      'plan',
+    ])
+  })
+
+  it('tells when a stage of a path can move', () => {
+    expect(canMove(BRANCHED, 'implement', 1)).toBe(true)
+    expect(canMove(BRANCHED, 'review', 1)).toBe(true)
+    expect(canMove(BRANCHED, 'release', 1)).toBe(false)
+  })
+
+  it('keeps every id once after any move', () => {
+    for (const id of ['implement', 'testing', 'review', 'plan']) {
+      for (const direction of [-1, 1] as const) {
+        const used = [...usedIds(moveStage(BRANCHED, id, direction))]
+        expect(used.sort()).toEqual([...usedIds(BRANCHED)].sort())
+      }
+    }
+  })
+})
+
+describe('branches: drop, add and remove', () => {
+  it('drops a stage before or after a stage of a path', () => {
+    expect(ids(dropStage(BRANCHED, 'plan', 'review', 'before'))[1]).toEqual(
+      branchRef(['implement', 'testing'], ['plan', 'review']),
+    )
+    expect(ids(dropStage(BRANCHED, 'testing', 'implement', 'before'))[2]).toEqual(
+      branchRef(['testing', 'implement'], ['review']),
+    )
+    expect(ids(dropStage(BRANCHED, 'implement', 'review', 'after'))[2]).toEqual(
+      branchRef(['testing'], ['review', 'implement']),
+    )
+  })
+
+  it('drops a stage on a path, to its end', () => {
+    expect(ids(dropStage(BRANCHED, 'plan', 'pr-review', 'after'))[1]).toEqual(
+      branchRef(['implement', 'testing'], ['review', 'plan']),
+    )
+    const empty = removeStage(BRANCHED, 'review')
+    expect(ids(dropStage(empty, 'testing', 'pr-review', 'after'))[2]).toEqual(
+      branchRef(['implement'], ['testing']),
+    )
+  })
+
+  it('drops a stage of a path out of the branch, next to a step', () => {
+    expect(ids(dropStage(BRANCHED, 'implement', 'release', 'before')).slice(2, 5)).toEqual([
+      branchRef(['testing'], ['review']),
+      'implement',
+      'release',
+    ])
+    expect(ids(dropStage(BRANCHED, 'review', 'after-plan', 'after')).slice(2, 4)).toEqual([
+      branchRef(['implement', 'testing'], []),
+      'review',
+    ])
+  })
+
+  it('does not drop a group, a context stage or a release stage into a path', () => {
+    const grouped: Step[] = [
+      ...BRANCHED.slice(0, 3),
+      {
+        id: 'build',
+        parallel: [
+          { id: 'docs', kind: 'agent', gate: 'auto' },
+          { id: 'i18n', kind: 'agent', gate: 'auto' },
+        ],
+      },
+      ...BRANCHED.slice(3),
+    ]
+    expect(dropStage(grouped, 'build', 'review', 'before')).toBe(grouped)
+    expect(dropStage(BRANCHED, 'context', 'review', 'after')).toBe(BRANCHED)
+    expect(dropStage(BRANCHED, 'release', 'pr-review', 'after')).toBe(BRANCHED)
+    expect(dropStage(BRANCHED, 'after-plan', 'review', 'after')).toBe(BRANCHED)
+  })
+
+  it('removes a stage of a path, and leaves the path with none', () => {
+    const steps = removeStage(BRANCHED, 'review')
+    expect(ids(steps)[2]).toEqual(branchRef(['implement', 'testing'], []))
+    const issues = pipelineIssues(steps)
+    expect(issues.some((issue) => issue.stage === 'after-plan' && issue.level === 'error')).toBe(
+      true,
+    )
+    expect(ids(removeStage(BRANCHED, 'after-plan'))).toEqual(['context', 'plan', 'release'])
+  })
+
+  it('adds a catalog stage to the end of a path', () => {
+    expect(ids(addCatalogStage(BRANCHED, 'qa', 'pr-review'))[2]).toEqual(
+      branchRef(['implement', 'testing'], ['review', 'qa']),
+    )
+    expect(ids(addCatalogStage(BRANCHED, 'qa'))[3]).toBe('qa')
+  })
+
+  it('does not add a used stage, a release or context stage, or to an unknown path', () => {
+    expect(addCatalogStage(BRANCHED, 'implement', 'pr-review')).toBe(BRANCHED)
+    expect(addCatalogStage(BRANCHED, 'qa', 'nope')).toBe(BRANCHED)
+    const bare = BRANCHED.filter((step) => step.id !== 'release' && step.id !== 'context')
+    expect(addCatalogStage(bare, 'release', 'small')).toBe(bare)
+    expect(addCatalogStage(bare, 'context', 'small')).toBe(bare)
+  })
+
+  it('does not offer a stage that is in a path', () => {
+    const choices = catalogChoices(BRANCHED).map((entry) => entry.stage.id)
+    expect(choices).not.toContain('implement')
+    expect(choices).not.toContain('review')
+    expect(choices).toContain('qa')
+  })
+
+  it('edits a stage of a path', () => {
+    const off = setEnabled(BRANCHED, 'review', false)
+    expect(findStage(off, 'review')?.enabled).toBe(false)
+    const text = setText(BRANCHED, 'implement', 'check', 'pnpm lint')
+    expect(findStage(text, 'implement')?.check).toBe('pnpm lint')
+    expect(findStage(setGate(BRANCHED, 'testing', 'manual'), 'testing')?.gate).toBe('manual')
+  })
+
+  it('does not run a stage of a path alongside another', () => {
+    expect(joinProblem(BRANCHED, 'testing')).toBe('A path holds single stages only')
+    expect(joinAbove(BRANCHED, 'testing')).toBe(BRANCHED)
+    const after: Step[] = [
+      ...BRANCHED.slice(0, 3),
+      { id: 'docs', kind: 'agent', gate: 'auto' },
+      ...BRANCHED.slice(3),
+    ]
+    expect(joinProblem(after, 'docs')).toBe(
+      'After plan is a branch; a stage cannot run alongside it',
+    )
+    expect(joinAbove(after, 'docs')).toBe(after)
+  })
+})
+
+describe('branches: shell fields and labels', () => {
+  it('lists the command of a condition, with the stages of its path', () => {
+    const steps = setText(BRANCHED, 'review', 'check', 'make qa')
+    expect(shellFields(steps).map(({ stage, field, value }) => [stage.id, field, value])).toEqual([
+      ['pr-review', 'run', 'test -f .no-review'],
+      ['review', 'check', 'make qa'],
+    ])
+  })
+
+  it('lists nothing for a file condition', () => {
+    const steps = setPathCondition(BRANCHED, 'after-plan', 'pr-review', {
+      type: 'output',
+      file: 'plan.md',
+      contains: 'x',
+    })
+    expect(shellFields(steps)).toEqual([])
+  })
+
+  it('says each branch, with its paths, for a screen reader', () => {
+    expect(pipelineLabel(BRANCHED)).toBe(
+      'Pipeline: Context, then Plan, then After plan, one path of 2: Small change if plan.md "Size" contains "small"; Review PR if test -f .no-review does not succeed, then Release',
+    )
+    const otherwise = setOtherwise(BRANCHED, 'after-plan', 'pr-review', true)
+    const branch = findBranch(otherwise, 'after-plan')
+    expect(branch && branchLabel(branch)).toBe(
+      'After plan, one path of 2: Small change if plan.md "Size" contains "small"; Review PR, otherwise',
+    )
+  })
+
+  it('leaves out the stages that are off, and a path with none on', () => {
+    const off = setEnabled(setEnabled(BRANCHED, 'review', false), 'implement', false)
+    expect(pipelineLabel(off)).toContain('one path of 1')
+    const plain = setEnabled(
+      setEnabled(setEnabled(BRANCHED, 'review', false), 'implement', false),
+      'testing',
+      false,
+    )
+    expect(pipelineLabel(plain)).toBe('Pipeline: Context, then Plan, then Release')
+  })
+})
+
+describe('uniqueIssues', () => {
+  it('shows a message of a branch once, however many paths break the rule', () => {
+    const issues = pipelineIssues(addBranch(BRANCHED.slice(0, 2), 'plan'))
+    const messages = uniqueIssues(issues).map((issue) => `${issue.stage}: ${issue.message}`)
+    expect(new Set(messages).size).toBe(messages.length)
+    expect(messages.some((message) => message.startsWith('branch: '))).toBe(true)
+  })
+
+  it('keeps the same message on another stage', () => {
+    const error = (stage: string) => ({ stage, message: 'Wrong', level: 'error' as const })
+    expect(uniqueIssues([error('a'), error('a'), error('b')])).toEqual([error('a'), error('b')])
   })
 })

@@ -1,8 +1,12 @@
 import {
   activeSteps,
+  type BranchPath,
+  describeCondition,
+  isBranch,
   isGroup,
   type PipelineIssue,
   type Stage,
+  type StageBranch,
   type StageKind,
   type Step,
   stageName,
@@ -18,14 +22,18 @@ import {
   Rocket,
   UserRound,
 } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   alwaysWaits,
   approvalLabel,
+  branchLabel,
+  branchName,
   groupName,
   hasCustomPrompt,
   KIND_LABEL,
+  pathName,
   pipelineLabel,
+  stepName,
 } from '../lib/pipeline-editor'
 
 export const KIND_ICON: Record<StageKind, LucideIcon> = {
@@ -80,7 +88,7 @@ type PipelinePreviewProps = {
 }
 
 // The pipeline as it is in the form now, not as saved: one node per step, a fork for stages that
-// run side by side.
+// run side by side, and an "If" fork with a condition on each lane for a branch.
 export function PipelinePreview({ steps, issues, selected, onSelect }: PipelinePreviewProps) {
   const shown = activeSteps(steps)
   const wrong = new Set(
@@ -97,34 +105,191 @@ export function PipelinePreview({ steps, issues, selected, onSelect }: PipelineP
       onSelect={onSelect}
     />
   )
+  const branches = shown.filter(isBranch)
   return (
-    <div className="shrink-0 overflow-x-auto rounded-lg border border-line bg-raised">
+    <div className="shrink-0 rounded-lg border border-line bg-raised">
       {shown.length === 0 ? (
         <p className="m-0 px-4 py-5 text-muted">No stage is on. Turn on at least one.</p>
       ) : (
-        <ol aria-label={pipelineLabel(steps)} className="pipeline">
-          {shown.map((step, index) => (
-            <li key={step.id} className="pipeline-step">
-              {index > 0 && <span className="pipeline-link" aria-hidden="true" />}
-              {isGroup(step) ? (
-                <ul
-                  aria-label={`${groupName(step)}, side by side`}
-                  className="pipeline-group"
-                  data-error={wrong.has(step.id) ? '' : undefined}
-                >
-                  {step.parallel.map((stage) => (
-                    <li key={stage.id} className="pipeline-lane">
-                      {node(stage)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                node(step, edgeOf(index, shown.length))
-              )}
-            </li>
-          ))}
-        </ol>
+        <div className="overflow-x-auto">
+          <ol
+            aria-label={pipelineLabel(steps)}
+            className="pipeline"
+            data-branch={branches.length > 0 ? '' : undefined}
+          >
+            {shown.map((step, index) => (
+              <li
+                key={step.id}
+                className={isBranch(step) ? 'pipeline-step pipeline-branch' : 'pipeline-step'}
+              >
+                {index > 0 && <span className="pipeline-link" aria-hidden="true" />}
+                {isBranch(step) ? (
+                  <BranchChart
+                    branch={step}
+                    next={shown[index + 1]}
+                    selected={step.id === selected}
+                    error={wrong.has(step.id)}
+                    node={node}
+                    onSelect={onSelect}
+                  />
+                ) : isGroup(step) ? (
+                  <ul
+                    aria-label={`${groupName(step)}, side by side`}
+                    className="pipeline-group"
+                    data-error={wrong.has(step.id) ? '' : undefined}
+                  >
+                    {step.parallel.map((stage) => (
+                      <li key={stage.id} className="pipeline-lane">
+                        {node(stage)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  node(step, edgeOf(index, shown.length))
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
+      {branches.map((branch) => (
+        <BranchNotes key={branch.id} branch={branch} next={shown[shown.indexOf(branch) + 1]} />
+      ))}
+    </div>
+  )
+}
+
+// Where a task goes when no path of the branch holds.
+function skipText(branch: StageBranch, next: Step | undefined): string | null {
+  if (branch.paths.some((path) => path.when === undefined)) {
+    return null
+  }
+  return `No path holds → skip to ${next === undefined ? 'the end' : stepName(next)}`
+}
+
+function WhenLabel({ path }: { path: BranchPath }) {
+  const { when } = path
+  const target =
+    when?.type !== 'output' || when.section === undefined
+      ? undefined
+      : `${when.file} › ${when.section}`
+  return (
+    <span className="pipeline-when" data-tip={describeCondition(path)}>
+      <b>{pathName(path)}</b>
+      {when === undefined ? (
+        <span className="pipeline-word"> Otherwise</span>
+      ) : (
+        <>
+          <span className="pipeline-word"> if </span>
+          {path.not === true && <span className="pipeline-not">NOT </span>}
+          {when.type === 'command' ? (
+            <>
+              <code>{when.run}</code>
+              <span className="pipeline-word"> succeeds</span>
+            </>
+          ) : (
+            <>
+              <code>{target ?? when.file}</code>
+              <span className="pipeline-word"> has </span>
+              {`"${when.contains}"`}
+            </>
+          )}
+        </>
+      )}
+    </span>
+  )
+}
+
+// A branch: the "If" node where the paths split, a lane for each path with its condition, and a
+// join. The lanes are drawn by the rules of `.pipeline-fork`.
+function BranchChart({
+  branch,
+  next,
+  selected,
+  error,
+  node,
+  onSelect,
+}: {
+  branch: StageBranch
+  next: Step | undefined
+  selected: boolean
+  error: boolean
+  node: (stage: Stage) => ReactNode
+  onSelect: (id: string) => void
+}) {
+  const name = branchName(branch)
+  const count = branch.paths.length
+  const skip = skipText(branch, next)
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={`Branch ${name}, one path of ${count}`}
+        aria-pressed={selected}
+        data-tip={branchLabel(branch)}
+        data-error={error ? '' : undefined}
+        onClick={() => onSelect(branch.id)}
+        className="pipeline-node pipeline-if focus-inset"
+      >
+        <span className="pipeline-dot">
+          <span className="pipeline-diamond" aria-hidden="true" />
+        </span>
+        <span className="pipeline-if-text">
+          <span className="pipeline-if-head">
+            <b>If</b>
+            <span className="pipeline-name">{name}</span>
+          </span>
+          <span className="pipeline-if-sub">One path of {count}, checked in order</span>
+        </span>
+      </button>
+      <span className="pipeline-link" aria-hidden="true" />
+      <ul
+        aria-label={`${name}, ${count} paths, checked in order`}
+        className="pipeline-fork"
+        data-skip={skip === null ? undefined : ''}
+        data-error={error ? '' : undefined}
+      >
+        {branch.paths.map((path) => (
+          <li key={path.id} className="pipeline-path">
+            <WhenLabel path={path} />
+            <ul aria-label={`${pathName(path)}, stages`} className="pipeline-row">
+              {path.stages.map((stage) => (
+                <li key={stage.id} className="pipeline-cell">
+                  {node(stage)}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+        {skip !== null && (
+          <li aria-hidden="true" className="pipeline-skip">
+            <span>{skip}</span>
+          </li>
+        )}
+      </ul>
+    </>
+  )
+}
+
+// The branch in words, under the chart: the same for everyone, and what a screen reader reads.
+function BranchNotes({ branch, next }: { branch: StageBranch; next: Step | undefined }) {
+  const name = branchName(branch)
+  const skip = skipText(branch, next)
+  return (
+    <div className="flex flex-col gap-1 border-t border-line px-4 py-3 text-sm">
+      <p className="m-0">
+        <b className="font-semibold">{name}</b> · one path of {branch.paths.length}, checked in
+        order:
+      </p>
+      <ol aria-label={`Paths of ${name}`} className="m-0 flex flex-col gap-0.5 pl-5">
+        {branch.paths.map((path) => (
+          <li key={path.id}>
+            <b className="font-semibold">{pathName(path)}</b> · {describeCondition(path)} →{' '}
+            {path.stages.map(stageName).join(', ')}
+          </li>
+        ))}
+      </ol>
+      {skip !== null && <p className="m-0 text-muted">{skip}.</p>}
     </div>
   )
 }

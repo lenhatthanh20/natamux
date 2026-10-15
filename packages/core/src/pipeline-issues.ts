@@ -1,4 +1,12 @@
-import { isGroup, isOn, pipelineSchema, type Step, stageSchema, stagesOf } from './stage.js'
+import {
+  isBranch,
+  isGroup,
+  isOn,
+  pipelineSchema,
+  type Step,
+  stageSchema,
+  stagesOf,
+} from './stage.js'
 import { catalogEntry } from './stage-catalog.js'
 
 // A problem of a pipeline that the settings screen shows next to its stage. Errors stop a save;
@@ -28,6 +36,16 @@ const FIELD_LABELS: Record<string, string> = {
 export function pipelineIssues(steps: readonly Step[]): PipelineIssue[] {
   const issues: PipelineIssue[] = []
   for (const stage of steps.flatMap(stagesOf)) {
+    // A path holds single stages only. The schema only says such a branch is not valid.
+    if ('parallel' in stage || 'paths' in stage) {
+      const branch = steps.find((step) => stagesOf(step).includes(stage))
+      issues.push({
+        stage: branch?.id ?? null,
+        message: 'A path holds single stages only, not a group or a branch',
+        level: 'error',
+      })
+      continue
+    }
     const parsed = stageSchema.safeParse(stage)
     for (const issue of parsed.error?.issues ?? []) {
       const field = String(issue.path[0] ?? '')
@@ -67,13 +85,17 @@ export function pipelineIssues(steps: readonly Step[]): PipelineIssue[] {
 }
 
 function stageAt(steps: readonly Step[], path: readonly PropertyKey[]): string | null {
-  const [index, field, lane] = path
+  const [index, field, lane, , stage] = path
   const step = typeof index === 'number' ? steps[index] : undefined
   if (step === undefined) {
     return null
   }
   if (isGroup(step) && field === 'parallel' && typeof lane === 'number') {
     return step.parallel[lane]?.id ?? step.id
+  }
+  // A stage in a path, such as [2, 'paths', 0, 'stages', 1]; else the branch itself.
+  if (isBranch(step) && typeof lane === 'number' && typeof stage === 'number') {
+    return step.paths[lane]?.stages[stage]?.id ?? step.id
   }
   return step.id
 }

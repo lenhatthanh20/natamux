@@ -4,13 +4,20 @@ import {
   enterStep,
   entryState,
   firstPosition,
+  isBranch,
   isGroup,
+  isNotTaken,
+  isStage,
+  pathOf,
   type Stage,
+  type StageBranch,
   type StagePosition,
   type Step,
   stageOfTerminal,
   stagesOf,
   stepIndex,
+  stepToRun,
+  takenStages,
 } from './stage.js'
 import { isTerminalState, type TaskState, taskStateSchema } from './task-state.js'
 
@@ -161,6 +168,14 @@ function payloadString(event: TaskEvent, key: string): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
+// The position with the record of the paths taken, when there is one.
+function withPaths(
+  position: StagePosition,
+  paths: Record<string, string> | undefined,
+): StagePosition {
+  return paths === undefined ? position : { ...position, paths }
+}
+
 // The state of one stage of a step: its lane in a group, else the state of the step.
 function laneStateOf(position: StagePosition, step: Step, stage: string): TaskState | undefined {
   return isGroup(step) ? position.lanes[stage] : position.state
@@ -172,12 +187,13 @@ function sendsBack(event: TaskEvent, step: Step): boolean {
   return (
     event.type === 'stage.reopened' ||
     event.type === 'review.changes-requested' ||
-    (event.type === 'agent.resumed' && !isGroup(step) && step.kind === 'review')
+    (event.type === 'agent.resumed' && isStage(step) && step.kind === 'review')
   )
 }
 
 // The stage to go back to: `to`; for changes asked about an agent stage that waits for you, that
-// stage; else the last agent stage before the current step.
+// stage; else the last agent stage before the current step. Only stages on the way the task went
+// count: a stage of a path it did not take is never a target.
 function reopenTarget(
   steps: readonly Step[],
   position: StagePosition,
@@ -185,11 +201,16 @@ function reopenTarget(
   event: TaskEvent,
 ): { index: number; stage: string } | undefined {
   const to = payloadString(event, 'to')
+  const here = pathOf(steps, position.stage)
   if (to !== undefined) {
     const index = stepIndex(steps, to)
-    return index >= 0 && index <= current ? { index, stage: to } : undefined
+    const there = pathOf(steps, to)
+    const ahead = here !== undefined && there?.path === here.path && there.index > here.index
+    return index >= 0 && index <= current && !ahead && !isNotTaken(steps, position.paths, to)
+      ? { index, stage: to }
+      : undefined
   }
-  const step = steps[current]
+  const step = stepToRun(steps, position.stage)
   if (event.type === 'review.changes-requested' && step !== undefined) {
     const waiting = stagesOf(step).filter((stage) => {
       const state = laneStateOf(position, step, stage.id)
@@ -201,9 +222,15 @@ function reopenTarget(
       return { index: current, stage: chosen.id }
     }
   }
-  for (let index = current - 1; index >= 0; index -= 1) {
-    const earlier = steps[index]
-    const stage = earlier === undefined ? undefined : agentStageOf(earlier)
+  const earlier = [
+    ...steps.slice(0, current).flatMap((each, index) => {
+      const units: Step[] = isBranch(each) ? takenStages(each, position.paths) : [each]
+      return units.map((unit) => ({ index, unit }))
+    }),
+    ...(here?.path.stages.slice(0, here.index).map((unit) => ({ index: current, unit })) ?? []),
+  ]
+  for (const { index, unit } of earlier.reverse()) {
+    const stage = agentStageOf(unit)
     if (stage !== undefined) {
       return { index, stage: stage.id }
     }
@@ -220,7 +247,9 @@ function agentStageOf(step: Step): Stage | undefined {
 // The position after going back to `stage` (a stage, or a whole group) at step `index`. The stage
 // gets `state`, or without one the state it starts in, so a stage that only waits for a person
 // waits for approval again. Going back inside the current group leaves its other stages as they
-// are; going back to an earlier group counts its other stages as done.
+// are; going back to an earlier group counts its other stages as done. The choices made at that
+// step and after it are dropped, so the task checks those conditions again; a stage of a path the
+// task did not take is refused.
 function reopen(
   steps: readonly Step[],
   index: number,
@@ -233,8 +262,23 @@ function reopen(
     return undefined
   }
   const stateOf = (target: Stage) => state ?? entryState(target)
+  const paths =
+    position.paths === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(position.paths).filter(([id]) => stepIndex(steps, id) < index),
+        )
+  if (isBranch(step)) {
+    const place = pathOf(steps, stage)
+    const target = place?.path.stages[place.index]
+    if (place === undefined || target === undefined || isNotTaken(steps, position.paths, stage)) {
+      return undefined
+    }
+    const taken = { ...paths, [step.id]: place.path.id }
+    return { stage, state: stateOf(target), lanes: {}, paths: taken }
+  }
   if (!isGroup(step)) {
-    return { stage: step.id, state: stateOf(step), lanes: {} }
+    return withPaths({ stage: step.id, state: stateOf(step), lanes: {} }, paths)
   }
   const here = step.id === position.stage
   const lanes = Object.fromEntries(
@@ -247,7 +291,7 @@ function reopen(
           : 'done',
     ]),
   ) as Record<string, TaskState>
-  return { stage: step.id, state: combinedState(lanes), lanes }
+  return withPaths({ stage: step.id, state: combinedState(lanes), lanes }, paths)
 }
 
 // The move an event makes in one stage. A failed check keeps the stage running while the agent
@@ -291,7 +335,7 @@ export function completeEvent(
   steps: readonly Step[],
 ): TaskEvent {
   const index = stepIndex(steps, position.stage)
-  const step = steps[index]
+  const step = stepToRun(steps, position.stage)
   if (step === undefined || isTerminalState(position.state)) {
     return event
   }
@@ -312,8 +356,15 @@ export function completeEvent(
   return lane === undefined ? event : { ...event, payload: { ...event.payload, stage: lane } }
 }
 
-// After a stage ends: the next step, or done after the last one.
-function finishLane(steps: readonly Step[], index: number, position: StagePosition, lane: string) {
+// After a stage ends: the next stage of its path, the next step, or done after the last one.
+// `path` is the path the event took at a branch it enters.
+function finishLane(
+  steps: readonly Step[],
+  index: number,
+  position: StagePosition,
+  lane: string,
+  path: string | undefined,
+): { position: StagePosition; moved: boolean } {
   const step = steps[index]
   if (step !== undefined && isGroup(step)) {
     const lanes = { ...position.lanes, [lane]: 'done' as TaskState }
@@ -321,11 +372,28 @@ function finishLane(steps: readonly Step[], index: number, position: StagePositi
       return { position: { ...position, lanes, state: combinedState(lanes) }, moved: false }
     }
   }
-  const next = steps[index + 1]
-  if (next === undefined) {
-    return { position: { ...position, state: 'done' as TaskState, lanes: {} }, moved: false }
+  const place = pathOf(steps, lane)
+  const following = place?.path.stages[place.index + 1]
+  if (following !== undefined) {
+    return { position: withPaths(enterStep(following), position.paths), moved: true }
   }
-  return { position: enterStep(next), moved: true }
+  let paths = position.paths
+  let chosen = path
+  for (const next of steps.slice(index + 1)) {
+    if (!isBranch(next)) {
+      return { position: withPaths(enterStep(next), paths), moved: true }
+    }
+    // A branch takes the path the event names. Without one, or with a path the task does not
+    // have, the task skips the branch. Both are recorded, a skip as ''.
+    const taken = next.paths.find((each) => each.id === chosen)?.id ?? ''
+    paths = { ...paths, [next.id]: taken }
+    if (taken !== '') {
+      return { position: withPaths(enterStep(next, undefined, taken), paths), moved: true }
+    }
+    // The event chose a path for the first branch it reaches only.
+    chosen = undefined
+  }
+  return { position: withPaths({ ...position, state: 'done', lanes: {} }, paths), moved: false }
 }
 
 // Applies one event to a task's position in its steps. An event that does not fit is not
@@ -341,7 +409,7 @@ export function applyTaskEvent(
   }
 
   const index = stepIndex(steps, position.stage)
-  const step = steps[index]
+  const step = stepToRun(steps, position.stage)
 
   if (event.type === 'state.overridden') {
     const target = taskStateSchema.safeParse(event.payload.to)
@@ -376,17 +444,29 @@ export function applyTaskEvent(
 
   if (event.type === 'pr.merged') {
     // A merged pull request finishes a task that is at review or later.
+    const reviewOrLater = (stage: Stage) => stage.kind === 'review' || stage.kind === 'release'
     const firstReview = steps.findIndex((candidate) =>
-      stagesOf(candidate).some((stage) => stage.kind === 'review' || stage.kind === 'release'),
+      takenStages(candidate, position.paths).some(reviewOrLater),
     )
-    if (firstReview < 0 || index < firstReview) {
+    // The stages of a path share the index of their branch, so the stage must also be at or
+    // after the review of its path.
+    const place = pathOf(steps, position.stage)
+    const early =
+      index === firstReview &&
+      place !== undefined &&
+      !place.path.stages.slice(0, place.index + 1).some(reviewOrLater)
+    if (firstReview < 0 || index < firstReview || early) {
       return keep(false)
     }
+    // A branch is no stage to be at: at the end, the task ends on the last stage of its path.
     const last = steps.at(-1)
+    const end =
+      last !== undefined && isBranch(last) ? takenStages(last, position.paths ?? {}).at(-1) : last
+    const done: StagePosition = { stage: end?.id ?? position.stage, state: 'done', lanes: {} }
     return {
-      position: { stage: last?.id ?? position.stage, state: 'done', lanes: {} },
+      position: withPaths(done, position.paths),
       accepted: true,
-      moved: last !== undefined && last.id !== position.stage,
+      moved: end !== undefined && end.id !== position.stage,
     }
   }
 
@@ -420,7 +500,7 @@ export function applyTaskEvent(
 
   const to = move.to === 'gate' ? (stage.gate === 'auto' ? 'finish' : 'review') : move.to
   if (to === 'finish') {
-    const finished = finishLane(steps, index, position, lane)
+    const finished = finishLane(steps, index, position, lane, payloadString(event, 'path'))
     return { position: finished.position, accepted: true, moved: finished.moved }
   }
   if (!group) {
@@ -432,6 +512,24 @@ export function applyTaskEvent(
     accepted: true,
     moved: false,
   }
+}
+
+// The branch an event would enter: the event ends the current step, and the next step is a
+// branch. The daemon checks the conditions of that branch before it applies the event. This is a
+// dry run that ignores any path the event names.
+export function entersBranch(
+  position: StagePosition,
+  event: TaskEvent,
+  steps: readonly Step[],
+): StageBranch | undefined {
+  const before = position.paths ?? {}
+  const payload = Object.fromEntries(
+    Object.entries(event.payload).filter(([key]) => key !== 'path'),
+  )
+  const applied = applyTaskEvent({ ...position, paths: before }, { ...event, payload }, steps)
+  const after = applied.position.paths ?? {}
+  const entered = steps.find((step) => after[step.id] === '' && before[step.id] === undefined)
+  return entered !== undefined && isBranch(entered) ? entered : undefined
 }
 
 export type DerivedTaskState = {

@@ -73,6 +73,7 @@ function makeTask(id: string, title: string): Task {
     stage: 'implement',
     stages: ['implement'],
     lanes: {},
+    paths: {},
     stageSince: null,
     backgroundSince: null,
     workflowStages: [],

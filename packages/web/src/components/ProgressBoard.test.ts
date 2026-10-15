@@ -94,4 +94,45 @@ describe('ProgressBoard', () => {
     expect(renders).toEqual(['T-0001'])
     expect(screen.getByRole('button', { name: 'Fix the login test' })).toBeTruthy()
   })
+
+  // A task on one path is in the column of its stage only, not in the columns of the other paths.
+  it('counts a task in the column of its own path only, and marks the other path Not taken', async () => {
+    const branched = {
+      ...(task('T-0001', new Date().toISOString()) as Task),
+      title: 'Branch task',
+      stage: 'implement',
+      stages: [
+        'plan',
+        {
+          id: 'after-plan',
+          paths: [
+            { id: 'small', stages: ['implement', 'testing'] },
+            { id: 'big', stages: ['agent-review'] },
+          ],
+        },
+        'release',
+      ],
+      paths: { 'after-plan': 'small' },
+      stageSince: null,
+      backgroundSince: null,
+    } as Task
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        createElement(ProgressBoard, {
+          tasks: [branched],
+          repos: [],
+          loadSettings: async () => ({ settings: { stages: [] } }) as never,
+          onOpenTask: () => {},
+        }),
+      ),
+    )
+
+    const implement = (await screen.findByText('Implement')).parentElement
+    const review = screen.getByText('Review').parentElement
+    expect(implement?.textContent).toContain('1')
+    expect(review?.textContent).not.toContain('1')
+    expect(screen.getByRole('img', { name: 'Review: Not taken' })).toBeTruthy()
+  })
 })

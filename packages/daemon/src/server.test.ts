@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { CLOSE_GONE, GATE_EVENT_TYPES, SILENT_CLOSE_MS } from '@natamux/core'
+import { CLOSE_GONE, GATE_EVENT_TYPES, SILENT_CLOSE_MS, type TaskEvent } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentRunner } from './agent-runner.js'
@@ -465,6 +465,44 @@ describe('task events', () => {
       headers: authorization,
     })
     expect(ready.json().tasks).toHaveLength(1)
+  })
+
+  // Any event may end the step before a branch, so each goes through the conditions.
+  it('checks the conditions of a branch before any event of a person or an agent', async () => {
+    await createTask()
+    const withPath = vi.spyOn(serverOptions.stages, 'withPath')
+    withPath.mockImplementation(async (_id, input) => ({
+      ...input,
+      payload: { ...input.payload, because: 'No condition held' },
+    }))
+    const post = (type: string, headers = authorization) =>
+      app.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/events',
+        headers,
+        payload: { source: 'human', type },
+      })
+
+    await post('review.approved')
+    await post('task.readied')
+    await post('stage.checked', asAgent)
+
+    expect(withPath.mock.calls).toEqual([
+      ['T-0001', { source: 'human', type: 'review.approved', payload: {} }],
+      ['T-0001', { source: 'human', type: 'task.readied', payload: {} }],
+      ['T-0001', { source: 'agent', type: 'stage.checked', payload: {} }],
+    ])
+    const events = await app.inject({
+      method: 'GET',
+      url: '/tasks/T-0001/events',
+      headers: authorization,
+    })
+    const logged = events.json().events.map((entry: { event: TaskEvent }) => entry.event)
+    expect(logged[1]).toMatchObject({
+      type: 'review.approved',
+      payload: { because: 'No condition held' },
+    })
+    expect(logged[2]).toMatchObject({ type: 'task.readied', payload: {} })
   })
 
   it('reports an event that does not fit as not accepted', async () => {

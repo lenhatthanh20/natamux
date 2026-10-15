@@ -109,6 +109,23 @@ describe('stagePosition', () => {
     expect(stagePosition(makeTask({ stage: 'security', stages }))).toEqual({ at: 2, of: 3 })
   })
 
+  it('counts a branch as one step, by its id or a stage of one of its paths', () => {
+    const stages = [
+      'plan',
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'small', stages: ['implement', 'testing'] },
+          { id: 'pr-review', stages: ['review'] },
+        ],
+      },
+      'release',
+    ]
+    expect(stagePosition(makeTask({ stage: 'testing', stages }))).toEqual({ at: 2, of: 3 })
+    expect(stagePosition(makeTask({ stage: 'review', stages }))).toEqual({ at: 2, of: 3 })
+    expect(stagePosition(makeTask({ stage: 'release', stages }))).toEqual({ at: 3, of: 3 })
+  })
+
   it('is null for one step, an unknown stage, or a task with no stage to show', () => {
     expect(stagePosition(makeTask({ stage: 'implement', stages: ['implement'] }))).toBeNull()
     expect(stagePosition(makeTask({ stage: 'other', stages: ['spec', 'implement'] }))).toBeNull()
@@ -322,6 +339,32 @@ describe('cometOf', () => {
       }),
     )
     expect(failed).toMatchObject({ stage: 'Test spec', state: 'failed' })
+  })
+
+  it('counts a branch as one step, and names only the path the task took', () => {
+    const stages = [
+      'plan',
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'small', stages: ['implement', 'testing'] },
+          { id: 'pr-review', stages: ['review'] },
+        ],
+      },
+      'release',
+    ]
+    const comet = cometOf(
+      makeTask({
+        stages,
+        stage: 'testing',
+        state: 'running',
+        paths: { 'after-plan': 'small' },
+      }),
+    )
+    expect(comet).toMatchObject({ at: 2, of: 3, stage: 'Automated tests', state: 'running' })
+    expect(comet.summary).toBe(
+      'Plan done, Implement done, Automated tests running, Release not started',
+    )
   })
 
   it('fills a finished task, and a pipeline of one step', () => {

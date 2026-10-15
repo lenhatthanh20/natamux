@@ -2,21 +2,30 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-settings.js'
 import {
   activeSteps,
+  type BranchPath,
   canEndShell,
   canRunWorkflow,
   codeStageBefore,
   combinedState,
   DEFAULT_PIPELINE,
   defaultPrompt,
+  describeCondition,
   enterStep,
+  findStep,
   firstPosition,
+  isBranch,
+  isGroup,
+  isNotTaken,
+  isStage,
   LEGACY_STEP_REFS,
   offersCi,
   offersWorkflow,
+  pathOf,
   pipelineSchema,
   resolveSteps,
   runsWorkflow,
   type Stage,
+  type StageBranch,
   type Step,
   stageAgent,
   stageIdSchema,
@@ -24,6 +33,7 @@ import {
   stageOfTerminal,
   stagesOf,
   stepIndex,
+  stepRefSchema,
   stepRefsOf,
   terminalLane,
   terminalOfStage,
@@ -796,5 +806,346 @@ describe('workflows', () => {
     expect(runsWorkflow({ ...implement, workflow: false }, ['implement'], 'claude-code')).toBe(
       false,
     )
+  })
+})
+
+describe('a branch', () => {
+  const plan: Stage = { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' }
+  const implement: Stage = { id: 'implement', kind: 'agent', gate: 'auto' }
+  const testing: Stage = { id: 'testing', kind: 'testing', gate: 'auto' }
+  const review: Stage = { id: 'review', kind: 'review', gate: 'manual' }
+  const release: Stage = { id: 'release', kind: 'release', gate: 'manual' }
+  const small: BranchPath = {
+    id: 'small',
+    name: 'Small change',
+    when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+    stages: [implement, testing],
+  }
+  const prReview: BranchPath = {
+    id: 'pr-review',
+    name: 'Review PR',
+    when: { type: 'command', run: 'test -f .no-review' },
+    not: true,
+    stages: [review],
+  }
+  const branch: StageBranch = { id: 'after-plan', name: 'After plan', paths: [small, prReview] }
+  const steps: Step[] = [plan, branch, release]
+
+  const messages = (value: unknown[]) =>
+    pipelineSchema.safeParse(value).error?.issues.map((issue) => issue.message)
+  const withPaths = (paths: unknown[]) => [plan, { id: 'after-plan', paths }, release]
+  const path = (id: string, stages: unknown[], extra: object = {}) => ({
+    id,
+    when: { type: 'command', run: 'true' },
+    stages,
+    ...extra,
+  })
+  const otherwise = (id: string, stages: unknown[]) => ({ id, stages })
+  const off = (stage: Stage): Stage => ({ ...stage, enabled: false })
+
+  it('reads a branch and gives it back the same, as neither a stage nor a group', () => {
+    const parsed = pipelineSchema.parse(steps)
+    expect(parsed).toEqual(steps)
+    expect(isBranch(parsed[1] as Step)).toBe(true)
+    expect(isGroup(branch)).toBe(false)
+    expect(isStage(branch)).toBe(false)
+    expect(isBranch(plan)).toBe(false)
+    expect(isStage(plan)).toBe(true)
+    // No names, no section, and an Otherwise path last.
+    const plain = withPaths([
+      path('a', [implement], { when: { type: 'output', file: 'plan.md', contains: 'small' } }),
+      otherwise('b', [review]),
+    ])
+    expect(pipelineSchema.parse(plain)).toEqual(plain)
+  })
+
+  it('holds 2 to 4 paths', () => {
+    const paths = ['a', 'b', 'c', 'd', 'e'].map((id) =>
+      path(id, [{ id: `stage-${id}`, kind: 'agent', gate: 'auto' }]),
+    )
+    expect(messages(withPaths(paths.slice(0, 1)))).toEqual(['A branch holds 2 to 4 paths'])
+    expect(messages(withPaths(paths.slice(0, 2)))).toBeUndefined()
+    expect(messages(withPaths(paths.slice(0, 4)))).toBeUndefined()
+    expect(messages(withPaths(paths))).toEqual(['A branch holds 2 to 4 paths'])
+  })
+
+  it('needs ids that are unique across stages, paths and branches', () => {
+    expect(messages(withPaths([path('a', [implement]), path('a', [review])]))).toEqual([
+      'The path id "a" is used twice',
+    ])
+    expect(messages(withPaths([path('plan', [implement]), path('b', [review])]))).toEqual([
+      'The path id "plan" is used twice',
+    ])
+    expect(messages(withPaths([path('a', [implement]), path('b', [implement])]))).toEqual([
+      'The stage id "implement" is used twice',
+    ])
+    expect(messages(withPaths([path('a', [plan]), path('b', [review])]))).toEqual([
+      'The stage id "plan" is used twice',
+    ])
+  })
+
+  it('takes the Otherwise path, with no condition, only last', () => {
+    const message = 'Only the last path can be the Otherwise path'
+    expect(messages(withPaths([otherwise('a', [implement]), path('b', [review])]))).toEqual([
+      message,
+    ])
+    expect(messages(withPaths([otherwise('a', [implement]), otherwise('b', [review])]))).toEqual([
+      message,
+    ])
+    expect(messages(withPaths([path('a', [implement]), otherwise('b', [review])]))).toBeUndefined()
+  })
+
+  it('needs a stage in each path, and single stages only', () => {
+    expect(messages(withPaths([path('a', []), path('b', [review])]))).toEqual([
+      'A path has at least one stage',
+    ])
+    const group = { id: 'build', parallel: [implement, { ...testing, kind: 'agent' }] }
+    const valid = (paths: unknown[]) => pipelineSchema.safeParse(withPaths(paths)).success
+    expect(valid([path('a', [group]), path('b', [review])])).toBe(false)
+    const nested = { id: 'inner', paths: [path('x', [implement]), path('y', [testing])] }
+    expect(valid([path('a', [nested]), path('b', [review])])).toBe(false)
+  })
+
+  it('takes no context or release stage in a path', () => {
+    const context = { id: 'more', kind: 'context', gate: 'auto' }
+    expect(messages(withPaths([path('a', [context]), path('b', [review])]))).toEqual([
+      '"more" is a context stage, which cannot be in a path',
+    ])
+    const ship = { id: 'ship', kind: 'release', gate: 'manual' }
+    expect(messages(withPaths([path('a', [implement, ship]), path('b', [review])]))).toEqual([
+      '"ship" is a release stage, which cannot be in a path',
+    ])
+  })
+
+  it('cannot be the first step or come right after a branch, but may be the last', () => {
+    expect(messages([branch, release])).toEqual(['A branch cannot be the first step'])
+    expect(messages([off(plan), branch, release])).toEqual(['A branch cannot be the first step'])
+    expect(messages([plan, branch])).toBeUndefined()
+    const next = {
+      id: 'after-build',
+      paths: [
+        path('docs', [{ ...plan, id: 'write-docs' }]),
+        otherwise('none', [{ ...review, id: 'qa' }]),
+      ],
+    }
+    // A skipped branch chooses no path for the next one, so a stage must end between them.
+    const message = 'A branch cannot come right after a branch. Put a stage between them'
+    expect(messages([plan, branch, next, release])).toEqual([message])
+    const between: Stage = { id: 'docs-check', kind: 'agent', gate: 'auto' }
+    expect(messages([plan, branch, off(between), next, release])).toEqual([message])
+    expect(messages([plan, branch, between, next, release])).toBeUndefined()
+    // A branch left with only its Otherwise path runs it as plain steps.
+    const lone = {
+      ...next,
+      paths: [path('docs', [off({ ...plan, id: 'write-docs' })]), next.paths[1]],
+    }
+    expect(messages([plan, branch, lone, release])).toBeUndefined()
+  })
+
+  it('checks the fields of a condition', () => {
+    const when = (condition: object) =>
+      messages(withPaths([path('a', [implement], { when: condition }), path('b', [review])]))
+    expect(when({ type: 'output', file: 'plan.md', contains: 'small' })).toBeUndefined()
+    for (const file of ['plan.txt', '', '../x.md']) {
+      expect(when({ type: 'output', file, contains: 'small' })).toEqual([
+        'A condition file is a markdown file, such as plan.md',
+      ])
+    }
+    expect(when({ type: 'output', file: 'plan.md', contains: '  ' })).toEqual([
+      'Give the text to look for',
+    ])
+    expect(when({ type: 'command', run: ' ' })).toEqual(['Give the command to run'])
+    expect(when({ type: 'label', has: 'x' })).toBeDefined()
+  })
+
+  it('leaves out stages and paths that are off, and runs a lone Otherwise path as steps', () => {
+    const docs: Stage = { id: 'write-docs', kind: 'agent', gate: 'auto' }
+    const when = small.when
+    const three: StageBranch = {
+      id: 'after-plan',
+      paths: [
+        { id: 'a', when, stages: [implement, off(testing)] },
+        { id: 'b', when, stages: [off(review)] },
+        { id: 'c', stages: [docs] },
+      ],
+    }
+    expect(activeSteps([plan, three, release])).toEqual([
+      plan,
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'a', when, stages: [implement] },
+          { id: 'c', stages: [docs] },
+        ],
+      },
+      release,
+    ])
+    const lone: StageBranch = {
+      id: 'after-plan',
+      paths: [
+        { id: 'a', when, stages: [off(implement)] },
+        { id: 'b', stages: [review, testing] },
+      ],
+    }
+    expect(activeSteps([plan, lone, release])).toEqual([plan, review, testing, release])
+    expect(messages([plan, lone, release])).toBeUndefined()
+    const none: StageBranch = {
+      id: 'after-plan',
+      paths: [
+        { id: 'a', when, stages: [off(review)] },
+        { id: 'b', stages: [off(testing)] },
+      ],
+    }
+    expect(activeSteps([plan, none, release])).toEqual([plan, release])
+    expect(messages([plan, none, release])).toBeUndefined()
+  })
+
+  it('needs another path that is on when the one left has a condition', () => {
+    expect(messages(withPaths([path('a', [implement]), path('b', [off(review)])]))).toEqual([
+      'Turn on a stage in another path, or remove the branch',
+    ])
+  })
+
+  it('finds the stages of its paths, and the path of a stage', () => {
+    expect(stagesOf(branch).map((stage) => stage.id)).toEqual(['implement', 'testing', 'review'])
+    expect(findStep(steps, 'review')).toBe(branch)
+    expect(stepIndex(steps, 'testing')).toBe(1)
+    expect(stepIndex(steps, 'after-plan')).toBe(1)
+    expect(pathOf(steps, 'testing')).toEqual({ branch, path: small, index: 1 })
+    expect(pathOf(steps, 'review')).toEqual({ branch, path: prReview, index: 0 })
+    expect(pathOf(steps, 'plan')).toBeUndefined()
+    expect(pathOf(steps, 'nope')).toBeUndefined()
+  })
+
+  it('keeps the ids of its paths in a task, and reads the rest from the settings', () => {
+    const refs = stepRefsOf(steps)
+    expect(refs).toEqual([
+      'plan',
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'small', stages: ['implement', 'testing'] },
+          { id: 'pr-review', stages: ['review'] },
+        ],
+      },
+      'release',
+    ])
+    expect(refs.every((ref) => stepRefSchema.safeParse(ref).success)).toBe(true)
+    expect(
+      stepRefSchema.safeParse({ id: 'b', paths: [{ id: 'a', stages: ['implement'] }] }).success,
+    ).toBe(false)
+    expect(resolveSteps(refs, steps)).toEqual(steps)
+
+    // The settings changed: a new condition counts, and a path that is gone keeps its stages, with
+    // the catalog settings of a stage that is gone too.
+    const now: Step[] = [
+      plan,
+      { id: 'after-plan', paths: [{ ...small, not: true }, { id: 'other', stages: [testing] }] },
+      release,
+    ]
+    expect(resolveSteps(refs, now)[1]).toEqual({
+      id: 'after-plan',
+      paths: [
+        { ...small, not: true },
+        { id: 'pr-review', stages: [{ ...review, name: 'Manual review' }] },
+      ],
+    })
+  })
+
+  it('says its condition in words', () => {
+    expect(describeCondition(small)).toBe('plan.md "Size" contains "small"')
+    const file = { type: 'output', file: 'plan.md', contains: 'small' } as const
+    expect(describeCondition({ when: file })).toBe('plan.md contains "small"')
+    expect(describeCondition({ when: file, not: true })).toBe('plan.md does not contain "small"')
+    expect(describeCondition({ when: { type: 'command', run: 'test -f x' } })).toBe(
+      'test -f x succeeds',
+    )
+    expect(describeCondition(prReview)).toBe('test -f .no-review does not succeed')
+    expect(describeCondition({})).toBe('Otherwise')
+    expect(describeCondition({ not: true })).toBe('Otherwise')
+  })
+
+  it('is entered at the first stage of the path taken', () => {
+    expect(enterStep(branch, undefined, 'pr-review')).toEqual({
+      stage: 'review',
+      state: 'review',
+      lanes: {},
+    })
+    expect(enterStep(branch, 'draft', 'small')).toEqual({
+      stage: 'implement',
+      state: 'draft',
+      lanes: {},
+    })
+  })
+
+  it('tells the stages of a path the task did not take', () => {
+    expect(isNotTaken(steps, { 'after-plan': 'small' }, 'review')).toBe(true)
+    expect(isNotTaken(steps, { 'after-plan': 'small' }, 'implement')).toBe(false)
+    expect(isNotTaken(steps, { 'after-plan': '' }, 'implement')).toBe(true)
+    expect(isNotTaken(steps, { 'after-plan': 'small' }, 'plan')).toBe(false)
+    expect(isNotTaken(steps, {}, 'review')).toBe(false)
+    expect(isNotTaken(steps, undefined, 'review')).toBe(false)
+  })
+
+  it('finds the stage that changes code only on the way the task went', () => {
+    const loadTest: Stage = { id: 'load-test', kind: 'testing', gate: 'auto', ci: true }
+    const all: Step[] = [plan, branch, loadTest]
+    expect(codeStageBefore(all, 'testing')?.id).toBe('implement')
+    expect(codeStageBefore(all, 'implement')).toBeUndefined()
+    expect(codeStageBefore(all, 'load-test')?.id).toBe('implement')
+    expect(codeStageBefore(all, 'load-test', { 'after-plan': 'small' })?.id).toBe('implement')
+    expect(codeStageBefore(all, 'load-test', { 'after-plan': 'pr-review' })).toBeUndefined()
+    expect(codeStageBefore(all, 'load-test', { 'after-plan': '' })).toBeUndefined()
+  })
+
+  it('gives a stage in a path the shell of a single stage', () => {
+    const agentReview: Stage = {
+      id: 'agent-review',
+      kind: 'agent',
+      gate: 'auto',
+      output: 'review.md',
+      ownShell: true,
+    }
+    const docs: Stage = { id: 'write-docs', kind: 'agent', gate: 'auto', agent: 'codex' }
+    const notes: Stage = {
+      id: 'notes',
+      kind: 'agent',
+      gate: 'auto',
+      output: 'notes.md',
+      agent: 'cursor',
+      ownShell: true,
+    }
+    const shells: Step[] = [
+      plan,
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'a', when: small.when, stages: [implement, agentReview] },
+          { id: 'b', stages: [docs, notes] },
+        ],
+      },
+    ]
+    const ids = ['plan', 'implement', 'agent-review', 'write-docs', 'notes']
+    expect(ids.map((id) => terminalOfStage(shells, id))).toEqual(['1', '1', '5', '6', '7'])
+    expect(pipelineSchema.safeParse(shells).success).toBe(true)
+
+    const atReview = {
+      stage: 'agent-review',
+      state: 'running' as const,
+      lanes: {},
+      paths: { 'after-plan': 'a' },
+    }
+    expect(terminalLane(atReview, shells, '5')).toEqual({ stage: 'agent-review', state: 'running' })
+    expect(terminalLane(atReview, shells, '1')).toEqual({ stage: 'implement', state: 'done' })
+    const atNotes = {
+      stage: 'notes',
+      state: 'running' as const,
+      lanes: {},
+      paths: { 'after-plan': 'b' },
+    }
+    expect(terminalLane(atNotes, shells, '7')).toEqual({ stage: 'notes', state: 'running' })
+    // Implement is on the path the task did not take.
+    expect(terminalLane(atNotes, shells, '1')).toEqual({ stage: 'plan', state: 'done' })
+    expect(terminalLane(atNotes, shells, '6')).toEqual({ stage: 'write-docs', state: 'done' })
   })
 })

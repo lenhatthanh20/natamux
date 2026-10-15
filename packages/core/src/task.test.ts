@@ -27,6 +27,7 @@ describe('taskSchema', () => {
       stage: 'implement',
       stages: ['implement', 'review', 'release'],
       lanes: {},
+      paths: {},
       stageSince: null,
       backgroundSince: null,
       workflowStages: [],
@@ -58,6 +59,24 @@ describe('taskSchema', () => {
     ])
     expect(taskSchema.parse(minimalTask).skipStages).toBeUndefined()
     expect(taskSchema.parse({ ...minimalTask, skipStages: 'testing' }).skipStages).toBeUndefined()
+  })
+
+  it('reads the path taken at each branch, and the paths of a branch in its steps', () => {
+    const stages = [
+      'plan',
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'small', stages: ['implement', 'testing'] },
+          { id: 'pr-review', stages: ['review'] },
+        ],
+      },
+      'release',
+    ]
+    const task = taskSchema.parse({ ...minimalTask, stages, paths: { 'after-plan': 'small' } })
+    expect(task.stages).toEqual(stages)
+    expect(task.paths).toEqual({ 'after-plan': 'small' })
+    expect(taskSchema.parse({ ...minimalTask, stages }).paths).toEqual({})
   })
 
   it('trims the title', () => {

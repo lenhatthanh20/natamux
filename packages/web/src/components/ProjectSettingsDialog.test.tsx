@@ -3,6 +3,7 @@ import {
   DEFAULT_PROJECT_SETTINGS,
   type SkillList,
   type Step,
+  stagesOf,
 } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -108,9 +109,7 @@ function savedStages(save: ReturnType<typeof open>['save'], call = 0): Step[] | 
 }
 
 function stageIn(steps: readonly Step[] | undefined, id: string) {
-  return steps
-    ?.flatMap((step) => ('parallel' in step ? step.parallel : [step]))
-    .find((stage) => stage.id === id)
+  return steps?.flatMap(stagesOf).find((stage) => stage.id === id)
 }
 
 describe('ProjectSettingsDialog', () => {
@@ -2101,5 +2100,249 @@ describe('ProjectSettingsDialog, import and export', () => {
     await user.click(exportButton())
 
     expect(JSON.parse((await exported()).text ?? '')).toEqual(JSON.parse(ONE_STAGE))
+  })
+})
+
+const BRANCH_STAGES = [
+  { id: 'context', kind: 'context', gate: 'manual' },
+  { id: 'plan', kind: 'agent', gate: 'manual' },
+  {
+    id: 'after-plan',
+    name: 'After plan',
+    paths: [
+      {
+        id: 'small',
+        name: 'Small change',
+        when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+        stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }],
+      },
+      {
+        id: 'pr-review',
+        name: 'Review PR',
+        when: { type: 'command', run: 'test -f .no-review' },
+        not: true,
+        stages: [{ id: 'review', kind: 'review', gate: 'manual' }],
+      },
+    ],
+  },
+  { id: 'release', kind: 'release', gate: 'manual' },
+]
+
+describe('ProjectSettingsDialog, branches', () => {
+  it('shows a branch as a block with a list of stages for each path, and in the chart', async () => {
+    open(withStages(BRANCH_STAGES))
+
+    const list = await stageList()
+    const block = within(list).getByRole('list', { name: 'After plan, paths' })
+    const small = within(block).getByRole('list', { name: 'Small change, stages' })
+    expect(within(small).getByRole('button', { name: /^Implement/ })).toBeTruthy()
+    const review = within(block).getByRole('list', { name: 'Review PR, stages' })
+    expect(within(review).getByRole('button', { name: /^Manual review/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Branch After plan, one path of 2' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Paths of After plan' })).toBeTruthy()
+    expect(screen.queryByRole('status')?.textContent ?? '').toBe('')
+  })
+
+  it('opens the details of the branch from the list and from the chart', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await user.click(await row('After plan'))
+    expect(details('After plan')).toBeTruthy()
+    await user.click(await row('Plan'))
+    expect(details('Plan')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Branch After plan, one path of 2' }))
+    expect(details('After plan')).toBeTruthy()
+  })
+
+  it('opens the details of a stage in a path', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await user.click(await row('Manual review'))
+
+    expect(details('Manual review')).toBeTruthy()
+  })
+
+  it('shows the same branch on the JSON tab', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await stageList()
+    await user.click(screen.getByRole('tab', { name: 'JSON' }))
+
+    const box = screen.getByRole('textbox', { name: '.natamux.json' }) as HTMLTextAreaElement
+    expect(JSON.parse(box.value).stages).toEqual(BRANCH_STAGES)
+  })
+
+  it('builds a branch with Add branch, and saves it', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Plan'))
+    await user.click(screen.getByRole('button', { name: 'Add branch' }))
+    expect(details('Branch')).toBeTruthy()
+    // Paths with no stage block Save.
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+
+    await user.type(screen.getByRole('textbox', { name: 'Branch name' }), 'After plan')
+    const first = within(details('After plan')).getByRole('region', { name: 'Path 1' })
+    await user.type(within(first).getByRole('textbox', { name: 'Text to look for' }), 'small')
+    await user.selectOptions(
+      within(first).getByRole('combobox', { name: 'Add a stage to Path 1' }),
+      'Manual review',
+    )
+    const second = within(details('After plan')).getByRole('region', { name: 'Path 2' })
+    await user.selectOptions(
+      within(second).getByRole('combobox', { name: 'Add a stage to Path 2' }),
+      'Manual testing',
+    )
+
+    expect(screen.getByRole('button', { name: 'Branch After plan, one path of 2' })).toBeTruthy()
+    expect(saveButton().getAttribute('aria-disabled')).toBeNull()
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    const saved = savedStages(save)
+    const branch = saved?.find((step) => 'paths' in step)
+    expect(saved?.indexOf(branch as Step)).toBe(3)
+    expect(branch).toEqual({
+      id: 'branch',
+      name: 'After plan',
+      paths: [
+        {
+          id: 'path-1',
+          when: { type: 'output', file: 'plan.md', contains: 'small' },
+          stages: [expect.objectContaining({ id: 'review' })],
+        },
+        { id: 'path-2', stages: [expect.objectContaining({ id: 'qa' })] },
+      ],
+    })
+  })
+
+  it('adds a branch after the picked step, and before the release at the end', async () => {
+    const { user } = open()
+
+    await user.click(await row('Release'))
+    await user.click(screen.getByRole('button', { name: 'Add branch' }))
+
+    const names = within(await stageList())
+      .getAllByRole('button', { name: /^(Release|Branch)\b/ })
+      .map((button) => button.textContent?.split(',')[0])
+    expect(names).toEqual(['Branch', 'Release'])
+  })
+
+  it('shows the problem of a branch on it, and counts it', async () => {
+    const { user } = open()
+
+    await user.click(await row('Plan'))
+    await user.click(screen.getByRole('button', { name: 'Add branch' }))
+
+    expect(screen.getByRole('status').textContent).toMatch(/problem/)
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('moves a stage into a path with Alt+ArrowDown, and out with Alt+ArrowUp', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    const plan = await row('Plan')
+    plan.focus()
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+
+    const small = within(await stageList()).getByRole('list', { name: 'Small change, stages' })
+    expect(
+      within(small)
+        .getAllByRole('switch')
+        .map((toggle) => toggle.getAttribute('aria-label')),
+    ).toEqual(['Plan on', 'Implement on'])
+    expect(document.activeElement).toBe(await row('Plan'))
+
+    await user.keyboard('{Alt>}{ArrowUp}{/Alt}')
+    expect(await rowNames()).toEqual(['Context', 'Plan', 'Implement', 'Manual review', 'Release'])
+    expect(
+      within(within(await stageList()).getByRole('list', { name: 'Small change, stages' }))
+        .getAllByRole('switch')
+        .map((toggle) => toggle.getAttribute('aria-label')),
+    ).toEqual(['Implement on'])
+  })
+
+  it('moves a stage of a path to the other path with its menu', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await openMenu(user, 'Implement')
+    await user.click(screen.getByRole('menuitem', { name: 'Move down' }))
+
+    const review = within(await stageList()).getByRole('list', { name: 'Review PR, stages' })
+    expect(
+      within(review)
+        .getAllByRole('switch')
+        .map((toggle) => toggle.getAttribute('aria-label')),
+    ).toEqual(['Implement on', 'Manual review on'])
+  })
+
+  it('offers no run alongside for a stage of a path', async () => {
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await openMenu(user, 'Implement')
+
+    expect(screen.queryByRole('menuitem', { name: 'Run alongside the stage above' })).toBeNull()
+  })
+
+  it('removes a branch after asking, with its stages', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open(withStages(BRANCH_STAGES))
+
+    await openMenu(user, 'After plan')
+    await user.click(screen.getByRole('menuitem', { name: 'Remove branch' }))
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove After plan? Its paths and stages, with their settings, are lost.',
+    )
+    expect(await rowNames()).toHaveLength(5)
+
+    confirm.mockReturnValue(true)
+    await openMenu(user, 'After plan')
+    await user.click(screen.getByRole('menuitem', { name: 'Remove branch' }))
+    expect(await rowNames()).toEqual(['Context', 'Plan', 'Release'])
+    expect(screen.queryByRole('button', { name: /^Branch/ })).toBeNull()
+  })
+
+  it('lists the command of a condition before an import, like any command', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { user } = open()
+
+    await stageList()
+    await user.upload(importInput(), jsonFile(JSON.stringify({ stages: BRANCH_STAGES })))
+
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        'Import shared.json? It has commands that run in a shell on this computer:\n\nReview PR (pr-review) · Condition command: test -f .no-review\n\nNothing is saved until you click Save.',
+      ),
+    )
+  })
+
+  it('B2: shows the error of a rule on the branch, and Save is off until it is fixed', async () => {
+    const { user } = open()
+    const noStage = JSON.stringify({
+      stages: [
+        { id: 'plan', kind: 'agent', gate: 'manual' },
+        {
+          id: 'after-plan',
+          paths: [
+            {
+              id: 'small',
+              when: { type: 'command', run: 'true' },
+              stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }],
+            },
+            { id: 'empty', stages: [] },
+          ],
+        },
+      ],
+    })
+
+    await stageList()
+    await jsonTab(user, noStage)
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+    expect(screen.getByRole('status').textContent).toMatch(/problem/)
+
+    const qa = '"stages":[{"id":"qa","kind":"manual","gate":"manual"}]'
+    await jsonTab(user, noStage.replace('"stages":[]', qa))
+    expect(saveButton().getAttribute('aria-disabled')).toBeNull()
   })
 })

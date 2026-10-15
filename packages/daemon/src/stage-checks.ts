@@ -10,7 +10,9 @@ const execFileAsync = promisify(execFile)
 
 // A `check` command gets this long before it counts as failed.
 export const CHECK_TIMEOUT_MS = 10 * 60 * 1000
-const OUTPUT_TAIL_CHARS = 2000
+export const OUTPUT_TAIL_CHARS = 2000
+// The end of the output of a command that ran too long.
+export const TIMED_OUT = '(timed out)'
 // File times come from a coarser clock than Date.now (on Linux, up to a few ms behind), so a
 // file written right after the stage started can look older than the start.
 const FILE_TIME_SLACK_MS = 1000
@@ -62,7 +64,7 @@ export const runShellCommand: RunCommand = async (command, cwd) => {
   } catch (error) {
     const failed = error as { code?: unknown; stdout?: string; stderr?: string; killed?: boolean }
     const code = typeof failed.code === 'number' ? failed.code : 1
-    const output = `${failed.stdout ?? ''}${failed.stderr ?? ''}${failed.killed ? '\n(timed out)' : ''}`
+    const output = `${failed.stdout ?? ''}${failed.stderr ?? ''}${failed.killed ? `\n${TIMED_OUT}` : ''}`
     return { code: code === 0 ? 1 : code, output }
   }
 }
@@ -89,7 +91,7 @@ function headings(text: string): string[] {
 }
 
 // The lines under a heading, up to the next heading of the same or a higher level.
-function sectionBody(text: string, name: string): string[] {
+export function sectionBody(text: string, name: string): string[] {
   const lines = text.split(/\r?\n/)
   const start = lines.findIndex(
     (line) => /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)?.[2]?.toLowerCase() === name.toLowerCase(),

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { signIn, taskNamed } from './helpers'
+import { firstRepo, headers, openSettings, signIn, taskNamed } from './helpers'
 
 test('lists the tasks on a phone, with no sideways scrolling', async ({ page }) => {
   await signIn(page)
@@ -44,4 +44,81 @@ test('fits the Start a task dialog on a phone, with long text too', async ({ pag
     contentType: 'image/png',
   })
   await page.keyboard.press('Escape')
+})
+
+// B9 of the test spec of T-0080: the branch chart goes top to bottom on a phone.
+test('draws a branch from top to bottom on a phone', async ({ page, request }) => {
+  const repo = await firstRepo(request)
+  const before = await (await request.get(`/api/repos/${repo.id}/settings`, { headers })).json()
+  const stage = (id: string, kind: string, gate: string) => ({ id, kind, gate })
+  const saved = await request.put(`/api/repos/${repo.id}/settings`, {
+    headers,
+    data: {
+      stages: [
+        { ...stage('context', 'context', 'manual'), output: 'context.md' },
+        stage('plan', 'agent', 'manual'),
+        {
+          id: 'after-plan',
+          name: 'After plan',
+          paths: [
+            {
+              id: 'small',
+              name: 'Small change',
+              when: { type: 'output', file: 'context.md', contains: '[small]' },
+              stages: [stage('implement', 'agent', 'auto')],
+            },
+            {
+              id: 'pr-review',
+              name: 'Review PR',
+              when: { type: 'command', run: 'test -f .no-review' },
+              not: true,
+              stages: [{ ...stage('review', 'review', 'manual'), name: 'Manual review' }],
+            },
+          ],
+        },
+        stage('release', 'release', 'manual'),
+      ],
+    },
+  })
+  expect(saved.ok()).toBe(true)
+
+  try {
+    await signIn(page)
+    // The sidebar is a drawer on a phone.
+    const show = page.getByRole('button', { name: 'Show sidebar' })
+    if ((await show.count()) > 0) {
+      await show.click()
+    }
+    const dialog = await openSettings(page, repo)
+    const start = dialog.getByRole('button', { name: 'Branch After plan, one path of 2' })
+    await expect(start).toBeVisible()
+    const fork = dialog.getByRole('list', { name: 'After plan, 2 paths, checked in order' })
+    const paths = fork.locator(':scope > li.pipeline-path')
+    await expect(paths).toHaveCount(2)
+    await expect(paths.first()).toContainText('Small change')
+    await expect(paths.last()).toContainText('Review PR')
+
+    const [top, first, second] = await Promise.all([
+      start.boundingBox(),
+      paths.first().boundingBox(),
+      paths.last().boundingBox(),
+    ])
+    expect(top && first && second).toBeTruthy()
+    expect(first?.y ?? 0).toBeGreaterThanOrEqual((top?.y ?? 0) + (top?.height ?? 0) - 1)
+    expect(second?.y ?? 0).toBeGreaterThanOrEqual((first?.y ?? 0) + (first?.height ?? 0) - 1)
+
+    const sideways = await page.evaluate(() => {
+      const panel = document.querySelector('[role="dialog"]') as HTMLElement
+      return Math.max(
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        panel.scrollWidth - panel.clientWidth,
+      )
+    })
+    expect(sideways).toBeLessThanOrEqual(0)
+  } finally {
+    await request.put(`/api/repos/${repo.id}/settings`, {
+      headers,
+      data: before.text === null ? {} : JSON.parse(before.text),
+    })
+  }
 })

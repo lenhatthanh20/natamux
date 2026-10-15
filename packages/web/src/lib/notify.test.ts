@@ -24,6 +24,7 @@ function task(id: string, state: TaskState): Task {
     stage: 'implement',
     stages: ['implement', 'review', 'release'],
     lanes: {},
+    paths: {},
     stageSince: null,
     backgroundSince: null,
     workflowStages: [],

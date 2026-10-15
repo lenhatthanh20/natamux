@@ -1,5 +1,6 @@
 import {
   activeSteps,
+  isBranch,
   isGroup,
   needsMe,
   type Repo,
@@ -18,7 +19,7 @@ import { memo, useState } from 'react'
 import { clockNow, useNow, useNowValue } from '../hooks/useNow'
 import { useStableCallback } from '../hooks/useStableCallback'
 import type { LoadedSettings } from '../lib/api'
-import { formatDuration, stepsKey } from '../lib/stage-view'
+import { formatDuration, sameLane, stepsKey } from '../lib/stage-view'
 import { isQuiet, laneSummary, STATE_LABEL } from '../lib/tasks'
 import { DEFAULT_REPO_ID, knownRepos } from '../lib/workspace-groups'
 import { linkKind, StageLink, StageMarker } from './StageMarker'
@@ -176,10 +177,17 @@ const ProgressRow = memo(function ProgressRow({
         const before = progress[index - 1]
         const after = progress[index + 1]
         // Stages of one group sit side by side; no line runs between them.
+        // Nor between stages of two paths of a branch.
         const left =
-          before !== undefined && group !== null && before.group === group ? undefined : before
+          (before !== undefined && group !== null && before.group === group) ||
+          !sameLane(before, entry)
+            ? undefined
+            : before
         const right =
-          after !== undefined && group !== null && after.group === group ? undefined : after
+          (after !== undefined && group !== null && after.group === group) ||
+          !sameLane(entry, after)
+            ? undefined
+            : after
         return (
           <div
             key={entry.stage}
@@ -189,7 +197,7 @@ const ProgressRow = memo(function ProgressRow({
             <StageMarker
               status={entry.status}
               state={entry.state}
-              label={`${entry.name}: ${entry.status === 'current' && entry.state !== null ? STATE_LABEL[entry.state] : entry.status}`}
+              label={`${entry.name}: ${entry.status === 'current' && entry.state !== null ? STATE_LABEL[entry.state] : entry.status === 'not-taken' ? 'Not taken' : entry.status}`}
             />
             <StageLink kind={linkKind(entry, right)} />
           </div>
@@ -281,7 +289,11 @@ export function ProgressBoard({
       )}
       {sections.map((section) => {
         const stages = section.steps.flatMap((step) =>
-          stagesOf(step).map((stage) => ({ stage, step, inGroup: isGroup(step) })),
+          stagesOf(step).map((stage) => ({
+            stage,
+            inGroup: isGroup(step),
+            inPath: isBranch(step),
+          })),
         )
         const rows = [...section.open, ...(showDone[section.key] ? section.done : [])]
         const columns = `minmax(240px,1.6fr) repeat(${stages.length}, minmax(72px,1fr)) minmax(120px,0.8fr)`
@@ -308,13 +320,16 @@ export function ProgressBoard({
                   >
                     Task
                   </div>
-                  {stages.map(({ stage, inGroup }) => {
+                  {stages.map(({ stage, inGroup, inPath }) => {
                     // The tasks whose current step holds this stage, and not finished there.
                     const here = section.open.filter((task) => {
                       const step = section.steps[stepIndex(section.steps, task.stage)]
                       return (
                         step !== undefined &&
-                        stagesOf(step).some((candidate) => candidate.id === stage.id) &&
+                        // A task is in one path of a branch only, the one of its stage.
+                        (inPath
+                          ? task.stage === stage.id
+                          : stagesOf(step).some((candidate) => candidate.id === stage.id)) &&
                         (!inGroup || (task.lanes[stage.id] ?? 'done') !== 'done')
                       )
                     })
