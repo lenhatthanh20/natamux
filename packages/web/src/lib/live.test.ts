@@ -188,9 +188,11 @@ describe('applyLiveMessages', () => {
       { kind: 'shells.changed', taskId: 'T-0001' },
     ])
 
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ended-shells', 'T-0001'] })
+    // The open shells, which the Terminal tab and the palette show.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['terminals', 'T-0001'] })
   })
 
   it('reads the files and the sizes of a changed workspace again, not its shells', () => {

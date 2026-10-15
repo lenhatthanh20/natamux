@@ -34,6 +34,8 @@ type TerminalViewProps = {
   focusOnOpen?: boolean
   // The shell comes back after a restart: the line under the spinner, such as "Restoring Codex…".
   restoring?: string
+  // Told once the shell ended: its exit code, or null when the daemon closed it.
+  onExit?: (code: number | null) => void
 }
 
 // The spinner of a shell that came back fades out in this long (duration-150 below).
@@ -74,6 +76,7 @@ export default function TerminalView({
   taskState,
   focusOnOpen = true,
   restoring,
+  onExit,
 }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
@@ -106,6 +109,14 @@ export default function TerminalView({
     const timer = setTimeout(() => setRestoreLine(undefined), RESTORE_FADE_MS)
     return () => clearTimeout(timer)
   }, [restoringNow, restoring])
+
+  const onExitRef = useRef(onExit)
+  onExitRef.current = onExit
+  useEffect(() => {
+    if (status === 'ended') {
+      onExitRef.current?.(exitCode)
+    }
+  }, [status, exitCode])
 
   // Layout effects, so a cached terminal is back in place before the browser paints.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.

@@ -495,6 +495,21 @@ describe('TerminalView after the task ends', () => {
   })
 })
 
+describe('TerminalView exit report', () => {
+  it.each([0, 1, null])('tells its pane once that the shell ended with code %s', async (code) => {
+    const onExit = vi.fn()
+    const { made, connect } = sockets(2)
+    render(<TerminalView connect={connect} cacheKey={KEY} onExit={onExit} />)
+    await flush()
+    act(() => made[0]?.open())
+    expect(onExit).not.toHaveBeenCalled()
+
+    exit(made[0], code)
+    expect(onExit).toHaveBeenCalledTimes(1)
+    expect(onExit).toHaveBeenCalledWith(code)
+  })
+})
+
 describe('TerminalView after the shell ends by itself', () => {
   it.each([
     [0, 'The shell ended.'],

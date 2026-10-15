@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.27 (2026-10-15)
+
+- Fix: when an agent ended its turn and still ran, **Resume** left it at its prompt. Resume now asks it to go on with the stage. See [Type to the agent](/docs/guides/terminal/#type-to-the-agent).
+
 ## v0.1.26 (2026-10-15)
 
 - A context, agent or testing stage can end its agent and close its shell when it is done (`"endShell": true`). A next stage in that shell starts a new agent session. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).

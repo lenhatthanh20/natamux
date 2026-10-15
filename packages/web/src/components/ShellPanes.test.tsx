@@ -14,6 +14,7 @@ import {
   vi,
 } from 'vitest'
 import type { TaskShells } from '../lib/api'
+import { applyLiveMessages } from '../lib/live'
 import { MAX_PANES } from '../lib/panes'
 import { SHELLS_EVERY_MS } from '../lib/task-shells'
 import { disposeTerminal } from '../lib/terminal-cache'
@@ -27,11 +28,14 @@ type StandInProps = {
   cacheKey?: string
   taskState?: TaskState
   restoring?: string
+  onExit?: (code: number | null) => void
 }
 
 // The grid columns each stand-in saw when it was first shown. `order` has "pane" for each one
 // shown, and the tests of the grid width add "measure" for each read of the width.
 const shownAt = vi.hoisted(() => ({ columns: [] as string[], order: [] as string[] }))
+// The exit report of each stand-in, by cache key, so a test can end a shell as the daemon would.
+const exits = vi.hoisted(() => new Map<string, (code: number | null) => void>())
 
 // The stand-in shows the focus token it gets, which makes the real terminal take the keyboard,
 // and its cache key. It also shows if it may take the keyboard on open, as it was when it
@@ -46,8 +50,12 @@ vi.mock('./TerminalView', () => ({
     cacheKey,
     taskState,
     restoring,
+    onExit,
   }: StandInProps) => {
     const [focusAtMount] = useState(focusOnOpen)
+    if (cacheKey !== undefined && onExit !== undefined) {
+      exits.set(cacheKey, onExit)
+    }
     const element = useRef<HTMLParagraphElement>(null)
     useLayoutEffect(() => {
       const grid = element.current?.closest<HTMLElement>('.grid')
@@ -893,6 +901,25 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
   })
 
+  it('drops the shell of a stage that ends its shell, and does not attach it again', async () => {
+    const { client, state, connects, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const { rerender } = render(view(building))
+    await agentShown('Shell 2')
+
+    // Test spec is done and set to end its shell: the daemon closes Shell 2 and says so.
+    state.terminals = ['1']
+    state.lanes = { '1': IMPLEMENT }
+    rerender(view({ ...building, lanes: { implement: 'running', 'test-spec': 'done' } }))
+    act(() => exits.get('T-0001/2')?.(null))
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+    expect(connects('2')).toHaveLength(1)
+    expect(connects('1')).toHaveLength(1)
+  })
+
   it('shows a hand-added shell once when a stage shell gets the same name', async () => {
     const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
     const user = typist()
@@ -907,6 +934,62 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
     expect(pane('Shell 2')).toBe(added)
+    expect(connects('2')).toHaveLength(1)
+  })
+
+  it('keeps a shell that ended by itself until the user closes it', async () => {
+    const { client, state, loadTerminals, connects, view } = daemon(['1', '2'], { '1': IMPLEMENT })
+    const user = typist()
+    render(view(implementing))
+    await screen.findByRole('region', { name: 'Shell 2' })
+
+    // The user typed `exit` in Shell 2: it ends with a code, and the daemon lists it no more.
+    state.terminals = ['1']
+    act(() => exits.get('T-0001/2')?.(0))
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    await poll()
+    expect(pane('Shell 2')).toBeTruthy()
+    expect(connects('2')).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Close Shell 2' }))
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+  })
+
+  it('drops a hand-added shell that a stage took once the daemon closes it', async () => {
+    const { client, state, loadTerminals, connects, view, startGroup } = daemon(['1'], {
+      '1': IMPLEMENT,
+    })
+    const user = typist()
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    await user.click(newShell())
+    await screen.findByRole('region', { name: 'Shell 2' })
+
+    // The stage of the group takes Shell 2, then is done and ends it.
+    startGroup()
+    rerender(view(building))
+    await agentShown('Shell 2')
+    const done: ShellTask = { ...building, lanes: { implement: 'running', 'test-spec': 'done' } }
+    state.terminals = ['1']
+    state.lanes = { '1': IMPLEMENT }
+    rerender(view(done))
+    act(() => exits.get('T-0001/2')?.(null))
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+    expect(connects('2')).toHaveLength(1)
+
+    // The user leaves the task and comes back.
+    const reads = loadTerminals.mock.calls.length
+    cleanup()
+    render(view(done))
+    await waitFor(() => expect(loadTerminals.mock.calls.length).toBeGreaterThan(reads))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    expect(shellNames()).toEqual(['Shell 1'])
     expect(connects('2')).toHaveLength(1)
   })
 

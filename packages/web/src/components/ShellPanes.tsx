@@ -100,6 +100,28 @@ export function ShellPanes({
     }
   })
   const [added, setAdded] = useState<string[]>([])
+  // Once listed, the daemon's list decides: a shell it later closes, for example when a stage
+  // that took it ends its shell, must leave, not attach again and start a new one.
+  useEffect(() => {
+    const listed = open.data
+    if (listed !== undefined) {
+      setAdded((current) => {
+        const kept = current.filter((name) => !listed.includes(name))
+        return kept.length === current.length ? current : kept
+      })
+    }
+  }, [open.data])
+  // Shells that ended by themselves, such as after `exit`. The daemon lists them no more, but they
+  // keep their last screen and "Open a new shell" until the user closes them. A shell the daemon
+  // closed (exit code null) leaves.
+  const [exited, setExited] = useState<string[]>([])
+  const noteExit = (name: string, code: number | null) =>
+    setExited((current) => {
+      if (code === null) {
+        return current.includes(name) ? current.filter((item) => item !== name) : current
+      }
+      return current.includes(name) ? current : [...current, name]
+    })
   // Shells that are being closed. They leave the screen at once, not when the list is read again.
   const [closing, setClosing] = useState<string[]>([])
   const [shown, setShown] = useState('1')
@@ -110,7 +132,7 @@ export function ShellPanes({
   const measured = gridWidth !== null || typeof ResizeObserver === 'undefined'
   const phone = usePhone()
   const names = terminalNames(
-    (open.data ?? []).filter((name) => !closing.includes(name)),
+    [...(open.data ?? []), ...exited].filter((name) => !closing.includes(name)),
     added,
   )
 
@@ -157,6 +179,7 @@ export function ShellPanes({
     disposeTerminal(terminalKey(taskId, name))
     setClosing((current) => [...current, name])
     setAdded((current) => current.filter((item) => item !== name))
+    setExited((current) => current.filter((item) => item !== name))
     if (maximized === name) {
       setMaximized(null)
     }
@@ -306,6 +329,7 @@ export function ShellPanes({
                 focusOnOpen={!asked && name === visible[0]}
                 taskState={task.state}
                 restoring={restoring.data?.[name]}
+                onExit={(code) => noteExit(name, code)}
                 maximized={focused === name}
                 onToggleMaximize={() => setMaximized(focused === name ? null : name)}
                 onClose={name === '1' ? undefined : () => void closeShell(name)}

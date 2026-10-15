@@ -37,6 +37,7 @@ type TerminalPaneProps = {
   taskState?: TaskState
   // The shell comes back after a restart, with this agent (null: a plain shell).
   restoring?: string | null
+  onExit?: (code: number | null) => void
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -65,6 +66,7 @@ export function TerminalPane({
   cacheKey,
   taskState,
   restoring,
+  onExit,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -147,6 +149,7 @@ export function TerminalPane({
               ? undefined
               : `Restoring ${restoring === null ? 'shell' : agentLabel(restoring)}…`
           }
+          onExit={onExit}
         />
       </LazyView>
     </section>
