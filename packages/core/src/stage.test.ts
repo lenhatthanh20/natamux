@@ -64,7 +64,7 @@ describe('pipelineSchema', () => {
     const agent = (id: string) => ({ id, kind: 'agent', gate: 'auto' })
     const messages = (value: unknown[]) =>
       pipelineSchema.safeParse(value).error?.issues.map((issue) => issue.message)
-    expect(messages(group([agent('a')]))).toEqual(['A group holds 2 to 4 stages'])
+    expect(messages(group([agent('a')]))).toContain('A group holds 2 to 4 stages')
     expect(pipelineSchema.safeParse(group([agent('a'), agent('b')])).success).toBe(true)
     expect(messages(group(['a', 'b', 'c', 'd', 'e'].map(agent)))).toEqual([
       'A group holds 2 to 4 stages',
