@@ -14,6 +14,7 @@ import {
   vi,
 } from 'vitest'
 import type { TaskShells } from '../lib/api'
+import { applyLiveMessages } from '../lib/live'
 import { MAX_PANES } from '../lib/panes'
 import { SHELLS_EVERY_MS } from '../lib/task-shells'
 import { disposeTerminal } from '../lib/terminal-cache'
@@ -849,6 +850,24 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
   })
 
+  it('drops the shell of a stage that ends its shell, and does not attach it again', async () => {
+    const { client, state, connects, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    const { rerender } = render(view(building))
+    await agentShown('Shell 2')
+
+    // Test spec is done and set to end its shell: the daemon closes Shell 2 and says so.
+    state.terminals = ['1']
+    state.lanes = { '1': IMPLEMENT }
+    rerender(view({ ...building, lanes: { implement: 'running', 'test-spec': 'done' } }))
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+    expect(connects('2')).toHaveLength(1)
+    expect(connects('1')).toHaveLength(1)
+  })
+
   it('shows a hand-added shell once when a stage shell gets the same name', async () => {
     const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
     const user = typist()
@@ -863,6 +882,41 @@ describe('ShellPanes stage shells', () => {
     await agentShown('Shell 2')
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
     expect(pane('Shell 2')).toBe(added)
+    expect(connects('2')).toHaveLength(1)
+  })
+
+  it('drops a hand-added shell that a stage took once the daemon closes it', async () => {
+    const { client, state, loadTerminals, connects, view, startGroup } = daemon(['1'], {
+      '1': IMPLEMENT,
+    })
+    const user = typist()
+    const { rerender } = render(view(implementing))
+    await agentShown('Shell 1')
+    await user.click(newShell())
+    await screen.findByRole('region', { name: 'Shell 2' })
+
+    // The stage of the group takes Shell 2, then is done and ends it.
+    startGroup()
+    rerender(view(building))
+    await agentShown('Shell 2')
+    const done: ShellTask = { ...building, lanes: { implement: 'running', 'test-spec': 'done' } }
+    state.terminals = ['1']
+    state.lanes = { '1': IMPLEMENT }
+    rerender(view(done))
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+
+    await waitFor(() => expect(noPane('Shell 2')).toBeNull())
+    await poll()
+    expect(noPane('Shell 2')).toBeNull()
+    expect(connects('2')).toHaveLength(1)
+
+    // The user leaves the task and comes back.
+    const reads = loadTerminals.mock.calls.length
+    cleanup()
+    render(view(done))
+    await waitFor(() => expect(loadTerminals.mock.calls.length).toBeGreaterThan(reads))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    expect(shellNames()).toEqual(['Shell 1'])
     expect(connects('2')).toHaveLength(1)
   })
 
