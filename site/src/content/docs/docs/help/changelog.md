@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.26 (2026-10-15)
+
+- A context, agent or testing stage can end its agent and close its shell when it is done (`"endShell": true`). A next stage in that shell starts a new agent session. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
+- Fix: a testing stage whose command was running when the daemon stopped stayed running. The daemon now runs the command again when it starts.
+- Codex and Gemini run inline, so their output goes into the terminal history. See [Codex](/docs/agents/codex/#what-natamux-runs) and [Gemini CLI](/docs/agents/gemini/#what-natamux-runs).
+- The waiting state is now called **Needs input**, so its chip fits the Table view. See [Status icons](/docs/guides/status-icons/).
+
 ## v0.1.25 (2026-10-15)
 
 - Task shells get an agent token. An agent cannot approve, skip or pass a stage, or change project settings, and what it does is recorded as the agent's. See [Agents run with your rights](/docs/help/security-and-privacy/#agents-run-with-your-rights).
