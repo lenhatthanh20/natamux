@@ -30,10 +30,14 @@ describe('a blurred project', () => {
     render(
       <>
         <div data-blurred>
-          <span data-private data-tip="natamux/t-0001-secret-branch">T-0001</span>
+          <span data-private data-tip="natamux/t-0001-secret-branch">
+            T-0001
+          </span>
           <span data-tip="Subtasks done">2/5</span>
         </div>
-        <span data-private data-tip="Not blurred">T-0002</span>
+        <span data-private data-tip="Not blurred">
+          T-0002
+        </span>
         <Tooltip />
       </>,
     )
@@ -62,9 +66,13 @@ describe('a blurred project', () => {
     render(
       <>
         <div data-blurred>
-          <button type="button" data-private data-tip="natamux/t-0001-secret-branch">T-0001</button>
+          <button type="button" data-private data-tip="natamux/t-0001-secret-branch">
+            T-0001
+          </button>
         </div>
-        <button type="button" data-tip="Settings">Gear</button>
+        <button type="button" data-tip="Settings">
+          Gear
+        </button>
         <Tooltip />
       </>,
     )
@@ -81,7 +89,9 @@ describe('a blurred project', () => {
       <>
         <ul>
           <li data-blurred>
-            <span data-private data-tip="natamux/t-0001-secret-branch">T-0001</span>
+            <span data-private data-tip="natamux/t-0001-secret-branch">
+              T-0001
+            </span>
             <span data-tip="Subtasks done">2/5</span>
           </li>
         </ul>

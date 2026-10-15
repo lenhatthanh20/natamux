@@ -263,10 +263,14 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   const stage = (
     <>
       {step !== null && (
-        <span data-private className="shrink-0 font-mono text-2xs tabular-nums">{step}</span>
+        <span data-private className="shrink-0 font-mono text-2xs tabular-nums">
+          {step}
+        </span>
       )}
       {comet.stage !== null && (
-        <span data-private className="min-w-0 shrink truncate">{comet.stage}</span>
+        <span data-private className="min-w-0 shrink truncate">
+          {comet.stage}
+        </span>
       )}
     </>
   )
@@ -545,7 +549,9 @@ export const AgentRow = memo(function AgentRow({
         >
           {row.label}
         </span>
-        <span data-private className="min-w-0 flex-1 truncate text-muted">{activity}</span>
+        <span data-private className="min-w-0 flex-1 truncate text-muted">
+          {activity}
+        </span>
         {tag !== null && (
           <span
             data-private

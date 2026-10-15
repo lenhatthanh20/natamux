@@ -543,9 +543,7 @@ export function WorkspaceList({
                   tone="project"
                   label={`${count} workspace${count === 1 ? '' : 's'}`}
                 />
-                {isCollapsed && (
-                  <HiddenDot group={group} currentId={currentId} repoName={name} />
-                )}
+                {isCollapsed && <HiddenDot group={group} currentId={currentId} repoName={name} />}
               </button>
               {!gone && (
                 <IconButton
