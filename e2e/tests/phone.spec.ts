@@ -85,10 +85,7 @@ test('draws a branch from top to bottom on a phone', async ({ page, request }) =
   try {
     await signIn(page)
     // The sidebar is a drawer on a phone.
-    const show = page.getByRole('button', { name: 'Show sidebar' })
-    if ((await show.count()) > 0) {
-      await show.click()
-    }
+    await page.getByRole('button', { name: 'Open the menu' }).click()
     const dialog = await openSettings(page, repo)
     const start = dialog.getByRole('button', { name: 'Branch After plan, one path of 2' })
     await expect(start).toBeVisible()

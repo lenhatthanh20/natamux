@@ -1040,7 +1040,13 @@ describe('a branch', () => {
     // the catalog settings of a stage that is gone too.
     const now: Step[] = [
       plan,
-      { id: 'after-plan', paths: [{ ...small, not: true }, { id: 'other', stages: [testing] }] },
+      {
+        id: 'after-plan',
+        paths: [
+          { ...small, not: true },
+          { id: 'other', stages: [testing] },
+        ],
+      },
       release,
     ]
     expect(resolveSteps(refs, now)[1]).toEqual({

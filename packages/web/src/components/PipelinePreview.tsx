@@ -184,12 +184,12 @@ function WhenLabel({ path }: { path: BranchPath }) {
           {path.not === true && <span className="pipeline-not">NOT </span>}
           {when.type === 'command' ? (
             <>
-              <code>{when.run}</code>
+              <code className="pipeline-code">{when.run}</code>
               <span className="pipeline-word"> succeeds</span>
             </>
           ) : (
             <>
-              <code>{target ?? when.file}</code>
+              <code className="pipeline-code">{target ?? when.file}</code>
               <span className="pipeline-word"> has </span>
               {`"${when.contains}"`}
             </>

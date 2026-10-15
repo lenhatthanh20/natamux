@@ -1374,7 +1374,7 @@
   color: var(--accent);
   font-weight: 600;
 }
-.pipeline-when code {
+.pipeline-code {
   font-family: var(--font-mono);
   font-size: 11px;
 }

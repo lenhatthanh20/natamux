@@ -100,15 +100,17 @@ describe('BranchDetails', () => {
   it('offers the two condition types and the holds choice by their labels', () => {
     show()
     const type = within(card(1)).getByRole('combobox', { name: 'Condition type' })
-    expect(within(type).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'File has text',
-      'Command succeeds',
-    ])
+    expect(
+      within(type)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['File has text', 'Command succeeds'])
     const holds = within(card(1)).getByRole('combobox', { name: 'Condition holds' })
-    expect(within(holds).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'holds',
-      'does not hold',
-    ])
+    expect(
+      within(holds)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['holds', 'does not hold'])
   })
 
   it('edits the name of the branch, and the region follows', async () => {

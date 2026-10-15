@@ -2262,7 +2262,7 @@ describe('ProjectSettingsDialog, branches', () => {
     const { user } = open(withStages(BRANCH_STAGES))
 
     await openMenu(user, 'Implement')
-    await user.click(screen.getByRole('menuitem', { name: 'Move down' }))
+    await user.click(screen.getByRole('menuitem', { name: /^Move down/ }))
 
     const review = within(await stageList()).getByRole('list', { name: 'Review PR, stages' })
     expect(

@@ -139,6 +139,8 @@ test('builds a branch in Project settings and saves it', async ({ page, request 
 
   const two = details.getByRole('region', { name: 'Path 2', exact: true })
   await two.getByRole('textbox', { name: 'Path name' }).fill('Review PR')
+  // A new branch ends with an Otherwise path; this one gets a condition.
+  await two.getByRole('checkbox', { name: 'Make this the Otherwise path' }).uncheck()
   await two
     .getByRole('combobox', { name: 'Condition type' })
     .selectOption({ label: 'Command succeeds' })

@@ -10,9 +10,9 @@ import {
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
 import {
+  branchStatus,
   finishedWhen,
   formatDuration,
-  branchStatus,
   missingSkills,
   pathLabel,
   ranWithWorkflow,

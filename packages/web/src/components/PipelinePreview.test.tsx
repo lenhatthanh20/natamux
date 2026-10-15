@@ -230,7 +230,11 @@ describe('PipelinePreview with a branch', () => {
   it('writes the branch in words under the chart', () => {
     preview(BRANCHED)
     const list = screen.getByRole('list', { name: 'Paths of After plan' })
-    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
       'Small change · plan.md "Size" contains "small" → Implement, Automated tests',
       'Review PR · test -f .no-review does not succeed → Manual review',
     ])
