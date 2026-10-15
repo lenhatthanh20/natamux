@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import {
   type ContextSource,
+  canEndShell,
   codeStageBefore,
   ENDED_SHELL_LINES,
   type EndedShell,
@@ -411,6 +412,9 @@ export class StageRunner {
         this.startInBackground(task.id, ['ready', 'draft'])
       }
     }
+    if (ENDS_STAGE.includes(event.type)) {
+      this.endStageShell(task, event)
+    }
     if (message.moved === true) {
       this.startInBackground(task.id, ['ready'], event)
     } else if (event.type === 'agent.resumed' && event.source !== 'agent') {
@@ -424,6 +428,45 @@ export class StageRunner {
     if (task.state === 'done' || event.type === 'task.edited') {
       this.startWaiting()
     }
+  }
+
+  // A stage set to end its shell closes it once its lane is done. This runs before the next stage
+  // starts, so a next stage in the same shell starts a new agent. A finished task is left to
+  // `finish`, which keeps the screens.
+  private endStageShell(task: Task, event: TaskEvent): void {
+    const stageId = event.payload.stage
+    if (typeof stageId !== 'string' || task.state === 'done' || task.state === 'cancelled') {
+      return
+    }
+    // A planned skip never started the stage, so its shell may hold the agent of the stage before.
+    if (event.payload.planned === true) {
+      return
+    }
+    const steps = this.tasks.stepsOf(task)
+    const step = findStep(steps, stageId)
+    const stage = step && stagesOf(step).find((each) => each.id === stageId)
+    if (step === undefined || stage?.endShell !== true || !canEndShell(stage)) {
+      return
+    }
+    // Still in the step and not done: a stage that waits for approval, or a lane still at work.
+    if (task.stage === step.id && task.lanes[stageId] !== 'done') {
+      return
+    }
+    const command = stage.kind === 'testing' && stage.command !== undefined
+    const terminal = command ? this.commandTerminals.get(task.id) : terminalOfStage(steps, stageId)
+    if (terminal === undefined) {
+      return
+    }
+    if (command) {
+      this.commandTerminals.delete(task.id)
+    }
+    this.terminals.closeOne(task.id, terminal)
+    // The killed agent never ends its turn, so its report would swallow the first turn end of the
+    // next agent in this shell.
+    const key = `${task.id}/${terminal}`
+    this.reported.delete(key)
+    this.launched.delete(key)
+    this.outputTails.delete(key)
   }
 
   // A task that is done or cancelled needs its agent and its shells no more. A deleted task keeps

@@ -136,7 +136,8 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    expect(within(spec).getAllByText('Default')).toHaveLength(4)
+    // Name, approval, workflow, end the shell, and the prompt.
+    expect(within(spec).getAllByText('Default')).toHaveLength(5)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
   })
@@ -1621,6 +1622,61 @@ describe('ProjectSettingsDialog, workflow', () => {
       ),
     ).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('1 problem')
+    await user.click(saveButton())
+    expect(save).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProjectSettingsDialog, end the shell', () => {
+  const LABEL = 'End the agent and close its shell when the stage is done'
+  const endBox = (name: string) => within(details(name)).queryByRole('checkbox', { name: LABEL })
+
+  it('offers it, off, on stages that start an agent or a command only', async () => {
+    const { user } = open()
+
+    for (const name of ['Context', 'Spec', 'Implement', 'Automated tests']) {
+      await user.click(await row(name))
+      expect(endBox(name)).toHaveProperty('checked', false)
+    }
+    await user.click(await row('Release'))
+    expect(endBox('Release')).toBeNull()
+  })
+
+  it('saves a stage that ends its shell, and puts the default back with Use default', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Spec'))
+    await user.click(endBox('Spec') as HTMLElement)
+    const option = within(details('Spec')).getByRole('group', { name: LABEL })
+    expect(within(option).getByText('Changed')).toBeTruthy()
+    await user.click(await row('Plan'))
+    await user.click(endBox('Plan') as HTMLElement)
+    const planOption = within(details('Plan')).getByRole('group', { name: LABEL })
+    await user.click(within(planOption).getByRole('button', { name: 'Use default' }))
+    expect(endBox('Plan')).toHaveProperty('checked', false)
+
+    await user.click(saveButton())
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    const steps = savedStages(save)
+    expect(stageIn(steps, 'spec')?.endShell).toBe(true)
+    expect(stageIn(steps, 'plan')).not.toHaveProperty('endShell')
+  })
+
+  it('shows endShell on a review stage as a problem, and blocks Save', async () => {
+    const { save, user } = open()
+
+    await stageList()
+    await jsonTab(
+      user,
+      '{ "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }, { "id": "review", "kind": "review", "gate": "manual", "endShell": true }] }',
+    )
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+
+    expect(
+      within(await stageList()).getByText(
+        'Only a stage that starts an agent or a command can end its shell, and "review" is a review stage',
+      ),
+    ).toBeTruthy()
     await user.click(saveButton())
     expect(save).not.toHaveBeenCalled()
   })

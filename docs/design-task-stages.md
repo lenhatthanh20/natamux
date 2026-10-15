@@ -363,6 +363,7 @@ Stage fields:
 - `sections`, `requireCommit`, `requireClean`, `check`: the checks of 3.5.
 - `doneWhen`: the sentence the progress page shows before the stage is reached (7.5).
 - `workflow`: the stage offers its tasks a "Run with a workflow" checkbox (3.8). `agent` stages only.
+- `endShell`: when the stage's lane is done (passed, approved, checked with an auto gate, or skipped), the daemon closes its shell (`terminalOfStage`, or the command shell of a `testing` stage with a `command`) before the next stage starts. A next stage in that shell starts a new agent. Not on the last step: the task's finish keeps the screens. `context`, `agent` and `testing` stages only.
 - A group is `{ "id", "name"?, "parallel": [stages] }` (section 3.6).
 
 Other rules:

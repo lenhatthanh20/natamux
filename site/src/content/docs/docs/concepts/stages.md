@@ -72,7 +72,7 @@ A catalog stage in Shell 1 cannot change the model: that would need a new sessio
 
 A stage of your own (made with **Custom stage**) that an agent works on can change it too, also where it would run in Shell 1.
 
-A stage with its own agent or arguments runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux never closes an agent while the task runs, so Shell 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its shell, which still has the context of the last round. All shells of a task close when the task is done or cancelled.
+A stage with its own agent or arguments runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux closes no agent while the task runs, unless a stage asks for it (see [End a stage's shell](#end-a-stages-shell)), so Shell 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its shell, which still has the context of the last round. All shells of a task close when the task is done or cancelled.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -260,6 +260,16 @@ For a review by a person, add **Manual review** from the catalog, for example af
 ### Stages in their own shell
 
 A stage that only writes a report can run in its own shell with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Shell 5**, and a turn of its agent does not touch the session in Shell 1. With its own agent or arguments, it runs in a shell of its own instead, from Shell 6; see [Choose a model](#choose-a-model).
+
+### End a stage's shell
+
+Check **End the agent and close its shell when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages.
+
+- Done means the stage passed, was approved or was skipped. A stage that waits for your approval keeps its shell until you approve.
+- Natamux ends the agent or command in the stage's shell and closes the shell. Other shells go on.
+- A next stage in the same shell starts a new agent with a new session and the full stage prompt. For Shell 1 this drops the context of the stages before.
+- A send back to the stage starts a new agent in its shell.
+- The last stage is left to the end of the task, which keeps the last screen of each shell. A shell closed earlier keeps no screen.
 
 ## Check a stage on CI
 

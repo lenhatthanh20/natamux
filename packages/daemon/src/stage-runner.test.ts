@@ -1508,6 +1508,194 @@ describe('a group', () => {
   })
 })
 
+describe('a stage that ends its shell', () => {
+  function withImplement(change: Partial<Stage>, after: Stage[] = []): void {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto', ...change },
+        ...after,
+        { id: 'finish', kind: 'agent', gate: 'auto' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  }
+
+  const claudeLaunches = (id: string) =>
+    tasks
+      .listEvents(id)
+      .filter((entry) => entry.event.type === 'agent.launched')
+      .filter((entry) => entry.event.payload.agent === 'claude-code')
+
+  it('closes Shell 1 when the stage passes, and starts the next stage with a new agent', async () => {
+    withImplement({ endShell: true })
+    const task = await implementing()
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
+    expect(ptys[0]?.killed).toBe(true)
+    expect(ptys).toHaveLength(2)
+    expect(ptys[1]?.killed).toBe(false)
+    expect(claudeLaunches(task.id)).toHaveLength(2)
+    expect(launchScript(task.id)).toContain('Do the Finish stage of this task.')
+  })
+
+  it('drops the report of the closed agent, so the next agent in Shell 1 reports its turn end', async () => {
+    withImplement({ endShell: true })
+    const task = await implementing()
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
+    expect(runner.takeReport(task.id, '1')).toBe(false)
+  })
+
+  it('starts a new agent in a new shell with the send-back prompt, and closes it again', async () => {
+    withImplement({ endShell: true }, [{ id: 'qa', kind: 'manual', gate: 'manual' }])
+    const task = await implementing()
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'qa', state: 'review' })
+    expect(terminals.list(task.id)).toEqual([])
+
+    await runner.act(task.id, 'reopen', { to: 'implement', reason: 'Fix the dates' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys).toHaveLength(2)
+    expect(ptys[1]?.killed).toBe(false)
+    expect(claudeLaunches(task.id)).toHaveLength(2)
+    expect(launchScript(task.id)).toContain('What to change: Fix the dates')
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('qa')
+    expect(ptys[1]?.killed).toBe(true)
+  })
+
+  it('keeps the shell of a stage without it, as before', async () => {
+    withImplement({})
+    const task = await implementing()
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
+    expect(ptys.some((pty) => pty.killed)).toBe(false)
+    expect(claudeLaunches(task.id)).toHaveLength(1)
+  })
+
+  it('keeps the shell while the stage waits for approval, and closes it on approval', async () => {
+    withImplement({ gate: 'manual', endShell: true })
+    const task = await implementing()
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'review' })
+    expect(ptys[0]?.killed).toBe(false)
+
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
+    expect(ptys[0]?.killed).toBe(true)
+    expect(claudeLaunches(task.id)).toHaveLength(2)
+  })
+
+  it('closes the shell of a skipped stage', async () => {
+    withImplement({ endShell: true })
+    const task = await implementing()
+
+    await runner.act(task.id, 'skip')
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).stage).toBe('finish')
+    expect(ptys[0]?.killed).toBe(true)
+  })
+
+  it('keeps the shell of the stage before when a stage marked to skip is skipped', async () => {
+    withImplement({}, [{ id: 'docs-pass', kind: 'agent', gate: 'auto', endShell: true }])
+    const task = await implementing()
+    tasks.setSkip(task.id, 'docs-pass', true)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).stage).toBe('finish')
+    expect(ptys.some((pty) => pty.killed)).toBe(false)
+  })
+
+  it('closes only the shell of the lane that is done in a group', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: DEFAULT_PROJECT_SETTINGS.stages.map((step) =>
+        'parallel' in step
+          ? {
+              ...step,
+              parallel: step.parallel.map((stage) =>
+                stage.id === 'implement' ? { ...stage, endShell: true } : stage,
+              ),
+            }
+          : step,
+      ),
+    }
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    await withWorkspace(task.id)
+    expect(ptys).toHaveLength(2)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'running', implement: 'done' })
+    expect(ptys.filter((pty) => pty.killed)).toHaveLength(1)
+    expect(terminals.list(task.id)).toEqual(['2'])
+  })
+
+  it('closes the shell of a command when the command passes', async () => {
+    withImplement({}, [
+      { id: 'testing', kind: 'testing', gate: 'auto', command: 'make test', endShell: true },
+    ])
+    const task = await implementing()
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('testing')
+    expect(terminals.list(task.id)).toEqual(['1', '2'])
+
+    await runner.act(task.id, 'pass', { stage: 'testing' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).stage).toBe('finish')
+    expect(ptys[1]?.killed).toBe(true)
+    expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  it('leaves the last stage to the finish of the task, which keeps the screens', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', kind: 'agent', gate: 'auto', endShell: true }],
+    }
+    const task = await implementing()
+    ptys[0]?.emit('last words of the agent\r\n')
+    await terminals.settled(task.id, '1')
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('done')
+    await vi.waitFor(() => expect(ptys[0]?.killed).toBe(true))
+    const [shell] = readEndedShells(dataDir, task.id)
+    expect(shell).toMatchObject({ name: '1', stage: 'implement' })
+    expect(shell?.text).toContain('last words of the agent')
+  })
+})
+
 describe('a stage that runs as a workflow', () => {
   // Plan waits for approval; the next step is Test spec and Implement.
   async function atPlanReview(agent = 'claude-code'): Promise<Task> {

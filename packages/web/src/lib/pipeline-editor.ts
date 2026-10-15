@@ -583,6 +583,11 @@ export function setCi(steps: readonly Step[], id: string, on: boolean): Step[] {
   return updateStage(steps, id, (stage) => withField(stage, 'ci', on ? true : undefined))
 }
 
+// Off leaves the field out, so a stage of the catalog stays as the catalog has it.
+export function setEndShell(steps: readonly Step[], id: string, on: boolean): Step[] {
+  return updateStage(steps, id, (stage) => withField(stage, 'endShell', on ? true : undefined))
+}
+
 // The catalog offers CI on Implement and Automated tests; a stage of your own does not.
 export function defaultCi(stage: Pick<Stage, 'id'>): boolean {
   return catalogEntry(stage.id)?.stage.ci === true
