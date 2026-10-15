@@ -203,9 +203,11 @@ describe('useLiveTasks', () => {
     flush()
 
     expect(write).toHaveBeenCalledTimes(1)
-    // Once per key, however many messages came: the shells, and the screens a finished task kept.
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    // Once per key, however many messages came: the shells, the open shells, and the screens a
+    // finished task kept.
+    expect(invalidate).toHaveBeenCalledTimes(3)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['task-shells', 'T-0001'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['terminals', 'T-0001'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ended-shells', 'T-0001'] })
   })
 

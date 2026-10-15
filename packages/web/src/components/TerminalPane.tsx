@@ -34,6 +34,7 @@ type TerminalPaneProps = {
   cacheKey?: string
   // The task's state, so an ended shell can say the task was done or cancelled.
   taskState?: TaskState
+  onExit?: (code: number | null) => void
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -61,6 +62,7 @@ export function TerminalPane({
   focusOnOpen,
   cacheKey,
   taskState,
+  onExit,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -138,6 +140,7 @@ export function TerminalPane({
           focusOnOpen={focusOnOpen}
           cacheKey={cacheKey}
           taskState={taskState}
+          onExit={onExit}
         />
       </LazyView>
     </section>

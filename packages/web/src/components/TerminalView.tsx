@@ -31,6 +31,8 @@ type TerminalViewProps = {
   taskState?: TaskState
   // False: the terminal does not take the keyboard when it is shown.
   focusOnOpen?: boolean
+  // Told once the shell ended: its exit code, or null when the daemon closed it.
+  onExit?: (code: number | null) => void
 }
 
 const STATUS_TEXT: Record<TerminalStatus, string> = {
@@ -67,6 +69,7 @@ export default function TerminalView({
   cacheKey,
   taskState,
   focusOnOpen = true,
+  onExit,
 }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
@@ -87,6 +90,13 @@ export default function TerminalView({
     subscribe,
     snapshot,
   )
+  const onExitRef = useRef(onExit)
+  onExitRef.current = onExit
+  useEffect(() => {
+    if (status === 'ended') {
+      onExitRef.current?.(exitCode)
+    }
+  }, [status, exitCode])
 
   // Layout effects, so a cached terminal is back in place before the browser paints.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt starts a new shell on purpose.

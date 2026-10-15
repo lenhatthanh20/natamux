@@ -137,6 +137,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
       activity = withTaskActivity(activity, message.taskId, message.lines, message.latest)
     } else if (message.kind === 'shells.changed') {
       add(['task-shells', message.taskId])
+      // A pane left for a shell the daemon closed would attach again and start a new shell.
+      add(['terminals', message.taskId])
       // A finished task saves the last screens of its shells before they end.
       add(['ended-shells', message.taskId])
     } else if (message.kind === 'workspace.dirty') {
