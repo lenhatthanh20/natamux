@@ -248,9 +248,7 @@ describe('shellRowName', () => {
     const byHand = row({ label: 'Shell 2', shell: '2', agent: 'cursor', state: null })
     expect(shellRowName(byHand)).toBe('Shell 2, Cursor, State not known')
     // Test spec C16: a known state is said as before, with no "State not known".
-    expect(shellRowName({ ...byHand, state: 'needs-input' })).toBe(
-      'Shell 2, Cursor, Needs input',
-    )
+    expect(shellRowName({ ...byHand, state: 'needs-input' })).toBe('Shell 2, Cursor, Needs input')
     expect(shellRowName({ ...byHand, state: 'failed' })).toBe('Shell 2, Cursor, Failed')
     const plain = row({ label: 'zsh', shell: '2', agent: null, state: null, plain: true })
     expect(shellRowName(plain)).toBe('Shell 2, zsh')
