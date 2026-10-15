@@ -307,11 +307,7 @@ describe('ProjectSettingsDialog', () => {
     await waitFor(() => expect(save).toHaveBeenCalled())
     const steps = savedStages(save)
     expect(stageIn(steps, 'plan')?.prompt).toBe('Plan {title} with care.')
-    expect(
-      steps
-        ?.flatMap((step) => ('parallel' in step ? step.parallel : [step]))
-        .filter((stage) => stage.prompt !== undefined),
-    ).toHaveLength(1)
+    expect(steps?.flatMap(stagesOf).filter((stage) => stage.prompt !== undefined)).toHaveLength(1)
   })
 
   it('puts the prompt back to the default', async () => {
