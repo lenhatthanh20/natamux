@@ -724,9 +724,26 @@ export class StageRunner {
       try {
         const step = this.stepOf(task)
         for (const stage of stagesOf(step)) {
-          const working = ['running', 'needs-input', 'review'].includes(
-            laneState(task, step, stage.id),
-          )
+          const state = laneState(task, step, stage.id)
+          // The restart killed the shell of a test command, so its result never comes. It runs
+          // again. A stage that waits for CI is resumeCiChecks' work.
+          if (
+            stage.kind === 'testing' &&
+            stage.command !== undefined &&
+            state === 'running' &&
+            !stagesWaitingForCi(this.tasks.listEvents(task.id)).includes(stage.id)
+          ) {
+            const stopped = this.tasks.applyEvent(task.id, {
+              source: 'system',
+              type: 'agent.stopped',
+              payload: { stage: stage.id },
+            })
+            if (stopped.accepted) {
+              this.background(this.startStage(task.id, step, stage))
+            }
+            continue
+          }
+          const working = ['running', 'needs-input', 'review'].includes(state)
           // No agent Natamux started for it: a person runs their own in the shell.
           const agent = stageAgent(step, stage).agent ?? task.agent
           if (working && agent !== null && isLaunchable(agent)) {

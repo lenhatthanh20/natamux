@@ -2882,6 +2882,226 @@ describe('a resume after a restart', () => {
       expect(terminals.list(task.id)).toEqual(['1'])
       expect(launchScript(task.id)).toContain("--resume 's-1'")
     })
+
+    describe('a stage whose command ran', () => {
+      const scriptOf = (id: string) => join(dataDir, `stage-command-${id}.sh`)
+
+      // The test command runs in the task's workspace.
+      async function testingRunning(input: Record<string, unknown> = {}): Promise<Task> {
+        withTestCommand()
+        const task = await created({ title: 'Export tasks', agent: 'claude-code', ...input })
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'ready', stage: 'testing' },
+        })
+        await withWorkspace(task.id)
+        expect(tasks.getTask(task.id)).toMatchObject({ stage: 'testing', state: 'running' })
+        return tasks.getTask(task.id)
+      }
+
+      // The daemon stops, which ends every shell, and starts again.
+      function restart(): void {
+        runner.stop()
+        for (const task of tasks.listTasks()) {
+          terminals.close(task.id)
+        }
+        runner = makeRunner(agents)
+        runner.start()
+      }
+
+      // The test command ran when the daemon stopped: its shell is gone, the stage still runs.
+      async function testingAfterRestart(input: Record<string, unknown> = {}): Promise<Task> {
+        const task = await testingRunning(input)
+        restart()
+        return tasks.getTask(task.id)
+      }
+
+      it('runs the command again in a new shell, with no agent', async () => {
+        const task = await testingAfterRestart()
+        const shells = ptys.length
+
+        await resumeAll()
+
+        const script = scriptOf(task.id)
+        expect(tasks.listEvents(task.id).slice(-2)).toMatchObject([
+          {
+            accepted: true,
+            event: { source: 'system', type: 'agent.stopped', payload: { stage: 'testing' } },
+          },
+          { accepted: true, event: { type: 'stage.started', payload: { stage: 'testing' } } },
+        ])
+        expect(tasks.getTask(task.id)).toMatchObject({ stage: 'testing', state: 'running' })
+        expect(ptys).toHaveLength(shells + 1)
+        expect(terminals.list(task.id)).toEqual(['2'])
+        expect(ptys.at(-1)?.written).toEqual([`sh '${script}'\r`])
+        expect(readFileSync(script, 'utf8')).toContain('make test')
+      })
+
+      it.each([
+        ['no agent', null],
+        ['an agent Natamux cannot start', 'aider'],
+      ])('runs the command again for a task with %s', async (_name, agent) => {
+        const task = await testingAfterRestart({ agent })
+
+        await resumeAll()
+
+        const types = tasks.listEvents(task.id).map(({ event }) => event.type)
+        expect(types.slice(-2)).toEqual(['agent.stopped', 'stage.started'])
+        expect(tasks.getTask(task.id).state).toBe('running')
+        expect(terminals.list(task.id)).toEqual(['2'])
+        expect(ptys.at(-1)?.written).toEqual([`sh '${scriptOf(task.id)}'\r`])
+      })
+
+      it('runs the command again for each task, in its own shell', async () => {
+        const first = await testingRunning()
+        const second = await testingRunning({ agent: null })
+        restart()
+        const shells = ptys.length
+
+        await resumeAll()
+
+        for (const task of [first, second]) {
+          const types = tasks.listEvents(task.id).map(({ event }) => event.type)
+          expect(types.slice(-2)).toEqual(['agent.stopped', 'stage.started'])
+          expect(tasks.getTask(task.id).state).toBe('running')
+          expect(terminals.list(task.id)).toEqual(['2'])
+          expect(readFileSync(scriptOf(task.id), 'utf8')).toContain('make test')
+        }
+        const lines = ptys.slice(shells).flatMap((pty) => pty.written)
+        const expected = [first, second].map((task) => `sh '${scriptOf(task.id)}'\r`)
+        expect(lines.sort()).toEqual(expected.sort())
+      })
+
+      it('runs the command again when another task is at a stage the settings lost', async () => {
+        const lost = await created({ title: 'Old task', agent: 'claude-code' })
+        const task = await testingAfterRestart()
+        const others = tasks.listTasks().filter((each) => each.id !== lost.id)
+        vi.spyOn(tasks, 'listTasks').mockReturnValue([{ ...lost, stage: 'gone' }, ...others])
+
+        expect(() => runner.resumeAgents()).not.toThrow()
+        await runner.settle()
+
+        expect(tasks.getTask(task.id).state).toBe('running')
+        expect(terminals.list(task.id)).toEqual(['2'])
+        expect(ptys.at(-1)?.written).toEqual([`sh '${scriptOf(task.id)}'\r`])
+      })
+
+      it('leaves alone a stage that waits for CI', async () => {
+        const task = await testingAfterRestart()
+        tasks.recordEvent(task.id, 'stage.ci-started', { stage: 'testing', branch: 'ci' })
+        const before = tasks.listEvents(task.id).length
+
+        await resumeAll()
+
+        expect(tasks.listEvents(task.id)).toHaveLength(before)
+        expect(terminals.list(task.id)).toEqual([])
+        expect(tasks.getTask(task.id).state).toBe('running')
+      })
+
+      it('runs the command again once its CI check has a result', async () => {
+        const task = await testingAfterRestart()
+        tasks.recordEvent(task.id, 'stage.ci-started', { stage: 'testing', branch: 'ci' })
+        tasks.recordEvent(task.id, 'stage.check-failed', {
+          stage: 'testing',
+          reasons: ['CI failed'],
+        })
+
+        await resumeAll()
+
+        const types = tasks.listEvents(task.id).map(({ event }) => event.type)
+        expect(types.slice(-2)).toEqual(['agent.stopped', 'stage.started'])
+        expect(terminals.list(task.id)).toEqual(['2'])
+      })
+
+      // The settings schema keeps a testing stage out of a group, but the runner reads lanes the
+      // same way for every kind.
+      it('runs the command of a lane again, and resumes the agent of the other lane', async () => {
+        settings = {
+          ...DEFAULT_PROJECT_SETTINGS,
+          stages: [
+            {
+              id: 'build',
+              name: 'Build',
+              parallel: [
+                { id: 'implement', kind: 'agent', gate: 'auto' },
+                { id: 'testing', kind: 'testing', gate: 'auto', command: 'make test' },
+              ],
+            },
+            { id: 'release', kind: 'release', gate: 'manual' },
+          ],
+        }
+        const made = await created({ title: 'Export tasks', agent: 'claude-code' })
+        await withWorkspace(made.id)
+        const task = await runner.act(made.id, 'start')
+        expect(task.lanes).toEqual({ implement: 'running', testing: 'running' })
+        tasks.applyEvent(task.id, {
+          source: 'agent',
+          type: 'agent.waiting',
+          payload: { stage: 'implement', sessionId: 's-1' },
+        })
+        restart()
+
+        await resumeAll()
+
+        const payloadsOf = (type: EventType) =>
+          tasks
+            .listEvents(task.id)
+            .filter(({ event }) => event.type === type)
+            .map(({ event }) => event.payload)
+        expect(payloadsOf('agent.stopped')).toEqual([{ stage: 'testing' }])
+        const starts = payloadsOf('stage.started').filter(({ stage }) => stage === 'testing')
+        expect(starts).toHaveLength(2)
+        expect(tasks.getTask(task.id).lanes).toEqual({ implement: 'running', testing: 'running' })
+        expect(launchScript(task.id)).toContain("--resume 's-1'")
+        expect([...terminals.list(task.id)].sort()).toEqual(['1', '2'])
+        expect(ptys.at(-1)?.written).toEqual([`sh '${scriptOf(task.id)}'\r`])
+      })
+
+      const notRunning = ['ready', 'needs-input', 'review', 'failed']
+      it.each(notRunning)('leaves alone a %s stage', async (to) => {
+        const task = await testingAfterRestart()
+        tasks.applyEvent(task.id, { source: 'human', type: 'state.overridden', payload: { to } })
+        await runner.settle()
+        const before = tasks.listEvents(task.id).length
+
+        await resumeAll()
+
+        expect(tasks.listEvents(task.id)).toHaveLength(before)
+        expect(terminals.list(task.id)).toEqual([])
+        expect(tasks.getTask(task.id).state).toBe(to)
+      })
+
+      it('runs the command once the task gets its workspace', async () => {
+        withTestCommand()
+        const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'ready', stage: 'testing' },
+        })
+        await runner.settle()
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'running' },
+        })
+        await runner.settle()
+        runner.stop()
+        runner = makeRunner(agents)
+        runner.start()
+
+        await resumeAll()
+
+        expect(tasks.getTask(task.id)).toMatchObject({ stage: 'testing', state: 'ready' })
+        expect(terminals.list(task.id)).toEqual([])
+
+        await withWorkspace(task.id)
+
+        expect(tasks.getTask(task.id).state).toBe('running')
+        expect(terminals.list(task.id)).toEqual(['2'])
+      })
+    })
   })
 })
 
