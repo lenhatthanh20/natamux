@@ -52,7 +52,10 @@ class FakeTerminals {
   }
 
   endShell(taskId: string, terminal: string): void {
-    this.open.set(taskId, this.list(taskId).filter((name) => name !== terminal))
+    this.open.set(
+      taskId,
+      this.list(taskId).filter((name) => name !== terminal),
+    )
     this.programs.delete(`${taskId}/${terminal}`)
     this.bus.publish({ kind: 'shells.changed', taskId })
   }
