@@ -62,11 +62,13 @@ describe('pipelineSchema', () => {
   it('allows only agent and manual stages, 2 to 4, in a group', () => {
     const group = (parallel: unknown[]) => [{ id: 'build', parallel }]
     const agent = (id: string) => ({ id, kind: 'agent', gate: 'auto' })
-    expect(pipelineSchema.safeParse(group([agent('a')])).success).toBe(false)
+    const messages = (value: unknown[]) =>
+      pipelineSchema.safeParse(value).error?.issues.map((issue) => issue.message)
+    expect(messages(group([agent('a')]))).toEqual(['A group holds 2 to 4 stages'])
     expect(pipelineSchema.safeParse(group([agent('a'), agent('b')])).success).toBe(true)
-    expect(pipelineSchema.safeParse(group(['a', 'b', 'c', 'd', 'e'].map(agent))).success).toBe(
-      false,
-    )
+    expect(messages(group(['a', 'b', 'c', 'd', 'e'].map(agent)))).toEqual([
+      'A group holds 2 to 4 stages',
+    ])
     expect(
       pipelineSchema.safeParse(group([agent('a'), { id: 'r', kind: 'review', gate: 'manual' }]))
         .success,

@@ -21,6 +21,10 @@ export const stageIdSchema = z
 
 const MARKDOWN_FILE = /^[\w-]+(\.[\w-]+)*\.md$/
 
+// Not .max(4): since zod 4.6.6 a failed max aborts, and the step union then says only
+// "Invalid input" instead of our message.
+const upTo4 = (list: readonly unknown[]) => list.length <= 4
+
 export const stageSchema = z.object({
   id: stageIdSchema,
   kind: z.enum(STAGE_KINDS),
@@ -74,7 +78,7 @@ export const stageGroupSchema = z.object({
       }),
     )
     .min(2, 'A group holds 2 to 4 stages')
-    .max(4, 'A group holds 2 to 4 stages'),
+    .refine(upTo4, 'A group holds 2 to 4 stages'),
 })
 
 export type StageGroup = z.infer<typeof stageGroupSchema>
@@ -115,7 +119,7 @@ export const branchSchema = z.object({
   paths: z
     .array(pathSchema)
     .min(2, 'A branch holds 2 to 4 paths')
-    .max(4, 'A branch holds 2 to 4 paths'),
+    .refine(upTo4, 'A branch holds 2 to 4 paths'),
 })
 
 export type StageBranch = z.infer<typeof branchSchema>
