@@ -766,6 +766,27 @@ describe('AgentHookService, pushed to the dashboards', () => {
     expect(touched).toEqual([])
   })
 
+  it('names the session of the agent in each Natamux shell', () => {
+    const sessions: string[][] = []
+    const service = new AgentHookService(tasks, undefined, {
+      bus,
+      sessionSeen: (...seen) => sessions.push(seen),
+    })
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+
+    service.handle('claude-code', { ...edit('a.ts'), session_id: 'a-1' }, task.id, '1')
+    service.handle('cursor', { hook_event_name: 'stop', conversation_id: 'u-1' }, task.id, '7')
+    // No session, or an agent outside Natamux shells: nothing to restore.
+    service.handle('claude-code', edit('b.ts'), task.id, '1')
+    service.handle('claude-code', { ...edit('c.ts'), session_id: 'a-2' }, task.id)
+
+    expect(sessions).toEqual([
+      [task.id, '1', 'claude-code', 'a-1'],
+      [task.id, '7', 'cursor', 'u-1'],
+    ])
+  })
+
   it.each([
     ['cursor', { hook_event_name: 'afterFileEdit' }],
     ['cursor', { hook_event_name: 'afterShellExecution' }],

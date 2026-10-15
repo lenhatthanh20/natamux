@@ -384,7 +384,25 @@ describe('createApi', () => {
       terminals: ['1', '2', '3'],
       lanes: { '1': { stage: 'implement', state: 'running', agent: 'claude-code' } },
       programs: { '1': 'node', '2': 'zsh', '3': null },
+      restoring: {},
     })
+  })
+
+  it('reads the shells that come back after a restart, with their agents', async () => {
+    const { fetchFunction } = fakeFetch(() =>
+      json({
+        terminals: ['1', '6', '7'],
+        agents: [],
+        lanes: {},
+        programs: { '1': 'zsh' },
+        restoring: { '6': 'copilot', '7': null, '8': 'cursor', '1': 5 },
+      }),
+    )
+
+    const shells = await createApi('secret', fetchFunction).listShells('T-0001')
+
+    // A shell the list does not have is dropped; an agent that is not text is a plain shell.
+    expect(shells.restoring).toEqual({ '1': null, '6': 'copilot', '7': null })
   })
 
   it('reads what the agent of each terminal does, and the latest line of each task', async () => {

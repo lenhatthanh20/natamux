@@ -15,7 +15,7 @@ import {
   fakes,
   resetFakes,
 } from '../lib/xterm-fake.fixture'
-import TerminalView from './TerminalView'
+import TerminalView, { RESTORE_FADE_MS } from './TerminalView'
 
 vi.mock('@xterm/xterm', async () => ({
   Terminal: (await import('../lib/xterm-fake.fixture')).FakeTerminal,
@@ -670,5 +670,50 @@ describe('TerminalView find', () => {
     openFind()
 
     expect(fakes.searches).toHaveLength(1)
+  })
+})
+
+describe('TerminalView of a shell that comes back after a restart', () => {
+  const LINE = 'Restoring GitHub Copilot…'
+  const cover = () => screen.queryByText(LINE)?.closest<HTMLElement>('[role="status"]') ?? null
+
+  it('covers the shell with a spinner until it is back, then fades it out', async () => {
+    const { made, connect } = sockets(1)
+    const view = render(<TerminalView connect={connect} restoring={LINE} />)
+    await flush()
+    act(() => made[0]?.open())
+
+    const shown = cover()
+    expect(shown?.querySelector('svg.hm-spin8')).toBeTruthy()
+    expect(shown?.className).toContain('opacity-100')
+    // An overlay: the terminal keeps its box, so it sends no resize.
+    expect(shown?.className).toContain('absolute')
+
+    view.rerender(<TerminalView connect={connect} />)
+    expect(cover()?.className).toContain('opacity-0')
+    act(() => vi.advanceTimersByTime(RESTORE_FADE_MS))
+    expect(cover()).toBeNull()
+  })
+
+  it('drops the spinner when the shell cannot start', async () => {
+    const { made, connect } = sockets(1)
+    render(<TerminalView connect={connect} restoring={LINE} />)
+    await flush()
+    act(() => made[0]?.open())
+
+    act(() => made[0]?.message({ type: 'error', message: 'At most 30 terminals can be open.' }))
+    act(() => vi.advanceTimersByTime(RESTORE_FADE_MS))
+
+    expect(cover()).toBeNull()
+    expect(screen.getByRole('button', { name: 'Start a new shell' })).toBeTruthy()
+  })
+
+  it('shows the spinner of a connect late, so a quick connect does not flash it', async () => {
+    const { connect } = sockets(1)
+    render(<TerminalView connect={connect} />)
+    await flush()
+
+    const strip = screen.getByText('Connecting.').parentElement as HTMLElement
+    expect(strip.querySelector('.hm-late-in svg.hm-spin8')).toBeTruthy()
   })
 })

@@ -34,6 +34,8 @@ type AgentPanesProps = {
   activity?: Readonly<Record<string, Readonly<Record<string, string>>>>
   // The shells of each task where an agent runs, with the stage each one works on.
   terminals?: Readonly<Record<string, Readonly<Record<string, TerminalLane>>>>
+  // By task id: Shell 1 comes back after a restart, with this agent (null: a plain shell).
+  restoring?: Readonly<Record<string, string | null>>
   connect: (taskId: string, query: TerminalConnectQuery) => Promise<WebSocket>
   onOpenTask: (id: string) => void
 }
@@ -54,6 +56,7 @@ export function AgentPanes({
   onLayout,
   activity,
   terminals,
+  restoring,
   connect,
   onOpenTask,
 }: AgentPanesProps) {
@@ -164,6 +167,7 @@ export function AgentPanes({
                 connect={(size) => connect(task.id, size)}
                 // The same key as Shell 1 in the task view: the terminal moves, no second socket.
                 cacheKey={terminalKey(task.id, '1')}
+                restoring={restoring?.[task.id]}
                 maximized={focused === task.id}
                 onToggleMaximize={() => setMaximized(focused === task.id ? null : task.id)}
                 openWorkspace={{

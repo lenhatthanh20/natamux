@@ -132,11 +132,47 @@ describe('launchCommand', () => {
     expect(quoteArgument(session, 'linux')).toBe("'s'\\''; rm -rf ~; '\\'''")
   })
 
-  it('starts other agents with the prompt, as only Claude Code goes on with a session', () => {
-    for (const agent of LAUNCHABLE_AGENTS.filter((id) => id !== 'claude-code')) {
-      const command = launchCommand(agent, { ...base, session: 's-1' })
-      expect(command).not.toContain('s-1')
-      expect(command).toContain("'Fix it'")
+  it('goes on with a session of each other agent, with its mode and extra words', () => {
+    const resume = { ...auto, extraArgs: '--x', prompt: '', session: 's-1' }
+    expect(launchCommand('copilot', { ...resume, program: 'copilot' })).toBe(
+      "copilot --allow-all-tools --x --resume 's-1'",
+    )
+    expect(launchCommand('cursor', { ...resume, program: 'cursor-agent' })).toBe(
+      "cursor-agent --force --x --resume 's-1'",
+    )
+    expect(launchCommand('gemini', { ...resume, program: 'gemini' })).toBe(
+      "GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH='/data/gemini.json' gemini --approval-mode yolo --x --resume 's-1'",
+    )
+    const codex = launchCommand('codex', { ...resume, program: 'codex' })
+    expect(
+      codex.startsWith(
+        'codex resume --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c ',
+      ),
+    ).toBe(true)
+    expect(codex).toContain(
+      `'hooks.Stop=[{hooks=[{type="command",command="natamux hook codex",timeout=5}]}]'`,
+    )
+    expect(codex.endsWith(" --no-alt-screen --x 's-1'")).toBe(true)
+  })
+
+  it('goes on with the newest session of the folder for each agent', () => {
+    const newest = { ...base, prompt: '', session: LAST_SESSION }
+    expect(launchCommand('copilot', { ...newest, program: 'copilot' })).toBe('copilot --continue')
+    expect(launchCommand('cursor', { ...newest, program: 'cursor-agent' })).toBe(
+      'cursor-agent --continue',
+    )
+    const gemini = launchCommand('gemini', { ...newest, program: 'gemini' })
+    expect(gemini.endsWith(' gemini --resume')).toBe(true)
+    const codex = launchCommand('codex', { ...newest, program: 'codex' })
+    expect(codex.startsWith('codex resume ')).toBe(true)
+    expect(codex.endsWith(' --no-alt-screen --last')).toBe(true)
+  })
+
+  it('quotes the session of every agent, so it cannot run as a command', () => {
+    const session = "s'; rm -rf ~; '"
+    for (const agent of LAUNCHABLE_AGENTS) {
+      const command = launchCommand(agent, { ...base, prompt: '', session })
+      expect(command.endsWith(` ${quoteArgument(session, 'linux')}`)).toBe(true)
     }
   })
 

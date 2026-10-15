@@ -6,7 +6,13 @@ import { DEFAULT_PROJECT_SETTINGS } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UnknownAgentError } from './agent-hook-service.js'
 import { trustPaths } from './agent-launch.js'
-import { AgentRunner, firstPrompt, quoteArgument, TaskWaitingError } from './agent-runner.js'
+import {
+  type AgentLaunch,
+  AgentRunner,
+  firstPrompt,
+  quoteArgument,
+  TaskWaitingError,
+} from './agent-runner.js'
 import { EventBus } from './event-bus.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { TaskIndex } from './task-index.js'
@@ -395,6 +401,33 @@ describe('AgentRunner', () => {
       type: 'agent.launched',
       payload: { agent: 'codex', stage: 'test-spec' },
     })
+  })
+
+  it('restores an agent on its session in its shell, and keeps the task agent', () => {
+    const launches: AgentLaunch[] = []
+    const restoring = new AgentRunner({
+      tasks,
+      terminals,
+      claudeSettingsPath: '/data/claude code.json',
+      platform: 'linux',
+      launchDir: dataDir,
+      trustPaths: trustPaths({}, dataDir),
+      onLaunch: (launch) => launches.push(launch),
+    })
+    const task = taskWithWorkspace()
+    restoring.start(task.id, 'claude-code')
+
+    const updated = restoring.start(task.id, 'copilot', undefined, '6', 'c-1', { restored: true })
+
+    expect(readFileSync(join(dataDir, `agent-launch-${task.id}-6.sh`), 'utf8')).toBe(
+      "copilot --allow-all-tools --resume 'c-1'\n",
+    )
+    expect(updated.agent).toBe('claude-code')
+    expect(tasks.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'agent.launched',
+      payload: { agent: 'copilot', terminal: '6', restored: true },
+    })
+    expect(launches.at(-1)).toMatchObject({ terminal: '6', agent: 'copilot', session: 'c-1' })
   })
 
   it('starts the next agent with the mode saved in .natamux.json', () => {

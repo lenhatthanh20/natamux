@@ -98,7 +98,7 @@ Click in the pane and type. Your keys go straight to the agent. This is how you 
 
 When an agent asks something, the task goes to **Needs input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
 
-After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
+After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other shells of the task come back too, see [A shell after a daemon restart](#a-shell-after-a-daemon-restart).
 
 ### Send a message to the agent
 
@@ -135,9 +135,21 @@ Natamux keeps your choice of **Columns** in this browser. Panes keep their order
 
 Shells belong to the daemon. When the daemon stops, it ends every shell, and an agent in a shell ends with it.
 
-While the daemon is down, the pane shows **Reconnecting.** After a restart the pane shows **The shell ended.** and an **Open a new shell** link at the bottom. Click it. If it shows **The terminal could not start.** at the top, click **Start a new shell** instead. Natamux opens a fresh shell in the same workspace folder. The old screen and the processes in it are gone. Your files and your git state are not.
+Natamux remembers the shells of each task that is not done or cancelled. After a restart:
 
-The agent of a running, waiting or in-review task starts again on its own, as in [Type to the agent](#type-to-the-agent). For any other task, use **Start agent**.
+- The agent of a running, waiting or in-review stage starts again at once, as in [Type to the agent](#type-to-the-agent).
+- Every other shell comes back with the same name when you open its task, or when the **Agents** view shows its Shell 1. Until then nothing runs in it, so the start stays fast.
+- An agent comes back on its last conversation, with no new prompt. It waits for you, and the task keeps its state.
+- A plain shell, and a shell whose agent never named its conversation, come back as a plain shell in the workspace folder.
+- A shell you closed does not come back. A shell whose agent you quit comes back as a plain shell.
+
+While a shell comes back, its pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring shell…**. The spinner goes once the agent runs, after 15 seconds at most.
+
+The old screen of a plain shell and the programs in it, such as a dev server, are gone. Your files and your git state are not.
+
+While the daemon is down, the pane shows **Reconnecting.** If a pane shows **The shell ended.** and an **Open a new shell** link at the bottom, click it. If it shows **The terminal could not start.** at the top, click **Start a new shell** instead. Natamux opens a fresh shell in the same workspace folder.
+
+For a task whose agent does not start again on its own, use **Start agent**.
 
 ## Ports
 

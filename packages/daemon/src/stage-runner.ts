@@ -37,6 +37,7 @@ import { type CiResult, checkOnCi, ciBranchOf } from './ci-check.js'
 import { readEndedShells, saveEndedShells } from './ended-shells.js'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import { deleteRemoteRef, type RunGh, runGh } from './git.js'
+import type { OpenShells } from './open-shells.js'
 import { currentHead, type RunCommand, runShellCommand, runStageChecks } from './stage-checks.js'
 import {
   archiveStageFiles,
@@ -114,6 +115,9 @@ export class StageInputError extends Error {
     this.name = 'StageInputError'
   }
 }
+
+// The states of a stage whose agent starts again when the daemon starts.
+const RESUMED_STATES: readonly TaskState[] = ['running', 'needs-input', 'review']
 
 function laneState(task: Pick<Task, 'state' | 'lanes'>, step: Step, stageId: string): TaskState {
   return isGroup(step) ? (task.lanes[stageId] ?? 'done') : task.state
@@ -249,6 +253,8 @@ type StageRunnerOptions = {
   home?: string
   // Pushes the work of a task to its CI branch and waits for CI. Tests give a fake.
   checkCi?: (input: { worktree: string; branch: string }) => Promise<CiResult>
+  // The shells that were open, to bring back after a restart.
+  openShells?: OpenShells
 }
 
 // A stage prompt for the agent that will get it, and the skills it names that were not found.
@@ -270,6 +276,7 @@ export class StageRunner {
   private readonly platform: NodeJS.Platform
   private readonly home: string
   private readonly checkCi: (input: { worktree: string; branch: string }) => Promise<CiResult>
+  private readonly openShells: OpenShells | undefined
   // Terminals whose agent reported a stage done, with that stage: the turn end that follows the
   // report is not a "stopped early". Kept by terminal, since the task may be at the next stage
   // when the turn ends.
@@ -311,6 +318,7 @@ export class StageRunner {
     this.now = options.now ?? Date.now
     this.platform = options.platform ?? process.platform
     this.home = options.home ?? homedir()
+    this.openShells = options.openShells
   }
 
   start(): void {
@@ -502,6 +510,7 @@ export class StageRunner {
     this.waitingForWorkspace.delete(taskId)
     this.waitingForTasks.delete(taskId)
     this.withoutAgent.delete(taskId)
+    this.openShells?.forget(taskId)
   }
 
   // Keeps the last screen of each shell, then ends it. A shell where a program that is no agent
@@ -814,12 +823,12 @@ export class StageRunner {
             }
             continue
           }
-          const working = ['running', 'needs-input', 'review'].includes(state)
+          const working = RESUMED_STATES.includes(state)
           // No agent Natamux started for it: a person runs their own in the shell.
           const agent = stageAgent(step, stage).agent ?? task.agent
           if (working && agent !== null && isLaunchable(agent)) {
             // In a group, the newest session of the folder may be the other stage's.
-            this.relaunch(task, step, stage, !isGroup(step))
+            this.relaunch(task, step, stage, !isGroup(step), true)
           }
         }
       } catch {
@@ -830,7 +839,8 @@ export class StageRunner {
 
   // Starts the agent of a stage again when it is gone. Claude Code goes on with its session of the
   // stage, or with `newest` the newest of the folder; other agents get the stage prompt again.
-  private relaunch(task: Task, step: Step, stage: Stage, newest = false): void {
+  // At the daemon's start (`restart`) its pane shows a spinner until the agent runs.
+  private relaunch(task: Task, step: Step, stage: Stage, newest = false, restart = false): void {
     const byAgent =
       stage.kind === 'agent' || (stage.kind === 'testing' && stage.command === undefined)
     if (!byAgent || task.workspace === null) {
@@ -847,6 +857,50 @@ export class StageRunner {
       (newest && agent === 'claude-code' ? LAST_SESSION : undefined)
     const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''
     this.launch(task.id, stage.id, agent, terminal, text, session, own)
+    if (restart) {
+      this.openShells?.markStarting(task.id, terminal, agent)
+    }
+  }
+
+  // At the daemon's start, before the dashboards connect: the shells that were open come back
+  // once a dashboard attaches to them, except those of the stages whose agent resumeAgents starts
+  // at once. A finished task, or one without a workspace, keeps none.
+  loadOpenShells(): void {
+    for (const task of this.tasks.listTasks()) {
+      if (task.state === 'done' || task.state === 'cancelled' || task.workspace === null) {
+        this.openShells?.forget(task.id)
+        continue
+      }
+      let working: string[] = []
+      try {
+        const steps = this.tasks.stepsOf(task)
+        const step = this.stepOf(task)
+        working = stagesOf(step)
+          .filter(({ id }) => RESUMED_STATES.includes(laneState(task, step, id)))
+          .map(({ id }) => terminalOfStage(steps, id))
+      } catch {
+        // A stage the settings no longer have: every shell waits for a dashboard.
+      }
+      this.openShells?.load(task.id, working)
+    }
+  }
+
+  // A dashboard attaches to a shell that waits to come back after a restart. Its agent goes on
+  // with its session, with no prompt. A plain shell, or an agent that cannot start, is left to the
+  // attach, which starts a plain shell.
+  restoreShell(taskId: string, terminal: string): void {
+    const shell = this.openShells?.take(taskId, terminal)
+    if (shell === undefined || shell.agent === null || shell.session === null) {
+      return
+    }
+    try {
+      this.agents.start(taskId, shell.agent, undefined, terminal, shell.session, { restored: true })
+      this.launched.set(`${taskId}/${terminal}`, { agent: shell.agent, at: this.now() })
+      this.openShells?.markStarting(taskId, terminal, shell.agent)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      console.warn(`Shell ${terminal} of ${taskId} comes back without its agent: ${reason}`)
+    }
   }
 
   // The last session that Claude Code reported from this stage. Other agents start new ones.
@@ -867,10 +921,12 @@ export class StageRunner {
       // A session from before another agent was started in this shell is not this agent's. The
       // own agent of a stage in another shell does not count.
       const launchStage = event.payload.stage
+      const launchShell = event.payload.terminal
       const otherShell =
-        typeof launchStage === 'string' &&
-        launchStage !== stageId &&
-        shellOf(launchStage) !== terminal
+        (typeof launchStage === 'string' &&
+          launchStage !== stageId &&
+          shellOf(launchStage) !== terminal) ||
+        (typeof launchShell === 'string' && launchShell !== terminal)
       if (event.type === 'agent.launched' && event.payload.agent !== agent && !otherShell) {
         return undefined
       }

@@ -19,6 +19,7 @@ import { worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
+import { OpenShells, saveOpenShells } from './open-shells.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { PullRequestWatcher } from './pull-request-watcher.js'
 import { RepoService } from './repo-service.js'
@@ -1895,7 +1896,13 @@ describe('terminal', () => {
       headers: authorization,
     })
     expect(listed.statusCode).toBe(200)
-    expect(listed.json()).toEqual({ terminals: [], agents: [], lanes: {}, programs: {} })
+    expect(listed.json()).toEqual({
+      terminals: [],
+      agents: [],
+      lanes: {},
+      programs: {},
+      restoring: {},
+    })
   })
 
   it('opens a second terminal, lists the terminals and closes one', async () => {
@@ -1917,6 +1924,7 @@ describe('terminal', () => {
       agents: [],
       lanes: {},
       programs: { '1': 'bash', '2': 'bash' },
+      restoring: {},
     })
     // A program that is not a shell runs in the first one: an agent, as far as Natamux can tell.
     ;(ptys[0] as FakePty).program = 'node'
@@ -1934,6 +1942,7 @@ describe('terminal', () => {
       agents: ['1'],
       lanes: { '1': { stage: task.stage, state: task.state, agent: null } },
       programs: { '1': 'node', '2': 'bash' },
+      restoring: {},
     })
     // An agent in an extra shell outside a group works on no stage. Its processes name it.
     ;(ptys[1] as FakePty).program = 'node'
@@ -2002,6 +2011,82 @@ describe('terminal', () => {
       headers: authorization,
     })
     expect(bad.statusCode).toBe(400)
+  })
+
+  it('lists the shells that wait to come back, and brings each back when it is attached', async () => {
+    await taskWithWorkspace()
+    const { dataDir, terminals, agents, bus } = serverOptions
+    // Claude Code, as Copilot and Cursor would trust the workspace in the real home folder.
+    saveOpenShells(dataDir, 'T-0001', [
+      { name: '6', agent: 'claude-code', session: 'a-6' },
+      { name: '7', agent: null, session: null },
+    ])
+    const openShells = new OpenShells({ dataDir, terminals, bus, isEnded: () => false })
+    const stages = new StageRunner({
+      tasks: serverOptions.service,
+      terminals,
+      agents,
+      bus,
+      dataDir,
+      repoPath: () => repo.dir,
+      home: join(repo.root, 'home'),
+      openShells,
+    })
+    stages.loadOpenShells()
+    const restoring = await buildServer({ ...serverOptions, stages, openShells })
+    const shellTicket = async () => {
+      const issued = await restoring.inject({
+        method: 'POST',
+        url: '/tasks/T-0001/terminal/ticket',
+        headers: authorization,
+      })
+      return encodeURIComponent(issued.json().ticket)
+    }
+    const list = async () => {
+      const listed = await restoring.inject({
+        method: 'GET',
+        url: '/tasks/T-0001/terminals',
+        headers: authorization,
+      })
+      return listed.json()
+    }
+
+    try {
+      expect(await list()).toMatchObject({
+        terminals: ['6', '7'],
+        agents: [],
+        programs: {},
+        restoring: { '6': 'claude-code', '7': null },
+      })
+      expect(ptys).toHaveLength(0)
+
+      // A client that lost its socket does not start a waiting shell.
+      const lost = await restoring.injectWS(
+        `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=7&shellId=old&offset=0`,
+      )
+      expect(await closeCode(lost)).toBe(CLOSE_GONE)
+      expect(ptys).toHaveLength(0)
+
+      await restoring.injectWS(
+        `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=6`,
+      )
+      await restoring.injectWS(
+        `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=7`,
+      )
+
+      expect(ptys).toHaveLength(2)
+      expect(readFileSync(join(dataDir, 'agent-launch-T-0001-6.sh'), 'utf8')).toContain(
+        "--resume 'a-6'",
+      )
+      expect(existsSync(join(dataDir, 'agent-launch-T-0001-7.sh'))).toBe(false)
+      expect(await list()).toMatchObject({
+        terminals: ['6', '7'],
+        restoring: { '6': 'claude-code' },
+      })
+    } finally {
+      openShells.stop(() => false)
+      await restoring.close()
+    }
   })
 
   it('shows the shell of an earlier stage as done, until its agent gets a new prompt', async () => {

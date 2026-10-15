@@ -19,6 +19,7 @@ import { StatusGlyph } from './StatusGlyph'
 import { TerminalFind } from './TerminalFind'
 import { Button } from './ui/Button'
 import { Skeleton } from './ui/Skeleton'
+import { Spinner } from './ui/Spinner'
 
 type TerminalViewProps = {
   connect: (query: TerminalConnectQuery) => Promise<WebSocket>
@@ -31,9 +32,14 @@ type TerminalViewProps = {
   taskState?: TaskState
   // False: the terminal does not take the keyboard when it is shown.
   focusOnOpen?: boolean
+  // The shell comes back after a restart: the line under the spinner, such as "Restoring Codex…".
+  restoring?: string
   // Told once the shell ended: its exit code, or null when the daemon closed it.
   onExit?: (code: number | null) => void
 }
+
+// The spinner of a shell that came back fades out in this long (duration-150 below).
+export const RESTORE_FADE_MS = 150
 
 const STATUS_TEXT: Record<TerminalStatus, string> = {
   connecting: 'Connecting.',
@@ -69,6 +75,7 @@ export default function TerminalView({
   cacheKey,
   taskState,
   focusOnOpen = true,
+  restoring,
   onExit,
 }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
@@ -90,6 +97,19 @@ export default function TerminalView({
     subscribe,
     snapshot,
   )
+  // The spinner covers the shell's prompt and the typed launch line until the agent runs. It stays
+  // drawn while it fades out.
+  const restoringNow = restoring !== undefined && status !== 'error' && status !== 'ended'
+  const [restoreLine, setRestoreLine] = useState(restoring)
+  useEffect(() => {
+    if (restoringNow) {
+      setRestoreLine(restoring)
+      return
+    }
+    const timer = setTimeout(() => setRestoreLine(undefined), RESTORE_FADE_MS)
+    return () => clearTimeout(timer)
+  }, [restoringNow, restoring])
+
   const onExitRef = useRef(onExit)
   onExitRef.current = onExit
   useEffect(() => {
@@ -168,6 +188,12 @@ export default function TerminalView({
     <div className="flex min-h-0 flex-1 flex-col">
       {status !== 'open' && status !== 'ended' && (
         <div className="flex h-7 shrink-0 items-center gap-3 border-b border-line px-3">
+          {/* Shown late, so a quick connect does not flash it. */}
+          {status !== 'error' && (
+            <span className="hm-late-in flex shrink-0 text-muted">
+              <Spinner size={12} />
+            </span>
+          )}
           <p className="flex-1 truncate text-xs text-muted" role="status">
             {STATUS_TEXT[status]}
             {error !== null && ` ${error}`}
@@ -202,6 +228,17 @@ export default function TerminalView({
             className="pointer-events-none absolute inset-0"
           >
             <Skeleton className="m-3" width="30%" />
+          </div>
+        )}
+        {restoreLine !== undefined && (
+          <div
+            role="status"
+            className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-terminal text-xs text-muted transition-opacity duration-150 ${
+              restoringNow ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <Spinner size={16} />
+            <p>{restoreLine}</p>
           </div>
         )}
         {findOpen && session !== null && (

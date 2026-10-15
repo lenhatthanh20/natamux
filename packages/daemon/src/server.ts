@@ -53,6 +53,7 @@ import {
 import type { IssueImporter } from './issue-importer.js'
 import { IssueLinkError, type IssueLinker } from './issue-linker.js'
 import { newWorkspace } from './new-workspace.js'
+import type { OpenShells } from './open-shells.js'
 import {
   type ProjectSettingsService,
   SettingsChangedError,
@@ -112,6 +113,8 @@ type ServerOptions = {
   repos: RepoService
   bus: EventBus
   stages: StageRunner
+  // The shells that wait to come back after a restart. None in most tests.
+  openShells?: OpenShells
   settings: ProjectSettingsService
   issueLinker: IssueLinker
   // The daemon's data folder, where stage files are kept for tasks without a worktree.
@@ -314,6 +317,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   const hooks = new AgentHookService(options.service, options.stages, {
     bus: options.bus,
     workspaceChanged: (taskId) => options.workspaces.touch(taskId),
+    sessionSeen: (taskId, terminal, agent, session) =>
+      options.openShells?.noteSession(taskId, terminal, agent, session),
   })
   await app.register(websocket)
   const servesPage =
@@ -792,9 +797,14 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.get('/tasks/:id/terminals', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const task = options.service.getTask(id)
-    const terminals = options.terminals.list(id)
+    const open = options.terminals.list(id)
+    // Shells that wait to come back after a restart are listed too, so their panes show. They
+    // start when a dashboard attaches to them.
+    const waiting = (options.openShells?.waiting(id) ?? []).filter((name) => !open.includes(name))
+    const terminals = [...open, ...waiting].sort((a, b) => Number(a) - Number(b))
+    const restoring = options.openShells?.restoring(id) ?? {}
     // The shells where an agent runs now, so a shell left after a restart is not called the agent's.
-    const agents = terminals.filter((name) => options.stages.agentRuns(id, name))
+    const agents = open.filter((name) => options.stages.agentRuns(id, name))
     hooks.forgetShellsExcept(id, agents)
     // Each agent shows the state of its own stage, not the state of the whole task, and the agent
     // that runs there, which may not be the task's. An agent on no stage of the current step has
@@ -813,12 +823,12 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     )
     // A shell with no agent shows the program in its foreground, such as "zsh".
     const programs = Object.fromEntries(
-      terminals.map((name) => {
+      open.map((name) => {
         const program = options.terminals.foreground(id, name)
         return [name, program === undefined ? null : basename(program)] as const
       }),
     )
-    return { terminals, agents, lanes, programs }
+    return { terminals, agents, lanes, programs, restoring }
   })
 
   app.delete('/tasks/:id/terminals/:terminal', async (request) => {
@@ -864,6 +874,10 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     let detach: () => void
     try {
+      // A client that lost its socket only resumes a shell that runs, never one that waits.
+      if (shellId === undefined) {
+        options.stages.restoreShell(taskId, terminal)
+      }
       detach = options.terminals.attach(taskId, client, { cols, rows }, terminal, attachOptions)
     } catch (error) {
       if (error instanceof ShellGoneError) {

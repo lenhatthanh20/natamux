@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   DEFAULT_PROJECT_SETTINGS,
@@ -15,6 +15,7 @@ import type { CiResult } from './ci-check.js'
 import { readEndedShells } from './ended-shells.js'
 import { EventBus } from './event-bus.js'
 import { createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
+import { type OpenShell, OpenShells, openShellsPath, saveOpenShells } from './open-shells.js'
 import type { RunCommand } from './stage-checks.js'
 import { archiveDir, STAGE_DIR } from './stage-files.js'
 import { WORKFLOW_LINE } from './stage-prompts.js'
@@ -30,7 +31,7 @@ import {
   StageRunner,
 } from './stage-runner.js'
 import { TaskIndex } from './task-index.js'
-import { TaskService } from './task-service.js'
+import { isTaskEnded, TaskService } from './task-service.js'
 import { type FakePty, fakeSpawner } from './terminal-fake.fixture.js'
 import { TerminalService } from './terminal-service.js'
 import { WorkspaceService } from './workspace-service.js'
@@ -98,7 +99,7 @@ beforeEach(() => {
   runner.start()
 })
 
-function makeRunner(agents: AgentRunner): StageRunner {
+function makeRunner(agents: AgentRunner, openShells?: OpenShells): StageRunner {
   return new StageRunner({
     tasks,
     terminals,
@@ -121,6 +122,7 @@ function makeRunner(agents: AgentRunner): StageRunner {
         finishCi = resolve
       })
     },
+    openShells,
   })
 }
 
@@ -2374,6 +2376,15 @@ describe('a resume after a restart', () => {
     expect(launchScript(task.id)).toContain("--resume 's-1'")
   })
 
+  it('keeps the Claude Code session of a stage after an agent came back in another shell', async () => {
+    const task = await waitingAfterRestart({ sessionId: 's-1' })
+    tasks.recordAgentLaunch(task.id, 'copilot', 'copilot', undefined, '6')
+
+    await resume(task.id)
+
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
+  })
+
   it('goes on with the last Claude Code session of the stage, with no new prompt', async () => {
     const task = await waitingAfterRestart({ sessionId: 's-1' })
     expect(task.state).toBe('needs-input')
@@ -3378,6 +3389,131 @@ describe('a resume after a restart', () => {
         expect(terminals.list(task.id)).toEqual(['2'])
       })
     })
+  })
+})
+
+describe('shells that come back after a restart', () => {
+  let shells: OpenShells | undefined
+
+  afterEach(() => {
+    shells?.stop(() => false)
+    shells = undefined
+    vi.restoreAllMocks()
+  })
+
+  // The daemon starts again, with this list of the task's shells. The old shells are gone.
+  function restart(taskId: string, list: OpenShell[]): OpenShells {
+    terminals.close(taskId)
+    runner.stop()
+    saveOpenShells(dataDir, taskId, list)
+    shells = new OpenShells({ dataDir, terminals, bus, isEnded: (id) => isTaskEnded(tasks, id) })
+    shells.start()
+    runner = makeRunner(agents, shells)
+    runner.start()
+    runner.loadOpenShells()
+    return shells
+  }
+
+  // The spec runs in Shell 1.
+  async function specRunning(): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
+    return tasks.getTask(task.id)
+  }
+
+  const shellsOfT0075: OpenShell[] = [
+    { name: '1', agent: 'claude-code', session: 's-1' },
+    { name: '6', agent: 'copilot', session: 'c-1' },
+    { name: '7', agent: null, session: null },
+  ]
+
+  it('lets every shell wait for a dashboard, except the shell of a working stage', async () => {
+    const task = await specRunning()
+
+    const open = restart(task.id, shellsOfT0075)
+
+    expect(open.waiting(task.id)).toEqual(['6', '7'])
+    expect(open.restoring(task.id)).toEqual({ '6': 'copilot', '7': null })
+  })
+
+  it('brings an agent back on its session once, and keeps the task agent', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, shellsOfT0075)
+    const before = ptys.length
+
+    runner.restoreShell(task.id, '6')
+    runner.restoreShell(task.id, '6')
+
+    expect(ptys).toHaveLength(before + 1)
+    expect(launchScript(task.id, '6')).toMatch(/^copilot /)
+    expect(launchScript(task.id, '6')).toContain("--resume 'c-1'")
+    expect(launchScript(task.id, '6')).not.toContain('Export tasks')
+    expect(tasks.getTask(task.id).agent).toBe('claude-code')
+    expect(open.restoring(task.id)).toEqual({ '6': 'copilot', '7': null })
+    expect(runner.agentRuns(task.id, '6')).toBe(true)
+  })
+
+  it('leaves a plain shell, and an agent with no session, to the attach', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, [
+      { name: '6', agent: 'copilot', session: null },
+      { name: '7', agent: null, session: null },
+    ])
+
+    runner.restoreShell(task.id, '6')
+    runner.restoreShell(task.id, '7')
+    runner.restoreShell(task.id, '9')
+
+    expect(terminals.list(task.id)).not.toContain('6')
+    expect(terminals.list(task.id)).not.toContain('7')
+    expect(terminals.list(task.id)).not.toContain('9')
+    expect(open.waiting(task.id)).toEqual([])
+  })
+
+  it('leaves the shell to the attach when its agent cannot start', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, shellsOfT0075)
+    vi.spyOn(agents, 'start').mockImplementation(() => {
+      throw new Error('At most 30 terminals can be open')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(() => runner.restoreShell(task.id, '6')).not.toThrow()
+
+    expect(open.restoring(task.id)).toEqual({ '7': null })
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('keeps no shells of a task without a workspace', async () => {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+
+    const open = restart(task.id, shellsOfT0075)
+
+    expect(open.waiting(task.id)).toEqual([])
+    expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
+  })
+
+  it('forgets the shells of a task that ends', async () => {
+    const task = await specRunning()
+    restart(task.id, shellsOfT0075)
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
+
+    expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
+  })
+
+  it('shows the agent of a working stage as coming back while the daemon starts it', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, shellsOfT0075)
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    // As before: the stage reported no session, so Claude Code takes the newest of the folder.
+    expect(launchScript(task.id)).toContain('--continue')
+    expect(open.restoring(task.id)).toEqual({ '1': 'claude-code', '6': 'copilot', '7': null })
   })
 })
 

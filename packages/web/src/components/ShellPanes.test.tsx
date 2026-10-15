@@ -27,6 +27,7 @@ type StandInProps = {
   focusOnOpen?: boolean
   cacheKey?: string
   taskState?: TaskState
+  restoring?: string
   onExit?: (code: number | null) => void
 }
 
@@ -48,6 +49,7 @@ vi.mock('./TerminalView', () => ({
     focusOnOpen = true,
     cacheKey,
     taskState,
+    restoring,
     onExit,
   }: StandInProps) => {
     const [focusAtMount] = useState(focusOnOpen)
@@ -72,6 +74,7 @@ vi.mock('./TerminalView', () => ({
         'data-focus-on-open': String(focusAtMount),
         'data-cache-key': cacheKey ?? '',
         'data-task-state': taskState ?? '',
+        'data-restoring': restoring ?? '',
       },
       'Terminal stand-in',
     )
@@ -176,6 +179,41 @@ const focusOnOpen = async (name: string) => {
   const terminal = await within(pane).findByText('Terminal stand-in')
   return terminal.getAttribute('data-focus-on-open')
 }
+
+describe('ShellPanes after a restart', () => {
+  it('tells each pane that comes back what it brings back', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const task: ShellTask = {
+      id: 'T-0001',
+      state: 'running',
+      stage: 'spec',
+      lanes: {},
+      agent: null,
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <ShellPanes
+          task={task}
+          connect={() => new Promise<WebSocket>(() => {})}
+          loadTerminals={async () => ['1', '6', '7']}
+          loadShells={async () => ({ ...withLanes({}), restoring: { '6': 'copilot', '7': null } })}
+          closeTerminal={async () => []}
+          actionsSlot={null}
+        />
+      </QueryClientProvider>,
+    )
+    const restoring = (name: string) =>
+      within(screen.getByRole('region', { name }))
+        .getByText('Terminal stand-in')
+        .getAttribute('data-restoring')
+
+    await waitFor(() => {
+      expect(restoring('Shell 6')).toBe('Restoring GitHub Copilot…')
+      expect(restoring('Shell 7')).toBe('Restoring shell…')
+      expect(restoring('Shell 1')).toBe('')
+    })
+  })
+})
 
 describe('ShellPanes focus on open', () => {
   it('lets only Shell 1 take the keyboard when the shells of a task open', async () => {

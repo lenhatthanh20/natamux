@@ -8,7 +8,7 @@ import { usePhone } from '../hooks/useLayoutMode'
 import type { TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
-import { agentLanes, NO_SHELLS, taskShellsQuery } from '../lib/task-shells'
+import { agentLanes, NO_SHELLS, restoringShells, taskShellsQuery } from '../lib/task-shells'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
@@ -56,6 +56,12 @@ export function ShellPanes({
     ...taskShellsQuery(taskId, (id) => loadShells?.(id) ?? Promise.resolve(NO_SHELLS)),
     enabled: loadShells !== undefined,
     select: agentLanes,
+  })
+  // The shells that come back after a restart. Each starts when its pane connects.
+  const restoring = useQuery({
+    ...taskShellsQuery(taskId, (id) => loadShells?.(id) ?? Promise.resolve(NO_SHELLS)),
+    enabled: loadShells !== undefined,
+    select: restoringShells,
   })
   // A stage that starts or ends changes the lanes. The daemon may have opened or ended the
   // stage's agent shell, so the agent list is read again now, not at the next poll.
@@ -322,6 +328,7 @@ export function ShellPanes({
                 focusToken={focusing?.name === name ? focusing.at : undefined}
                 focusOnOpen={!asked && name === visible[0]}
                 taskState={task.state}
+                restoring={restoring.data?.[name]}
                 onExit={(code) => noteExit(name, code)}
                 maximized={focused === name}
                 onToggleMaximize={() => setMaximized(focused === name ? null : name)}

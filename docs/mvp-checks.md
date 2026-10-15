@@ -34,7 +34,7 @@ Pass: with three tasks in different states, a person who has not watched the ter
 1. `scripts/dev.sh down`, then `scripts/dev.sh up`.
 2. Reload the dashboard.
 
-Pass: the same tasks, states, workspaces, pull requests and activity. Shells do not survive a daemon restart; **Open a new shell** opens a new one in the same worktree. The agents of running, waiting and in-review tasks start again in their terminals when the daemon starts (see `docs/claude-code-adapter.md`, "Resume after a restart").
+Pass: the same tasks, states, workspaces, pull requests and activity. The agents of running, waiting and in-review tasks start again in their terminals when the daemon starts. The other shells of a task come back, with the same names, when the task is opened: an agent on its last session, the rest as plain shells (see `docs/claude-code-adapter.md`, "Resume after a restart"). The screens of plain shells and the programs in them do not survive.
 
 ## Results
 
