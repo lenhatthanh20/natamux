@@ -96,7 +96,7 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to **Needs input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
+When an agent asks something, the task goes to **Needs input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
 
 After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
 

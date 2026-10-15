@@ -7,6 +7,7 @@ import {
   codeStageBefore,
   ENDED_SHELL_LINES,
   type EndedShell,
+  type EventType,
   findStep,
   isGroup,
   offersCi,
@@ -51,6 +52,12 @@ import { MAIN_TERMINAL, SHELLS, type TerminalService } from './terminal-service.
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
 export const LAUNCH_GRACE_MS = 30_000
+
+// What Resume types to an agent that still runs and ended its turn.
+export const GO_ON_PROMPT = 'Go on with the stage you are working on.'
+
+// Events of an agent that leave it where it was: still at the end of its turn.
+const KEEPS_TURN: EventType[] = ['agent.active']
 
 // How long a finishing task waits for a shell's output to reach its screen before it keeps the
 // screen as it is. A flood must not keep the agent running.
@@ -747,14 +754,35 @@ export class StageRunner {
   }
 
   // A person resumed a stage that waited for them. Its agent may be gone, for example after a
-  // restart, and then starts again.
+  // restart, and then starts again. One that still runs and ended its turn waits at its prompt, so
+  // it is asked to go on. One that asked gets nothing: the Enter would answer its menu.
   private resumeStage(taskId: string, event: TaskEvent): void {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     const stage = stagesOf(step).find((candidate) => candidate.id === event.payload.stage)
-    if (stage !== undefined) {
-      this.relaunch(task, step, stage)
+    if (stage === undefined) {
+      return
     }
+    const terminal = terminalOfStage(this.tasks.stepsOf(task), stage.id)
+    if (!this.agentRuns(task.id, terminal)) {
+      this.relaunch(task, step, stage)
+    } else if (this.endedTurn(task.id, stage.id)) {
+      this.terminals.paste(task.id, GO_ON_PROMPT, terminal)
+    }
+  }
+
+  // True when the last thing the stage's agent did was to end its turn. Only the agent's own
+  // events count: a CI result, an edit, a restart's launch or this resume leave it there.
+  private endedTurn(taskId: string, stageId: string): boolean {
+    for (const { accepted, event } of [...this.tasks.listEvents(taskId)].reverse()) {
+      const stage = event.payload.stage
+      const otherStage = typeof stage === 'string' && stage !== stageId
+      if (!accepted || otherStage || event.source !== 'agent' || KEEPS_TURN.includes(event.type)) {
+        continue
+      }
+      return event.type === 'agent.finished'
+    }
+    return false
   }
 
   // Agents end with the daemon. At its start, each stage an agent worked on gets its agent back,

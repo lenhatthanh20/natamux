@@ -19,6 +19,7 @@ import type { RunCommand } from './stage-checks.js'
 import { archiveDir, STAGE_DIR } from './stage-files.js'
 import { WORKFLOW_LINE } from './stage-prompts.js'
 import {
+  GO_ON_PROMPT,
   issueContext,
   issueNumber,
   LAUNCH_GRACE_MS,
@@ -2458,11 +2459,12 @@ describe('a resume after a restart', () => {
     expect(launchScript(task.id)).not.toContain('--resume')
   })
 
-  it.each(['claude-code', 'codex'])('types nothing when %s still runs', async (agent) => {
+  // The Enter of a prompt would answer the menu of an agent that asked.
+  it.each(['claude-code', 'codex'])('types nothing when %s still runs and asked', async (agent) => {
     const task = await withWorkspace((await created({ title: 'Export tasks', agent })).id)
     tasks.applyEvent(task.id, {
       source: 'agent',
-      type: 'agent.finished',
+      type: 'agent.asked',
       payload: { stage: 'spec', sessionId: 's-1' },
     })
     const pty = ptys.at(-1) as FakePty
@@ -2475,6 +2477,92 @@ describe('a resume after a restart', () => {
 
     expect(tasks.getTask(task.id).state).toBe('running')
     expect(ptys).toHaveLength(1)
+    expect(pty.written).toHaveLength(written)
+  })
+
+  it.each(['claude-code', 'codex'])('asks %s to go on when it ended its turn', async (agent) => {
+    const task = await withWorkspace((await created({ title: 'Export tasks', agent })).id)
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    const written = pty.written.length
+
+    await resume(task.id)
+    await resume(task.id)
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(ptys).toHaveLength(1)
+    const typed = pty.written.slice(written).join('')
+    expect(typed.split(`\x1b[200~${GO_ON_PROMPT}`)).toHaveLength(2)
+    expect(typed).not.toContain('agent-launch-')
+  })
+
+  // The daemon started the agent again with its session; it is still at the end of that turn.
+  it('asks the agent to go on after a restart started it again', async () => {
+    const task = await withWorkspace(
+      (await created({ title: 'Export tasks', agent: 'claude-code' })).id,
+    )
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    tasks.recordAgentLaunch(task.id, 'claude-code', 'claude')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    const written = pty.written.length
+
+    await resume(task.id)
+
+    expect(pty.written.slice(written).join('')).toContain(`\x1b[200~${GO_ON_PROMPT}`)
+  })
+
+  // Only what the agent did tells a turn end from a question; a CI result or an edit does not.
+  it('asks the agent to go on after an event that is not from the agent', async () => {
+    const task = await withWorkspace(
+      (await created({ title: 'Export tasks', agent: 'claude-code' })).id,
+    )
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    tasks.updateTask(task.id, { title: 'Export all tasks' })
+    expect(tasks.listEvents(task.id).at(-1)?.event.type).toBe('task.edited')
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    const written = pty.written.length
+
+    await resume(task.id)
+
+    expect(pty.written.slice(written).join('')).toContain(`\x1b[200~${GO_ON_PROMPT}`)
+  })
+
+  it('types nothing for a prompt typed to an agent that runs', async () => {
+    const task = await withWorkspace(
+      (await created({ title: 'Export tasks', agent: 'claude-code' })).id,
+    )
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    const pty = ptys.at(-1) as FakePty
+    pty.program = 'node'
+    const written = pty.written.length
+
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.resumed',
+      payload: { stage: 'spec', sessionId: 's-1' },
+    })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('running')
     expect(pty.written).toHaveLength(written)
   })
 
