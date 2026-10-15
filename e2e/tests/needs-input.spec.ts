@@ -86,7 +86,10 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   const shell = view.getByRole('region', { name: 'Shell 1' })
   await expect(shell.locator('header [data-tip-overflow]')).toHaveCount(0)
   await expect(shell.locator('.bg-signal, .bg-signal-soft, .text-signal')).toHaveCount(0)
-  await expect(shell.getByText('Needs input', { exact: true })).toHaveCount(0)
+  // Only the glyph's screen reader text says the state.
+  const stateText = shell.getByText('Needs input', { exact: true })
+  await expect(stateText.and(shell.locator(':not(.sr-only)'))).toHaveCount(0)
+  await expect(stateText.and(shell.locator('.sr-only'))).toHaveCount(1)
 
   for (const theme of ['Dark', 'Light'] as const) {
     await pickTheme(page, theme)
