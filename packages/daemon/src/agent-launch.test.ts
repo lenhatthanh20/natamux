@@ -97,6 +97,22 @@ describe('launchCommand', () => {
     ).toBe("copilot --allow-all-tools -i 'it''s'")
   })
 
+  it('starts Codex inline in every mode, before the extra words', () => {
+    for (const options of [base, auto]) {
+      const codex = launchCommand('codex', { ...options, program: 'codex', extraArgs: '--x' })
+      expect(codex.split(' --no-alt-screen ')).toHaveLength(2)
+      expect(codex.endsWith(" --no-alt-screen --x 'Fix it'")).toBe(true)
+    }
+  })
+
+  // Codex exits 2 when the flag comes twice.
+  it('adds no second --no-alt-screen when the extra words hold it', () => {
+    const extraArgs = '--x  --no-alt-screen'
+    const codex = launchCommand('codex', { ...auto, program: 'codex', extraArgs })
+    expect(codex.split('--no-alt-screen')).toHaveLength(2)
+    expect(codex.endsWith(` ${extraArgs} 'Fix it'`)).toBe(true)
+  })
+
   it('goes on with a Claude Code session after the mode', () => {
     expect(
       launchCommand('claude-code', { ...auto, program: 'claude', prompt: '', session: 's-1' }),
@@ -382,6 +398,10 @@ describe('the hook settings', () => {
       version: 1,
       hooks: { stop: [{ command: 'natamux hook cursor', timeout: 5 }] },
     })
+  })
+
+  it('keep Gemini inline: its system settings win over the user settings', () => {
+    expect(geminiHookSettings().ui).toEqual({ useAlternateBuffer: false })
   })
 
   it('start every hook of the four agents with `natamux hook <agent>`, the fast path', () => {

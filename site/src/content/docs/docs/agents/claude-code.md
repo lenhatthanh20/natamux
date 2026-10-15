@@ -121,3 +121,4 @@ Real Claude Code sessions. The permission path (`PermissionRequest` and the perm
 - `Stop` does not fire when you interrupt Claude Code with Esc. The task stays running. After 10 minutes with no hook, the dashboard marks it quiet.
 - Because `Stop` fires after every answer, a task shows "needs input" at the end of each turn, even when the agent only asked a question in plain text.
 - `--settings` adds to your own hooks. It does not replace them.
+- In its default TUI, Claude Code may leave empty rows under its footer after a turn: when its live area gets shorter, the rows it freed stay empty. Natamux sizes the terminal right; this is how Claude Code draws. `/tui fullscreen` avoids it, and a wider pane makes the footer shorter.

@@ -101,6 +101,8 @@ export function geminiHookSettings() {
   const hook = { type: 'command', name: 'natamux', command: `${HOOK} gemini`, timeout: 5000 }
   const events = ['BeforeAgent', 'BeforeTool', 'AfterTool', 'Notification', 'AfterAgent']
   return {
+    // Inline, so its output goes into the terminal history. System settings win over the user's.
+    ui: { useAlternateBuffer: false },
     hooks: Object.fromEntries(
       events.map((event) => [
         event,
@@ -223,6 +225,9 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         ...mode,
         ...(options.workspace === null ? [] : ['-c', quote(codexTrustArg(options.workspace))]),
         ...codexHookArgs().map((arg) => (arg === '-c' ? arg : quote(arg))),
+        // Inline, so its output goes into the terminal history. Codex exits when the flag
+        // comes twice, so the user's own one is enough.
+        ...(options.extraArgs.split(/\s+/).includes('--no-alt-screen') ? [] : ['--no-alt-screen']),
         ...extra,
         ...prompt,
       ].join(' ')
