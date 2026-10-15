@@ -123,8 +123,9 @@ const MOVES: Partial<Record<EventType, Move>> = {
   'agent.started': { from: ['ready'], to: 'running' },
   'stage.started': { from: ['draft', 'ready'], to: 'running' },
   'agent.asked': { from: ['running'], to: 'needs-input' },
-  // A prompt typed to an agent whose stage waits for approval takes the stage up again.
-  'agent.resumed': { from: ['needs-input', 'review'], to: 'running' },
+  // A prompt typed to an agent whose stage waits for approval takes the stage up again. So does a
+  // prompt after an API error failed the turn: the agent's session goes on.
+  'agent.resumed': { from: ['needs-input', 'review', 'failed'], to: 'running' },
   // The agent ended its turn without saying the stage is done (`natamux done`), for example to
   // ask something in plain text. The daemon drops the turn end that follows a report.
   'agent.finished': { from: ['running'], to: 'needs-input' },

@@ -94,6 +94,19 @@ describe('deriveTaskState with the legacy pipeline', () => {
     expect(result.position).toEqual(at('implement', 'ready'))
   })
 
+  it('runs a failed stage again when its agent is resumed', () => {
+    const result = deriveTaskState(
+      [
+        event('task.readied'),
+        event('agent.started'),
+        event('agent.failed'),
+        event('agent.resumed'),
+      ],
+      LEGACY_PIPELINE,
+    )
+    expect(result.position).toEqual(at('implement', 'running'))
+  })
+
   it('fails a task that waited for the user when its agent, started again, did not start', () => {
     const result = deriveTaskState(
       [event('task.readied'), event('agent.started'), event('agent.asked'), event('agent.failed')],
@@ -197,6 +210,19 @@ describe('applyTaskEvent with a manual review', () => {
       PIPELINE,
     )
     expect(approved).toEqual({ position: at('review', 'review'), accepted: true, moved: true })
+  })
+
+  it('takes a failed agent stage up again in its own lane, then moves on', () => {
+    const group = at('build', 'failed', { 'test-spec': 'done', implement: 'failed' })
+    const resumed = run(group, event('agent.resumed', { stage: 'implement' })).position
+    expect(resumed).toEqual(at('build', 'running', { 'test-spec': 'done', implement: 'running' }))
+
+    const checked = applyTaskEvent(
+      resumed,
+      event('stage.checked', { stage: 'implement' }),
+      PIPELINE,
+    )
+    expect(checked).toEqual({ position: at('review', 'review'), accepted: true, moved: true })
   })
 
   it('takes a failed check to needs input only when it is final', () => {
