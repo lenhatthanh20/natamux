@@ -25,7 +25,7 @@
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   },
   "description": "Run many coding agents in parallel, one dashboard for every task",
   "author": "lenhatthanh20",
