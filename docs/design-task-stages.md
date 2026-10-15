@@ -79,7 +79,7 @@ Every stage has a kind. The kind decides what runs and when the stage ends.
 | `testing` | testing | auto | An agent turns each case in `test-spec.md` into a test that is not there yet, then the project's test command runs all tests. The agent does not commit |
 | `release` | release | manual | — |
 
-- **Every agent prompt** ends with "When you are done, run `natamux done`" (section 3.5).
+- **Every agent prompt** ends with "When you are done, run `natamux done`, unless the steps above say not to" (section 3.5). The last part lets a prompt of your own say when the agent must not run it, for example after `natamux stage back`.
 - **Commits:** the `implement` and `testing` prompts tell the agent not to commit. You read the changes in the Changes tab and commit them there. A stage with `requireCommit` asks the agent to commit instead.
 - **Gate `manual`:** when the stage output is ready, the state becomes `review` and the task waits for you.
 - **Gate `auto`:** when the stage output is ready, the task moves to the next stage at once.
