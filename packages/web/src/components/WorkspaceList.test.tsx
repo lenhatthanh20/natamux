@@ -8,6 +8,7 @@ import { AGENT_CHOICES } from '../lib/agents'
 import type { StoredEvent, TaskShells } from '../lib/api'
 import { ACTIVITY_KEY } from '../lib/live'
 import { SHELLS_EVERY_MS } from '../lib/task-shells'
+import { formatAge } from '../lib/tasks'
 import { ContextMenuHost } from './ui/Menu'
 import { WorkspaceList } from './WorkspaceList'
 
@@ -224,6 +225,7 @@ describe('when it is offered', () => {
     expect(removeButton('old')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Actions for old' }))
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Blur names',
       'Remove finished workspaces',
     ])
   })
@@ -904,6 +906,328 @@ describe('a project header', () => {
 
     expect(screen.queryByRole('button', { name: 'Settings of old' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Settings of natamux' })).toBeTruthy()
+  })
+})
+
+// The header band and the card of a project, found by its name.
+function card(name: string) {
+  const header = screen.getByRole('button', { name: new RegExp(`^${name}`) })
+  const band = header.parentElement as HTMLElement
+  return { band, card: band.parentElement as HTMLElement }
+}
+
+const isPrivate = (element: Element | null) => element?.closest('[data-private]') != null
+
+describe('blurring a project', () => {
+  it('blurs the names in one project only, and shows them again', async () => {
+    const user = userEvent.setup()
+    list({ pinnedIds: [] })
+    const natamux = card('natamux')
+    const web = card('Web app')
+
+    const toggle = within(natamux.band).getByRole('button', { name: 'Blur names' })
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle.className).toMatch(/opacity-0/)
+    await user.click(toggle)
+
+    expect(natamux.card.hasAttribute('data-blurred')).toBe(true)
+    expect(web.card.hasAttribute('data-blurred')).toBe(false)
+    expect(isPrivate(within(natamux.band).getByText('natamux'))).toBe(true)
+    expect(isPrivate(within(rowOf('Still going')).getByText('Still going'))).toBe(true)
+    expect(isPrivate(within(rowOf('Still going')).getByText('T-0001'))).toBe(true)
+    // The state stays sharp.
+    expect(isPrivate(rowOf('Still going').querySelector('[data-state]'))).toBe(false)
+
+    const shown = within(natamux.band).getByRole('button', { name: 'Show names' })
+    expect(shown.getAttribute('aria-pressed')).toBe('true')
+    // Always on screen while blurred, so the user sees why the names are gone.
+    expect(shown.className).not.toMatch(/opacity-0/)
+    await user.click(shown)
+    expect(natamux.card.hasAttribute('data-blurred')).toBe(false)
+    expect(within(natamux.band).getByRole('button', { name: 'Blur names' })).toBeTruthy()
+  })
+
+  it('blurs the finished rows, the subtasks and the agent rows of the project', async () => {
+    const user = userEvent.setup()
+    const lanes = { ...parent, stage: 'checks', lanes: { alpha: 'running' as const } }
+    list({
+      tasks: [lanes, child, makeTask({ id: 'T-0003', title: 'Shipped', state: 'done' })],
+      pinnedIds: [],
+      currentId: 'T-0001',
+    })
+    const natamux = card('natamux')
+    await user.click(within(natamux.band).getByRole('button', { name: 'Blur names' }))
+    await user.click(screen.getByRole('button', { name: '1 finished' }))
+
+    expect(isPrivate(within(rowOf('Child')).getByText('Child'))).toBe(true)
+    expect(isPrivate(within(rowOf('Shipped')).getByText('Shipped'))).toBe(true)
+    const agent = screen.getByRole('button', { name: 'Alpha, Running' })
+    expect(isPrivate(within(agent).getByText('Alpha'))).toBe(true)
+    for (const row of [rowOf('Child'), rowOf('Shipped'), agent]) {
+      expect(natamux.card.contains(row)).toBe(true)
+    }
+  })
+
+  it('blurs a pinned task of the project, not one of another project', async () => {
+    const user = userEvent.setup()
+    list({ pinnedIds: ['T-0004', 'T-0005'] })
+
+    await user.click(within(card('natamux').band).getByRole('button', { name: 'Blur names' }))
+    const mine = rowOf('Pinned and done').closest('li') as HTMLElement
+    const other = rowOf('Web done').closest('li') as HTMLElement
+    expect(mine.hasAttribute('data-blurred')).toBe(true)
+    expect(isPrivate(within(mine).getByText('Pinned and done'))).toBe(true)
+    expect(other.hasAttribute('data-blurred')).toBe(false)
+  })
+
+  it('keeps the choice in the browser, and reads a bad value as none', async () => {
+    const user = userEvent.setup()
+    const first = list({ pinnedIds: [] })
+    await user.click(within(card('Web app').band).getByRole('button', { name: 'Blur names' }))
+    expect(window.localStorage.getItem('natamux.blurred-projects')).toBe('["web"]')
+    first.unmount()
+
+    const second = list({ pinnedIds: [] })
+    expect(card('Web app').card.hasAttribute('data-blurred')).toBe(true)
+    expect(card('natamux').card.hasAttribute('data-blurred')).toBe(false)
+    second.unmount()
+
+    window.localStorage.setItem('natamux.blurred-projects', '{bad')
+    list({ pinnedIds: [] })
+    expect(card('Web app').card.hasAttribute('data-blurred')).toBe(false)
+  })
+
+  it('reads a stored value that is not a list of ids as none', () => {
+    for (const value of ['{}', '"a"', '5', 'null']) {
+      window.localStorage.setItem('natamux.blurred-projects', value)
+      const view = list({ pinnedIds: [] })
+      expect(card('natamux').card.hasAttribute('data-blurred')).toBe(false)
+      expect(card('Web app').card.hasAttribute('data-blurred')).toBe(false)
+      view.unmount()
+    }
+  })
+
+  it('skips stored entries that are not ids, and an id of a project that is gone', () => {
+    window.localStorage.setItem('natamux.blurred-projects', '[5, null, "web", "removed"]')
+    list({ pinnedIds: [] })
+
+    expect(card('Web app').card.hasAttribute('data-blurred')).toBe(true)
+    expect(card('natamux').card.hasAttribute('data-blurred')).toBe(false)
+  })
+
+  it('still blurs and shows when the browser does not keep the choice', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota')
+    })
+    list({ pinnedIds: [] })
+    const natamux = card('natamux')
+
+    await user.click(within(natamux.band).getByRole('button', { name: 'Blur names' }))
+    expect(natamux.card.hasAttribute('data-blurred')).toBe(true)
+    await user.click(within(natamux.band).getByRole('button', { name: 'Show names' }))
+    expect(natamux.card.hasAttribute('data-blurred')).toBe(false)
+    expect(window.localStorage.getItem('natamux.blurred-projects')).toBeNull()
+  })
+
+  it('blurs rows that come later, without another click', async () => {
+    const user = userEvent.setup()
+    const first = makeTask({ id: 'T-0001', title: 'First' })
+    const { rerender } = list({ tasks: [first], pinnedIds: [] })
+    const natamux = card('natamux')
+    await user.click(within(natamux.band).getByRole('button', { name: 'Blur names' }))
+
+    rerender({
+      tasks: [
+        { ...first, stage: 'checks', lanes: { alpha: 'running' } },
+        makeTask({ id: 'T-0002', title: 'New task' }),
+        makeTask({ id: 'T-0003', title: 'New child', parentId: 'T-0001' }),
+        makeTask({ id: 'T-0004', title: 'New finished', state: 'done' }),
+      ],
+      pinnedIds: [],
+      currentId: 'T-0001',
+    })
+    for (const title of ['New task', 'New child']) {
+      expect(natamux.card.contains(rowOf(title))).toBe(true)
+      expect(isPrivate(within(rowOf(title)).getByText(title))).toBe(true)
+    }
+    const agent = screen.getByRole('button', { name: 'Alpha, Running' })
+    expect(natamux.card.contains(agent)).toBe(true)
+    expect(isPrivate(within(agent).getByText('Alpha'))).toBe(true)
+
+    // A row in the closed finished fold is blurred once the fold opens.
+    expect(screen.queryByRole('button', { name: /^New finished,/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: '1 finished' }))
+    expect(natamux.card.contains(rowOf('New finished'))).toBe(true)
+    expect(isPrivate(within(rowOf('New finished')).getByText('New finished'))).toBe(true)
+  })
+
+  it('keeps the state, agent, unseen dot, age, counts and pull request sharp', async () => {
+    const user = userEvent.setup()
+    const task = makeTask({
+      id: 'T-0001',
+      title: 'Parent',
+      agent: 'claude-code',
+      stage: 'review',
+      stages: ['spec', 'implement', 'review', 'release'],
+      pr: 'https://github.com/o/r/pull/12',
+      prStatus: { state: 'open', checks: 'failing' },
+    })
+    const done = makeTask({ id: 'T-0002', parentId: 'T-0001', state: 'done' })
+    const open = makeTask({ id: 'T-0003', parentId: 'T-0001', workspace: null, state: 'ready' })
+    list({ tasks: [task, done, open], pinnedIds: [], seenState: { 'T-0001': 'ready' } })
+    const natamux = card('natamux')
+    await user.click(within(natamux.band).getByRole('button', { name: 'Blur names' }))
+
+    const row = rowOf('Parent')
+    const sharp = [
+      row.querySelector('[data-state]'),
+      row.querySelector('[data-tip="Claude Code"]'),
+      row.querySelector('[data-unseen]'),
+      within(row).getByText(formatAge(task.updatedAt, NOW)),
+      within(row).getByText('1/2'),
+      within(row).getByText('#12'),
+      within(natamux.band).getByRole('img', { name: /workspaces?$/ }),
+      natamux.band.querySelector('.sb-chevron'),
+      within(natamux.band).getByRole('button', { name: 'Show names' }),
+    ]
+    for (const element of sharp) {
+      expect(element).toBeTruthy()
+      expect(isPrivate(element)).toBe(false)
+    }
+    // The text of the task is not.
+    expect(isPrivate(within(row).getByText('T-0001'))).toBe(true)
+  })
+
+  it('blurs the "No matches" line, which names the project', async () => {
+    const user = userEvent.setup()
+    list({ tasks: [], allTasks: TASKS, filter: 'nothing', pinnedIds: [] })
+    const natamux = card('natamux')
+    await user.click(within(natamux.band).getByRole('button', { name: 'Blur names' }))
+
+    const blurred = within(natamux.card).getByText(/^No matches in natamux/)
+    expect(blurred.closest('[data-blurred] [data-private]')).toBeTruthy()
+    // The other project shows it sharp.
+    const sharp = within(card('Web app').card).getByText(/^No matches in Web app/)
+    expect(sharp.closest('[data-blurred] [data-private]')).toBeNull()
+  })
+
+  it('blurs the question, the reason, the activity, the stage and the repo badge', async () => {
+    const user = userEvent.setup()
+    const failed = makeTask({ id: 'T-0006', title: 'Broken', state: 'failed' })
+    const asks = makeTask({ id: 'T-0007', title: 'Asking', state: 'needs-input' })
+    const busy = makeTask({
+      id: 'T-0008',
+      title: 'Busy',
+      stage: 'review',
+      stages: ['spec', 'implement', 'review', 'release'],
+    })
+    const said: Record<string, StoredEvent['event']> = {
+      'T-0006': taskEvent('T-0006', 'agent.failed', { reason: 'claude: command not found' }),
+      'T-0007': taskEvent('T-0007', 'agent.asked', { message: 'Which test runner?' }),
+    }
+    const loadEvents = vi.fn(async (id: string): Promise<StoredEvent[]> => {
+      const last = said[id]
+      return last === undefined ? [] : [{ seq: 1, accepted: true, event: last }]
+    })
+    queryClient.setQueryData(ACTIVITY_KEY, {
+      byTask: { 'T-0008': 'Edit src/app.ts' },
+      byTerminal: {},
+    })
+    render(
+      withHost(
+        <WorkspaceList
+          {...props({ tasks: [failed, asks, busy], pinnedIds: ['T-0008'] })}
+          loadEvents={loadEvents}
+        />,
+      ),
+    )
+    await user.click(within(card('natamux').band).getByRole('button', { name: 'Blur names' }))
+
+    const reason = await within(rowOf('Broken')).findByText('claude: command not found')
+    const question = await within(rowOf('Asking')).findByText('The agent asks: Which test runner?')
+    const pinned = within(rowOf('Busy'))
+    for (const element of [
+      reason,
+      question,
+      pinned.getByText('Edit src/app.ts'),
+      pinned.getByText('Manual review'),
+      pinned.getByText('3/4'),
+      pinned.getByText('natamux'),
+    ]) {
+      expect(element.closest('[data-blurred] [data-private]')).toBeTruthy()
+    }
+    expect(isPrivate(rowOf('Asking').querySelector('[data-state]'))).toBe(false)
+    expect(isPrivate(rowOf('Broken').querySelector('[data-state]'))).toBe(false)
+  })
+
+  it('keeps the real names for screen readers', async () => {
+    const user = userEvent.setup()
+    const lanes = { ...parent, stage: 'checks', lanes: { alpha: 'running' as const } }
+    list({ tasks: [lanes, child], pinnedIds: [], currentId: 'T-0001' })
+    await user.click(within(card('natamux').band).getByRole('button', { name: 'Blur names' }))
+
+    expect(rowOf('Parent').getAttribute('aria-label')).toMatch(/^Parent, /)
+    expect(rowOf('Child').getAttribute('aria-label')).toMatch(/^Child, /)
+    expect(screen.getByRole('button', { name: 'Alpha, Running' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^natamux/ })).toBeTruthy()
+  })
+
+  it('toggles from the project menu', async () => {
+    const user = userEvent.setup()
+    list({ pinnedIds: [] })
+
+    await user.click(screen.getByRole('button', { name: 'Actions for natamux' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Blur names' }))
+    expect(card('natamux').card.hasAttribute('data-blurred')).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: 'Actions for this project' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Show names' }))
+    expect(card('natamux').card.hasAttribute('data-blurred')).toBe(false)
+  })
+
+  it('names no project in the labels that show as tooltips', async () => {
+    const user = userEvent.setup()
+    list({ tasks: [makeTask({ title: 'Asks', state: 'needs-input' })], pinnedIds: [] })
+    const natamux = card('natamux')
+    const button = (name: string) => within(natamux.band).getByRole('button', { name })
+
+    await user.click(button('Blur names'))
+    expect(screen.queryByRole('button', { name: 'Start a task in natamux' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Settings of natamux' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Actions for natamux' })).toBeNull()
+    expect(button('Start a task in this project')).toBeTruthy()
+    expect(button('Settings of this project')).toBeTruthy()
+    expect(button('Actions for this project')).toBeTruthy()
+    // The other project keeps its name.
+    expect(screen.getByRole('button', { name: 'Settings of Web app' })).toBeTruthy()
+
+    // Folded, the dot of the waiting workspace says nothing of the name either.
+    await user.click(screen.getByRole('button', { name: /^natamux/ }))
+    const dot = natamux.band.querySelector('[data-tip^="A workspace in"]')
+    expect(dot?.getAttribute('data-tip')).toBe('A workspace in this project is hidden here')
+  })
+
+  it('works on a project that is gone', async () => {
+    const user = userEvent.setup()
+    list({ tasks: [makeTask({ id: 'T-0007', title: 'Orphan', repo: 'old' })], pinnedIds: [] })
+
+    await user.click(within(card('old').band).getByRole('button', { name: 'Blur names' }))
+    expect(card('old').card.hasAttribute('data-blurred')).toBe(true)
+    expect(isPrivate(within(rowOf('Orphan')).getByText('Orphan'))).toBe(true)
+  })
+
+  it('keeps the rename field readable, and blurs the title again after', async () => {
+    const user = userEvent.setup()
+    list({ tasks: [makeTask({ id: 'T-0001', title: 'Secret' })], pinnedIds: [] })
+    await user.click(within(card('natamux').band).getByRole('button', { name: 'Blur names' }))
+    act(() => rowOf('Secret').focus())
+
+    await user.keyboard('{F2}')
+    const field = screen.getByRole('textbox', { name: 'New name for T-0001' })
+    expect(isPrivate(field)).toBe(false)
+    await user.keyboard('{Escape}')
+    expect(isPrivate(within(rowOf('Secret')).getByText('Secret'))).toBe(true)
   })
 })
 

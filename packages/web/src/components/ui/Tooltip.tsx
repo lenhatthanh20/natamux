@@ -26,6 +26,10 @@ function isFocusVisible(el: HTMLElement): boolean {
 
 // Reads what a trigger wants to say. Null when it has nothing to show right now.
 function describe(el: HTMLElement): Shown | null {
+  // Text of a blurred project: its tooltip would say what the blur hides, such as the branch.
+  if (el.closest('[data-blurred] [data-private]') !== null) {
+    return null
+  }
   const text = el.dataset.tip ?? el.textContent?.trim() ?? ''
   if (text === '') {
     return null

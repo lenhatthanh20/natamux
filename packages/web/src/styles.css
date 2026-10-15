@@ -546,6 +546,12 @@
   animation: hm-pop var(--dur-modal) var(--ease-out);
 }
 
+/* A blurred project hides its names, for screen sharing. State glyphs and counts stay sharp. */
+[data-blurred] [data-private] {
+  filter: blur(5px);
+  user-select: none;
+}
+
 /* Only a running status glyph moves (ShapeGlyph.tsx): it holds still, then blinks once every 2 s.
    The keyframes sit on the 125 ms ticks of lib/motion-ticker.ts, so the ticker shows the frames
    as drawn, and every running glyph blinks on the same tick. */
