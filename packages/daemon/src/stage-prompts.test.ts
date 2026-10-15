@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { contextPrompt, manualContext, stagePrompt, WORKFLOW_LINE } from './stage-prompts.js'
 
 const task = { title: 'Export tasks', description: '', context: null }
+const DONE = 'When you are done, run `natamux done`, unless the steps above say not to.'
 
 function defaultStage(id: string): Stage {
   const stage = DEFAULT_PIPELINE.flatMap(stagesOf).find((each) => each.id === id)
@@ -14,7 +15,7 @@ describe('stagePrompt', () => {
     const prompt = stagePrompt(defaultStage('implement'), task)
     expect(prompt).toContain('Do not commit')
     expect(prompt).not.toContain('Commit your work')
-    expect(prompt.endsWith('When you are done, run `natamux done`.')).toBe(true)
+    expect(prompt.endsWith(DONE)).toBe(true)
   })
 
   it('tells the testing agent not to commit by default', () => {
@@ -31,9 +32,7 @@ describe('stagePrompt', () => {
 
   it('keeps a prompt of your own as it is', () => {
     const stage: Stage = { ...defaultStage('implement'), prompt: 'Fix {title}. {commit}' }
-    expect(stagePrompt(stage, task)).toBe(
-      'Fix Export tasks. {commit}\nWhen you are done, run `natamux done`.',
-    )
+    expect(stagePrompt(stage, task)).toBe(`Fix Export tasks. {commit}\n${DONE}`)
   })
 
   it('asks for a workflow once, just before the done line, when the stage runs one', () => {
@@ -41,7 +40,7 @@ describe('stagePrompt', () => {
     const prompt = stagePrompt(defaultStage('implement'), task, { workflow: true })
     expect(WORKFLOW_LINE).toContain('ultracode')
     expect(prompt.split(WORKFLOW_LINE)).toHaveLength(2)
-    expect(prompt.endsWith(`${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`)).toBe(true)
+    expect(prompt.endsWith(`${WORKFLOW_LINE}\n${DONE}`)).toBe(true)
     expect(prompt.replace(`${WORKFLOW_LINE}\n`, '')).toBe(plain)
   })
 
@@ -56,7 +55,7 @@ describe('stagePrompt', () => {
   it('asks for a workflow in a prompt of your own too', () => {
     const stage: Stage = { ...defaultStage('implement'), prompt: 'Fix {title}.' }
     expect(stagePrompt(stage, task, { workflow: true })).toBe(
-      `Fix Export tasks.\n${WORKFLOW_LINE}\nWhen you are done, run \`natamux done\`.`,
+      `Fix Export tasks.\n${WORKFLOW_LINE}\n${DONE}`,
     )
   })
 
@@ -88,9 +87,7 @@ describe('stagePrompt of the catalog', () => {
       gate: 'manual',
       prompt: `Kiểm thử {foo} 🚀 ${long}`,
     }
-    expect(stagePrompt(stage, task)).toBe(
-      `Kiểm thử {foo} 🚀 ${long}\nWhen you are done, run \`natamux done\`.`,
-    )
+    expect(stagePrompt(stage, task)).toBe(`Kiểm thử {foo} 🚀 ${long}\n${DONE}`)
   })
 
   it('still adds the done line to a prompt that asks for it already', () => {
@@ -100,7 +97,7 @@ describe('stagePrompt of the catalog', () => {
       gate: 'manual',
       prompt: 'Plan it. Then run `natamux done`.',
     }
-    expect(stagePrompt(stage, task).endsWith('\nWhen you are done, run `natamux done`.')).toBe(true)
+    expect(stagePrompt(stage, task).endsWith(`\n${DONE}`)).toBe(true)
   })
 
   it('gives the web app and the agent the same default prompt', () => {
@@ -108,7 +105,7 @@ describe('stagePrompt of the catalog', () => {
     const expected = defaultPrompt(plan)
       .replace('{title}', task.title)
       .replaceAll('{dir}', '.natamux-task')
-    expect(stagePrompt(plan, task)).toBe(`${expected}\nWhen you are done, run \`natamux done\`.`)
+    expect(stagePrompt(plan, task)).toBe(`${expected}\n${DONE}`)
   })
 
   it('leaves skill placeholders for the agent to fill', () => {

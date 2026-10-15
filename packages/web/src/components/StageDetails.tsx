@@ -628,7 +628,7 @@ function PromptField({
         className={`${textarea} w-full resize-y font-mono text-xs leading-5`}
       />
       <p className="m-0 font-mono text-xs text-muted">
-        When you are done, run <code>natamux done</code>.
+        When you are done, run <code>natamux done</code>, unless the steps above say not to.
       </p>
     </Field>
   )

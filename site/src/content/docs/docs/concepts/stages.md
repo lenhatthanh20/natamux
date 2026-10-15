@@ -185,7 +185,7 @@ natamux done
 natamux done --task T-0001 --stage implement
 ```
 
-Use `--stage` only when two stages run side by side and Natamux cannot tell which one you mean. The default stage prompts end with the line `When you are done, run natamux done.`
+Use `--stage` only when two stages run side by side and Natamux cannot tell which one you mean. Every stage prompt ends with the line `When you are done, run natamux done, unless the steps above say not to.`
 
 The turn end that follows `natamux done` does not count as "stopped early".
 

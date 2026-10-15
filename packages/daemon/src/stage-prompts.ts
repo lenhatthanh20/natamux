@@ -11,7 +11,8 @@ import type { SkillResolution } from './agent-skills.js'
 import { attachmentPath } from './attachments.js'
 import { STAGE_DIR } from './stage-files.js'
 
-const DONE = 'When you are done, run `natamux done`.'
+// A prompt of your own may say when not to run it, for example after a send back.
+const DONE = 'When you are done, run `natamux done`, unless the steps above say not to.'
 
 // Claude Code runs a workflow only when the prompt asks for one in words; "ultracode" is its
 // keyword for that.
