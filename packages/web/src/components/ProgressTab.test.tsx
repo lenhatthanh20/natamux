@@ -1,6 +1,7 @@
 import {
   DEFAULT_PROJECT_SETTINGS,
   projectSettingsSchema,
+  type Step,
   type Task,
   type TaskEvent,
 } from '@natamux/core'
@@ -35,6 +36,7 @@ const TASK: Task = {
   stage: 'spec',
   stages: ['context', 'spec', 'plan'],
   lanes: {},
+  paths: {},
   stageSince: '2026-10-10T08:11:00.000Z',
   backgroundSince: null,
   workflowStages: [],
@@ -1429,5 +1431,162 @@ describe('ProgressTab skip a later stage', () => {
 
     const review = await screen.findByRole('article', { name: 'Manual review' })
     expect(within(review).queryByRole('button')).toBeNull()
+  })
+})
+
+// Plan, then a branch of two paths (Small change, or Big change as the Otherwise path), then Release.
+describe('a branch in the stages', () => {
+  const PIPELINE: Step[] = [
+    { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' },
+    {
+      id: 'after-plan',
+      paths: [
+        {
+          id: 'small',
+          name: 'Small change',
+          when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+          stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }],
+        },
+        {
+          id: 'big',
+          name: 'Big change',
+          stages: [{ id: 'review', name: 'Check', kind: 'agent', gate: 'auto' }],
+        },
+      ],
+    },
+    { id: 'release', kind: 'release', gate: 'manual' },
+  ]
+  const BRANCH_SETTINGS: LoadedSettings = {
+    ...SETTINGS,
+    settings: { ...DEFAULT_PROJECT_SETTINGS, stages: PIPELINE },
+  }
+  const BECAUSE = 'plan.md "Size" contains "small"'
+  const branchTask = (stage: string, paths: Record<string, string>): Task => ({
+    ...TASK,
+    state: 'running',
+    stage,
+    stages: [
+      'plan',
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'small', stages: ['implement'] },
+          { id: 'big', stages: ['review'] },
+        ],
+      },
+      'release',
+    ],
+    paths,
+  })
+  const TAKEN_EVENTS: StoredEvent[] = [
+    stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'plan' }),
+    stored(2, 'stage.approved', '2026-10-10T08:10:00.000Z', {
+      stage: 'plan',
+      path: 'small',
+      because: BECAUSE,
+    }),
+    stored(3, 'stage.started', '2026-10-10T08:11:00.000Z', { stage: 'implement' }),
+  ]
+
+  it('says which path the task took and why, on the first card of that path', async () => {
+    progress({
+      task: branchTask('implement', { 'after-plan': 'small' }),
+      events: TAKEN_EVENTS,
+      settings: BRANCH_SETTINGS,
+    })
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(implement).getByText('Took Small change')).toBeTruthy()
+    expect(within(implement).getByText(`: ${BECAUSE}`)).toBeTruthy()
+    const plan = screen.getByRole('article', { name: 'Plan' })
+    expect(within(plan).queryByText(/^Took/)).toBeNull()
+  })
+
+  it('shows the stages of the path not taken as Not taken, and counts them out', async () => {
+    progress({
+      task: branchTask('implement', { 'after-plan': 'small' }),
+      events: TAKEN_EVENTS,
+      settings: BRANCH_SETTINGS,
+    })
+
+    const review = await screen.findByRole('article', { name: 'Check' })
+    expect(within(review).getByText('Not taken')).toBeTruthy()
+    expect(within(review).getByRole('img', { name: 'Check: Not taken' })).toBeTruthy()
+    expect(within(review).queryByText(/^Finished when/)).toBeNull()
+    // Plan is done; Plan, Implement and Release count.
+    expect(screen.getByText('1 of 3')).toBeTruthy()
+  })
+
+  it('draws a lane per path, the taken one marked Taken and the others dim', async () => {
+    progress({
+      task: branchTask('implement', { 'after-plan': 'small' }),
+      events: TAKEN_EVENTS,
+      settings: BRANCH_SETTINGS,
+    })
+
+    const taken = await screen.findByRole('region', { name: 'Small change' })
+    const other = screen.getByRole('region', { name: 'Big change' })
+    expect(taken.dataset.taken).toBe('true')
+    expect(other.dataset.taken).toBe('false')
+    expect(within(taken).getByText('Taken')).toBeTruthy()
+    expect(within(taken).getByText(BECAUSE)).toBeTruthy()
+    expect(within(other).getByText('Otherwise')).toBeTruthy()
+  })
+
+  it('shows every path as Not taken when the branch was skipped', async () => {
+    progress({
+      task: branchTask('release', { 'after-plan': '' }),
+      events: [TAKEN_EVENTS[0] as StoredEvent],
+      settings: BRANCH_SETTINGS,
+    })
+
+    await screen.findByRole('list', { name: 'Stages' })
+    const implement = screen.getByRole('article', { name: 'Implement' })
+    const check = screen.getByRole('article', { name: 'Check' })
+    expect(within(implement).getByText('Not taken')).toBeTruthy()
+    expect(within(check).getByText('Not taken')).toBeTruthy()
+    expect(screen.queryByText(/^Took/)).toBeNull()
+    expect(screen.getByRole('img', { name: /No path taken/ })).toBeTruthy()
+  })
+
+  it('keeps both paths as not started before the branch is reached', async () => {
+    progress({
+      task: branchTask('plan', {}),
+      events: [TAKEN_EVENTS[0] as StoredEvent],
+      settings: BRANCH_SETTINGS,
+    })
+
+    const implement = await screen.findByRole('article', { name: 'Implement' })
+    expect(within(implement).getByText(/^Finished when/)).toBeTruthy()
+    expect(screen.queryByText('Not taken')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Small change' }).dataset.taken).toBeUndefined()
+  })
+
+  it('ends the timeline line of an event that chose a path with the path name', async () => {
+    progress({
+      task: branchTask('implement', { 'after-plan': 'small' }),
+      events: TAKEN_EVENTS,
+      settings: BRANCH_SETTINGS,
+    })
+    const user = userEvent.setup()
+
+    await screen.findByRole('list', { name: 'Stages' })
+    await user.click(screen.getByRole('button', { name: 'Latest events' }))
+    const events = screen.getByRole('region', { name: 'Latest events' })
+    expect(within(events).getByText(/Stage approved → Small change/)).toBeTruthy()
+  })
+
+  it('does not offer a send back to a stage of a path not taken', async () => {
+    progress({
+      task: branchTask('implement', { 'after-plan': 'small' }),
+      events: TAKEN_EVENTS,
+      settings: BRANCH_SETTINGS,
+    })
+    await screen.findByRole('article', { name: 'Implement' })
+    actOn(() => fireAppEvent('send-back'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Send the task back' })
+    expect(within(dialog).queryByRole('option', { name: 'Check' })).toBeNull()
+    expect(within(dialog).getByRole('option', { name: 'Plan' })).toBeTruthy()
   })
 })

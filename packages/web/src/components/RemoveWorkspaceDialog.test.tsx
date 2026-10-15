@@ -24,6 +24,7 @@ const task: Task = {
   stage: 'release',
   stages: ['implement', 'review', 'release'],
   lanes: {},
+  paths: {},
   stageSince: null,
   backgroundSince: null,
   workflowStages: [],

@@ -1,5 +1,7 @@
 import {
   canRunWorkflow,
+  describeCondition,
+  isBranch,
   isGroup,
   offersCi,
   offersWorkflow,
@@ -25,13 +27,16 @@ import type {
 import { useAppEvent } from '../lib/app-events'
 import { describeEvent } from '../lib/events'
 import {
+  branchStatus,
   finishedWhen,
   formatDuration,
   missingSkills,
+  pathLabel,
   ranWithWorkflow,
   sentBackCount,
   stageCount,
   stageTime,
+  takenPath,
   waitingForCi,
 } from '../lib/stage-view'
 import { contextText, STATE_LABEL } from '../lib/tasks'
@@ -196,6 +201,12 @@ export function ProgressTab({
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
+  // The names of the paths, for the timeline and the "Took" line.
+  const pathNames = Object.fromEntries(
+    steps
+      .filter(isBranch)
+      .flatMap((step) => step.paths.map((path): [string, string] => [path.id, pathLabel(path)])),
+  )
   const open = task.state !== 'done' && task.state !== 'cancelled'
   const { tracker } = loadedSettings.settings
   const canCreateIssue = open && tracker.type === 'github' && tracker.createIssue !== 'never'
@@ -221,6 +232,11 @@ export function ProgressTab({
         key={stage.id}
         stage={stage}
         progress={entry}
+        took={
+          entry.because === null || entry.path === null
+            ? undefined
+            : { path: pathNames[entry.path] ?? entry.path, because: entry.because }
+        }
         file={stage.output === undefined ? undefined : fileByName.get(stage.output)}
         fileStatus={fileStatus}
         pr={stage.kind === 'release' ? task.pr : null}
@@ -289,23 +305,38 @@ export function ProgressTab({
             const stages = stagesOf(step)
             const first = byId.get(stages[0]?.id ?? '')
             const last = index === steps.length - 1
-            const markerStatus = isGroup(step)
-              ? stages.some((stage) => byId.get(stage.id)?.status === 'current')
-                ? 'current'
+            const markerStatus = isBranch(step)
+              ? branchStatus(step, byId)
+              : isGroup(step)
+                ? stages.some((stage) => byId.get(stage.id)?.status === 'current')
+                  ? 'current'
+                  : (first?.status ?? 'upcoming')
                 : (first?.status ?? 'upcoming')
-              : (first?.status ?? 'upcoming')
             const groupState =
-              isGroup(step) && markerStatus === 'current' ? task.state : (first?.state ?? null)
+              (isGroup(step) || isBranch(step)) && markerStatus === 'current'
+                ? task.state
+                : (first?.state ?? null)
             const next = steps[index + 1]
             const nextFirst = next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
+            const taken = isBranch(step) ? takenPath(step, byId) : undefined
+            const stepName = isBranch(step)
+              ? (step.name ?? step.paths.map(pathLabel).join(' or '))
+              : (step.name ?? stages.map((stage) => stage.id).join(' and '))
             return (
               <li key={step.id} className="grid grid-cols-[20px_minmax(0,1fr)] gap-x-2">
                 <div className="flex flex-col items-center pt-3">
                   <StageMarker
                     status={markerStatus}
                     state={groupState}
-                    size={18}
-                    label={`${step.name ?? stages.map((stage) => stage.id).join(' and ')}: ${markerStatus}`}
+                    size={isBranch(step) ? 16 : 18}
+                    diamond={isBranch(step)}
+                    label={`${stepName}: ${
+                      taken !== undefined
+                        ? `Took ${pathLabel(taken)}`
+                        : markerStatus === 'not-taken'
+                          ? 'No path taken'
+                          : markerStatus
+                    }`}
                   />
                   {!last && (
                     <span
@@ -325,7 +356,55 @@ export function ProgressTab({
                   )}
                 </div>
                 <div className="min-w-0 pb-2">
-                  {isGroup(step) ? (
+                  {isBranch(step) ? (
+                    <section
+                      aria-label={stepName}
+                      className="rounded-xl border border-line-strong bg-raised p-2"
+                    >
+                      <div className="flex flex-col gap-0.5 px-1 pb-2">
+                        <div className="flex flex-wrap items-baseline gap-x-2">
+                          <h3 className="m-0 text-md font-semibold">{stepName}</h3>
+                          <span className="text-xs text-muted">
+                            one of {step.paths.length} paths
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted">
+                          {markerStatus === 'not-taken'
+                            ? 'No path was taken'
+                            : taken === undefined
+                              ? 'The task picks a path when it gets here'
+                              : 'The task took one path'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {step.paths.map((path) => (
+                          <section
+                            key={path.id}
+                            aria-label={pathLabel(path)}
+                            className="branch-lane flex flex-col gap-2"
+                            data-taken={
+                              taken === path
+                                ? 'true'
+                                : taken !== undefined || markerStatus === 'not-taken'
+                                  ? 'false'
+                                  : undefined
+                            }
+                          >
+                            <div className="flex flex-wrap items-baseline gap-x-2 px-1">
+                              <h4 className="m-0 text-sm font-semibold">{pathLabel(path)}</h4>
+                              <span className="text-xs text-muted">{describeCondition(path)}</span>
+                              {taken === path && (
+                                <span className="state-chip" data-state="done">
+                                  Taken
+                                </span>
+                              )}
+                            </div>
+                            {path.stages.map(card)}
+                          </section>
+                        ))}
+                      </div>
+                    </section>
+                  ) : isGroup(step) ? (
                     <section
                       aria-label={step.name ?? 'Side by side'}
                       className="rounded-xl border border-line-strong bg-raised p-2"
@@ -340,7 +419,9 @@ export function ProgressTab({
                         <span className="text-xs text-muted">
                           {nextFirst === undefined
                             ? 'The task is done when both are finished'
-                            : `${nextFirst.name} starts when both are finished`}
+                            : next !== undefined && isBranch(next)
+                              ? 'A path is chosen when both are finished'
+                              : `${nextFirst.name} starts when both are finished`}
                         </span>
                       </div>
                       <div className="flex flex-col gap-2">{stages.map(card)}</div>
@@ -414,7 +495,7 @@ export function ProgressTab({
                 <Age at={event.at} />
               </span>
               <span className="truncate">
-                {describeEvent(event.type, event.payload)}
+                {describeEvent(event.type, event.payload, pathNames)}
                 {typeof event.payload.stage === 'string' ? (
                   <span className="text-muted">
                     {' '}
@@ -433,6 +514,7 @@ export function ProgressTab({
           earlier={progress.filter(
             (entry) =>
               entry.status !== 'upcoming' &&
+              entry.status !== 'not-taken' &&
               (entry.kind === 'agent' || entry.kind === 'context' || entry.kind === 'testing'),
           )}
           busy={action.isPending}
@@ -536,6 +618,7 @@ function TimeBars({ progress }: { progress: readonly StageProgress[] }) {
 function StageCard({
   stage,
   progress,
+  took,
   file,
   fileStatus,
   pr,
@@ -559,6 +642,8 @@ function StageCard({
   skip,
 }: {
   activity?: string
+  // The path the task took, on the first stage of that path, and why.
+  took?: { path: string; because: string }
   // The last start of the stage asked the agent for a workflow.
   ranWorkflow: boolean
   // The workflow choice of a stage the settings offer it on.
@@ -607,6 +692,26 @@ function StageCard({
   const sentBack = progress.rounds - 1
   // The failed runs of a CI send back. The log after them is for the agent.
   const ciRuns = progress.sentBackByCi ? progress.sentBackFor?.split('\n\n')[0] : undefined
+
+  if (progress.status === 'not-taken') {
+    return (
+      <article
+        aria-label={progress.name}
+        className="flex items-center gap-2 rounded-xl border border-dashed border-line px-3 py-2.5"
+      >
+        <StageMarker
+          status="not-taken"
+          state={null}
+          size={14}
+          label={`${progress.name}: Not taken`}
+        />
+        <span className="text-md font-semibold text-muted">{progress.name}</span>
+        <span className="state-chip" data-state="draft">
+          Not taken
+        </span>
+      </article>
+    )
+  }
 
   const title = (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -686,6 +791,13 @@ function StageCard({
           <h4 className="m-0">{title}</h4>
           {factLine}
         </div>
+      )}
+
+      {took !== undefined && (
+        <p className="m-0 mt-1 text-xs">
+          <span className="font-medium text-ink-2">{`Took ${took.path}`}</span>
+          <span className="text-muted">{`: ${took.because}`}</span>
+        </p>
       )}
 
       {upcoming ? (

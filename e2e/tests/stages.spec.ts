@@ -1,42 +1,25 @@
-import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
-import { openTask, signIn, TOKEN, taskNamed, taskTable } from './helpers'
-
-const headers = { authorization: `Bearer ${TOKEN}` }
+import { type APIRequestContext, expect, test } from '@playwright/test'
+import {
+  firstRepo,
+  headers,
+  newTask as makeTask,
+  openSettings,
+  openTask,
+  type Repo,
+  signIn,
+  type TaskEvent,
+  taskNamed,
+  taskOf,
+  taskTable,
+} from './helpers'
 
 type Stage = { id: string; gate: string; prompt?: string; output?: string }
 type Step = Stage | { id: string; parallel: Stage[] }
-type Repo = { id: string; name: string }
-type TaskEvent = { type: string; payload: Record<string, unknown> }
-
-async function firstRepo(request: APIRequestContext): Promise<Repo> {
-  const body = await (await request.get('/api/repos', { headers })).json()
-  return body.repos[0]
-}
 
 async function savedStages(request: APIRequestContext, repo: string): Promise<Stage[]> {
   const body = await (await request.get(`/api/repos/${repo}/settings`, { headers })).json()
   const steps: Step[] = body.settings.stages
   return steps.flatMap((step) => ('parallel' in step ? step.parallel : [step]))
-}
-
-async function taskOf(request: APIRequestContext, id: string) {
-  return (await (await request.get(`/api/tasks/${id}`, { headers })).json()).task
-}
-
-async function openSettings(page: Page, repo: Repo) {
-  await page
-    .getByRole('navigation', { name: 'Workspaces' })
-    .getByRole('button', { name: 'Add a project' })
-    .click()
-  await page
-    .getByRole('dialog', { name: 'Projects' })
-    .getByRole('listitem')
-    .filter({ hasText: repo.name })
-    .getByRole('button', { name: 'Settings' })
-    .click()
-  const dialog = page.getByRole('dialog', { name: `Project settings of ${repo.name}` })
-  await expect(dialog.getByRole('tab', { name: 'Stages', selected: true })).toBeVisible()
-  return dialog
 }
 
 let repo: Repo
@@ -61,11 +44,8 @@ test.afterEach(async ({ request }) => {
   })
 })
 
-async function newTask(request: APIRequestContext, title: string) {
-  const created = await request.post('/api/tasks', { headers, data: { title, repo: repo.id } })
-  const { task } = await created.json()
-  made.push(task.id)
-  return task
+function newTask(request: APIRequestContext, title: string) {
+  return makeTask(request, repo, title, made)
 }
 
 const PROMPT = 'Task: {title}\nLook for secrets in the diff. Write {dir}/security.md with Findings.'

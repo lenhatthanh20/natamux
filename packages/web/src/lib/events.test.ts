@@ -30,6 +30,29 @@ describe('describeEvent', () => {
   })
 })
 
+describe('describeEvent with a path', () => {
+  it('ends with an arrow and the name of the path an event chose', () => {
+    const payload = { stage: 'plan', path: 'small' }
+    expect(describeEvent('stage.approved', payload, { small: 'Small change' })).toBe(
+      'Stage approved → Small change',
+    )
+  })
+
+  it('names the path by its id when no name is known, and adds nothing without a path', () => {
+    expect(describeEvent('stage.approved', { path: 'small' })).toBe('Stage approved → small')
+    expect(describeEvent('stage.approved', { stage: 'plan' }, { small: 'Small change' })).toBe(
+      'Stage approved',
+    )
+  })
+
+  it('shows the path in grouped lines', () => {
+    const event = stored(1, 'stage.approved')
+    event.event.payload = { path: 'small' }
+    const [line] = groupEvents([event], { small: 'Small change' })
+    expect(describeLine(line as never)).toBe('Stage approved → Small change · You')
+  })
+})
+
 describe('formatClock', () => {
   it('shows hours, minutes and seconds', () => {
     expect(formatClock('2026-10-08T09:05:07.000Z')).toMatch(/\d{1,2}\D\d{2}\D\d{2}/)

@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import {
   DEFAULT_PROJECT_SETTINGS,
+  deriveTaskState,
   type ProjectSettings,
   type Task,
   type TaskState,
@@ -438,6 +439,119 @@ describe('applyEvent inside a group', () => {
       source: 'system',
       payload: { stage: 'implement' },
     })
+  })
+})
+
+describe('applyEvent at a branch', () => {
+  const settings: ProjectSettings = {
+    ...DEFAULT_PROJECT_SETTINGS,
+    stages: [
+      { id: 'plan', kind: 'agent', gate: 'manual' },
+      {
+        id: 'after-plan',
+        paths: [
+          {
+            id: 'small',
+            when: { type: 'command', run: 'true' },
+            stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }],
+          },
+          { id: 'pr-review', stages: [{ id: 'review', kind: 'review', gate: 'manual' }] },
+        ],
+      },
+      { id: 'release', kind: 'release', gate: 'manual' },
+    ],
+  }
+  let staged: TaskService
+
+  function approvedPlan(): Task {
+    const task = staged.createTask({ title: 'Export' })
+    staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'plan' },
+    })
+    return staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'stage.approved',
+      payload: { stage: 'plan', path: 'small', because: 'true exited 0' },
+    }).task
+  }
+
+  beforeEach(() => {
+    staged = makeService(index, () => settings)
+  })
+
+  it('starts a task with no path taken', () => {
+    expect(staged.createTask({ title: 'Export' }).paths).toEqual({})
+  })
+
+  it('stores the path the task took, in its file and after a restart', () => {
+    const task = approvedPlan()
+
+    expect(task).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+    expect(readTaskFile(dataDir, task.id)?.paths).toEqual({ 'after-plan': 'small' })
+    const freshIndex = new TaskIndex(':memory:')
+    expect(started(freshIndex, () => settings).getTask(task.id).paths).toEqual({
+      'after-plan': 'small',
+    })
+    freshIndex.close()
+  })
+
+  it('keeps the path on later moves, and the log gives the same position', () => {
+    const task = approvedPlan()
+    const moved = staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'stage.passed',
+      payload: { stage: 'implement' },
+    }).task
+
+    expect(moved).toMatchObject({ stage: 'release', paths: { 'after-plan': 'small' } })
+    const events = staged.listEvents(task.id).map((entry) => entry.event)
+    expect(deriveTaskState(events, staged.stepsOf(moved)).position).toEqual({
+      stage: moved.stage,
+      state: moved.state,
+      lanes: moved.lanes,
+      paths: moved.paths,
+    })
+  })
+
+  it('forgets the path when the task goes back before the branch', () => {
+    const task = approvedPlan()
+    const back = staged.applyEvent(task.id, {
+      source: 'human',
+      type: 'stage.reopened',
+      payload: { to: 'plan' },
+    }).task
+
+    expect(back).toMatchObject({ stage: 'plan', paths: {} })
+  })
+
+  it('marks a later stage of the path the task is on, but not the current one', () => {
+    staged = makeService(index, () => ({
+      ...settings,
+      stages: [
+        { id: 'plan', kind: 'agent', gate: 'manual' },
+        {
+          id: 'after-plan',
+          paths: [
+            {
+              id: 'small',
+              when: { type: 'command', run: 'true' },
+              stages: [
+                { id: 'implement', kind: 'agent', gate: 'auto' },
+                { id: 'docs', kind: 'agent', gate: 'auto' },
+              ],
+            },
+            { id: 'pr-review', stages: [{ id: 'review', kind: 'review', gate: 'manual' }] },
+          ],
+        },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }))
+    const task = approvedPlan()
+
+    expect(() => staged.setSkip(task.id, 'implement', true)).toThrow(/Skip/)
+    expect(staged.setSkip(task.id, 'docs', true).skipStages).toEqual(['docs'])
   })
 })
 

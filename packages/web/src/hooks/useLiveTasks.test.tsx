@@ -45,6 +45,7 @@ const task: Task = {
   stage: 'implement',
   stages: ['implement'],
   lanes: {},
+  paths: {},
   stageSince: null,
   backgroundSince: null,
   workflowStages: [],

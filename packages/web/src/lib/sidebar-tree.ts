@@ -1,4 +1,4 @@
-import { stageName, type Task, type TaskState } from '@natamux/core'
+import { type StepRef, stageName, type Task, type TaskState } from '@natamux/core'
 import { agentLabel } from './agents'
 import type { TaskShells } from './api'
 import { terminalState } from './panes'
@@ -73,6 +73,14 @@ export function opensByDefault(states: readonly TaskState[]): boolean {
   )
 }
 
+// The stages a step of a task holds: itself, the lanes of a group, or the stages of every path.
+function stagesOfRef(step: StepRef): string[] {
+  if (typeof step === 'string') {
+    return [step]
+  }
+  return 'parallel' in step ? step.parallel : step.paths.flatMap((path) => path.stages)
+}
+
 // "Step 3 of 5", from the steps the task has. A group of parallel stages is one step.
 export function stagePosition(
   task: Pick<Task, 'stage' | 'stages' | 'state'>,
@@ -83,7 +91,7 @@ export function stagePosition(
   const index = task.stages.findIndex((step) =>
     typeof step === 'string'
       ? step === task.stage
-      : step.id === task.stage || step.parallel.includes(task.stage),
+      : step.id === task.stage || stagesOfRef(step).includes(task.stage),
   )
   return index === -1 ? null : { at: index + 1, of: task.stages.length }
 }
@@ -212,17 +220,22 @@ const lower = (state: TaskState) => STATE_LABEL[state].toLowerCase()
 
 // How far a task is through its own steps. A group is one step; its most urgent stage speaks
 // for it.
-export function cometOf(task: Pick<Task, 'stage' | 'stages' | 'state' | 'lanes'>): Comet {
+export function cometOf(
+  task: Pick<Task, 'stage' | 'stages' | 'state' | 'lanes'> & { paths?: Task['paths'] },
+): Comet {
   const steps = task.stages
   const finished = task.state === 'done' || task.state === 'cancelled'
   const found = steps.findIndex((step) =>
     typeof step === 'string'
       ? step === task.stage
-      : step.id === task.stage || step.parallel.includes(task.stage),
+      : step.id === task.stage || stagesOfRef(step).includes(task.stage),
   )
   const index = finished && task.state === 'done' ? steps.length - 1 : Math.max(0, found)
   const current = steps[index]
-  const lanes = current === undefined || typeof current === 'string' ? [] : current.parallel
+  const lanes =
+    current === undefined || typeof current === 'string' || !('parallel' in current)
+      ? []
+      : current.parallel
   const open = lanes.filter((id) => task.lanes[id] !== 'done')
   const laneState = urgentState(open.map((id) => task.lanes[id] ?? 'ready'))
   const urgentLane = open.find((id) => task.lanes[id] === laneState)
@@ -236,10 +249,33 @@ export function cometOf(task: Pick<Task, 'stage' | 'stages' | 'state' | 'lanes'>
     }
     return lower(lane === null ? task.state : (task.lanes[lane] ?? task.state))
   }
-  const names = (step: (typeof steps)[number], at: number) =>
-    typeof step === 'string'
-      ? [`${stageName({ id: step })} ${mark(at, null)}`]
-      : step.parallel.map((id) => `${stageName({ id })} ${mark(at, id)}`)
+  // Only the path a task took counts. Inside the current path, the stages before the current one
+  // are done and the ones after it have not started.
+  const pathNames = (step: Exclude<StepRef, string | { parallel: string[] }>, at: number) => {
+    const chosen = task.paths?.[step.id]
+    const taken =
+      chosen === undefined ? step.paths : step.paths.filter((path) => path.id === chosen)
+    return taken.flatMap((path) => {
+      const here = path.stages.indexOf(task.stage)
+      return path.stages.map((id, place) => {
+        const state =
+          at === index && here !== -1 && place !== here
+            ? place < here
+              ? 'done'
+              : 'not started'
+            : mark(at, null)
+        return `${stageName({ id })} ${state}`
+      })
+    })
+  }
+  const names = (step: (typeof steps)[number], at: number) => {
+    if (typeof step === 'string') {
+      return [`${stageName({ id: step })} ${mark(at, null)}`]
+    }
+    return 'parallel' in step
+      ? step.parallel.map((id) => `${stageName({ id })} ${mark(at, id)}`)
+      : pathNames(step, at)
+  }
   return {
     progress: steps.length === 0 || task.state === 'done' ? 1 : (index + 1) / steps.length,
     at: index + 1,

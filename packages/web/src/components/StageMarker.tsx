@@ -8,6 +8,7 @@ const STATUS_LABEL: Record<StageStatus, string> = {
   current: 'Now',
   upcoming: 'Not reached',
   skipped: 'Skipped',
+  'not-taken': 'Not taken',
 }
 
 export function markerLabel(status: StageStatus, state: TaskState | null): string {
@@ -24,11 +25,14 @@ export function StageMarker({
   status,
   state,
   size = 20,
+  diamond = false,
   label,
 }: {
   status: StageStatus
   state: TaskState | null
   size?: number
+  // The node of a branch.
+  diamond?: boolean
   // What a screen reader says; the stage name and its state.
   label: string
 }) {
@@ -39,6 +43,7 @@ export function StageMarker({
       className="stage-node"
       data-status={status}
       data-state={colorState}
+      data-diamond={diamond ? '' : undefined}
       role="img"
       aria-label={label}
       data-tip={label}
@@ -60,6 +65,9 @@ export function linkKind(
 ): LinkKind {
   if (before === undefined || after === undefined) {
     return 'hidden'
+  }
+  if (before.status === 'not-taken' || after.status === 'not-taken') {
+    return 'upcoming'
   }
   const finished = (status: StageStatus) => status === 'done' || status === 'skipped'
   if (!finished(before.status)) {

@@ -251,6 +251,41 @@ A person can mark a stage the task has not reached yet; the task skips it when i
 - **Send back:** the mark stays, so the next forward pass skips the stage again. A send back straight to a marked stage runs it.
 - A marked release stage ends the task as `done` when it is skipped.
 
+### 3.10 Branches (if condition)
+
+A step of the pipeline can also be a branch: 2 to 4 paths, each with a condition and its own stages. The task takes the first path whose condition holds, runs its stages one after another, then goes on to the step after the branch. The stages of the other paths never run for that task.
+
+- **Model:** a step with `id`, optional `name` and `paths`. A path has `id`, optional `name`, `when`, optional `not: true` and `stages` (single stages). The last path may leave out `when`: it is the Otherwise path. With no path holding and no Otherwise path, the task skips the branch.
+- **Conditions:**
+  - `{ "type": "output", "file": "plan.md", "section": "Size", "contains": "small" }`: the file in the stage folder has the text, ignoring case. With `section`, only the lines under that heading count (the same `sectionBody` as the checks).
+  - `{ "type": "command", "run": "test -f .no-review" }`: the command exits with 0. It runs like a check command: worktree root (task folder without one), platform shell, 10 minute timeout.
+- **Rules (`pipelineSchema`):**
+  - Ids are unique across stages, groups, branches and paths.
+  - Only the last path may have no `when`.
+  - A path holds single stages: no group, no branch, no context or release stage.
+  - A branch is not the first step, and does not come right after a branch: the event that skips a branch picks no path for the next one.
+  - A path with all stages off is left out of new tasks. A branch left with one path that has a `when` is an error ("Turn on a stage in another path, or remove the branch"); without a `when` its stages run as plain steps.
+- **Task data:** the step ref `{ id, paths: [{ id, stages }] }` in `stages`; conditions, names and `not` come from the current settings, as gates do. The task field `paths` maps a branch id to the path taken, `""` when the branch was skipped. It is part of the position, so `deriveTaskState` rebuilds it.
+- **Trigger:** an event that ends the step before a branch. The stage runner (`withPath`) dry-runs the event with `applyTaskEvent`; when the next step is a branch (`entersBranch`), it checks the conditions first. This covers `stage.checked` (after the CI round when CI is on), `stage.approved`, `stage.passed`, `stage.skipped`, the pass of the context stage, the last lane of a group, and a person's `review.approved` through `POST /tasks/:id/events`. A manual gate is checked when you approve, so edits made while it waited count.
+- **Payload:** the ending event gets `path` (the id taken; left out when skipped) and `because` (one line, for example `context.md contains "[small]"`, `test -f .no-review did not exit 0`, `Otherwise`, `No condition held`). No new event type. The reducer reads `path` and never runs a condition, so a replay of `.events.jsonl` gives the same position.
+- **Order:** paths are checked in order and the first that holds wins. `not` turns the result around. A path the task does not have (the branch changed after the task was made) is passed over, and `because` starts with `<path> is not in this task`. Conditions and order come from the current settings; when the branch is gone from the settings, the task's own branch is used.
+- **Failure paths:** a missing or unreadable file, a command that fails to start, and a command that times out all mean "does not hold". A timeout or a start failure adds its reason and the last 2000 characters of output to `because`. A condition never fails or blocks a stage: the worst case is the Otherwise path or the skip.
+- **Moving:**
+  - Entering a branch enters the first stage of the path named in the event and records it in `paths`. Without `path` the task goes to the step after the branch and records `""`.
+  - Inside a path, a finished stage enters the next stage of the path; the last one enters the step after the branch.
+  - Only the first branch reached by an event uses its `path`. A branch right after a skipped branch is skipped too, without a check.
+  - `findStep` and `stepIndex` find a stage inside a path and return the branch. `stepToRun` gives the unit to run: the stage itself inside a path.
+- **Send back:**
+  - With `to`: refused for a stage of a path not taken ("`<id>` is on a path this task did not take"), and for a later stage of the same path.
+  - Without `to`: the last agent stage before, through earlier stages of the current path, then earlier steps, where a branch counts only its taken path.
+  - Going back to a step before the branch drops its choice, and the conditions are checked again when the task gets there. The same holds for `state.overridden` with a stage.
+- **Shells:** a stage in a path is a single stage: Shell 1, the own shell (5), or 6 and up with its own agent.
+- **Progress:** the stage status `not-taken` for stages of a path not taken; stages of a branch not reached are `upcoming`. `StageProgress` gets `path`, and `because` on the first stage of the taken path. The timeline adds "→ <path name>" to an event with `path`.
+- **Known limits:**
+  - The command runs before the event is applied, up to 10 minutes. The task may move meanwhile; the reducer then ignores a stale `path`. There is no lock.
+  - A later stage of a path cannot be marked to skip early while the task is in the same path.
+  - A branch of a group lane, a loop and a person's choice of path are not built.
+
 ## 4. Task context
 
 ### 4.1 Sources

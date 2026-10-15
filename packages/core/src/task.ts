@@ -73,12 +73,16 @@ export const taskSchema = z.object({
   parentId: taskIdSchema.nullable().default(null),
   // The repository of the task. Null is the one with the id DEFAULT_REPO.
   repo: repoIdSchema.nullable().default(null),
-  // The current step: a stage id, or a group id while stages run side by side.
+  // The current step: a stage id, or a group id while stages run side by side. Inside a branch,
+  // the current stage of the path.
   stage: stageIdSchema.default('implement'),
   // The steps the task goes through, copied from its project when it was made.
   stages: z.array(stepRefSchema).min(1).default(LEGACY_STEP_REFS),
   // The state of each stage of the current group. Empty outside a group.
   lanes: lanesSchema.default({}),
+  // The path the task took at each branch it reached: branch id -> path id, '' when it skipped
+  // the branch. Part of the position, so it is rebuilt from the events.
+  paths: z.record(z.string(), z.string()).default({}),
   // When the current step started.
   stageSince: z.iso.datetime().nullable().default(null),
   // When the running agent ended its turn to wait for its background work, which wakes it again.

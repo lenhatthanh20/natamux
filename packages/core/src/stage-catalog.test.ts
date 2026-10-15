@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { pipelineIssues } from './pipeline-issues.js'
-import { DEFAULT_PIPELINE, defaultPrompt, GROUP_KINDS, type Step, stageSchema } from './stage.js'
+import {
+  DEFAULT_PIPELINE,
+  defaultPrompt,
+  GROUP_KINDS,
+  type Stage,
+  type Step,
+  stageSchema,
+} from './stage.js'
 import { catalogEntry, STAGE_CATALOG, STAGE_PHASES } from './stage-catalog.js'
 
 describe('STAGE_CATALOG', () => {
@@ -215,5 +222,58 @@ describe('pipelineIssues', () => {
         level: 'warning',
       },
     ])
+  })
+
+  describe('of a branch', () => {
+    const plan: Step = { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' }
+    const qa: Stage = { id: 'qa', kind: 'manual', gate: 'manual' }
+    const branch = (first: object, second: object = { id: 'other', stages: [qa] }): Step[] => [
+      plan,
+      { id: 'after-plan', paths: [first, second] } as never,
+    ]
+    const when = { type: 'command', run: 'true' }
+
+    it('names the stage in a path that breaks a rule', () => {
+      const ship = { id: 'ship', kind: 'release', gate: 'manual' }
+      expect(pipelineIssues(branch({ id: 'small', when, stages: [ship] }))).toEqual([
+        {
+          stage: 'ship',
+          message: '"ship" is a release stage, which cannot be in a path',
+          level: 'error',
+        },
+      ])
+    })
+
+    it('names the branch of a rule about its paths or conditions', () => {
+      const first = { id: 'small', stages: [{ id: 'implement', kind: 'agent', gate: 'auto' }] }
+      expect(pipelineIssues(branch(first, { id: 'other', when, stages: [qa] }))).toEqual([
+        {
+          stage: 'after-plan',
+          message: 'Only the last path can be the Otherwise path',
+          level: 'error',
+        },
+      ])
+      const empty = { ...first, when: { type: 'command', run: ' ' } }
+      expect(pipelineIssues(branch(empty))).toEqual([
+        { stage: 'after-plan', message: 'Give the command to run', level: 'error' },
+      ])
+    })
+
+    it('names the branch of a group or a branch inside a path', () => {
+      const group = {
+        id: 'build',
+        parallel: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'notes', kind: 'agent', gate: 'auto', output: 'notes.md' },
+        ],
+      }
+      expect(pipelineIssues(branch({ id: 'small', when, stages: [group] }))).toEqual([
+        {
+          stage: 'after-plan',
+          message: 'A path holds single stages only, not a group or a branch',
+          level: 'error',
+        },
+      ])
+    })
   })
 })

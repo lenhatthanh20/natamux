@@ -1014,6 +1014,29 @@
 .stage-link[data-kind="hidden"] {
   visibility: hidden;
 }
+/* A stage of a path the task did not take, and the node of a branch. */
+.stage-node[data-status="not-taken"] {
+  border: 1.5px dashed var(--muted);
+  color: var(--muted);
+  opacity: 0.6;
+}
+.stage-node[data-diamond] {
+  border-radius: 3px;
+  transform: rotate(45deg);
+}
+.stage-node[data-diamond] > svg {
+  transform: rotate(-45deg);
+}
+.branch-lane {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 0.5rem;
+}
+.branch-lane[data-taken="true"] {
+  border-left-color: var(--accent);
+}
+.branch-lane[data-taken="false"] {
+  opacity: 0.6;
+}
 /* The pipeline preview of Project settings: left to right, top to bottom below 640px. It is still,
    so it reads the same with reduced motion. Lines meet the middle of the markers. */
 .pipeline {
@@ -1237,6 +1260,292 @@
   .pipeline-lane .pipeline-node::before,
   .pipeline-lane .pipeline-node::after {
     display: none;
+  }
+}
+
+/* A branch in the pipeline preview: an "If" diamond where the paths split, one lane for each path
+   with its condition above it, and a join. The first lane sits on the line of the other steps, so
+   its condition hangs above the chart. Below 640px the lanes become cards under the "If" row. */
+.pipeline {
+  --chip: 28px;
+}
+.pipeline[data-branch] {
+  padding-top: calc(12px + var(--chip));
+}
+.pipeline-branch {
+  margin-top: calc(var(--chip) * -1);
+}
+.pipeline-branch > .pipeline-link {
+  margin-top: calc(var(--chip) + var(--dot-middle));
+}
+.pipeline-if {
+  margin-top: var(--chip);
+}
+.pipeline-diamond {
+  width: 17px;
+  height: 17px;
+  margin: 3.5px;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  transform: rotate(45deg);
+}
+.pipeline-if-text,
+.pipeline-if-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+.pipeline-if-head b {
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: var(--text-xs--line-height);
+}
+.pipeline-if-sub {
+  display: none;
+}
+.pipeline-fork {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 12px;
+  list-style: none;
+}
+.pipeline-fork::before,
+.pipeline-fork::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--chip) + var(--dot-middle));
+  bottom: calc(var(--lane) - var(--dot-middle) - 2px);
+  width: 2px;
+  background-image: var(--dash-y);
+}
+.pipeline-fork::before {
+  left: 0;
+}
+.pipeline-fork::after {
+  right: 0;
+}
+.pipeline-fork[data-skip]::before,
+.pipeline-fork[data-skip]::after {
+  bottom: 9px;
+}
+.pipeline-fork[data-error]::before,
+.pipeline-fork[data-error]::after {
+  background-image: none;
+  background-color: var(--danger-text);
+}
+.pipeline-path {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.pipeline-path::before,
+.pipeline-path::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--chip) + var(--dot-middle));
+  width: 10px;
+  height: 2px;
+  background-image: var(--dash-x);
+}
+.pipeline-path::before {
+  left: -10px;
+}
+.pipeline-path::after {
+  right: -10px;
+}
+.pipeline-when {
+  align-self: flex-start;
+  max-width: 24rem;
+  height: 24px;
+  margin-bottom: 4px;
+  padding: 0 10px 0 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--raised));
+  color: var(--ink);
+  font-size: var(--text-xs);
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pipeline-when b {
+  color: var(--accent);
+  font-weight: 600;
+}
+.pipeline-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.pipeline-word {
+  color: var(--muted);
+}
+.pipeline-not {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--signal-soft);
+  color: var(--signal);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.pipeline-row {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The line runs on to the right side of the lane, where the lanes join. */
+.pipeline-row::after {
+  content: "";
+  flex: 1;
+  align-self: flex-start;
+  height: 2px;
+  margin-top: var(--dot-middle);
+  background-image: var(--dash-x);
+}
+.pipeline-cell {
+  display: flex;
+}
+.pipeline-skip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 20px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.pipeline-skip::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: -10px;
+  left: -10px;
+  height: 2px;
+  background-image: repeating-linear-gradient(90deg, var(--faint) 0 2px, transparent 2px 6px);
+}
+.pipeline-skip span {
+  position: relative;
+  margin-left: 16px;
+  padding: 0 8px;
+  background: var(--raised);
+}
+.pipeline-if[data-error] .pipeline-diamond {
+  border-color: var(--danger-text);
+}
+
+@media (width < 40rem) {
+  .pipeline[data-branch] {
+    padding-top: 12px;
+  }
+  .pipeline-branch {
+    margin-top: 0;
+  }
+  .pipeline-branch > .pipeline-link {
+    margin: 0 0 0 var(--dot-middle);
+  }
+  .pipeline-if {
+    margin-top: 0;
+  }
+  .pipeline-if-text {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .pipeline-if-head {
+    flex-direction: row;
+    gap: 4px;
+  }
+  .pipeline-if-head b {
+    font-size: var(--text-sm);
+  }
+  .pipeline-if-head b::after {
+    content: " ·";
+  }
+  .pipeline-if-head .pipeline-name {
+    font-size: var(--text-sm);
+    color: var(--ink);
+  }
+  .pipeline-if-sub {
+    display: block;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+  }
+  .pipeline-fork {
+    max-width: 100%;
+    gap: 0;
+    padding: 4px 0 0 34px;
+  }
+  .pipeline-fork::before {
+    top: 0;
+    bottom: 0;
+    left: var(--dot-middle);
+  }
+  .pipeline-fork::after {
+    display: none;
+  }
+  .pipeline-fork[data-skip]::before {
+    bottom: 9px;
+  }
+  .pipeline-path {
+    margin-bottom: 8px;
+    padding: 8px 12px 4px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .pipeline-path::before {
+    top: 17px;
+    left: calc(var(--dot-middle) - 34px + 2px - 1px);
+    width: calc(34px - var(--dot-middle));
+  }
+  .pipeline-path::after {
+    display: none;
+  }
+  .pipeline-when {
+    max-width: none;
+    height: auto;
+    margin-bottom: 2px;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    white-space: normal;
+  }
+  .pipeline-row {
+    flex-direction: column;
+  }
+  .pipeline-row::after {
+    display: none;
+  }
+  .pipeline-cell {
+    max-width: 100%;
+  }
+  .pipeline-row .pipeline-node::before,
+  .pipeline-row .pipeline-node::after {
+    display: none;
+  }
+  .pipeline-skip {
+    margin-bottom: 4px;
+  }
+  .pipeline-skip::before {
+    right: auto;
+    left: calc(var(--dot-middle) - 34px + 2px - 1px);
+    width: calc(34px - var(--dot-middle));
+  }
+  .pipeline-skip span {
+    margin-left: 0;
+    padding: 0;
+    background: none;
   }
 }
 

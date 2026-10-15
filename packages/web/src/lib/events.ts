@@ -53,11 +53,19 @@ const EVENT_SENTENCE: Record<EventType, string> = {
 }
 
 // A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.
-export function describeEvent(type: EventType, payload: TaskEvent['payload'] = {}): string {
-  if (type === 'stage.reopened' && payload.ci === true) {
-    return 'Sent back by CI'
-  }
-  return EVENT_SENTENCE[type]
+// An event that chose a path of a branch ends with "→ <path name>". `pathNames` maps a path id to
+// its name; without one the id is shown.
+export function describeEvent(
+  type: EventType,
+  payload: TaskEvent['payload'] = {},
+  pathNames: Readonly<Record<string, string>> = {},
+): string {
+  const sentence =
+    type === 'stage.reopened' && payload.ci === true ? 'Sent back by CI' : EVENT_SENTENCE[type]
+  const path = payload.path
+  return typeof path === 'string' && path !== ''
+    ? `${sentence} → ${pathNames[path] ?? path}`
+    : sentence
 }
 
 export function formatClock(isoTime: string): string {
@@ -106,13 +114,16 @@ function detailOf(event: TaskEvent): string | undefined {
 
 // Consecutive events of the same kind, from the same actor, become one line with a count, so
 // "Details edited" four times in a row reads as "Details edited ×4". Oldest first in, oldest first out.
-export function groupEvents(events: readonly StoredEvent[]): ActivityLine[] {
+export function groupEvents(
+  events: readonly StoredEvent[],
+  pathNames?: Readonly<Record<string, string>>,
+): ActivityLine[] {
   const lines: ActivityLine[] = []
   for (const { seq, accepted, event } of events) {
     const actor = actorOf(event.source)
     const last = lines[lines.length - 1]
     const detail = detailOf(event)
-    const sentence = describeEvent(event.type, event.payload)
+    const sentence = describeEvent(event.type, event.payload, pathNames)
     if (last?.sentence === sentence && last.actor === actor && last.accepted === accepted) {
       last.count += 1
       last.at = event.at

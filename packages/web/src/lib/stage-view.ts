@@ -1,6 +1,9 @@
 import {
+  type BranchPath,
   type Stage,
+  type StageBranch,
   type StageProgress,
+  type StageStatus,
   type Step,
   stagesOf,
   type Task,
@@ -105,12 +108,60 @@ export function finishedWhen(stage: Stage): string {
   }
 }
 
-// How many stages are finished, of all.
+// How many stages are finished, of all. A stage of a path not taken is neither.
 export function stageCount(progress: readonly StageProgress[]): { done: number; total: number } {
+  const counted = progress.filter((stage) => stage.status !== 'not-taken')
   return {
-    done: progress.filter((stage) => stage.status === 'done' || stage.status === 'skipped').length,
-    total: progress.length,
+    done: counted.filter((stage) => stage.status === 'done' || stage.status === 'skipped').length,
+    total: counted.length,
   }
+}
+
+export function pathLabel(path: Pick<BranchPath, 'id' | 'name'>): string {
+  return path.name ?? path.id
+}
+
+// The path a task took: the one with a stage that is not waiting. None before the branch is
+// reached, and none when the branch was skipped.
+export function takenPath(
+  branch: StageBranch,
+  progress: ReadonlyMap<string, StageProgress>,
+): BranchPath | undefined {
+  return branch.paths.find((path) =>
+    path.stages.some((stage) => {
+      const status = progress.get(stage.id)?.status
+      return status !== undefined && status !== 'upcoming' && status !== 'not-taken'
+    }),
+  )
+}
+
+// The status of the diamond of a branch.
+export function branchStatus(
+  branch: StageBranch,
+  progress: ReadonlyMap<string, StageProgress>,
+): StageStatus {
+  const stages = branch.paths.flatMap((path) => path.stages)
+  const statuses = stages.map((stage) => progress.get(stage.id)?.status ?? 'upcoming')
+  const taken = takenPath(branch, progress)
+  if (taken === undefined) {
+    return statuses.every((status) => status === 'not-taken') ? 'not-taken' : 'upcoming'
+  }
+  const own = taken.stages.map((stage) => progress.get(stage.id)?.status)
+  return own.every((status) => status === 'done' || status === 'skipped') ? 'done' : 'current'
+}
+
+// A line joins two stages only when they are not in different paths.
+export function sameLane(
+  before: Pick<StageProgress, 'path'> | undefined,
+  after: Pick<StageProgress, 'path'> | undefined,
+): boolean {
+  return (
+    before === undefined ||
+    after === undefined ||
+    before.path === null ||
+    after.path === null ||
+    before.path === after.path
+  )
 }
 
 // How many times the task was sent back.

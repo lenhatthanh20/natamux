@@ -1,13 +1,25 @@
-import { DEFAULT_PIPELINE, type Stage, stagesOf, type TaskEvent } from '@natamux/core'
+import {
+  DEFAULT_PIPELINE,
+  type Stage,
+  type StageBranch,
+  type StageProgress,
+  type StageStatus,
+  stagesOf,
+  type TaskEvent,
+} from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { linkKind } from '../components/StageMarker'
 import {
+  branchStatus,
   finishedWhen,
   formatDuration,
   missingSkills,
+  pathLabel,
   ranWithWorkflow,
+  sameLane,
   stageCount,
   stepTime,
+  takenPath,
   waitingForCi,
 } from './stage-view'
 
@@ -66,6 +78,72 @@ describe('stageCount', () => {
       done: 2,
       total: 3,
     })
+  })
+})
+
+describe('stageCount with a branch', () => {
+  it('leaves out the stages of a path not taken', () => {
+    const entry = (status: StageStatus) => ({ status }) as never
+    expect(
+      stageCount([entry('done'), entry('not-taken'), entry('not-taken'), entry('current')]),
+    ).toEqual({ done: 1, total: 2 })
+  })
+})
+
+describe('the branch of a task', () => {
+  const stage = (id: string): Stage => ({ id, kind: 'agent', gate: 'auto' }) as Stage
+  const branch: StageBranch = {
+    id: 'after-plan',
+    paths: [
+      { id: 'small', name: 'Small change', stages: [stage('implement'), stage('testing')] },
+      { id: 'big', stages: [stage('review')] },
+    ],
+  }
+  const entries = (statuses: Record<string, StageStatus>) =>
+    new Map(
+      Object.entries(statuses).map(([id, status]) => [id, { stage: id, status }] as const),
+    ) as unknown as ReadonlyMap<string, StageProgress>
+
+  it('finds the path the task took by its stages that are not waiting', () => {
+    const taken = takenPath(
+      branch,
+      entries({ implement: 'current', testing: 'upcoming', review: 'not-taken' }),
+    )
+    expect(taken?.id).toBe('small')
+  })
+
+  it('finds no path before the branch is reached, and none when it was skipped', () => {
+    const before = entries({ implement: 'upcoming', testing: 'upcoming', review: 'upcoming' })
+    const skipped = entries({ implement: 'not-taken', testing: 'not-taken', review: 'not-taken' })
+    expect(takenPath(branch, before)).toBeUndefined()
+    expect(takenPath(branch, skipped)).toBeUndefined()
+  })
+
+  it('gives the status of the diamond', () => {
+    const status = (statuses: Record<string, StageStatus>) =>
+      branchStatus(branch, entries(statuses))
+    expect(status({ implement: 'upcoming', testing: 'upcoming', review: 'upcoming' })).toBe(
+      'upcoming',
+    )
+    expect(status({ implement: 'done', testing: 'current', review: 'not-taken' })).toBe('current')
+    expect(status({ implement: 'done', testing: 'done', review: 'not-taken' })).toBe('done')
+    expect(status({ implement: 'not-taken', testing: 'not-taken', review: 'not-taken' })).toBe(
+      'not-taken',
+    )
+  })
+
+  it('names a path by its name, or its id', () => {
+    expect(pathLabel({ id: 'small', name: 'Small change' })).toBe('Small change')
+    expect(pathLabel({ id: 'big' })).toBe('big')
+  })
+
+  it('draws no line from a stage of one path to a stage of another', () => {
+    const at = (path: string | null) => ({ path })
+    expect(sameLane(at(null), at('small'))).toBe(true)
+    expect(sameLane(at('small'), at(null))).toBe(true)
+    expect(sameLane(at('small'), at('small'))).toBe(true)
+    expect(sameLane(at('small'), at('big'))).toBe(false)
+    expect(sameLane(undefined, at('big'))).toBe(true)
   })
 })
 

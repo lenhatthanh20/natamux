@@ -1,21 +1,29 @@
 import {
   activeSteps,
+  type BranchPath,
   type CatalogStage,
+  type Condition,
   type CreateIssueWhen,
   canHaveOwnAgent,
   catalogEntry,
   commitRule,
+  conditionSchema,
   DEFAULT_PIPELINE,
   DEFAULT_PROJECT_SETTINGS,
   defaultPrompt,
+  describeCondition,
   GATES,
   type Gate,
   GROUP_KINDS,
+  isBranch,
   isGroup,
+  isStage,
+  type PipelineIssue,
   projectSettingsSchema,
   STAGE_CATALOG,
   STAGE_KINDS,
   type Stage,
+  type StageBranch,
   type StageGroup,
   type StageKind,
   type Step,
@@ -37,6 +45,7 @@ export type Draft = { ok: true; raw: RawSettings; steps: Step[] } | { ok: false;
 const ID_RULE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const MAX_ID = 40
 const MAX_GROUP = 4
+const MAX_PATHS = 4
 
 function isRecord(value: unknown): value is RawSettings {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -93,6 +102,15 @@ function isStageShape(value: unknown): boolean {
   )
 }
 
+function isPathShape(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    Array.isArray(value.stages) &&
+    value.stages.every(isStageShape)
+  )
+}
+
 // The steps the Stages tab can show. Wrong values of a field are left for `pipelineIssues`, which
 // names them next to their stage; only a shape the list cannot draw is refused here.
 function readSteps(value: unknown): Step[] | string {
@@ -103,6 +121,14 @@ function readSteps(value: unknown): Step[] | string {
     return 'stages: give a list of stages, such as [].'
   }
   for (const [index, step] of value.entries()) {
+    if (isRecord(step) && 'paths' in step) {
+      const fitsBranch =
+        typeof step.id === 'string' && Array.isArray(step.paths) && step.paths.every(isPathShape)
+      if (!fitsBranch) {
+        return `stages, item ${index + 1}: a branch needs an id and paths, each with an id and a list of stages. A stage needs an id, a kind (${STAGE_KINDS.join(', ')}) and a gate (manual or auto).`
+      }
+      continue
+    }
     const fits =
       isRecord(step) && 'parallel' in step
         ? typeof step.id === 'string' &&
@@ -206,31 +232,79 @@ export function mergeChanges(
   return merged
 }
 
-// Every id in the pipeline: stages and groups.
+// Every id in the pipeline: stages, groups, branches and paths.
 export function usedIds(steps: readonly Step[]): Set<string> {
   return new Set(
-    steps.flatMap((step) =>
-      isGroup(step) ? [step.id, ...step.parallel.map((stage) => stage.id)] : [step.id],
-    ),
+    steps.flatMap((step) => {
+      if (isGroup(step)) {
+        return [step.id, ...step.parallel.map((stage) => stage.id)]
+      }
+      if (isBranch(step)) {
+        return [
+          step.id,
+          ...step.paths.flatMap((path) => [path.id, ...path.stages.map((stage) => stage.id)]),
+        ]
+      }
+      return [step.id]
+    }),
   )
 }
 
-type Place = { index: number; lane: number | null }
+// Where a stage is: its step; its lane when it runs in a group; its path and its place in the path
+// when it is in a branch. A group's or a branch's own id has none of these.
+type Place = { index: number; lane: number | null; path: number | null; slot: number | null }
 
-// Where a stage is: its step, and its lane when it runs in a group. A group's own id has no lane.
 export function findPlace(steps: readonly Step[], id: string): Place | null {
   for (const [index, step] of steps.entries()) {
     if (step.id === id) {
-      return { index, lane: null }
+      return { index, lane: null, path: null, slot: null }
     }
     if (isGroup(step)) {
       const lane = step.parallel.findIndex((stage) => stage.id === id)
       if (lane !== -1) {
-        return { index, lane }
+        return { index, lane, path: null, slot: null }
+      }
+    }
+    if (isBranch(step)) {
+      for (const [path, item] of step.paths.entries()) {
+        const slot = item.stages.findIndex((stage) => stage.id === id)
+        if (slot !== -1) {
+          return { index, lane: null, path, slot }
+        }
       }
     }
   }
   return null
+}
+
+export function findBranch(steps: readonly Step[], id: string): StageBranch | undefined {
+  const step = steps.find((candidate) => candidate.id === id)
+  return step !== undefined && isBranch(step) ? step : undefined
+}
+
+// The branch with this path, and the place of the path in it.
+function findPath(steps: readonly Step[], pathId: string): { index: number; path: number } | null {
+  for (const [index, step] of steps.entries()) {
+    if (isBranch(step)) {
+      const path = step.paths.findIndex((item) => item.id === pathId)
+      if (path !== -1) {
+        return { index, path }
+      }
+    }
+  }
+  return null
+}
+
+// A path holds single stages; a context or release stage has its fixed place and cannot be in one.
+function fitsInPath(step: Step): step is Stage {
+  return isStage(step) && step.kind !== 'context' && step.kind !== 'release'
+}
+
+function withPathStages(branch: StageBranch, path: number, stages: Stage[]): StageBranch {
+  return {
+    ...branch,
+    paths: branch.paths.map((item, at) => (at === path ? { ...item, stages } : item)),
+  }
 }
 
 export function findStage(steps: readonly Step[], id: string): Stage | undefined {
@@ -268,6 +342,13 @@ function takeOut(
   if (place === null || step === undefined) {
     return null
   }
+  if (place.path !== null && place.slot !== null && isBranch(step)) {
+    const stages = step.paths[place.path]?.stages ?? []
+    const taken = stages[place.slot] as Stage
+    const left = stages.filter((_, slot) => slot !== place.slot)
+    const rest = replaceAt(steps, place.index, withPathStages(step, place.path, left))
+    return { rest, taken, at: place.index }
+  }
   if (place.lane === null || !isGroup(step)) {
     return { rest: replaceAt(steps, place.index), taken: step, at: place.index }
   }
@@ -283,6 +364,9 @@ export function moveStage(steps: readonly Step[], id: string, direction: -1 | 1)
   const step = place === null ? undefined : steps[place.index]
   if (place === null || step === undefined) {
     return steps as Step[]
+  }
+  if (place.path !== null && place.slot !== null && isBranch(step)) {
+    return movePathStage(steps, id, step, place.path, place.slot, direction)
   }
   if (place.lane !== null && isGroup(step)) {
     const target = place.lane + direction
@@ -305,7 +389,51 @@ export function moveStage(steps: readonly Step[], id: string, direction: -1 | 1)
   if (other === undefined) {
     return steps as Step[]
   }
+  // A stage next to a branch goes into its nearest path; it leaves by the same controls.
+  if (isBranch(other) && fitsInPath(step)) {
+    const out = takeOut(steps, id)
+    const at = out === null ? -1 : out.rest.findIndex((item) => item.id === other.id)
+    const branch = out?.rest[at]
+    if (out === null || branch === undefined || !isBranch(branch)) {
+      return steps as Step[]
+    }
+    const path = direction > 0 ? 0 : branch.paths.length - 1
+    const held = branch.paths[path]?.stages ?? []
+    const stages = direction > 0 ? [step, ...held] : [...held, step]
+    return replaceAt(out.rest, at, withPathStages(branch, path, stages))
+  }
   return replaceAt(replaceAt(steps, target, step), place.index, other)
+}
+
+// A stage of a path moves among the stages of its path, then into the next path, and out of the
+// branch at the last one.
+function movePathStage(
+  steps: readonly Step[],
+  id: string,
+  branch: StageBranch,
+  path: number,
+  slot: number,
+  direction: -1 | 1,
+): Step[] {
+  const stages = [...(branch.paths[path]?.stages ?? [])]
+  const target = slot + direction
+  if (target >= 0 && target < stages.length) {
+    ;[stages[slot], stages[target]] = [stages[target] as Stage, stages[slot] as Stage]
+    return replaceAt(steps, steps.indexOf(branch), withPathStages(branch, path, stages))
+  }
+  const out = takeOut(steps, id)
+  if (out === null) {
+    return steps as Step[]
+  }
+  const stage = out.taken as Stage
+  const next = path + direction
+  const left = out.rest[out.at]
+  if (left !== undefined && isBranch(left) && next >= 0 && next < left.paths.length) {
+    const held = left.paths[next]?.stages ?? []
+    const joined = direction < 0 ? [...held, stage] : [stage, ...held]
+    return replaceAt(out.rest, out.at, withPathStages(left, next, joined))
+  }
+  return insertAt(out.rest, direction < 0 ? out.at : out.at + 1, stage)
 }
 
 export function canMove(steps: readonly Step[], id: string, direction: -1 | 1): boolean {
@@ -324,6 +452,11 @@ export function dropStage(
     return steps as Step[]
   }
   const from = findPlace(steps, id)
+  // Dropped on a path that has no stage to drop beside: the stage goes to the end of the path.
+  const into = findPath(steps, targetId)
+  if (from !== null && into !== null) {
+    return dropIntoPath(steps, id, into)
+  }
   const to = findPlace(steps, targetId)
   if (from === null || to === null) {
     return steps as Step[]
@@ -354,10 +487,18 @@ export function dropStage(
     return steps as Step[]
   }
   const { taken } = out
+  if (place.path !== null && place.slot !== null && isBranch(host)) {
+    if (!fitsInPath(taken)) {
+      return steps as Step[]
+    }
+    const stages = [...(host.paths[place.path]?.stages ?? [])]
+    stages.splice(side === 'before' ? place.slot : place.slot + 1, 0, taken)
+    return replaceAt(out.rest, place.index, withPathStages(host, place.path, stages))
+  }
   if (
     place.lane !== null &&
     isGroup(host) &&
-    !isGroup(taken) &&
+    isStage(taken) &&
     GROUP_KINDS.includes(taken.kind) &&
     host.parallel.length < MAX_GROUP
   ) {
@@ -368,10 +509,27 @@ export function dropStage(
   return insertAt(out.rest, side === 'before' ? place.index : place.index + 1, taken)
 }
 
-// A group id that no stage or group uses yet, from the id of its first stage.
-function newGroupId(steps: readonly Step[], first: string): string {
-  const used = usedIds(steps)
-  const base = first.length <= MAX_ID - 10 ? `${first}-group` : 'group'
+function dropIntoPath(
+  steps: readonly Step[],
+  id: string,
+  into: { index: number; path: number },
+): Step[] {
+  const target = steps[into.index]
+  const out = takeOut(steps, id)
+  if (out === null || target === undefined || !fitsInPath(out.taken)) {
+    return steps as Step[]
+  }
+  const at = out.rest.findIndex((step) => step.id === target.id)
+  const branch = out.rest[at]
+  if (branch === undefined || !isBranch(branch)) {
+    return steps as Step[]
+  }
+  const held = branch.paths[into.path]?.stages ?? []
+  return replaceAt(out.rest, at, withPathStages(branch, into.path, [...held, out.taken]))
+}
+
+// The base with a number after it, when the base is used already.
+function freeId(used: ReadonlySet<string>, base: string): string {
   if (!used.has(base)) {
     return base
   }
@@ -382,6 +540,32 @@ function newGroupId(steps: readonly Step[], first: string): string {
   return `${base}-${number}`
 }
 
+// Two paths of a branch can break the same rule, and the message does not tell them apart: show it
+// once.
+export function uniqueIssues(issues: readonly PipelineIssue[]): PipelineIssue[] {
+  const seen = new Set<string>()
+  return issues.filter((issue) => {
+    const key = `${issue.level}|${issue.stage}|${issue.message}`
+    const fresh = !seen.has(key)
+    seen.add(key)
+    return fresh
+  })
+}
+
+// "path-3", counting up from `from` until no id of the pipeline is the same.
+function freePathId(used: ReadonlySet<string>, from: number): string {
+  let number = from
+  while (used.has(`path-${number}`)) {
+    number += 1
+  }
+  return `path-${number}`
+}
+
+// A group id that no stage or group uses yet, from the id of its first stage.
+function newGroupId(steps: readonly Step[], first: string): string {
+  return freeId(usedIds(steps), first.length <= MAX_ID - 10 ? `${first}-group` : 'group')
+}
+
 // Why a stage cannot run alongside the stage above, or null when it can.
 export function joinProblem(steps: readonly Step[], id: string): string | null {
   const place = findPlace(steps, id)
@@ -389,7 +573,10 @@ export function joinProblem(steps: readonly Step[], id: string): string | null {
   if (place !== null && place.lane !== null) {
     return 'It runs alongside other stages already'
   }
-  if (place === null || step === undefined || isGroup(step)) {
+  if (place !== null && place.path !== null) {
+    return 'A path holds single stages only'
+  }
+  if (place === null || step === undefined || !isStage(step)) {
     return 'Only a stage can run alongside another'
   }
   if (!GROUP_KINDS.includes(step.kind)) {
@@ -398,6 +585,9 @@ export function joinProblem(steps: readonly Step[], id: string): string | null {
   const above = steps[place.index - 1]
   if (above === undefined) {
     return 'There is no stage above'
+  }
+  if (isBranch(above)) {
+    return `${branchName(above)} is a branch; a stage cannot run alongside it`
   }
   if (isGroup(above)) {
     return above.parallel.length >= MAX_GROUP ? 'A group holds 4 stages at most' : null
@@ -416,6 +606,9 @@ export function joinAbove(steps: readonly Step[], id: string): Step[] {
   }
   const stage = steps[place.index] as Stage
   const above = steps[place.index - 1] as Step
+  if (isBranch(above)) {
+    return steps as Step[]
+  }
   const rest = replaceAt(steps, place.index)
   const joined: StageGroup = isGroup(above)
     ? { ...above, parallel: [...above.parallel, stage] }
@@ -442,20 +635,30 @@ function addBeforeRelease(steps: readonly Step[], stage: Stage): Step[] {
   if (stage.kind === 'context') {
     return insertAt(steps, 0, stage)
   }
-  const release = steps.findIndex((step) => !isGroup(step) && step.kind === 'release')
-  return insertAt(steps, release === -1 ? steps.length : release, stage)
+  return insertAt(steps, releaseIndex(steps), stage)
 }
 
-export function addCatalogStage(steps: readonly Step[], id: string): Step[] {
+function releaseIndex(steps: readonly Step[]): number {
+  const release = steps.findIndex((step) => isStage(step) && step.kind === 'release')
+  return release === -1 ? steps.length : release
+}
+
+// With `pathId`, the stage goes to the end of that path instead. A path takes no context or
+// release stage.
+export function addCatalogStage(steps: readonly Step[], id: string, pathId?: string): Step[] {
   const entry = catalogEntry(id)
   if (entry === undefined || usedIds(steps).has(id)) {
     return steps as Step[]
   }
-  const { sections, ...stage } = entry.stage
-  return addBeforeRelease(
-    steps,
-    sections === undefined ? stage : { ...stage, sections: [...sections] },
-  )
+  const { sections, ...rest } = entry.stage
+  const stage: Stage = sections === undefined ? rest : { ...rest, sections: [...sections] }
+  if (pathId === undefined) {
+    return addBeforeRelease(steps, stage)
+  }
+  if (!fitsInPath(stage) || findPath(steps, pathId) === null) {
+    return steps as Step[]
+  }
+  return updatePath(steps, pathId, (path) => ({ ...path, stages: [...path.stages, stage] }))
 }
 
 // The catalog stages that are not in the pipeline, in catalog order.
@@ -543,6 +746,17 @@ export function addCustomStage(steps: readonly Step[], input: CustomStageInput):
 
 function updateStage(steps: readonly Step[], id: string, change: (stage: Stage) => Stage): Step[] {
   return steps.map((step) => {
+    if (isBranch(step)) {
+      return step.paths.some((path) => path.stages.some((stage) => stage.id === id))
+        ? {
+            ...step,
+            paths: step.paths.map((path) => ({
+              ...path,
+              stages: path.stages.map((stage) => (stage.id === id ? change(stage) : stage)),
+            })),
+          }
+        : step
+    }
     if (isGroup(step)) {
       return step.parallel.some((stage) => stage.id === id)
         ? {
@@ -552,6 +766,180 @@ function updateStage(steps: readonly Step[], id: string, change: (stage: Stage) 
         : step
     }
     return step.id === id ? change(step) : step
+  })
+}
+
+function updateBranch(
+  steps: readonly Step[],
+  branchId: string,
+  change: (branch: StageBranch) => StageBranch,
+): Step[] {
+  return steps.map((step) => (isBranch(step) && step.id === branchId ? change(step) : step))
+}
+
+function updatePath(
+  steps: readonly Step[],
+  pathId: string,
+  change: (path: BranchPath) => BranchPath,
+): Step[] {
+  return steps.map((step) =>
+    isBranch(step) && step.paths.some((path) => path.id === pathId)
+      ? { ...step, paths: step.paths.map((path) => (path.id === pathId ? change(path) : path)) }
+      : step,
+  )
+}
+
+// A condition to start from. It is not valid until the person fills it in.
+export function blankCondition(type: Condition['type']): Condition {
+  return type === 'command'
+    ? { type: 'command', run: '' }
+    : { type: 'output', file: 'plan.md', contains: '' }
+}
+
+// The condition with another type; the same one when the type does not change.
+export function retypeCondition(when: Condition | undefined, type: Condition['type']): Condition {
+  return when?.type === type ? when : blankCondition(type)
+}
+
+export type ConditionField = 'file' | 'section' | 'contains' | 'run'
+
+// One field of a condition. An empty section is left out.
+export function editCondition(when: Condition, field: ConditionField, value: string): Condition {
+  if (when.type === 'command') {
+    return field === 'run' ? { ...when, run: value } : when
+  }
+  if (field === 'file') {
+    return { ...when, file: value }
+  }
+  if (field === 'contains') {
+    return { ...when, contains: value }
+  }
+  if (field === 'section') {
+    const { section: _, ...rest } = when
+    return value.trim() === '' ? rest : { ...rest, section: value }
+  }
+  return when
+}
+
+// The messages of the rules a condition breaks, by field.
+export function conditionProblems(when: Condition): Partial<Record<ConditionField, string>> {
+  const problems: Partial<Record<ConditionField, string>> = {}
+  for (const issue of conditionSchema.safeParse(when).error?.issues ?? []) {
+    const field = issue.path[0]
+    if (field === 'file' || field === 'section' || field === 'contains' || field === 'run') {
+      problems[field] ??= issue.message
+    }
+  }
+  return problems
+}
+
+// A new branch goes after the step with this id, or before the release. It starts with a path that
+// has a condition and an Otherwise path, both without stages: the person adds them.
+export function addBranch(steps: readonly Step[], afterId?: string): Step[] {
+  const place = afterId === undefined ? null : findPlace(steps, afterId)
+  const end = releaseIndex(steps)
+  const index = place === null ? end : Math.min(place.index + 1, end)
+  const used = usedIds(steps)
+  const id = freeId(used, 'branch')
+  used.add(id)
+  const first = freePathId(used, 1)
+  used.add(first)
+  const second = freePathId(used, 2)
+  const branch: StageBranch = {
+    id,
+    paths: [
+      { id: first, when: blankCondition('output'), stages: [] },
+      { id: second, stages: [] },
+    ],
+  }
+  return insertAt(steps, index, branch)
+}
+
+// A path with a condition. It goes before the Otherwise path, which stays last. A branch holds 4
+// paths at most.
+export function addPath(steps: readonly Step[], branchId: string): Step[] {
+  const branch = findBranch(steps, branchId)
+  if (branch === undefined || branch.paths.length >= MAX_PATHS) {
+    return steps as Step[]
+  }
+  const id = freePathId(usedIds(steps), branch.paths.length + 1)
+  const added: BranchPath = { id, when: blankCondition('output'), stages: [] }
+  const last = branch.paths.at(-1)
+  return updateBranch(steps, branchId, (item) => ({
+    ...item,
+    paths:
+      last !== undefined && last.when === undefined
+        ? [...item.paths.slice(0, -1), added, last]
+        : [...item.paths, added],
+  }))
+}
+
+// The path goes with its stages. A branch keeps one path at least.
+export function removePath(steps: readonly Step[], branchId: string, pathId: string): Step[] {
+  const branch = findBranch(steps, branchId)
+  if (branch === undefined || branch.paths.length < 2) {
+    return steps as Step[]
+  }
+  return updateBranch(steps, branchId, (item) => ({
+    ...item,
+    paths: item.paths.filter((path) => path.id !== pathId),
+  }))
+}
+
+// "Does not hold" is `not: true`; "holds" leaves the field out.
+export function setPathCondition(
+  steps: readonly Step[],
+  branchId: string,
+  pathId: string,
+  when: Condition,
+  not = false,
+): Step[] {
+  if (findBranch(steps, branchId) === undefined) {
+    return steps as Step[]
+  }
+  return updatePath(steps, pathId, (path) => {
+    const { not: _, ...rest } = path
+    return { ...rest, when, ...(not ? { not: true } : {}) }
+  })
+}
+
+// Only the last path can be the Otherwise path. Turning it off gives it a blank condition.
+export function setOtherwise(
+  steps: readonly Step[],
+  branchId: string,
+  pathId: string,
+  on: boolean,
+): Step[] {
+  const last = findBranch(steps, branchId)?.paths.at(-1)
+  if (last === undefined || last.id !== pathId || (last.when === undefined) === on) {
+    return steps as Step[]
+  }
+  return updatePath(steps, pathId, (path) => {
+    const { when: _when, not: _not, ...rest } = path
+    return on ? rest : { ...rest, when: blankCondition('output') }
+  })
+}
+
+// An empty name removes the field, so the id shows as the name.
+export function setBranchName(steps: readonly Step[], branchId: string, name: string): Step[] {
+  return updateBranch(steps, branchId, (branch) => {
+    const { name: _, ...rest } = branch
+    return name.trim() === '' ? rest : { ...rest, name }
+  })
+}
+
+export function setPathName(
+  steps: readonly Step[],
+  branchId: string,
+  pathId: string,
+  name: string,
+): Step[] {
+  if (findBranch(steps, branchId) === undefined) {
+    return steps as Step[]
+  }
+  return updatePath(steps, pathId, (path) => {
+    const { name: _, ...rest } = path
+    return name.trim() === '' ? rest : { ...rest, name }
   })
 }
 
@@ -608,16 +996,32 @@ export type TextField =
   | 'agent'
   | 'args'
 
-export type ShellField = { stage: Stage; field: 'check' | 'command' | 'args'; value: string }
+// `run` is the command of a path's condition; its `stage` is the path.
+export type ShellField = {
+  stage: Pick<Stage, 'id' | 'name'>
+  field: 'check' | 'command' | 'args' | 'run'
+  value: string
+}
+
+function stageFields(stage: Stage): ShellField[] {
+  return (['check', 'command', 'args'] as const).flatMap((field) => {
+    const value = stage[field]
+    return value === undefined ? [] : [{ stage, field, value }]
+  })
+}
 
 // What a settings file would run in a shell or put on an agent's command line, so an import can
 // show it before it lands. Stages that are off count: they can be turned on later.
 export function shellFields(steps: readonly Step[]): ShellField[] {
-  return steps.flatMap(stagesOf).flatMap((stage) =>
-    (['check', 'command', 'args'] as const).flatMap((field) => {
-      const value = stage[field]
-      return value === undefined ? [] : [{ stage, field, value }]
-    }),
+  return steps.flatMap((step) =>
+    isBranch(step)
+      ? step.paths.flatMap((path): ShellField[] => [
+          ...(path.when?.type === 'command'
+            ? [{ stage: path, field: 'run' as const, value: path.when.run }]
+            : []),
+          ...path.stages.flatMap(stageFields),
+        ])
+      : stagesOf(step).flatMap(stageFields),
   )
 }
 
@@ -737,10 +1141,43 @@ export function groupName(group: StageGroup): string {
   return group.name ?? joinNames(group.parallel.map(stageName))
 }
 
+export function branchName(branch: Pick<StageBranch, 'id' | 'name'>): string {
+  return stageName(branch)
+}
+
+export function pathName(path: Pick<BranchPath, 'id' | 'name'>): string {
+  return stageName(path)
+}
+
+// The name of a step in a sentence: a stage, a group or a branch.
+export function stepName(step: Step): string {
+  if (isGroup(step)) {
+    return groupName(step)
+  }
+  return isBranch(step) ? branchName(step) : stageName(step)
+}
+
+// "Small change if plan.md contains "small"", or "Review PR, otherwise".
+export function pathLabel(path: BranchPath): string {
+  return path.when === undefined
+    ? `${pathName(path)}, otherwise`
+    : `${pathName(path)} if ${describeCondition(path)}`
+}
+
+// "After plan, one path of 2: Small change if …; Review PR, otherwise"
+export function branchLabel(branch: StageBranch): string {
+  return `${branchName(branch)}, one path of ${branch.paths.length}: ${branch.paths.map(pathLabel).join('; ')}`
+}
+
 // What the preview says to a screen reader: the stages that are on, in order.
 export function pipelineLabel(steps: readonly Step[]): string {
-  const parts = activeSteps(steps).map((step) =>
-    isGroup(step) ? `${joinNames(step.parallel.map(stageName))} side by side` : stageName(step),
-  )
+  const parts = activeSteps(steps).map((step) => {
+    if (isBranch(step)) {
+      return branchLabel(step)
+    }
+    return isGroup(step)
+      ? `${joinNames(step.parallel.map(stageName))} side by side`
+      : stageName(step)
+  })
   return parts.length === 0 ? 'Pipeline: no stage is on' : `Pipeline: ${parts.join(', then ')}`
 }

@@ -4,11 +4,19 @@ import {
   completeEvent,
   deriveTaskState,
   type EventType,
+  entersBranch,
   GATE_EVENT_TYPES,
   type TaskEvent,
   taskEventSchema,
 } from './events.js'
-import { DEFAULT_PIPELINE, LEGACY_PIPELINE, type StagePosition, type Step } from './stage.js'
+import {
+  DEFAULT_PIPELINE,
+  LEGACY_PIPELINE,
+  type Stage,
+  type StageBranch,
+  type StagePosition,
+  type Step,
+} from './stage.js'
 
 // The pipeline these cases were written for: a person reviews, then the tests run. The default
 // pipeline has an agent review after the tests instead.
@@ -488,5 +496,253 @@ describe('GATE_EVENT_TYPES', () => {
       'stage.skipped',
       'state.overridden',
     ])
+  })
+})
+
+describe('a branch', () => {
+  const plan: Stage = { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' }
+  const branch: StageBranch = {
+    id: 'after-plan',
+    paths: [
+      {
+        id: 'small',
+        when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+        stages: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'testing', kind: 'testing', gate: 'auto' },
+        ],
+      },
+      {
+        id: 'pr-review',
+        when: { type: 'command', run: 'test -f .no-review' },
+        not: true,
+        stages: [{ id: 'review', kind: 'review', gate: 'manual' }],
+      },
+    ],
+  }
+  const steps: Step[] = [plan, branch, { id: 'release', kind: 'release', gate: 'manual' }]
+  const SMALL = { 'after-plan': 'small' }
+
+  function on(stage: string, state: StagePosition['state'], paths: Record<string, string>) {
+    return { stage, state, lanes: {}, paths }
+  }
+
+  function walk(position: StagePosition, ...events: TaskEvent[]) {
+    let current = position
+    const accepted: boolean[] = []
+    for (const next of events) {
+      const applied = applyTaskEvent(current, next, steps)
+      current = applied.position
+      accepted.push(applied.accepted)
+    }
+    return { position: current, accepted }
+  }
+
+  it('enters the first stage of the path the event names, and records it', () => {
+    const approved = applyTaskEvent(
+      on('plan', 'review', {}),
+      event('stage.approved', { stage: 'plan', path: 'small', because: 'plan.md has it' }),
+      steps,
+    )
+    expect(approved).toEqual({
+      position: on('implement', 'ready', SMALL),
+      accepted: true,
+      moved: true,
+    })
+    expect(
+      walk(on('plan', 'review', {}), event('stage.approved', { path: 'pr-review' })).position,
+    ).toEqual(on('review', 'review', { 'after-plan': 'pr-review' }))
+  })
+
+  it('skips the branch when the event names no path, or a path the task does not have', () => {
+    const skipped = on('release', 'ready', { 'after-plan': '' })
+    expect(applyTaskEvent(on('plan', 'review', {}), event('stage.approved'), steps)).toEqual({
+      position: skipped,
+      accepted: true,
+      moved: true,
+    })
+    expect(
+      walk(on('plan', 'review', {}), event('stage.approved', { path: 'gone' })).position,
+    ).toEqual(skipped)
+    // A position from before branches existed has no record of the choices yet.
+    expect(walk(at('plan', 'review'), event('stage.approved')).position).toEqual(skipped)
+  })
+
+  it('takes the path of an event only at the first branch it reaches', () => {
+    const next: StageBranch = {
+      id: 'after-build',
+      paths: [
+        {
+          id: 'docs',
+          when: { type: 'command', run: 'true' },
+          stages: [{ id: 'write-docs', kind: 'agent', gate: 'auto' }],
+        },
+        { id: 'none', stages: [{ id: 'qa', kind: 'manual', gate: 'manual' }] },
+      ],
+    }
+    const two: Step[] = [plan, branch, next]
+    const approved = event('stage.approved', { path: 'docs' })
+    const applied = applyTaskEvent(on('plan', 'review', {}), approved, two)
+    expect(applied.position).toEqual({
+      stage: 'plan',
+      state: 'done',
+      lanes: {},
+      paths: { 'after-plan': '', 'after-build': '' },
+    })
+  })
+
+  it('goes through the stages of the path, then to the step after the branch', () => {
+    const { position, accepted } = walk(
+      on('implement', 'running', SMALL),
+      event('stage.checked'),
+      event('stage.started'),
+      event('agent.asked'),
+      event('agent.resumed'),
+      event('stage.checked'),
+    )
+    expect(accepted).toEqual([true, true, true, true, true])
+    expect(position).toEqual(on('release', 'ready', SMALL))
+    expect(walk(on('implement', 'ready', SMALL), event('stage.skipped')).position).toEqual(
+      on('testing', 'ready', SMALL),
+    )
+    const prReview = { 'after-plan': 'pr-review' }
+    expect(walk(on('review', 'review', prReview), event('review.approved'))).toEqual({
+      position: on('release', 'ready', prReview),
+      accepted: [true],
+    })
+  })
+
+  it('names the stage in a path an event is about, and keeps the path and the reason', () => {
+    const checked = completeEvent(on('implement', 'running', SMALL), event('stage.checked'), steps)
+    expect(checked.payload).toEqual({ stage: 'implement' })
+    const chosen = event('stage.approved', { path: 'small', because: 'Otherwise' })
+    expect(completeEvent(on('plan', 'review', {}), chosen, steps).payload).toEqual({
+      path: 'small',
+      because: 'Otherwise',
+      stage: 'plan',
+    })
+  })
+
+  it('sends a task back only to a stage on the way it went', () => {
+    const atTesting = on('testing', 'running', SMALL)
+    expect(walk(atTesting, event('stage.reopened', { to: 'review' }))).toEqual({
+      position: atTesting,
+      accepted: [false],
+    })
+    expect(walk(atTesting, event('stage.reopened', { to: 'implement' })).position).toEqual(
+      on('implement', 'ready', SMALL),
+    )
+    const atImplement = on('implement', 'running', SMALL)
+    expect(walk(atImplement, event('stage.reopened', { to: 'testing' })).accepted).toEqual([false])
+    const skipped = on('release', 'review', { 'after-plan': '' })
+    expect(walk(skipped, event('stage.reopened', { to: 'implement' })).accepted).toEqual([false])
+  })
+
+  it('clears the choice when the task goes back to a stage before the branch', () => {
+    expect(
+      walk(on('implement', 'running', SMALL), event('stage.reopened', { to: 'plan' })).position,
+    ).toEqual(on('plan', 'ready', {}))
+    expect(
+      walk(
+        on('implement', 'running', SMALL),
+        event('state.overridden', { to: 'review', stage: 'plan' }),
+      ).position,
+    ).toEqual(on('plan', 'review', {}))
+  })
+
+  it('sends a task back without a stage named along the path it took', () => {
+    const back = (paths: Record<string, string>) =>
+      walk(on('release', 'review', paths), event('stage.reopened')).position
+    expect(back(SMALL)).toEqual(on('implement', 'ready', SMALL))
+    expect(back({ 'after-plan': 'pr-review' })).toEqual(on('plan', 'ready', {}))
+    expect(back({ 'after-plan': '' })).toEqual(on('plan', 'ready', {}))
+    const atReview = on('review', 'review', { 'after-plan': 'pr-review' })
+    expect(walk(atReview, event('review.changes-requested')).position).toEqual(
+      on('plan', 'ready', {}),
+    )
+    expect(
+      completeEvent(on('release', 'review', SMALL), event('stage.reopened'), steps).payload,
+    ).toEqual({ to: 'implement' })
+  })
+
+  it('finishes a task on a path when its pull request is merged', () => {
+    const atReview = on('review', 'review', { 'after-plan': 'pr-review' })
+    expect(applyTaskEvent(atReview, event('pr.merged'), steps)).toEqual({
+      position: on('release', 'done', { 'after-plan': 'pr-review' }),
+      accepted: true,
+      moved: true,
+    })
+  })
+
+  it('finishes a task on the last stage it took when the pipeline ends in a branch', () => {
+    const atReview = on('review', 'review', { 'after-plan': 'pr-review' })
+    expect(applyTaskEvent(atReview, event('pr.merged'), [plan, branch])).toEqual({
+      position: on('review', 'done', { 'after-plan': 'pr-review' }),
+      accepted: true,
+      moved: false,
+    })
+  })
+
+  it('refuses a merge at a stage of a path before its review stage', () => {
+    const reviewed: StageBranch = {
+      id: 'after-plan',
+      paths: [
+        {
+          id: 'full',
+          stages: [
+            { id: 'implement', kind: 'agent', gate: 'auto' },
+            { id: 'review', kind: 'review', gate: 'manual' },
+          ],
+        },
+      ],
+    }
+    const full: Step[] = [plan, reviewed]
+    const merge = (stage: string) =>
+      applyTaskEvent(on(stage, 'running', { 'after-plan': 'full' }), event('pr.merged'), full)
+    expect(merge('implement').accepted).toBe(false)
+    expect(merge('review').accepted).toBe(true)
+  })
+
+  it('gives the same position, with the choices, when its log is replayed', () => {
+    const log = [
+      event('task.readied'),
+      event('stage.started', { stage: 'plan' }),
+      event('stage.checked', { stage: 'plan' }),
+      event('stage.approved', { stage: 'plan', path: 'small', because: 'plan.md has it' }),
+      event('stage.started', { stage: 'implement' }),
+      event('stage.checked', { stage: 'implement' }),
+    ]
+    expect(deriveTaskState(log, steps)).toEqual({
+      position: on('testing', 'ready', SMALL),
+      rejected: [],
+    })
+    const again = [
+      ...log,
+      event('stage.reopened', { to: 'plan' }),
+      event('stage.started', { stage: 'plan' }),
+      event('stage.checked', { stage: 'plan' }),
+      event('stage.approved', { stage: 'plan' }),
+    ]
+    expect(deriveTaskState(again, steps)).toEqual({
+      position: on('release', 'ready', { 'after-plan': '' }),
+      rejected: [],
+    })
+  })
+
+  it('tells when an event would enter a branch, without a path', () => {
+    const approve = event('stage.approved')
+    expect(entersBranch(on('plan', 'review', {}), approve, steps)).toBe(branch)
+    expect(entersBranch(at('plan', 'review'), approve, steps)).toBe(branch)
+    expect(
+      entersBranch(on('plan', 'review', {}), event('stage.approved', { path: 'small' }), steps),
+    ).toBe(branch)
+    expect(entersBranch(on('plan', 'running', {}), event('stage.checked'), steps)).toBeUndefined()
+    const auto: Step[] = [{ ...plan, gate: 'auto' }, ...steps.slice(1)]
+    expect(entersBranch(on('plan', 'running', {}), event('stage.checked'), auto)).toBe(branch)
+    const atImplement = on('implement', 'running', SMALL)
+    expect(entersBranch(atImplement, event('stage.checked'), steps)).toBeUndefined()
+    const atTesting = on('testing', 'running', SMALL)
+    expect(entersBranch(atTesting, event('stage.checked'), steps)).toBeUndefined()
+    expect(entersBranch(atTesting, event('stage.reopened', { to: 'plan' }), steps)).toBeUndefined()
   })
 })

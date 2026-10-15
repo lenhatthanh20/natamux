@@ -1,7 +1,7 @@
 import type { StageStatus, TaskState } from '@natamux/core'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { StageLink, StageMarker } from './StageMarker'
+import { linkKind, markerLabel, StageLink, StageMarker } from './StageMarker'
 
 afterEach(cleanup)
 
@@ -44,6 +44,20 @@ describe('StageMarker', () => {
     expect(marker('upcoming', null).querySelector('svg')).toBeNull()
   })
 
+  it('shows a stage of a path not taken as an empty dashed node that says Not taken', () => {
+    const node = marker('not-taken', null)
+    expect(node.dataset.status).toBe('not-taken')
+    expect(node.querySelector('svg')).toBeNull()
+    expect(markerLabel('not-taken', null)).toBe('Not taken')
+  })
+
+  it('draws the node of a branch as a diamond', () => {
+    const { container } = render(
+      <StageMarker status="done" state={null} diamond label="Branch: Took Small change" />,
+    )
+    expect((container.firstElementChild as HTMLElement).dataset.diamond).toBeDefined()
+  })
+
   it('draws the inner shape on whole, even pixels at every node size', () => {
     for (const size of [14, 18, 20, 24]) {
       const art = Number(marker('current', 'review', size).querySelector('svg')?.dataset.art)
@@ -63,5 +77,13 @@ describe('StageMarker', () => {
     const link = container.firstElementChild as HTMLElement
     expect(link.dataset.kind).toBe('flow')
     expect(link.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('linkKind with a path not taken', () => {
+  const at = (status: StageStatus) => ({ status, state: null })
+  it('draws a dashed line next to a stage that is not taken', () => {
+    expect(linkKind(at('done'), at('not-taken'))).toBe('upcoming')
+    expect(linkKind(at('not-taken'), at('done'))).toBe('upcoming')
   })
 })

@@ -1,6 +1,7 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { type APIRequestContext, expect, type Locator, type Page } from '@playwright/test'
 
 export const TOKEN = process.env.NATAMUX_TOKEN ?? 'e2e-token'
+export const headers = { authorization: `Bearer ${TOKEN}` }
 
 // The demo data of scripts/e2e.sh.
 export const DEMO_TITLE = 'Demo: changes and history'
@@ -42,4 +43,45 @@ export async function openTask(page: Page, title: string): Promise<Locator> {
   const tabs = page.getByRole('tablist', { name: 'View', exact: true })
   await expect(tabs).toBeVisible()
   return tabs
+}
+
+export type Repo = { id: string; name: string }
+export type TaskEvent = { type: string; payload: Record<string, unknown> }
+
+export async function firstRepo(request: APIRequestContext): Promise<Repo> {
+  const body = await (await request.get('/api/repos', { headers })).json()
+  return body.repos[0]
+}
+
+export async function taskOf(request: APIRequestContext, id: string) {
+  return (await (await request.get(`/api/tasks/${id}`, { headers })).json()).task
+}
+
+// Makes a task of the project. The id goes into `made`, so the test can remove the task after.
+export async function newTask(
+  request: APIRequestContext,
+  repo: Repo,
+  title: string,
+  made: string[],
+) {
+  const created = await request.post('/api/tasks', { headers, data: { title, repo: repo.id } })
+  const { task } = await created.json()
+  made.push(task.id)
+  return task
+}
+
+export async function openSettings(page: Page, repo: Repo) {
+  await page
+    .getByRole('navigation', { name: 'Workspaces' })
+    .getByRole('button', { name: 'Add a project' })
+    .click()
+  await page
+    .getByRole('dialog', { name: 'Projects' })
+    .getByRole('listitem')
+    .filter({ hasText: repo.name })
+    .getByRole('button', { name: 'Settings' })
+    .click()
+  const dialog = page.getByRole('dialog', { name: `Project settings of ${repo.name}` })
+  await expect(dialog.getByRole('tab', { name: 'Stages', selected: true })).toBeVisible()
+  return dialog
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { EventType, TaskEvent } from './events.js'
 import { stageProgress } from './progress.js'
-import { DEFAULT_PIPELINE } from './stage.js'
+import { DEFAULT_PIPELINE, type Step } from './stage.js'
 import type { Task } from './task.js'
 
 let minute = 0
@@ -179,5 +179,105 @@ describe('stageProgress', () => {
       ...steps,
     ])
     expect(release).toMatchObject({ status: 'current', startedAt: '2026-10-09T09:02:00.000Z' })
+  })
+
+  describe('with a branch', () => {
+    const steps: Step[] = [
+      { id: 'plan', kind: 'agent', gate: 'manual', output: 'plan.md' },
+      {
+        id: 'after-plan',
+        paths: [
+          {
+            id: 'small',
+            when: { type: 'output', file: 'plan.md', section: 'Size', contains: 'small' },
+            stages: [
+              { id: 'implement', kind: 'agent', gate: 'auto' },
+              { id: 'testing', kind: 'testing', gate: 'auto' },
+            ],
+          },
+          { id: 'pr-review', stages: [{ id: 'review', kind: 'review', gate: 'manual' }] },
+        ],
+      },
+      { id: 'release', kind: 'release', gate: 'manual' },
+    ]
+    const because = 'plan.md "Size" contains "small"'
+    type Branched = Pick<Task, 'stage' | 'state' | 'lanes' | 'paths'>
+
+    it('marks the stages of a path not taken, and gives each stage its path and reason', () => {
+      minute = 0
+      const events = [
+        event('stage.started', { stage: 'plan' }),
+        event('stage.checked', { stage: 'plan' }),
+        event('stage.approved', { stage: 'plan', path: 'small', because }, 'human'),
+        event('stage.started', { stage: 'implement' }),
+        event('stage.checked', { stage: 'implement' }),
+      ]
+      const task: Branched = {
+        stage: 'testing',
+        state: 'ready',
+        lanes: {},
+        paths: { 'after-plan': 'small' },
+      }
+      const progress = stageProgress(task, events, steps)
+      expect(progress.map((stage) => [stage.stage, stage.status, stage.path])).toEqual([
+        ['plan', 'done', null],
+        ['implement', 'done', 'small'],
+        ['testing', 'current', 'small'],
+        ['review', 'not-taken', 'pr-review'],
+        ['release', 'upcoming', null],
+      ])
+      expect(progress.map((stage) => stage.because)).toEqual([null, because, null, null, null])
+      expect(progress[2]).toMatchObject({ startedAt: '2026-10-09T09:05:00.000Z', rounds: 1 })
+      expect(progress[3]).toMatchObject({ startedAt: null, endedAt: null, rounds: 0 })
+    })
+
+    it('starts the first stage of the path taken when the event that chose it came', () => {
+      minute = 0
+      const events = [
+        event('stage.started', { stage: 'plan' }),
+        event('stage.approved', { stage: 'plan', path: 'pr-review', because: 'Otherwise' }),
+      ]
+      const task: Branched = {
+        stage: 'review',
+        state: 'review',
+        lanes: {},
+        paths: { 'after-plan': 'pr-review' },
+      }
+      const progress = stageProgress(task, events, steps)
+      expect(progress.find((stage) => stage.stage === 'review')).toMatchObject({
+        status: 'current',
+        startedAt: '2026-10-09T09:02:00.000Z',
+        because: 'Otherwise',
+      })
+      expect(progress.filter((stage) => stage.status === 'not-taken').length).toBe(2)
+    })
+
+    it('shows every stage of a skipped branch as not taken, and all as upcoming before it', () => {
+      minute = 0
+      const events = [event('stage.approved', { stage: 'plan', because: 'No condition held' })]
+      for (const state of ['ready', 'done'] as const) {
+        const task = { stage: 'release', state, lanes: {}, paths: { 'after-plan': '' } }
+        const progress = stageProgress(task, events, steps)
+        expect(progress.map((stage) => stage.status)).toEqual([
+          'done',
+          'not-taken',
+          'not-taken',
+          'not-taken',
+          state === 'done' ? 'done' : 'current',
+        ])
+        expect(progress.every((stage) => stage.because === null)).toBe(true)
+      }
+      const choices: (Record<string, string> | undefined)[] = [{}, undefined]
+      for (const paths of choices) {
+        const task = { stage: 'plan', state: 'running' as const, lanes: {}, paths }
+        const before = stageProgress(task, [], steps)
+        expect(before.slice(1).map((stage) => stage.status)).toEqual([
+          'upcoming',
+          'upcoming',
+          'upcoming',
+          'upcoming',
+        ])
+      }
+    })
   })
 })

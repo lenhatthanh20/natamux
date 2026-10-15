@@ -2,6 +2,7 @@ import {
   type CreateIssueWhen,
   DEFAULT_PIPELINE,
   DEFAULT_PROJECT_SETTINGS,
+  isBranch,
   pipelineIssues,
   type Repo,
   type SkillList,
@@ -10,13 +11,15 @@ import {
   stagesOf,
 } from '@natamux/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, Plus } from 'lucide-react'
+import { CircleAlert, GitFork, Plus } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isConflict, type LoadedSettings } from '../lib/api'
 import { saveBlob } from '../lib/attachments'
 import {
+  addBranch,
   addCatalogStage,
   addCustomStage,
+  findBranch,
   findStage,
   formatSettings,
   mergeChanges,
@@ -26,10 +29,12 @@ import {
   sameSettings,
   shellFields,
   trackerOf,
+  uniqueIssues,
   withCreateIssue,
   withSteps,
 } from '../lib/pipeline-editor'
 import { toast } from '../lib/toasts'
+import { BranchDetails } from './BranchDetails'
 import { PipelinePreview } from './PipelinePreview'
 import { StageDetails } from './StageDetails'
 import { StageList } from './StageList'
@@ -86,6 +91,7 @@ const SHELL_FIELD_LABEL: Record<ShellField['field'], string> = {
   check: 'Check command',
   command: 'Command',
   args: 'Arguments',
+  run: 'Condition command',
 }
 
 // The import question. A file with commands lists each one in full, since they run on this
@@ -141,7 +147,7 @@ export function ProjectSettingsDialog({
   const draftText = text ?? current?.text ?? '{}'
   const draft = useMemo(() => parseDraft(draftText), [draftText])
   const steps: readonly Step[] = draft.ok ? draft.steps : DEFAULT_PIPELINE
-  const issues = useMemo(() => (draft.ok ? pipelineIssues(draft.steps) : []), [draft])
+  const issues = useMemo(() => (draft.ok ? uniqueIssues(pipelineIssues(draft.steps)) : []), [draft])
   const errors = issues.filter((issue) => issue.level === 'error').length + (draft.ok ? 0 : 1)
   const warnings = issues.filter((issue) => issue.level === 'warning').length
   const dirty = current !== null && !sameSettings(draftText, current.text)
@@ -152,8 +158,12 @@ export function ProjectSettingsDialog({
   const [selected, setSelected] = useState<string | null>(null)
   const [head] = steps
   const first = head === undefined ? undefined : stagesOf(head)[0]
+  // A branch can be picked too; its details take the place of the stage's.
+  const selectedBranch = findBranch(steps, selected ?? '')
   // The first stage until one is picked, and when the picked one is removed.
-  const selectedStage = findStage(steps, selected ?? '') ?? first
+  const selectedStage =
+    selectedBranch === undefined ? (findStage(steps, selected ?? '') ?? first) : undefined
+  const selectedId = selectedBranch?.id ?? selectedStage?.id ?? null
   const [picking, setPicking] = useState(false)
   // A picker closed with Escape takes the focus with it; Add stage gets it back.
   const addButton = useRef<HTMLButtonElement>(null)
@@ -329,6 +339,16 @@ export function ProjectSettingsDialog({
     setPhoneDetails(true)
   }
 
+  // A new branch goes after the picked step, and opens for its details.
+  const addBranchAfterSelected = () => {
+    const next = addBranch(steps, selectedId ?? undefined)
+    const added = next.find((step) => isBranch(step) && findBranch(steps, step.id) === undefined)
+    edit(next)
+    if (added !== undefined) {
+      select(added.id)
+    }
+  }
+
   const blockedReason = !draft.ok
     ? 'Fix the JSON first'
     : errors > 0
@@ -471,13 +491,16 @@ export function ProjectSettingsDialog({
               <PipelinePreview
                 steps={steps}
                 issues={issues}
-                selected={selectedStage?.id ?? null}
+                selected={selectedId}
                 onSelect={select}
               />
               <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
                 <div className={`flex flex-col gap-2 ${phoneDetails ? 'max-sm:hidden' : ''}`}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="m-0 flex-1 text-sm font-semibold">Stages in order</h3>
+                    <Button size="xs" icon={GitFork} onClick={addBranchAfterSelected}>
+                      Add branch
+                    </Button>
                     <Button
                       ref={addButton}
                       size="xs"
@@ -495,7 +518,7 @@ export function ProjectSettingsDialog({
                   <StageList
                     steps={steps}
                     issues={issues}
-                    selected={selectedStage?.id ?? null}
+                    selected={selectedId}
                     onSelect={select}
                     onChange={edit}
                   />
@@ -518,6 +541,16 @@ export function ProjectSettingsDialog({
                         edit(addCustomStage(steps, input))
                         select(input.id)
                       }}
+                    />
+                  ) : selectedBranch !== undefined ? (
+                    <BranchDetails
+                      key={selectedBranch.id}
+                      branch={selectedBranch}
+                      steps={steps}
+                      issues={issues.filter((issue) => issue.stage === selectedBranch.id)}
+                      onSelect={select}
+                      onChange={edit}
+                      onBack={() => setPhoneDetails(false)}
                     />
                   ) : selectedStage !== undefined ? (
                     <StageDetails

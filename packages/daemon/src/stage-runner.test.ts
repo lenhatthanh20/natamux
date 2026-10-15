@@ -5,6 +5,8 @@ import {
   type EventType,
   type ProjectSettings,
   type Stage,
+  type StageBranch,
+  type Step,
   type Task,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -2037,6 +2039,384 @@ describe('a stage of a group marked to skip', () => {
     expect(moved.stage).toBe('testing')
     await runner.settle()
     expect(tasks.getTask(task.id).stage).toBe('testing')
+  })
+})
+
+describe('a branch', () => {
+  const plan: Stage = { id: 'plan', kind: 'agent', gate: 'manual' }
+  const afterPlan: StageBranch = {
+    id: 'after-plan',
+    paths: [
+      {
+        id: 'small',
+        when: { type: 'output', file: 'context.md', contains: '[small]' },
+        stages: [
+          { id: 'implement', kind: 'agent', gate: 'auto' },
+          { id: 'docs', kind: 'agent', gate: 'auto' },
+        ],
+      },
+      {
+        id: 'pr-review',
+        when: { type: 'command', run: 'test -f .no-review' },
+        not: true,
+        stages: [{ id: 'review', kind: 'review', gate: 'manual' }],
+      },
+    ],
+  }
+
+  // Context, the steps given, the branch, then Release.
+  function pipeline(...before: Step[]): void {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'context', kind: 'context', gate: 'manual', output: 'context.md' },
+        ...before,
+        afterPlan,
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  }
+
+  beforeEach(() => {
+    pipeline(plan)
+    // There is no .no-review file, so Review PR holds whenever Small change does not. The context
+    // has the title, so "[small]" in it picks Small change.
+    runCommand = async (command) => ({ code: command === 'test -f .no-review' ? 1 : 0, output: '' })
+  })
+
+  const eventsOf = (id: string) => tasks.listEvents(id).map((entry) => entry.event)
+  const lastOf = (id: string, type: EventType) =>
+    eventsOf(id)
+      .filter((event) => event.type === type)
+      .at(-1)
+  const startedStages = (id: string) =>
+    eventsOf(id)
+      .filter((event) => event.type === 'stage.started')
+      .map((event) => event.payload.stage)
+
+  async function atPlanReview(title: string): Promise<Task> {
+    const task = await created({ title, agent: 'claude-code' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'plan' },
+    })
+    return withWorkspace(task.id)
+  }
+
+  it('takes the path whose condition holds when the stage before is approved', async () => {
+    const task = await atPlanReview('Export [small]')
+
+    const moved = await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(moved).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+    expect(lastOf(task.id, 'stage.approved')?.payload).toEqual({
+      stage: 'plan',
+      path: 'small',
+      because: 'context.md contains "[small]"',
+    })
+    expect(startedStages(task.id)).toContain('implement')
+    expect(startedStages(task.id)).not.toContain('review')
+  })
+
+  it('takes a path whose command fails, with not, and runs the command in the worktree', async () => {
+    const ran: string[] = []
+    runCommand = async (command, cwd) => {
+      ran.push(`${command} in ${cwd}`)
+      return { code: 1, output: '' }
+    }
+    const task = await atPlanReview('Export')
+
+    const moved = await runner.act(task.id, 'approve')
+    await runner.settle()
+
+    expect(moved).toMatchObject({ stage: 'review', state: 'review' })
+    expect(moved.paths).toEqual({ 'after-plan': 'pr-review' })
+    expect(lastOf(task.id, 'stage.approved')?.payload).toMatchObject({
+      path: 'pr-review',
+      because: 'test -f .no-review did not exit 0',
+    })
+    expect(ran).toEqual([`test -f .no-review in ${task.workspace}`])
+    expect(startedStages(task.id)).not.toContain('implement')
+  })
+
+  it('goes on after the branch when no condition holds', async () => {
+    runCommand = async () => ({ code: 0, output: '' })
+    const task = await atPlanReview('Export')
+
+    const moved = await runner.act(task.id, 'approve')
+
+    expect(moved).toMatchObject({ stage: 'release', paths: { 'after-plan': '' } })
+    expect(lastOf(task.id, 'stage.approved')?.payload).toEqual({
+      stage: 'plan',
+      because: 'No condition held',
+    })
+  })
+
+  it('checks the conditions on approval, so an edit made while the stage waited counts', async () => {
+    const task = await atPlanReview('Export')
+    writeWorking(task, 'context.md', '# Export\n\nA [small] change after all.\n')
+
+    const moved = await runner.act(task.id, 'approve')
+
+    expect(moved.paths).toEqual({ 'after-plan': 'small' })
+  })
+
+  it.each([
+    ['pass', 'stage.passed'],
+    ['skip', 'stage.skipped'],
+  ] as const)('enters the path after %s of the stage before', async (action, type) => {
+    const task = await atPlanReview('Export [small]')
+
+    const moved = await runner.act(task.id, action)
+
+    expect(moved).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+    expect(lastOf(task.id, type)?.payload).toMatchObject({ stage: 'plan', path: 'small' })
+  })
+
+  it('enters the path when the checks pass a stage with an auto gate', async () => {
+    pipeline({ ...plan, gate: 'auto' })
+    const task = await implementing('plan')
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'review', state: 'review' })
+    expect(lastOf(task.id, 'stage.checked')?.payload).toMatchObject({
+      stage: 'plan',
+      path: 'pr-review',
+    })
+  })
+
+  it('enters the path once CI passes the stage before', async () => {
+    pipeline({ ...plan, gate: 'auto', ci: true })
+    const task = await implementing('plan')
+    tasks.setCi(task.id, 'plan', true)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    expect(tasks.getTask(task.id).stage).toBe('plan')
+    finishCi({ passed: true, reasons: [], passes: ['CI passed: CI u'], final: false })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'review', state: 'review' })
+    expect(lastOf(task.id, 'stage.checked')?.payload).toMatchObject({ path: 'pr-review' })
+  })
+
+  it('enters the path when the context stage passes on its own', async () => {
+    pipeline()
+
+    const task = await created({ title: 'Export [small]' })
+
+    expect(task).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+    expect(lastOf(task.id, 'stage.passed')?.payload).toMatchObject({
+      stage: 'context',
+      path: 'small',
+    })
+  })
+
+  it('enters the path when the last stage of a group ends', async () => {
+    pipeline({
+      id: 'build',
+      parallel: [
+        { id: 'code', kind: 'agent', gate: 'auto' },
+        { id: 'notes', kind: 'agent', gate: 'auto' },
+      ],
+    })
+    const task = await created({ title: 'Export [small]' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'build' },
+    })
+
+    await runner.act(task.id, 'approve', { stage: 'code' })
+    expect(tasks.getTask(task.id).paths).toEqual({})
+    const moved = await runner.act(task.id, 'approve', { stage: 'notes' })
+
+    expect(moved).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+    expect(lastOf(task.id, 'stage.approved')?.payload).toMatchObject({
+      stage: 'notes',
+      path: 'small',
+    })
+  })
+
+  it('enters the path when a stage marked to skip before the branch is skipped', async () => {
+    const task = tasks.createTask({ title: 'Export [small]', agent: 'claude-code' })
+    tasks.setSkip(task.id, 'plan', true)
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({
+      stage: 'implement',
+      paths: { 'after-plan': 'small' },
+    })
+    expect(lastOf(task.id, 'stage.skipped')?.payload).toMatchObject({
+      stage: 'plan',
+      planned: true,
+      path: 'small',
+    })
+  })
+
+  it('goes from stage to stage in the path, then to the step after the branch', async () => {
+    const task = await atPlanReview('Export [small]')
+    await runner.act(task.id, 'approve')
+
+    expect(await runner.act(task.id, 'pass')).toMatchObject({ stage: 'docs', state: 'running' })
+    expect(await runner.act(task.id, 'pass')).toMatchObject({
+      stage: 'release',
+      paths: { 'after-plan': 'small' },
+    })
+    expect(startedStages(task.id)).not.toContain('review')
+  })
+
+  it('refuses a send back to a path not taken, and checks again after one to Plan', async () => {
+    const task = await atPlanReview('Export [small]')
+    await runner.act(task.id, 'approve')
+    const count = eventsOf(task.id).length
+
+    await expect(runner.act(task.id, 'reopen', { to: 'review' })).rejects.toThrow(
+      'review is on a path this task did not take',
+    )
+    await expect(runner.act(task.id, 'reopen', { to: 'review' })).rejects.toThrow(StageInputError)
+    await expect(runner.act(task.id, 'reopen', { to: 'docs' })).rejects.toThrow(StageInputError)
+    expect(eventsOf(task.id)).toHaveLength(count)
+
+    const back = await runner.act(task.id, 'reopen', { to: 'plan' })
+    expect(back.stage).toBe('plan')
+    expect(back.paths).toEqual({})
+    await runner.settle()
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'plan' },
+    })
+    await runner.act(task.id, 'approve')
+
+    const approvals = eventsOf(task.id).filter((event) => event.type === 'stage.approved')
+    expect(approvals.map((event) => event.payload.path)).toEqual(['small', 'small'])
+    expect(tasks.getTask(task.id).stage).toBe('implement')
+  })
+
+  it('takes a send back to a stage of the taken path', async () => {
+    const task = await atPlanReview('Export [small]')
+    await runner.act(task.id, 'approve')
+    await runner.act(task.id, 'pass')
+
+    const back = await runner.act(task.id, 'reopen', { to: 'implement' })
+
+    expect(back).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
+  })
+
+  it('keeps the path over a restart, and starts the stage of the path again', async () => {
+    const task = await atPlanReview('Export [small]')
+    await runner.act(task.id, 'approve')
+    await runner.settle()
+    terminals.close(task.id)
+
+    const reloadedIndex = new TaskIndex(':memory:')
+    const reloaded = new TaskService({
+      dataDir,
+      index: reloadedIndex,
+      bus: new EventBus(),
+      settingsOf: () => settings,
+    })
+    reloaded.init()
+    reloaded.close()
+    expect(reloaded.getTask(task.id)).toMatchObject({
+      stage: 'implement',
+      state: 'running',
+      paths: { 'after-plan': 'small' },
+    })
+    reloadedIndex.close()
+
+    const launches = ptys.length
+    runner.resumeAgents()
+    await runner.settle()
+    expect(ptys.length).toBeGreaterThan(launches)
+    expect(runner.laneFor(tasks.getTask(task.id), '1')).toEqual({
+      stage: 'implement',
+      state: 'running',
+    })
+  })
+
+  it('drops the checks of a round that started again while the conditions ran', async () => {
+    pipeline({ ...plan, gate: 'auto' })
+    let asked: () => void = () => undefined
+    const running = new Promise<void>((resolve) => {
+      asked = resolve
+    })
+    let finish: (code: number) => void = () => undefined
+    runCommand = (command) => {
+      if (command !== 'test -f .no-review') {
+        return Promise.resolve({ code: 0, output: '' })
+      }
+      asked()
+      return new Promise((resolve) => {
+        finish = (code) => resolve({ code, output: '' })
+      })
+    }
+    const task = await implementing('plan')
+
+    const report = runner.act(task.id, 'report', { terminal: '1' })
+    await running
+    await runner.act(task.id, 'reopen', { to: 'plan' })
+    finish(1)
+    await report
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'plan', state: 'running', paths: {} })
+    const checked = eventsOf(task.id).filter(
+      (event) => event.type === 'stage.checked' && event.payload.stage === 'plan',
+    )
+    expect(checked).toEqual([])
+  })
+
+  it('takes no path or reason from the sender, and keeps the stage of the event', async () => {
+    runCommand = async () => ({ code: 0, output: '' })
+    const task = await atPlanReview('Export')
+
+    const input = await runner.withPath(task.id, {
+      source: 'human',
+      type: 'stage.approved',
+      payload: { path: 'pr-review', because: 'I say so' },
+    })
+
+    expect(input.payload).toEqual({ stage: 'plan', because: 'No condition held' })
+    const asked = await runner.withPath(task.id, {
+      source: 'agent',
+      type: 'agent.asked',
+      payload: { stage: 'plan', path: 'small', because: 'I say so' },
+    })
+    expect(asked.payload).toEqual({ stage: 'plan' })
+  })
+
+  it('checks a path the task has, though its stages are off now', async () => {
+    const notes: Stage = { id: 'notes', kind: 'agent', gate: 'auto' }
+    // Small change first, Review PR, then an Otherwise path.
+    const withSmall = (enabled: boolean) => {
+      const branch: StageBranch = {
+        ...afterPlan,
+        paths: [
+          ...afterPlan.paths.map((path) =>
+            path.id === 'small'
+              ? { ...path, stages: path.stages.map((stage) => ({ ...stage, enabled })) }
+              : path,
+          ),
+          { id: 'other', stages: [notes] },
+        ],
+      }
+      settings = {
+        ...settings,
+        stages: settings.stages.map((step) => (step.id === branch.id ? branch : step)),
+      }
+    }
+    withSmall(true)
+    const task = await atPlanReview('Export [small]')
+    withSmall(false)
+
+    const moved = await runner.act(task.id, 'approve')
+
+    expect(moved).toMatchObject({ stage: 'implement', paths: { 'after-plan': 'small' } })
   })
 })
 
