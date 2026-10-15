@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.28 (2026-10-15)
+
+- A task's shells come back after a restart, with the same names. An agent goes on with its last conversation. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- Fix: a shell that a stage closed came back as a new plain shell. Its pane now leaves the **Terminal** tab.
+- Fix: after an API error, a Claude Code stage stayed failed when you typed to the agent or clicked **Start agent**. Now the stage runs again. See [Events and states](/docs/agents/claude-code/#events-and-states).
+
 ## v0.1.27 (2026-10-15)
 
 - Fix: when an agent ended its turn and still ran, **Resume** left it at its prompt. Resume now asks it to go on with the stage. See [Type to the agent](/docs/guides/terminal/#type-to-the-agent).
