@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.29 (2026-10-16)
+
+- A pipeline can split into 2 to 4 paths by a condition: a file has some text, or a command succeeds. The task runs only the stages of the path it takes. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
+- **Blur names** on a sidebar project blurs its names, and the names of its tasks, while you share your screen. See [Sidebar](/docs/guides/dashboard/#sidebar).
+- Timed update checks are off by default. Tick **Check for Updates Automatically** to check every 6 hours. See [Updates](/docs/guides/desktop-app/#updates).
+
 ## v0.1.28 (2026-10-15)
 
 - A task's shells come back after a restart, with the same names. An agent goes on with its last conversation. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
