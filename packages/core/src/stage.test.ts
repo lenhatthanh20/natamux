@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, projectSettingsSchema } from './project-settings.js'
 import {
   activeSteps,
+  canEndShell,
   canRunWorkflow,
   codeStageBefore,
   combinedState,
@@ -122,6 +123,26 @@ describe('pipelineSchema', () => {
       expect(result.error?.issues[0]?.message).toContain('workflow')
     }
     expect(valid([{ id: 'r', kind: 'review', gate: 'manual', workflow: false }])).toBe(true)
+  })
+
+  it('takes endShell on stages that start an agent or a command only', () => {
+    for (const kind of ['context', 'agent', 'testing']) {
+      const steps = [{ id: 'x', kind, gate: 'auto', endShell: true }]
+      expect(pipelineSchema.safeParse(steps).success).toBe(true)
+      expect(canEndShell({ kind: kind as Stage['kind'] })).toBe(true)
+    }
+    for (const kind of ['review', 'release', 'manual']) {
+      const result = pipelineSchema.safeParse([{ id: 'x', kind, gate: 'manual', endShell: true }])
+      expect(result.success).toBe(false)
+      expect(result.error?.issues[0]?.message).toBe(
+        `Only a stage that starts an agent or a command can end its shell, and "x" is a ${kind} stage`,
+      )
+      expect(canEndShell({ kind: kind as Stage['kind'] })).toBe(false)
+    }
+    const off = [{ id: 'r', kind: 'review', gate: 'manual', endShell: false }]
+    expect(pipelineSchema.safeParse(off).success).toBe(true)
+    const wrong = [{ id: 'plan', kind: 'agent', gate: 'manual', endShell: 'yes' }]
+    expect(pipelineSchema.safeParse(wrong).success).toBe(false)
   })
 
   it('rejects a workflow that is not true or false', () => {

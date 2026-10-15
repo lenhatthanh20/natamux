@@ -56,6 +56,7 @@ An array of **steps**. A step is a stage, or a group of stages that run side by 
 | `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that starts its own agent: one that runs beside the stage in Shell 1, such as Test spec, one with `"ownShell": true`, such as Review, or an `agent` or `testing` stage of your own. |
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own shell (Shell 5) with a new session, or in a shell of its own from Shell 6 when it has its own `agent` or `args`. Only for an `agent` stage with an `output`. |
+| `endShell` | boolean | no | `false` | When the stage is done, end its agent or command and close its shell. Only for `context`, `agent` and `testing` stages. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell). |
 | `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Same rule as `agent`. |
 
 Details:
@@ -69,7 +70,7 @@ Details:
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
 - `agent` and `args` are for an `agent` stage that starts its own agent: a stage in a group that does not keep Shell 1, or a stage with `"ownShell": true`, such as Review. In a group, that is every agent stage but the one that changes code (the first agent stage without an `output`). Such a stage starts its own agent in its own shell, so it can use another agent or model without touching the session in Shell 1. A launch for such a stage does not change the task's agent.
 - An `agent` or `testing` stage of your own (an id that is not in the [catalog](#stage-catalog)) can have `agent` and `args` too, also where it would run in Shell 1.
-- A stage with its own `agent` or `args` runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux never closes an agent while the task runs. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- A stage with its own `agent` or `args` runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
@@ -93,6 +94,7 @@ Details:
 - `agent` and `args` are only allowed on an `agent` stage in a group that does not keep Shell 1, on one with `"ownShell": true`, or on an `agent` or `testing` stage of your own.
 - `"ownShell": true` is only allowed on an `agent` stage with an `output`.
 - `"ci": true` is only allowed on a `testing` stage or an `agent` stage without an `output`.
+- `"endShell": true` is only allowed on a `context`, `agent` or `testing` stage.
 
 ### Skill placeholder
 

@@ -1,4 +1,5 @@
 import {
+  canEndShell,
   catalogEntry,
   checksOnCi,
   type PipelineIssue,
@@ -23,6 +24,7 @@ import {
   KIND_LABEL,
   runsInShellOne,
   setCi,
+  setEndShell,
   setGate,
   setSections,
   setText,
@@ -191,6 +193,8 @@ export function StageDetails({
       {stage.kind === 'agent' && <WorkflowOption stage={stage} steps={steps} onChange={onChange} />}
 
       {checksOnCi(stage) && <CiOption stage={stage} steps={steps} onChange={onChange} />}
+
+      {canEndShell(stage) && <EndShellOption stage={stage} steps={steps} onChange={onChange} />}
 
       {ownAgent && (
         <Field
@@ -458,6 +462,44 @@ function CiOption({
       <p id={noteId} className="m-0 text-xs text-muted">
         Each task gets a Check on CI checkbox on this stage, off by default. The work is pushed to a
         natamux-ci branch, so the CI workflows must run on a push to natamux-ci/**.
+      </p>
+    </fieldset>
+  )
+}
+
+function EndShellOption({
+  stage,
+  steps,
+  onChange,
+}: {
+  stage: Stage
+  steps: readonly Step[]
+  onChange: (steps: Step[]) => void
+}) {
+  const labelId = useId()
+  const noteId = useId()
+  const on = stage.endShell === true
+  return (
+    <fieldset aria-labelledby={labelId} className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-7 flex-wrap items-center gap-2">
+        <label className="flex h-7 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={on}
+            aria-describedby={noteId}
+            onChange={(event) => onChange(setEndShell(steps, stage.id, event.target.checked))}
+            className="size-3.5 accent-accent"
+          />
+          <span id={labelId}>End the agent and close its shell when the stage is done</span>
+        </label>
+        <DefaultMark
+          isDefault={!on}
+          onReset={() => onChange(setEndShell(steps, stage.id, false))}
+        />
+      </div>
+      <p id={noteId} className="m-0 text-xs text-muted">
+        Frees the memory of the stage. A next stage in the same shell starts a new agent session.
+        The last stage is left to the end of the task, which keeps its screen.
       </p>
     </fieldset>
   )

@@ -25,6 +25,7 @@ import {
   runsInShellOne,
   sameSettings,
   setEnabled,
+  setEndShell,
   setGate,
   setSections,
   setText,
@@ -364,6 +365,14 @@ describe('stage fields', () => {
     expect(defaultWorkflow({ id: 'spec', kind: 'agent' })).toBe(false)
     expect(defaultWorkflow({ id: 'my-stage', kind: 'agent' })).toBe(false)
     expect(defaultWorkflow({ id: 'plan', kind: 'manual' })).toBe(false)
+  })
+
+  it('ends the shell with true, and leaves the field out when it is off', () => {
+    const on = setEndShell(DEFAULT_PIPELINE, 'spec', true)
+    expect(findStage(on, 'spec')?.endShell).toBe(true)
+    const off = setEndShell(on, 'spec', false)
+    expect(findStage(off, 'spec')).not.toHaveProperty('endShell')
+    expect(findStage(off, 'spec')).toEqual(findStage(DEFAULT_PIPELINE, 'spec'))
   })
 
   it('turns a stage off with enabled false, and on by removing it', () => {

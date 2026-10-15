@@ -49,6 +49,9 @@ export const stageSchema = z.object({
   // A stage that only writes a report, such as a review, runs in its own shell with a new session:
   // it sees the work with fresh eyes, and may use another agent.
   ownShell: z.boolean().optional(),
+  // Ends the agent or command of the stage, and closes its shell, when the stage is done. The
+  // next stage in that shell then starts a new agent session.
+  endShell: z.boolean().optional(),
 })
 
 export type Stage = z.infer<typeof stageSchema>
@@ -140,6 +143,13 @@ export const pipelineSchema = z
           context.addIssue({
             code: 'custom',
             message: `Only a stage that changes code or runs tests can be checked on CI, and "${stage.id}" cannot`,
+            path: [index],
+          })
+        }
+        if (stage.endShell === true && !canEndShell(stage)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Only a stage that starts an agent or a command can end its shell, and "${stage.id}" is a ${stage.kind} stage`,
             path: [index],
           })
         }
@@ -284,6 +294,11 @@ export function canRunWorkflow(agent: string | null): boolean {
 // The project settings let tasks run this stage as a workflow.
 export function offersWorkflow(stage: Pick<Stage, 'kind' | 'workflow'>): boolean {
   return stage.kind === 'agent' && stage.workflow === true
+}
+
+// Review, manual and release stages start nothing in a shell, so they have none to end.
+export function canEndShell(stage: Pick<Stage, 'kind'>): boolean {
+  return stage.kind === 'context' || stage.kind === 'agent' || stage.kind === 'testing'
 }
 
 // CI checks code, so only a stage that changes it (an agent stage without an output file) or a
