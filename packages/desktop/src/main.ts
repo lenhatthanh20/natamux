@@ -20,7 +20,13 @@ import { daemonEnv } from './daemon-env.js'
 import { readGhosttyFont } from './ghostty-config.js'
 import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
 import { findParts } from './paths.js'
-import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
+import {
+  autoUpdateOn,
+  isGitRepository,
+  loadSettings,
+  saveSettings,
+  startingRepoDir,
+} from './settings.js'
 import { checkReleaseSignature, runSmoke } from './smoke.js'
 import {
   freePort,
@@ -366,7 +372,7 @@ function makeUpdater(): Updater | undefined {
   return new Updater({
     userData,
     version: process.env.NATAMUX_UPDATE_AS_VERSION || app.getVersion(),
-    autoUpdate: loadSettings(settingsFile).autoUpdate !== false,
+    autoUpdate: autoUpdateOn(loadSettings(settingsFile)),
     saveAutoUpdate: (on) =>
       saveSettings(settingsFile, { ...loadSettings(settingsFile), autoUpdate: on }),
     confirmRestart: () => confirmStop('Restart'),

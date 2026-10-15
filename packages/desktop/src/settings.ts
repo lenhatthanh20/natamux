@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 export type DesktopSettings = {
   // The repository older versions asked for on the first run. The app no longer writes it.
   repoDir?: string
-  // False turns the timed update checks off. Missing means on.
+  // True turns the timed update checks on. Missing means off.
   autoUpdate?: boolean
 }
 
@@ -27,6 +27,10 @@ export function loadSettings(file: string): DesktopSettings {
 export function saveSettings(file: string, settings: DesktopSettings): void {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`)
+}
+
+export function autoUpdateOn(settings: DesktopSettings): boolean {
+  return settings.autoUpdate === true
 }
 
 // A git repository has .git at its top: a folder, or a file in a worktree.

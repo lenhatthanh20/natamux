@@ -8,7 +8,13 @@ import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv, fallbackBinDirs } from './daemon-env.js'
 import { isDashboardUrl, isLoadingPage, loadingPageUrl, opensInBrowser } from './navigation.js'
-import { isGitRepository, loadSettings, saveSettings, startingRepoDir } from './settings.js'
+import {
+  autoUpdateOn,
+  isGitRepository,
+  loadSettings,
+  saveSettings,
+  startingRepoDir,
+} from './settings.js'
 import { hasSmokeOutput, smokeCommandLine } from './smoke.js'
 import {
   freePort,
@@ -100,6 +106,17 @@ describe('settings', () => {
     expect(loadSettings(file)).toEqual({ repoDir: '/work/repo', autoUpdate: false })
     writeFileSync(file, '{"autoUpdate":"no"}')
     expect(loadSettings(file)).toEqual({})
+  })
+
+  it('checks for updates on its own only when the user turned it on', () => {
+    const file = join(dir, 'settings.json')
+    expect(autoUpdateOn(loadSettings(file))).toBe(false)
+    writeFileSync(file, '{"autoUpdate":"yes"}')
+    expect(autoUpdateOn(loadSettings(file))).toBe(false)
+    saveSettings(file, { autoUpdate: false })
+    expect(autoUpdateOn(loadSettings(file))).toBe(false)
+    saveSettings(file, { autoUpdate: true })
+    expect(autoUpdateOn(loadSettings(file))).toBe(true)
   })
 
   it('knows a git repository by its .git', () => {
