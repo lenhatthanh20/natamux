@@ -26,7 +26,7 @@ import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
 import { removeEach, removeSummary } from '../lib/remove-finished'
 import { createTaskBatch } from '../lib/task-batch'
-import { agentLanes, taskShellsQuery } from '../lib/task-shells'
+import { agentLanes, restoringShells, taskShellsQuery } from '../lib/task-shells'
 import {
   applyTaskChanges,
   filterTasks,
@@ -554,15 +554,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   // starts and ends in its shell without a task event; the daemon says so with shells.changed.
   const paneTasks = agentsOpen ? agentPaneTasks(agentPanes, tasks) : []
   const paneQueries = useQueries({
-    queries: paneTasks.map((task) => ({
-      ...taskShellsQuery(task.id, (id) => api.listShells(id)),
-      select: agentLanes,
-    })),
+    queries: paneTasks.map((task) => taskShellsQuery(task.id, (id) => api.listShells(id))),
   })
   const paneTerminals = Object.fromEntries(
     paneTasks.flatMap((task, index) => {
-      const lanes = paneQueries[index]?.data
-      return lanes === undefined ? [] : [[task.id, lanes]]
+      const shells = paneQueries[index]?.data
+      return shells === undefined ? [] : [[task.id, agentLanes(shells)]]
+    }),
+  )
+  // A pane of the grid is Shell 1, which may be coming back after a restart.
+  const paneRestoring = Object.fromEntries(
+    paneTasks.flatMap((task, index) => {
+      const shells = paneQueries[index]?.data
+      const agent = shells === undefined ? undefined : restoringShells(shells)['1']
+      return agent === undefined ? [] : [[task.id, agent]]
     }),
   )
   const dockedBesideWorkspace = besideWorkspace && shellLayout.details === 'docked'
@@ -1150,6 +1155,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             layout={paneLayout}
             onLayout={setPaneLayout}
             terminals={paneTerminals}
+            restoring={paneRestoring}
             connect={async (taskId, size) => {
               const ticket = await api.terminalTicket(taskId)
               return new WebSocket(terminalSocketUrl(window.location, taskId, ticket, size, '1'))

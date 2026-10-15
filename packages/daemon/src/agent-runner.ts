@@ -6,6 +6,7 @@ import { UnknownAgentError } from './agent-hook-service.js'
 import {
   DEFAULT_PROGRAMS,
   isLaunchable,
+  LAST_SESSION,
   type LaunchableAgent,
   launchCommand,
   prepareWorkspace,
@@ -71,6 +72,8 @@ export type AgentLaunch = {
   terminal: string
   agent: LaunchableAgent
   program: string
+  // The session the agent went on with.
+  session?: string
 }
 
 // Starts an agent in the terminal of a task, as if the user typed the command. Its hooks then
@@ -123,15 +126,16 @@ export class AgentRunner {
   }
 
   // Starts the agent in a terminal of the task: the first by default, another for a stage that
-  // runs beside the first one. With a session, Claude Code goes on with it and gets no prompt.
-  // A stage with its own agent or words names itself, so the task keeps its agent.
+  // runs beside the first one. With a session, the agent goes on with it and gets no prompt.
+  // A stage with its own agent or words names itself, so the task keeps its agent. So does an
+  // agent `restored` in its shell after a restart.
   start(
     taskId: string,
     agent: string,
     prompt?: string,
     terminal?: string,
     session?: string,
-    own: { args?: string; stage?: string } = {},
+    own: { args?: string; stage?: string; restored?: boolean } = {},
   ): Task {
     if (!isLaunchable(agent)) {
       throw new UnknownAgentError(agent)
@@ -165,8 +169,11 @@ export class AgentRunner {
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)
     const program = this.programs[agent]
-    this.onLaunch?.({ taskId, terminal: terminal ?? MAIN_TERMINAL, agent, program })
-    return this.tasks.recordAgentLaunch(taskId, agent, program, own.stage)
+    const shell = terminal ?? MAIN_TERMINAL
+    const resumed = session === undefined || session === LAST_SESSION ? {} : { session }
+    this.onLaunch?.({ taskId, terminal: shell, agent, program, ...resumed })
+    const restoredIn = own.restored === true ? shell : undefined
+    return this.tasks.recordAgentLaunch(taskId, agent, program, own.stage, restoredIn)
   }
 
   // What is typed into the terminal. The terminal echoes it, so the long command (settings path,

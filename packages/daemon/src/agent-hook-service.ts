@@ -67,6 +67,8 @@ type HookServiceOptions = {
   bus?: EventBus
   // Called after a hook that may have changed files in the task's workspace.
   workspaceChanged?: (taskId: string) => void
+  // Called with each session a hook names from a Natamux shell, so the shell can come back on it.
+  sessionSeen?: (taskId: string, terminal: string, agent: string, session: string) => void
 }
 
 export class AgentHookService {
@@ -84,6 +86,7 @@ export class AgentHookService {
   private readonly hiddenShells = new Set<string>()
   private readonly bus: EventBus | undefined
   private readonly workspaceChanged: (taskId: string) => void
+  private readonly sessionSeen: NonNullable<HookServiceOptions['sessionSeen']>
 
   constructor(
     tasks: TaskService,
@@ -94,6 +97,7 @@ export class AgentHookService {
     this.stages = stages
     this.bus = options.bus
     this.workspaceChanged = options.workspaceChanged ?? (() => undefined)
+    this.sessionSeen = options.sessionSeen ?? (() => undefined)
   }
 
   // The task comes from the header when it names one, otherwise from the workspace that holds `cwd`.
@@ -151,6 +155,10 @@ export class AgentHookService {
     }
 
     this.noteActivity(task.id, terminal ?? MAIN_TERMINAL, hook)
+    const session = hook.details.sessionId
+    if (terminal !== undefined && typeof session === 'string' && session !== '') {
+      this.sessionSeen(task.id, terminal, adapter.id, session)
+    }
     if (changesFiles(hook)) {
       this.workspaceChanged(task.id)
     }

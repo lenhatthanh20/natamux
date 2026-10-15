@@ -101,11 +101,13 @@ export type AgentActivity = {
 }
 
 // The open shells of a task: the lane of each one where an agent runs, and the program in front
-// of each one, or null where the platform does not tell.
+// of each one, or null where the platform does not tell. `restoring`: the shells that come back
+// after a restart, with the agent each one comes back with (null: a plain shell).
 export type TaskShells = {
   terminals: string[]
   lanes: Record<string, TerminalLane>
   programs: Record<string, string | null>
+  restoring?: Record<string, string | null>
 }
 
 export type RemoveWorkspaceResult = {
@@ -508,6 +510,7 @@ export function createApi(
       const body = asRecord(await request('GET', `/tasks/${encodeURIComponent(taskId)}/terminals`))
       const lanes = body.lanes === undefined ? {} : asRecord(body.lanes)
       const programs = body.programs === undefined ? {} : asRecord(body.programs)
+      const restoring = body.restoring === undefined ? {} : asRecord(body.restoring)
       const terminals = stringList(body.terminals)
       return {
         terminals,
@@ -522,6 +525,11 @@ export function createApi(
             const program = programs[name]
             return [name, typeof program === 'string' ? program : null]
           }),
+        ),
+        restoring: Object.fromEntries(
+          Object.entries(restoring)
+            .filter(([name]) => terminals.includes(name))
+            .map(([name, agent]) => [name, typeof agent === 'string' ? agent : null]),
         ),
       }
     },

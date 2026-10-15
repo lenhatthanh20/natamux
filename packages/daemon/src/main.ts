@@ -9,6 +9,7 @@ import { GenericSignals } from './generic-signals.js'
 import { IssueImporter } from './issue-importer.js'
 import { IssueLinker } from './issue-linker.js'
 import { type ParentPort, waitForLoginPath } from './login-path.js'
+import { OpenShells } from './open-shells.js'
 import { ProjectSettingsService } from './project-settings.js'
 import { spawnShell } from './pty.js'
 import { PullRequestWatcher, repoFolderOr } from './pull-request-watcher.js'
@@ -124,7 +125,16 @@ const agents = new AgentRunner({
   programs: perAgent('COMMAND'),
   extraArgs: perAgent('ARGS'),
   binDir: process.env.NATAMUX_BIN_DIR,
-  onLaunch: (launch) => genericSignals.watchLaunch(launch),
+  onLaunch: (launch) => {
+    genericSignals.watchLaunch(launch)
+    openShells.noteLaunch(launch.taskId, launch.terminal, launch.agent, launch.session)
+  },
+})
+const openShells = new OpenShells({
+  dataDir: config.dataDir,
+  terminals,
+  bus,
+  isEnded: (taskId) => isTaskEnded(service, taskId),
 })
 
 const stages = new StageRunner({
@@ -134,7 +144,11 @@ const stages = new StageRunner({
   bus,
   dataDir: config.dataDir,
   repoPath: (repo) => repos.pathOf(repo),
+  openShells,
 })
+// Before the listen, so no dashboard attaches to a shell before it is known to wait.
+openShells.start()
+stages.loadOpenShells()
 const pullRequests = new PullRequestWatcher({
   tasks: service,
   cwdOf: repoFolderOr(repos, config.dataDir),
@@ -157,6 +171,7 @@ const app = await buildServer({
   repos,
   bus,
   stages,
+  openShells,
   settings,
   issueLinker,
   dataDir: config.dataDir,
@@ -183,6 +198,8 @@ if (config.tokenWasGenerated) {
 }
 
 async function shutdown(): Promise<void> {
+  // Before the shells end, so they all come back at the next start.
+  openShells.stop((taskId, terminal) => stages.agentRuns(taskId, terminal))
   terminals.closeAll()
   stages.stop()
   issueLinker.stop()

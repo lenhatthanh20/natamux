@@ -45,6 +45,7 @@ import {
   readEventLog,
   writeEventLog,
 } from './event-log.js'
+import { deleteOpenShells } from './open-shells.js'
 import { archiveDir } from './stage-files.js'
 import {
   type FileStat,
@@ -579,6 +580,7 @@ export class TaskService {
     rmSync(eventLogPath(this.dataDir, taskId), { force: true })
     rmSync(archiveDir(this.dataDir, taskId), { recursive: true, force: true })
     deleteEndedShells(this.dataDir, taskId)
+    deleteOpenShells(this.dataDir, taskId)
     this.removeLaunchScripts(taskId)
     this.index.deleteTask(taskId)
     this.tasks.delete(taskId)
@@ -729,8 +731,15 @@ export class TaskService {
 
   // Writes down that an agent was started in the task's terminal, and names it on the task.
   // The program is the command the shell looks for, to tell when it was not found.
-  // The agent of a stage that starts its own (`stage`) is not the task's agent.
-  recordAgentLaunch(taskId: string, agent: string, program?: string, stage?: string): Task {
+  // The agent of a stage that starts its own (`stage`) is not the task's agent. Neither is one
+  // restored in its shell after a restart (`restoredIn`, the shell).
+  recordAgentLaunch(
+    taskId: string,
+    agent: string,
+    program?: string,
+    stage?: string,
+    restoredIn?: string,
+  ): Task {
     const task = this.getTask(taskId)
     const event: TaskEvent = {
       taskId,
@@ -741,11 +750,12 @@ export class TaskService {
         agent,
         ...(program === undefined ? {} : { program }),
         ...(stage === undefined ? {} : { stage }),
+        ...(restoredIn === undefined ? {} : { terminal: restoredIn, restored: true }),
       },
     }
     const updated: Task = {
       ...task,
-      agent: stage === undefined ? agent : task.agent,
+      agent: stage === undefined && restoredIn === undefined ? agent : task.agent,
       updatedAt: event.at,
     }
 

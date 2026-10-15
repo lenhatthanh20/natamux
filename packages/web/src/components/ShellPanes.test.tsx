@@ -26,6 +26,7 @@ type StandInProps = {
   focusOnOpen?: boolean
   cacheKey?: string
   taskState?: TaskState
+  restoring?: string
 }
 
 // The grid columns each stand-in saw when it was first shown. `order` has "pane" for each one
@@ -38,7 +39,14 @@ const shownAt = vi.hoisted(() => ({ columns: [] as string[], order: [] as string
 // the real terminal does, so a test can count the mounts. It notes the grid columns in a layout
 // effect, where the real terminal is shown and fits its pane.
 vi.mock('./TerminalView', () => ({
-  default: ({ connect, focusToken, focusOnOpen = true, cacheKey, taskState }: StandInProps) => {
+  default: ({
+    connect,
+    focusToken,
+    focusOnOpen = true,
+    cacheKey,
+    taskState,
+    restoring,
+  }: StandInProps) => {
     const [focusAtMount] = useState(focusOnOpen)
     const element = useRef<HTMLParagraphElement>(null)
     useLayoutEffect(() => {
@@ -58,6 +66,7 @@ vi.mock('./TerminalView', () => ({
         'data-focus-on-open': String(focusAtMount),
         'data-cache-key': cacheKey ?? '',
         'data-task-state': taskState ?? '',
+        'data-restoring': restoring ?? '',
       },
       'Terminal stand-in',
     )
@@ -162,6 +171,41 @@ const focusOnOpen = async (name: string) => {
   const terminal = await within(pane).findByText('Terminal stand-in')
   return terminal.getAttribute('data-focus-on-open')
 }
+
+describe('ShellPanes after a restart', () => {
+  it('tells each pane that comes back what it brings back', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const task: ShellTask = {
+      id: 'T-0001',
+      state: 'running',
+      stage: 'spec',
+      lanes: {},
+      agent: null,
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <ShellPanes
+          task={task}
+          connect={() => new Promise<WebSocket>(() => {})}
+          loadTerminals={async () => ['1', '6', '7']}
+          loadShells={async () => ({ ...withLanes({}), restoring: { '6': 'copilot', '7': null } })}
+          closeTerminal={async () => []}
+          actionsSlot={null}
+        />
+      </QueryClientProvider>,
+    )
+    const restoring = (name: string) =>
+      within(screen.getByRole('region', { name }))
+        .getByText('Terminal stand-in')
+        .getAttribute('data-restoring')
+
+    await waitFor(() => {
+      expect(restoring('Shell 6')).toBe('Restoring GitHub Copilot…')
+      expect(restoring('Shell 7')).toBe('Restoring shell…')
+      expect(restoring('Shell 1')).toBe('')
+    })
+  })
+})
 
 describe('ShellPanes focus on open', () => {
   it('lets only Shell 1 take the keyboard when the shells of a task open', async () => {

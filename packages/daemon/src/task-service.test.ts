@@ -22,6 +22,7 @@ import { decodeAttachments, listAttachments } from './attachments.js'
 import { endedShellsPath, saveEndedShells } from './ended-shells.js'
 import { type DaemonMessage, EventBus } from './event-bus.js'
 import { eventLogPath, readEventLog } from './event-log.js'
+import { openShellsPath, saveOpenShells } from './open-shells.js'
 import { readTaskFile, serializeTask, taskFilePath, tasksDir, writeTaskFile } from './task-files.js'
 import { TaskIndex } from './task-index.js'
 import {
@@ -1291,6 +1292,7 @@ describe('event log files', () => {
     saveEndedShells(dataDir, task.id, [
       { name: '1', agent: null, stage: null, endedAt: '2026-10-15T00:07:00.000Z', text: 'done' },
     ])
+    saveOpenShells(dataDir, task.id, [{ name: '6', agent: 'copilot', session: 'c-1' }])
 
     expect(service.deleteTask(task.id)).toEqual([])
 
@@ -1300,6 +1302,7 @@ describe('event log files', () => {
     expect(existsSync(join(dataDir, `agent-launch-${task.id}.sh`))).toBe(false)
     expect(existsSync(join(dataDir, `agent-launch-${task.id}-2.sh`))).toBe(false)
     expect(existsSync(endedShellsPath(dataDir, task.id))).toBe(false)
+    expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
     expect(readFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'utf8')).toBe('keep\n')
     expect(service.listTasks()).toEqual([])
     expect(messages.at(-1)).toEqual({ kind: 'task.deleted', taskId: task.id })

@@ -185,7 +185,7 @@ export type LaunchOptions = {
   // Words added to the command line, from NATAMUX_<AGENT>_ARGS.
   extraArgs: string
   prompt: string
-  // A Claude Code session to go on with, or LAST_SESSION. Other agents start a new one.
+  // A session of the agent to go on with, or LAST_SESSION.
   session?: string
   platform: NodeJS.Platform
   claudeSettingsPath: string
@@ -203,6 +203,10 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
   const mode = options.permissionMode === 'auto' ? AUTO_FLAGS[agent] : []
   const extra = options.extraArgs === '' ? [] : [options.extraArgs]
   const prompt = options.prompt === '' ? [] : [quote(options.prompt)]
+  const session = options.session
+  // `--resume <id>`, or the flag of the newest session of the folder.
+  const resume = (newest: string[]) =>
+    session === undefined ? [] : session === LAST_SESSION ? newest : ['--resume', quote(session)]
   switch (agent) {
     case 'claude-code':
       return [
@@ -210,17 +214,15 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         '--settings',
         quote(options.claudeSettingsPath),
         ...mode,
-        ...(options.session === undefined
-          ? []
-          : options.session === LAST_SESSION
-            ? [LAST_SESSION]
-            : ['--resume', quote(options.session)]),
+        ...resume([LAST_SESSION]),
         ...extra,
         ...prompt,
       ].join(' ')
     case 'codex':
       return [
         options.program,
+        // `codex resume [OPTIONS] [SESSION_ID]` takes the same options as `codex`.
+        ...(session === undefined ? [] : ['resume']),
         '--dangerously-bypass-hook-trust',
         ...mode,
         ...(options.workspace === null ? [] : ['-c', quote(codexTrustArg(options.workspace))]),
@@ -229,6 +231,7 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         // comes twice, so the user's own one is enough.
         ...(options.extraArgs.split(/\s+/).includes('--no-alt-screen') ? [] : ['--no-alt-screen']),
         ...extra,
+        ...(session === undefined ? [] : session === LAST_SESSION ? ['--last'] : [quote(session)]),
         ...prompt,
       ].join(' ')
     case 'gemini': {
@@ -236,6 +239,8 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         options.program,
         ...mode,
         ...extra,
+        // A bare `--resume` is the newest session.
+        ...resume(['--resume']),
         ...(prompt.length > 0 ? ['-i', ...prompt] : []),
       ]
       const settings = quote(options.geminiSettingsPath)
@@ -249,10 +254,11 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         options.program,
         ...mode,
         ...extra,
+        ...resume(['--continue']),
         ...(prompt.length > 0 ? ['-i', ...prompt] : []),
       ].join(' ')
     case 'cursor':
-      return [options.program, ...mode, ...extra, ...prompt].join(' ')
+      return [options.program, ...mode, ...extra, ...resume(['--continue']), ...prompt].join(' ')
   }
 }
 

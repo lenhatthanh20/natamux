@@ -1,6 +1,7 @@
 import type { TaskState } from '@natamux/core'
 import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
 import { type CSSProperties, lazy, type ReactNode, useRef } from 'react'
+import { agentLabel } from '../lib/agents'
 import { useAppEvent } from '../lib/app-events'
 import { shortcutOf } from '../lib/commands'
 import type { TerminalConnectQuery } from '../lib/terminal'
@@ -34,6 +35,8 @@ type TerminalPaneProps = {
   cacheKey?: string
   // The task's state, so an ended shell can say the task was done or cancelled.
   taskState?: TaskState
+  // The shell comes back after a restart, with this agent (null: a plain shell).
+  restoring?: string | null
   maximized: boolean
   onToggleMaximize: () => void
   // The agents grid can open the workspace of a pane.
@@ -61,6 +64,7 @@ export function TerminalPane({
   focusOnOpen,
   cacheKey,
   taskState,
+  restoring,
   maximized,
   onToggleMaximize,
   openWorkspace,
@@ -138,6 +142,11 @@ export function TerminalPane({
           focusOnOpen={focusOnOpen}
           cacheKey={cacheKey}
           taskState={taskState}
+          restoring={
+            restoring === undefined
+              ? undefined
+              : `Restoring ${restoring === null ? 'shell' : agentLabel(restoring)}…`
+          }
         />
       </LazyView>
     </section>
