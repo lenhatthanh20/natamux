@@ -17,6 +17,7 @@ Install the Cursor CLI and log in. Follow the [Cursor documentation](https://cur
 |---|---|
 | Program | `cursor-agent` |
 | Command line | `cursor-agent --force [extra args] '<prompt>'` |
+| Full screen | None: Cursor CLI runs inline (checked on 2026.10.14), so its output goes into the terminal history |
 | Permission flag | `--force`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_CURSOR_COMMAND` |
 | Add arguments | `NATAMUX_CURSOR_ARGS` |

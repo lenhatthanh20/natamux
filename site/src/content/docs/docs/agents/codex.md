@@ -16,7 +16,8 @@ Install Codex and log in. Follow the [Codex project page](https://github.com/ope
 | | |
 |---|---|
 | Program | `codex` |
-| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'projects={…}' -c 'hooks.<Event>=[…]' [extra args] '<prompt>'` |
+| Command line | `codex --dangerously-bypass-hook-trust --sandbox workspace-write --ask-for-approval never -c 'projects={…}' -c 'hooks.<Event>=[…]' --no-alt-screen [extra args] '<prompt>'` |
+| Full screen | Off: `--no-alt-screen` runs Codex inline, so its output goes into the terminal history. `NATAMUX_CODEX_ARGS` cannot turn it back on: the flag wins over `tui.alternate_screen` |
 | Permission flag | `--sandbox workspace-write --ask-for-approval never`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_CODEX_COMMAND` |
 | Add arguments | `NATAMUX_CODEX_ARGS` |

@@ -73,6 +73,6 @@ A real Copilot CLI 1.0.94 session.
 
 ## Limits
 
-- Copilot runs in its own full screen, so its output does not go into the terminal history. Its scrollbar shows as a light line at the right edge. Copilot CLI 1.0.97 has no flag to turn the full screen off.
+- Copilot runs in its own full screen, so its output does not go into the terminal history. Its scrollbar shows as a light line at the right edge. Copilot CLI (checked on 1.0.98) has no flag or setting to turn the full screen off.
 - Copilot may ring the terminal bell when it starts. Natamux ignores a bell in the first 15 seconds after launch.
 - Copilot's hooks may be off until its folder is trusted. Without `~/.copilot/config.json` (Copilot never ran), Natamux cannot trust the folder, and Copilot asks once. Until then, the terminal bell moves a running task to needs input.

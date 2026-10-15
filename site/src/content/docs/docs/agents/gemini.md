@@ -21,6 +21,7 @@ Per `docs/agent-adapters.md`, the Gemini CLI free tier was replaced by the Antig
 |---|---|
 | Program | `gemini` |
 | Command line | `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=<file> gemini --approval-mode yolo [extra args] -i '<prompt>'` |
+| Full screen | Off: the settings file sets `ui.useAlternateBuffer` to `false`, so Gemini runs inline and its output goes into the terminal history |
 | Permission flag | `--approval-mode yolo`, left out with `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) |
 | Change the program | `NATAMUX_GEMINI_COMMAND` |
 | Add arguments | `NATAMUX_GEMINI_ARGS` |
@@ -33,7 +34,7 @@ natamux agent start T-42 --agent gemini
 
 ## How hooks are added
 
-The daemon writes `gemini-settings.json` into its data folder. Gemini CLI reads it as its system settings, so your own settings stay as they are. Each hook runs `natamux hook gemini`, which prints `{}` because Gemini reads the answer as JSON.
+The daemon writes `gemini-settings.json` into its data folder. Gemini CLI reads it as its system settings. It holds only the hooks and `ui.useAlternateBuffer`, so your other settings stay as they are. Each hook runs `natamux hook gemini`, which prints `{}` because Gemini reads the answer as JSON.
 
 ## Events and states
 
