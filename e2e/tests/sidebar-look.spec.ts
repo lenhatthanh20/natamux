@@ -192,7 +192,7 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
   await hook('Stop')
   await expect.poll(async () => (await lane()).state, { timeout: 10_000 }).toBe('needs-input')
 
-  const waiting = page.getByRole('button', { name: 'Shell 2, Needs your input', exact: true })
+  const waiting = page.getByRole('button', { name: 'Shell 2, Needs input', exact: true })
   await expect(waiting).toBeVisible({ timeout: 15_000 })
   await expect(waiting.locator('[data-state="needs-input"]')).toBeVisible()
   await expect(waiting.locator('[data-tip="State not known yet"]')).toHaveCount(0)

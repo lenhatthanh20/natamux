@@ -67,7 +67,7 @@ describe('tasksThatStartedWaiting', () => {
 describe('notificationFor', () => {
   it('names the task and its state', () => {
     expect(notificationFor(task('T-0001', 'needs-input'))).toEqual({
-      title: 'T-0001: Needs your input',
+      title: 'T-0001: Needs input',
       body: 'Title of T-0001',
     })
   })

@@ -62,7 +62,7 @@ Natamux's stage prompts already tell agents what to run. The commands are useful
 | Command | When | Effect |
 |---|---|---|
 | `natamux done` | The stage's work is finished | The daemon runs the checks of the stage, then moves on or waits for your approval |
-| `natamux ask "Keep the old columns?"` | The agent needs a decision | The task goes to **Needs your input** and the question shows in the sidebar |
+| `natamux ask "Keep the old columns?"` | The agent needs a decision | The task goes to **Needs input** and the question shows in the sidebar |
 | `natamux stage back $NATAMUX_TASK_ID --reason "..."` | A review found problems | The task goes back to the last agent stage, with the reason in its prompt. See [The review loop](/docs/concepts/review-loop/) |
 | `natamux task create "Follow-up: ..."` | The agent finds work for later | A draft task in the same project |
 

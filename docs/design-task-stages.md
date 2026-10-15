@@ -39,7 +39,7 @@ The state list does not change. Each state now means "in the current stage":
 | `draft` | The stage cannot start yet; something is missing (for example no context source) | Not started |
 | `ready` | The stage can start | Ready |
 | `running` | An agent or a command works on the stage | Running |
-| `needs-input` | The agent asks a question | Needs your input |
+| `needs-input` | The agent asks a question | Needs input |
 | `review` | The stage output waits for your approval | Waiting for approval |
 | `blocked`, `failed` | As before | Blocked, Failed |
 | `done` | The last stage is approved. Only reachable from the last stage | Done |

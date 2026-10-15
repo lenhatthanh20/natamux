@@ -344,7 +344,7 @@ describe('paneStateText', () => {
   it('shows what a running agent does, and says plainly that it waits for the user', () => {
     expect(paneStateText('running', 'Edit notes/T-0018.md')).toBe('Running · Edit notes/T-0018.md')
     expect(paneStateText('running', null)).toBe('Running')
-    expect(paneStateText('needs-input', 'Edit a.ts')).toBe('Needs your input')
+    expect(paneStateText('needs-input', 'Edit a.ts')).toBe('Needs input')
     expect(paneStateText('review', 'Edit a.ts')).toBe('In review')
   })
 })
@@ -395,7 +395,7 @@ describe('otherTerminalHint', () => {
       '1': { stage: 'implement', state: 'running' as const },
       '2': { stage: 'test-spec', state: 'running' as const },
     }
-    expect(otherTerminalHint(task, lanes)).toBe('Shell 2 needs your input')
+    expect(otherTerminalHint(task, lanes)).toBe('Shell 2 needs input')
   })
 
   it('names a failed terminal, after one that waits', () => {

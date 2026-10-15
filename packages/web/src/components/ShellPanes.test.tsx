@@ -316,9 +316,9 @@ describe('ShellPanes agent state', () => {
   it('marks only the shell that waits for the user', async () => {
     group({ implement: 'running', 'test-spec': 'needs-input' }, { '1': 'Edit src/a.ts' })
     await agentShown('Shell 2')
-    expect(stateLine('Shell 2')).toBe('Needs your input')
+    expect(stateLine('Shell 2')).toBe('Needs input')
     expect(stateLine('Shell 1')).toBe('Running · Edit src/a.ts')
-    expect(amber('Shell 2').map((element) => element.textContent)).toEqual(['Needs your input'])
+    expect(amber('Shell 2').map((element) => element.textContent)).toEqual(['Needs input'])
     expect(amber('Shell 1')).toEqual([])
 
     // Maximized, it is the only agent shell on the screen, so the banner is enough.
@@ -339,7 +339,7 @@ describe('ShellPanes agent state', () => {
     expect(stateLine('Shell 1')).toBeUndefined()
     expect(amber('Shell 1')).toEqual([])
     // The glyph still says the state to screen readers.
-    expect(header('Shell 1').querySelector('.sr-only')?.textContent).toBe('Needs your input')
+    expect(header('Shell 1').querySelector('.sr-only')?.textContent).toBe('Needs input')
   })
 
   it('keeps the activity of each shell apart', async () => {
@@ -450,7 +450,7 @@ describe('ShellPanes answer in terminal', () => {
     const { update } = answerable({ implement: 'needs-input', 'test-spec': 'needs-input' })
     await agentShown('Shell 2')
     for (const name of ['Shell 1', 'Shell 2']) {
-      expect(amber(name).map((element) => element.textContent)).toEqual(['Needs your input'])
+      expect(amber(name).map((element) => element.textContent)).toEqual(['Needs input'])
     }
 
     update({ implement: 'running', 'test-spec': 'needs-input' }, 0)
@@ -752,7 +752,7 @@ describe('ShellPanes stage shells', () => {
     expect(stateLine('Shell 2')).toBe('Running')
 
     rerender(view({ ...building, lanes: { implement: 'running', 'test-spec': 'needs-input' } }))
-    expect(stateLine('Shell 2')).toBe('Needs your input')
+    expect(stateLine('Shell 2')).toBe('Needs input')
   })
 
   it('keeps every terminal through polls that read the same lists', async () => {

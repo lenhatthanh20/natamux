@@ -19,7 +19,7 @@ The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px 
 | <StatusIcon kind="ready" /> | <StatusIcon kind="ready" size={8} /> | Ready | Ring | The stage waits to start: for its agent, a workspace, or the tasks it depends on. | Nothing. It starts when it can. | No |
 | <StatusIcon kind="running" /> | <StatusIcon kind="running" size={8} /> | Running | Full disk that blinks | An agent or a command works on the stage. | Nothing. Open the workspace to watch. | No |
 | <StatusIcon kind="quiet" /> | <StatusIcon kind="quiet" size={8} /> | Running, but quiet | Ring, lower half filled, in the "needs you" color | The task runs, but its agent has shown no sign of life for 10 minutes. | Open its terminal and check that the agent is not stuck. | Yes |
-| <StatusIcon kind="needs-input" /> | <StatusIcon kind="needs-input" size={8} /> | Needs your input | Diamond | The agent asked a question or a permission, or ended its turn without `natamux done`. | Click **Answer** to open its terminal, then reply. | Yes |
+| <StatusIcon kind="needs-input" /> | <StatusIcon kind="needs-input" size={8} /> | Needs input | Diamond | The agent asked a question or a permission, or ended its turn without `natamux done`. | Click **Answer** to open its terminal, then reply. | Yes |
 | <StatusIcon kind="review" /> | <StatusIcon kind="review" size={8} /> | In review | Rounded square | The stage is done and waits for your approval. | Read the changes, then **Approve** or **Send back**. | Yes |
 | <StatusIcon kind="blocked" /> | <StatusIcon kind="blocked" size={8} /> | Blocked | Two bars | You or Natamux paused the task. | Unblock it when it can go on. | Yes |
 | <StatusIcon kind="failed" /> | <StatusIcon kind="failed" size={8} /> | Failed | Triangle | The agent or a stage command failed. | Read the reason, fix it, then **Retry**. | Yes |
@@ -39,7 +39,7 @@ The **Progress** views show one marker per stage, with the same shapes.
 |---|---|---|
 | <StatusIcon marker="done" /> | Done | The stage was approved or passed its checks. |
 | <StatusIcon marker="current" kind="running" /> | Now, running | The current stage. Its agent works; the inner disk blinks. |
-| <StatusIcon marker="current" kind="needs-input" /> | Now, needs your input | The current stage waits for your answer. |
+| <StatusIcon marker="current" kind="needs-input" /> | Now, needs input | The current stage waits for your answer. |
 | <StatusIcon marker="current" kind="review" /> | Now, in review | The current stage waits for your approval. |
 | <StatusIcon marker="current" kind="blocked" /> | Now, blocked | The current stage is paused. |
 | <StatusIcon marker="current" kind="failed" /> | Now, failed | The current stage failed. |

@@ -431,7 +431,7 @@ quiet (done, cancelled, draft), min 24px:
 - Glyph (`components/ShapeGlyph.tsx`): the state shapes of 4.10 at 10px in a 14px slot, for every tier, in `--chip-fg`. 10px matches the cap height of 13px Inter; 8px read as a bullet and blurred the small shapes. Tooltip and screen readers get the state label.
 - Task glyph: `running` while any row or parallel stage under the task runs, else the task state (`taskGlyphState`).
 - Only the open workspace shows the rows under it, and the parent of an open subtask. No row opens by itself, and the user cannot fold the open one. A folded row still shows its subtasks in an attention tier (needs-input, failed, blocked) as cards under it (T-0022). The row carries `aria-expanded` when it has work under it. A click, Enter or Right on a folded row opens that task.
-- Live line 2: repo chip (pinned rows), task id in mono (tooltip: branch), the step `n/m` (only with 2 steps or more; a parallel group is one step), the current stage (in a group the most urgent stage), subtasks `done/all`, what the agent does (running and folded only; open, the shell rows say it), pull request number in the checks color, the icon of the task's agent (icon only, tooltip: its name; folded and open, since the shell rows name the agent of each stage). Screen readers hear every step through `aria-describedby` ("Steps: Spec done, Implement needs your input, …").
+- Live line 2: repo chip (pinned rows), task id in mono (tooltip: branch), the step `n/m` (only with 2 steps or more; a parallel group is one step), the current stage (in a group the most urgent stage), subtasks `done/all`, what the agent does (running and folded only; open, the shell rows say it), pull request number in the checks color, the icon of the task's agent (icon only, tooltip: its name; folded and open, since the shell rows name the agent of each stage). Screen readers hear every step through `aria-describedby` ("Steps: Spec done, Implement needs input, …").
 - Attention card: the question (needs-input; "Waiting for your answer" until it is known) or the reason (failed, blocked) on up to 2 lines, then id, step and stage. A needs-input card has an **Answer** button (`Answer T-0018`, not a tab stop) that opens the terminal of the waiting shell, or the first shell.
 - Under the open row, inside a 1px `--line` guide under the task glyph (`ml-4`): first one row per open shell in shell order, then a stand-in row for each parallel stage with no shell yet, then the subtask rows (full rows, one level only). Shell rows are 22px (40 on touch), glyph lined up with the title: shape glyph 8 (muted ring with a dot, tooltip "State not known yet", for an agent with no state yet, such as one started by hand that has had no prompt yet; `SquareTerminal` 12 muted for a shell with no agent), agent icon 12 (tooltip: the agent's label), stage name (a shell that a stage of an earlier step opened keeps that stage and shows done, or the state its agent's hooks give later) or "Shell 2" for an agent on no stage or the program (`bash`, `zsh`) for a shell with no agent, what the agent does (muted, truncate), shell tag `S1` (11 mono muted, tooltip "Shell 1"; none when the name already says the shell). Accessible name: "Implement, Claude Code, Shell 1, Running"; "Shell 2, Claude Code, State not known"; "Shell 2, zsh". They come from `GET /tasks/<id>/terminals` (`terminals`, `lanes`, `programs`), read again when the live feed says a shell started or ended, its program in front changed, or a hook changed its agent's state (`shells.changed`), and every 5 min as a fallback, for tasks that are running or need input, and the open workspace. A pick opens the task's terminal on that shell (`requestShell`); a shell that closed since then gives the first agent shell, as opening the workspace does.
 - A finished or pinned subtask stays where it was (finished list, pinned group). An open subtask of a finished parent stays at the top level, so it is never folded away in "N finished". A subtask whose parent is not shown stays at the top level. A filter that matches a subtask keeps its parent in view, open, with the subtask under it.
@@ -456,7 +456,7 @@ One family of filled shapes for every place: the table, palette, pane tabs and t
 | ready | ring | — | Ready |
 | running | full disk | blinks once per 2000ms (`.hm-beat`) | Running |
 | running but quiet | ring, lower half filled, needs-input color | — | Running, but quiet |
-| needs-input | diamond | — | Needs your input |
+| needs-input | diamond | — | Needs input |
 | review | rounded square | — | In review |
 | blocked | two bars | — | Blocked |
 | failed | triangle | — | Failed |
@@ -562,7 +562,7 @@ Shared shell:
 - Right: icon buttons 24: Maximize/Restore (`Mod+Shift+Enter`), Open workspace (agents grid only), Close. Close tooltip: "Close shell (ends the process)" and confirms when a foreground process other than the shell is running.
 - Focus: the focused pane gets `outline: 1px solid var(--focus); outline-offset: -1px` on the pane frame; header title ink, other headers muted.
 - Opening another task's workspace on its Terminal tab puts the keyboard in its first agent shell (the lowest-numbered shell that runs an agent, else Shell 1), once the shells are read. Not on a phone, not when opened from an address, and a shell picked in the jump palette wins.
-- Needs-input pane: one mark only, the state text "Needs your input" in signal. No top bar and no header tint (WS-21, T-0015).
+- Needs-input pane: one mark only, the state text "Needs input" in signal. No top bar and no header tint (WS-21, T-0015).
 - In a workspace the mark shows only while two or more agent panes are on the screen, so it says which one waits. With one agent pane (also when one is maximized, and on a phone) the pane shows no state text for needs-input: the banner over the tabs says it. The Agents grid has no banner, so its panes always show the mark.
 - Body: bg terminal, pad 8 top and bottom, 10 left, 2 right (xterm keeps 8 for its scrollbar, so text has 10 on both sides). 13px, line height 1 (xterm multiplies the font's own height: about 17px rows, as in Ghostty and VS Code), bold 700 in its own color (not bright), block cursor, outline cursor when unfocused, Alt + wheel scrolls 5×. "Jump to latest" pill (24px, radius full, bg popover, `--shadow-1`, `ArrowDown` 14) bottom-right when scrolled up (WS-30). Connection states ("Connecting", "Reconnecting", "Could not start" + [Start a new shell]) as a 28px strip at the top of the body. "Reconnecting" shows while a dropped connection comes back by itself; it has no button, the screen stays as it was, and the output missed meanwhile follows. If the shell is gone by then (a daemon restart), the pane shows the ended state below. A pane that comes back (another tab, another task) shows the same screen and scroll position at once, with no strip; "Connecting" shows only for a new connection. While a new connection writes the shell's history, the screen stays hidden and the body shows the pane's skeleton; the final screen then shows at once, scrolled to the bottom, so no history scrolls by. An ended shell dims the screen (opacity 60%), hides the cursor and takes no input; a 32px bar at the bottom (bg surface, border-top) shows the task state glyph (done, cancelled) or `SquareTerminal`, "The shell ended." (with the exit code when it is not 0 and the task is not finished; the finished banner says how the task ended), and [Open a new shell].
 - With two or more panes, the panes without the focus are not dimmed. Only the focused pane shows the focus outline.
@@ -593,7 +593,7 @@ Shared shell:
 
 | Main width | Columns |
 |---|---|
-| >= 1000 | Id 72 (mono 12 muted) · Task (flex, min 240) · State 120 · Agent 120 · Branch 200 (mono 12) · Changes 88 (right) · PR 120 · Last activity 104 (right) |
+| >= 1000 | Id 72 (mono 12 muted) · Task (flex, min 240) · State 128 · Agent 120 · Branch 200 (mono 12) · Changes 88 (right) · PR 120 · Last activity 104 (right) |
 | 760-999 | Id · Task · State · Changes · Last activity |
 | 560-759 | Id · Task · State · Last activity |
 | < 560 | card list: 56px rows: glyph + title (13/500) / id mono · state text · age (12 muted) |
@@ -773,7 +773,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 4. Focus visible everywhere (5.2). Never `outline: none` without a replacement.
 5. Landmarks: `header` (title bar), `nav` (sidebar), `main`, `aside` (details), `footer` (status bar). One `h1` (the current view title, visually the view header), `h2` for sections.
 6. Names: every icon-only control has `aria-label`; toggles use `aria-pressed`; disclosures `aria-expanded`; current workspace `aria-current="true"`; sorted column `aria-sort`; tabs/radios/listbox/menu use their ARIA roles; segmented options say the option, not the state.
-7. Live regions: toasts (`status`/`alert`), needs-you count changes announced politely ("T-0008 needs your input"), connection state. Do not announce every terminal line.
+7. Live regions: toasts (`status`/`alert`), needs-you count changes announced politely ("T-0008 needs input"), connection state. Do not announce every terminal line.
 8. Modals: `aria-modal`, `inert` on the rest, focus trap, return focus.
 9. Targets: >= 24x24 everywhere (WCAG 2.2 target size minimum), >= 40 on coarse pointers.
 10. Zoom and text size: layouts survive 200% browser zoom and the UI size setting; no fixed px heights on text containers except the listed chrome heights.
@@ -781,7 +781,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 12. `prefers-contrast: more`: turn on `--contrast-border`, use `--muted` for control borders.
 13. `prefers-color-scheme`: first visit follows the OS; the user choice (System / Light / Dark) is stored.
 14. Language: `lang="en"`; plain words; no emoji as content.
-15. Screen reader names for rows read as one sentence: "Fix token refresh race, Needs your input, T-0008, 34 minutes".
+15. Screen reader names for rows read as one sentence: "Fix token refresh race, Needs input, T-0008, 34 minutes".
 16. Terminal: xterm `screenReaderMode` follows a setting (off by default); Monaco diff keeps its accessible diff viewer (F7).
 
 ---------------------------------------------------------------------

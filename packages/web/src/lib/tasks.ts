@@ -13,7 +13,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   draft: 'Draft',
   ready: 'Ready',
   running: 'Running',
-  'needs-input': 'Needs your input',
+  'needs-input': 'Needs input',
   review: 'In review',
   blocked: 'Blocked',
   failed: 'Failed',
@@ -311,7 +311,7 @@ export function formatExact(isoTime: string): string {
 }
 
 // What a screen reader says for a task row, such as
-// "Fix token refresh race, Needs your input, T-0008, 34m ago".
+// "Fix token refresh race, Needs input, T-0008, 34m ago".
 // The stage a task is in, such as "Plan". Null while it has none: a draft, or a finished task.
 export function stageLabel(task: Pick<Task, 'stage' | 'state'>): string | null {
   if (task.state === 'draft' || task.state === 'done' || task.state === 'cancelled') {
@@ -320,7 +320,7 @@ export function stageLabel(task: Pick<Task, 'stage' | 'state'>): string | null {
   return stageName({ id: task.stage })
 }
 
-// "Plan · Needs your input": the stage and its state in one text.
+// "Plan · Needs input": the stage and its state in one text.
 export function stageStateLabel(task: Pick<Task, 'stage' | 'state'>): string {
   const stage = stageLabel(task)
   return stage === null ? STATE_LABEL[task.state] : `${stage} · ${STATE_LABEL[task.state]}`
