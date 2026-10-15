@@ -11,7 +11,7 @@ export type TableLayout =
 const WIDTH: Record<ColumnKey, number | null> = {
   id: 72,
   task: null,
-  state: 120,
+  state: 128,
   agent: 120,
   branch: 200,
   changes: 88,
@@ -22,7 +22,7 @@ const WIDTH: Record<ColumnKey, number | null> = {
 export const TASK_MIN = 240
 
 // The full set needs this much room: all its columns and the task column at its minimum.
-const FULL_FROM = 1064
+const FULL_FROM = 1072
 
 export const COLUMN_LABEL: Record<ColumnKey, string> = {
   id: 'Id',

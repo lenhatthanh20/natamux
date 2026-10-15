@@ -25,7 +25,7 @@ type TerminalPaneProps = {
   stateText?: string
   // The agent waits for the user: the state text is amber, the one mark of the pane.
   needsInput?: boolean
-  // Another agent of the task needs the user, such as "Shell 2 needs your input".
+  // Another agent of the task needs the user, such as "Shell 2 needs input".
   hint?: string
   connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   focusToken?: number

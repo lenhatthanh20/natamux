@@ -252,7 +252,7 @@ The **Review** stage is an agent stage that runs in its own shell (`"ownShell": 
 - It writes `review.md` with a **Findings** section.
 - **Nothing to fix:** it runs `natamux done`, and the task goes on.
 - **Something to fix:** it runs `natamux stage back` with the problems as the reason. Implement starts again with "What to change: …" in its prompt, then Automated tests and Review run again.
-- An agent may send the task back from its stage **2 times**, over the life of the task. The third time the stage waits for you ("needs your input"), so two agents that disagree do not loop. You can always send it back yourself.
+- An agent may send the task back from its stage **2 times**, over the life of the task. The third time the stage waits for you ("needs input"), so two agents that disagree do not loop. You can always send it back yourself.
 - Pick another agent or model for it in **Agent** and **Arguments** of its stage settings.
 
 For a review by a person, add **Manual review** from the catalog, for example after Review. The whole loop, with screenshots and the limits, is on [The review loop](/docs/concepts/review-loop/).

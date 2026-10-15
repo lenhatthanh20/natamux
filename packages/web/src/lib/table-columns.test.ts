@@ -9,8 +9,8 @@ function columns(width: number | null, has = both): ColumnKey[] | 'cards' {
 }
 
 describe('tableLayout', () => {
-  it('has every column from 1064', () => {
-    expect(columns(1064)).toEqual([
+  it('has every column from 1072', () => {
+    expect(columns(1072)).toEqual([
       'id',
       'task',
       'state',
@@ -23,8 +23,8 @@ describe('tableLayout', () => {
     expect(columns(1920)).toHaveLength(8)
   })
 
-  it('drops agent, branch and pull request from 760 to 1063', () => {
-    expect(columns(1063)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
+  it('drops agent, branch and pull request from 760 to 1071', () => {
+    expect(columns(1071)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
     expect(columns(760)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
   })
 
@@ -55,7 +55,8 @@ describe('tableLayout', () => {
     }
     expect(layout.widths.task).toBeNull()
     expect(layout.widths.id).toBe(72)
-    expect(layout.minWidth).toBe(72 + 120 + 120 + 200 + 88 + 120 + 104 + 240)
+    expect(layout.widths.state).toBe(128)
+    expect(layout.minWidth).toBe(72 + 128 + 120 + 200 + 88 + 120 + 104 + 240)
   })
 
   it('has a smaller minimum with fewer columns', () => {

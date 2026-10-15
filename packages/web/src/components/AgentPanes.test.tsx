@@ -163,7 +163,7 @@ describe('AgentPanes header around the badge', () => {
       )
       // The glyph also says the state to screen readers, so read the visible state line.
       const line = header('T-0001').querySelector('[data-tip-overflow]')
-      expect(line?.textContent).toBe(state === 'needs-input' ? 'Needs your input' : 'Running')
+      expect(line?.textContent).toBe(state === 'needs-input' ? 'Needs input' : 'Running')
     },
   )
 
@@ -185,7 +185,7 @@ describe('AgentPanes header around the badge', () => {
   it('keeps the mark on a lone waiting pane', () => {
     grid([makeTask('T-0001', { state: 'needs-input' })])
     const line = header('T-0001').querySelector('[data-tip-overflow]') as HTMLElement
-    expect(line.textContent).toBe('Needs your input')
+    expect(line.textContent).toBe('Needs input')
     expect(line.className).toMatch(/text-signal/)
   })
 
@@ -360,7 +360,7 @@ describe('AgentPanes in a group', () => {
     expect(stateLine()).toBe('Running · Edit src/a.ts')
     const glyph = header('T-0001').querySelector('[data-state]')
     expect(glyph?.getAttribute('data-state')).toBe('running')
-    expect(within(header('T-0001')).getByText('Shell 2 needs your input')).toBeTruthy()
+    expect(within(header('T-0001')).getByText('Shell 2 needs input')).toBeTruthy()
     expect(header('T-0001').className).not.toMatch(/bg-signal-soft/)
   })
 
@@ -373,6 +373,6 @@ describe('AgentPanes in a group', () => {
 
   it('shows the task state when the terminals are not known yet', () => {
     grid([build({ implement: 'running', 'test-spec': 'needs-input' }, 'needs-input')])
-    expect(stateLine()).toBe('Needs your input')
+    expect(stateLine()).toBe('Needs input')
   })
 })

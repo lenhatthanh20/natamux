@@ -87,7 +87,7 @@ Agents without hooks are followed by their output and bell. They can report with
 
 ## The review keeps sending the task back
 
-The Review agent may send the task back to Implement 2 times. The third time Natamux refuses, and the task waits in **Needs your input** with "Review sent the task back 2 times. Decide what to do." Read `review.md` in the **Docs** tab, then:
+The Review agent may send the task back to Implement 2 times. The third time Natamux refuses, and the task waits in **Needs input** with "Review sent the task back 2 times. Decide what to do." Read `review.md` in the **Docs** tab, then:
 
 - fix the code yourself, or type to the agent in Shell 1, and press **Mark as done** on Review;
 - **Send back** with your own reason, which has no limit;

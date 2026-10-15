@@ -42,10 +42,10 @@ test('shows a state change of a task within 2 s', async ({ page, request }) => {
   // The sidebar has a row of the task too, as it has a workspace.
   const row = taskTable(page).getByRole('button', { name: taskNamed(title) })
   await expect(row).toBeVisible()
-  await expect(row).not.toHaveAccessibleName(/Needs your input/)
+  await expect(row).not.toHaveAccessibleName(/Needs input/)
 
   await needsInput(request, id)
-  await expect(row).toHaveAccessibleName(/Needs your input/, { timeout: PUSH_MS })
+  await expect(row).toHaveAccessibleName(/Needs input/, { timeout: PUSH_MS })
 })
 
 test('shows a shell that ends, within 2 s', async ({ page, request }) => {
@@ -93,7 +93,7 @@ test('catches up after the live socket dropped and came back', async ({ page, re
   await page.getByRole('radio', { name: 'Table' }).click()
   const row = taskTable(page).getByRole('button', { name: taskNamed(title) })
   await expect(row).toBeVisible()
-  await expect(row).not.toHaveAccessibleName(/Needs your input/)
+  await expect(row).not.toHaveAccessibleName(/Needs input/)
   await expect.poll(() => sockets.length).toBe(1)
 
   // The change comes while no socket is open: the page waits 1 s before it connects again, and
@@ -101,5 +101,5 @@ test('catches up after the live socket dropped and came back', async ({ page, re
   await sockets[0]?.close()
   await needsInput(request, id)
   await expect.poll(() => sockets.length).toBe(2)
-  await expect(row).toHaveAccessibleName(/Needs your input/, { timeout: PUSH_MS })
+  await expect(row).toHaveAccessibleName(/Needs input/, { timeout: PUSH_MS })
 })

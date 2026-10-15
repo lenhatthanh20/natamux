@@ -620,7 +620,7 @@ describe('the agents of a task', () => {
 
     expect(rowOf('Checks').getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: 'Alpha, Running' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Beta, Needs your input' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Beta, Needs input' })).toBeTruthy()
   })
 
   it('names the terminal of each stage once they are loaded, and focuses it on a pick', async () => {
@@ -635,8 +635,8 @@ describe('the agents of a task', () => {
       loadTerminals,
     })
 
-    const shell = await screen.findByRole('button', { name: 'Beta, Shell 2, Needs your input' })
-    expect(screen.queryByRole('button', { name: 'Beta, Needs your input' })).toBeNull()
+    const shell = await screen.findByRole('button', { name: 'Beta, Shell 2, Needs input' })
+    expect(screen.queryByRole('button', { name: 'Beta, Needs input' })).toBeNull()
     await user.click(shell)
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', '2')
   })
@@ -728,7 +728,7 @@ describe('one row per shell', () => {
 
     lanes = { ...lanes, '2': { stage: null, state: 'needs-input', agent: 'cursor' } }
     await act(() => queryClient.refetchQueries())
-    const cursor = await screen.findByRole('button', { name: 'Shell 2, Cursor, Needs your input' })
+    const cursor = await screen.findByRole('button', { name: 'Shell 2, Cursor, Needs input' })
     expect(cursor.querySelector('[data-tip="Cursor"]')).toBeTruthy()
   })
 
@@ -769,7 +769,7 @@ describe('one row per shell', () => {
 
     const rows = [
       ['Spec, Claude Code, Shell 1, Running', 'running'],
-      ['Shell 2, Claude Code, Needs your input', 'needs-input'],
+      ['Shell 2, Claude Code, Needs input', 'needs-input'],
       ['Shell 3, Codex, Failed', 'failed'],
     ]
     for (const [name, glyph] of rows) {
@@ -1216,7 +1216,7 @@ describe('test spec cases', () => {
       currentId: 'T-0001',
     })
 
-    expect(names()).toEqual(['Alpha, Needs your input', 'Beta, Running'])
+    expect(names()).toEqual(['Alpha, Needs input', 'Beta, Running'])
   })
 
   // D4: unmount, a hidden tab and an error.

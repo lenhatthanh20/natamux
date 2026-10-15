@@ -82,8 +82,8 @@ Pick a view with the **Layout** switch above the list.
 | Progress | Tasks against their [stages](/docs/concepts/stages/) |
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/board-wide-dark.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs your input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/board-wide-light.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs your input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/board-wide-dark.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/board-wide-light.webp" alt="The Board view with the sidebar hidden: one column per state, such as Needs input, In review, Blocked, Running and Draft, each with task cards." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>The Board view: one column per state.</figcaption>
 </figure>
 
@@ -95,7 +95,7 @@ Pick a view with the **Layout** switch above the list.
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
-The default order puts what needs you first: Needs your input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
+The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
@@ -155,7 +155,7 @@ The palette also changes the view (**All tasks**, **Agents**, table, board, prog
 | Ready | Ring | Marked ready to start. |
 | Running | Full disk that blinks | An agent works on it. |
 | Running, but quiet | Half disk in amber | It runs, but the agent has been silent for 10 minutes. |
-| Needs your input | Diamond | The agent asked a question, or ended its turn without `natamux done`. |
+| Needs input | Diamond | The agent asked a question, or ended its turn without `natamux done`. |
 | In review | Rounded square | Work is ready for you to review. |
 | Blocked | Two bars | You or Natamux blocked it. |
 | Failed | Triangle | The agent or a stage failed. |
@@ -166,15 +166,15 @@ See [Status icons](/docs/guides/status-icons/) for every icon and what to do abo
 
 ## Needs you
 
-A task needs you when it is in Needs your input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
+A task needs you when it is in Needs input, In review, Failed or Blocked state, or when it is running but has shown no sign of life for 10 minutes (it shows as quiet).
 
 - The title bar shows a chip such as "2 need you". The status bar shows it too. Click either one to open a palette of those tasks, tasks without a workspace too. The chip ignores the filter.
 - In the sidebar, a task that waits on you, failed or is blocked is a tinted card with the agent's question. See [Sidebar](#sidebar).
 - The browser tab title shows the count: `(2) Natamux`.
 
 <figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-needs-you-dark.webp" alt="A task in Needs your input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-needs-you-light.webp" alt="A task in Needs your input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-dark" src="/screens/ui/task-needs-you-dark.webp" alt="A task in Needs input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
+<img class="shot-light" src="/screens/ui/task-needs-you-light.webp" alt="A task in Needs input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
 <figcaption>A task that needs you: the banner, the card in the sidebar, and the actions of its stage.</figcaption>
 </figure>
 

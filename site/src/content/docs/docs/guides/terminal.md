@@ -42,7 +42,7 @@ Things to know:
 - A task has at most 6 shells. **New shell** is off after that.
 - Shell 1 has no close button. It stays for the agent.
 - You can start an agent yourself in any shell, for example type `codex` or `agent` (Cursor) in Shell 2. Its pane header then shows that agent, even when the task has another one. A shell that runs another program, such as `vim`, shows no agent. On Windows, a header shows only an agent that Natamux started.
-- An agent you start yourself in an extra shell has a state of its own, such as **Running** or **Needs your input**, when its hooks reach Natamux. It does not change the task's state or stage. Cursor and Copilot read their hooks from the worktree, which Natamux prepares for every shell. Claude Code, Codex and Gemini started by hand show their name but no state.
+- An agent you start yourself in an extra shell has a state of its own, such as **Running** or **Needs input**, when its hooks reach Natamux. It does not change the task's state or stage. Cursor and Copilot read their hooks from the worktree, which Natamux prepares for every shell. Claude Code, Codex and Gemini started by hand show their name but no state.
 - New shells are named in order: Shell 2, Shell 3, and so on.
 - Panes sit side by side and fill the width. The last pane takes the rest of its row.
 - On a phone, one shell fills the screen. Chips named **Shell 1**, **Shell 2** switch between them.
@@ -96,7 +96,7 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to **Needs your input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs your input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
+When an agent asks something, the task goes to **Needs input** and a banner shows what it asks. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**.
 
 After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state.
 

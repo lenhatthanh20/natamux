@@ -1,5 +1,5 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
-import { DEMO_TITLE, openTask, signIn, TOKEN } from './helpers'
+import { DEMO_TITLE, openTask, signIn, TOKEN, taskNamed, taskTable } from './helpers'
 
 const headers = { authorization: `Bearer ${TOKEN}` }
 const STOPPED = 'The agent ended its turn. Reply in the terminal, or resume it.'
@@ -86,7 +86,7 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   const shell = view.getByRole('region', { name: 'Shell 1' })
   await expect(shell.locator('header [data-tip-overflow]')).toHaveCount(0)
   await expect(shell.locator('.bg-signal, .bg-signal-soft, .text-signal')).toHaveCount(0)
-  await expect(page.getByText('Needs input', { exact: true })).toHaveCount(0)
+  await expect(shell.getByText('Needs input', { exact: true })).toHaveCount(0)
 
   for (const theme of ['Dark', 'Light'] as const) {
     await pickTheme(page, theme)
@@ -101,6 +101,36 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
     await tabs.getByRole('tab', { name }).click()
     await expect(view.getByText(STOPPED)).toBeVisible()
     await expect(view.getByRole('button', { name: 'Resume' })).toBeVisible()
+  }
+})
+
+test('fits the state chip in its table cell', async ({ page, request }, testInfo) => {
+  const title = await waitingTask(request)
+  await page.getByRole('radio', { name: 'Table' }).click()
+  const row = taskTable(page)
+    .getByRole('row')
+    .filter({ has: page.getByRole('button', { name: taskNamed(title) }) })
+  const chip = row.locator('.state-chip')
+  const agent = taskTable(page).getByRole('columnheader', { name: 'Agent' })
+  // 1920 has every column, so the Agent column sits next to State. 1000 has the narrow set.
+  for (const width of [1920, 1000]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(agent).toHaveCount(width === 1920 ? 1 : 0)
+    await expect(chip).toHaveText('Needs input')
+    const [box, cell] = await Promise.all([
+      chip.boundingBox(),
+      chip.locator('xpath=ancestor::td[1]').boundingBox(),
+    ])
+    expect(box).not.toBeNull()
+    expect(cell).not.toBeNull()
+    if (box !== null && cell !== null) {
+      // The cell has 12 px of padding on the right (px-3).
+      expect(box.x + box.width).toBeLessThanOrEqual(cell.x + cell.width - 12)
+    }
+    await testInfo.attach(`table-chip-${width}.png`, {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    })
   }
 })
 
