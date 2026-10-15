@@ -2278,12 +2278,13 @@ describe('a prompt for a running agent', () => {
     }
 
     // The events Start agent logged after the failure: one resume per failed stage, by a person.
+    // The record of a launch is left out: it only notes that an agent started again.
     function loggedAfterFailure(taskId: string) {
       const events = tasks.listEvents(taskId)
       const failed = events.map(({ event }) => event.type).lastIndexOf('agent.failed')
       return events
         .slice(failed + 1)
-        .filter(({ event }) => event.source === 'human')
+        .filter(({ event }) => event.source === 'human' && event.type !== 'agent.launched')
         .map(({ accepted, event }) => ({ accepted, type: event.type, stage: event.payload.stage }))
     }
 
