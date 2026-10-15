@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.30 (2026-10-16)
+
+- The line at the end of every stage prompt now reads "When you are done, run `natamux done`, unless the steps above say not to." A prompt of your own can say when the agent must not run it, for example after it sends the task back. See [Configuration](/docs/reference/configuration/).
+
 ## v0.1.29 (2026-10-16)
 
 - A pipeline can split into 2 to 4 paths by a condition: a file has some text, or a command succeeds. The task runs only the stages of the path it takes. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
