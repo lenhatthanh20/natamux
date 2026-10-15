@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.25 (2026-10-15)
+
+- Task shells get an agent token. An agent cannot approve, skip or pass a stage, or change project settings, and what it does is recorded as the agent's. See [Agents run with your rights](/docs/help/security-and-privacy/#agents-run-with-your-rights).
+- Fix: on Windows, control bytes in a prompt, such as from an imported issue, could run a command in PowerShell. Natamux removes them from every prompt.
+- The **Stages** tab shows every check command, and an import lists the commands in the file before it applies them. See [Import and export](/docs/guides/project-settings/#import-and-export).
+- A finished task says what is left, shows a wrap-up on the **Terminal** tab, and removes its workspace in one dialog. See [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
+- Switching tasks no longer makes the terminals jump, and **Check for Updates…** shows a popup while it works. See [Updates](/docs/guides/desktop-app/#updates).
+
 ## v0.1.24 (2026-10-14)
 
 - The desktop app installs an update only when `SHA256SUMS.txt` of the release is signed with the Natamux release key. A missing or wrong signature stops the update. v0.1.23 and earlier do not check it. See [Updates](/docs/help/security-and-privacy/#updates).

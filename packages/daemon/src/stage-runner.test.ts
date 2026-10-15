@@ -1872,12 +1872,14 @@ describe('who a stage action came from', () => {
   it('records a report with byAgent and no terminal as the agent', async () => {
     const task = await implementing()
     await runner.act(task.id, 'report', { byAgent: true })
+    await runner.settle()
     expect(sourceOf(task.id, 'stage.reported')).toBe('agent')
   })
 
   it('records a report with no terminal and no byAgent as a person', async () => {
     const task = await implementing()
     await runner.act(task.id, 'report')
+    await runner.settle()
     expect(sourceOf(task.id, 'stage.reported')).toBe('human')
   })
 
