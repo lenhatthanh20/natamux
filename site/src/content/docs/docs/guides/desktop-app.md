@@ -23,7 +23,7 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 | **File → Add Project…** (`Cmd/Ctrl+Shift+O`) | Pick a git repository and add it as a project. No restart |
 | **File → Show Daemon Log** | Opens the daemon log file |
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Windows and Linux |
-| **Check for Updates Automatically** | Turns the timed update checks off and on. Next to the item above |
+| **Check for Updates Automatically** | Off by default. Tick it to check every 6 hours. Next to the item above |
 
 The app also has the standard Edit, View and Window menus.
 
@@ -31,9 +31,9 @@ Links to other sites open in your browser. Only `http`, `https` and `mailto` lin
 
 ## Updates
 
-The app updates itself, the way other desktop apps do.
+The app updates itself, the way other desktop apps do. It looks for a new version when you choose **Check for Updates…**. Timed checks are off by default; tick **Check for Updates Automatically** to turn them on.
 
-1. About 30 seconds after it starts, and then every 6 hours, the app asks GitHub for the latest release.
+1. You choose **Check for Updates…**, or, with timed checks on, about 30 seconds after the app starts and then every 6 hours, the app asks GitHub for the latest release.
 2. When there is a newer version, it downloads it in the background. The menu item shows **Downloading Update 0.1.5…**.
    After **Check for Updates…**, a small popup shows **Checking for updates…** and then the download progress. **Hide** or `Esc` closes it; the update goes on.
 3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version. A release without a valid signature is not installed.

@@ -27,10 +27,10 @@ The desktop app finds a new release, downloads it in the background, and install
 
 ## When it checks
 
-- 30 seconds after the app starts, then every 6 hours while it runs.
+- When **Check for Updates Automatically** is ticked: 30 seconds after the app starts, then every 6 hours while it runs.
 - **Check for Updates…** in the menu checks now. It is on the app menu on macOS and on the **Help** menu on Linux and Windows.
 - A manual check opens a small popup over the window at once (see Popup below). Timed checks show none.
-- **Check for Updates Automatically** (a tick in the same menu) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, on by default. A manual check always works.
+- **Check for Updates Automatically** (a tick in the same menu) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check always works.
 - No check when the app is not packaged (`pnpm start`) or in smoke mode (`NATAMUX_DESKTOP_SMOKE=1`).
 
 ## What counts as newer
@@ -108,7 +108,7 @@ A manual check shows a small frameless window over the main window (on the scree
 
 ## Privacy
 
-The check is one `HEAD` request to `github.com` without any data about you or your tasks. GitHub sees your IP address and the app's version in the `User-Agent`. **Check for Updates Automatically** turns it off. `PRIVACY.md` says so.
+The check is one `HEAD` request to `github.com` without any data about you or your tasks. GitHub sees your IP address and the app's version in the `User-Agent`. Timed checks run only after you tick **Check for Updates Automatically**. `PRIVACY.md` says so.
 
 ## Files
 
