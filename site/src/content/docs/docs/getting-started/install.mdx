@@ -5,6 +5,8 @@ sidebar:
   order: 1
 ---
 
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
 Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS and Linux apps [update themselves](/docs/guides/desktop-app/#updates); on Windows the app tells you about a new version and you run the new installer.
 
 ## Requirements
@@ -38,57 +40,105 @@ Every file:
 
 Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. You can also build the app from source with `scripts/package-desktop.sh`; see `packages/desktop/README.md`.
 
-:::caution
-The apps are **not signed** with an Apple or Windows certificate yet. Download them only from the Natamux releases page, and follow the first-open steps for your system below.
-:::
+## Install
 
-## Install on macOS
+<Aside type="caution">
+The apps are **not signed** with an Apple or Windows certificate yet. Download them only from the Natamux releases page, and follow the first-open steps for your system below.
+</Aside>
+
+<Tabs syncKey="os">
+<TabItem label="macOS">
+
+<Steps>
 
 1. Open the `.dmg` and drag **Natamux** to **Applications**.
 2. Open Natamux. macOS blocks it the first time.
 3. Open **System Settings → Privacy & Security** and click **Open Anyway**.
 4. If there is no such button, remove the quarantine flag and open the app again:
 
-   ```sh
+   ```sh frame="terminal"
    xattr -dr com.apple.quarantine /Applications/Natamux.app
    ```
 
-## Install on Windows
+</Steps>
+
+</TabItem>
+<TabItem label="Windows">
+
+<Steps>
 
 1. Run `Natamux-win-x64.exe`. Windows SmartScreen may show **Windows protected your PC**, because the installer is not signed.
 2. Click **More info**, then **Run anyway**.
 3. The installer needs no administrator rights. It installs Natamux for your user only, adds it to the Start menu and the desktop, and opens it.
 
+</Steps>
+
 Terminals of your tasks run **PowerShell**. A project's setup script on Windows is `.natamux-setup.ps1`; see [Workspaces](/docs/concepts/workspaces/). Install your agents so that PowerShell finds them: open a new PowerShell window and run `claude --version` (or `codex`, `gemini`, `copilot`, `cursor-agent`).
 
-## Install on Linux
+</TabItem>
+<TabItem label="Linux">
 
-### AppImage
+Pick one of three files.
 
-Make the file runnable, then start it:
+**AppImage**
 
-```sh
-chmod +x Natamux-linux-x86_64.AppImage
-./Natamux-linux-x86_64.AppImage
-```
+<Steps>
 
-On Ubuntu 24.04 and later, the system can block Chromium's sandbox, and the app does not start. Either install the `.deb` instead, or start the AppImage with `--no-sandbox`:
+1. Make the file runnable, then start it:
 
-```sh
-./Natamux-linux-x86_64.AppImage --no-sandbox
-```
+   ```sh frame="terminal"
+   chmod +x Natamux-linux-x86_64.AppImage
+   ./Natamux-linux-x86_64.AppImage
+   ```
 
-### Debian and Ubuntu (.deb)
+2. On Ubuntu 24.04 and later, the system can block Chromium's sandbox, and the app does not start. Either install the `.deb` instead, or start the AppImage with `--no-sandbox`:
 
-```sh
+   ```sh frame="terminal"
+   ./Natamux-linux-x86_64.AppImage --no-sandbox
+   ```
+
+</Steps>
+
+**Debian and Ubuntu (.deb)**
+
+```sh frame="terminal"
 sudo apt install ./Natamux-linux-amd64.deb
 ```
 
 The package installs the app as `natamux-desktop`, so the name `natamux` stays free for the command line.
 
-### tar.gz
+**tar.gz**
 
 Unpack `Natamux-linux-x64.tar.gz` anywhere and run the app from the folder. The same sandbox note as for the AppImage applies.
+
+</TabItem>
+<TabItem label="Docker">
+
+You need Docker with Compose, and a git repository. From a clone of the Natamux repository:
+
+<Steps>
+
+1. Set a token and the path of your repository:
+
+   ```sh frame="terminal"
+   export NATAMUX_TOKEN="$(openssl rand -base64 32)"
+   export NATAMUX_REPO=/path/to/the/git/repository
+   ```
+
+2. Start the two containers:
+
+   ```sh frame="terminal"
+   docker compose -f compose.prod.yaml up -d --build
+   ```
+
+3. Open `http://localhost:8080` and paste the token into the **Daemon token** field.
+
+</Steps>
+
+The images contain no coding agents. Docker keeps tasks, stages and the dashboard. To work with real agents, use the desktop app. See [Self-host with Docker](/docs/guides/self-host-docker/).
+
+</TabItem>
+</Tabs>
 
 ## Verify the download
 
@@ -153,21 +203,27 @@ The folder is `bin` inside the app's user data folder:
 | Windows | `%APPDATA%\Natamux\bin` |
 | Linux | `~/.config/Natamux/bin` |
 
-On macOS and Linux, add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash).
+<Tabs syncKey="os">
+<TabItem label="macOS">
 
-macOS:
+Add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash):
 
-```sh
+```sh title="~/.zshrc"
 export PATH="$HOME/Library/Application Support/Natamux/bin:$PATH"
 ```
 
-Linux:
+Open a new shell. The command also needs the daemon's token and address:
 
-```sh
-export PATH="$HOME/.config/Natamux/bin:$PATH"
+```sh frame="terminal"
+export NATAMUX_TOKEN="$(cat "$HOME/Library/Application Support/Natamux/daemon-token")"
+export NATAMUX_URL=http://127.0.0.1:4317
+natamux task list
 ```
 
-Windows, in PowerShell (for your user, once):
+</TabItem>
+<TabItem label="Windows">
+
+In PowerShell, for your user, once:
 
 ```powershell
 [Environment]::SetEnvironmentVariable('Path', "$env:APPDATA\Natamux\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
@@ -175,19 +231,31 @@ Windows, in PowerShell (for your user, once):
 
 Open a new shell. The command also needs the daemon's token and address:
 
-```sh
-export NATAMUX_TOKEN="$(cat "$HOME/Library/Application Support/Natamux/daemon-token")"   # Linux: ~/.config/Natamux/daemon-token
-export NATAMUX_URL=http://127.0.0.1:4317
-natamux task list
-```
-
-In PowerShell:
-
 ```powershell
 $env:NATAMUX_TOKEN = Get-Content "$env:APPDATA\Natamux\daemon-token"
 $env:NATAMUX_URL = 'http://127.0.0.1:4317'
 natamux task list
 ```
+
+</TabItem>
+<TabItem label="Linux">
+
+Add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash):
+
+```sh title="~/.bashrc"
+export PATH="$HOME/.config/Natamux/bin:$PATH"
+```
+
+Open a new shell. The command also needs the daemon's token and address:
+
+```sh frame="terminal"
+export NATAMUX_TOKEN="$(cat "$HOME/.config/Natamux/daemon-token")"
+export NATAMUX_URL=http://127.0.0.1:4317
+natamux task list
+```
+
+</TabItem>
+</Tabs>
 
 The app uses port 4317 when it is free, and another free port when it is not. Check the address in the dashboard's browser URL or in the daemon log. See [Desktop app](/docs/guides/desktop-app/) and the [CLI reference](/docs/reference/cli/).
 

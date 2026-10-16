@@ -5,15 +5,14 @@ sidebar:
   order: 5
 ---
 
+import { Steps } from '@astrojs/starlight/components'
+import Figure from '../../../../components/Figure.astro'
+
 Each project has its own settings: the [stages](/docs/concepts/stages/) every task goes through, where task context comes from, the issue tracker and how agents ask for permission. Natamux keeps them in `.natamux.json` at the root of the repository, so you can commit the file and share it with your team.
 
 Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/settings-stages-dark.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/settings-stages-light.webp" alt="Project settings of a repository, Stages tab. On top, a flow chart of the pipeline with Test spec and Implement in one column. Below, the list of stages in order with checkboxes, and the details of the selected stage." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>The Stages tab: the pipeline preview, the stages in order, and the details of one stage.</figcaption>
-</figure>
+<Figure src="/screens/v2/settings-stages" alt="Project settings, Stages tab. On top, a flow chart of the pipeline. Below, the list of stages in order with checkboxes, and the details of the selected stage." caption="The Stages tab: the pipeline preview, the stages in order, and the details of one stage." />
 
 ## The Stages tab
 
@@ -55,6 +54,7 @@ Under the choices, the tab says what the issue is made of. With `tracker.type` s
 The **JSON** tab edits the whole file as text. Edits move between the tabs. JSON that is not valid keeps you on this tab with the error shown, until you fix it. Use it for fields the **Stages** tab does not show:
 
 - `requireCommit`, `requireClean` and `check` on a stage;
+- `ownShell` on a stage: it has no checkbox on the **Stages** tab;
 - `context.sources`, such as a skill or MCP source with a name of its own;
 - `tracker.type` and `tracker.linkInPr`, the rest of the issue tracker;
 - `agents.permissionMode`, `auto` or `ask`.
@@ -81,16 +81,32 @@ To use an exported file in another project, import it there, or copy it into the
 
 ### Choose the review agent
 
+<Steps>
+
 1. Click **Review** in the stage list.
 2. In **Agent**, pick the agent, for example **Codex**.
 3. Optional: in **Arguments**, add words such as `--model sonnet`.
 4. Click **Save**.
 
+</Steps>
+
+<Figure src="/screens/v2/stage-agent-picker" alt="Project settings, Stages tab. The Review stage is selected, with the Agent field set to a provider and the Arguments field below it." caption="Review selected, with its Agent and Arguments." />
+
 Review runs in its own shell, Shell 5, so it can use another agent than the task's without touching the session in Shell 1. **Test spec** works the same way, in Shell 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
 
 ### Split the pipeline by a condition
 
-Click **Add branch** and give each path a condition, such as a section of `plan.md` or a command. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
+<Steps>
+
+1. Click **Add branch** and give it a **Branch name**.
+2. Give each path a **Path name** and a condition, such as **File has text** (a section of `plan.md`) or **Command succeeds**.
+3. Click **Save**.
+
+</Steps>
+
+<Figure src="/screens/v2/stages-branch" alt="Project settings, Stages tab. The flow chart shows an If node that splits into two lanes, each with its condition and its stages." caption="The chart shows the branch as an If node with one lane per path." />
+
+See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
 
 ### Give a stage another agent
 
@@ -116,7 +132,7 @@ Click **Automated tests** and enter a **Command**, such as `pnpm test`. A shell 
 
 On the **JSON** tab, add:
 
-```json
+```json title=".natamux.json"
 { "agents": { "permissionMode": "ask" } }
 ```
 

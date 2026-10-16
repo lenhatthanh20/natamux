@@ -9,11 +9,13 @@ interface Props {
   crop?: { width: number; height: number }
   sizes?: string
   priority?: boolean
+  // Folder under public/, such as 'media/v2/'.
+  dir?: string
 }
 
-const { name, alt, crop, sizes = '(min-width: 1240px) 1200px, 100vw', priority = false } = Astro.props
+const { name, alt, crop, sizes = '(min-width: 1240px) 1200px, 100vw', priority = false, dir: folder = 'media/home/' } = Astro.props
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
-const dir = `${base}media/home/`
+const dir = `${base}${folder}`
 const width = crop ? crop.width : 2000
 const height = crop ? crop.height : 1250
 const src = (theme: string) => (crop ? `${dir}${name}-${theme}.webp` : `${dir}${name}-${theme}-2000.webp`)

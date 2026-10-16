@@ -5,9 +5,16 @@ sidebar:
   order: 5.1
 ---
 
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components'
+import Figure from '../../../../components/Figure.astro'
+
 A workflow is the `stages` list of `.natamux.json`. Commit the file, and everyone on the team runs the same process: the same steps, the same checks, the same agents. Each task goes through the list, and agents and people work on it as the stages say.
 
 This page shows how the parts fit together with two full examples. For every field, see the [configuration reference](/docs/reference/configuration/).
+
+<Figure src="/screens/v2/stages-branch" alt="Project settings, Stages tab. The flow chart shows an If node that splits into two lanes, each with its condition and its stages." caption="A workflow in Project settings: the If node splits the task into two paths." />
+
+<Figure src="/media/v2/clip-branch" video alt="Screen recording: a branch is selected in Project settings, its condition is opened, and both paths show in the chart." caption="Select a branch, open its condition, and see both paths. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
 
 ## Building blocks
 
@@ -24,9 +31,42 @@ This page shows how the parts fit together with two full examples. For every fie
 | Check on CI | A stage waits for the CI runs of its work. | [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci) |
 | Run as a workflow | Claude Code uses sub-agents on one stage. | [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow) |
 
-To edit a workflow on a screen, use **Project settings → Stages**. See [Project settings](/docs/guides/project-settings/). The **JSON** tab shows the same file as text.
+## Edit a workflow on a screen
 
-## Example 1: Solo developer
+<Steps>
+
+1. Open **Project settings → Stages**. See [Project settings](/docs/guides/project-settings/).
+2. Add, move or change stages, groups and branches. The chart on top shows the result.
+3. Click **Save**. Natamux writes `.natamux.json`.
+4. Commit the file. Everyone on the team now runs the same workflow.
+
+</Steps>
+
+The **JSON** tab shows the same file as text.
+
+## Patterns
+
+**Review loop.** An agent in its own shell reviews the work and sends the task back with the findings. See [The review loop](/docs/concepts/review-loop/).
+
+**CI watcher.** A stage after the pull request watches the CI jobs and sends the task back to the stage that changes code when a job fails. The solo example does this with `gh` in the prompt. Or tick **Check on CI** on a stage: Natamux pushes a snapshot, waits for the runs and sends the failed logs back itself.
+
+**A person's gate before a risky step.** Put a `manual` stage, or `"gate": "manual"`, before the step: Spec before the code, Final check before the end. The task waits in state `review` until a person approves.
+
+**Condition from a file or from a command.**
+
+| Use | When |
+|---|---|
+| `output` | An agent decides, and a person can read and fix the answer. Triage in the team example. |
+| `command` | The repository decides, for example `test -f .no-review` or a `git` check. No agent has to write a file. |
+
+**Limit a loop.** An agent can send a task back 2 times. The third time the stage waits for the person. To stop earlier, say it in the prompt: "After 3 rounds, stop and tell me what is left."
+
+## Two example workflows
+
+The two examples are full files. Pick the one that looks like your team.
+
+<Tabs syncKey="role">
+<TabItem label="Solo developer">
 
 One person, one repository. The person approves the context and the spec. After that, agents write the tests and the code, review it and watch CI.
 
@@ -42,9 +82,14 @@ Context → Spec → [ Test spec ‖ Implement ] → Review → Watch CI and mer
 
 The task's agent is Claude Code, so Context, Spec and Implement run in Shell 1. The other three stages name their own agent.
 
-### The file
+<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with ×2." caption="The send back loop of the solo workflow. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
 
-```json
+### The solo file
+
+<details>
+<summary>Full file: .natamux.json</summary>
+
+```json title=".natamux.json"
 {
   "stages": [
     { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
@@ -101,9 +146,11 @@ The task's agent is Claude Code, so Context, Spec and Implement run in Shell 1. 
 }
 ```
 
+</details>
+
 The owner's file also has `review`, `testing`, `merge-prs` and `release` stages with `"enabled": false`. A stage that is off stays in the file with its prompt and gate, but new tasks do not get it. Use it to keep a step you may need later, or to try a change without losing the old setup. The example leaves them out.
 
-### Who runs where
+### Solo: who runs where
 
 | Stage | Agent | Shell |
 |---|---|---|
@@ -114,7 +161,7 @@ The owner's file also has `review`, `testing`, `merge-prs` and `release` stages 
 
 See [Mix agents in one task](/docs/guides/mix-agents/) for why.
 
-### Send back points
+### Solo: send back points
 
 | From | To | When | What happens |
 |---|---|---|---|
@@ -124,12 +171,13 @@ See [Mix agents in one task](/docs/guides/mix-agents/) for why.
 
 An agent may send the task back from its stage 2 times. The third time the stage waits for you. See [Review by an agent](/docs/concepts/stages/#review-by-an-agent).
 
-### Two rules in the prompts
+### Solo: two rules in the prompts
 
 - After `natamux stage back`, the agent stops. It does not run `natamux done`. Natamux adds "When you are done, run natamux done, unless the steps above say not to." to every prompt, so the prompt must say when not to.
 - A person makes the release tag. The CI stage merges the pull request, but its prompt tells the agent to stop at a release and never create a tag.
 
-## Example 2: Team
+</TabItem>
+<TabItem label="Team">
 
 A team shares one `.natamux.json`. A person starts a task, and a triage agent decides where the task is: a teammate's pull request waits for review, or new work starts. The task then takes the path that fits.
 
@@ -153,9 +201,16 @@ Context → Triage → ◇ Where is the task ───────────�
 
 The review of the teammate's pull request and the development of your own change never run for the same task. In **Progress**, the path not taken folds into one row marked **Not taken**.
 
-### The file
+<Figure src="/screens/v2/progress-took-develop" alt="The Progress tab of a task. The branch header says which path was taken and why, and the path that ran is marked Taken." caption="The branch header says which path the task took." />
 
-```json
+<Figure src="/screens/v2/progress-not-taken" alt="The Progress tab with the Not taken row opened. It lists the stages of the path that did not run." caption="The path not taken folds into one row. Click it to see its stages." />
+
+### The team file
+
+<details>
+<summary>Full file: .natamux.json</summary>
+
+```json title=".natamux.json"
 {
   "stages": [
     { "id": "context", "kind": "context", "gate": "auto", "output": "context.md" },
@@ -275,6 +330,8 @@ The review of the teammate's pull request and the development of your own change
 }
 ```
 
+</details>
+
 The branch rules from [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) hold:
 
 - The branch has 2 paths. The last one has no `when`, so it is the **Otherwise** path.
@@ -282,7 +339,7 @@ The branch rules from [Paths with a condition](/docs/concepts/stages/#paths-with
 - Every stage id is unique in the whole file, so each stage is on exactly one path.
 - The condition reads only the lines under `## Stage`. A marker the agent quotes under `## Evidence` does not count.
 
-### Who runs where
+### Team: who runs where
 
 | Stage | Agent | Shell |
 |---|---|---|
@@ -295,7 +352,7 @@ The branch rules from [Paths with a condition](/docs/concepts/stages/#paths-with
 | Definition of done and review request | Copilot | Its own shell, closed when done |
 | Follow PR CI, Wait for the author's fix, QA build | The task's agent | Shell 1 |
 
-### Send back points
+### Team: send back points
 
 All three go to **Implement** on the Develop path.
 
@@ -320,22 +377,8 @@ The agent does not run `natamux done` after it. After the fix, Natamux runs the 
 - In **Progress**, the branch says **Took Develop** or **Took Review a teammate's PR** and the reason. The other path is one folded row marked **Not taken**.
 - A person steps in at the manual gates: Triage, Spec and Final check.
 
-## Patterns
-
-**Review loop.** An agent in its own shell reviews the work and sends the task back with the findings. See [The review loop](/docs/concepts/review-loop/).
-
-**CI watcher.** A stage after the pull request watches the CI jobs and sends the task back to the stage that changes code when a job fails. The solo example does this with `gh` in the prompt. Or tick **Check on CI** on a stage: Natamux pushes a snapshot, waits for the runs and sends the failed logs back itself.
-
-**A person's gate before a risky step.** Put a `manual` stage, or `"gate": "manual"`, before the step: Spec before the code, Final check before the end. The task waits in state `review` until a person approves.
-
-**Condition from a file or from a command.**
-
-| Use | When |
-|---|---|
-| `output` | An agent decides, and a person can read and fix the answer. Triage in the team example. |
-| `command` | The repository decides, for example `test -f .no-review` or a `git` check. No agent has to write a file. |
-
-**Limit a loop.** An agent can send a task back 2 times. The third time the stage waits for the person. To stop earlier, say it in the prompt: "After 3 rounds, stop and tell me what is left."
+</TabItem>
+</Tabs>
 
 ## Related
 

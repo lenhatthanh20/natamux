@@ -1,25 +1,24 @@
 ---
 title: What is Natamux
-description: Natamux runs many coding agents in parallel, each task in its own worktree and terminal, and shows every task's state on one dashboard.
+description: Natamux runs your team's workflow with parallel coding agents. Stages, approvals, branches and send backs live in one committed file.
 sidebar:
   order: 1
 ---
 
-Natamux is an open-source Agent Development Environment (ADE). You give each piece of work its own task, and Natamux gives each task its own git worktree, branch and terminal. Coding agents such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor run in those terminals in parallel, and one dashboard shows what every task is doing and which one needs you.
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+import Figure from '../../../components/Figure.astro'
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/table-dark.webp" alt="The Natamux dashboard. The sidebar lists the workspaces of a project, with a tinted card for a task whose agent waits for an answer. The main area is the All tasks table with state filters, and the title bar says 5 need you." width="1600" height="1000" decoding="async" />
-<img class="shot-light" src="/screens/ui/table-light.webp" alt="The Natamux dashboard. The sidebar lists the workspaces of a project, with a tinted card for a task whose agent waits for an answer. The main area is the All tasks table with state filters, and the title bar says 5 need you." width="1600" height="1000" decoding="async" />
-<figcaption>All tasks in one table. The card in the sidebar is a task whose agent asked a question.</figcaption>
-</figure>
+Natamux is an open-source Agent Development Environment (ADE). You write your team's workflow once, in a file named `.natamux.json`: the stages, the approvals, the paths a task can take and the send backs. Every task of every person then runs that workflow, each in its own git worktree and terminals. Coding agents such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor do the work, and each stage can use a different one. You step in only where the workflow asks for you.
 
-<div class="downloads">
-<a href="/docs/getting-started/install/"><strong>Install</strong><span>macOS · Windows · Linux</span></a>
-<a href="/docs/getting-started/quick-start/"><strong>Quick start</strong><span>first task in ten minutes</span></a>
-<a href="/docs/concepts/review-loop/"><strong>The review loop</strong><span>two agents build, a third reviews</span></a>
-<a href="/docs/guides/workflows/"><strong>Build a workflow</strong><span>paths, send back, CI</span></a>
-<a href="/docs/guides/mix-agents/"><strong>Mix agents</strong><span>an agent per stage</span></a>
-</div>
+<Figure src="/media/v2/clip-send-back" video alt="The Progress panel of a task. The Review stage fails and says Sent back, then Implement runs a second time." caption="A review agent sends a task back to Implement. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+
+<CardGrid>
+  <LinkCard title="Install" description="The desktop app for macOS, Windows or Linux." href="/docs/getting-started/install/" />
+  <LinkCard title="Quick start" description="From first launch to a merged change." href="/docs/getting-started/quick-start/" />
+  <LinkCard title="Build a workflow" description="Stages, side by side groups, paths and send backs." href="/docs/guides/workflows/" />
+  <LinkCard title="Mix agents" description="Give each stage its own agent and model." href="/docs/guides/mix-agents/" />
+  <LinkCard title="Reference" description="Every field, command, route and key." href="/docs/reference/configuration/" />
+</CardGrid>
 
 ## The problem
 

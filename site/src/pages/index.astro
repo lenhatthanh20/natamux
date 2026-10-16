@@ -1,6 +1,10 @@
 ---
 // The landing page. The docs live under /docs/ (Starlight).
 import Shot from '../components/Shot.astro'
+import Clip from '../components/Clip.astro'
+import LivingWorkflow from '../components/LivingWorkflow.astro'
+import BlockDiagram from '../components/BlockDiagram.astro'
+import film from '../data/film.json'
 import '../styles/landing.css'
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
@@ -11,15 +15,12 @@ const site = 'https://natamux.github.io'
 // File names carry no version, so these links always get the newest release.
 const latest = (file: string) => `${repo}/releases/latest/download/${file}`
 const mac = latest('Natamux-mac-arm64.dmg')
+const v2 = 'media/v2/'
+const note = 'Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short.'
 
-// The hero recording: where each step starts, in seconds. Both themes share the timing.
-const heroSteps = [
-  [0, 'Six agents at once'],
-  [4.1, 'Cursor reviews'],
-  [11.1, 'Sent back and fixed'],
-  [16.8, 'Copilot follows CI'],
-  [19.9, 'You approve'],
-] as const
+const title = 'Natamux: write your workflow once, run it with parallel agents'
+const description =
+  "Natamux runs your team's workflow with parallel coding agents. Stages, approvals, branches and send backs live in one committed file, and each stage can use Claude Code, Codex, Gemini CLI, Copilot or Cursor. A free desktop app for macOS, Windows and Linux."
 
 const files = [
   { os: 'mac', label: 'macOS, Apple silicon (M1 and later)', file: 'Natamux-mac-arm64.dmg' },
@@ -30,116 +31,180 @@ const files = [
   { os: 'linux', label: 'Linux, no install', file: 'Natamux-linux-x64.tar.gz' },
 ]
 
-// The default pipeline. x, y place a stage on the wide chart (1100 x 400),
-// mx, my on the tall one for phones (360 x 710). The lane is the agent.
-const stages = [
-  { id: 'context', name: 'Context', sub: 'context.md', x: 66, y: 200, mx: 180, my: 45 },
-  { id: 'spec', name: 'Spec', sub: 'spec.md', lane: 'amber', x: 227, y: 200, mx: 180, my: 140 },
-  { id: 'plan', name: 'Plan', sub: 'plan.md', lane: 'amber', x: 389, y: 200, mx: 180, my: 235 },
-  { id: 'impl', name: 'Implement', sub: 'code and tests', lane: 'amber', x: 550, y: 110, mx: 95, my: 345 },
-  { id: 'test', name: 'Test spec', sub: 'test-spec.md', lane: 'mint', x: 550, y: 290, mx: 265, my: 345 },
-  { id: 'tests', name: 'Automated tests', sub: 'a test per case', lane: 'amber', x: 711, y: 200, mx: 180, my: 455 },
-  { id: 'review', name: 'Review', sub: 'review.md', lane: 'sky', x: 873, y: 200, mx: 180, my: 560 },
-  { id: 'release', name: 'Release', sub: 'pull request', x: 1034, y: 200, mx: 180, my: 665 },
-]
+// Film chapters: each one ends where the next starts.
+const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+const chapters = film.chapters.map((c, i) => ({ ...c, end: film.chapters[i + 1]?.at ?? film.duration }))
 
-const edges = {
-  wide: [
-    ['e1', '', 'M128 200 H165'],
-    ['e2', 'amber', 'M289 200 H327'],
-    ['e3', 'amber', 'M451 200 C 480 200, 458 110, 488 110'],
-    ['e4', 'mint', 'M451 200 C 480 200, 458 290, 488 290'],
-    ['e5', 'amber', 'M612 110 C 642 110, 620 200, 649 200'],
-    ['e6', 'mint', 'M612 290 C 642 290, 620 200, 649 200'],
-    ['e7', 'sky', 'M773 200 H811'],
-    ['e8', '', 'M935 200 H972'],
-    ['loop', 'rose', 'M873 164 C 873 24, 550 24, 550 74 M543 64 L550 74 L557 64'],
-  ],
-  tall: [
-    ['e1', '', 'M180 77 V108'],
-    ['e2', 'amber', 'M180 172 V203'],
-    ['e3', 'amber', 'M180 267 C 180 290, 95 290, 95 313'],
-    ['e4', 'mint', 'M180 267 C 180 290, 265 290, 265 313'],
-    ['e5', 'amber', 'M95 377 C 95 400, 180 400, 180 423'],
-    ['e6', 'mint', 'M265 377 C 265 400, 180 400, 180 423'],
-    ['e7', 'sky', 'M180 487 V528'],
-    ['e8', '', 'M180 592 V633'],
-    ['loop', 'rose', 'M105 560 C 8 560, 8 430, 40 377 M32 383 L40 377 L43 386'],
-  ],
+// Keys and strings of a JSON line get a class each. The code here has no < or &.
+const paint = (code: string) =>
+  code.replace(/("[^"]*")(\s*:)?/g, (_, s: string, colon?: string) =>
+    colon ? `<span class="k">${s}</span>${colon}` : `<span class="s">${s}</span>`,
+  )
+
+type Media = { clip?: string; shot?: string; alt: string; caption: string }
+type Block = {
+  id: string
+  name: string
+  short: string
+  text: string
+  diagram: 'gate' | 'side' | 'branch' | 'back' | 'ci' | 'agents'
+  figure: string
+  codeTitle: string
+  code: string
+  json: boolean
+  media?: Media
+  docs: [string, string]
 }
 
-const steps = [
+const blocks: Block[] = [
   {
-    title: 'You approve the spec and the plan',
-    text: 'The agent writes spec.md, then plan.md. Each one waits for your Approve, so nothing gets built from a plan you did not read.',
+    id: 'gates',
+    name: 'Stages and gates',
+    short: 'A stage can wait for your approval.',
+    text: 'A stage is one step of the work, such as Spec, Implement or Review. Natamux starts it, checks the result and goes on. A stage with <b>Wait for my approval</b> stops until you click <b>Approve</b>, so nothing gets built from a spec you did not read.',
+    diagram: 'gate',
+    figure: 'Spec waits for your approval. After Approve, Implement starts.',
+    codeTitle: '.natamux.json',
+    code: '{ "id": "spec", "gate": "manual" }',
+    json: true,
+    media: {
+      shot: 'stage-gate',
+      alt: 'A task whose Spec waits. The banner Ready for review: Spec has Approve and Send back, and the Spec card in the right panel has Approve.',
+      caption: '<b>Ready for review: Spec</b> in the workspace, and <b>Approve</b> on the stage card.',
+    },
+    docs: ['concepts/stages/#gates', 'Gates'],
   },
   {
-    title: 'Two agents start at once',
-    text: 'Implement writes tests and code in Shell 1. Test spec starts a second agent in Shell 2 that works from the spec alone. You approve the test spec.',
+    id: 'side',
+    name: 'Side by side',
+    short: '2 to 4 stages run at the same time.',
+    text: 'A group holds 2 to 4 stages that work at the same time, each in its own shell. Here Test spec writes the cases from the spec alone while Implement builds. The group is done when every stage in it is done.',
+    diagram: 'side',
+    figure: 'After Plan, Test spec and Implement start at the same time. Review starts when both are done.',
+    codeTitle: '.natamux.json',
+    code: '{ "id": "build", "parallel": [\n  { "id": "test-spec", "agent": "gemini" },\n  { "id": "implement" }\n] }',
+    json: true,
+    media: {
+      shot: 'side-by-side',
+      alt: 'The Terminal tab of a task. Claude Code works on Implement in Shell 1 and Gemini CLI writes the test spec in its own shell. The right panel shows the side by side group.',
+      caption: 'Claude Code and Gemini CLI on one task, each in its own shell.',
+    },
+    docs: ['concepts/stages/#stages-that-run-side-by-side', 'Stages that run side by side'],
   },
   {
-    title: 'The tests run',
-    text: 'An agent adds a test for each case of the test spec, runs every test and fixes what fails.',
+    id: 'branches',
+    name: 'Branches',
+    short: 'Each task takes the path that fits it.',
+    text: 'A branch splits the pipeline into 2 to 4 paths. When a task gets there, Natamux checks the conditions in order, and the task takes the first path that holds. A condition is <b>File has text</b> or <b>Command succeeds</b> (the command exits with 0). The last path can be the <b>Otherwise</b> path. The Progress tab then says <b>Took Bug fix</b> and folds the other paths into <b>Not taken</b>.',
+    diagram: 'branch',
+    figure: 'The If node sends the task down Bug fix. Feature is not taken.',
+    codeTitle: '.natamux.json',
+    code: '{ "id": "triage", "name": "Bug or feature",\n  "paths": [\n    { "id": "bugfix", "name": "Bug fix",\n      "when": { "type": "command",\n        "run": "grep -qi bug .natamux-task/context.md" },\n      "stages": [{ "id": "reproduce" }] },\n    { "id": "feature", "name": "Feature",\n      "stages": [{ "id": "plan" }] }\n  ] }',
+    json: true,
+    media: {
+      clip: 'clip-branch',
+      alt: 'Screen recording: in Project settings, the branch Bug or feature is selected, its condition opens, and the chart shows both paths.',
+      caption: 'A branch in <b>Project settings → Stages</b>, with its condition and both paths.',
+    },
+    docs: ['concepts/stages/#paths-with-a-condition', 'Paths with a condition'],
   },
   {
-    title: 'A third agent reviews',
-    text: 'Review starts its own session in Shell 5 with the agent you pick in Project settings, such as Codex, and writes review.md.',
+    id: 'send-back',
+    name: 'Send back',
+    short: 'A review returns the work with the reason.',
+    text: 'A review agent that finds a problem runs <code>natamux stage back</code> with the reason. The task goes back to Implement, and its agent gets the reason in its next prompt. An agent can send back at most 2 times from one stage; the third time, the task waits for you. A person can send back from any stage, any time.',
+    diagram: 'back',
+    figure: 'Review sends the task back to Implement with the reason, and Implement runs a second time.',
+    codeTitle: 'The review agent runs',
+    code: 'natamux stage back $NATAMUX_TASK_ID --to implement \\\n  --reason "A coupon larger than the total makes it negative"',
+    json: false,
+    media: {
+      clip: 'clip-send-back',
+      alt: 'Screen recording of the Progress tab of a bug task: the Review card fails, Sent back appears, and Implement runs a second time.',
+      caption: 'Review fails, the task is <b>Sent back</b>, and Implement runs again.',
+    },
+    docs: ['concepts/review-loop/', 'The review loop'],
   },
   {
-    title: 'Findings go back to Implement',
-    text: 'The reviewer sends the task back with the reasons. Implement, the tests and Review run again. After two rounds it asks you.',
+    id: 'ci',
+    name: 'CI as a stage',
+    short: 'A red run goes back to the agent.',
+    text: 'Tick <b>Tasks can check it on CI</b> on a stage, and each task gets a <b>Check on CI</b> box. When the stage is done, Natamux pushes a snapshot of the worktree to <code>natamux-ci/&lt;branch&gt;</code> and waits for your CI. A red run goes back to the agent with the end of the failed log. After two such send backs, the next failure waits for you.',
+    diagram: 'ci',
+    figure: 'Implement pushes to a natamux-ci branch. A red run goes back to Implement with the failed log; the next run passes.',
+    codeTitle: '.natamux.json',
+    code: '{ "id": "implement", "ci": true }',
+    json: true,
+    docs: ['concepts/stages/#check-a-stage-on-ci', 'Check a stage on CI'],
   },
   {
-    title: 'Release opens the pull request',
-    text: 'Natamux pushes the branch and opens the PR when you click. The task is done when the PR is merged.',
+    id: 'agent',
+    name: 'An agent per stage',
+    short: 'Pick the agent and model for each stage.',
+    text: 'A stage can start its own agent, with its own arguments such as a model. It runs in a shell of its own, so a reviewer reads the diff with fresh eyes. Set <b>Agent</b> and <b>Arguments</b> in the stage settings. They are saved in <code>.natamux.json</code>, so the whole team uses them.',
+    diagram: 'agents',
+    figure: 'Four stages of one task, each with another agent: Cursor, Claude Code, Gemini CLI and Codex.',
+    codeTitle: '.natamux.json',
+    code: '{ "id": "agent-review", "name": "Review",\n  "agent": "codex", "args": "--model gpt-5" }',
+    json: true,
+    media: {
+      shot: 'stage-agent',
+      alt: 'Project settings of storefront, Stages tab. The chart shows the If node. The Review stage is selected, with Agent set to Codex and the Arguments field.',
+      caption: 'The Review stage set to Codex in <b>Project settings → Stages</b>.',
+    },
+    docs: ['guides/mix-agents/', 'Mix agents in one task'],
   },
 ]
 
-const views = [
+type View = { id: string; name: string; text: string; alt: string; clip?: string; shot?: string }
+const views: View[] = [
+  {
+    id: 'needs-you',
+    name: 'Needs you',
+    text: 'When an agent asks something, its card in the sidebar shows the question and Answer. The title bar counts the tasks that need you, and a system notice comes when the window is in the back.',
+    clip: 'clip-needs-you',
+    alt: 'Screen recording: a question arrives, the title bar count goes up, the sidebar card shows Answer, and a short reply lets the agent go on.',
+  },
+  {
+    id: 'progress',
+    name: 'Progress',
+    text: 'The right panel beside the terminal: one card per stage, the path a branch took and why, the other paths folded into Not taken, and Approve where a stage waits.',
+    shot: 'progress-took',
+    alt: 'The Progress tab of a bug task. The branch header says Took Bug fix with its reason, the Feature path is folded as Not taken, and Implement ran twice after 1 send back.',
+  },
+  {
+    id: 'progress-view',
+    name: 'Progress view',
+    text: 'Layout: Progress puts each task in a row and each stage in a column, with the path each task took. You see at once where every task is.',
+    shot: 'progress-view',
+    alt: 'The Progress layout across storefront tasks in different stages, with a column for the branch.',
+  },
   {
     id: 'table',
     name: 'Table',
     text: 'Every task with its state, agent, branch and changes. Tasks that need you sort first, and / filters by id, title, agent, branch or label.',
     shot: 'table',
-    alt: 'The All tasks table with ten tasks. One needs your input, three are in review, three are running, one is blocked.',
-  },
-  {
-    id: 'board',
-    name: 'Board',
-    text: 'One column per state. Empty columns fold to a thin strip, so the work in flight stays in view.',
-    shot: 'board-wide',
-    alt: 'The board with columns for Needs input, In review, Blocked, Running and Draft. Failed and Ready are folded.',
+    alt: 'The All tasks table of storefront. A task that needs input sorts first, and the title bar says how many need you.',
   },
   {
     id: 'palette',
     name: 'Command palette',
     text: 'Cmd+K or Ctrl+K finds any task or command. Tasks that need you come first, and Cmd+J jumps to a workspace.',
-    shot: 'palette-actions',
-    alt: 'The command palette open over a task. It lists tasks that need you, recent tasks and suggested commands.',
-  },
-  {
-    id: 'start',
-    name: 'Start a task',
-    text: 'A title and the context: your notes, a GitHub issue, or an agent skill such as one that fetches a ticket. Attach files, pick the project and the agent.',
-    shot: 'start-task-skill',
-    alt: 'The Start a task dialog. Context from An agent skill, skill fetch-ticket, reference NAT-142, and an area to attach files.',
+    shot: 'palette',
+    alt: 'The command palette open over a workspace, with tasks that need you first and suggested commands.',
   },
 ]
 
 const agents = [
-  { name: 'Claude Code', cmd: 'claude', how: 'Hooks through its settings file. The only agent that runs a stage as a workflow.', c: 'amber' },
-  { name: 'Codex', cmd: 'codex', how: 'Hooks passed on the command line for that run.', c: 'mint' },
-  { name: 'Gemini CLI', cmd: 'gemini', how: 'Hooks in a system settings file Natamux points it to.', c: 'sky' },
-  { name: 'GitHub Copilot', cmd: 'copilot', how: 'Hooks in the worktree, kept out of git.', c: 'amber' },
-  { name: 'Cursor', cmd: 'cursor-agent', how: 'Hooks in the worktree, kept out of git.', c: 'mint' },
-  { name: 'Any other CLI', cmd: 'your-agent', how: 'Runs in a plain shell. The terminal bell and natamux ask or done report back.', c: 'sky' },
+  { name: 'Claude Code', cmd: 'claude', how: 'Hooks through its settings file. The only agent that runs a stage as a workflow.' },
+  { name: 'Codex', cmd: 'codex', how: 'Hooks passed on the command line for that run.' },
+  { name: 'Gemini CLI', cmd: 'gemini', how: 'Hooks in a system settings file Natamux points it to.' },
+  { name: 'GitHub Copilot', cmd: 'copilot', how: 'Hooks in the worktree, kept out of git.' },
+  { name: 'Cursor', cmd: 'cursor-agent', how: 'Hooks in the worktree, kept out of git.' },
+  { name: 'Any other CLI', cmd: 'your-agent', how: 'Runs in a plain shell. The terminal bell and natamux ask or done report back.' },
 ]
 
-const pv = {
-  claude: ['Claude Code', 'amber'],
-  copilot: ['Copilot', 'mint'],
-  cursor: ['Cursor', 'sky'],
-} as const
+const pv = { claude: 'Claude Code', copilot: 'Copilot', cursor: 'Cursor' } as const
 
 // A row is one step, a group that runs side by side (par), or a branch with paths.
 type Row = {
@@ -151,11 +216,12 @@ type Row = {
   branch?: string
   paths?: { name: string; other?: boolean; rows: Row[] }[]
 }
-const workflows: { id: string; name: string; text: string; rows: Row[] }[] = [
+const workflows: { id: string; name: string; text: string; anchor: string; rows: Row[] }[] = [
   {
     id: 'solo',
     name: 'Solo',
     text: 'One developer, one repo. You approve the spec. The rest runs without you.',
+    anchor: 'example-1-solo-developer',
     rows: [
       { n: 'Context' },
       { n: 'Spec', you: 'You approve' },
@@ -168,6 +234,7 @@ const workflows: { id: string; name: string; text: string; rows: Row[] }[] = [
     id: 'team',
     name: 'Team',
     text: 'One committed file. Each task takes the path that fits where it is.',
+    anchor: 'example-2-team',
     rows: [
       { n: 'Context' },
       { n: 'Triage' },
@@ -203,27 +270,16 @@ const workflows: { id: string; name: string; text: string; rows: Row[] }[] = [
   },
 ]
 
-// One task, one agent per stage. Shell numbers follow concepts/stages.md: a stage with its own agent
+// One task, one agent per stage. Shell numbers follow concepts/stages.mdx: a stage with its own agent
 // gets its own shell, from Shell 6.
 const shells = [
-  { shell: 'Shell 1', a: 'claude', stage: 'Implement', text: 'Builds. Keeps the task\'s session.' },
+  { shell: 'Shell 1', a: 'claude', stage: 'Implement', text: "Builds. Keeps the task's session." },
   { shell: 'Shell 6', a: 'copilot', stage: 'Test spec', text: 'Writes the test cases from the spec alone.' },
   { shell: 'Shell 7', a: 'cursor', stage: 'Review', text: 'Reads the diff with fresh eyes. Sends findings back.' },
   { shell: 'Shell 8', a: 'copilot', stage: 'Watch CI', text: 'Follows the checks. A red run goes back to the agent.' },
 ] as const
 
-const extras = [
-  ['Templates', 'Save a task as a template and start the next one from it.'],
-  ['Attachments', 'Drop or paste screenshots, logs and specs on a task. Agents read them in the worktree.'],
-  ['Subtasks and order', 'Split a task one level deep, and make a task wait until others are done.'],
-  ['More tries', 'Run up to five Claude Code tries of one task and keep the best one.'],
-  ['Ports per task', 'Each task gets its own block of ten ports, so dev servers do not collide.'],
-  ['Setup script', 'A .natamux-setup script prepares each new worktree: install, seed, copy env.'],
-  ['Notifications', 'A system notice when a task needs your input, even with the window in the back.'],
-  ['Resume', 'After a restart, agents of running and waiting stages start again where they were.'],
-  ['Updates itself', 'On macOS and Linux the app downloads the new version and checks its checksum.'],
-  ['Docker', 'Run the daemon and the dashboard on a server or in a codespace, behind a token.'],
-]
+const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI', 'any terminal agent']
 ---
 
 <!doctype html>
@@ -231,26 +287,25 @@ const extras = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Natamux: your team's process, run by parallel agents</title>
-    <meta
-      name="description"
-      content="Write your team's process once as a workflow: spec, review, CI, QA, release. Every task runs it with many agents in parallel, Claude Code, Codex, Gemini CLI, Copilot or Cursor per stage. A free desktop app."
-    />
+    <title>{title}</title>
+    <meta name="description" content={description} />
     <link rel="canonical" href={`${site}${base}`} />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Natamux" />
     <meta property="og:url" content={`${site}${base}`} />
-    <meta property="og:title" content="Natamux: your team's process, run by parallel agents" />
-    <meta property="og:description" content="Commit your process as a workflow. Every task of every person runs it with many agents, and a person steps in only where the process says so." />
-    <meta property="og:image" content={`${site}${base}media/home/og-progress.jpg`} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={`${site}${base}${v2}og.jpg`} />
     <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="750" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The storefront workflow of Natamux: stages, a branch, two agents side by side and a send back." />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${site}${base}${v2}og.jpg`} />
     <meta name="theme-color" content="#070c18" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
     <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
-    <!-- The hero poster is the LCP image. -->
-    <link rel="preload" as="image" href={`${base}media/hero-agents-dark.webp`} media="not (prefers-color-scheme: light)" fetchpriority="high" />
-    <link rel="preload" as="image" href={`${base}media/hero-agents-light.webp`} media="(prefers-color-scheme: light)" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -277,21 +332,18 @@ const extras = [
         </a>
         <nav aria-label="Main">
           <a href="#workflows">Workflows</a>
-          <a href="#flow">How it works</a>
-          <a href="#views">Dashboard</a>
-          <a href="#terminal">Terminal</a>
-          <a href="#git">Git</a>
           <a href="#agents">Agents</a>
+          <a href="#views">Dashboard</a>
           <a href={docs}>Docs</a>
         </nav>
         <div class="nav-end">
+          <a class="icon-btn" href={repo} aria-label="Natamux on GitHub">
+            <svg viewBox="0 0 16 16" aria-hidden="true" class="fill"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z" /></svg>
+          </a>
           <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch to light theme">
             <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>
             <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4a8.2 8.2 0 1 0 10.6 10.6Z" /></svg>
           </button>
-          <a class="icon-btn" href={repo} aria-label="Natamux on GitHub">
-            <svg viewBox="0 0 16 16" aria-hidden="true" class="fill"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z" /></svg>
-          </a>
           <a class="btn primary small" href="#download">Download</a>
         </div>
       </div>
@@ -299,81 +351,80 @@ const extras = [
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="wrap hero-copy">
-          <a class="news" href="#workflows">New: workflows with branches and send back</a>
-          <h1 id="hero-title">
-            <span class="line">Write your team's process once.</span>
-            <span class="line">Many agents run it in parallel.<span class="cursor" aria-hidden="true"></span></span>
-          </h1>
-          <p class="lede">
-            Spec, review, CI, QA and release become a workflow in <code>.natamux.json</code>. Commit it, and every
-            task of every person runs it: Claude Code, Codex, Gemini CLI, Copilot and Cursor in parallel, a different
-            agent per stage. Agents check each other and send work back. You step in only where the process says so.
-          </p>
-          <div class="ctas">
-            <a class="btn primary big" href={mac} data-hero-download>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
-              <span data-hero-label>Download for macOS</span>
-            </a>
-            <a class="btn big" href={`${docs}getting-started/quick-start/`}>Read the quick start</a>
-          </div>
-          <p class="fine">
-            <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
-            <a href="#download">Other systems</a>. MIT licensed, no account.
-          </p>
-        </div>
-
-        <div class="hero-lanes" aria-hidden="true">
-          <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
-            <defs>
-              <mask id="lanes-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                <rect class="lanes-wipe" width="1200" height="120" fill="#fff" />
-              </mask>
-            </defs>
-            <g mask="url(#lanes-mask)" fill="none" stroke-width="3" stroke-linecap="round">
-              <path class="lane-amber" d="M140 0 C 140 70, 600 50, 600 120" vector-effect="non-scaling-stroke" />
-              <path class="lane-sky" d="M600 0 V 120" vector-effect="non-scaling-stroke" />
-              <path class="lane-mint" d="M1060 0 C 1060 70, 600 50, 600 120" vector-effect="non-scaling-stroke" />
-            </g>
-          </svg>
-        </div>
-
         <div class="wrap">
-          <figure class="hero-shot" data-hero>
-            <div class="frame">
+          <a class="news" href="#workflows">New in {version}: see which path each task took</a>
+          <h1 id="hero-title">
+            <span class="line">Write your workflow once.</span>
+            <span class="line">Every task runs it, with the agents you pick.</span>
+          </h1>
+          <div class="hero-row">
+            <p class="lede">
+              Stages, approvals, branches and send backs live in one committed file, <code>.natamux.json</code>.
+              Each task gets its own worktree and terminals, and each stage can use a different agent: Claude Code,
+              Codex, Gemini CLI, Copilot or Cursor. You step in only where the workflow asks for you.
+            </p>
+            <div class="hero-act">
+              <div class="ctas">
+                <a class="btn primary big" href={mac} data-hero-download>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
+                  <span data-hero-label>Download for macOS</span>
+                </a>
+                <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
+              </div>
+              <p class="fine">
+                <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
+                <a href="#download">Other systems</a>. MIT licensed, no account.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage">
+          <LivingWorkflow />
+        </div>
+
+        <div class="wrap works">
+          <p id="works-title">Works with</p>
+          <ul aria-labelledby="works-title">
+            {works.map((w) => <li>{w}</li>)}
+          </ul>
+        </div>
+      </section>
+
+      <section class="section film" id="film" aria-labelledby="film-title">
+        <div class="wrap">
+          <div class="head">
+            <h2 id="film-title">One task, from bug report to your approval</h2>
+            <p>
+              A bug task in the storefront project, start to finish: the branch picks Bug fix, Gemini CLI and
+              Claude Code work side by side, Codex sends the task back once, and you approve it.
+            </p>
+          </div>
+        </div>
+        <div class="stage">
+          <figure class="film-box">
+            <div class="frame rise">
+              <Clip
+                id="film-player"
+                name="film"
+                width={1920}
+                height={1200}
+                alt="Screen recording of the Natamux dashboard: the storefront workflow in Project settings, a bug task that takes the Bug fix path, Gemini CLI and Claude Code side by side, a Codex review that sends the task back, five providers in the Agents view, and your approval at Manual review."
+              />
+            </div>
+            <ol class="chapters" data-chapters aria-label="Chapters">
               {
-                ['dark', 'light'].map((theme) => (
-                  <video
-                    class={`for-${theme}`}
-                    muted
-                    loop
-                    playsinline
-                    preload="none"
-                    poster={`${base}media/hero-agents-${theme}.webp`}
-                    width="2400"
-                    height="1500"
-                    aria-label="Screen recording of the Natamux dashboard: six agents of five providers work in parallel, then one task goes through review, a send back, CI and approval."
-                  >
-                    <source src={`${base}media/hero-agents-${theme}.mp4`} type="video/mp4" />
-                    <source src={`${base}media/hero-agents-${theme}.webm`} type="video/webm" />
-                  </video>
+                chapters.map((c) => (
+                  <li data-at={c.at} data-end={c.end}>
+                    <button type="button" data-seek={c.at}>
+                      <span class="ch-time">{fmt(c.at)}</span>
+                      <span class="ch-label">{c.label}</span>
+                    </button>
+                  </li>
                 ))
               }
-              <button class="btn small hero-play" type="button" data-hero-play hidden>
-                <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-                <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z" /></svg>
-                <span data-hero-play-label>Play</span>
-              </button>
-            </div>
-            <ol class="hero-steps" aria-hidden="true">
-              {heroSteps.map(([at, label]) => <li data-at={at}>{label}</li>)}
             </ol>
-            <figcaption class="sr-only">
-              The Agents view shows six live terminals: Claude Code, Codex, Gemini CLI, Copilot and Cursor work on six
-              tasks at once. One task opens. Its branch took the Develop path. Cursor reviews the change in its own
-              shell, finds a problem and sends the task back to Implement. The second review passes, Copilot opens the
-              pull request and follows CI, and you approve the final check.
-            </figcaption>
+            <figcaption class="note">{note}</figcaption>
           </figure>
         </div>
       </section>
@@ -381,284 +432,171 @@ const extras = [
       <section class="section" id="workflows" aria-labelledby="workflows-title">
         <div class="wrap">
           <div class="head">
-            <h2 id="workflows-title">Your process, as a workflow</h2>
+            <h2 id="workflows-title">Six building blocks for any process</h2>
             <p>
-              Write the stages once: who runs each one, where a person approves, where work goes back. Commit the
-              file. A branch sends each task down the path that fits it. A review or a red CI run sends the work
-              back to the stage that must fix it.
+              Each block is a few lines in <code>.natamux.json</code>, or a few clicks in
+              <b>Project settings → Stages</b>. Put them in any order your team works in.
+            </p>
+          </div>
+          <div class="blocks" data-tabs>
+            <div class="block-tabs" role="tablist" aria-label="Building blocks" aria-orientation="vertical">
+              {
+                blocks.map((b, i) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`tab-b-${b.id}`}
+                    aria-controls={`panel-b-${b.id}`}
+                    aria-selected={i === 0 ? 'true' : 'false'}
+                    tabindex={i === 0 ? 0 : -1}
+                  >
+                    <b>{b.name}</b>
+                    <span>{b.short}</span>
+                  </button>
+                ))
+              }
+            </div>
+            <div class="stack">
+              {
+                blocks.map((b, i) => (
+                  <div
+                    class="block"
+                    role="tabpanel"
+                    id={`panel-b-${b.id}`}
+                    aria-labelledby={`tab-b-${b.id}`}
+                    data-active={i === 0 ? 'true' : 'false'}
+                    inert={i !== 0}
+                  >
+                    <div class="block-copy">
+                      <h3>{b.name}</h3>
+                      <p set:html={b.text} />
+                      {b.media && (
+                        <div class="block-diagram">
+                          <BlockDiagram kind={b.diagram} label={b.figure} />
+                        </div>
+                      )}
+                      <div class="code">
+                        <p class="code-title">{b.json ? <code>{b.codeTitle}</code> : b.codeTitle}</p>
+                        {b.json ? <pre set:html={paint(b.code)} /> : <pre>{b.code}</pre>}
+                      </div>
+                      <p class="more">
+                        More in the docs: <a href={`${docs}${b.docs[0]}`}>{b.docs[1]}</a>
+                      </p>
+                    </div>
+                    {b.media ? (
+                      <figure class="block-media">
+                        <div class="frame rise">
+                          {b.media.clip ? (
+                            <Clip name={b.media.clip} alt={b.media.alt} />
+                          ) : (
+                            <Shot dir={v2} name={b.media.shot ?? ''} alt={b.media.alt} sizes="(min-width: 1240px) 560px, 100vw" />
+                          )}
+                        </div>
+                        <figcaption>
+                          <span set:html={b.media.caption} />
+                          {b.media.clip && <span class="note"> {note}</span>}
+                        </figcaption>
+                      </figure>
+                    ) : (
+                      <div class="block-media big-diagram">
+                        <BlockDiagram kind={b.diagram} label={b.figure} />
+                      </div>
+                    )}
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="recipes" aria-labelledby="recipes-title">
+        <div class="wrap">
+          <div class="head">
+            <h2 id="recipes-title">Start from a recipe</h2>
+            <p>
+              Two workflows from the guide, each a full file you can copy. They use your own stages, such as Watch
+              CI and merge, next to the ones Natamux has.
             </p>
           </div>
           <div class="wf-cards">
             {
               workflows.map((w) => (
-                <article class="wf-card reveal" aria-labelledby={`wf-${w.id}`}>
+                <article class="wf-card" aria-labelledby={`wf-${w.id}`}>
                   <h3 id={`wf-${w.id}`}>{w.name}</h3>
                   <p class="wf-text">{w.text}</p>
                   <ol class="wf">
-                    {
-                      w.rows.map((r) =>
-                        r.par ? (
-                          <li class="par">
-                            <span class="sr-only">At the same time:</span>
-                            <ul>
-                              {r.par.map((p) => (
-                                <li class="st">
-                                  <span class="st-n">{p.n}</span>
-                                  <span class={`chip ${pv[p.a][1]}`}>{pv[p.a][0]}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        ) : r.paths ? (
-                          <li class="br">
-                            <p class="if"><i aria-hidden="true"></i><span>If <b>{r.branch}</b></span></p>
-                            <ul class="paths">
-                              {r.paths.map((path) => (
-                                <li class="path">
-                                  <p class="path-name">{path.other ? 'Otherwise' : 'When'}: <b>{path.name}</b></p>
-                                  <ol class="wf">
-                                    {path.rows.map((q) => (
-                                      <li class="st">
-                                        <span class="st-n">{q.n}</span>
-                                        {q.a && <span class={`chip ${pv[q.a][1]}`}>{pv[q.a][0]}</span>}
-                                        {q.you && <span class="chip you">{q.you}</span>}
-                                        {q.back && (
-                                          <span class="back">
-                                            <svg viewBox="0 0 28 14" aria-hidden="true"><path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" /></svg>
-                                            {q.back}
-                                          </span>
-                                        )}
-                                      </li>
-                                    ))}
-                                  </ol>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        ) : (
-                          <li class="st">
-                            <span class="st-n">{r.n}</span>
-                            {r.a && <span class={`chip ${pv[r.a][1]}`}>{pv[r.a][0]}</span>}
-                            {r.you && <span class="chip you">{r.you}</span>}
-                            {r.back && (
-                              <span class="back">
-                                <svg viewBox="0 0 28 14" aria-hidden="true"><path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" /></svg>
-                                {r.back}
-                              </span>
-                            )}
-                          </li>
-                        ),
-                      )
-                    }
+                    {w.rows.map((r) =>
+                      r.par ? (
+                        <li class="par">
+                          <span class="sr-only">At the same time:</span>
+                          <ul>
+                            {r.par.map((p) => (
+                              <li class="st">
+                                <span class="st-n">{p.n}</span>
+                                {p.a && <span class="chip">{pv[p.a]}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ) : r.paths ? (
+                        <li class="br">
+                          <p class="if">
+                            <i aria-hidden="true" />
+                            <span>
+                              If <b>{r.branch}</b>
+                            </span>
+                          </p>
+                          <ul class="paths">
+                            {r.paths.map((path) => (
+                              <li class="path">
+                                <p class="path-name">
+                                  {path.other ? 'Otherwise' : 'When'}: <b>{path.name}</b>
+                                </p>
+                                <ol class="wf">
+                                  {path.rows.map((q) => (
+                                    <li class="st">
+                                      <span class="st-n">{q.n}</span>
+                                      {q.a && <span class="chip">{pv[q.a]}</span>}
+                                      {q.you && <span class="chip you">{q.you}</span>}
+                                      {q.back && (
+                                        <span class="back">
+                                          <svg viewBox="0 0 28 14" aria-hidden="true">
+                                            <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
+                                          </svg>
+                                          {q.back}
+                                        </span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ) : (
+                        <li class="st">
+                          <span class="st-n">{r.n}</span>
+                          {r.a && <span class="chip">{pv[r.a]}</span>}
+                          {r.you && <span class="chip you">{r.you}</span>}
+                          {r.back && (
+                            <span class="back">
+                              <svg viewBox="0 0 28 14" aria-hidden="true">
+                                <path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" />
+                              </svg>
+                              {r.back}
+                            </span>
+                          )}
+                        </li>
+                      ),
+                    )}
                   </ol>
+                  <p class="more">
+                    <a href={`${docs}guides/workflows/#${w.anchor}`}>See the file</a>
+                  </p>
                 </article>
               ))
             }
-          </div>
-          <p class="wf-note">
-            Each task of each person runs the same file, so the Progress view shows <b>Took Develop</b> on the path
-            a task took and <b>Not taken</b> on the other.
-          </p>
-          <div class="cta-row">
-            <a class="btn primary big" href="#download">Download Natamux</a>
-            <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
-          </div>
-        </div>
-      </section>
-
-      <section class="section flow" id="flow" aria-labelledby="flow-title">
-        <div class="wrap">
-          <div class="head">
-            <h2 id="flow-title">Three agents on one task, from spec to pull request</h2>
-            <p>
-              The default pipeline. Approve the plan and two agents start side by side: one builds, one writes the
-              test spec without looking at the code. Then the review agent reads the diff and sends findings back to
-              Implement.
-            </p>
-          </div>
-
-          <div class="flow-box" data-flow>
-            <div class="flow-bar">
-              <ul class="legend" aria-label="Agents">
-                <li class="amber"><i></i>Agent A in Shell 1: Spec, Plan, Implement, tests</li>
-                <li class="mint"><i></i>Agent B in Shell 2: Test spec, a new session</li>
-                <li class="sky"><i></i>Agent C in Shell 5: Review, any agent you pick</li>
-              </ul>
-              <button class="btn small" type="button" data-flow-play aria-pressed="false">
-                <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-                <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z" /></svg>
-                <span data-flow-play-label>Play</span>
-              </button>
-            </div>
-
-            <div class="flow-map" role="img" aria-label="The default pipeline: Context, Spec, Plan, then Test spec and Implement side by side, then Automated tests, Review and Release. Review can send the task back to Implement.">
-              <svg class="edges wide" viewBox="0 0 1100 400" aria-hidden="true">
-                {edges.wide.map(([id, , d]) => <path class="edge" data-e={id} d={d} />)}
-                {edges.wide.map(([id, lane, d]) => <path class={`lit ${lane}`} data-e={id} d={d} />)}
-              </svg>
-              <svg class="edges tall" viewBox="0 0 360 710" aria-hidden="true">
-                {edges.tall.map(([id, , d]) => <path class="edge" data-e={id} d={d} />)}
-                {edges.tall.map(([id, lane, d]) => <path class={`lit ${lane}`} data-e={id} d={d} />)}
-              </svg>
-              {
-                stages.map((s) => (
-                  <div
-                    class="node"
-                    data-n={s.id}
-                    data-lane={s.lane}
-                    data-s="idle"
-                    style={`--x: ${s.x}; --y: ${s.y}; --mx: ${s.mx}; --my: ${s.my}`}
-                    aria-hidden="true"
-                  >
-                    <b>{s.name}</b>
-                    <span class="sub">{s.sub}</span>
-                    <span class="state">
-                      <i class="spin" />
-                      <span data-note>&nbsp;</span>
-                    </span>
-                  </div>
-                ))
-              }
-              <span class="loop-label" aria-hidden="true">Findings go back, at most twice</span>
-            </div>
-
-            <ol class="steps">
-              {
-                steps.map((s, i) => (
-                  <li data-step={i}>
-                    <button type="button" data-step-go={i}>
-                      <span class="num">{i + 1}</span>
-                      {s.title}
-                    </button>
-                    <p>{s.text}</p>
-                  </li>
-                ))
-              }
-            </ol>
-          </div>
-
-          <div class="proof">
-            <div class="proof-col narrow">
-              <figure class="reveal">
-                <div class="frame">
-                  <Shot name="crop-two-agents" crop={{ width: 641, height: 763 }} alt="The Progress panel of a task. Test spec and Implement run side by side. Test spec is in review with an Approve button, Implement is done." />
-                </div>
-                <figcaption>Test spec and Implement run side by side in one task. You approve the test spec.</figcaption>
-              </figure>
-            </div>
-            <div class="proof-col wide">
-              <figure class="reveal">
-                <div class="frame">
-                  <Shot name="crop-review-agent" crop={{ width: 1600, height: 782 }} alt="Project settings, Stages tab. The pipeline chart and the stage list, with the Review stage selected and its Agent set to Codex." />
-                </div>
-                <figcaption>Pick the review agent in <b>Project settings → Stages → Review → Agent</b>. It is saved in <code>.natamux.json</code>, so the team shares it.</figcaption>
-              </figure>
-              <figure class="reveal side">
-                <div class="frame">
-                  <Shot name="crop-sent-back" crop={{ width: 641, height: 352 }} alt="The Implement stage running for the second time, with the note Sent back 1×." />
-                </div>
-                <figcaption>
-                  The review agent sent the task back once, so Implement runs again. Then the tests and Review run
-                  again. <a href={`${base}media/home/review-loop-dark.webm`}>Watch a 20-second recording</a> of the loop in the app.
-                </figcaption>
-              </figure>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="views" aria-labelledby="views-title">
-        <div class="wrap">
-          <div class="head">
-            <h2 id="views-title">See every task, and the one that needs you</h2>
-            <p>
-              The sidebar sizes each task by how much it needs you. A question or a failure gets a tinted card
-              with <b>Answer</b>. A running task shows its stage. Finished work folds to one line. The amber pill in the
-              title bar counts what waits.
-            </p>
-          </div>
-          <div class="views" data-tabs>
-            <div class="views-tabs" role="tablist" aria-label="Dashboard views" aria-orientation="vertical">
-              {
-                views.map((v, i) => (
-                  <button
-                    type="button"
-                    role="tab"
-                    id={`tab-${v.id}`}
-                    aria-controls={`panel-${v.id}`}
-                    aria-selected={i === 0 ? 'true' : 'false'}
-                    tabindex={i === 0 ? 0 : -1}
-                  >
-                    <b>{v.name}</b>
-                    <span>{v.text}</span>
-                  </button>
-                ))
-              }
-            </div>
-            <div class="views-panels stack">
-              {
-                views.map((v, i) => (
-                  <div class="views-panel" role="tabpanel" id={`panel-${v.id}`} aria-labelledby={`tab-${v.id}`} data-active={i === 0 ? 'true' : 'false'} inert={i !== 0}>
-                    <div class="frame">
-                      <Shot name={v.shot} alt={v.alt} sizes="(min-width: 1240px) 820px, 100vw" />
-                    </div>
-                    <p class="views-cap">{v.text}</p>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section split" id="terminal" aria-labelledby="terminal-title">
-        <div class="wrap split-row">
-          <div class="head">
-            <h2 id="terminal-title">Real terminals for every agent</h2>
-            <p>
-              Each task has its own shells. Shell 1 runs the agent; open up to six. The <b>Agents</b> view puts the
-              live terminals of up to six tasks in one grid, and a pane that waits for you says so in its header.
-            </p>
-            <ul class="ticks">
-              <li>Drawn on the GPU in JetBrains Mono, with Nerd Font icons and up to 10,000 lines of history</li>
-              <li>The pane header shows the agent and what it does now</li>
-              <li>Find with match case or a regular expression</li>
-              <li>Reconnects by itself, and agents resume after a restart</li>
-              <li>Pick the terminal font, or let the desktop app read your Ghostty font</li>
-            </ul>
-            <p class="more"><a href={`${docs}guides/terminal/`}>Terminal guide</a></p>
-          </div>
-          <figure class="frame reveal">
-            <Shot name="agents" sizes="(min-width: 1240px) 720px, 100vw" alt="The Agents view: four live Claude Code terminals in a grid. The pane at the bottom right asks a question." />
-          </figure>
-        </div>
-      </section>
-
-      <section class="section split flip" id="git" aria-labelledby="git-title">
-        <div class="wrap split-row">
-          <div class="head">
-            <h2 id="git-title">Git and GitHub without leaving the task</h2>
-            <p>
-              Every task works in its own worktree on its own branch, so agents never touch each other's files or
-              your checkout.
-            </p>
-            <ul class="ticks">
-              <li><b>Generate</b> asks the task's agent for a commit message from the diff. Then <b>Commit all</b>.</li>
-              <li>Side-by-side diffs, image diffs, and a comment on any line that goes straight to the agent</li>
-              <li><b>Push</b>, then <b>Create PR</b> with the GitHub CLI. The body ends with <code>Closes #N</code></li>
-              <li>Natamux watches the PR checks; a merged PR finishes the task</li>
-              <li><b>Check on CI</b> pushes a stage's work to a <code>natamux-ci/</code> branch, and a failed run goes back to the agent</li>
-              <li><b>Import issues</b> turns open GitHub issues into tasks</li>
-            </ul>
-            <p class="more"><a href={`${docs}guides/github/`}>GitHub guide</a></p>
-          </div>
-          <div class="git-shots reveal">
-            <figure class="frame back">
-              <Shot name="history" sizes="(min-width: 1240px) 600px, 100vw" alt="The History tab: a commit graph of the task branch, 2 commits ahead of main and 2 behind." />
-            </figure>
-            <figure class="frame front">
-              <Shot name="changes-generate" sizes="(min-width: 1240px) 600px, 100vw" alt="The Changes tab: two changed files, a side-by-side diff, and a commit message written by Generate above the Commit all button." />
-            </figure>
           </div>
         </div>
       </section>
@@ -672,25 +610,33 @@ const extras = [
               second who works, who asks and who is done. Each worktree is trusted for the agent it starts.
             </p>
           </div>
-          <ul class="agent-list">
-            {
-              agents.map((a) => (
-                <li class={a.c}>
-                  <b>{a.name}</b>
-                  <code>{a.cmd}</code>
-                  <span>{a.how}</span>
-                </li>
-              ))
-            }
-          </ul>
-          <div class="shells reveal">
-            <p class="shells-title" id="shells-title">One task, one agent per stage</p>
+          <div class="agents-row">
+            <figure class="agents-media">
+              <div class="frame rise">
+                <Clip name="clip-agents" alt="Screen recording of the Agents view: panes of five different agents work at the same time, and the cursor moves over their headers." />
+              </div>
+              <figcaption>Five providers at once in the <b>Agents</b> view. <span class="note">{note}</span></figcaption>
+            </figure>
+            <ul class="agent-list">
+              {
+                agents.map((a) => (
+                  <li>
+                    <b>{a.name}</b>
+                    <code>{a.cmd}</code>
+                    <span>{a.how}</span>
+                  </li>
+                ))
+              }
+            </ul>
+          </div>
+          <div class="shells">
+            <h3 class="shells-title" id="shells-title">One task, one agent per stage</h3>
             <ol aria-labelledby="shells-title">
               {
                 shells.map((s) => (
-                  <li class={pv[s.a][1]}>
+                  <li>
                     <code>{s.shell}</code>
-                    <span class={`chip ${pv[s.a][1]}`}>{pv[s.a][0]}</span>
+                    <span class="chip">{pv[s.a]}</span>
                     <b>{s.stage}</b>
                     <span>{s.text}</span>
                   </li>
@@ -702,29 +648,118 @@ const extras = [
               <code>.natamux.json</code>, so the team shares it.
             </p>
           </div>
-          <p class="more">
-            <a href={`${docs}guides/mix-agents/`}>Mix agents in one task</a> ·
+          <p class="more links">
+            <a href={`${docs}guides/mix-agents/`}>Mix agents in one task</a>
             <a href={`${docs}concepts/agents-and-hooks/`}>Agents and hooks</a>
           </p>
-          <div class="cta-row">
-            <a class="btn primary big" href="#download">Download Natamux</a>
+        </div>
+      </section>
+
+      <section class="section" id="project" aria-labelledby="project-title">
+        <div class="wrap split-row">
+          <div class="head">
+            <h2 id="project-title">Fits the project you already have</h2>
+            <ul class="ticks">
+              <li>A worktree and a branch for each task, so agents never touch each other's files or your checkout</li>
+              <li><code>.natamux-setup</code> prepares each new worktree: install, seed, copy env</li>
+              <li>Ten ports for each task, the first in <code>$PORT</code>, so dev servers do not clash</li>
+              <li>Checks and conditions are any shell command, so any language and build tool works</li>
+              <li>macOS, Windows and Linux. On Windows the script is <code>.natamux-setup.ps1</code></li>
+              <li><b>Export</b> a workflow from one project and <b>Import...</b> it into another. Import lists every command first</li>
+            </ul>
+            <p class="more">More in the docs: <a href={`${docs}concepts/workspaces/`}>Workspaces</a></p>
+          </div>
+          <div class="code big">
+            <p class="code-title"><code>.natamux-setup</code></p>
+            <pre><span class="c">#!/bin/sh</span>
+pnpm install
+cp ~/storefront.env .env
+pnpm db:seed</pre>
           </div>
         </div>
       </section>
 
-      <section class="section split" id="cli" aria-labelledby="cli-title">
-        <div class="wrap split-row">
+      <section class="section" id="views" aria-labelledby="views-title">
+        <div class="wrap">
           <div class="head">
-            <h2 id="cli-title">One command for you and your agents</h2>
+            <h2 id="views-title">See every task, and the one that needs you</h2>
             <p>
-              <code>natamux</code>, or <code>nmx</code> for short. Create and start tasks from your own shell.
-              Agents use the same command to ask you something, say a stage is done, or send the work back.
+              The sidebar sizes each task by how much it needs you. A running task shows its stage, and finished
+              work folds to one line. Open a task and its stages stay in sight beside the terminal.
             </p>
-            <p class="more"><a href={`${docs}reference/cli/`}>CLI reference</a></p>
           </div>
-          <div class="term" role="img" aria-label="Terminal commands: you create a task and start Codex on it; the agent asks a question and reports done; the review agent sends the task back with a reason.">
-            <div class="term-bar"><i></i><i></i><i></i></div>
-            <pre><span class="c"># You, in any shell</span>
+          <div class="views" data-tabs>
+            <div class="views-tabs" role="tablist" aria-label="Dashboard views" aria-orientation="vertical">
+              {
+                views.map((v, i) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`tab-v-${v.id}`}
+                    aria-controls={`panel-v-${v.id}`}
+                    aria-selected={i === 0 ? 'true' : 'false'}
+                    tabindex={i === 0 ? 0 : -1}
+                  >
+                    <b>{v.name}</b>
+                    <span>{v.text}</span>
+                  </button>
+                ))
+              }
+            </div>
+            <div class="stack">
+              {
+                views.map((v, i) => (
+                  <figure
+                    class="views-panel"
+                    role="tabpanel"
+                    id={`panel-v-${v.id}`}
+                    aria-labelledby={`tab-v-${v.id}`}
+                    data-active={i === 0 ? 'true' : 'false'}
+                    inert={i !== 0}
+                  >
+                    <div class="frame">
+                      {v.clip ? (
+                        <Clip name={v.clip} alt={v.alt} />
+                      ) : (
+                        <Shot dir={v2} name={v.shot ?? ''} alt={v.alt} sizes="(min-width: 1240px) 820px, 100vw" />
+                      )}
+                    </div>
+                    <figcaption>
+                      <span class="views-cap">{v.text}</span>
+                      {v.clip && <span class="note"> {note}</span>}
+                    </figcaption>
+                  </figure>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="git" aria-labelledby="git-title">
+        <div class="wrap">
+          <div class="halves">
+            <div>
+              <h2 id="git-title">Git and GitHub without leaving the task</h2>
+              <p class="sub">Every task works in its own worktree on its own branch.</p>
+              <ul class="ticks">
+                <li><b>Generate</b> asks the task's agent for a commit message from the diff. Then <b>Commit all</b>.</li>
+                <li>Side-by-side diffs, image diffs, and a comment on any line that goes straight to the agent</li>
+                <li><b>Push</b>, then <b>Create PR</b> with the GitHub CLI. The body ends with <code>Closes #N</code></li>
+                <li>Natamux watches the PR checks; a merged PR finishes the task</li>
+                <li><b>Import issues</b> turns open GitHub issues into tasks</li>
+              </ul>
+              <p class="more">More in the docs: <a href={`${docs}guides/github/`}>GitHub</a></p>
+            </div>
+            <div>
+              <h2 id="cli-title">One command for you and your agents</h2>
+              <p class="sub">
+                <code>natamux</code>, or <code>nmx</code> for short. Agents use the same command to ask you something,
+                say a stage is done, or send the work back.
+              </p>
+              <div class="term" role="img" aria-label="Terminal commands: you create a task and start Codex on it; the agent asks a question and reports done; the review agent sends the task back with a reason.">
+                <div class="term-bar"><i></i><i></i><i></i></div>
+                <pre><span class="c"># You, in any shell</span>
 <span class="p">$</span> nmx task create "Export the report as CSV" --label reports
 <span class="p">$</span> nmx agent start T-0010 --agent codex
 
@@ -735,25 +770,24 @@ const extras = [
 <span class="c"># The review agent, when something must change</span>
 <span class="p">$</span> natamux stage back $NATAMUX_TASK_ID \
     --reason "Empty rows break the export"</pre>
+              </div>
+              <p class="more">More in the docs: <a href={`${docs}reference/cli/`}>CLI reference</a></p>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="extras-title">
-        <div class="wrap">
-          <div class="head">
-            <h2 id="extras-title">The small things, done</h2>
+          <div class="git-shots">
+            <figure>
+              <div class="frame rise">
+                <Shot dir={v2} name="changes" sizes="(min-width: 1240px) 600px, 100vw" alt="The Changes tab: a side by side diff of the task's changes and a commit message written by Generate." />
+              </div>
+              <figcaption>The <b>Changes</b> tab, with a message from <b>Generate</b>.</figcaption>
+            </figure>
+            <figure>
+              <div class="frame rise">
+                <Shot dir={v2} name="history" sizes="(min-width: 1240px) 600px, 100vw" alt="The History tab: the commit graph of the task branch next to its base branch." />
+              </div>
+              <figcaption>The <b>History</b> tab, with the commit graph of the task branch.</figcaption>
+            </figure>
           </div>
-          <dl class="extras">
-            {
-              extras.map(([t, d]) => (
-                <div>
-                  <dt>{t}</dt>
-                  <dd>{d}</dd>
-                </div>
-              ))
-            }
-          </dl>
         </div>
       </section>
 

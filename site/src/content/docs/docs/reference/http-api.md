@@ -71,6 +71,40 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
 
+## More endpoints
+
+Files, git, GitHub, terminals and templates.
+
+| Method and path | Meaning |
+|---|---|
+| `GET /tasks/:id/files` | The stage files of a task: `{ files }` |
+| `GET /tasks/:id/files/:name` | One stage file, such as `spec.md`: `{ name, text }`. Answers 404 when it does not exist |
+| `PUT /tasks/:id/files/:name` | Replace a stage file `{ text }`, for example to fix the spec before you approve it |
+| `GET /tasks/:id/attachments` | The files attached to a task: `{ attachments }` |
+| `GET /tasks/:id/attachments/:name` | One attachment. Images come with their type, any other file downloads |
+| `GET /tasks/:id/ended-shells` | The last screens of the shells of a done or cancelled task: `{ shells }` |
+| `GET /tasks/:id/changes/file?path=<file>` | The diff of one changed file |
+| `GET /tasks/:id/changes/image?path=<file>&side=original\|modified` | One side of a changed image |
+| `POST /tasks/:id/agent/message` | Paste a comment into the agent's terminal `{ text }`. Answers 400 when no agent runs there |
+| `POST /tasks/:id/commit` | Commit all changes `{ message }` |
+| `POST /tasks/:id/push` | Push the task branch |
+| `POST /tasks/:id/pull-request` | Open the pull request: `{ task }` |
+| `POST /tasks/:id/pull-request/refresh` | Ask GitHub now for the state of the pull request, instead of waiting for the next check |
+| `POST /tasks/:id/issue` | Open a GitHub issue for the task now |
+| `PUT /tasks/:id/issue` | Link an issue that exists `{ provider, key, url }` |
+| `POST /tasks/:id/fan-out` | Run more tries of a task `{ count, start? }`. `count` is 1 to 5 |
+| `GET /tasks/:id/terminals` | The open shells of a task: `{ terminals, agents, lanes, programs, restoring }` |
+| `DELETE /tasks/:id/terminals/:terminal` | Close one shell. `:terminal` is its number |
+| `POST /tasks/:id/terminal/ticket` | A one-time ticket for the terminal WebSocket |
+| `GET /templates` | The saved task templates: `{ templates }` |
+| `POST /templates` | Save a template |
+| `POST /templates/:id/tasks` | Make a task from a template |
+| `GET /github/issues?repo=<id>` | The open issues of a project: `{ issues }` |
+| `POST /github/issues/import` | Import issues as draft tasks `{ numbers, repo? }`. Up to 100 numbers |
+| `GET /git/branches?repo=<id>` | The branches of a project, for **Branch from** |
+| `GET /activity` | What the agent of each task does now, from its last hook |
+| `GET /diffstats` | The size of the changes of every workspace |
+
 ## Live updates and terminals
 
 A browser cannot set headers on a WebSocket, so:

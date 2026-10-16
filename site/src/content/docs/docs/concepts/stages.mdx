@@ -5,13 +5,12 @@ sidebar:
   order: 3
 ---
 
+import { Steps } from '@astrojs/starlight/components'
+import Figure from '../../../../components/Figure.astro'
+
 A stage is one step of the work on a task, such as writing a spec or implementing code. Every task goes through a **pipeline** of stages. For each stage, Natamux starts the work, checks the result, and waits for your approval when the stage asks for it.
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/progress-dark.webp" alt="The Progress view: one row per task and one column per stage from Context to Release, with a marker for the state of each stage." width="1600" height="1000" decoding="async" />
-<img class="shot-light" src="/screens/ui/progress-light.webp" alt="The Progress view: one row per task and one column per stage from Context to Release, with a marker for the state of each stage." width="1600" height="1000" decoding="async" />
-<figcaption>Tasks against their stages in the Progress view.</figcaption>
-</figure>
+<Figure src="/screens/v2/progress" alt="The Progress layout: one row per task and one column per stage from Context to Release, with a marker for the state of each stage." caption="Tasks against their stages in the Progress layout." />
 
 For the default pipeline at work, with two agents side by side and a review agent that sends the task back, see [The review loop](/docs/concepts/review-loop/).
 
@@ -97,9 +96,9 @@ A prompt can name a skill with `{skill:<name>}`. A skill of a plugin is `<plugin
 
 1. The agent has the skill and a sure way to call it: Natamux writes that call. It is `/name` for Claude Code and Copilot CLI, and `$name` for Codex. Gemini CLI and Cursor CLI have no sure call, so they always get rule 2.
 2. Otherwise, a `SKILL.md` of that name exists for any agent: Natamux writes `the skill in <path> (read that file and follow it)`. Natamux looks in the task's worktree, then in your main checkout. A new worktree does not have your untracked files, such as `.claude/settings.local.json` that turns a plugin on, so a skill found only in the main checkout always gets this form.
-3. Otherwise Natamux writes `the <name> skill`, and the stage card says "The skill <name> was not found for <agent>." The stage still starts.
+3. Otherwise Natamux writes `the <name> skill`, and the stage card says "The skill `<name>` was not found for `<agent>`." The stage still starts.
 
-Each form reads well in a sentence such as "Use {skill:review-pr} on the diff". For where each agent keeps its skills, see the page of the agent, for example [Claude Code](/docs/agents/claude-code/#skills).
+Each form reads well in a sentence such as "Use `{skill:review-pr}` on the diff". For where each agent keeps its skills, see the page of the agent, for example [Claude Code](/docs/agents/claude-code/#skills).
 
 ## Stage kinds
 
@@ -150,11 +149,7 @@ A task in a workspace shows its stages in the **Progress** view of the details p
 
 The **Docs** tab of a workspace (key `4`) lists the stage files of the task, such as `context.md`, `spec.md` and `plan.md`, with the time each changed. You can read them and fix them by hand before you approve a stage.
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/docs-dark.webp" alt="The Docs tab of a task: the stage file context.md in the list on the left, and its text shown formatted on the right, with Rendered, Source and Edit buttons." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/docs-light.webp" alt="The Docs tab of a task: the stage file context.md in the list on the left, and its text shown formatted on the right, with Rendered, Source and Edit buttons." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>The Docs tab: read and edit the files the stages wrote.</figcaption>
-</figure>
+<Figure src="/screens/v2/docs" alt="The Docs tab of a task: the stage file context.md in the list on the left, and its text shown formatted on the right, with Rendered, Source and Edit buttons." caption="The Docs tab: read and edit the files the stages wrote." />
 
 - **Rendered** shows Markdown as formatted text. **Source** shows the raw text. Natamux remembers your choice in this browser.
 - Click **Edit** to change a file, then **Save**. If the file changed after you began, Natamux asks before it replaces the new text. Your unsaved edit stays when you switch to another file or tab.
@@ -320,9 +315,13 @@ A group holds 2 to 4 stages that are on and work at the same time. Only `agent` 
 
 A branch splits the pipeline into 2 to 4 paths. Each path has a condition and its own stages. When the task gets to the branch, Natamux checks the conditions in order. The task takes the first path that holds, runs its stages one after another, and then goes on to the step after the branch. The stages of the other paths never run for that task. [Build a workflow](/docs/guides/workflows/) has a solo and a team example with branch paths.
 
+<Figure src="/screens/v2/stages-branch" alt="Project settings, Stages tab. The flow chart shows an If node that splits into two lanes, each with its condition and its stages." caption="A branch in the Stages chart: an If node with one lane per path." />
+
+<Figure src="/media/v2/clip-branch" video alt="Screen recording: in Project settings, a branch is selected, its condition is opened, and both paths show in the chart." caption="Select a branch, open its condition, and see both paths in the chart." />
+
 For example, after Plan: a small change goes the Implement way, and a change that needs a review goes the Review PR way.
 
-```json
+```json title=".natamux.json"
 {
   "id": "after-plan",
   "name": "After plan",
@@ -364,10 +363,14 @@ If `plan.md` has "small" under `## Size`, the task goes Implement, Testing, and 
 
 ### Build a branch in Project settings
 
+<Steps>
+
 1. Open **Project settings → Stages** and pick the step the branch comes after.
 2. Click **Add branch**. Give it a **Branch name**.
 3. In each path card, set the **Path name**, the condition (**File has text** or **Command succeeds**, **holds** or **does not hold**), and add stages from the list.
 4. **Add path** adds a path (up to 4). **Make this the Otherwise path** is on the last path.
+
+</Steps>
 
 The chart shows the branch as an **If** node with one lane per path, each with its condition, and a dashed line for the skip when there is no Otherwise path. Command conditions are listed in the notice before you save, like other commands.
 
@@ -384,6 +387,10 @@ Stage ids are unique in the whole pipeline, so each stage is on exactly one path
 ### In the Progress view
 
 The branch says **Took Small change** and the reason, such as `plan.md "Size" contains "small"`. Each other path is one folded row marked **Not taken**. Click it to see its stages. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
+
+<Figure src="/screens/v2/progress-took-develop" alt="The Progress tab of a task. The branch header says Took Bug fix with its reason, and the path that ran is marked Taken." caption="The branch header says which path the task took, and why." />
+
+<Figure src="/screens/v2/progress-not-taken" alt="The Progress tab with the Not taken row opened. It lists the stages of the path that never ran for this task." caption="Click the Not taken row to see the stages that did not run." />
 
 ### Send back
 
@@ -432,11 +439,7 @@ Use a skill when the context lives in another application, for example a record 
 3. Enter the key or address of the record in **Reference**.
 4. Choose an agent. **No agent, a plain shell** cannot run a skill.
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/start-task-skill-dark.webp" alt="The Start a task dialog with Context from set to An agent skill, the skill fetch-ticket picked, and the reference NAT-142." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/start-task-skill-light.webp" alt="The Start a task dialog with Context from set to An agent skill, the skill fetch-ticket picked, and the reference NAT-142." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>Context from a skill: pick the skill, then enter the record to read.</figcaption>
-</figure>
+<Figure src="/screens/v2/start-task-skill" alt="The Start a task dialog with Context from set to An agent skill, a skill picked, and a reference entered." caption="Context from a skill: pick the skill, then enter the record to read." />
 
 The context stage starts the agent with the skill and the reference, for example `/read-record ABC-1` for Claude Code. The agent writes what it finds to `context.md` and runs `natamux done`. No entry in `.natamux.json` is needed. Natamux does not install skills or MCP servers: the agent uses what it has.
 

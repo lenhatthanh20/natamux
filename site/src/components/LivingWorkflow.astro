@@ -1,0 +1,230 @@
+---
+// The hero: the demo workflow "storefront" as a graph, with three tasks moving through it and the
+// file that makes it beside the graph. landing.js runs the timeline; this file only draws it.
+// x, y place an item on the wide graph (1020 x 440), mx, my on the tall one for phones (360 x 930).
+type Node = {
+  id: string
+  name: string
+  who?: string
+  you?: boolean
+  gate?: boolean
+  branch?: boolean
+  x: number
+  y: number
+  mx: number
+  my: number
+}
+
+const nodes: Node[] = [
+  { id: 'context', name: 'Context', gate: true, x: 52, y: 220, mx: 180, my: 40 },
+  { id: 'spec', name: 'Spec', who: 'Claude Code', gate: true, x: 157, y: 220, mx: 180, my: 135 },
+  { id: 'triage', name: 'If', branch: true, x: 262, y: 220, mx: 180, my: 225 },
+  { id: 'reproduce', name: 'Reproduce', who: 'Cursor', x: 367, y: 95, mx: 95, my: 330 },
+  { id: 'plan', name: 'Plan', who: 'Claude Code', gate: true, x: 367, y: 345, mx: 265, my: 330 },
+  { id: 'test-spec', name: 'Test spec', who: 'Gemini CLI', x: 540, y: 150, mx: 95, my: 490 },
+  { id: 'implement', name: 'Implement', who: 'Claude Code', x: 540, y: 290, mx: 265, my: 490 },
+  { id: 'agent-review', name: 'Review', who: 'Codex', x: 650, y: 220, mx: 180, my: 600 },
+  { id: 'security', name: 'Security review', who: 'Copilot', x: 755, y: 220, mx: 180, my: 695 },
+  { id: 'review', name: 'Manual review', who: 'You', you: true, gate: true, x: 860, y: 220, mx: 180, my: 790 },
+  { id: 'release', name: 'Release', gate: true, x: 965, y: 220, mx: 180, my: 885 },
+]
+
+const describe = (n: Node) => {
+  if (n.branch) return 'If: Bug or feature. The task takes the first path whose condition holds.'
+  const who = n.you ? ' You check it.' : n.who ? ` Agent: ${n.who}.` : ''
+  return `${n.name}.${who}${n.gate ? ' Waits for your approval.' : ''}`
+}
+
+// [id, from, to, wide path, tall path]. A path runs from the centre of one node to the next, under the nodes.
+const edges: [string, string, string, string, string][] = [
+  ['context-spec', 'context', 'spec', 'M52 220 H157', 'M180 40 V135'],
+  ['spec-triage', 'spec', 'triage', 'M157 220 H262', 'M180 135 V225'],
+  ['triage-reproduce', 'triage', 'reproduce', 'M262 220 C 305 220, 320 95, 367 95', 'M180 225 C 180 280, 95 270, 95 330'],
+  ['triage-plan', 'triage', 'plan', 'M262 220 C 305 220, 320 345, 367 345', 'M180 225 C 180 280, 265 270, 265 330'],
+  ['reproduce-join', 'reproduce', 'join', 'M367 95 C 415 95, 410 220, 452 220', 'M95 330 C 95 380, 180 360, 180 405'],
+  ['plan-join', 'plan', 'join', 'M367 345 C 415 345, 410 220, 452 220', 'M265 330 C 265 380, 180 360, 180 405'],
+  ['join-test-spec', 'join', 'test-spec', 'M452 220 C 495 220, 495 150, 540 150', 'M180 405 C 180 450, 95 435, 95 490'],
+  ['join-implement', 'join', 'implement', 'M452 220 C 495 220, 495 290, 540 290', 'M180 405 C 180 450, 265 435, 265 490'],
+  ['test-spec-agent-review', 'test-spec', 'agent-review', 'M540 150 C 600 150, 600 220, 650 220', 'M95 490 C 95 545, 180 545, 180 600'],
+  ['implement-agent-review', 'implement', 'agent-review', 'M540 290 C 600 290, 600 220, 650 220', 'M265 490 C 265 545, 180 545, 180 600'],
+  ['agent-review-security', 'agent-review', 'security', 'M650 220 H755', 'M180 600 V695'],
+  ['security-review', 'security', 'review', 'M755 220 H860', 'M180 695 V790'],
+  ['review-release', 'review', 'release', 'M860 220 H965', 'M180 790 V885'],
+  ['back', 'agent-review', 'implement', 'M650 220 C 650 410, 540 410, 540 290', 'M180 600 C 352 600, 352 490, 265 490'],
+]
+
+// [text, wide x, y, tall x, y, tall alignment, data key]
+const labels: [string, number, number, number, number, string, string][] = [
+  ['Bug or feature', 262, 268, 212, 225, 'start', 'branch'],
+  ['Bug fix', 367, 140, 28, 372, 'start', 'bug'],
+  ['Otherwise: Feature', 367, 392, 332, 372, 'end', 'feature'],
+  ['Side by side', 540, 220, 30, 548, 'start', 'group'],
+  ['Sends back, at most twice', 595, 396, 0, 0, 'none', 'back'],
+]
+
+const tokens = [
+  ['T-0011', 'T-0011'],
+  ['T-0011b', 'T-0011'],
+  ['T-0012', 'T-0012'],
+  ['T-0014', 'T-0014'],
+  ['T-0014b', 'T-0014'],
+]
+
+// The real file of the demo project, shortened. The first item names the node a line belongs to.
+const json: [string, string][] = [
+  ['', '{'],
+  ['', '  "stages": ['],
+  ['context', '    { "id": "context", "kind": "context" },'],
+  ['spec', '    { "id": "spec", "gate": "manual" },'],
+  ['triage', '    { "id": "triage", "name": "Bug or feature",'],
+  ['triage', '      "paths": ['],
+  ['reproduce', '        { "id": "bugfix", "name": "Bug fix",'],
+  ['triage', '          "when": { "type": "command",'],
+  ['triage', '            "run": "grep -qi bug .natamux-task/context.md" },'],
+  ['reproduce', '          "stages": ['],
+  ['reproduce', '            { "id": "reproduce", "agent": "cursor" }'],
+  ['reproduce', '          ] },'],
+  ['plan', '        { "id": "feature", "name": "Feature",'],
+  ['plan', '          "stages": ['],
+  ['plan', '            { "id": "plan", "gate": "manual" }'],
+  ['plan', '          ] }'],
+  ['triage', '      ] },'],
+  ['', '    { "id": "build", "parallel": ['],
+  ['test-spec', '      { "id": "test-spec", "agent": "gemini" },'],
+  ['implement', '      { "id": "implement" }'],
+  ['', '    ] },'],
+  ['agent-review', '    { "id": "agent-review", "name": "Review",'],
+  ['agent-review', '      "agent": "codex" },'],
+  ['security', '    { "id": "security", "agent": "copilot" },'],
+  ['review', '    { "id": "review", "name": "Manual review",'],
+  ['review', '      "gate": "manual" },'],
+  ['release', '    { "id": "release", "gate": "manual" }'],
+  ['', '  ]'],
+  ['', '}'],
+]
+
+// Keys and strings get a class each. The text has no < or &, so it needs no escaping.
+const paint = (line: string) =>
+  line.replace(/("[^"]*")(\s*:)?/g, (_, s: string, colon?: string) =>
+    colon ? `<span class="k">${s}</span>${colon}` : `<span class="s">${s}</span>`,
+  )
+
+const events = [
+  ['took', 2.6, 'T-0011', ' Took Bug fix: ', 'grep -qi bug context.md', ' exited 0'],
+  ['wait', 7, 'T-0012', ' waits for you at Plan', '', ''],
+  ['back', 10, 'T-0011', '', '', ': a coupon larger than the total makes it negative'],
+] as const
+---
+
+<figure class="lw" data-lw aria-labelledby="lw-title" aria-describedby="lw-desc">
+  <div class="lw-bar">
+    <p class="lw-title" id="lw-title">Three tasks run the workflow of <b>storefront</b></p>
+    <button class="btn small lw-play" type="button" data-lw-play>
+      <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+      <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z"></path></svg>
+      <span data-lw-label>Pause</span><span class="sr-only"> the animation</span>
+    </button>
+  </div>
+
+  <div class="lw-body">
+    <div class="lw-graph">
+      <div class="lw-map" role="group" aria-label="Stages of the storefront workflow" data-lw-map>
+        <svg class="lw-wires wide" viewBox="0 0 1020 440" aria-hidden="true">
+          <rect class="lw-group" x="486" y="106" width="108" height="228" rx="14"></rect>
+          {edges.map(([id, from, to, d]) => <path class={id === 'back' ? 'lw-wire loop' : 'lw-wire'} data-e={id} data-from={from} data-to={to} d={d}></path>)}
+          <path class="lw-arrow" d="M534 331 L540 322 L546 331"></path>
+        </svg>
+        <svg class="lw-wires tall" viewBox="0 0 360 930" aria-hidden="true">
+          <rect class="lw-group" x="22" y="456" width="316" height="106" rx="14"></rect>
+          {edges.map(([id, from, to, , d]) => <path class={id === 'back' ? 'lw-wire loop' : 'lw-wire'} data-e={id} data-from={from} data-to={to} d={d}></path>)}
+          <path class="lw-arrow" d="M341 484 L332 490 L341 496"></path>
+        </svg>
+
+        {
+          labels.map(([text, x, y, mx, my, align, key]) => (
+            <span class={`lw-at lw-label ${align}`} data-label={key} style={`--x: ${x}; --y: ${y}; --mx: ${mx}; --my: ${my}`} aria-hidden="true">
+              {text}
+            </span>
+          ))
+        }
+
+        {
+          nodes.map((n, i) => (
+            <button
+              type="button"
+              class:list={['lw-at', 'lw-node', { if: n.branch, gated: n.gate && n.who }]}
+              data-n={n.id}
+              style={`--x: ${n.x}; --y: ${n.y}; --mx: ${n.mx}; --my: ${n.my}`}
+              tabindex={i === 0 ? '0' : '-1'}
+              aria-label={describe(n)}
+            >
+              <span class="lw-name">{n.name}</span>
+              {n.who && <span class:list={['lw-who', { you: n.you }]}>{n.who}</span>}
+              {n.gate && n.who && <span class="lw-approve">Approve</span>}
+              {
+                n.gate && (
+                  <svg class="lw-gate" viewBox="0 0 12 12" aria-hidden="true">
+                    <circle cx="6" cy="3.8" r="2.3"></circle>
+                    <path d="M1.8 11.2a4.2 4.2 0 0 1 8.4 0"></path>
+                  </svg>
+                )
+              }
+              {n.id === 'implement' && <span class="lw-twice" aria-hidden="true">×2</span>}
+            </button>
+          ))
+        }
+
+        {tokens.map(([id, text]) => <span class="lw-token" data-t={id} aria-hidden="true">{text}</span>)}
+
+        <span class="lw-cursor" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 2.5 19.5 13l-7.2 1.1L8.4 21Z"></path></svg>
+          <i></i>
+        </span>
+      </div>
+    </div>
+
+    <div class="lw-code">
+      <p class="lw-code-title"><code>.natamux.json</code><span>shortened</span></p>
+      <pre data-lw-code>{json.map(([n, line]) => <span class="ln" data-n={n || undefined} set:html={paint(line)} />)}</pre>
+    </div>
+  </div>
+
+  <div class="lw-foot">
+    <ol class="lw-ticker" aria-hidden="true">
+      {
+        events.map(([kind, at, id, before, cmd, after]) => (
+          <li class={`ev-${kind}`} data-at={at}>
+            {kind === 'back' ? (
+              <>Review sent <code>{id}</code> back{after}</>
+            ) : (
+              <>
+                <code>{id}</code>
+                {before}
+                {cmd && <code>{cmd}</code>}
+                {after}
+              </>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+    <ul class="lw-legend">
+      <li class="sky">An agent works</li>
+      <li class="amber">Waits for you</li>
+      <li class="mint">Passed, or the path taken</li>
+      <li class="rose">Sent back</li>
+    </ul>
+  </div>
+
+  <p class="sr-only" id="lw-desc">
+    An animated graph of the storefront workflow. Its stages: Context; Spec, which waits for your approval; an If
+    node, Bug or feature, with two paths: Bug fix, where Cursor reproduces the bug, and the Otherwise path,
+    Feature, where Plan waits for your approval; then Test spec with Gemini CLI and Implement with Claude Code,
+    side by side; Review with Codex, which can send the task back to Implement at most twice; Security review
+    with Copilot; Manual review by you; and Release. Three tasks run it. T-0011 takes the Bug fix path, because
+    grep -qi bug context.md exited 0. Review sends it back once: a coupon larger than the total makes it
+    negative. Implement runs a second time, the review passes, and T-0011 waits at Manual review until you click
+    Approve. T-0012 takes the Feature path and waits for you at Plan. T-0014 runs Test spec and Implement at the
+    same time. Next to the graph is the shortened .natamux.json file of this workflow.
+  </p>
+</figure>

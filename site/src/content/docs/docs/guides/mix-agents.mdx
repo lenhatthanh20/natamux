@@ -5,6 +5,9 @@ sidebar:
   order: 5.2
 ---
 
+import { Steps } from '@astrojs/starlight/components'
+import Figure from '../../../../components/Figure.astro'
+
 One task can use several agents. Claude Code writes the code, Cursor reviews it, Copilot watches CI. Each stage picks its agent and model in `.natamux.json`.
 
 ## Why
@@ -13,11 +16,26 @@ One task can use several agents. Claude Code writes the code, Cursor reviews it,
 - A new agent reviews with fresh eyes. It did not write the code, so it does not defend it.
 - Several providers share the cost and the rate limits.
 
+<Figure src="/media/v2/clip-agents" video alt="Screen recording of the Agents view: panes of five different agents work at the same time." caption="Five providers working at once in the Agents view. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+
 ## How
 
 Set `agent` and `args` on a stage. In **Project settings → Stages**, they are **Agent** and **Arguments**.
 
-```json
+<Steps>
+
+1. Open **Project settings → Stages** and click the stage, for example **Review**.
+2. In **Agent**, pick the agent. **Task's agent** keeps the task's own.
+3. Optional: in **Arguments**, add words for its command line, such as `--model gpt-5`.
+4. Click **Save**, then commit `.natamux.json`.
+
+</Steps>
+
+<Figure src="/screens/v2/stage-agent-picker" alt="Project settings, Stages tab. The Review stage is selected, with the Agent field set to a provider and the Arguments field below it." caption="The Agent and Arguments fields of the Review stage." />
+
+In the file, the same stage looks like this:
+
+```json title=".natamux.json"
 { "id": "agent-review", "kind": "agent", "gate": "auto", "output": "review.md",
   "ownShell": true, "agent": "cursor", "args": "--model gpt-5" }
 ```
@@ -49,22 +67,19 @@ A stage that runs again, for example after a send back, gets its prompt in the a
 
 `"workflow": true` offers **Run with a workflow** on a stage. Claude Code then works with sub-agents inside that one stage. Use it on a hard stage such as Implement. It uses more tokens, and only Claude Code does it. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).
 
-## Example
+## Why each stage uses its own agent
 
-Stages of the two examples in [Build a workflow](/docs/guides/workflows/):
+The two examples in [Build a workflow](/docs/guides/workflows/) list which agent and shell each stage uses. The reasons:
 
-| Stage | Example | Agent | Shell | Why |
-|---|---|---|---|---|
-| Spec, Implement | Solo | Claude Code, the task's agent | Shell 1 | One session keeps the context of the spec for the code. Implement adds sub-agents with a workflow. |
-| Test spec | Solo | Copilot | Its own, closed when done | Writes cases without reading the code. The shell frees its memory. |
-| Review | Solo | Cursor | Its own, closed when done | An agent that did not write the code reads it. |
-| Watch CI and merge | Solo | Copilot | Its own | Moves CI and merge work off the main session. |
-| Spec, Plan, Implement | Team | Task's agent | Shell 1 | One session keeps the context of the spec for the code. |
-| Review PR | Team | Claude Code | Its own, closed when done | Reads a teammate's work with a new session. |
-| Review implementation | Team | Claude Code | Its own, closed when done | A new session per round. |
-| Follow CI | Team | Cursor | Its own, closed when done | Watches jobs, and a failed job sends the task back. |
-| Verify impact list | Team | Claude Code | Its own, closed when done | Checks the change with a new session. |
-| Definition of done and review request | Team | Copilot | Its own, closed when done | Another provider for the last check. |
+| Stage | Why |
+|---|---|
+| Spec, Plan, Implement | One session in Shell 1 keeps the context of the spec for the code. Implement can add sub-agents with a workflow. |
+| Test spec | It writes cases without reading the code. Its shell frees its memory when done. |
+| Review | An agent that did not write the code reads it. A new session per round. |
+| Review PR | It reads a teammate's work with a new session. |
+| Watch CI and merge, Follow CI | It moves CI and merge work off the main session. A failed job sends the task back. |
+| Verify impact list | It checks the change with a new session. |
+| Definition of done and review request | Another provider for the last check. |
 
 ## What each agent needs
 
