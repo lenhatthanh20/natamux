@@ -1,0 +1,44 @@
+---
+// A recording in both themes: <dir><name>-<theme>.mp4 with the poster <name>-<theme>.webp.
+// landing.js plays the one of the current theme while it is half in view, and never with reduced
+// motion until the visitor presses Play. The poster is in data-poster: a hidden video still fetches
+// its poster, so landing.js sets it only on the shown video, once it comes near the view.
+interface Props {
+  name: string
+  alt: string
+  dir?: string
+  width?: number
+  height?: number
+  // Lets the film chapters find this player.
+  id?: string
+}
+
+const { name, alt, dir = 'media/v2/', width = 1600, height = 1000, id } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const path = `${base}${dir}${name}`
+---
+
+<div class="player" data-player id={id}>
+  {
+    ['dark', 'light'].map((theme) => (
+      <video
+        class={`for-${theme}`}
+        muted
+        loop
+        playsinline
+        preload="none"
+        data-poster={`${path}-${theme}.webp`}
+        width={width}
+        height={height}
+        aria-label={alt}
+      >
+        <source src={`${path}-${theme}.mp4`} type="video/mp4" />
+      </video>
+    ))
+  }
+  <button class="btn small play" type="button" data-play data-paused>
+    <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+    <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5Z"></path></svg>
+    <span data-play-label>Play</span><span class="sr-only"> the recording</span>
+  </button>
+</div>

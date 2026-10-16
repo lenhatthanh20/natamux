@@ -122,6 +122,8 @@ natamux stage fail T-42 --reason "Tests do not pass"
 
 `back` goes to the stage named with `--to`. It cannot be used with `--stage`. See [Stages](/docs/concepts/stages/).
 
+`skip` skips the current stage. Marking a stage that the task has not reached yet, so it is skipped when the task gets there (**Skip** and **Will be skipped** in the dashboard), is not a command. Use the dashboard or `PUT /tasks/:id/skip` in the [HTTP API](/docs/reference/http-api/#main-endpoints). The API action `reopen` has no command either. `back` is the command that sends a task to an earlier stage.
+
 ```sh
 natamux stage workflow T-42 on --stage implement
 natamux stage workflow T-42 off --stage implement

@@ -53,7 +53,7 @@ jobs:
           error() { echo "::error::$1"; fails=$((fails + 1)); }
           [[ $key =~ ^RW[A-Za-z0-9+/]{54}$ ]] || error "RELEASE_SIGNER is not a minisign public key (the placeholder?)"
           grep -rqxF -- "$key" packages/desktop/src/fixtures && error "RELEASE_SIGNER is a test key from packages/desktop/src/fixtures"
-          for doc in SECURITY.md docs/release-process.md site/src/content/docs/docs/getting-started/install.md \
+          for doc in SECURITY.md docs/release-process.md site/src/content/docs/docs/getting-started/install.mdx \
             site/src/content/docs/docs/help/security-and-privacy.md; do
             grep -qF -- "$key" "$doc" || error "$doc does not show RELEASE_SIGNER"
           done

@@ -37,6 +37,26 @@ To compare several approaches to the same job, use **fan out**: it copies a task
 
 You can also open more terminals in a task for your own shells.
 
+## How is this different from tmux, or from one agent alone?
+
+tmux gives you panes. Natamux adds what sits around them: a git worktree and branch per task, the state of every agent on one dashboard, and a workflow that each task follows. One agent alone does one job at a time, in one checkout, and you are the process. With Natamux the process is a file: stages, approvals, reviews and checks. See [What is Natamux](/docs/).
+
+## Can I share a workflow with my team?
+
+Yes. The workflow is the `stages` list in `.natamux.json` at the root of the repository. Commit it, and everyone who opens the project runs the same stages. You can also move a workflow to another project with **Import…** and **Export** in **Project settings**. See [Build a workflow](/docs/guides/workflows/) and the [configuration reference](/docs/reference/configuration/).
+
+## Does it work with monorepos and any language?
+
+Yes. Natamux does not depend on a language. It works with git, and every check is a shell command you write: the `check` and `command` of a stage, and the condition of a branch path. A `.natamux-setup` script prepares each new worktree, for example with an install. Each task also gets a block of ten ports in `$PORT`, so dev servers do not collide. See [Workspaces](/docs/concepts/workspaces/) and [Stages](/docs/concepts/stages/).
+
+## Which agent should I use for which stage?
+
+There is no fixed answer. A common split is the agent you trust most for Implement, and a different one for Review, so the review has fresh eyes. Each stage sets its `agent` and `args` in `.natamux.json`. See [Mix agents in one task](/docs/guides/mix-agents/) and the [compatibility table](/docs/agents/).
+
+## What does the note under the recordings mean?
+
+The recordings on the homepage and in these docs show the real Natamux dashboard. The agents in them are stand-in scripts, so their terminal text is short and the runs are fast. The dashboard, the stages, the branches and the send backs are real. A real agent writes much more.
+
 ## Where are my tasks stored?
 
 As Markdown files with a small header, in `<data folder>/tasks/T-0001.md`. A SQLite index is a cache that Natamux rebuilds from them.

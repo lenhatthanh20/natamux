@@ -1,0 +1,123 @@
+---
+title: What is Natamux
+description: Natamux runs your team's workflow with parallel coding agents. Stages, approvals, branches and send backs live in one committed file.
+sidebar:
+  order: 1
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components'
+import Figure from '../../../components/Figure.astro'
+
+Natamux is an open-source Agent Development Environment (ADE). You write your team's workflow once, in a file named `.natamux.json`: the stages, the approvals, the paths a task can take and the send backs. Every task of every person then runs that workflow, each in its own git worktree and terminals. Coding agents such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor do the work, and each stage can use a different one. You step in only where the workflow asks for you.
+
+<Figure src="/media/v2/clip-send-back" video alt="The Progress panel of a task. The Review stage fails and says Sent back, then Implement runs a second time with x2." caption="A review agent sends a task back to Implement. Recorded on the real dashboard; the agents are stand-in scripts." />
+
+<CardGrid>
+  <LinkCard title="Install" description="The desktop app for macOS, Windows or Linux." href="/docs/getting-started/install/" />
+  <LinkCard title="Quick start" description="From first launch to a merged change." href="/docs/getting-started/quick-start/" />
+  <LinkCard title="Build a workflow" description="Stages, side by side groups, paths and send backs." href="/docs/guides/workflows/" />
+  <LinkCard title="Mix agents" description="Give each stage its own agent and model." href="/docs/guides/mix-agents/" />
+  <LinkCard title="Reference" description="Every field, command, route and key." href="/docs/reference/configuration/" />
+</CardGrid>
+
+## The problem
+
+Coding agents are good at one job at a time. When you run several, you start to juggle:
+
+- Terminal tabs, and no way to tell which agent is working, which is stuck and which finished an hour ago.
+- Branches that collide, because two agents edit the same checkout.
+- Permission prompts and questions that wait unseen.
+- Work that nobody checked before it reaches a pull request.
+- Different agents with different tools and no common view.
+- On a team, each person runs agents their own way, so there is no shared process for spec, review, CI and QA.
+
+## Agents that check each other
+
+Every task goes through [stages](/docs/concepts/stages/). The default pipeline is:
+
+```text
+Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release
+```
+
+You approve the spec, the plan and the test spec. After you approve the plan, two agents work at once: one writes test cases from the spec without reading the code, the other writes the code. Then the tests run, and a third agent reviews the changes in a session of its own. When the review finds problems, it sends the task back to Implement by itself, at most two times, and then asks you. See [The review loop](/docs/concepts/review-loop/).
+
+<Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Shell 1 runs Claude Code on Implement and Shell 7 runs Gemini CLI on Test spec, and both say Running. The Progress panel shows the Test spec and Implement group with both stages Running." caption="Test spec and Implement run side by side, each agent in its own shell." />
+
+## What you get
+
+### A worktree and a terminal per task
+
+A task gets its own branch, such as `natamux/t-0001-fix-login`, and its own folder, so agents never step on each other. Its shells keep running when you close the dashboard, and come back with their screen when you open it again. See [Workspaces](/docs/concepts/workspaces/) and [Terminal](/docs/guides/terminal/).
+
+### One place to see what needs you
+
+The title bar counts the tasks that wait for you: an agent asked a question, a stage is ready for review, a task failed or is blocked, or an agent has been quiet for 10 minutes. In the sidebar, a question or a failure becomes a card with an **Answer** button. Turn on **Notify me** to get a system notification. See [Needs you](/docs/guides/dashboard/#needs-you).
+
+<Figure src="/screens/v2/task-needs-you" alt="A task that needs input. A banner under the header says The agent asks: Should a coupon apply before or after tax?, with Answer in terminal and Resume. The sidebar card has an Answer button, and the Spec card in Progress shows Needs input with Approve anyway, Mark as done and Start agent." caption="A task that needs your input, with the agent's question and the ways to go on." />
+
+### Three views of the work
+
+Switch the task list between **Table**, **Board** and **Progress**. The progress view lines up every task against its stages, with the next action for each one. The **Agents** view shows up to six live agent terminals in a grid. See [Dashboard](/docs/guides/dashboard/).
+
+<Figure src="/screens/v2/progress" alt="The Progress view of a project: one row per task, one column per stage from Context to Release, with the Reproduce the bug and Plan columns of the branch. A marker shows the state of each stage, and a button at the end of the row says Review, Answer or Open." caption="The Progress view: where each task is in its pipeline, and what it needs next." />
+
+### Stages you can shape
+
+Each project can change its pipeline in **Project settings**: pick stages from a catalog of 28 (Research, Security review, Manual testing, Release notes, and more), run stages side by side, choose which ones wait for you, give a stage its own agent or model, check a stage on CI, or run it as a Claude Code workflow. You can split the pipeline into paths with a condition, such as a review path and a develop path. A review agent or a CI check can send a task back to an earlier stage, and each stage can use its own agent, such as Claude Code to write, Cursor to review and Copilot to watch CI. Settings are saved in `.natamux.json`, so the whole team can commit and share one process. See [Project settings](/docs/guides/project-settings/), [Build a workflow](/docs/guides/workflows/) and [Mix agents in one task](/docs/guides/mix-agents/).
+
+### Review and ship from the dashboard
+
+The **Changes** tab shows side-by-side or inline diffs, image diffs, and a box to send a comment on a line straight to the agent. **Generate** asks the agent for a commit message. **Commit all**, **Push** and **Create PR** finish the job, and the task is done when the pull request is merged. See [Changes and history](/docs/guides/changes-and-history/) and [GitHub](/docs/guides/github/).
+
+<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files, a side by side diff of checkout.ts, and under the list a commit message box with Generate and Commit all." caption="Read the diff, write or generate the commit message, then commit." />
+
+### Five agents, and any other
+
+Natamux starts Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor in the task's terminal, and adds hooks to each session, so the dashboard knows when an agent works, asks or finishes. Any other terminal agent works too, with the terminal bell and `natamux ask` / `natamux done`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+
+### A command line for you and your agents
+
+`natamux`, short name `nmx`, creates tasks, moves stages, and lets agents report: `natamux ask "Which API?"`, `natamux done`. See [Use the command line](/docs/guides/command-line/).
+
+### Desktop app or browser
+
+Use the desktop app for macOS, Windows or Linux, which starts everything for you and updates itself, or run the daemon and open the dashboard in a browser tab, also [in Docker](/docs/guides/self-host-docker/).
+
+### No account and no telemetry
+
+Natamux runs on your machine, with no account, no server of its own and no analytics. Besides the update check of the desktop app, it talks to GitHub only through your own `git` and `gh` login, for example to follow your pull requests and CI. Your agents talk to their own services, with their own logins. See [Security and privacy](/docs/help/security-and-privacy/).
+
+## How the parts fit
+
+```text
+ Desktop app or browser tab        natamux / nmx (CLI)
+           |                              |
+           |  HTTP + WebSocket            |  HTTP
+           v                              v
+        +-------------- daemon ---------------+
+        | tasks, stages, git worktrees,       |
+        | terminals, GitHub                   |
+        +-----------------+-------------------+
+                          |  one terminal per task
+                          v
+              agent (claude, codex, ...)
+                          |
+                          |  hooks: "working", "asks", "done"
+                          +--------> back to the daemon
+```
+
+- The **daemon** is a background process on your machine. It owns all task state. It listens on `127.0.0.1` only and needs a token on every request.
+- The **dashboard** is the web page the daemon serves. The desktop app is a window around it and starts the daemon for you.
+- The **CLI** talks to the daemon over HTTP. Agents call it from their terminals.
+- **Agents** are the command-line tools you already have installed. Hooks tell the daemon what each agent does.
+
+Tasks are plain Markdown files with a small header, so they are easy to read and back up. A SQLite index is only a cache of them.
+
+## Where to go next
+
+1. [Install Natamux](/docs/getting-started/install/): the desktop app for macOS, Windows or Linux.
+2. [Quick start](/docs/getting-started/quick-start/): from first launch to a merged change.
+3. [The review loop](/docs/concepts/review-loop/): how the default pipeline runs three agents.
+   Then [Build a workflow](/docs/guides/workflows/) and [Mix agents in one task](/docs/guides/mix-agents/) to shape your own.
+4. [Tasks](/docs/concepts/tasks/), [Workspaces](/docs/concepts/workspaces/) and [Stages](/docs/concepts/stages/): the core ideas.
+5. [Troubleshooting](/docs/help/troubleshooting/) and the [FAQ](/docs/help/faq/).

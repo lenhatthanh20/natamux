@@ -1,0 +1,28 @@
+  // film chapter 1: open Project settings from the sidebar, the Stages chart with the If branch, scroll the list.
+  await page.goto('http://localhost:8090/w/__TASK__');
+  await page.getByRole('button', { name: 'Approve', exact: true }).first().waitFor();
+  await notips();
+  await page.mouse.move(700, 520); pos = [700, 520];
+  await sleep(1800);
+  await rec();
+  await sleep(700);
+  await to(page.getByRole('button', { name: /^storefront \d+ workspace/ }), 900, 40, 0);
+  await sleep(250);
+  await to(page.getByRole('button', { name: 'Settings of storefront', exact: true }), 450);
+  await sleep(150);
+  await press(true);
+  mark('open');
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('tab', { name: 'Stages' }).waitFor();
+  await sleep(900);
+  await to(dlg.getByRole('button', { name: /^Branch Bug or feature/ }), 900);
+  await sleep(150);
+  await press(true);
+  mark('branch');
+  await sleep(900);
+  await glide(420, 640, 700);
+  await smooth('[role=dialog] .overflow-y-auto', 330, 1800);
+  await sleep(700);
+  const res = await stop();
+  await page.keyboard.press('Escape');
+  return res;

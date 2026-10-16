@@ -1,0 +1,152 @@
+---
+title: Quick start
+description: Go from first launch to a pull request with one agent working on one task.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components'
+import Figure from '../../../../components/Figure.astro'
+
+This walk-through uses the desktop app and one agent. Starting a task and reaching the first approval takes about ten minutes, and most of that is the agent working. The rest depends on your task and your agent: the default pipeline waits for you three times, then an agent reviews the work. You need the [requirements](/docs/getting-started/install/#requirements) and a git repository you can experiment in.
+
+## Add a project
+
+Open Natamux. The app starts its daemon and opens the dashboard, already signed in. On the first launch there is no project yet, and the sidebar says **No projects yet**.
+
+<Steps>
+
+1. Use **File → Add Project…** (`Cmd+Shift+O` on macOS, `Ctrl+Shift+O` on Linux). You can also click **Add project** in the sidebar and type the folder, or pick it with **Browse…**.
+2. Pick the top folder of the repository, the one that holds `.git`. Natamux warns you if the folder is not a git repository.
+
+</Steps>
+
+Add more projects the same way, at any time.
+
+<Aside>
+Running the dashboard in a browser instead? Open it and paste the token into the **Daemon token** field. It is `NATAMUX_TOKEN` of the daemon, or the token the daemon printed when it started. The browser keeps it for this address only.
+</Aside>
+
+## Start a task
+
+You have two ways to start.
+
+- **Add a task** puts an idea in the backlog. Type a title in the field "Add a task to the backlog" (press `n`) and press Enter.
+- **Start a task** starts work right away. Click the **+** button in the title bar, or press `c`.
+
+For this guide, use **Start a task**.
+
+<Steps>
+
+1. Enter a **Title**, for example `Fix the login redirect`.
+2. Pick the **Project** to work in.
+3. Pick an **Agent**, or "No agent, a plain shell".
+4. Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
+
+</Steps>
+
+<Figure src="/screens/v2/start-task" alt="The Start a task dialog over an open task, scrolled so the Title field is out of view. Context from is My notes, with a notes box and an Attachments drop area. Under Workspace and agent, Project is storefront, Branch from is main and Agent is Claude Code. Cancel and Start task are at the bottom." caption="The Start a task dialog: what the agent reads, and where and how the task runs." />
+
+The dialog has two groups. **Context** is what the agent reads as the task's context. The line under the heading says what that is for the source you pick. **Workspace and agent** is where and how the task runs.
+
+<details>
+<summary>Every field of the dialog</summary>
+
+| Field | What to enter |
+|---|---|
+| Context from | Where the context comes from: **My notes**, **A GitHub issue**, or **An agent skill** when an agent has a skill. It shows when there is more than one source |
+| Skill | With **An agent skill**. Click **Pick a skill** and choose the skill that reads the context |
+| Notes | Optional, with **My notes**. What to change and why, where to look, and how to tell it is done |
+| Reference | With any other source. The issue, ticket or record to read, for example `#42` |
+| Attachments | Optional. Screenshots, logs or specs. Click **Add files**, drop them, or paste a screenshot |
+| Project | The project to work in |
+| Branch from | The branch to start from. It defaults to the default branch, such as `main`. Natamux fetches it first, so the task starts from its newest commit |
+| Agent | Pick an agent, or "No agent, a plain shell" |
+
+</details>
+
+If you added a task to the backlog first, open it and click **Start agent** (or **Start task** with no agent if you only want a shell).
+
+## Watch the agent work
+
+Open the task. The **Terminal** tab shows the agent running in the task's worktree.
+
+<Figure src="/screens/v2/task-review-shell5" alt="An open task on the Terminal tab with four agent shells in a grid: Shell 1, Shell 6, Shell 7 and Shell 8. The Review agent runs in Shell 8 and shows git diff. In the Progress tab, Review is Running after Test spec and Implement are done." caption="An open task: its shells in the middle, its stages on the right." />
+
+On the dashboard, the state of the task updates by itself, because Natamux's hooks tell it when the agent works, asks or finishes. You can close the dashboard and the agent keeps running.
+
+## Answer when it needs you
+
+When an agent asks a question or waits for a permission, the task moves to **Needs input**. Its row in the sidebar becomes a card with the agent's question, and the title bar shows a count such as "1 needs you".
+
+<Steps>
+
+1. Click the task in the sidebar.
+2. Click **Answer in terminal** on the banner.
+3. Type your answer in the terminal.
+
+</Steps>
+
+The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
+
+<Figure src="/media/v2/clip-needs-you" video alt="Screen recording: a question arrives, the title bar count and the sidebar card appear, the cursor clicks Answer, a short reply is typed and the agent goes on." caption="A question arrives, you answer it, and the agent goes on. Recorded on the real dashboard; the agents are stand-in scripts." />
+
+## Review the stage
+
+Each task moves through stages. The **Progress** tab of the details panel shows them and the evidence of each one, beside the terminal.
+
+<Figure src="/screens/v2/task-spec-approve" alt="An open task at the Spec stage. A banner under the header says Ready for review: Spec, with Approve and Send back. In the Progress tab, the Spec card says In review and has an Approve button, and the Bug or feature branch waits below it." caption="Spec is ready for review. Approve it from the banner or from the stage card." />
+
+When a stage waits for you, the task is in review. Read what the agent produced, then:
+
+- **Approve** moves on to the next stage.
+- **Send back** returns the task to an earlier stage, with a note about what should change.
+- **Skip** leaves the stage out.
+
+With the default pipeline you approve three times: the spec, the plan and the test spec.
+
+- After you approve the plan, two agents work at once: the task's agent implements in Shell 1, and a second agent writes the test spec in Shell 2.
+- When both are done, the tests run, then a review agent reads the changes in Shell 5.
+- If the review finds problems, it sends the task back to Implement by itself, at most two times.
+
+See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/stages/).
+
+## Look at the changes
+
+Open the **Changes** tab. It lists the changed files and shows a diff for each one, side by side or inline. The **History** tab shows the task's branch as a graph.
+
+<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files on the left, a side by side diff of checkout.ts on the right, and under the list a commit message box with a title and a body, a Generate button and a Commit all button." caption="The Changes tab. Write the commit message, or click Generate to ask the agent for one." />
+
+## Commit, push and open a pull request
+
+<Steps>
+
+1. In the **Changes** tab, write a commit message, or click **Generate** to let the agent draft one. Then click **Commit all**. It commits every change, new files included.
+2. Click **Push** in the task header. The button shows how many commits are ahead, for example **Push ↑2**.
+3. Click **Create PR**. It needs the `gh` command, logged in. When the pull request exists, the button becomes **Open pull request**.
+
+</Steps>
+
+Natamux never pushes or merges unless you click the button or run the command.
+
+## Finish
+
+Merge the pull request on GitHub. While a dashboard is open, Natamux checks pull requests of open tasks once a minute (every 5 minutes once all their checks have finished), and when one is merged it moves a task in review to done.
+
+To clean up, open the task and remove its workspace. Natamux asks first and refuses if the worktree has changes that are not committed.
+
+<Aside type="tip" title="You did it">
+One task went from a title to a pull request, with an agent and your approvals. Next, shape the process to your team.
+</Aside>
+
+## Next
+
+<CardGrid>
+  <LinkCard title="Build a workflow" description="Paths, send back and CI for your team." href="/docs/guides/workflows/" />
+  <LinkCard title="Tasks and workspaces" description="How a task, its worktree and its shells fit together." href="/docs/concepts/tasks/" />
+  <LinkCard title="Desktop app" description="Updates, menus and the command line." href="/docs/guides/desktop-app/" />
+</CardGrid>
+
+- [Workspaces](/docs/concepts/workspaces/)
+- [Troubleshooting](/docs/help/troubleshooting/)
+

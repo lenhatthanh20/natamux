@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# Demo stand-in for the agent CLIs (claude, codex, gemini, copilot, cursor-agent), for marketing
+# recordings of the e2e images. Called by its link name, so Natamux sees the right agent.
+# It does each stage prompt for real (files, sections, commits), reports through `natamux`, and
+# waits for the next prompt. Title marks: [ask] asks first, [clean] review finds nothing.
+# A review (a "Findings section" prompt) sends the task back once, then passes.
+# Free prompts: "loop: ..." keeps working, "ask: ..." asks, anything else works and ends.
+set -u
+export PATH="/data/bin:$PATH"
+me=${STANDIN_NAME:-$(basename "$0")}
+# Per task controls in /data/standin/: <task>.pace (tenths of the base pause, default from
+# /data/standin-pace or 10), <task>.ask (ask a question in the first stage), <task>.clean (the review
+# finds nothing). Title marks [ask] and [clean] work too.
+ctl=/data/standin/${NATAMUX_TASK_ID:-none}
+pace=$(cat "$ctl.pace" 2>/dev/null || cat /data/standin-pace 2>/dev/null || echo 10)
+
+prompt=""
+for arg in "$@"; do
+  # The prompt is the long argument with spaces; flags and their values are short.
+  case "$arg" in *' '*) prompt=$arg ;; esac
+done
+
+dim=$'\e[2m' bold=$'\e[1m' off=$'\e[0m' green=$'\e[32m' red=$'\e[31m' yellow=$'\e[33m'
+case "$me" in
+claude) agent=claude-code; c=$'\e[38;5;209m'; mark="⏺"; name="Claude Code" ;;
+codex) agent=codex; c=$'\e[38;5;250m'; mark="•"; name="Codex" ;;
+gemini) agent=gemini; c=$'\e[38;5;75m'; mark="✦"; name="Gemini CLI" ;;
+copilot) agent=copilot; c=$'\e[38;5;141m'; mark="●"; name="Copilot CLI" ;;
+*) agent=cursor; c=$'\e[38;5;252m'; mark="⬢"; name="Cursor Agent" ;;
+esac
+
+json() {
+  local text=${1//\\/\\\\}
+  text=${text//$'\n'/\\n}
+  printf '"%s"' "${text//\"/\\\"}"
+}
+
+# Every stand-in reports in the Claude Code hook format, which the daemon knows best.
+hook() {
+  printf '{"hook_event_name":%s,"cwd":%s%s}' "$(json "$1")" "$(json "$PWD")" "${2:-}" |
+    natamux hook claude-code >/dev/null 2>&1 || true
+}
+
+pause() { sleep "$(((RANDOM % 10 + 12) * pace / 100)).$(((RANDOM % 10)))"; }
+
+tool() {
+  local verb=$1 what=$2 key=${3:-file_path}
+  hook PreToolUse ",\"tool_name\":$(json "$verb"),\"tool_input\":{$(json "$key"):$(json "$what")}"
+  printf '%s%s%s %s%s%s %s\n' "$c" "$mark" "$off" "$bold" "$verb" "$off" "${what#"$PWD"/}"
+}
+
+say() { printf '%s\n\n' "$1"; }
+
+banner() {
+  local where="${NATAMUX_TASK_ID:-}"
+  printf '%s%s %s%s  %s%s%s\n' "$c" "$mark" "$bold$name" "$off" "$dim" "$where · $(git branch --show-current 2>/dev/null)" "$off"
+  printf '%s%s%s\n\n' "$dim" "────────────────────────────────────────────────────" "$off"
+}
+
+files() { git ls-files 'src/*' 2>/dev/null | head -n 6; }
+some_file() { local list; mapfile -t list < <(files); printf '%s' "${list[RANDOM % ${#list[@]}]:-README.md}"; }
+
+read_prompt() {
+  local line text
+  IFS= read -r line || return 1
+  text=$line
+  while IFS= read -r -t 0.5 line; do text+=$'\n'$line; done
+  text=${text//$'\e[200~'/}
+  text=${text//$'\e[201~'/}
+  printf '%s' "${text//$'\r'/}"
+}
+
+write_sections() {
+  local file=$1 sections=$2
+  mkdir -p "$(dirname "$file")"
+  local IFS=','
+  read -r -a names <<<"$sections"
+  unset IFS
+  {
+    printf '# %s\n\n' "$(basename "$file" .md)"
+    for name in "${names[@]}"; do
+      name=${name# }; name=${name% }
+      printf '## %s\n\n' "$name"
+      case "$name" in
+      Cases) printf '### An empty cart has a total of 0\n\n### A coupon cannot make the total negative\n\n### Prices are rounded once, at the end\n\n' ;;
+      *) printf -- '- %s for this task.\n\n' "$name" ;;
+      esac
+    done
+  } >"$file"
+  tool Write "$PWD/$file"
+}
+
+change_code() {
+  local commit=$1 file
+  file=$(some_file)
+  tool Read "$PWD/$file"; pause
+  mkdir -p src test
+  local name="change_$(date +%s)"
+  printf '\nexport const %s = (value: number) => Math.round(value * 100) / 100\n' "$name" >>"src/${file##*/}" 2>/dev/null ||
+    printf 'export const %s = 1\n' "$name" >"src/$name.ts"
+  printf "import { test } from 'node:test'\ntest('%s', () => {})\n" "$name" >"test/$name.test.ts"
+  tool Edit "$PWD/src/${file##*/}"
+  printf '  %s+12 lines%s %s-3 lines%s\n' "$green" "$off" "$red" "$off"; pause
+  tool Bash "pnpm test" command
+  printf '  %s✓ %s passed%s\n\n' "$green" "$((40 + RANDOM % 30))" "$off"
+  if [ "$commit" = yes ]; then
+    # The daemon reads git at the same time, so the index can be locked for a moment.
+    for _ in 1 2 3 4 5; do
+      git add -A src test 2>>/tmp/standin.log &&
+        git commit -q -m "$(title_of "$current" | cut -c1-60)" 2>>/tmp/standin.log && break
+      sleep 1
+    done
+    tool Bash "git commit -m \"$(title_of "$current" | cut -c1-40)…\"" command
+  fi
+}
+
+title_of() { local first=${1%%$'\n'*}; printf '%s' "${first#Task: }"; }
+
+review() {
+  local file=$1 count_file
+  count_file=".natamux-task/.reviews-$(basename "$file" .md)"
+  local count; count=$(cat "$count_file" 2>/dev/null || echo 0)
+  count=$((count + 1)); echo "$count" >"$count_file"
+  tool Bash "git diff main...HEAD --stat" command; pause
+  tool Read "$PWD/$(some_file)"; pause
+  if [ "$count" -eq 1 ] && [[ $(title_of "$current") != *"[clean]"* ]] && [ ! -e "$ctl.clean" ] && [[ $current == *"natamux stage back"* ]]; then
+    # <task>.finding holds a finding that fits the task; the default fits the coupon bug.
+    local finding; finding=$(cat "$ctl.finding" 2>/dev/null || echo "src/cart.ts: a coupon larger than the total makes the total negative. Clamp it at 0.")
+    printf '# review\n\n## Findings\n\n- %s\n' "$finding" >"$file"
+    tool Write "$PWD/$file"
+    printf '  %s✗ 1 problem must be fixed%s\n\n' "$red" "$off"
+    tool Bash "natamux stage back \$NATAMUX_TASK_ID --reason \"…\"" command
+    natamux stage back "${NATAMUX_TASK_ID:-}" --reason "$finding" >/dev/null 2>&1
+    say "Sent back to Implement with 1 finding."
+    return 1
+  fi
+  printf '# review\n\n## Findings\n\nNone\n' >"$file"
+  tool Write "$PWD/$file"
+  printf '  %s✓ No problems found%s\n\n' "$green" "$off"
+  return 0
+}
+
+do_stage() {
+  current=$1
+  printf '%s %s %s T%s: %s\n' "$(date +%T)" "$me" "${NATAMUX_TASK_ID:-}" "${NATAMUX_TERMINAL:-}" "${current//$'\n'/ | }" >>/tmp/standin.log
+  local title; title=$(title_of "$current")
+  printf '\n%s>%s %s\n\n' "$bold" "$off" "$(printf '%s' "$current" | head -c 220 | tr '\n' ' ')…"
+  hook UserPromptSubmit
+  pause
+  if { [[ $title == *"[ask]"* ]] || [ -e "$ctl.ask" ]; } && [ ! -e .natamux-task/.asked ]; then
+    mkdir -p .natamux-task && : >.natamux-task/.asked
+    local question="Should a coupon apply before or after tax?"
+    printf '%s?%s %s\n' "$yellow" "$off" "$question"
+    hook Notification ",\"notification_type\":\"permission_prompt\",\"message\":$(json "$question")"
+    local answer; answer=$(read_prompt)
+    hook UserPromptSubmit
+    say "Got it: $answer"
+  fi
+  local done=yes
+  if [[ $current == *"The checks of this stage failed"* ]]; then
+    git add -A >/dev/null 2>&1 && git commit -q -m "Commit the rest" >/dev/null 2>&1
+    tool Bash "git commit -m \"Commit the rest\"" command
+  elif [[ $current =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ a\ Findings\ section ]]; then
+    review "${BASH_REMATCH[1]}" || done=no
+  elif [[ $current =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ these\ sections:\ ([^.]+)\. ]]; then
+    local out=${BASH_REMATCH[1]} secs=${BASH_REMATCH[2]}
+    tool Read "$PWD/.natamux-task/context.md"; pause
+    tool Read "$PWD/$(some_file)"; pause
+    write_sections "$out" "$secs"
+  elif [[ $current =~ Write\ (\.natamux-task/[a-z.-]+\.md)\ with\ an?\ ([A-Z][a-z]+)\ section ]]; then
+    local out=${BASH_REMATCH[1]} sec=${BASH_REMATCH[2]}
+    tool Read "$PWD/.natamux-task/spec.md"; pause
+    write_sections "$out" "$sec"
+  else
+    local commit=no
+    [[ $current == *"Commit your work"* ]] && commit=yes
+    change_code "$commit"
+  fi
+  [ "$done" = yes ] || { hook Stop; return; }
+  say "Done with this stage."
+  tool Bash "natamux done" command
+  natamux done >/dev/null 2>&1
+  hook Stop
+}
+
+# Raw agents do not echo what is pasted; clear the launch line too.
+stty -echo 2>/dev/null
+trap 'stty echo 2>/dev/null' EXIT
+printf '\e[H\e[2J\e[3J'
+banner
+if [ -z "$prompt" ]; then
+  # Resumed after a restart: wait for the next prompt.
+  printf '%s(waiting for the next prompt)%s\n' "$dim" "$off"
+  prompt=$(read_prompt) || exit 0
+fi
+
+trap 'exit 0' HUP TERM
+case "$prompt" in
+loop:*)
+  current=${prompt#loop:}
+  printf '%s>%s %s\n\n' "$bold" "$off" "${current# }"
+  hook UserPromptSubmit
+  while true; do change_code no; pause; done
+  ;;
+ask:*)
+  current=${prompt#ask:}
+  printf '%s>%s %s\n\n' "$bold" "$off" "${current# }"
+  hook UserPromptSubmit
+  change_code no
+  question="Keep the old ticket format for one release, or drop it now?"
+  printf '%s?%s %s\n' "$yellow" "$off" "$question"
+  hook Notification ",\"notification_type\":\"permission_prompt\",\"message\":$(json "$question")"
+  answer=$(read_prompt)
+  hook UserPromptSubmit
+  say "Got it: $answer"
+  change_code no
+  hook Stop
+  ;;
+esac
+
+next=$prompt
+while true; do
+  do_stage "$next"
+  printf '%s(waiting for the next prompt)%s\n' "$dim" "$off"
+  next=$(read_prompt) || exit 0
+  [ -n "$next" ] || exit 0
+done

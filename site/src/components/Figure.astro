@@ -1,0 +1,90 @@
+---
+// A dashboard capture for the docs, in a dark and a light version. The page shows the one that
+// matches the theme (docs.css hides the other, and lazy loading skips a hidden image).
+// A still is `<src>-dark.webp` and `<src>-light.webp`. A video is `<src>-<theme>.mp4` with the
+// poster `<src>-<theme>.webp`.
+interface Props {
+  src: string
+  alt: string
+  caption?: string
+  video?: boolean
+  width?: number
+  height?: number
+}
+
+const { src, alt, caption, video = false, width = 1600, height = 1000 } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+const path = `${base}${src}`
+const themes = ['dark', 'light'] as const
+---
+
+<figure class="shot">
+  {
+    themes.map((theme) =>
+      video ? (
+        <video
+          class={`shot-${theme}`}
+          data-clip
+          muted
+          loop
+          playsinline
+          preload="none"
+          poster={`${path}-${theme}.webp`}
+          width={width}
+          height={height}
+          aria-label={alt}
+          tabindex="0"
+        >
+          <source src={`${path}-${theme}.mp4`} type="video/mp4" />
+        </video>
+      ) : (
+        <img
+          class={`shot-${theme}`}
+          src={`${path}-${theme}.webp`}
+          alt={alt}
+          width={width}
+          height={height}
+          loading="lazy"
+          decoding="async"
+        />
+      )
+    )
+  }
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script>
+  // Play a clip while it is on screen and visible in the current theme. With reduced motion, show
+  // the poster and the controls instead.
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const clips = document.querySelectorAll<HTMLVideoElement>('video[data-clip]')
+  const shown = (clip: HTMLVideoElement) => clip.offsetParent !== null
+
+  if (still) {
+    clips.forEach((clip) => {
+      clip.controls = true
+    })
+  } else {
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(({ target, isIntersecting }) => {
+          const clip = target as HTMLVideoElement
+          if (isIntersecting && shown(clip)) {
+            clip.play().catch(() => {})
+          } else {
+            clip.pause()
+          }
+        })
+      },
+      { threshold: 0.5 },
+    )
+    clips.forEach((clip) => {
+      watcher.observe(clip)
+      const controls = () => {
+        clip.controls = true
+      }
+      clip.addEventListener('mouseenter', controls)
+      clip.addEventListener('focus', controls)
+    })
+  }
+</script>

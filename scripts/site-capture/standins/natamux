@@ -1,0 +1,69 @@
+#!/usr/local/bin/node
+// A small stand-in for the `natamux` command, for demo recordings in the e2e images (they have no
+// CLI). Supports: hook <agent> [event], done [--stage s], stage <approve|back|skip|pass|fail|start> <id> [--to s] [--reason r] [--stage s].
+const env = process.env
+const url = (env.NATAMUX_URL || 'http://127.0.0.1:4317').replace(/\/+$/, '')
+const token = (env.NATAMUX_TOKEN || '').trim()
+const task = (env.NATAMUX_TASK_ID || '').trim()
+const terminal = (env.NATAMUX_TERMINAL || '').trim()
+const [cmd, ...rest] = process.argv.slice(2)
+
+function flag(name) {
+  const at = rest.indexOf(`--${name}`)
+  return at === -1 ? undefined : rest[at + 1]
+}
+
+async function call(path, body) {
+  if (!token) return
+  const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
+  if (task) headers['X-Natamux-Task'] = task
+  if (terminal) headers['X-Natamux-Terminal'] = terminal
+  try {
+    const res = await fetch(url + path, {
+      method: 'POST',
+      headers,
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (env.NATAMUX_DEBUG) console.error(`${path}: ${res.status} ${await res.text()}`)
+  } catch (error) {
+    if (env.NATAMUX_DEBUG) console.error(`${path}: ${error}`)
+  }
+}
+
+async function stdin() {
+  let text = ''
+  for await (const chunk of process.stdin) text += chunk
+  return text
+}
+
+async function main() {
+  if (cmd === 'hook') {
+    const [agent, event] = rest
+    const body = await stdin()
+    if (body.trim()) await call(`/hooks/${agent}${event ? `?event=${event}` : ''}`, body)
+    return
+  }
+  if (cmd === 'done') {
+    const stage = flag('stage')
+    await call(`/tasks/${task}/stage`, {
+      action: 'report',
+      ...(stage ? { stage } : {}),
+      ...(terminal ? { terminal } : {}),
+    })
+    console.log('Reported done; the checks run now.')
+    return
+  }
+  if (cmd === 'stage') {
+    const [action, id] = rest
+    const body = { action: action === 'back' ? 'reopen' : action }
+    if (terminal && id === task) body.terminal = terminal
+    for (const name of ['stage', 'to', 'reason']) {
+      if (flag(name) !== undefined) body[name] = flag(name)
+    }
+    await call(`/tasks/${id}/stage`, body)
+    console.log(`${id}: ${action}`)
+  }
+}
+
+main().then(() => process.exit(0))

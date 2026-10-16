@@ -26,14 +26,14 @@ To edit the file in the dashboard, open **Settings** in the menu of the project.
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `stages` | array of stages and groups | The [default pipeline](#default-pipeline) | The steps of every task, in order. At least one. |
+| `stages` | array of stages, groups and branches | The [default pipeline](#default-pipeline) | The steps of every task, in order. At least one. |
 | `context` | object | `{ "sources": [{ "type": "manual" }, { "type": "github-issue" }] }` | Where task context can come from. |
 | `tracker` | object | `{ "type": "github", "createIssue": "manual", "linkInPr": true }` | The issue tracker. |
 | `agents` | object | `{ "permissionMode": "auto" }` | How the agents that Natamux starts ask for permission. |
 
 ## `stages`
 
-An array of **steps**. A step is a stage, or a group of stages that run side by side.
+An array of **steps**. A step is a stage, a group of stages that run side by side, or a branch that splits the pipeline into paths.
 
 ### Stage
 
@@ -81,10 +81,76 @@ Details:
 | `name` | string | no | Display name, 1 to 60 characters. |
 | `parallel` | array of stages | yes | 2 to 4 stages that run at the same time. Only kinds `agent` and `manual`. |
 
+### Branch
+
+A branch splits the pipeline into 2 to 4 paths. A task takes the first path whose condition holds. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Same rules as a stage id. Unique, also against stage ids and path ids. |
+| `name` | string | no | Display name, 1 to 60 characters. |
+| `paths` | array of paths | yes | 2 to 4 paths, checked in order. |
+
+### Path
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Same rules as a stage id. Unique in the file. |
+| `name` | string | no | Display name, 1 to 60 characters. |
+| `when` | condition | no | What must hold to take the path. Leave it out for the **Otherwise** path. |
+| `not` | boolean | no | `true` takes the path when the condition does not hold. |
+| `stages` | array of stages | yes | At least one. The stages run one after another. A path holds stages only: no group and no branch. |
+
+### Condition
+
+The `type` of `when` picks the fields.
+
+| Type | Field | Required | Meaning |
+|---|---|---|---|
+| `output` | `file` | yes | A Markdown file name in the task's stage folder, such as `plan.md`. |
+| `output` | `section` | no | A heading. Only the lines under it count. |
+| `output` | `contains` | yes | The text to look for. The match ignores case. |
+| `command` | `run` | yes | A shell command. The condition holds when it exits with 0. |
+
+```json title=".natamux.json"
+{
+  "id": "after-plan",
+  "paths": [
+    {
+      "id": "small",
+      "when": { "type": "output", "file": "plan.md", "section": "Size", "contains": "small" },
+      "stages": [{ "id": "implement", "kind": "agent", "gate": "auto" }]
+    },
+    {
+      "id": "pr-review",
+      "when": { "type": "command", "run": "test -f .no-review" },
+      "not": true,
+      "stages": [{ "id": "review", "kind": "review", "gate": "manual" }]
+    }
+  ]
+}
+```
+
+- The check happens when the stage before the branch ends. For a stage that waits for approval, that is when you approve.
+- A `command` runs in the worktree with the shell of your system, and stops after 10 minutes. A command that fails to start or times out means the condition does not hold.
+- A missing file means the condition does not hold.
+- Only the last path can leave out `when`. An earlier path without `when` is an error.
+- No path holds and there is no Otherwise path: the task skips the branch.
+
+### Rules for a branch
+
+- A branch has 2 to 4 paths, and each path has at least one stage.
+- A branch cannot be the first step.
+- A branch cannot come right after another branch. Put a stage between them.
+- A path cannot hold a `context` or `release` stage, a group or another branch.
+- Every stage id and path id is used once in the whole file.
+- A path with all its stages off is left out of new tasks. If only one path is left and it has a condition, the file is an error: turn on a stage in another path, or remove the branch. If only the Otherwise path is left, its stages run as plain steps.
+- A path keeps the same rules for stages as a plain step: `ownShell`, `agent`, `args`, `ci`, `endShell` and `workflow`.
+
 ### Rules for the pipeline
 
 - At least one step.
-- Every id is used once, counting the stages inside groups.
+- Every id is used once, counting the stages inside groups and paths.
 - A `context` stage must be the first step. There is at most one.
 - A `release` stage must be the last step. There is at most one.
 - A `context` or `release` stage cannot be inside a group.
@@ -197,6 +263,23 @@ The stage starts in every case. Each agent page says where it finds skills, for 
   ]
 }
 ```
+
+## Limits
+
+| What | Limit |
+|---|---|
+| Stages in a group | 2 to 4. Only `agent` and `manual` stages. |
+| Paths in a branch | 2 to 4. |
+| Stage id, path id, group id | Up to 40 characters, lower case words joined by `-`. |
+| Display name | 1 to 60 characters. |
+| Sends back by a review agent from one stage | 2 per task. The third time the stage waits as **Needs input**. A person can send back as often as they like. |
+| Sends back by CI from one stage | 2 per task, shared with the review agent. The third red run waits for you. |
+| Wait for a CI run to start | 3 minutes. |
+| Wait for a CI run to finish | 30 minutes. |
+| A `check` command, and a `command` of a condition | 10 minutes each. |
+| Shells per task | 6. Natamux runs 30 shells in all. |
+| Shell for commands | `sh -c`, or `cmd.exe` on Windows. |
+| Attachments per task | 20 files, 20 MB each, 50 MB in all. |
 
 ## `context`
 

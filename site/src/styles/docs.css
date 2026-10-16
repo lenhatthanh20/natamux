@@ -144,3 +144,18 @@ header.header::after {
   font-family: var(--sl-font-mono);
   font-size: var(--sl-text-xs);
 }
+
+/* Keys in text: kbd. */
+.sl-markdown-content kbd {
+  display: inline-block;
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--sl-color-gray-5);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+  font-family: var(--sl-font-mono);
+  font-size: 0.82em;
+  line-height: 1.5;
+}
+
