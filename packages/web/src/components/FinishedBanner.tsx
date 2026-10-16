@@ -73,7 +73,7 @@ export function FinishedBanner({
             disabled={busy && pending !== 'pull-request'}
             onClick={onCreatePullRequest}
           >
-            Create pull request
+            Create PR
           </Button>
         )
       case 'open-pull-request':

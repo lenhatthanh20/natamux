@@ -128,20 +128,15 @@ describe('pushButton', () => {
 })
 
 describe('pullRequestButton', () => {
-  it('uses the short label in a narrow main area', () => {
-    expect(pullRequestButton('b', 1, 'main', false).label).toBe('Create pull request')
-    expect(pullRequestButton('b', 1, 'main', true).label).toBe('Open PR')
+  it('says Create PR', () => {
+    expect(pullRequestButton('b', 1, 'main').label).toBe('Create PR')
   })
 
   it('asks for a push first when there is nothing ahead, and for a branch', () => {
-    expect(pullRequestButton('b', 0, 'main', false).reason).toBe(
-      'Push first: 0 commits ahead of main',
-    )
-    expect(pullRequestButton(null, null, null, false).reason).toBe('This task has no branch yet')
-    expect(pullRequestButton('b', null, null, false).reason).toBeUndefined()
-    expect(pullRequestButton('b', 0, 'main', false, 4).reason).toBe(
-      'Commit your 4 changed files first',
-    )
+    expect(pullRequestButton('b', 0, 'main').reason).toBe('Push first: 0 commits ahead of main')
+    expect(pullRequestButton(null, null, null).reason).toBe('This task has no branch yet')
+    expect(pullRequestButton('b', null, null).reason).toBeUndefined()
+    expect(pullRequestButton('b', 0, 'main', 4).reason).toBe('Commit your 4 changed files first')
   })
 })
 

@@ -116,7 +116,7 @@ Open the **Changes** tab. It lists the changed files and shows a diff for each o
 
 1. In the **Changes** tab, write a commit message, or click **Generate** to let the agent draft one. Then click **Commit all**. It commits every change, new files included.
 2. Click **Push** in the task header. The button shows how many commits are ahead, for example **Push ↑2**.
-3. Click **Create pull request**. It needs the `gh` command, logged in. When the pull request exists, the button becomes **Open pull request**.
+3. Click **Create PR**. It needs the `gh` command, logged in. When the pull request exists, the button becomes **Open pull request**.
 
 Natamux never pushes or merges unless you click the button or run the command.
 

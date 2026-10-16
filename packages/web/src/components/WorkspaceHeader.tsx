@@ -18,7 +18,8 @@ import { Menu, type MenuItem } from './ui/Menu'
 import { MiddleTruncate } from './ui/MiddleTruncate'
 import { button, ICON } from './ui/styles'
 
-// Under this width of the main area, the pull request button gets its short label.
+// Under this width of the main area, the branch chip hides and the pull request link gets its
+// short label.
 const COMPACT_BELOW = 900
 
 type WorkspaceHeaderProps = {
@@ -56,7 +57,7 @@ export function WorkspaceHeader({
   // Unmeasured counts as wide, so nothing flickers in the first frame.
   const compact = width !== null && width < COMPACT_BELOW
   const push = pushButton(task.branch, pushStatus, uncommitted)
-  const pullRequest = pullRequestButton(task.branch, ahead, base, compact, uncommitted)
+  const pullRequest = pullRequestButton(task.branch, ahead, base, uncommitted)
   const busy = pending !== null
   // With nothing to push, the next step is to commit, so that button takes Push's place.
   const commitFirst = needsCommit(pushStatus, uncommitted)
@@ -79,7 +80,7 @@ export function WorkspaceHeader({
         },
     task.pr === null
       ? {
-          label: 'Create pull request',
+          label: 'Create PR',
           icon: GitPullRequest,
           disabled: pullRequest.reason !== undefined || busy,
           hint: pullRequest.reason,
@@ -148,7 +149,7 @@ export function WorkspaceHeader({
           busy={pending === 'pull-request'}
           disabled={busy && pending !== 'pull-request'}
           disabledReason={pullRequest.reason}
-          aria-label="Create pull request"
+          aria-label="Create PR"
           onClick={onPullRequest}
         >
           {pullRequest.label}

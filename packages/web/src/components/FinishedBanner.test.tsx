@@ -84,6 +84,17 @@ describe('FinishedBanner', () => {
     expect(screen.getByRole('button', { name: 'Remove workspace' })).toBeTruthy()
   })
 
+  it('creates a pull request for a branch that has none', async () => {
+    const facts: GitFacts = {
+      uncommitted: 0,
+      graph: { ahead: 2, base: 'main', push: { remote: 'tracked', unpushed: 0, unpulled: 0 } },
+    }
+    const { onCreatePullRequest } = banner({ task: { ...task, pr: null, prStatus: null }, facts })
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Create PR' }))
+    expect(onCreatePullRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('links to a pull request that is still open', () => {
     banner({ task: { ...task, prStatus: { state: 'open', checks: 'passing' } } })
 

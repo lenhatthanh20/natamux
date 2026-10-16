@@ -24,7 +24,7 @@ These features need `gh` signed in:
 | Import issues as tasks | **Import issues** |
 | Read an issue as task context | Context source `github-issue` |
 | Open an issue for a task | **Create issue**, or automatically |
-| Create a pull request | **Create pull request** |
+| Create a pull request | **Create PR** |
 | Pull request status and checks | Details panel |
 
 **Push** uses git, not `gh` directly. For `github.com` it asks `gh` for credentials when you have no other git credential helper set up.
@@ -94,9 +94,9 @@ If opening an issue fails in the background, the task stays without an issue and
 
 ## Pull requests
 
-**Create pull request** in the workspace header pushes the branch and opens a pull request. See [Changes and history](/docs/guides/changes-and-history/).
+**Create PR** in the workspace header pushes the branch and opens a pull request. See [Changes and history](/docs/guides/changes-and-history/).
 
-A pull request that the agent or you open another way, such as with `gh pr create`, is found too. Once origin has the task branch, Natamux looks for an open or merged pull request from that branch when the agent stops, on each status check, and on **Check now**. It then links it to the task, as if **Create pull request** had opened it. A closed pull request is not linked.
+A pull request that the agent or you open another way, such as with `gh pr create`, is found too. Once origin has the task branch, Natamux looks for an open or merged pull request from that branch when the agent stops, on each status check, and on **Check now**. It then links it to the task, as if **Create PR** had opened it. A closed pull request is not linked.
 
 When the task is linked to an issue and `tracker.linkInPr` is true (the default), the pull request body ends with `Closes #N`. GitHub then closes the issue when the pull request merges. For an issue of another tracker, the line is `Tracked in KEY: address`.
 
