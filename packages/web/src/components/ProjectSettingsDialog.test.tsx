@@ -135,8 +135,8 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    // Name, approval, workflow, end the shell, and the prompt.
-    expect(within(spec).getAllByText('Default')).toHaveLength(5)
+    // Name, approval, workflow, and the prompt. Spec runs in Shell 1, so it cannot end its shell.
+    expect(within(spec).getAllByText('Default')).toHaveLength(4)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
   })
@@ -1626,35 +1626,137 @@ describe('ProjectSettingsDialog, end the shell', () => {
   const LABEL = 'End the agent and close its shell when the stage is done'
   const endBox = (name: string) => within(details(name)).queryByRole('checkbox', { name: LABEL })
 
-  it('offers it, off, on stages that start an agent or a command only', async () => {
+  const NOTE =
+    "This stage runs in Shell 1, which cannot be closed. Shell 1 keeps the task's agent and its session."
+  const note = (name: string) => within(details(name)).queryByText(NOTE)
+
+  it('offers it, off, only on stages that start an agent or a command outside Shell 1', async () => {
     const { user } = open()
 
-    for (const name of ['Context', 'Spec', 'Implement', 'Automated tests']) {
+    for (const name of ['Test spec', 'Review']) {
       await user.click(await row(name))
       expect(endBox(name)).toHaveProperty('checked', false)
+      expect(note(name)).toBeNull()
+    }
+    for (const name of ['Context', 'Spec', 'Plan', 'Implement', 'Automated tests']) {
+      await user.click(await row(name))
+      expect(endBox(name)).toBeNull()
+      expect(note(name)).toBeTruthy()
     }
     await user.click(await row('Release'))
     expect(endBox('Release')).toBeNull()
+    expect(note('Release')).toBeNull()
+  })
+
+  it('offers it when a stage of your own leaves Shell 1 for its own agent', async () => {
+    const file = {
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'write-docs', name: 'Write docs', kind: 'agent', gate: 'auto' },
+      ],
+    }
+    const { user } = open({ loaded: { found: true, text: JSON.stringify(file), version: 'v1' } })
+    const agent = () => within(details('Write docs')).getByRole('combobox', { name: 'Agent' })
+
+    await user.click(await row('Write docs'))
+    expect(endBox('Write docs')).toBeNull()
+    expect(note('Write docs')).toBeTruthy()
+
+    await user.selectOptions(agent(), 'codex')
+    expect(endBox('Write docs')).toHaveProperty('checked', false)
+    expect(note('Write docs')).toBeNull()
+
+    await user.selectOptions(agent(), '')
+    expect(endBox('Write docs')).toBeNull()
+    expect(note('Write docs')).toBeTruthy()
+  })
+
+  it('offers it on a lane of a group that is not the code stage, and not after it runs alone', async () => {
+    const file = {
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'write-docs', name: 'Write docs', kind: 'agent', gate: 'auto', output: 'docs.md' },
+      ],
+    }
+    const { user } = open({ loaded: { found: true, text: JSON.stringify(file), version: 'v1' } })
+    const actions = async () =>
+      user.click(within(await stageList()).getByRole('button', { name: 'Actions for Write docs' }))
+
+    await user.click(await row('Write docs'))
+    expect(endBox('Write docs')).toBeNull()
+    expect(note('Write docs')).toBeTruthy()
+
+    // Implement keeps Shell 1 as the code stage of the group; Write docs gets Shell 2.
+    await actions()
+    await user.click(screen.getByRole('menuitem', { name: 'Run alongside the stage above' }))
+    await user.click(await row('Write docs'))
+    expect(endBox('Write docs')).toHaveProperty('checked', false)
+    expect(note('Write docs')).toBeNull()
+
+    await actions()
+    await user.click(screen.getByRole('menuitem', { name: 'Run on its own' }))
+    await user.click(await row('Write docs'))
+    expect(endBox('Write docs')).toBeNull()
+    expect(note('Write docs')).toBeTruthy()
+  })
+
+  it('offers it on a testing stage with a command, which runs in a shell of its own', async () => {
+    const file = {
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'testing', kind: 'testing', gate: 'auto', command: 'make test' },
+      ],
+    }
+    const { user } = open({ loaded: { found: true, text: JSON.stringify(file), version: 'v1' } })
+
+    await user.click(await row('Automated tests'))
+    expect(endBox('Automated tests')).toHaveProperty('checked', false)
+    expect(note('Automated tests')).toBeNull()
   })
 
   it('saves a stage that ends its shell, and puts the default back with Use default', async () => {
     const { save, user } = open()
 
-    await user.click(await row('Spec'))
-    await user.click(endBox('Spec') as HTMLElement)
-    const option = within(details('Spec')).getByRole('group', { name: LABEL })
+    await user.click(await row('Test spec'))
+    await user.click(endBox('Test spec') as HTMLElement)
+    const option = within(details('Test spec')).getByRole('group', { name: LABEL })
     expect(within(option).getByText('Changed')).toBeTruthy()
-    await user.click(await row('Plan'))
-    await user.click(endBox('Plan') as HTMLElement)
-    const planOption = within(details('Plan')).getByRole('group', { name: LABEL })
-    await user.click(within(planOption).getByRole('button', { name: 'Use default' }))
-    expect(endBox('Plan')).toHaveProperty('checked', false)
+    await user.click(await row('Review'))
+    await user.click(endBox('Review') as HTMLElement)
+    const reviewOption = within(details('Review')).getByRole('group', { name: LABEL })
+    await user.click(within(reviewOption).getByRole('button', { name: 'Use default' }))
+    expect(endBox('Review')).toHaveProperty('checked', false)
 
     await user.click(saveButton())
     await waitFor(() => expect(save).toHaveBeenCalled())
     const steps = savedStages(save)
-    expect(stageIn(steps, 'spec')?.endShell).toBe(true)
-    expect(stageIn(steps, 'plan')).not.toHaveProperty('endShell')
+    expect(stageIn(steps, 'test-spec')?.endShell).toBe(true)
+    expect(stageIn(steps, 'agent-review')).not.toHaveProperty('endShell')
+  })
+
+  it('loads and saves a file that sets it on a stage in Shell 1, which keeps the shell', async () => {
+    const file = {
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto', endShell: true },
+        { id: 'write-docs', name: 'Write docs', kind: 'agent', gate: 'auto' },
+      ],
+    }
+    const { save, user } = open({
+      loaded: { found: true, text: JSON.stringify(file), version: 'v1' },
+    })
+
+    await user.click(await row('Implement'))
+    expect(endBox('Implement')).toBeNull()
+    expect(note('Implement')).toBeTruthy()
+    await user.click(await row('Write docs'))
+    await user.selectOptions(
+      within(details('Write docs')).getByRole('combobox', { name: 'Agent' }),
+      'codex',
+    )
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'implement')?.endShell).toBe(true)
   })
 
   it('shows endShell on a review stage as a problem, and blocks Save', async () => {

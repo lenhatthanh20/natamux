@@ -10,6 +10,7 @@ import {
   DEFAULT_PIPELINE,
   defaultPrompt,
   describeCondition,
+  endsShell1,
   enterStep,
   findStep,
   firstPosition,
@@ -690,6 +691,53 @@ describe('a stage in its own shell', () => {
     expect(issues({ kind: 'agent', output: 'x.md' })).toBeUndefined()
     expect(issues({ kind: 'agent' })?.[0]?.message).toBe(message('x'))
     expect(issues({ kind: 'review' })?.[0]?.message).toBe(message('x'))
+  })
+})
+
+describe('a stage that ends its shell', () => {
+  const ends = (steps: readonly Step[], id: string) => {
+    const stage = steps.flatMap(stagesOf).find((each) => each.id === id)
+    if (stage === undefined) {
+      throw new Error(`No stage ${id}`)
+    }
+    return endsShell1(steps, stage)
+  }
+
+  it('would end Shell 1 for the stages of the default pipeline that run there', () => {
+    const ids = ['context', 'spec', 'plan', 'implement', 'test-spec', 'testing', 'agent-review']
+    expect(ids.map((id) => ends(DEFAULT_PIPELINE, id))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+    ])
+  })
+
+  it('ends a shell of its own for a testing stage with a command, or a stage with its own agent', () => {
+    const steps: Step[] = [
+      { id: 'testing', kind: 'testing', gate: 'auto', command: 'pnpm test' },
+      { id: 'write-docs', kind: 'agent', gate: 'auto', args: '--model opus' },
+      { id: 'notes', kind: 'agent', gate: 'auto' },
+    ]
+    expect(steps.map((step) => ends(steps, step.id))).toEqual([false, false, true])
+  })
+
+  it('would end Shell 1 for a stage in a path of a branch', () => {
+    const implement: Stage = { id: 'implement', kind: 'agent', gate: 'auto' }
+    const docs: Stage = { id: 'docs', kind: 'agent', gate: 'auto' }
+    const steps: Step[] = [
+      {
+        id: 'after-plan',
+        paths: [
+          { id: 'code', when: { type: 'command', run: 'true' }, stages: [implement] },
+          { id: 'text', stages: [docs] },
+        ],
+      },
+    ]
+    expect(ends(steps, 'implement')).toBe(true)
   })
 })
 

@@ -9,6 +9,7 @@ import {
   ENDED_SHELL_LINES,
   type EndedShell,
   type EventType,
+  endsShell1,
   entersBranch,
   findStep,
   isBranch,
@@ -478,6 +479,9 @@ export class StageRunner {
     const step = stepToRun(steps, stageId)
     const stage = step && stagesOf(step).find((each) => each.id === stageId)
     if (step === undefined || stage?.endShell !== true || !canEndShell(stage)) {
+      return
+    }
+    if (endsShell1(steps, stage)) {
       return
     }
     // Still in the step and not done: a stage that waits for approval, or a lane still at work.
