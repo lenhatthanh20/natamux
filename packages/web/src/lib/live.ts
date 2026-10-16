@@ -137,7 +137,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
       activity = withTaskActivity(activity, message.taskId, message.lines, message.latest)
     } else if (message.kind === 'shells.changed') {
       add(['task-shells', message.taskId])
-      // A pane left for a shell the daemon closed would attach again and start a new shell.
+      // A pane left for a shell the daemon closed would attach again and start a new shell. A list
+      // not on screen is only marked stale: ShellPanes reads it again before it attaches.
       add(['terminals', message.taskId])
       // A finished task saves the last screens of its shells before they end.
       add(['ended-shells', message.taskId])

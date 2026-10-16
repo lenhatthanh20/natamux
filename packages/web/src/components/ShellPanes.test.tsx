@@ -81,9 +81,16 @@ vi.mock('./TerminalView', () => ({
   },
 }))
 
+// The stand-in never puts a terminal in the cache. A test of a task switch sets `all`, as the
+// terminals of the task wait hidden in the cache in the app.
+const cached = vi.hoisted(() => ({ all: false }))
 vi.mock('../lib/terminal-cache', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/terminal-cache')>()
-  return { ...actual, disposeTerminal: vi.fn(actual.disposeTerminal) }
+  return {
+    ...actual,
+    disposeTerminal: vi.fn(actual.disposeTerminal),
+    hasTerminal: (key: string) => cached.all || actual.hasTerminal(key),
+  }
 })
 
 const layout = vi.hoisted(() => ({ phone: false }))
@@ -92,7 +99,10 @@ vi.mock('../hooks/useLayoutMode', async (importOriginal) => ({
   usePhone: () => layout.phone,
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  cached.all = false
+})
 
 type ShellTask = Pick<Task, 'id' | 'state' | 'stage' | 'lanes' | 'agent'>
 
@@ -920,6 +930,99 @@ describe('ShellPanes stage shells', () => {
     expect(connects('1')).toHaveLength(1)
   })
 
+  // The user was on another task when the stage ended Shell 2. The cached list still has it, and
+  // a pane for it would attach and start a new shell.
+  it('does not start again a shell the daemon closed while the task was not shown', async () => {
+    const { client, state, loadTerminals, connects, view } = daemon(['1', '2'], {
+      '1': IMPLEMENT,
+      '2': TEST_SPEC,
+    })
+    render(view(building))
+    await agentShown('Shell 2')
+    cleanup()
+
+    // Its terminal left the cache on exit. The list is not shown, so it is not read again.
+    state.terminals = ['1']
+    state.lanes = { '1': IMPLEMENT }
+    act(() => applyLiveMessages(client, [{ kind: 'shells.changed', taskId: 'T-0001' }]))
+    expect(client.getQueryData(['terminals', 'T-0001'])).toEqual(['1', '2'])
+
+    const reads = loadTerminals.mock.calls.length
+    render(view({ ...building, lanes: { implement: 'running', 'test-spec': 'done' } }))
+    await waitFor(() => expect(loadTerminals.mock.calls.length).toBeGreaterThan(reads))
+    await waitFor(() => expect(client.isFetching({ queryKey: ['terminals', 'T-0001'] })).toBe(0))
+    await agentShown('Shell 1')
+    await poll()
+    expect(shellNames()).toEqual(['Shell 1'])
+    expect(connects('2')).toHaveLength(1)
+    expect(connects('1')).toHaveLength(2)
+  })
+
+  it('shows the shells of a task shown again at once when their terminals are cached', async () => {
+    const { loadTerminals, connects, view } = daemon(['1', '2'], { '1': IMPLEMENT, '2': TEST_SPEC })
+    render(view(building))
+    await agentShown('Shell 2')
+    cleanup()
+
+    cached.all = true
+    const reads = loadTerminals.mock.calls.length
+    render(view(building))
+    // Before the list is read again.
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
+    await waitFor(() => expect(loadTerminals.mock.calls.length).toBeGreaterThan(reads))
+    expect(connects('2')).toHaveLength(2)
+  })
+
+  // The list read before this mount has Shell 6, and its terminal is not in the cache: it ended,
+  // was evicted, or comes back after a restart. Only the read on mount tells.
+  it.each([
+    ['a shell the daemon closed', ['1'], ['Shell 1']],
+    ['a shell that still runs', ['1', '6'], ['Shell 1', 'Shell 6']],
+  ])('waits for the late read on mount, then shows %s as listed', async (_, read, panes) => {
+    const { client, loadTerminals, connects, view } = daemon(['1', '6'], { '1': IMPLEMENT })
+    client.setQueryData(['terminals', 'T-0001'], ['1', '6'])
+    let answer: (names: string[]) => void = () => undefined
+    loadTerminals.mockImplementation(
+      () =>
+        new Promise<string[]>((resolve) => {
+          answer = resolve
+        }),
+    )
+    render(view(implementing))
+    await waitFor(() => expect(loadTerminals).toHaveBeenCalled())
+    expect(screen.queryAllByRole('region')).toEqual([])
+    expect(connects('6')).toHaveLength(0)
+
+    await act(async () => answer(read))
+    await waitFor(() => expect(shellNames()).toEqual(panes))
+    expect(connects('6')).toHaveLength(read.includes('6') ? 1 : 0)
+    expect(connects('1')).toHaveLength(1)
+  })
+
+  it('shows the grid when the read on mount fails', async () => {
+    const { client, loadTerminals, view } = daemon(['1', '6'], { '1': IMPLEMENT })
+    client.setQueryData(['terminals', 'T-0001'], ['1', '6'])
+    loadTerminals.mockRejectedValue(new Error('The daemon did not answer.'))
+    render(view(implementing))
+    await agentShown('Shell 1')
+    expect(shellNames()).toEqual(['Shell 1', 'Shell 6'])
+  })
+
+  it('shows a new shell at once while the read on mount is on its way', async () => {
+    const { client, loadTerminals, connects, view } = daemon(['1'], { '1': IMPLEMENT })
+    client.setQueryData(['terminals', 'T-0001'], ['1'])
+    loadTerminals.mockImplementation(() => new Promise<string[]>(() => {}))
+    const user = typist()
+    render(view(implementing))
+    const first = pane('Shell 1')
+
+    await user.click(newShell())
+    expect(pane('Shell 2')).toBeTruthy()
+    expect(pane('Shell 1')).toBe(first)
+    expect(connects('1')).toHaveLength(1)
+    expect(loadTerminals).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a hand-added shell once when a stage shell gets the same name', async () => {
     const { connects, view, startGroup } = daemon(['1'], { '1': IMPLEMENT })
     const user = typist()
@@ -1019,6 +1122,7 @@ describe('ShellPanes stage shells', () => {
     state.terminals = ['1', '2']
 
     cleanup()
+    cached.all = true
     render(view(implementing))
     expect(shellNames()).toEqual(['Shell 1', 'Shell 2'])
     // The list read again on mount has the shell too: it shows once.
@@ -1136,8 +1240,9 @@ describe('ShellPanes grid width', () => {
     return element.style.gridTemplateColumns
   }
 
-  // The view of a task switch: the shell list is in the cache already.
+  // The view of a task switch: the shell list and the terminals are in the cache already.
   function showShells(count: number) {
+    cached.all = true
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const terminals = Array.from({ length: count }, (_, index) => String(index + 1))
     client.setQueryData(['terminals', 'T-0001'], terminals)

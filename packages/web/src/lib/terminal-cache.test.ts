@@ -8,6 +8,7 @@ import {
   disposeAllTerminals,
   disposeTerminal,
   HOLDER_ID,
+  hasTerminal,
   KEEP_ALIVE_TERMINALS,
   resetTerminalCache,
   syncTaskTerminals,
@@ -222,6 +223,29 @@ describe('removing cached terminals', () => {
     const unknown = fakeSession()
     expect(() => discardTerminal(unknown)).not.toThrow()
     expect(unknown.disposed).toBe(0)
+  })
+})
+
+describe('hasTerminal', () => {
+  it('tells a live terminal, shown or hidden, from one that ended or never was', () => {
+    expect(hasTerminal('T-0001/2')).toBe(false)
+    const lease = acquireTerminal('T-0001/2', fakeSession)
+    expect(hasTerminal('T-0001/2')).toBe(true)
+    lease.release()
+    expect(hasTerminal('T-0001/2')).toBe(true)
+
+    // The shell ended while hidden, as when a stage ends it.
+    disposeTerminal('T-0001/2')
+    expect(hasTerminal('T-0001/2')).toBe(false)
+  })
+
+  it('does not count a terminal on screen whose shell ended', () => {
+    const session = fakeSession()
+    const lease = acquireTerminal('T-0001/2', () => session)
+    discardTerminal(session)
+    expect(hasTerminal('T-0001/2')).toBe(false)
+    lease.release()
+    expect(hasTerminal('T-0001/2')).toBe(false)
   })
 })
 
