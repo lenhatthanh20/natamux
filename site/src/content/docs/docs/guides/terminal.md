@@ -74,7 +74,7 @@ A pane keeps at most 10,000 lines and at least 1,000. When a pane gets wider, it
 
 ### Font and drawing
 
-Terminals draw with the GPU (WebGL), as native terminals do, and fall back to the browser's own drawing when WebGL is off. When you switch tasks, the shells fade in at their final size, so the programs in them do not redraw. Programs that draw a whole screen at once, such as Claude Code, do not flicker: Natamux waits for the end of each screen update (synchronized output). Emoji and other wide signs take two columns.
+Terminals draw with the GPU (WebGL), as native terminals do, and fall back to the browser's own drawing when WebGL is off. When you switch tasks, the shells fade in at their final size, so the programs in them do not redraw. When a pane changes size, for example after **New shell**, closing a shell, or a stage change that shows a banner, the pane keeps its frame, and the screen fades in once the program has drawn for the new size. Programs that draw a whole screen at once, such as Claude Code, do not flicker: Natamux waits for the end of each screen update (synchronized output). Emoji and other wide signs take two columns.
 
 To change the font, open the **Account** menu at the bottom right and click **Terminal font…**. Type a font family that is installed on your machine and a size in pixels. Leave a field empty to use the default.
 
