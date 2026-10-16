@@ -390,12 +390,14 @@ export function createTerminalSession(options: {
     }
   }
 
-  // The textarea stays visible, so it keeps the focus and typed keys are not lost.
+  // A catch-up hides with visibility; the textarea stays visible, so it keeps the focus and typed
+  // keys are queued, not lost. A cover uses opacity: the pane still takes a click, which focuses
+  // the terminal (a hidden element gets no click).
   const applyScreen = () => {
-    const hidden = covered || catchUpHidden
-    host.style.visibility = hidden ? 'hidden' : ''
+    host.style.visibility = catchUpHidden ? 'hidden' : ''
+    host.style.opacity = covered ? '0' : ''
     if (terminal.textarea !== undefined) {
-      terminal.textarea.style.visibility = hidden ? 'visible' : ''
+      terminal.textarea.style.visibility = catchUpHidden ? 'visible' : ''
     }
   }
   const hideScreen = () => {

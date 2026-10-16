@@ -51,11 +51,11 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - These resizes are local: `holdSize` keeps `onResize` from sending them. When the pane settles (`FIT_DELAY_MS`, 100 ms after the last change), `settle` fits (the columns catch up) and sends one resize. A hide or dispose before that sends nothing.
   - `onResize` sets the scrollback for the new width and, outside a local resize, sends the size.
   - Disposal closes the socket at once and frees xterm after `DISPOSE_DELAY_MS`, because xterm still has a frame queued.
-  - **Cover (T-0089).** A pane change that changes the cells (New shell, Close shell, a banner of a stage change, a panel) hides the screen in the `ResizeObserver` callback, before paint: `host` `visibility: hidden`, the textarea stays visible. No skeleton. The frame and its background stay.
+  - **Cover (T-0089).** A pane change that changes the cells (New shell, Close shell, a banner of a stage change, a panel) hides the screen in the `ResizeObserver` callback, before paint: `host` `opacity: 0`, not `visibility: hidden`, so a click in the pane still reaches xterm and focuses it (a hidden element gets no click; the `terminal-look` cursor E2E clicks right after New shell). No skeleton. The frame and its background stay.
     - At `settle`: a resize that went out while covered (`redrawWanted`) waits for the redraw: shown once the shell printed nothing for `REDRAW_QUIET_MS` (60 ms), at most `REDRAW_MAX_MS` (400 ms) after the resize. No resize (same cells, ended shell, catch-up): shown at once.
     - Shown with `hm-fade-in` on `host`, removed on its `animationend`, so a move to the holder and back does not fade again.
     - A change while covered keeps it covered; the wait starts again at the next `settle`.
-    - Cover (`covered`) and catch-up (`catchUpHidden`) are separate flags; `applyScreen` shows only when both are off.
+    - Cover (`covered`, opacity) and catch-up (`catchUpHidden`, visibility) are separate flags; `applyScreen` sets both.
     - `stopObserving` (`show`, `hide`, `dispose`) and a `settle` while off screen (`watchVisible`) end the cover without a fade.
   - The status strip ("Connecting.", "Reconnecting.", error) is drawn over the top of the screen, so the screen box does not change when the socket opens.
 - **Cache (web).**

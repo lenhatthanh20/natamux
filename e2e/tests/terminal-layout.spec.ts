@@ -58,7 +58,9 @@ async function sampleShell1(page: Page): Promise<void> {
       if (rowsElement && drawn instanceof HTMLElement && host) {
         frames.push({
           at: Math.round(performance.now() - start),
-          visible: getComputedStyle(rowsElement).visibility === 'visible',
+          // A cover sets opacity 0 on the host; a catch-up sets visibility.
+          visible:
+            getComputedStyle(rowsElement).visibility === 'visible' && host.style.opacity !== '0',
           size: `${rowsElement.children.length}x${drawn.offsetWidth}`,
           fade: host.classList.contains('hm-fade-in'),
         })
