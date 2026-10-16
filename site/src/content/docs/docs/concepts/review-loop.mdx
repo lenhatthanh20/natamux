@@ -151,6 +151,7 @@ Everything here is the default pipeline. In [project settings](/docs/guides/proj
 - turn **Test spec** or **Review** off, or turn **Wait for my approval** on for Review;
 - add **Manual review** after Review, so a person reads the diff before release;
 - add more report stages, such as **Security review**. All stages with their own shell share **Shell 5**: when the Review agent still runs there, a later report stage gets its prompt in that same session, not a new agent;
+- add a CI watcher stage that sends the task back when a check fails (see the examples in [Build a workflow](/docs/guides/workflows/));
 - run a hard stage, such as Implement, as a [workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow) with Claude Code.
 
 ## Related

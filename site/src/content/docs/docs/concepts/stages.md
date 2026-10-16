@@ -212,6 +212,9 @@ Sending back starts a stage again. You can go back to the current stage or to an
 - `--reason` is added to the prompt of the agent as `What to change: ...`.
 - Requesting changes in a review, or typing a prompt to the agent during a review stage, also sends the task back.
 - After a send back to an earlier stage, the task goes through the stages after it again.
+- An agent sends a task back from its prompt. Tell it to run `natamux stage back $NATAMUX_TASK_ID --to implement --reason "..."` when it finds a problem, and then to stop without running `natamux done`.
+
+See the worked examples in [Build a workflow](/docs/guides/workflows/), such as a CI watcher that sends the task back on a failed check.
 
 ### Skip a stage
 
@@ -315,7 +318,7 @@ A group holds 2 to 4 stages that are on and work at the same time. Only `agent` 
 
 ## Paths with a condition
 
-A branch splits the pipeline into 2 to 4 paths. Each path has a condition and its own stages. When the task gets to the branch, Natamux checks the conditions in order. The task takes the first path that holds, runs its stages one after another, and then goes on to the step after the branch. The stages of the other paths never run for that task.
+A branch splits the pipeline into 2 to 4 paths. Each path has a condition and its own stages. When the task gets to the branch, Natamux checks the conditions in order. The task takes the first path that holds, runs its stages one after another, and then goes on to the step after the branch. The stages of the other paths never run for that task. [Build a workflow](/docs/guides/workflows/) has a solo and a team example with branch paths.
 
 For example, after Plan: a small change goes the Implement way, and a change that needs a review goes the Review PR way.
 
@@ -398,7 +401,7 @@ A `testing` stage with a `command` runs it in a shell. Without a command, an age
 { "id": "testing", "kind": "testing", "gate": "auto", "command": "pnpm test" }
 ```
 
-If the command exits with 0, the stage passes. Any other exit code fails the stage and the task is `failed`. To run it again, retry the task, then start the stage:
+If the daemon stops while the command runs, it runs the command again when it starts. If the command exits with 0, the stage passes. Any other exit code fails the stage and the task is `failed`. To run it again, retry the task, then start the stage:
 
 ```bash
 natamux event T-0001 task.retried
@@ -451,4 +454,6 @@ You can attach files to a new task: documents such as Word, Excel, PDF or Markdo
 
 - [Tasks](/docs/concepts/tasks/): the states a stage can be in
 - [Agents and hooks](/docs/concepts/agents-and-hooks/): how agents start and report
+- [Build a workflow](/docs/guides/workflows/): worked examples with paths and send back
+- [Mix agents in one task](/docs/guides/mix-agents/): an agent and model per stage
 - [Configuration](/docs/reference/configuration/): the `.natamux.json` file

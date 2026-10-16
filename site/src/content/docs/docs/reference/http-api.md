@@ -85,4 +85,6 @@ A browser cannot set headers on a WebSocket, so:
 
 ## The full table
 
+A request with a bad field answers 400 with an error that names the field and the reason, such as which field is too long.
+
 The daemon README lists every endpoint with its body and errors: [packages/daemon/README.md](https://github.com/lenhatthanh20/natamux/blob/main/packages/daemon/README.md).

@@ -14,11 +14,11 @@ const mac = latest('Natamux-mac-arm64.dmg')
 
 // The hero recording: where each step starts, in seconds. Both themes share the timing.
 const heroSteps = [
-  [0, 'Approve the spec'],
-  [3, 'Two agents start'],
-  [8.4, 'Review agent'],
-  [15.7, 'Sent back'],
-  [20.6, 'Review passes'],
+  [0, 'Six agents at once'],
+  [4.1, 'Cursor reviews'],
+  [11.1, 'Sent back and fixed'],
+  [16.8, 'Copilot follows CI'],
+  [19.9, 'You approve'],
 ] as const
 
 const files = [
@@ -135,6 +135,83 @@ const agents = [
   { name: 'Any other CLI', cmd: 'your-agent', how: 'Runs in a plain shell. The terminal bell and natamux ask or done report back.', c: 'sky' },
 ]
 
+const pv = {
+  claude: ['Claude Code', 'amber'],
+  copilot: ['Copilot', 'mint'],
+  cursor: ['Cursor', 'sky'],
+} as const
+
+// A row is one step, a group that runs side by side (par), or a branch with paths.
+type Row = {
+  n?: string
+  a?: keyof typeof pv
+  you?: string
+  back?: string
+  par?: Row[]
+  branch?: string
+  paths?: { name: string; other?: boolean; rows: Row[] }[]
+}
+const workflows: { id: string; name: string; text: string; rows: Row[] }[] = [
+  {
+    id: 'solo',
+    name: 'Solo',
+    text: 'One developer, one repo. You approve the spec. The rest runs without you.',
+    rows: [
+      { n: 'Context' },
+      { n: 'Spec', you: 'You approve' },
+      { par: [{ n: 'Test spec', a: 'copilot' }, { n: 'Implement', a: 'claude' }] },
+      { n: 'Review', a: 'cursor', back: 'Sends back to Implement' },
+      { n: 'Watch CI and merge', a: 'copilot', back: 'Sends back on red CI' },
+    ],
+  },
+  {
+    id: 'team',
+    name: 'Team',
+    text: 'One committed file. Each task takes the path that fits where it is.',
+    rows: [
+      { n: 'Context' },
+      { n: 'Triage' },
+      {
+        branch: 'Where is the task',
+        paths: [
+          {
+            name: "Review a teammate's PR",
+            rows: [
+              { n: 'Review PR', a: 'claude' },
+              { n: 'Follow PR CI' },
+              { n: 'Wait for fix' },
+              { n: 'QA build' },
+            ],
+          },
+          {
+            name: 'Develop',
+            other: true,
+            rows: [
+              { n: 'Spec', you: 'You approve' },
+              { n: 'Plan' },
+              { n: 'Implement' },
+              { n: 'Review', a: 'claude', back: 'Sends back to Implement' },
+              { n: 'Open PR' },
+              { n: 'Follow CI', a: 'cursor', back: 'Sends back on red CI' },
+              { n: 'Definition of done', a: 'copilot' },
+            ],
+          },
+        ],
+      },
+      { n: 'Final check', you: 'You check' },
+    ],
+  },
+]
+
+// One task, one agent per stage. Shell numbers follow concepts/stages.md: a stage with its own agent
+// gets its own shell, from Shell 6.
+const shells = [
+  { shell: 'Shell 1', a: 'claude', stage: 'Implement', text: 'Builds. Keeps the task\'s session.' },
+  { shell: 'Shell 6', a: 'copilot', stage: 'Test spec', text: 'Writes the test cases from the spec alone.' },
+  { shell: 'Shell 7', a: 'cursor', stage: 'Review', text: 'Reads the diff with fresh eyes. Sends findings back.' },
+  { shell: 'Shell 8', a: 'copilot', stage: 'Watch CI', text: 'Follows the checks. A red run goes back to the agent.' },
+] as const
+
 const extras = [
   ['Templates', 'Save a task as a template and start the next one from it.'],
   ['Attachments', 'Drop or paste screenshots, logs and specs on a task. Agents read them in the worktree.'],
@@ -154,16 +231,16 @@ const extras = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Natamux: run coding agents in parallel</title>
+    <title>Natamux: your team's process, run by parallel agents</title>
     <meta
       name="description"
-      content="A free desktop app for Claude Code, Codex, Gemini CLI, GitHub Copilot and Cursor. Each task gets its own git worktree, terminal and checked stages, from spec to pull request, on one dashboard."
+      content="Write your team's process once as a workflow: spec, review, CI, QA, release. Every task runs it with many agents in parallel, Claude Code, Codex, Gemini CLI, Copilot or Cursor per stage. A free desktop app."
     />
     <link rel="canonical" href={`${site}${base}`} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={`${site}${base}`} />
-    <meta property="og:title" content="Natamux: run coding agents in parallel" />
-    <meta property="og:description" content="Each task gets its own worktree, terminal and stages. One dashboard shows which task needs you." />
+    <meta property="og:title" content="Natamux: your team's process, run by parallel agents" />
+    <meta property="og:description" content="Commit your process as a workflow. Every task of every person runs it with many agents, and a person steps in only where the process says so." />
     <meta property="og:image" content={`${site}${base}media/home/og-progress.jpg`} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="750" />
@@ -172,8 +249,8 @@ const extras = [
     <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
     <link rel="icon" href={`${base}icon.svg`} type="image/svg+xml" />
     <!-- The hero poster is the LCP image. -->
-    <link rel="preload" as="image" href={`${base}media/hero-flow-dark.webp`} media="not (prefers-color-scheme: light)" fetchpriority="high" />
-    <link rel="preload" as="image" href={`${base}media/hero-flow-light.webp`} media="(prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href={`${base}media/hero-agents-dark.webp`} media="not (prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href={`${base}media/hero-agents-light.webp`} media="(prefers-color-scheme: light)" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -199,6 +276,7 @@ const extras = [
           <span>Natamux</span>
         </a>
         <nav aria-label="Main">
+          <a href="#workflows">Workflows</a>
           <a href="#flow">How it works</a>
           <a href="#views">Dashboard</a>
           <a href="#terminal">Terminal</a>
@@ -222,15 +300,15 @@ const extras = [
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div class="wrap hero-copy">
-          <a class="news" href="#download">Now on macOS, Windows and Linux</a>
+          <a class="news" href="#workflows">New: workflows with branches and send back</a>
           <h1 id="hero-title">
-            <span class="line">Run coding agents in parallel.</span>
-            <span class="line">Step in only when one needs you.<span class="cursor" aria-hidden="true"></span></span>
+            <span class="line">Write your team's process once.</span>
+            <span class="line">Many agents run it in parallel.<span class="cursor" aria-hidden="true"></span></span>
           </h1>
           <p class="lede">
-            Natamux is a free desktop app for Claude Code, Codex, Gemini CLI, GitHub Copilot and Cursor. Each task
-            gets its own git worktree, terminal and checked stages, from spec to pull request. One dashboard shows
-            which task waits for you.
+            Spec, review, CI, QA and release become a workflow in <code>.natamux.json</code>. Commit it, and every
+            task of every person runs it: Claude Code, Codex, Gemini CLI, Copilot and Cursor in parallel, a different
+            agent per stage. Agents check each other and send work back. You step in only where the process says so.
           </p>
           <div class="ctas">
             <a class="btn primary big" href={mac} data-hero-download>
@@ -271,13 +349,13 @@ const extras = [
                     loop
                     playsinline
                     preload="none"
-                    poster={`${base}media/hero-flow-${theme}.webp`}
+                    poster={`${base}media/hero-agents-${theme}.webp`}
                     width="2400"
                     height="1500"
-                    aria-label="Screen recording of one task in the Natamux dashboard, from spec approval to a passed review."
+                    aria-label="Screen recording of the Natamux dashboard: six agents of five providers work in parallel, then one task goes through review, a send back, CI and approval."
                   >
-                    <source src={`${base}media/hero-flow-${theme}.mp4`} type="video/mp4" />
-                    <source src={`${base}media/hero-flow-${theme}.webm`} type="video/webm" />
+                    <source src={`${base}media/hero-agents-${theme}.mp4`} type="video/mp4" />
+                    <source src={`${base}media/hero-agents-${theme}.webm`} type="video/webm" />
                   </video>
                 ))
               }
@@ -291,11 +369,100 @@ const extras = [
               {heroSteps.map(([at, label]) => <li data-at={at}>{label}</li>)}
             </ol>
             <figcaption class="sr-only">
-              You approve the spec. Test spec and Implement start side by side, each agent in its own shell. When both
-              are done, a review agent opens in Shell 5, finds a problem and sends the task back to Implement. Implement
-              runs again, the second review passes, and the task moves on to Release.
+              The Agents view shows six live terminals: Claude Code, Codex, Gemini CLI, Copilot and Cursor work on six
+              tasks at once. One task opens. Its branch took the Develop path. Cursor reviews the change in its own
+              shell, finds a problem and sends the task back to Implement. The second review passes, Copilot opens the
+              pull request and follows CI, and you approve the final check.
             </figcaption>
           </figure>
+        </div>
+      </section>
+
+      <section class="section" id="workflows" aria-labelledby="workflows-title">
+        <div class="wrap">
+          <div class="head">
+            <h2 id="workflows-title">Your process, as a workflow</h2>
+            <p>
+              Write the stages once: who runs each one, where a person approves, where work goes back. Commit the
+              file. A branch sends each task down the path that fits it. A review or a red CI run sends the work
+              back to the stage that must fix it.
+            </p>
+          </div>
+          <div class="wf-cards">
+            {
+              workflows.map((w) => (
+                <article class="wf-card reveal" aria-labelledby={`wf-${w.id}`}>
+                  <h3 id={`wf-${w.id}`}>{w.name}</h3>
+                  <p class="wf-text">{w.text}</p>
+                  <ol class="wf">
+                    {
+                      w.rows.map((r) =>
+                        r.par ? (
+                          <li class="par">
+                            <span class="sr-only">At the same time:</span>
+                            <ul>
+                              {r.par.map((p) => (
+                                <li class="st">
+                                  <span class="st-n">{p.n}</span>
+                                  <span class={`chip ${pv[p.a][1]}`}>{pv[p.a][0]}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ) : r.paths ? (
+                          <li class="br">
+                            <p class="if"><i aria-hidden="true"></i><span>If <b>{r.branch}</b></span></p>
+                            <ul class="paths">
+                              {r.paths.map((path) => (
+                                <li class="path">
+                                  <p class="path-name">{path.other ? 'Otherwise' : 'When'}: <b>{path.name}</b></p>
+                                  <ol class="wf">
+                                    {path.rows.map((q) => (
+                                      <li class="st">
+                                        <span class="st-n">{q.n}</span>
+                                        {q.a && <span class={`chip ${pv[q.a][1]}`}>{pv[q.a][0]}</span>}
+                                        {q.you && <span class="chip you">{q.you}</span>}
+                                        {q.back && (
+                                          <span class="back">
+                                            <svg viewBox="0 0 28 14" aria-hidden="true"><path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" /></svg>
+                                            {q.back}
+                                          </span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ) : (
+                          <li class="st">
+                            <span class="st-n">{r.n}</span>
+                            {r.a && <span class={`chip ${pv[r.a][1]}`}>{pv[r.a][0]}</span>}
+                            {r.you && <span class="chip you">{r.you}</span>}
+                            {r.back && (
+                              <span class="back">
+                                <svg viewBox="0 0 28 14" aria-hidden="true"><path d="M26 12 H6 Q2 12 2 8 V3 M2 3 l-3 4 M2 3 l3 4" /></svg>
+                                {r.back}
+                              </span>
+                            )}
+                          </li>
+                        ),
+                      )
+                    }
+                  </ol>
+                </article>
+              ))
+            }
+          </div>
+          <p class="wf-note">
+            Each task of each person runs the same file, so the Progress view shows <b>Took Develop</b> on the path
+            a task took and <b>Not taken</b> on the other.
+          </p>
+          <div class="cta-row">
+            <a class="btn primary big" href="#download">Download Natamux</a>
+            <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
+          </div>
         </div>
       </section>
 
@@ -304,9 +471,9 @@ const extras = [
           <div class="head">
             <h2 id="flow-title">Three agents on one task, from spec to pull request</h2>
             <p>
-              Approve the plan and two agents start side by side: one builds, one writes the test spec without
-              looking at the code. Then the review agent you chose reads the diff. When it finds a problem, the task
-              goes back to Implement on its own.
+              The default pipeline. Approve the plan and two agents start side by side: one builds, one writes the
+              test spec without looking at the code. Then the review agent reads the diff and sends findings back to
+              Implement.
             </p>
           </div>
 
@@ -516,7 +683,32 @@ const extras = [
               ))
             }
           </ul>
-          <p class="more"><a href={`${docs}concepts/agents-and-hooks/`}>Agents and hooks</a></p>
+          <div class="shells reveal">
+            <p class="shells-title" id="shells-title">One task, one agent per stage</p>
+            <ol aria-labelledby="shells-title">
+              {
+                shells.map((s) => (
+                  <li class={pv[s.a][1]}>
+                    <code>{s.shell}</code>
+                    <span class={`chip ${pv[s.a][1]}`}>{pv[s.a][0]}</span>
+                    <b>{s.stage}</b>
+                    <span>{s.text}</span>
+                  </li>
+                ))
+              }
+            </ol>
+            <p class="shells-foot">
+              Pick the agent and model per stage in <b>Project settings → Stages</b>. It is saved in
+              <code>.natamux.json</code>, so the team shares it.
+            </p>
+          </div>
+          <p class="more">
+            <a href={`${docs}guides/mix-agents/`}>Mix agents in one task</a> ·
+            <a href={`${docs}concepts/agents-and-hooks/`}>Agents and hooks</a>
+          </p>
+          <div class="cta-row">
+            <a class="btn primary big" href="#download">Download Natamux</a>
+          </div>
         </div>
       </section>
 
