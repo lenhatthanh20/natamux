@@ -1,4 +1,5 @@
 import {
+  type BranchPath,
   canRunWorkflow,
   describeCondition,
   isBranch,
@@ -14,7 +15,7 @@ import {
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleAlert, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { useNow, useNowValue } from '../hooks/useNow'
 import { type AgentId, agentLabel, DEFAULT_AGENT } from '../lib/agents'
 import type {
@@ -171,7 +172,7 @@ export function ProgressTab({
   // The current stage is what the user opens the progress for.
   useEffect(() => {
     if (ready) {
-      stageList.current?.querySelector('[data-current]')?.scrollIntoView?.({ block: 'nearest' })
+      stageList.current?.querySelector('[data-current]')?.scrollIntoView?.({ block: 'center' })
     }
   }, [ready])
 
@@ -201,7 +202,7 @@ export function ProgressTab({
   const fileByName = new Map((files.data ?? []).map((file) => [file.name, file]))
   const fileStatus = files.data !== undefined ? 'ready' : files.isError ? 'error' : 'loading'
   const count = stageCount(progress)
-  // The names of the paths, for the timeline and the "Took" line.
+  // The names of the paths, for the timeline.
   const pathNames = Object.fromEntries(
     steps
       .filter(isBranch)
@@ -232,11 +233,6 @@ export function ProgressTab({
         key={stage.id}
         stage={stage}
         progress={entry}
-        took={
-          entry.because === null || entry.path === null
-            ? undefined
-            : { path: pathNames[entry.path] ?? entry.path, because: entry.because }
-        }
         file={stage.output === undefined ? undefined : fileByName.get(stage.output)}
         fileStatus={fileStatus}
         pr={stage.kind === 'release' ? task.pr : null}
@@ -319,6 +315,7 @@ export function ProgressTab({
             const next = steps[index + 1]
             const nextFirst = next === undefined ? undefined : byId.get(stagesOf(next)[0]?.id ?? '')
             const taken = isBranch(step) ? takenPath(step, byId) : undefined
+            const because = byId.get(taken?.stages[0]?.id ?? '')?.because ?? null
             const stepName = isBranch(step)
               ? (step.name ?? step.paths.map(pathLabel).join(' or '))
               : (step.name ?? stages.map((stage) => stage.id).join(' and '))
@@ -357,59 +354,52 @@ export function ProgressTab({
                 </div>
                 <div className="min-w-0 pb-2">
                   {isBranch(step) ? (
-                    <section
-                      aria-label={stepName}
-                      className="rounded-xl border border-line-strong bg-raised p-2"
-                    >
-                      <div className="flex flex-col gap-0.5 px-1 pb-2">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
-                          <h3 className="m-0 text-md font-semibold">{stepName}</h3>
-                          <span className="text-xs text-muted">
-                            one of {step.paths.length} paths
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted">
-                          {markerStatus === 'not-taken'
-                            ? 'No path was taken'
-                            : taken === undefined
-                              ? 'The task picks a path when it gets here'
-                              : 'The task took one path'}
-                        </span>
+                    <section aria-label={stepName} className="flex flex-col pt-2">
+                      <div className="flex flex-col gap-0.5 pb-2">
+                        <h3 className="m-0 text-md font-semibold">{stepName}</h3>
+                        <p className="m-0 text-xs">
+                          {taken !== undefined ? (
+                            <>
+                              <span className="font-medium text-ink-2">
+                                {`Took ${pathLabel(taken)}`}
+                              </span>
+                              {because !== null && (
+                                <span className="text-muted">{`: ${because}`}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted">
+                              {markerStatus === 'not-taken'
+                                ? 'No path was taken'
+                                : 'Picks a path when it gets here'}
+                            </span>
+                          )}
+                        </p>
                       </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-3">
                         {step.paths.map((path) => (
-                          <section
+                          <BranchLane
                             key={path.id}
-                            aria-label={pathLabel(path)}
-                            className="branch-lane flex flex-col gap-2"
-                            data-taken={
+                            path={path}
+                            taken={
                               taken === path
-                                ? 'true'
+                                ? true
                                 : taken !== undefined || markerStatus === 'not-taken'
-                                  ? 'false'
+                                  ? false
                                   : undefined
                             }
                           >
-                            <div className="flex flex-wrap items-baseline gap-x-2 px-1">
-                              <h4 className="m-0 text-sm font-semibold">{pathLabel(path)}</h4>
-                              <span className="text-xs text-muted">{describeCondition(path)}</span>
-                              {taken === path && (
-                                <span className="state-chip" data-state="done">
-                                  Taken
-                                </span>
-                              )}
-                            </div>
                             {path.stages.map(card)}
-                          </section>
+                          </BranchLane>
                         ))}
                       </div>
                     </section>
                   ) : isGroup(step) ? (
                     <section
                       aria-label={step.name ?? 'Side by side'}
-                      className="rounded-xl border border-line-strong bg-raised p-2"
+                      className="flex flex-col pt-2"
                     >
-                      <div className="flex flex-col gap-0.5 px-1 pb-2">
+                      <div className="flex flex-col gap-0.5 pb-2">
                         <div className="flex flex-wrap items-baseline gap-x-2">
                           <h3 className="m-0 text-md font-semibold">
                             {step.name ?? stages.map((stage) => stage.id).join(' and ')}
@@ -553,10 +543,12 @@ function Overview({
         {task.stageSince !== null && !finished && (
           <Figure value={formatDuration(task.stageSince, now)} label="in this stage" />
         )}
-        <Figure
-          value={String(sentBack)}
-          label={sentBack === 1 ? 'time sent back' : 'times sent back'}
-        />
+        {sentBack > 0 && (
+          <Figure
+            value={String(sentBack)}
+            label={sentBack === 1 ? 'time sent back' : 'times sent back'}
+          />
+        )}
       </div>
     </section>
   )
@@ -568,6 +560,72 @@ function Figure({ value, label }: { value: string; label: string }) {
       <div className="text-lg font-semibold tracking-tight tabular-nums">{value}</div>
       <div className="text-xs text-muted">{label}</div>
     </div>
+  )
+}
+
+const LANE_TITLE = 'text-xs font-semibold uppercase tracking-wide'
+
+// A path of a branch. A path not taken folds into one row, so the path that runs stays in view.
+function BranchLane({
+  path,
+  taken,
+  children,
+}: {
+  path: BranchPath
+  // Unknown until the task reaches the branch.
+  taken: boolean | undefined
+  children: ReactNode
+}) {
+  const [opened, setOpened] = useState(false)
+  const stagesId = useId()
+  const name = pathLabel(path)
+  const condition = <span className="text-xs text-muted">{describeCondition(path)}</span>
+  return (
+    <section
+      aria-label={name}
+      className="branch-lane flex flex-col gap-2"
+      data-taken={taken === undefined ? undefined : String(taken)}
+    >
+      {taken === false ? (
+        <>
+          <h4 className="m-0">
+            <button
+              type="button"
+              aria-expanded={opened}
+              aria-controls={stagesId}
+              onClick={() => setOpened(!opened)}
+              className="focus-inset flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left"
+            >
+              <ChevronRight
+                size={ICON.xs}
+                aria-hidden="true"
+                className={`shrink-0 text-muted transition-transform ${opened ? 'rotate-90' : ''}`}
+              />
+              <span className={`${LANE_TITLE} text-muted`}>{name}</span>
+              {condition}
+              <span className="state-chip" data-state="draft">
+                Not taken
+              </span>
+              <span className="text-xs text-muted">
+                {path.stages.length === 1 ? '1 stage' : `${path.stages.length} stages`}
+              </span>
+            </button>
+          </h4>
+          <div id={stagesId} hidden={!opened} className="flex flex-col gap-2">
+            {opened && children}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <h4 className={`m-0 ${LANE_TITLE} ${taken ? 'text-ink' : 'text-muted'}`}>{name}</h4>
+            {condition}
+            {taken && <span className="text-xs font-medium text-ink-2">Taken</span>}
+          </div>
+          {children}
+        </>
+      )}
+    </section>
   )
 }
 
@@ -618,7 +676,6 @@ function TimeBars({ progress }: { progress: readonly StageProgress[] }) {
 function StageCard({
   stage,
   progress,
-  took,
   file,
   fileStatus,
   pr,
@@ -642,8 +699,6 @@ function StageCard({
   skip,
 }: {
   activity?: string
-  // The path the task took, on the first stage of that path, and why.
-  took?: { path: string; because: string }
   // The last start of the stage asked the agent for a workflow.
   ranWorkflow: boolean
   // The workflow choice of a stage the settings offer it on.
@@ -791,13 +846,6 @@ function StageCard({
           <h4 className="m-0">{title}</h4>
           {factLine}
         </div>
-      )}
-
-      {took !== undefined && (
-        <p className="m-0 mt-1 text-xs">
-          <span className="font-medium text-ink-2">{`Took ${took.path}`}</span>
-          <span className="text-muted">{`: ${took.because}`}</span>
-        </p>
       )}
 
       {upcoming ? (

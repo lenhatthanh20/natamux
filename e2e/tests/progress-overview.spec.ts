@@ -30,7 +30,10 @@ test('shows the figures of the Overview with no bar of stages', async ({ page },
   for (const task of [AGENT_TITLE, DONE_TITLE, title]) {
     const card = await overviewOf(page, task)
     await expect(card.getByText(TIME_LABEL)).toBeVisible()
-    await expect(card.getByText(/^times? sent back$/)).toBeVisible()
+    if (task === title) {
+      // A new task was never sent back, so the figure is left out.
+      await expect(card.getByText(/sent back/)).toHaveCount(0)
+    }
     await expect(card.locator('[data-state]')).toHaveCount(0)
     await expect(card.locator('.stage-stripes')).toHaveCount(0)
     await expect(card.locator('[aria-hidden="true"]')).toHaveCount(0)

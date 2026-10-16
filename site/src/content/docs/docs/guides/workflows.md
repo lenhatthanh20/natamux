@@ -151,7 +151,7 @@ Context → Triage → ◇ Where is the task ───────────�
                                                     manual
 ```
 
-The review of the teammate's pull request and the development of your own change never run for the same task. The stages of the path not taken show **Not taken** in **Progress**.
+The review of the teammate's pull request and the development of your own change never run for the same task. In **Progress**, the path not taken folds into one row marked **Not taken**.
 
 ### The file
 
@@ -317,7 +317,7 @@ The agent does not run `natamux done` after it. After the fix, Natamux runs the 
 
 - One committed file. Everyone's task runs the same steps, with the same checks.
 - Each person's task takes the path that fits its state. Triage writes the marker, a person reads it and approves the stage, and Natamux checks the condition when the approval comes. A person can fix `status.md` first.
-- In **Progress**, the first stage of the path taken says **Took Develop** or **Took Review a teammate's PR** and the reason. The stages of the other path say **Not taken**.
+- In **Progress**, the branch says **Took Develop** or **Took Review a teammate's PR** and the reason. The other path is one folded row marked **Not taken**.
 - A person steps in at the manual gates: Triage, Spec and Final check.
 
 ## Patterns

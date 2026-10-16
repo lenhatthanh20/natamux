@@ -325,7 +325,6 @@ describe('the overview of the progress', () => {
     expect(overview.querySelector('[aria-hidden="true"]')).toBeNull()
     expect(within(overview).getByText(done)).toBeTruthy()
     expect(within(overview).getByText('stages done')).toBeTruthy()
-    expect(within(overview).getByText(/times? sent back/)).toBeTruthy()
   })
 
   it('moves the open figures with the clock, and adds nothing else to the card', async () => {
@@ -390,12 +389,12 @@ describe('the overview of the progress', () => {
     expect(within(overview).getByText('times sent back')).toBeTruthy()
   })
 
-  it('shows zero times sent back', async () => {
+  it('leaves out the sent back figure while the task was never sent back', async () => {
     progress()
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).getByText('0')).toBeTruthy()
-    expect(within(overview).getByText('times sent back')).toBeTruthy()
+    expect(within(overview).getByText('stages done')).toBeTruthy()
+    expect(within(overview).queryByText(/sent back/)).toBeNull()
   })
 })
 
@@ -410,6 +409,8 @@ describe('the stage cards', () => {
     expect(within(group).getByText('Manual review starts when both are finished')).toBeTruthy()
     expect(testSpec.parentElement?.className).toContain('flex-col')
     expect(testSpec.parentElement?.className).not.toContain('grid')
+    // Only the stage cards are boxes.
+    expect(group.className).not.toMatch(/border|bg-raised/)
   })
 
   it('folds done and skipped stages, each on its own, by click, Enter and Space', async () => {
@@ -767,10 +768,14 @@ describe('scrolling to the current stage', () => {
   // jsdom has no scrollIntoView of its own.
   const original = Element.prototype.scrollIntoView
 
+  let options: unknown[] = []
+
   function watchScroll() {
     const scrolled: Element[] = []
-    Element.prototype.scrollIntoView = function (this: Element) {
+    options = []
+    Element.prototype.scrollIntoView = function (this: Element, option?: unknown) {
       scrolled.push(this)
+      options.push(option)
     }
     return scrolled
   }
@@ -785,6 +790,7 @@ describe('scrolling to the current stage', () => {
 
     const plan = await screen.findByRole('article', { name: 'Plan' })
     await waitFor(() => expect(scrolled).toContain(plan))
+    expect(options).toEqual([{ block: 'center' }])
   })
 
   it('scrolls nowhere when no stage is current', async () => {
@@ -1488,36 +1494,60 @@ describe('a branch in the stages', () => {
     stored(3, 'stage.started', '2026-10-10T08:11:00.000Z', { stage: 'implement' }),
   ]
 
-  it('says which path the task took and why, on the first card of that path', async () => {
+  const BRANCH = 'Small change or Big change'
+
+  it('says which path the task took and why, once, in the branch header', async () => {
     progress({
       task: branchTask('implement', { 'after-plan': 'small' }),
       events: TAKEN_EVENTS,
       settings: BRANCH_SETTINGS,
     })
 
-    const implement = await screen.findByRole('article', { name: 'Implement' })
-    expect(within(implement).getByText('Took Small change')).toBeTruthy()
-    expect(within(implement).getByText(`: ${BECAUSE}`)).toBeTruthy()
-    const plan = screen.getByRole('article', { name: 'Plan' })
-    expect(within(plan).queryByText(/^Took/)).toBeNull()
+    const branch = await screen.findByRole('region', { name: BRANCH })
+    expect(within(branch).getByText('Took Small change')).toBeTruthy()
+    expect(within(branch).getByText(`: ${BECAUSE}`)).toBeTruthy()
+    expect(screen.getAllByText(/^Took/)).toHaveLength(1)
+    const implement = screen.getByRole('article', { name: 'Implement' })
+    expect(within(implement).queryByText(/^Took/)).toBeNull()
+    expect(screen.queryByText(/one of \d+ paths/)).toBeNull()
+    expect(screen.queryByText('The task took one path')).toBeNull()
+    // Only the stage cards are boxes.
+    expect(branch.className).not.toMatch(/border|bg-raised/)
   })
 
-  it('shows the stages of the path not taken as Not taken, and counts them out', async () => {
+  it('folds the path not taken into one row that opens to its Not taken stages', async () => {
     progress({
       task: branchTask('implement', { 'after-plan': 'small' }),
       events: TAKEN_EVENTS,
       settings: BRANCH_SETTINGS,
     })
+    const user = userEvent.setup()
 
-    const review = await screen.findByRole('article', { name: 'Check' })
+    const other = await screen.findByRole('region', { name: 'Big change' })
+    expect(within(other).queryByRole('article')).toBeNull()
+    expect(within(other).getByText('Not taken')).toBeTruthy()
+    expect(within(other).getByText('1 stage')).toBeTruthy()
+    expect(within(other).getByText('Otherwise')).toBeTruthy()
+    const toggle = within(other).getByRole('heading', { level: 4 })
+    const button = within(toggle).getByRole('button', { expanded: false })
+    expect(button.getAttribute('aria-controls')).toBeTruthy()
+
+    await user.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    const review = within(other).getByRole('article', { name: 'Check' })
     expect(within(review).getByText('Not taken')).toBeTruthy()
     expect(within(review).getByRole('img', { name: 'Check: Not taken' })).toBeTruthy()
     expect(within(review).queryByText(/^Finished when/)).toBeNull()
+    const controlled = document.getElementById(button.getAttribute('aria-controls') ?? '')
+    expect(controlled?.contains(review)).toBe(true)
+
+    await user.click(button)
+    expect(within(other).queryByRole('article')).toBeNull()
     // Plan is done; Plan, Implement and Release count.
     expect(screen.getByText('1 of 3')).toBeTruthy()
   })
 
-  it('draws a lane per path, the taken one marked Taken and the others dim', async () => {
+  it('draws a lane per path, the taken one marked Taken in words and open', async () => {
     progress({
       task: branchTask('implement', { 'after-plan': 'small' }),
       events: TAKEN_EVENTS,
@@ -1528,36 +1558,42 @@ describe('a branch in the stages', () => {
     const other = screen.getByRole('region', { name: 'Big change' })
     expect(taken.dataset.taken).toBe('true')
     expect(other.dataset.taken).toBe('false')
-    expect(within(taken).getByText('Taken')).toBeTruthy()
+    expect(within(taken).getByText('Taken').classList.contains('state-chip')).toBe(false)
     expect(within(taken).getByText(BECAUSE)).toBeTruthy()
-    expect(within(other).getByText('Otherwise')).toBeTruthy()
+    expect(within(taken).getByRole('heading', { level: 4, name: 'Small change' })).toBeTruthy()
+    expect(within(taken).getByRole('article', { name: 'Implement' })).toBeTruthy()
+    expect(within(taken).queryByRole('button', { expanded: false })).toBeNull()
   })
 
-  it('shows every path as Not taken when the branch was skipped', async () => {
+  it('folds every path when the branch was skipped', async () => {
     progress({
       task: branchTask('release', { 'after-plan': '' }),
       events: [TAKEN_EVENTS[0] as StoredEvent],
       settings: BRANCH_SETTINGS,
     })
 
-    await screen.findByRole('list', { name: 'Stages' })
-    const implement = screen.getByRole('article', { name: 'Implement' })
-    const check = screen.getByRole('article', { name: 'Check' })
-    expect(within(implement).getByText('Not taken')).toBeTruthy()
-    expect(within(check).getByText('Not taken')).toBeTruthy()
+    const branch = await screen.findByRole('region', { name: BRANCH })
+    expect(within(branch).getByText('No path was taken')).toBeTruthy()
+    expect(screen.queryByRole('article', { name: 'Implement' })).toBeNull()
+    expect(screen.queryByRole('article', { name: 'Check' })).toBeNull()
+    expect(within(branch).getAllByRole('button', { expanded: false })).toHaveLength(2)
+    expect(within(branch).getAllByText('Not taken')).toHaveLength(2)
     expect(screen.queryByText(/^Took/)).toBeNull()
     expect(screen.getByRole('img', { name: /No path taken/ })).toBeTruthy()
   })
 
-  it('keeps both paths as not started before the branch is reached', async () => {
+  it('keeps both paths open and not started before the branch is reached', async () => {
     progress({
       task: branchTask('plan', {}),
       events: [TAKEN_EVENTS[0] as StoredEvent],
       settings: BRANCH_SETTINGS,
     })
 
-    const implement = await screen.findByRole('article', { name: 'Implement' })
+    const branch = await screen.findByRole('region', { name: BRANCH })
+    expect(within(branch).getByText('Picks a path when it gets here')).toBeTruthy()
+    const implement = within(branch).getByRole('article', { name: 'Implement' })
     expect(within(implement).getByText(/^Finished when/)).toBeTruthy()
+    expect(within(branch).getByRole('article', { name: 'Check' })).toBeTruthy()
     expect(screen.queryByText('Not taken')).toBeNull()
     expect(screen.getByRole('region', { name: 'Small change' }).dataset.taken).toBeUndefined()
   })
