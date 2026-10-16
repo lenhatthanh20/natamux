@@ -3,7 +3,12 @@
 // terminal-measures.json stay in 'timing', so the e2e-measures artifact stays one file.
 export const GROUPS: Record<string, string[]> = {
   timing: ['dashboard-measures.spec.ts', 'terminal-cache.spec.ts', 'terminal-measures.spec.ts'],
-  terminal: ['terminal-gpu.spec.ts', 'terminal-look.spec.ts', 'terminal-protocol.spec.ts'],
+  terminal: [
+    'terminal-gpu.spec.ts',
+    'terminal-layout.spec.ts',
+    'terminal-look.spec.ts',
+    'terminal-protocol.spec.ts',
+  ],
 }
 
 // The spec files that a group does not run. No group (local runs) skips none.

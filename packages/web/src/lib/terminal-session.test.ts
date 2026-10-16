@@ -18,6 +18,8 @@ import {
   FIT_DELAY_MS,
   HIDDEN_RESUME_BYTES,
   importWebgl,
+  REDRAW_MAX_MS,
+  REDRAW_QUIET_MS,
   REFLOW_WAIT_ROWS,
   type TerminalSession,
 } from './terminal-session'
@@ -461,6 +463,205 @@ describe('showing a terminal session', () => {
     const { socket, terminal } = await shown()
     terminal.fire('data', 'ls\r')
     expect(socket.sent).toEqual([{ type: 'input', data: 'ls\r' }])
+  })
+})
+
+describe('a pane that changes size (T-0089)', () => {
+  // The screen shows: not covered (opacity) and not hidden by a catch-up (visibility).
+  const drawn = (host: HTMLElement | null | undefined) =>
+    host?.style.opacity !== '0' && host?.style.visibility !== 'hidden'
+
+  // A pane on screen whose box just got a new size.
+  async function resized(size = { cols: 100, rows: 30 }) {
+    const made = await shown()
+    const observer = observers.at(-1)
+    made.terminal.fitSize = size
+    observer?.callback()
+    const host = made.terminal.element?.parentElement
+    return { ...made, observer, host }
+  }
+
+  it('hides the screen with opacity at once, so it still takes clicks; no skeleton', async () => {
+    const { session, host } = await resized()
+
+    expect(drawn(host)).toBe(false)
+    expect(host?.style.opacity).toBe('0')
+    // Not visibility: a hidden element gets no click, so a click in the pane would not focus it.
+    expect(host?.style.visibility).toBe('')
+    expect(session.state().catchingUp).toBe(false)
+  })
+
+  it('does not hide the screen when the cells stay the same', async () => {
+    const { socket, terminal } = await shown()
+    const host = terminal.element?.parentElement
+    // The first call after observe(), with the size the terminal already has.
+    observers.at(-1)?.callback()
+    expect(drawn(host)).toBe(true)
+
+    vi.advanceTimersByTime(FIT_DELAY_MS + REDRAW_MAX_MS)
+    expect(drawn(host)).toBe(true)
+    expect(socket.sent).toEqual([])
+  })
+
+  it('shows the screen again a quiet moment after the resize, with a fade', async () => {
+    const { socket, host } = await resized()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([{ type: 'resize', cols: 100, rows: 30 }])
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(REDRAW_QUIET_MS - 1)
+    expect(drawn(host)).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(drawn(host)).toBe(true)
+    expect(host?.classList.contains('hm-fade-in')).toBe(true)
+
+    // The class goes after the fade, so the next move of the element does not fade again.
+    host?.dispatchEvent(new Event('animationend'))
+    expect(host?.classList.contains('hm-fade-in')).toBe(false)
+  })
+
+  it('waits until the shell is quiet after its redraw', async () => {
+    const { socket, host } = await resized()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    for (let step = 0; step < 4; step += 1) {
+      vi.advanceTimersByTime(REDRAW_QUIET_MS - 10)
+      socket.bytes('redraw')
+    }
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(REDRAW_QUIET_MS - 1)
+    expect(drawn(host)).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('shows the screen REDRAW_MAX_MS after the resize, also while output flows', async () => {
+    const { socket, host } = await resized()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    for (let elapsed = 0; elapsed < REDRAW_MAX_MS - 20; elapsed += 20) {
+      vi.advanceTimersByTime(20)
+      socket.bytes('flood')
+    }
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(20)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('shows the screen when the pane settles and no resize goes out', async () => {
+    const { socket, terminal, observer, host } = await resized()
+    // Back to the old size before it settles: nothing to tell the shell.
+    terminal.fitSize = { cols: 80, rows: 24 }
+    observer?.callback()
+    vi.advanceTimersByTime(FIT_DELAY_MS - 1)
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(1)
+    expect(socket.sent).toEqual([])
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('shows the screen of an ended shell when the pane settles, and sends nothing', async () => {
+    const { socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    const host = terminal.element?.parentElement
+    socket.message({ type: 'exit', code: 0 })
+    socket.sent.length = 0
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(socket.sent).toEqual([])
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('stays hidden while the pane keeps changing, and sends one resize at the end', async () => {
+    const { socket, terminal, observer, host } = await resized()
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    vi.advanceTimersByTime(REDRAW_QUIET_MS - 10)
+    terminal.fitSize = { cols: 110, rows: 30 }
+    observer?.callback()
+    vi.advanceTimersByTime(REDRAW_QUIET_MS)
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(FIT_DELAY_MS - REDRAW_QUIET_MS)
+    expect(socket.sent).toEqual([
+      { type: 'resize', cols: 100, rows: 30 },
+      { type: 'resize', cols: 110, rows: 30 },
+    ])
+    expect(drawn(host)).toBe(false)
+    vi.advanceTimersByTime(REDRAW_QUIET_MS)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('sends what the user types while the screen is hidden, at once and in order', async () => {
+    const { socket, terminal, host } = await resized()
+    for (const data of KEYS) {
+      terminal.fire('data', data)
+    }
+    expect(drawn(host)).toBe(false)
+    expect(socket.sent).toEqual(KEYS.map((data) => ({ type: 'input', data })))
+  })
+
+  it('keeps a hidden catch-up hidden when the pane settles', async () => {
+    const { session, socket, terminal, host } = await resized()
+    snapshotOf(socket, { cols: 80, rows: 24 }, ['screen'])
+    terminal.parse()
+    vi.advanceTimersByTime(FIT_DELAY_MS + REDRAW_MAX_MS)
+    expect(session.state().catchingUp).toBe(true)
+    expect(drawn(host)).toBe(false)
+
+    socket.message({ type: 'replayed', offset: 6 })
+    terminal.parse()
+    expect(session.state().catchingUp).toBe(false)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('keeps the screen hidden when a catch-up ends while the pane is still settling', async () => {
+    const { session, socket, terminal } = await shown()
+    const observer = observers.at(-1)
+    const host = terminal.element?.parentElement
+    socket.message({ type: 'resume', offset: 0 })
+    socket.bytes('x'.repeat(HIDDEN_RESUME_BYTES + 1))
+    expect(session.state().catchingUp).toBe(true)
+    terminal.fitSize = { cols: 100, rows: 30 }
+    observer?.callback()
+
+    socket.message({ type: 'replayed', offset: HIDDEN_RESUME_BYTES + 1 })
+    terminal.parse()
+    expect(session.state().catchingUp).toBe(false)
+    expect(drawn(host)).toBe(false)
+
+    vi.advanceTimersByTime(FIT_DELAY_MS + REDRAW_QUIET_MS)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('is not hidden when shown again after it was hidden while settling', async () => {
+    const { session, host } = await resized()
+    session.hide(box())
+    expect(drawn(host)).toBe(true)
+
+    session.show(box())
+    vi.advanceTimersByTime(FIT_DELAY_MS + REDRAW_MAX_MS)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('is not left hidden when it leaves the screen while settling', async () => {
+    const { session, host } = await resized()
+    session.setOnScreen(false)
+    vi.advanceTimersByTime(FIT_DELAY_MS)
+    expect(drawn(host)).toBe(true)
+
+    session.setOnScreen(true)
+    expect(drawn(host)).toBe(true)
+  })
+
+  it('stops waiting when disposed while settling', async () => {
+    const { session, socket } = await resized()
+    session.dispose()
+    expect(() => vi.advanceTimersByTime(FIT_DELAY_MS + REDRAW_MAX_MS)).not.toThrow()
+    expect(socket.sent).not.toContainEqual(expect.objectContaining({ type: 'resize' }))
   })
 })
 

@@ -641,6 +641,20 @@ describe('TerminalView before the shell opens', () => {
     expect(lastTerminal().options.disableStdin).not.toBe(true)
   })
 
+  it('draws the status strip over the screen, so the screen keeps its box', async () => {
+    const { made, connect } = sockets(1)
+    render(<TerminalView connect={connect} />)
+    await flush()
+
+    const strip = screen.getByRole('status').parentElement
+    const screenArea = screen.getByRole('region', { name: 'Terminal screen' })
+    expect(strip?.className).toContain('absolute')
+    expect(strip?.parentElement).toBe(screenArea.parentElement)
+
+    act(() => made[0]?.open())
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('shows the error at the top when the socket closes before it opens', async () => {
     const { made, connect } = sockets(1)
     render(<TerminalView connect={connect} taskState="done" />)

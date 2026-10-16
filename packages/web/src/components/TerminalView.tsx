@@ -134,9 +134,7 @@ export default function TerminalView({
     }
   }, [attempt, cacheKey])
 
-  // Shown only after the render that has the session's status. Before it, the status strip of
-  // "connecting" takes room, so a cached open terminal would fit a smaller box and send two
-  // resizes: one now, and one back when the strip goes.
+  // Shown after the render that has the session, still before the browser paints.
   useLayoutEffect(() => {
     const element = container.current
     if (!element || session === null) {
@@ -186,25 +184,6 @@ export default function TerminalView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {status !== 'open' && status !== 'ended' && (
-        <div className="flex h-7 shrink-0 items-center gap-3 border-b border-line px-3">
-          {/* Shown late, so a quick connect does not flash it. */}
-          {status !== 'error' && (
-            <span className="hm-late-in flex shrink-0 text-muted">
-              <Spinner size={12} />
-            </span>
-          )}
-          <p className="flex-1 truncate text-xs text-muted" role="status">
-            {STATUS_TEXT[status]}
-            {error !== null && ` ${error}`}
-          </p>
-          {status === 'error' && (
-            <Button variant="link" onClick={startNewShell}>
-              Start a new shell
-            </Button>
-          )}
-        </div>
-      )}
       <div className="hm-terminal relative flex min-h-0 flex-1 flex-col">
         {/* The fit addon reads the height of xterm's parent, padding included, so the padding is
             on a wrapper. With it on the parent, the last row fell under the bottom edge.
@@ -243,6 +222,27 @@ export default function TerminalView({
         )}
         {findOpen && session !== null && (
           <TerminalFind search={session.search} onClose={closeFind} />
+        )}
+        {/* Over the screen, not above it: the screen keeps its box when the socket opens, so a new
+            shell gets one size. */}
+        {status !== 'open' && status !== 'ended' && (
+          <div className="absolute inset-x-0 top-0 z-10 flex h-7 items-center gap-3 border-b border-line bg-surface px-3">
+            {/* Shown late, so a quick connect does not flash it. */}
+            {status !== 'error' && (
+              <span className="hm-late-in flex shrink-0 text-muted">
+                <Spinner size={12} />
+              </span>
+            )}
+            <p className="flex-1 truncate text-xs text-muted" role="status">
+              {STATUS_TEXT[status]}
+              {error !== null && ` ${error}`}
+            </p>
+            {status === 'error' && (
+              <Button variant="link" onClick={startNewShell}>
+                Start a new shell
+              </Button>
+            )}
+          </div>
         )}
         {scrolledUp && (
           <Button

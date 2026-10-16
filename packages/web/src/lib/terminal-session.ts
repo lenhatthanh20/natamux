@@ -39,6 +39,10 @@ export const FIT_DELAY_MS = 100
 // As VS Code's terminalResizeDebouncer: rows change at once, they cost little. Columns reflow every
 // wrapped line, so a buffer of this many rows or more changes them only once the pane settles.
 export const REFLOW_WAIT_ROWS = 200
+// A pane that changes size hides its screen until the shell drew for the new size: shown once the
+// shell printed nothing for REDRAW_QUIET_MS after the resize, or REDRAW_MAX_MS after it at most.
+export const REDRAW_QUIET_MS = 60
+export const REDRAW_MAX_MS = 400
 export const DISPOSE_DELAY_MS = 200
 // A catch-up whose `replayed` never comes ends after this, so a daemon bug never leaves a blank
 // pane (spec 6).
@@ -202,6 +206,12 @@ export function createTerminalSession(options: {
   // so it has the classes of the box the terminal fills.
   const host = document.createElement('div')
   host.className = 'min-h-0 flex-1 overflow-hidden'
+  // The fade runs once; left on, it would run again each time the element moves.
+  host.addEventListener('animationend', (event) => {
+    if (event.target === host) {
+      host.classList.remove('hm-fade-in')
+    }
+  })
 
   let state: TerminalSessionState = {
     status: 'connecting',
@@ -238,6 +248,14 @@ export function createTerminalSession(options: {
   let fitTimer: ReturnType<typeof setTimeout> | undefined
   // Set while a resize is local only: the shell gets the size once the pane settles.
   let holdSize = false
+  // The screen is hidden while the pane changes size (`covered`) and while a catch-up is written
+  // (`catchUpHidden`). It shows when neither holds.
+  let covered = false
+  let catchUpHidden = false
+  // A resize went out while covered, so the shell redraws before the screen shows.
+  let redrawWanted = false
+  let quietTimer: ReturnType<typeof setTimeout> | undefined
+  let redrawTimer: ReturnType<typeof setTimeout> | undefined
   let frame: number | null = null
   const subscriptions: { dispose(): void }[] = []
   let catchUp: CatchUp | null = null
@@ -293,6 +311,7 @@ export function createTerminalSession(options: {
       if (send({ type: 'resize', ...size })) {
         sentSize = size
         claimed = true
+        redrawWanted ||= covered
       }
     }
   }
@@ -371,20 +390,62 @@ export function createTerminalSession(options: {
     }
   }
 
-  // The textarea stays visible, so it keeps the focus and typed keys are queued, not lost.
-  const hideScreen = () => {
-    host.style.visibility = 'hidden'
+  // A catch-up hides with visibility; the textarea stays visible, so it keeps the focus and typed
+  // keys are queued, not lost. A cover uses opacity: the pane still takes a click, which focuses
+  // the terminal (a hidden element gets no click).
+  const applyScreen = () => {
+    host.style.visibility = catchUpHidden ? 'hidden' : ''
+    host.style.opacity = covered ? '0' : ''
     if (terminal.textarea !== undefined) {
-      terminal.textarea.style.visibility = 'visible'
+      terminal.textarea.style.visibility = catchUpHidden ? 'visible' : ''
     }
+  }
+  const hideScreen = () => {
+    catchUpHidden = true
+    applyScreen()
     update({ catchingUp: true })
   }
   const showScreen = () => {
-    host.style.visibility = ''
-    if (terminal.textarea !== undefined) {
-      terminal.textarea.style.visibility = ''
-    }
+    catchUpHidden = false
+    applyScreen()
     update({ catchingUp: false })
+  }
+
+  // The pane changes size: the frame stays, the screen goes until the shell drew for the new size,
+  // so the reflow and the program's redraw are not seen.
+  const stopRedrawWait = () => {
+    clearTimeout(quietTimer)
+    clearTimeout(redrawTimer)
+    quietTimer = undefined
+    redrawTimer = undefined
+  }
+  const cover = () => {
+    stopRedrawWait()
+    if (!covered) {
+      covered = true
+      host.classList.remove('hm-fade-in')
+      applyScreen()
+    }
+  }
+  // fade: the screen comes back in the same place; not when the element moves.
+  const uncover = (fade = true) => {
+    stopRedrawWait()
+    redrawWanted = false
+    if (!covered) {
+      return
+    }
+    covered = false
+    applyScreen()
+    if (fade && onScreen && !catchUpHidden) {
+      // Read in between, so the animation starts again.
+      void host.offsetWidth
+      host.classList.add('hm-fade-in')
+    }
+  }
+  // Each output moves the end REDRAW_QUIET_MS later; redrawTimer is the latest end.
+  const waitForQuiet = () => {
+    clearTimeout(quietTimer)
+    quietTimer = setTimeout(() => uncover(), REDRAW_QUIET_MS)
   }
 
   // at is the offset from `replayed`, or null when the catch-up failed or the shell ended. The
@@ -450,6 +511,9 @@ export function createTerminalSession(options: {
     }
     offset += bytes.byteLength
     const at = offset
+    if (redrawTimer !== undefined) {
+      waitForQuiet()
+    }
     terminal.write(bytes, () => {
       if (!disposed && at - acked >= ACK_EVERY_BYTES) {
         ack(at)
@@ -480,6 +544,9 @@ export function createTerminalSession(options: {
     if (size === undefined || Number.isNaN(size.cols) || Number.isNaN(size.rows)) {
       return
     }
+    if (size.cols !== terminal.cols || size.rows !== terminal.rows) {
+      cover()
+    }
     const cols = terminal.buffer.normal.length < REFLOW_WAIT_ROWS ? size.cols : terminal.cols
     holdSize = true
     try {
@@ -489,11 +556,25 @@ export function createTerminalSession(options: {
     }
   }
 
-  // The pane settled: the columns catch up, and the shell gets the size once.
+  // The pane settled: the columns catch up, and the shell gets the size once. The screen shows
+  // after the shell's redraw, or at once when the shell got no new size.
   const settle = () => {
-    if (onScreen) {
-      fitNow()
-      sendSize()
+    if (!onScreen) {
+      // Off screen (watchVisible): nothing to see, and no settle may come to end the cover.
+      uncover(false)
+      return
+    }
+    fitNow()
+    sendSize()
+    if (!covered) {
+      return
+    }
+    if (redrawWanted) {
+      redrawWanted = false
+      redrawTimer = setTimeout(() => uncover(), REDRAW_MAX_MS)
+      waitForQuiet()
+    } else {
+      uncover()
     }
   }
 
@@ -861,6 +942,8 @@ export function createTerminalSession(options: {
     observer = null
     clearTimeout(fitTimer)
     fitTimer = undefined
+    // Without the observer the pane never settles, so the screen must not wait for it.
+    uncover(false)
   }
 
   const show = (container: HTMLElement, takeFocus = true) => {
