@@ -43,7 +43,6 @@ export default defineConfig({
             { slug: 'docs/concepts/stages' },
             { slug: 'docs/concepts/review-loop' },
             { slug: 'docs/guides/mix-agents', badge: { text: 'New', variant: 'tip' } },
-            { label: 'Check a stage on CI', link: '/docs/concepts/stages/#check-a-stage-on-ci' },
             { slug: 'docs/guides/fan-out' },
             { slug: 'docs/guides/project-settings' },
           ],
