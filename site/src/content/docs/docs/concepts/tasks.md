@@ -15,7 +15,7 @@ To choose the id yourself, start the title with it: `ABC-12: Fix the login bug` 
 
 | Field | Meaning |
 |---|---|
-| `title` | Short name, 1 to 200 characters. |
+| `title` | Short name, 1 to 400 characters. |
 | `description` | Notes, in Markdown. They become the first prompt and the task context. |
 | `state` | Where the task is now. See [States](#states). |
 | `priority` | `low`, `normal` (default), `high` or `urgent`. |

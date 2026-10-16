@@ -21,6 +21,7 @@ import {
   type TerminalServerMessage,
   taskContextSchema,
   taskIdSchema,
+  taskSchema,
   taskStateSchema,
   templateIdSchema,
   terminalClientMessageSchema,
@@ -168,7 +169,7 @@ const fanOutBodySchema = z.object({
 })
 const messageBodySchema = z.object({ text: z.string().trim().min(1).max(20_000) })
 const newWorkspaceBodySchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: taskSchema.shape.title,
   // Null, like none, is the default repository.
   repo: repoIdSchema.nullish().transform((repo) => repo ?? undefined),
   base: z.string().min(1).max(255).optional(),
@@ -309,6 +310,16 @@ function clientErrorStatus(error: unknown): number | undefined {
   return undefined
 }
 
+// One line a client can show as it is, such as "title: Too big: expected string to have <=400
+// characters". The issues stay in the answer too, for the CLI.
+function describeIssues(issues: z.ZodError['issues']): string {
+  return issues
+    .map(({ path, message }) =>
+      path.length === 0 ? message : `${path.map(String).join('.')}: ${message}`,
+    )
+    .join('; ')
+}
+
 export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
@@ -359,7 +370,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof z.ZodError) {
-      return reply.code(400).send({ error: 'invalid_request', issues: error.issues })
+      return reply.code(400).send({
+        error: 'invalid_request',
+        issues: error.issues,
+        message: describeIssues(error.issues),
+      })
     }
     if (error instanceof TaskEditError) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })

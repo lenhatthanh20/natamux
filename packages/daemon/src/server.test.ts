@@ -364,11 +364,24 @@ describe('tasks', () => {
     })
     expect(response.statusCode).toBe(400)
     expect(response.json().error).toBe('invalid_request')
+    expect(response.json().issues).toHaveLength(1)
+    expect(response.json().message).toMatch(/^title: /)
   })
 
   it('rejects a missing body with 400', async () => {
     const response = await app.inject({ method: 'POST', url: '/tasks', headers: authorization })
     expect(response.statusCode).toBe(400)
+    // The whole body is wrong, so the message names no field.
+    expect(response.json().message).toMatch(/^[^:]/)
+  })
+
+  it('takes a task title of up to 400 characters', async () => {
+    const make = (title: string) =>
+      app.inject({ method: 'POST', url: '/tasks', headers: authorization, payload: { title } })
+    expect((await make('a'.repeat(400))).statusCode).toBe(201)
+    const long = await make('a'.repeat(401))
+    expect(long.statusCode).toBe(400)
+    expect(long.json().message).toMatch(/^title: /)
   })
 
   it('deletes a task and the tasks that pointed at it stay', async () => {
@@ -641,6 +654,16 @@ describe('task events', () => {
     expect(response.statusCode).toBe(400)
     const tasks = await app.inject({ method: 'GET', url: '/tasks', headers: authorization })
     expect(tasks.json().tasks).toEqual([])
+  })
+
+  it('takes a workspace title of up to 400 characters, and names the field', async () => {
+    const make = (title: string) =>
+      app.inject({ method: 'POST', url: '/workspaces', headers: authorization, payload: { title } })
+    const long = await make('a'.repeat(401))
+    expect(long.statusCode).toBe(400)
+    expect(long.json()).toMatchObject({ error: 'invalid_request', issues: [{ path: ['title'] }] })
+    expect(long.json().message).toMatch(/^title: /)
+    expect((await make('a'.repeat(400))).statusCode).toBe(201)
   })
 
   it('keeps the skill picked as the context of a new workspace', async () => {
@@ -2480,6 +2503,18 @@ describe('edit a task', () => {
     })
     expect(edited.statusCode).toBe(200)
     expect(edited.json().task).toMatchObject({ title: 'Fix the parser', labels: ['parser'] })
+
+    const retitle = (title: string) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/tasks/T-0001',
+        headers: authorization,
+        payload: { title },
+      })
+    expect((await retitle('a'.repeat(400))).statusCode).toBe(200)
+    const long = await retitle('a'.repeat(401))
+    expect(long.statusCode).toBe(400)
+    expect(long.json().message).toMatch(/^title: /)
 
     const bad = await app.inject({
       method: 'PATCH',
