@@ -132,4 +132,5 @@ Natamux also treats terminal output as a sign of life, so a running task is not 
 
 - [Tasks](/docs/concepts/tasks/): the states that hooks move
 - [Stages](/docs/concepts/stages/): `natamux done` and the checks
+- [Mix agents in one task](/docs/guides/mix-agents/): an agent per stage
 - [Agents](/docs/agents/claude-code/): one page for each agent

@@ -141,11 +141,13 @@ Natamux remembers the shells of each task that is not done or cancelled. After a
 - Every other shell comes back with the same name when you open its task, or when the **Agents** view shows its Shell 1. Until then nothing runs in it, so the start stays fast.
 - An agent comes back on its last conversation, with no new prompt. It waits for you, and the task keeps its state.
 - A plain shell, and a shell whose agent never named its conversation, come back as a plain shell in the workspace folder.
-- A shell you closed does not come back. A shell whose agent you quit comes back as a plain shell.
+- A shell you closed, or that a stage closed with `endShell`, does not come back. A shell whose agent you quit comes back as a plain shell.
 
 While a shell comes back, its pane shows a spinner and **Restoring GitHub Copilot…** (the name of its agent), or **Restoring shell…**. The spinner goes once the agent runs, after 15 seconds at most.
 
 The old screen of a plain shell and the programs in it, such as a dev server, are gone. Your files and your git state are not.
+
+When a pane changes size, for example when a banner or panel opens or a new shell is added, Natamux hides it while the size changes and fades it in after the shell has redrawn.
 
 While the daemon is down, the pane shows **Reconnecting.** If a pane shows **The shell ended.** and an **Open a new shell** link at the bottom, click it. If it shows **The terminal could not start.** at the top, click **Start a new shell** instead. Natamux opens a fresh shell in the same workspace folder.
 

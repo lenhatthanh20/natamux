@@ -54,7 +54,8 @@ To see tasks in every state, run `scripts/dev.sh seed`. It starts fake agents th
 - **Keep work separate.** Each task has a git worktree, branch and terminal that keeps running when you close the dashboard. Agents never edit the same checkout.
 - **See what needs you.** A question, a failure or a stage that waits for review becomes a card in the sidebar, and the title bar counts every task that needs you. Turn on system notifications with **Notify me**.
 - **Watch every agent.** Switch the task list between table, board and progress views, or open **Agents** for a grid of up to six live agent terminals.
-- **Shape the pipeline.** Pick stages from a catalog of 28, run stages side by side, choose which ones wait for your approval, give a stage its own agent or model, check a stage on CI, or run it as a Claude Code workflow. The settings live in `.natamux.json`.
+- **Shape the pipeline.** Pick stages from a catalog of 28, run stages side by side, choose which ones wait for your approval, check a stage on CI, or run it as a Claude Code workflow. Split the pipeline into branch paths with a condition, and let an agent or CI send a task back to an earlier stage. The settings live in `.natamux.json`, so a team shares one process. See [Build a workflow](https://natamux.github.io/docs/guides/workflows/).
+- **Mix agents in one task.** Give each stage its own agent and model, for example Claude Code to implement, Cursor to review and Copilot to watch CI, each in its own shell. See [Mix agents in one task](https://natamux.github.io/docs/guides/mix-agents/).
 - **Review and deliver.** Read side-by-side diffs, send a comment on a line to the agent, let the agent draft the commit message, then commit, push and open a pull request. A merged pull request finishes the task.
 - **Use your own agent.** Natamux starts Claude Code, Codex, Gemini CLI, GitHub Copilot CLI or Cursor, and adds hooks so the dashboard knows when an agent works, asks or finishes.
 

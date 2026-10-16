@@ -88,6 +88,14 @@ To use an exported file in another project, import it there, or copy it into the
 
 Review runs in its own shell, Shell 5, so it can use another agent than the task's without touching the session in Shell 1. **Test spec** works the same way, in Shell 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
 
+### Split the pipeline by a condition
+
+Click **Add branch** and give each path a condition, such as a section of `plan.md` or a command. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
+
+### Give a stage another agent
+
+Click the stage and set **Agent** and **Arguments**. The stage then runs in its own shell. See [Mix agents in one task](/docs/guides/mix-agents/).
+
 ### Have a person read the diff
 
 Click **Add stage**, pick **Manual review** in the Check phase, and drag it after **Review**. The task then waits for your **Approve** before **Release**. To make the agent review wait for you as well, tick **Wait for my approval** on **Review**.

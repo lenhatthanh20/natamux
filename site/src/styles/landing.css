@@ -253,6 +253,63 @@ h1 .line { display: block; }
 .stack > [data-active='false'] { opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0s 0.3s; }
 .stack > [data-active='true'] { opacity: 1; visibility: visible; transition: opacity 0.3s; }
 
+/* CTA row at the end of a section */
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+
+/* Workflows */
+.wf-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.75fr); gap: 20px; align-items: start; }
+.wf-card { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: clamp(16px, 2.4vw, 26px); }
+.wf-card h3 { font-size: 1.375rem; font-stretch: 92%; }
+.wf-text { margin: 6px 0 18px; font-size: 0.9375rem; color: var(--muted); }
+.wf, .wf ul, .wf ol { list-style: none; margin: 0; padding: 0; }
+.wf { display: grid; gap: 12px; }
+.wf > li { position: relative; min-width: 0; }
+.wf > li:not(:last-child)::after {
+  content: ''; position: absolute; left: 22px; top: 100%; width: 2px; height: 12px; background: var(--line-2);
+}
+.st {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 9px 12px;
+  border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-2);
+  font-size: 0.9375rem; line-height: 1.3;
+}
+.st-n { color: var(--strong); font-weight: 600; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 500; line-height: 1.5; color: var(--c, var(--muted));
+  border: 1px solid color-mix(in srgb, var(--c, var(--muted)) 55%, transparent);
+  background: color-mix(in srgb, var(--c, var(--muted)) 12%, transparent);
+}
+.chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip.you { --c: var(--muted); }
+.chip.you::before { border-radius: 2px; }
+.back { flex-basis: 100%; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--rose); }
+.back svg { flex: none; width: 28px; height: 14px; fill: none; stroke: var(--rose); stroke-width: 1.6; stroke-dasharray: 3 3; stroke-linecap: round; stroke-linejoin: round; }
+.par > ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.par .st { height: 100%; align-content: start; }
+.par > ul > li { position: relative; }
+.br > .if { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px 2px; color: var(--text); font-size: 0.9375rem; }
+.if i { flex: none; width: 22px; height: 22px; transform: rotate(45deg); border: 2px solid var(--sky); border-radius: 4px; background: color-mix(in srgb, var(--sky) 14%, transparent); margin-inline: 4px; }
+.paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; align-items: start; }
+.path { min-width: 0; padding: 12px; border-radius: 12px; border: 1px dashed var(--line-2); }
+.path-name { margin-bottom: 10px; font-size: 0.8125rem; color: var(--muted); }
+.path .st { background: var(--panel); }
+.wf-note { margin-top: 20px; font-size: 0.9375rem; color: var(--muted); max-width: 64ch; }
+@media (max-width: 960px) { .wf-cards { grid-template-columns: minmax(0, 1fr); } }
+
+/* One task, one agent per stage */
+.shells { margin-top: 28px; padding: clamp(16px, 2.4vw, 26px); border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+.shells-title { font-weight: 600; color: var(--strong); }
+.shells ol { list-style: none; margin: 16px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.shells li {
+  position: relative; display: grid; gap: 6px; align-content: start; justify-items: start; padding: 14px;
+  border-radius: 12px; border: 1px solid var(--line-2); border-top: 3px solid var(--c); background: var(--bg-2); font-size: 0.9375rem;
+}
+.shells li > span:last-child { color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+.shells li code { font-size: 0.75rem; color: var(--muted); }
+.shells-foot { margin-top: 16px; font-size: 0.875rem; color: var(--muted); }
+@media (max-width: 899px) { .shells ol { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .shells ol { grid-template-columns: 1fr; } }
+
 /* Flow */
 .flow { background: linear-gradient(var(--bg-2), var(--bg) 70%); }
 .flow-box { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); padding: clamp(16px, 2.4vw, 28px); }

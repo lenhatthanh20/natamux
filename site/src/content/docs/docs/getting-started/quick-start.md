@@ -129,5 +129,6 @@ To clean up, open the task and remove its workspace. Natamux asks first and refu
 ## Next
 
 - [Tasks](/docs/concepts/tasks/) and [Workspaces](/docs/concepts/workspaces/)
+- [Build a workflow](/docs/guides/workflows/): paths, send back and CI for your team
 - [Desktop app](/docs/guides/desktop-app/)
 - [Troubleshooting](/docs/help/troubleshooting/)

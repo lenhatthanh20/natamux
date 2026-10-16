@@ -17,6 +17,8 @@ Natamux is an open-source Agent Development Environment (ADE). You give each pie
 <a href="/docs/getting-started/install/"><strong>Install</strong><span>macOS · Windows · Linux</span></a>
 <a href="/docs/getting-started/quick-start/"><strong>Quick start</strong><span>first task in ten minutes</span></a>
 <a href="/docs/concepts/review-loop/"><strong>The review loop</strong><span>two agents build, a third reviews</span></a>
+<a href="/docs/guides/workflows/"><strong>Build a workflow</strong><span>paths, send back, CI</span></a>
+<a href="/docs/guides/mix-agents/"><strong>Mix agents</strong><span>an agent per stage</span></a>
 </div>
 
 ## The problem
@@ -28,6 +30,7 @@ Coding agents are good at one job at a time. When you run several, you start to 
 - Permission prompts and questions that wait unseen.
 - Work that nobody checked before it reaches a pull request.
 - Different agents with different tools and no common view.
+- On a team, each person runs agents their own way, so there is no shared process for spec, review, CI and QA.
 
 ## Agents that check each other
 
@@ -73,7 +76,7 @@ Switch the task list between **Table**, **Board** and **Progress**. The progress
 
 ### Stages you can shape
 
-Each project can change its pipeline in **Project settings**: pick stages from a catalog of 28 (Research, Security review, Manual testing, Release notes, and more), run stages side by side, choose which ones wait for you, give a stage its own agent or model, check a stage on CI, or run it as a Claude Code workflow. Settings are saved in `.natamux.json`, so you can commit them. See [Project settings](/docs/guides/project-settings/).
+Each project can change its pipeline in **Project settings**: pick stages from a catalog of 28 (Research, Security review, Manual testing, Release notes, and more), run stages side by side, choose which ones wait for you, give a stage its own agent or model, check a stage on CI, or run it as a Claude Code workflow. You can split the pipeline into paths with a condition, such as a review path and a develop path. A review agent or a CI check can send a task back to an earlier stage, and each stage can use its own agent, such as Claude Code to write, Cursor to review and Copilot to watch CI. Settings are saved in `.natamux.json`, so the whole team can commit and share one process. See [Project settings](/docs/guides/project-settings/), [Build a workflow](/docs/guides/workflows/) and [Mix agents in one task](/docs/guides/mix-agents/).
 
 ### Review and ship from the dashboard
 
@@ -132,5 +135,6 @@ Tasks are plain Markdown files with a small header, so they are easy to read and
 1. [Install Natamux](/docs/getting-started/install/): the desktop app for macOS, Windows or Linux.
 2. [Quick start](/docs/getting-started/quick-start/): from first launch to a merged change.
 3. [The review loop](/docs/concepts/review-loop/): how the default pipeline runs three agents.
+   Then [Build a workflow](/docs/guides/workflows/) and [Mix agents in one task](/docs/guides/mix-agents/) to shape your own.
 4. [Tasks](/docs/concepts/tasks/), [Workspaces](/docs/concepts/workspaces/) and [Stages](/docs/concepts/stages/): the core ideas.
 5. [Troubleshooting](/docs/help/troubleshooting/) and the [FAQ](/docs/help/faq/).

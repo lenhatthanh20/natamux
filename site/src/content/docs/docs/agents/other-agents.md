@@ -63,3 +63,7 @@ natamux event T-42 agent.asked --source agent --payload '{"question":"Which data
 ```
 
 See the [CLI reference](/docs/reference/cli/) for the event types.
+
+## Related
+
+- [Mix agents in one task](/docs/guides/mix-agents/): an agent and model per stage
