@@ -383,7 +383,7 @@ Stage ids are unique in the whole pipeline, so each stage is on exactly one path
 
 ### In the Progress view
 
-The card of the first stage of the path taken says **Took Small change** and the reason, such as `plan.md "Size" contains "small"`. The stages of the other paths say **Not taken**. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
+The branch says **Took Small change** and the reason, such as `plan.md "Size" contains "small"`. Each other path is one folded row marked **Not taken**. Click it to see its stages. They do not count in "3 of 7". The timeline adds the path name to the event that chose it.
 
 ### Send back
 

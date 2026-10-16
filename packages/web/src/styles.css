@@ -1034,9 +1034,6 @@
 .branch-lane[data-taken="true"] {
   border-left-color: var(--accent);
 }
-.branch-lane[data-taken="false"] {
-  opacity: 0.6;
-}
 /* The pipeline preview of Project settings: left to right, top to bottom below 640px. It is still,
    so it reads the same with reduced motion. Lines meet the middle of the markers. */
 .pipeline {

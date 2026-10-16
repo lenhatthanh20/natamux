@@ -527,11 +527,13 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 **Task progress page** (the Progress view of the details panel, beside the workspace). It shows what each stage did and the evidence that it is finished. The panel is narrow (320-560), so everything is one column.
 
-- **Overview:** stages done out of all, time since the task started, time it waited for you, times sent back. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
+- **Overview:** stages done out of all, time since the task started, time it waited for you, and times sent back when it is above 0. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
 - **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
   - Done stage: time, who approved and when, and evidence chips. **Show evidence** opens the passed checks and, for a stage that ran twice, each round with the comment that sent it back.
   - Current stage: everything the checks of 3.5 will look at, live. A parallel step shows its stages side by side, each in its own card.
   - Stage not reached: what will finish it, in one sentence ("Finished when the pull request is merged").
+  - Branch: its name and one line, "Took <path>: <reason>", "Picks a path when it gets here" or "No path was taken". Under it one lane per path with a left rule. The taken lane says **Taken**. A lane not taken is one folded row (name, condition, **Not taken**, stage count) that opens to its stages, so the path that runs stays in view.
+  - Only stage cards are boxes. A branch or a side-by-side step has a header, no box.
 - **Evidence per stage kind:**
 
 | Kind | Evidence shown |

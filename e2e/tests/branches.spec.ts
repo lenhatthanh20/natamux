@@ -115,6 +115,15 @@ function card(details: Locator, name: string) {
   return details.getByRole('list', { name: 'Stages' }).getByRole('article', { name, exact: true })
 }
 
+// A path not taken is one folded row. Open it to see its stages.
+async function openLane(details: Locator, name: string) {
+  await details
+    .getByRole('list', { name: 'Stages' })
+    .getByRole('region', { name, exact: true })
+    .getByRole('button', { expanded: false })
+    .click()
+}
+
 // B1 of the test spec.
 test('builds a branch in Project settings and saves it', async ({ page, request }) => {
   test.setTimeout(90_000)
@@ -259,7 +268,10 @@ test('takes the first path, then goes on to the stage after the branch', async (
   expect(startedStages(events)).not.toContain('review')
 
   const details = await openProgress(page, title)
-  await expect(card(details, 'Implement').getByText('Took Small change')).toBeVisible()
+  const branchBlock = details.getByRole('region', { name: 'After plan', exact: true })
+  await expect(branchBlock.getByText('Took Small change')).toBeVisible()
+  await expect(card(details, 'Implement').getByText(/^Took/)).toHaveCount(0)
+  await openLane(details, 'Review PR')
   await expect(card(details, 'Manual review')).toContainText('Not taken')
   await details.getByRole('button', { name: 'Latest events' }).click()
   await expect(details.getByRole('region', { name: 'Latest events' })).toContainText(
@@ -291,6 +303,7 @@ test('takes a path whose condition is turned around with not', async ({ page, re
   expect(started).not.toContain('testing')
 
   const details = await openProgress(page, title)
+  await openLane(details, 'Small change')
   await expect(card(details, 'Implement')).toContainText('Not taken')
   await expect(card(details, 'Automated tests')).toContainText('Not taken')
 })
@@ -309,6 +322,8 @@ test('skips the branch when no path holds', async ({ page, request }) => {
   expect(approved[0]?.payload.path).toBeUndefined()
 
   const details = await openProgress(page, title)
+  await openLane(details, 'Small change')
+  await openLane(details, 'Review PR')
   for (const name of ['Implement', 'Automated tests', 'Manual review']) {
     await expect(card(details, name)).toContainText('Not taken')
   }
