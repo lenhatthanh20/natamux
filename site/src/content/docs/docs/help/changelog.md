@@ -14,6 +14,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - A task title may have up to 400 characters. See [Task fields](/docs/concepts/tasks/#task-fields).
 - Fix: a refused field gave only "The daemon answered with status 400." The message now names the field and the reason.
 - Fix: a shell that a stage closed while another task was shown came back as an empty plain shell. It now stays closed.
+- Fix: a new shell, a closed shell, or a banner or panel that changed a terminal's size showed the shell redrawing. The pane is now hidden while its size changes, and fades in after the shell has redrawn.
 
 ## v0.1.30 (2026-10-16)
 
