@@ -77,7 +77,7 @@ Each project can change its pipeline in **Project settings**: pick stages from a
 
 ### Review and ship from the dashboard
 
-The **Changes** tab shows side-by-side or inline diffs, image diffs, and a box to send a comment on a line straight to the agent. **Generate** asks the agent for a commit message. **Commit all**, **Push** and **Create pull request** finish the job, and the task is done when the pull request is merged. See [Changes and history](/docs/guides/changes-and-history/) and [GitHub](/docs/guides/github/).
+The **Changes** tab shows side-by-side or inline diffs, image diffs, and a box to send a comment on a line straight to the agent. **Generate** asks the agent for a commit message. **Commit all**, **Push** and **Create PR** finish the job, and the task is done when the pull request is merged. See [Changes and history](/docs/guides/changes-and-history/) and [GitHub](/docs/guides/github/).
 
 <figure class="shot">
 <img class="shot-dark" src="/screens/ui/changes-generate-dark.webp" alt="The Changes tab: a list of changed files, a side by side diff, and under the list a commit message drafted by Generate with the Commit all button." width="1600" height="1000" loading="lazy" decoding="async" />

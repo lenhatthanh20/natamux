@@ -113,14 +113,14 @@ The commit box is under the file list.
 
 The header of the workspace has two buttons.
 
-- **Push** pushes the task branch to `origin` and sets it as the upstream branch. The label shows how many commits are ahead of the base, such as `Push ↑2`. A toast says **Pushed `<branch>` to origin.** and, while the task has no pull request, has a **Create pull request** action.
-- **Create pull request** pushes the branch first, then opens a pull request on GitHub with the GitHub CLI. In a narrow window the label is **Open PR**. A toast says **Pull request opened.** and has an **Open** action.
+- **Push** pushes the task branch to `origin` and sets it as the upstream branch. The label shows how many commits are ahead of the base, such as `Push ↑2`. A toast says **Pushed `<branch>` to origin.** and, while the task has no pull request, has a **Create PR** action.
+- **Create PR** pushes the branch first, then opens a pull request on GitHub with the GitHub CLI. A toast says **Pull request opened.** and has an **Open** action.
 
-Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. When files are not committed yet, the reason is **Commit your N changed files first**, and **Commit…** takes the place of **Push**: it opens the Changes tab with the cursor in the commit message, and drafts a message when the box is empty. **Create pull request** is drawn as the main button only when it can be used.
+Both buttons are off, with a reason in the tooltip, when the task has no branch or has 0 commits ahead of the base. When files are not committed yet, the reason is **Commit your N changed files first**, and **Commit…** takes the place of **Push**: it opens the Changes tab with the cursor in the commit message, and drafts a message when the box is empty. **Create PR** is drawn as the main button only when it can be used.
 
 The pull request gets the task title as its title and the task notes as its body. When the task has a linked GitHub issue, the body ends with `Closes #N`. See [GitHub](/docs/guides/github/).
 
-After a pull request exists, **Create pull request** becomes **Open pull request** (**Open PR** in a narrow window). It opens the pull request in a new tab.
+After a pull request exists, **Create PR** becomes **Open pull request** (**Open PR** in a narrow window). It opens the pull request in a new tab.
 
 A done or cancelled task keeps only **Open pull request** in its header. The banner under it offers the next step instead, see [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
 

@@ -32,7 +32,7 @@ Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1
 1. **Add a project.** Choose **File → Add Project…** and pick a git repository.
 2. **Start a task.** Press `c`, type a title and notes, pick the agent, and click **Start task**. Natamux makes a worktree and a branch and starts the agent in the task's terminal.
 3. **Approve the spec, the plan and the test spec** when the task asks. The rest runs by itself.
-4. **Read the changes** in the **Changes** tab, click **Generate** for a commit message, then **Commit all**, **Push** and **Create pull request**.
+4. **Read the changes** in the **Changes** tab, click **Generate** for a commit message, then **Commit all**, **Push** and **Create PR**.
 
 The [quick start](https://natamux.github.io/docs/getting-started/quick-start/) walks through it with screenshots.
 

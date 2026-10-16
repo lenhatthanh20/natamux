@@ -108,7 +108,7 @@ The branch is deleted only when it is fully merged. Otherwise it stays, and you 
 ## Push or pull request fails
 
 - **Push** uses your own git login. For github.com it also asks `gh auth git-credential`, so `gh auth login` or `GH_TOKEN` is enough.
-- **Create pull request** needs the `gh` command, logged in. It refuses when the task already has a pull request.
+- **Create PR** needs the `gh` command, logged in. It refuses when the task already has a pull request.
 
 ## Where the logs are
 

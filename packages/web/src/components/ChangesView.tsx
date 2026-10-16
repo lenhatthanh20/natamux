@@ -268,7 +268,7 @@ export function ChangesView({
         })
       } else if (next !== null) {
         actions.push({
-          label: next === 'push' ? 'Push' : 'Create pull request',
+          label: next === 'push' ? 'Push' : 'Create PR',
           run: () => {
             gitAction.mutate({ action: next })
           },

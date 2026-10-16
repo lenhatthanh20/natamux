@@ -95,6 +95,19 @@ describe('WrapUp', () => {
     expect(onAction).toHaveBeenCalledWith('view-changes')
   })
 
+  it('offers to create a pull request for a branch that has none', async () => {
+    const { onAction } = wrapUp({
+      task: { ...task, pr: null, prStatus: null },
+      facts: {
+        uncommitted: 0,
+        graph: { ahead: 2, base: 'main', push: { remote: 'tracked', unpushed: 0, unpulled: 0 } },
+      },
+    })
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Create PR' }))
+    expect(onAction).toHaveBeenCalledWith('create-pull-request')
+  })
+
   it('shows the last screen of a shell that ended with the task', async () => {
     wrapUp()
     const user = userEvent.setup()

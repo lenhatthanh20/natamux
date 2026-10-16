@@ -36,7 +36,7 @@ const MARK = {
 
 const ACTION_LABEL = {
   'view-changes': 'View changes',
-  'create-pull-request': 'Create pull request',
+  'create-pull-request': 'Create PR',
 } as const
 
 function endedAt(iso: string): string {

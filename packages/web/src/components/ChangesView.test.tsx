@@ -151,7 +151,7 @@ describe('ChangesView', () => {
     await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1))
     const [pushed] = useToasts.getState().toasts
     expect(pushed?.text).toBe('Pushed natamux/t-0002 to origin.')
-    expect(pushed?.actions?.map((action) => action.label)).toEqual(['Create pull request'])
+    expect(pushed?.actions?.map((action) => action.label)).toEqual(['Create PR'])
 
     act(() => pushed?.actions?.[0]?.run())
     await waitFor(() => expect(openPullRequest).toHaveBeenCalledTimes(1))

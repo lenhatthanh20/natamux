@@ -760,7 +760,7 @@ describe('App', () => {
       calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/commit'),
     ).toBe(true)
 
-    await user.click(within(view).getByRole('button', { name: 'Create pull request' }))
+    await user.click(within(view).getByRole('button', { name: 'Create PR' }))
     const link = await within(view).findByRole('link', { name: 'Open pull request' })
     expect(link.getAttribute('href')).toBe('https://github.com/o/r/pull/5')
 

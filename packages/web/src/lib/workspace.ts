@@ -79,15 +79,14 @@ export function pushButton(
   return { label: `Push ↑${unpushed}`, tip: `Push ${commits(unpushed)} to ${remoteBranch}` }
 }
 
-// The button that opens a pull request. The short label is for a narrow main area.
+// The button that opens a pull request.
 export function pullRequestButton(
   branch: string | null,
   ahead: number | null,
   base: string | null,
-  compact: boolean,
   uncommitted: number | null = null,
 ): GitButton {
-  const label = compact ? 'Open PR' : 'Create pull request'
+  const label = 'Create PR'
   if (branch === null) {
     return { label, reason: 'This task has no branch yet' }
   }

@@ -69,7 +69,7 @@ function header({
   return handlers
 }
 
-const pullRequest = () => screen.getByRole('button', { name: 'Create pull request' })
+const pullRequest = () => screen.getByRole('button', { name: 'Create PR' })
 
 // A phone-sized window, where the git actions move into a menu.
 function stubPhone() {
@@ -213,12 +213,23 @@ describe('WorkspaceHeader', () => {
     header({ task: { ...TASK, state: 'done' }, ahead: 2, push: tracked(1), uncommitted: 1 })
     expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Create pull request' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Create PR' })).toBeNull()
     cleanup()
 
     const pr = 'https://github.com/o/r/pull/7'
     header({ task: { ...TASK, state: 'cancelled', pr } })
     expect(screen.getByRole('link', { name: 'Open pull request' }).getAttribute('href')).toBe(pr)
+  })
+
+  it('says Create PR on the button and in the phone menu', async () => {
+    header({ ahead: 1, push: tracked(1) })
+    expect(pullRequest().textContent).toBe('Create PR')
+    cleanup()
+
+    stubPhone()
+    header({ ahead: 1, push: tracked(1) })
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Git actions' }))
+    expect(screen.getByRole('menuitem', { name: 'Create PR' })).toBeTruthy()
   })
 
   it('has no git menu on a phone for a finished task without a pull request', () => {

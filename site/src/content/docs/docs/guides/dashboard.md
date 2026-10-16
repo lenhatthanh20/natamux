@@ -63,7 +63,7 @@ In the workspace list:
 
 When a task is done or cancelled, Natamux says so once with a message. When the tab is in the background, a task that is done also shows a notification.
 
-- A banner under the header says **Task done.** or **Task cancelled.** and what is left, with the next step as its main button: **Commit…** for files that are not committed, **Push** for commits that origin does not have, **Create pull request**, or **Open pull request** while it is open. When nothing is left, the main button is **Remove workspace**. The banner shows on every tab.
+- A banner under the header says **Task done.** or **Task cancelled.** and what is left, with the next step as its main button: **Commit…** for files that are not committed, **Push** for commits that origin does not have, **Create PR**, or **Open pull request** while it is open. When nothing is left, the main button is **Remove workspace**. The banner shows on every tab.
 - The **Terminal** tab shows the wrap-up instead of the shells. It lists the changes, the push, the pull request and the branch, each with a mark and a button when there is something to do. Under **Shells** are the shells that still run and the shells the task ended, with their agent and stage, and **Show last screen**.
 - **Remove workspace** asks first. The dialog lists what goes and what stays:
   - Files that are not committed stop it. The dialog lists them and offers **View changes** and **Commit…**.
