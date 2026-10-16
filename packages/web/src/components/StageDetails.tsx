@@ -2,6 +2,7 @@ import {
   canEndShell,
   catalogEntry,
   checksOnCi,
+  endsShell1,
   type PipelineIssue,
   PROMPT_PLACEHOLDERS,
   type SkillList,
@@ -194,7 +195,15 @@ export function StageDetails({
 
       {checksOnCi(stage) && <CiOption stage={stage} steps={steps} onChange={onChange} />}
 
-      {canEndShell(stage) && <EndShellOption stage={stage} steps={steps} onChange={onChange} />}
+      {canEndShell(stage) &&
+        (endsShell1(steps, stage) ? (
+          <p className="m-0 text-xs text-muted">
+            This stage runs in Shell 1, which cannot be closed. Shell 1 keeps the task's agent and
+            its session.
+          </p>
+        ) : (
+          <EndShellOption stage={stage} steps={steps} onChange={onChange} />
+        ))}
 
       {ownAgent && (
         <Field

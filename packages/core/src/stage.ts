@@ -57,7 +57,8 @@ export const stageSchema = z.object({
   // it sees the work with fresh eyes, and may use another agent.
   ownShell: z.boolean().optional(),
   // Ends the agent or command of the stage, and closes its shell, when the stage is done. The
-  // next stage in that shell then starts a new agent session.
+  // next stage in that shell then starts a new agent session. Shell 1 is never closed: a stage
+  // there keeps it, so files that set it still load.
   endShell: z.boolean().optional(),
 })
 
@@ -466,6 +467,18 @@ export function offersWorkflow(stage: Pick<Stage, 'kind' | 'workflow'>): boolean
 // Review, manual and release stages start nothing in a shell, so they have none to end.
 export function canEndShell(stage: Pick<Stage, 'kind'>): boolean {
   return stage.kind === 'context' || stage.kind === 'agent' || stage.kind === 'testing'
+}
+
+// Shell 1 keeps the task's agent and its session, so endShell never closes it. A testing stage
+// with a command runs it in a shell of its own, which it may end.
+export function endsShell1(
+  steps: readonly Step[],
+  stage: Pick<Stage, 'id' | 'kind' | 'command'>,
+): boolean {
+  if (stage.kind === 'testing' && stage.command !== undefined) {
+    return false
+  }
+  return terminalOfStage(steps, stage.id) === '1'
 }
 
 // CI checks code, so only a stage that changes it (an agent stage without an output file) or a

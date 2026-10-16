@@ -263,11 +263,12 @@ A stage that only writes a report can run in its own shell with a new session: `
 
 ### End a stage's shell
 
-Check **End the agent and close its shell when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages.
+Check **End the agent and close its shell when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Shell 1.
 
 - Done means the stage passed, was approved or was skipped. A stage that waits for your approval keeps its shell until you approve.
 - Natamux ends the agent or command in the stage's shell and closes the shell. Other shells go on.
-- A next stage in the same shell starts a new agent with a new session and the full stage prompt. For Shell 1 this drops the context of the stages before.
+- Shell 1 is never closed, because it keeps the task's agent and its session. A stage there shows "This stage runs in Shell 1, which cannot be closed." in place of the checkbox, and `"endShell": true` on it is ignored.
+- A next stage in the same shell starts a new agent with a new session and the full stage prompt.
 - A send back to the stage starts a new agent in its shell.
 - The last stage is left to the end of the task, which keeps the last screen of each shell. A shell closed earlier keeps no screen.
 
