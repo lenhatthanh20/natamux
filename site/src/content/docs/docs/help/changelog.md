@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.31 (2026-10-16)
+
+- A stage in Shell 1 no longer closes it with **End the agent and close its shell when the stage is done**. Shell 1 keeps the task's agent and its session; the stage settings say so. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
+- The button that opens a new pull request says **Create PR** at every width. See [Push and open a pull request](/docs/guides/changes-and-history/#push-and-open-a-pull-request).
+- A task title may have up to 400 characters. See [Task fields](/docs/concepts/tasks/#task-fields).
+- Fix: a refused field gave only "The daemon answered with status 400." The message now names the field and the reason.
+- Fix: a shell that a stage closed while another task was shown came back as an empty plain shell. It now stays closed.
+
 ## v0.1.30 (2026-10-16)
 
 - The line at the end of every stage prompt now reads "When you are done, run `natamux done`, unless the steps above say not to." A prompt of your own can say when the agent must not run it, for example after it sends the task back. See [Configuration](/docs/reference/configuration/).
