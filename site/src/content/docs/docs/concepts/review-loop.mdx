@@ -43,7 +43,7 @@ When the task reaches the group, Natamux starts both stages at the same moment.
 - **Test spec** gets **Shell 2** and a new session. Its prompt tells it not to read the code. The test cases come from the spec alone, so they test what was asked, not what was built.
 - Each shell shows the state of its own stage in its pane header. The sidebar shows both stages under the task while it is open.
 
-<Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress tab shows the stages with their states." caption="Implement in Shell 1 is still running. Test spec in Shell 2 waits for your approval. The group ends when both are done." />
+<Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Shell 1 runs Claude Code on Implement and Shell 7 runs Gemini CLI on Test spec, and both say Running. The Progress tab shows the Test spec and Implement group with both stages Running." caption="Both stages of the group run at once, each agent in its own shell. Here each stage has its own agent, so Test spec is in Shell 7. The group ends when both are done." />
 
 Test spec waits for your approval because the test cases decide what **Automated tests** checks. Read them in the **Docs** tab (key `4`) and fix them by hand before you approve, if you like.
 
@@ -56,7 +56,7 @@ Test spec waits for your approval because the test cases decide what **Automated
 - It writes `review.md` with a **Findings** section: each problem that must be fixed, with its file and why, or "None".
 - Its gate is `auto`. With no findings it runs `natamux done`, its checks pass, and the task goes on to **Release** without waiting for you.
 
-<Figure src="/screens/v2/task-review-shell5" alt="A task with three terminals. Shell 5 at the bottom holds the Review agent, which reads the diff. The Progress tab shows Review running." caption="The Review agent starts in Shell 5 with a new session, so it reads the work with fresh eyes." />
+<Figure src="/screens/v2/task-review-shell5" alt="An open task with four agent shells: Shell 1, Shell 6, Shell 7 and Shell 8. The Review agent runs in Shell 8 and shows git diff, and the Progress tab shows Review Running." caption="The Review agent starts in a shell of its own with a new session, so it reads the work with fresh eyes. Here each stage has its own agent, so Review is in Shell 8." />
 
 ### Choose the review agent
 
@@ -72,7 +72,7 @@ The review agent is the task's agent unless you pick another one. A second agent
 
 </Steps>
 
-<Figure src="/screens/v2/settings-review-agent" alt="Project settings of a repository, Stages tab. The Review stage is selected, and its Agent field is set to Codex." caption="Review selected in Project settings, with Codex as its agent." />
+<Figure src="/screens/v2/settings-review-agent" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field is empty and shows the hint --model sonnet." caption="Review selected in Project settings, with Codex as its agent." />
 
 In the file, these are the `agent` and `args` fields of the Review stage:
 
@@ -107,9 +107,9 @@ and stops, without `natamux done`. Then:
 3. **Automated tests** and **Review** run again after it. The review agent gets its prompt in the same Shell 5 session, so it knows what it asked for.
 4. The Implement card in **Progress** shows **Sent back 1×**, and the panel counts the times the task was sent back.
 
-<Figure src="/screens/v2/task-sent-back" alt="A task after the review agent sent it back. Shell 5 shows the review with one finding and the natamux stage back command. Shell 1 shows the Implement prompt again with What to change. The Implement card shows ×2 and Sent back 1×." caption="Implement runs a second time (×2) with the review's reasons in its prompt." />
+<Figure src="/screens/v2/task-sent-back" alt="An open task after the review agent sent it back. Shell 8 shows a review with 1 problem to fix, the natamux stage back command, and the line Sent back to Implement with 1 finding. In Progress, the Implement card is Running with x2 and Sent back 1x." caption="Implement runs a second time (x2) with the review's reasons in its prompt." />
 
-<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with ×2." caption="The loop in the Progress tab: the review sends the task back and Implement runs again. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with x2." caption="The loop in the Progress tab: the review sends the task back and Implement runs again. Recorded on the real dashboard; the agents are stand-in scripts." />
 
 ## Limits
 

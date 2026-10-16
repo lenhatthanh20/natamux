@@ -10,7 +10,7 @@ import Figure from '../../../components/Figure.astro'
 
 Natamux is an open-source Agent Development Environment (ADE). You write your team's workflow once, in a file named `.natamux.json`: the stages, the approvals, the paths a task can take and the send backs. Every task of every person then runs that workflow, each in its own git worktree and terminals. Coding agents such as Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor do the work, and each stage can use a different one. You step in only where the workflow asks for you.
 
-<Figure src="/media/v2/clip-send-back" video alt="The Progress panel of a task. The Review stage fails and says Sent back, then Implement runs a second time." caption="A review agent sends a task back to Implement. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-send-back" video alt="The Progress panel of a task. The Review stage fails and says Sent back, then Implement runs a second time with x2." caption="A review agent sends a task back to Implement. Recorded on the real dashboard; the agents are stand-in scripts." />
 
 <CardGrid>
   <LinkCard title="Install" description="The desktop app for macOS, Windows or Linux." href="/docs/getting-started/install/" />
@@ -41,11 +41,7 @@ Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests �
 
 You approve the spec, the plan and the test spec. After you approve the plan, two agents work at once: one writes test cases from the spec without reading the code, the other writes the code. Then the tests run, and a third agent reviews the changes in a session of its own. When the review finds problems, it sends the task back to Implement by itself, at most two times, and then asks you. See [The review loop](/docs/concepts/review-loop/).
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-side-by-side-dark.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-side-by-side-light.webp" alt="An open task with two agent terminals side by side. Implement runs in Shell 1 and Test spec waits in Shell 2. A banner says Ready for review: Test spec, and the Progress panel shows Context, Spec and Plan done, Test spec in review and Implement running." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>Test spec and Implement run side by side, each agent in its own shell.</figcaption>
-</figure>
+<Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Shell 1 runs Claude Code on Implement and Shell 7 runs Gemini CLI on Test spec, and both say Running. The Progress panel shows the Test spec and Implement group with both stages Running." caption="Test spec and Implement run side by side, each agent in its own shell." />
 
 ## What you get
 
@@ -57,21 +53,13 @@ A task gets its own branch, such as `natamux/t-0001-fix-login`, and its own fold
 
 The title bar counts the tasks that wait for you: an agent asked a question, a stage is ready for review, a task failed or is blocked, or an agent has been quiet for 10 minutes. In the sidebar, a question or a failure becomes a card with an **Answer** button. Turn on **Notify me** to get a system notification. See [Needs you](/docs/guides/dashboard/#needs-you).
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/task-needs-you-dark.webp" alt="A task that needs input. The banner says the agent ended its turn, the sidebar card has an Answer button, and the stage card in Progress offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/task-needs-you-light.webp" alt="A task that needs input. The banner says the agent ended its turn, the sidebar card has an Answer button, and the stage card in Progress offers Approve anyway, Mark as done and Start agent." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>A task that needs your input, with the agent's message and the ways to go on.</figcaption>
-</figure>
+<Figure src="/screens/v2/task-needs-you" alt="A task that needs input. A banner under the header says The agent asks: Should a coupon apply before or after tax?, with Answer in terminal and Resume. The sidebar card has an Answer button, and the Spec card in Progress shows Needs input with Approve anyway, Mark as done and Start agent." caption="A task that needs your input, with the agent's question and the ways to go on." />
 
 ### Three views of the work
 
 Switch the task list between **Table**, **Board** and **Progress**. The progress view lines up every task against its stages, with the next action for each one. The **Agents** view shows up to six live agent terminals in a grid. See [Dashboard](/docs/guides/dashboard/).
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/progress-dark.webp" alt="The Progress view: one row per task, one column per stage from Context to Release, with a marker for the state of each stage and a Next button such as Answer or Review." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/progress-light.webp" alt="The Progress view: one row per task, one column per stage from Context to Release, with a marker for the state of each stage and a Next button such as Answer or Review." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>The Progress view: where each task is in its pipeline, and what it needs next.</figcaption>
-</figure>
+<Figure src="/screens/v2/progress" alt="The Progress view of a project: one row per task, one column per stage from Context to Release, with the Reproduce the bug and Plan columns of the branch. A marker shows the state of each stage, and a button at the end of the row says Review, Answer or Open." caption="The Progress view: where each task is in its pipeline, and what it needs next." />
 
 ### Stages you can shape
 
@@ -81,11 +69,7 @@ Each project can change its pipeline in **Project settings**: pick stages from a
 
 The **Changes** tab shows side-by-side or inline diffs, image diffs, and a box to send a comment on a line straight to the agent. **Generate** asks the agent for a commit message. **Commit all**, **Push** and **Create PR** finish the job, and the task is done when the pull request is merged. See [Changes and history](/docs/guides/changes-and-history/) and [GitHub](/docs/guides/github/).
 
-<figure class="shot">
-<img class="shot-dark" src="/screens/ui/changes-generate-dark.webp" alt="The Changes tab: a list of changed files, a side by side diff, and under the list a commit message drafted by Generate with the Commit all button." width="1600" height="1000" loading="lazy" decoding="async" />
-<img class="shot-light" src="/screens/ui/changes-generate-light.webp" alt="The Changes tab: a list of changed files, a side by side diff, and under the list a commit message drafted by Generate with the Commit all button." width="1600" height="1000" loading="lazy" decoding="async" />
-<figcaption>Read the diff, let the agent draft the commit message, then commit.</figcaption>
-</figure>
+<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files, a side by side diff of checkout.ts, and under the list a commit message box with Generate and Commit all." caption="Read the diff, write or generate the commit message, then commit." />
 
 ### Five agents, and any other
 

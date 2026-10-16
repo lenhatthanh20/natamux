@@ -1,7 +1,8 @@
 ---
 // The hero: the demo workflow "storefront" as a graph, with three tasks moving through it and the
 // file that makes it beside the graph. landing.js runs the timeline; this file only draws it.
-// x, y place an item on the wide graph (1020 x 440), mx, my on the tall one for phones (360 x 930).
+// x, y place an item on the wide graph (1020 x 440, of which y 36 to 400 shows: --oy and --vh in
+// landing.css), mx, my on the tall one for phones (360 x 930).
 type Node = {
   id: string
   name: string
@@ -53,13 +54,14 @@ const edges: [string, string, string, string, string][] = [
   ['back', 'agent-review', 'implement', 'M650 220 C 650 410, 540 410, 540 290', 'M180 600 C 352 600, 352 490, 265 490'],
 ]
 
-// [text, wide x, y, tall x, y, tall alignment, data key]
+// [text, wide x, y, tall x, y, tall alignment, data key]. On the wide graph the path names sit
+// left of their wire, clear of the lines.
 const labels: [string, number, number, number, number, string, string][] = [
-  ['Bug or feature', 262, 268, 212, 225, 'start', 'branch'],
-  ['Bug fix', 367, 140, 28, 372, 'start', 'bug'],
-  ['Otherwise: Feature', 367, 392, 332, 372, 'end', 'feature'],
+  ['Bug or feature', 222, 263, 212, 225, 'start', 'branch'],
+  ['Bug fix', 290, 128, 28, 372, 'start', 'bug'],
+  ['Otherwise: Feature', 256, 316, 332, 372, 'end', 'feature'],
   ['Side by side', 540, 220, 30, 548, 'start', 'group'],
-  ['Sends back, at most twice', 595, 396, 0, 0, 'none', 'back'],
+  ['Sends back, at most twice', 595, 388, 0, 0, 'none', 'back'],
 ]
 
 const tokens = [
@@ -129,7 +131,7 @@ const events = [
   <div class="lw-body">
     <div class="lw-graph">
       <div class="lw-map" role="group" aria-label="Stages of the storefront workflow" data-lw-map>
-        <svg class="lw-wires wide" viewBox="0 0 1020 440" aria-hidden="true">
+        <svg class="lw-wires wide" viewBox="0 36 1020 364" aria-hidden="true">
           <rect class="lw-group" x="486" y="106" width="108" height="228" rx="14"></rect>
           {edges.map(([id, from, to, d]) => <path class={id === 'back' ? 'lw-wire loop' : 'lw-wire'} data-e={id} data-from={from} data-to={to} d={d}></path>)}
           <path class="lw-arrow" d="M534 331 L540 322 L546 331"></path>
@@ -185,7 +187,7 @@ const events = [
 
     <div class="lw-code">
       <p class="lw-code-title"><code>.natamux.json</code><span>shortened</span></p>
-      <pre data-lw-code>{json.map(([n, line]) => <span class="ln" data-n={n || undefined} set:html={paint(line)} />)}</pre>
+      <pre data-lw-code>{json.map(([n, line]) => <span class="ln" data-n={n || undefined} style={`--i: ${line.search(/\S/)}`} set:html={paint(line)} />)}</pre>
     </div>
   </div>
 

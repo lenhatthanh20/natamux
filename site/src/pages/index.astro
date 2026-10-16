@@ -357,26 +357,22 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
             <span class="line">Write your workflow once.</span>
             <span class="line">Every task runs it, with the agents you pick.</span>
           </h1>
-          <div class="hero-row">
-            <p class="lede">
-              Stages, approvals, branches and send backs live in one committed file, <code>.natamux.json</code>.
-              Each task gets its own worktree and terminals, and each stage can use a different agent: Claude Code,
-              Codex, Gemini CLI, Copilot or Cursor. You step in only where the workflow asks for you.
-            </p>
-            <div class="hero-act">
-              <div class="ctas">
-                <a class="btn primary big" href={mac} data-hero-download>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
-                  <span data-hero-label>Download for macOS</span>
-                </a>
-                <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
-              </div>
-              <p class="fine">
-                <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
-                <a href="#download">Other systems</a>. MIT licensed, no account.
-              </p>
-            </div>
+          <p class="lede">
+            Stages, approvals, branches and send backs live in one committed file, <code>.natamux.json</code>.
+            Each task gets its own worktree and terminals, and each stage can use a different agent: Claude Code,
+            Codex, Gemini CLI, Copilot or Cursor. You step in only where the workflow asks for you.
+          </p>
+          <div class="ctas">
+            <a class="btn primary big" href={mac} data-hero-download>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" /></svg>
+              <span data-hero-label>Download for macOS</span>
+            </a>
+            <a class="btn big" href={`${docs}guides/workflows/`}>Build a workflow</a>
           </div>
+          <p class="fine">
+            <span data-hero-note data-version={version}>Version {version} for Apple silicon.</span>{' '}
+            <a href="#download">Other systems</a>. MIT licensed, no account.
+          </p>
         </div>
 
         <div class="stage">
@@ -401,7 +397,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
             </p>
           </div>
         </div>
-        <div class="stage">
+        <div class="wrap">
           <figure class="film-box">
             <div class="frame rise">
               <Clip
@@ -412,12 +408,15 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                 alt="Screen recording of the Natamux dashboard: the storefront workflow in Project settings, a bug task that takes the Bug fix path, Gemini CLI and Claude Code side by side, a Codex review that sends the task back, five providers in the Agents view, and your approval at Manual review."
               />
             </div>
-            <ol class="chapters" data-chapters aria-label="Chapters">
+            <ol class="chapters" data-chapters aria-label="Chapters of the recording">
               {
-                chapters.map((c) => (
+                chapters.map((c, i) => (
                   <li data-at={c.at} data-end={c.end}>
-                    <button type="button" data-seek={c.at}>
-                      <span class="ch-time">{fmt(c.at)}</span>
+                    <button type="button" aria-label={`Chapter ${i + 1}: ${c.label}, from ${fmt(c.at)}`}>
+                      <span class="ch-top">
+                        <span class="ch-n">{i + 1}</span>
+                        <span class="ch-time">{fmt(c.at)}</span>
+                      </span>
                       <span class="ch-label">{c.label}</span>
                     </button>
                   </li>
@@ -434,7 +433,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
           <div class="head">
             <h2 id="workflows-title">Six building blocks for any process</h2>
             <p>
-              Each block is a few lines in <code>.natamux.json</code>, or a few clicks in
+              Each block is a few lines in <code>.natamux.json</code>, or a few clicks in{' '}
               <b>Project settings → Stages</b>. Put them in any order your team works in.
             </p>
           </div>
@@ -456,7 +455,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                 ))
               }
             </div>
-            <div class="stack">
+            <div class="stack swap">
               {
                 blocks.map((b, i) => (
                   <div
@@ -467,29 +466,13 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                     data-active={i === 0 ? 'true' : 'false'}
                     inert={i !== 0}
                   >
-                    <div class="block-copy">
-                      <h3>{b.name}</h3>
-                      <p set:html={b.text} />
-                      {b.media && (
-                        <div class="block-diagram">
-                          <BlockDiagram kind={b.diagram} label={b.figure} />
-                        </div>
-                      )}
-                      <div class="code">
-                        <p class="code-title">{b.json ? <code>{b.codeTitle}</code> : b.codeTitle}</p>
-                        {b.json ? <pre set:html={paint(b.code)} /> : <pre>{b.code}</pre>}
-                      </div>
-                      <p class="more">
-                        More in the docs: <a href={`${docs}${b.docs[0]}`}>{b.docs[1]}</a>
-                      </p>
-                    </div>
                     {b.media ? (
                       <figure class="block-media">
-                        <div class="frame rise">
+                        <div class="frame">
                           {b.media.clip ? (
                             <Clip name={b.media.clip} alt={b.media.alt} />
                           ) : (
-                            <Shot dir={v2} name={b.media.shot ?? ''} alt={b.media.alt} sizes="(min-width: 1240px) 560px, 100vw" />
+                            <Shot dir={v2} name={b.media.shot ?? ''} alt={b.media.alt} sizes="(min-width: 1240px) 920px, 100vw" />
                           )}
                         </div>
                         <figcaption>
@@ -502,6 +485,26 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                         <BlockDiagram kind={b.diagram} label={b.figure} />
                       </div>
                     )}
+                    <div class="block-row">
+                      <div class="block-copy">
+                        <h3>{b.name}</h3>
+                        <p set:html={b.text} />
+                        <p class="more">
+                          More in the docs: <a href={`${docs}${b.docs[0]}`}>{b.docs[1]}</a>
+                        </p>
+                      </div>
+                      <div class="block-side">
+                        {b.media && (
+                          <div class="block-diagram">
+                            <BlockDiagram kind={b.diagram} label={b.figure} />
+                          </div>
+                        )}
+                        <div class="code">
+                          <p class="code-title">{b.json ? <code>{b.codeTitle}</code> : b.codeTitle}</p>
+                          {b.json ? <pre set:html={paint(b.code)} /> : <pre>{b.code}</pre>}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))
               }
@@ -644,7 +647,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
               }
             </ol>
             <p class="shells-foot">
-              Pick the agent and model per stage in <b>Project settings → Stages</b>. It is saved in
+              Pick the agent and model per stage in <b>Project settings → Stages</b>. It is saved in{' '}
               <code>.natamux.json</code>, so the team shares it.
             </p>
           </div>
@@ -689,7 +692,7 @@ pnpm db:seed</pre>
             </p>
           </div>
           <div class="views" data-tabs>
-            <div class="views-tabs" role="tablist" aria-label="Dashboard views" aria-orientation="vertical">
+            <div class="views-tabs" role="tablist" aria-label="Dashboard views">
               {
                 views.map((v, i) => (
                   <button
@@ -700,13 +703,12 @@ pnpm db:seed</pre>
                     aria-selected={i === 0 ? 'true' : 'false'}
                     tabindex={i === 0 ? 0 : -1}
                   >
-                    <b>{v.name}</b>
-                    <span>{v.text}</span>
+                    {v.name}
                   </button>
                 ))
               }
             </div>
-            <div class="stack">
+            <div class="stack swap">
               {
                 views.map((v, i) => (
                   <figure
@@ -721,11 +723,11 @@ pnpm db:seed</pre>
                       {v.clip ? (
                         <Clip name={v.clip} alt={v.alt} />
                       ) : (
-                        <Shot dir={v2} name={v.shot ?? ''} alt={v.alt} sizes="(min-width: 1240px) 820px, 100vw" />
+                        <Shot dir={v2} name={v.shot ?? ''} alt={v.alt} sizes="(min-width: 1240px) 1200px, 100vw" />
                       )}
                     </div>
                     <figcaption>
-                      <span class="views-cap">{v.text}</span>
+                      <span class="views-cap"><b>{v.name}.</b> {v.text}</span>
                       {v.clip && <span class="note"> {note}</span>}
                     </figcaption>
                   </figure>

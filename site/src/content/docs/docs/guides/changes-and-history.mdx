@@ -9,7 +9,7 @@ import Figure from '../../../../components/Figure.astro'
 
 Each workspace has a **Changes** tab and a **History** tab. Use them to review the agent's work and ship it, without leaving the dashboard.
 
-<Figure src="/screens/v2/changes-generate" alt="The Changes tab: the changed files with their status letters and line counts, a side by side diff, and the commit box under the list with a message drafted by Generate and the Commit all button." caption="The Changes tab: files, diff, and the commit box with a drafted message." />
+<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files with their status letters and line counts, a side by side diff of checkout.ts, and the commit box under the list with a typed message, the Generate button and the Commit all button." caption="The Changes tab: files, diff, and the commit box. Generate drafts the message for you; here it is typed by hand." />
 
 Open them from a workspace, or press `2` for **Changes** and `3` for **History**. The **Docs** tab (`4`) shows the stage files; see [Stages](/docs/concepts/stages/#the-docs-tab).
 
@@ -134,7 +134,7 @@ While a dashboard is open, Natamux asks GitHub about open pull requests once a m
 
 The **History** tab draws the git graph of the task branch and of the branch of the main checkout, newest commit first.
 
-<Figure src="/screens/v2/history" alt="The History tab: a commit graph with branch labels, commit messages, authors, short hashes and ages, under a line that says how many commits the task branch is ahead of and behind its base." caption="The History tab: the task branch against its base." />
+<Figure src="/screens/v2/history" alt="The History tab of a task. A line says 2 commits ahead of main, 0 behind, and under it a commit graph shows branch labels, commit messages, authors, short hashes and ages." caption="The History tab: the task branch against its base." />
 
 - The first line says how far the task branch is from the base: `2 commits ahead of main, 0 behind.` When files are not committed, it adds **N files not committed.**, which opens the Changes tab.
 - The base is the branch that the main checkout of the repository is on. When that checkout is not on a branch, or is on the task's own branch, the line says **No base branch to compare with.**

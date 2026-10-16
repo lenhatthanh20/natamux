@@ -9,7 +9,7 @@ import Figure from '../../../../components/Figure.astro'
 
 The dashboard is the web app of the Natamux daemon. It shows every task, every workspace and every agent on one page, and it updates live.
 
-<Figure src="/screens/v2/table" alt="The dashboard: the title bar with Search or run a command and the 5 need you count, the sidebar with All tasks, Agents and the workspaces of a project, and the All tasks table with state chips and Table, Board and Progress switches." caption="The dashboard with the All tasks table. The tinted card in the sidebar is a task that waits for an answer." />
+<Figure src="/screens/v2/table" alt="The dashboard: the title bar with Search or run a command and the 15 need you count, the sidebar with All tasks, Agents and the workspaces of a project, and the All tasks table with state chips, one row per task, and the Table, Board and Progress switches." caption="The dashboard with the All tasks table. The title bar counts the tasks that wait for you." />
 
 ## Layout
 
@@ -25,7 +25,7 @@ The window has five parts.
 
 The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
 
-<Figure src="/screens/v2/task-details" alt="An open task with the Details view of the details panel: the notes of the task, its workspace with branch, folder and dev ports, its subtasks and its activity." caption="The details panel on Details: notes, workspace, dev ports, subtasks and activity." />
+<Figure src="/screens/v2/task-details" alt="An open task with the Details view of the details panel: the title and labels, Approve, Request changes and Restart agent, the notes, the workspace with branch, folder and dev ports 20110-20119, the subtasks and the activity list." caption="The details panel on Details: notes, workspace, dev ports, subtasks and activity." />
 
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
@@ -76,9 +76,9 @@ Pick a view with the **Layout** switch above the list.
 | Board | One column per state. An empty column is folded to a narrow rail; click it to open it. **Show finished** adds the done and cancelled columns. |
 | Progress | Tasks against their [stages](/docs/concepts/stages/) |
 
-<Figure src="/screens/v2/board-wide" alt="The Board view with the sidebar hidden: one column per state, such as Needs input, In review, Blocked, Running and Draft, each with task cards." caption="The Board view: one column per state." />
+<Figure src="/screens/v2/board-wide" alt="The Board view with the sidebar hidden. Needs input, In review, Running and Ready are columns with task cards. Failed, Blocked and Draft are narrow rails." caption="The Board view: one column per state, with the empty or short states folded into rails." />
 
-<Figure src="/screens/v2/progress" alt="The Progress view: one row per task and one column per stage from Context to Release. Each stage has a marker for its state, and the last column has the next action, such as Answer or Review." caption="The Progress view: every task against its stages, with the next action on the right." />
+<Figure src="/screens/v2/progress" alt="The Progress view of a project: one row per task and one column per stage from Context to Release, with the Reproduce the bug and Plan columns of a branch. Each stage has a marker for its state, and the last column has the next action, Review, Answer or Open." caption="The Progress view: every task against its stages, with the next action on the right." />
 
 The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
 
@@ -124,7 +124,7 @@ Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search task
 
 Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to `Alt+9` pick a row by number. `Tab` changes the scope.
 
-<Figure src="/screens/v2/palette" alt="The command palette open over the dashboard, with a search for a task and the matching tasks and commands below." caption="The command palette finds tasks, commands and projects." />
+<Figure src="/screens/v2/palette" alt="The command palette open over a task, after typing >. It lists commands such as Workspace: Jump to a workspace, View: Show or hide the sidebar and Task: Approve, each with its key." caption="The command palette finds tasks, commands and projects. Type > to list only commands." />
 
 Press `Mod+J` for **Jump to a workspace**. It lists workspaces and their extra shells, with the ones that need you first.
 
@@ -155,7 +155,7 @@ A task needs you when it is in Needs input, In review, Failed or Blocked state, 
 - In the sidebar, a task that waits on you, failed or is blocked is a tinted card with the agent's question. See [Sidebar](#sidebar).
 - The browser tab title shows the count: `(2) Natamux`.
 
-<Figure src="/screens/v2/task-needs-you" alt="A task in Needs input. The banner under the header says the agent ended its turn. The sidebar card has an Answer button, and the stage card offers Approve anyway, Mark as done and Start agent." caption="A task that needs you: the banner, the card in the sidebar, and the actions of its stage." />
+<Figure src="/screens/v2/task-needs-you" alt="A task in Needs input. The banner under the header says The agent asks: Should a coupon apply before or after tax?, with Answer in terminal and Resume. The sidebar card has an Answer button, and the Spec card offers Approve anyway, Mark as done and Start agent." caption="A task that needs you: the banner, the card in the sidebar, and the actions of its stage." />
 
 A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed no longer needs you.
 

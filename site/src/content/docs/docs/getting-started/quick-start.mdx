@@ -45,7 +45,7 @@ For this guide, use **Start a task**.
 
 </Steps>
 
-<Figure src="/screens/v2/start-task" alt="The Start a task dialog. The Context group has a title, Context from, notes and attachments. The Workspace and agent group has the project, the branch to start from and the agent." caption="The Start a task dialog: what the agent reads, and where and how the task runs." />
+<Figure src="/screens/v2/start-task" alt="The Start a task dialog over an open task, scrolled so the Title field is out of view. Context from is My notes, with a notes box and an Attachments drop area. Under Workspace and agent, Project is storefront, Branch from is main and Agent is Claude Code. Cancel and Start task are at the bottom." caption="The Start a task dialog: what the agent reads, and where and how the task runs." />
 
 The dialog has two groups. **Context** is what the agent reads as the task's context. The line under the heading says what that is for the source you pick. **Workspace and agent** is where and how the task runs.
 
@@ -71,7 +71,7 @@ If you added a task to the backlog first, open it and click **Start agent** (or 
 
 Open the task. The **Terminal** tab shows the agent running in the task's worktree.
 
-<Figure src="/screens/v2/task-review-shell5" alt="An open task on the Terminal tab with agent shells in the middle and the stages in the Progress tab on the right." caption="An open task: its shells in the middle, its stages on the right." />
+<Figure src="/screens/v2/task-review-shell5" alt="An open task on the Terminal tab with four agent shells in a grid: Shell 1, Shell 6, Shell 7 and Shell 8. The Review agent runs in Shell 8 and shows git diff. In the Progress tab, Review is Running after Test spec and Implement are done." caption="An open task: its shells in the middle, its stages on the right." />
 
 On the dashboard, the state of the task updates by itself, because Natamux's hooks tell it when the agent works, asks or finishes. You can close the dashboard and the agent keeps running.
 
@@ -89,13 +89,13 @@ When an agent asks a question or waits for a permission, the task moves to **Nee
 
 The task goes back to running. See [Dashboard](/docs/guides/dashboard/).
 
-<Figure src="/media/v2/clip-needs-you" video alt="Screen recording: a question arrives, the title bar count and the sidebar card appear, the cursor clicks Answer, a short reply is typed and the agent goes on." caption="A question arrives, you answer it, and the agent goes on. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-needs-you" video alt="Screen recording: a question arrives, the title bar count and the sidebar card appear, the cursor clicks Answer, a short reply is typed and the agent goes on." caption="A question arrives, you answer it, and the agent goes on. Recorded on the real dashboard; the agents are stand-in scripts." />
 
 ## Review the stage
 
 Each task moves through stages. The **Progress** tab of the details panel shows them and the evidence of each one, beside the terminal.
 
-<Figure src="/screens/v2/task-spec-approve" alt="An open task at the Spec stage. A banner under the header says Ready for review: Spec, with Approve and Send back, and the Progress tab shows the Spec stage card with its Approve button." caption="Spec is ready for review. Approve it from the banner or from the stage card." />
+<Figure src="/screens/v2/task-spec-approve" alt="An open task at the Spec stage. A banner under the header says Ready for review: Spec, with Approve and Send back. In the Progress tab, the Spec card says In review and has an Approve button, and the Bug or feature branch waits below it." caption="Spec is ready for review. Approve it from the banner or from the stage card." />
 
 When a stage waits for you, the task is in review. Read what the agent produced, then:
 
@@ -115,7 +115,7 @@ See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/s
 
 Open the **Changes** tab. It lists the changed files and shows a diff for each one, side by side or inline. The **History** tab shows the task's branch as a graph.
 
-<Figure src="/screens/v2/changes-generate" alt="The Changes tab: the changed files on the left, a side by side diff on the right, and under the list the commit message box with Generate and Commit all." caption="The Changes tab, with a commit message drafted by Generate." />
+<Figure src="/screens/v2/changes-generate" alt="The Changes tab: two changed files on the left, a side by side diff of checkout.ts on the right, and under the list a commit message box with a title and a body, a Generate button and a Commit all button." caption="The Changes tab. Write the commit message, or click Generate to ask the agent for one." />
 
 ## Commit, push and open a pull request
 

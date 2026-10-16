@@ -12,9 +12,9 @@ A workflow is the `stages` list of `.natamux.json`. Commit the file, and everyon
 
 This page shows how the parts fit together with two full examples. For every field, see the [configuration reference](/docs/reference/configuration/).
 
-<Figure src="/screens/v2/stages-branch" alt="Project settings, Stages tab. The flow chart shows an If node that splits into two lanes, each with its condition and its stages." caption="A workflow in Project settings: the If node splits the task into two paths." />
+<Figure src="/screens/v2/stages-branch" alt="Project settings of storefront, Stages tab, with the branch Bug or feature selected. The chart shows an If node and two lanes: Bug fix, with its condition, holds Reproduce the bug, and Feature, marked Otherwise, holds Plan." caption="A workflow in Project settings: the If node splits the task into two paths." />
 
-<Figure src="/media/v2/clip-branch" video alt="Screen recording: a branch is selected in Project settings, its condition is opened, and both paths show in the chart." caption="Select a branch, open its condition, and see both paths. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-branch" video alt="Screen recording: a branch is selected in Project settings, its condition is opened, and both paths show in the chart." caption="Select a branch, open its condition, and see both paths. Recorded on the real dashboard; the agents are stand-in scripts." />
 
 ## Building blocks
 
@@ -82,7 +82,7 @@ Context → Spec → [ Test spec ‖ Implement ] → Review → Watch CI and mer
 
 The task's agent is Claude Code, so Context, Spec and Implement run in Shell 1. The other three stages name their own agent.
 
-<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with ×2." caption="The send back loop of the solo workflow. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with x2." caption="The send back loop of the solo workflow." />
 
 ### The solo file
 
@@ -201,9 +201,9 @@ Context → Triage → ◇ Where is the task ───────────�
 
 The review of the teammate's pull request and the development of your own change never run for the same task. In **Progress**, the path not taken folds into one row marked **Not taken**.
 
-<Figure src="/screens/v2/progress-took-develop" alt="The Progress tab of a task. The branch header says which path was taken and why, and the path that ran is marked Taken." caption="The branch header says which path the task took." />
+<Figure src="/screens/v2/progress-took-develop" alt="The Progress tab of a task. The branch header Bug or feature says Took Bug fix with the command that exited 0, the Bug fix path is marked Taken, and the Feature path is folded as Not taken." caption="The branch header says which path the task took, and why." />
 
-<Figure src="/screens/v2/progress-not-taken" alt="The Progress tab with the Not taken row opened. It lists the stages of the path that did not run." caption="The path not taken folds into one row. Click it to see its stages." />
+<Figure src="/screens/v2/progress-not-taken" alt="The Progress tab with the Feature, Otherwise row opened. It lists its one stage, Plan, marked Not taken." caption="The path not taken folds into one row. Click it to see its stages." />
 
 ### The team file
 

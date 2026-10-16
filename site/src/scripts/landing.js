@@ -20,7 +20,7 @@ toggle?.addEventListener('click', () => {
 
 // Recordings. A player has one video per theme; only the shown one loads and plays. It plays while
 // it is half in view, the tab is visible and its tab panel is open. With reduced motion it waits
-// for the Play button.
+// for the Play button. Only the shown video gets its poster, once the player comes near the view.
 const players = [...document.querySelectorAll('[data-player]')].map((box) => {
   const p = {
     box,
@@ -29,6 +29,7 @@ const players = [...document.querySelectorAll('[data-player]')].map((box) => {
     label: box.querySelector('[data-play-label]'),
     wanted: !reduced,
     seen: false,
+    near: false,
     shown: null,
   }
   p.button.addEventListener('click', () => {
@@ -48,6 +49,7 @@ function sync(p) {
     else v.addEventListener('loadedmetadata', () => (v.currentTime = t), { once: true })
   }
   p.shown = v
+  if (p.near && !v.getAttribute('poster')) v.poster = v.dataset.poster
   if (p.wanted && p.seen && !document.hidden && !p.box.closest('[inert]')) {
     v.play().catch((error) => {
       // A pause that cuts a play short is fine. Otherwise nothing plays: offer the button.
@@ -77,9 +79,22 @@ const inView = new IntersectionObserver(
   },
   { threshold: 0.5 },
 )
+const nearView = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const p = players.find((player) => player.box === entry.target)
+      p.near = true
+      nearView.unobserve(p.box)
+      sync(p)
+    }
+  },
+  { rootMargin: '600px 0px' },
+)
 for (const p of players) {
   renderPlayer(p)
   inView.observe(p.box)
+  nearView.observe(p.box)
 }
 document.addEventListener('visibilitychange', syncAll)
 new MutationObserver(syncAll).observe(root, { attributes: true, attributeFilter: ['data-theme'] })
@@ -322,6 +337,7 @@ function livingWorkflow(box) {
 
   let clock = reduced ? STILL : 0
   let still = reduced
+  let looped = false
   let wanted = !reduced
   let seen = false
   let running = false
@@ -411,9 +427,10 @@ function livingWorkflow(box) {
     for (const [id, wire] of Object.entries(wires)) put(wire.el, 'data-on', on[id] || null)
     put(box, 'data-twice', t >= twice[0] && t < twice[1] ? '' : null)
 
+    // After the first loop, a line that has not come round yet stays, dimmed, from the last loop.
     const count = ticker.filter((li) => t >= Number(li.dataset.at)).length
     ticker.forEach((li, i) => {
-      put(li, 'data-on', i < count ? '' : null)
+      put(li, 'data-on', i < count ? '' : looped ? 'old' : null)
       put(li, 'data-new', i === count - 1 ? '' : null)
     })
 
@@ -459,6 +476,7 @@ function livingWorkflow(box) {
     prev = now
     const before = clock
     clock = (clock + dt) % LOOP
+    if (clock < before) looped = true
     if (before < PRESS && clock >= PRESS) press()
     draw(clock)
     raf = requestAnimationFrame(frame)

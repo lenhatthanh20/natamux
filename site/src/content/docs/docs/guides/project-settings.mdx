@@ -12,7 +12,7 @@ Each project has its own settings: the [stages](/docs/concepts/stages/) every ta
 
 Open them from the sidebar: click the gear next to the project. Or right-click the project, or click **...** next to it, and choose **Settings**. The screen is called **Project settings of &lt;repo&gt;** and has three tabs: **Stages** (the default), **Issues** and **JSON**.
 
-<Figure src="/screens/v2/settings-stages" alt="Project settings, Stages tab. On top, a flow chart of the pipeline. Below, the list of stages in order with checkboxes, and the details of the selected stage." caption="The Stages tab: the pipeline preview, the stages in order, and the details of one stage." />
+<Figure src="/screens/v2/settings-stages" alt="Project settings of storefront, Stages tab, with Context selected. On top, a flow chart of the pipeline with the If node. Under it, a summary of the branch, the list of stages in order with checkboxes, and the details of Context." caption="The Stages tab: the pipeline preview, the stages in order, and the details of one stage." />
 
 ## The Stages tab
 
@@ -90,7 +90,7 @@ To use an exported file in another project, import it there, or copy it into the
 
 </Steps>
 
-<Figure src="/screens/v2/stage-agent-picker" alt="Project settings, Stages tab. The Review stage is selected, with the Agent field set to a provider and the Arguments field below it." caption="Review selected, with its Agent and Arguments." />
+<Figure src="/screens/v2/stage-agent-picker" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field below it holds --model gpt-5-codex." caption="Review selected, with its Agent and Arguments." />
 
 Review runs in its own shell, Shell 5, so it can use another agent than the task's without touching the session in Shell 1. **Test spec** works the same way, in Shell 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
 
@@ -104,7 +104,7 @@ Review runs in its own shell, Shell 5, so it can use another agent than the task
 
 </Steps>
 
-<Figure src="/screens/v2/stages-branch" alt="Project settings, Stages tab. The flow chart shows an If node that splits into two lanes, each with its condition and its stages." caption="The chart shows the branch as an If node with one lane per path." />
+<Figure src="/screens/v2/stages-branch" alt="Project settings of storefront, Stages tab, with the branch Bug or feature selected. The chart shows an If node and two lanes: Bug fix, with its condition, holds Reproduce the bug, and Feature, marked Otherwise, holds Plan. The details show Branch name and Path 1." caption="The chart shows the branch as an If node with one lane per path." />
 
 See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and [Build a workflow](/docs/guides/workflows/).
 

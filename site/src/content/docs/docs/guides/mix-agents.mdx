@@ -16,7 +16,7 @@ One task can use several agents. Claude Code writes the code, Cursor reviews it,
 - A new agent reviews with fresh eyes. It did not write the code, so it does not defend it.
 - Several providers share the cost and the rate limits.
 
-<Figure src="/media/v2/clip-agents" video alt="Screen recording of the Agents view: panes of five different agents work at the same time." caption="Five providers working at once in the Agents view. Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short." />
+<Figure src="/media/v2/clip-agents" video alt="Screen recording of the Agents view: panes of five different agents work at the same time." caption="Five providers working at once in the Agents view. Recorded on the real dashboard; the agents are stand-in scripts." />
 
 ## How
 
@@ -31,7 +31,7 @@ Set `agent` and `args` on a stage. In **Project settings → Stages**, they are 
 
 </Steps>
 
-<Figure src="/screens/v2/stage-agent-picker" alt="Project settings, Stages tab. The Review stage is selected, with the Agent field set to a provider and the Arguments field below it." caption="The Agent and Arguments fields of the Review stage." />
+<Figure src="/screens/v2/stage-agent-picker" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field below it holds --model gpt-5-codex. The Save button is not yet pressed." caption="Each stage can use its own agent and arguments. Review runs Codex here." />
 
 In the file, the same stage looks like this:
 
