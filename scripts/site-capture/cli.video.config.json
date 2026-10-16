@@ -1,0 +1,21 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "headless": false,
+      "channel": "chrome",
+      "args": [
+        "--disable-webgl",
+        "--disable-webgl2"
+      ]
+    },
+    "contextOptions": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "deviceScaleFactor": 2,
+      "colorScheme": "dark"
+    }
+  }
+}

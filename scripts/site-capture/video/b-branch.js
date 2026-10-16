@@ -1,0 +1,55 @@
+  // clip-branch: Project settings > Stages, select the branch, zoom on the If node, show the condition and both paths.
+  await page.goto('http://localhost:8090/');
+  await page.getByRole('button', { name: 'Settings of storefront', exact: true }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('tab', { name: 'Stages' }).waitFor();
+  await notips();
+  await page.mouse.move(820, 300); pos = [820, 300];
+  await sleep(1500);
+  const body = '[role=dialog] .overflow-y-auto';
+  await rec();
+  await sleep(700);
+  const ifNode = dlg.getByRole('button', { name: /^Branch Bug or feature/ });
+  await to(ifNode, 1000);
+  await sleep(200);
+  await press(true);
+  mark('select');
+  await sleep(500);
+  // zoom about the If node and both paths of the chart
+  const a = await ifNode.boundingBox();
+  const r = await dlg.getByRole('button', { name: /^Reproduce the bug/ }).first().boundingBox();
+  const p = await dlg.getByRole('button', { name: /^Plan/ }).first().boundingBox();
+  const sp = await dlg.getByRole('button', { name: /^Spec/ }).first().boundingBox();
+  const zx = sp.x - 10, zy = r.y - 50, zr = { x: zx, y: zy, width: Math.max(r.x + r.width, p.x + p.width) + 20 - zx, height: p.y + p.height + 20 - zy };
+  await focus(zr, 1.5, 900);
+  mark('zoom');
+  await cap('The first path whose condition holds runs');
+  await sleep(1000);
+  await to(dlg.getByText('Bug fix', { exact: true }).first(), 800);
+  await sleep(500);
+  await to(dlg.getByText('Feature', { exact: true }).first(), 700);
+  await sleep(700);
+  await unfocus(900);
+  await cap(null);
+  mark('unzoom');
+  await sleep(900);
+  // scroll to the condition of Path 1
+  const cond = dlg.getByRole('combobox', { name: 'Condition type' }).first();
+  const scrollBy = async (loc, ms) => {
+    const b = await loc.boundingBox();
+    const s = await page.locator(body).boundingBox();
+    await smooth(body, b.y - (s.y + s.height * 0.45), ms);
+  };
+  await glide(900, 640, 600);
+  await scrollBy(cond, 1300);
+  mark('cond');
+  await to(cond, 800);
+  await sleep(600);
+  await to(dlg.getByRole('textbox', { name: 'Command' }).first(), 600, -120, 0);
+  await sleep(900);
+  const other = dlg.getByRole('checkbox', { name: 'Make this the Otherwise path' });
+  await scrollBy(other, 1200);
+  mark('path2');
+  await to(other, 700);
+  await sleep(1400);
+  return await stop();

@@ -1,0 +1,87 @@
+{
+  "stages": [
+    { "id": "context", "kind": "context", "gate": "manual", "output": "context.md" },
+    {
+      "id": "spec",
+      "kind": "agent",
+      "gate": "manual",
+      "output": "spec.md",
+      "sections": ["Goal", "Scope", "Out of scope", "Acceptance criteria", "Code map"]
+    },
+    {
+      "id": "triage",
+      "name": "Bug or feature",
+      "paths": [
+        {
+          "id": "bugfix",
+          "name": "Bug fix",
+          "when": { "type": "command", "run": "grep -qi bug .natamux-task/context.md" },
+          "stages": [
+            {
+              "id": "reproduce",
+              "name": "Reproduce the bug",
+              "kind": "agent",
+              "gate": "auto",
+              "agent": "cursor",
+              "output": "repro.md",
+              "sections": ["Steps", "Failing test"],
+              "prompt": "Task: {title}\nRead {dir}/spec.md. Write a failing test that shows the bug.\nWrite {dir}/repro.md with these sections: Steps, Failing test."
+            }
+          ]
+        },
+        {
+          "id": "feature",
+          "name": "Feature",
+          "stages": [
+            {
+              "id": "plan",
+              "kind": "agent",
+              "gate": "manual",
+              "output": "plan.md",
+              "sections": ["Steps", "Files", "Tests"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "build",
+      "name": "Test spec and Implement",
+      "parallel": [
+        {
+          "id": "test-spec",
+          "kind": "agent",
+          "gate": "auto",
+          "output": "test-spec.md",
+          "sections": ["Cases"],
+          "ownShell": true,
+          "agent": "gemini"
+        },
+        { "id": "implement", "kind": "agent", "gate": "auto", "requireCommit": true }
+      ]
+    },
+    {
+      "id": "agent-review",
+      "name": "Review",
+      "kind": "agent",
+      "gate": "auto",
+      "output": "review.md",
+      "sections": ["Findings"],
+      "ownShell": true,
+      "agent": "codex"
+    },
+    {
+      "id": "security",
+      "name": "Security review",
+      "kind": "agent",
+      "gate": "auto",
+      "output": "security.md",
+      "sections": ["Findings"],
+      "ownShell": true,
+      "agent": "copilot"
+    },
+    { "id": "review", "name": "Manual review", "kind": "review", "gate": "manual" },
+    { "id": "release", "kind": "release", "gate": "manual" }
+  ],
+  "tracker": { "type": "none", "createIssue": "never", "linkInPr": false }
+}

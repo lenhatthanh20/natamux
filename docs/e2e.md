@@ -97,3 +97,7 @@ These spec files time the terminal and the dashboard, so a change can show its e
 - Each test deletes its tasks, so their shells end.
 - The flood tests wait at most 30 s for a prompt or an echo: with flow control these are quick, so a long wait is a failure.
 - To compare two branches, download `e2e-measures` from both runs: `gh run download <run-id> -n e2e-measures`.
+
+## Site captures
+
+The website media is shot from a separate demo stack. See [scripts/site-capture/README.md](../scripts/site-capture/README.md).
