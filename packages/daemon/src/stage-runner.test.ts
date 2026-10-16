@@ -1721,9 +1721,9 @@ describe('a stage that ends its shell', () => {
 
   it('closes only the shell of the lane that is done in a group', async () => {
     const task = await building('test-spec')
-    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
 
-    await runner.act(task.id, 'report', { terminal: '2' })
+    // Test spec waits for approval after a report; a skip makes its lane done at once.
+    await runner.act(task.id, 'skip', { stage: 'test-spec' })
     await runner.settle()
 
     expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
