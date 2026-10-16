@@ -17,6 +17,7 @@ const latest = (file: string) => `${repo}/releases/latest/download/${file}`
 const mac = latest('Natamux-mac-arm64.dmg')
 const v2 = 'media/v2/'
 const note = 'Recorded on the real Natamux dashboard. The agents in it are stand-in scripts, so their terminal text is short.'
+const shortNote = 'Real dashboard, stand-in agents.'
 
 const title = 'Natamux: write your workflow once, run it with parallel agents'
 const description =
@@ -477,7 +478,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
                         </div>
                         <figcaption>
                           <span set:html={b.media.caption} />
-                          {b.media.clip && <span class="note"> {note}</span>}
+                          {b.media.clip && <span class="note"> {shortNote}</span>}
                         </figcaption>
                       </figure>
                     ) : (
@@ -618,7 +619,7 @@ const works = ['Claude Code', 'Codex', 'Gemini CLI', 'Copilot CLI', 'Cursor CLI'
               <div class="frame rise">
                 <Clip name="clip-agents" alt="Screen recording of the Agents view: panes of five different agents work at the same time, and the cursor moves over their headers." />
               </div>
-              <figcaption>Five providers at once in the <b>Agents</b> view. <span class="note">{note}</span></figcaption>
+              <figcaption>Five providers at once in the <b>Agents</b> view. <span class="note">{shortNote}</span></figcaption>
             </figure>
             <ul class="agent-list">
               {
@@ -728,7 +729,7 @@ pnpm db:seed</pre>
                     </div>
                     <figcaption>
                       <span class="views-cap"><b>{v.name}.</b> {v.text}</span>
-                      {v.clip && <span class="note"> {note}</span>}
+                      {v.clip && <span class="note"> {shortNote}</span>}
                     </figcaption>
                   </figure>
                 ))
@@ -781,7 +782,7 @@ pnpm db:seed</pre>
               <div class="frame rise">
                 <Shot dir={v2} name="changes" sizes="(min-width: 1240px) 600px, 100vw" alt="The Changes tab: a side by side diff of the task's changes and a commit message written by Generate." />
               </div>
-              <figcaption>The <b>Changes</b> tab, with a message from <b>Generate</b>.</figcaption>
+              <figcaption>The <b>Changes</b> tab: a side by side diff, and a comment box that sends a note to the agent.</figcaption>
             </figure>
             <figure>
               <div class="frame rise">
