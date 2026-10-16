@@ -10,7 +10,7 @@ import { useAppEvent } from '../lib/app-events'
 import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../lib/panes'
 import { agentLanes, NO_SHELLS, restoringShells, taskShellsQuery } from '../lib/task-shells'
 import type { TerminalConnectQuery } from '../lib/terminal'
-import { disposeTerminal, terminalKey } from '../lib/terminal-cache'
+import { disposeTerminal, hasTerminal, terminalKey } from '../lib/terminal-cache'
 import { nextTerminalName, terminalNames, unlistedShells } from '../lib/terminal-tabs'
 import { toast } from '../lib/toasts'
 import { useViewStore } from '../lib/view-store'
@@ -130,6 +130,20 @@ export function ShellPanes({
   // A terminal fits its pane when it is shown. In a guessed layout it would send a resize, and
   // another once the grid is measured, so the panes wait for the width (before the first paint).
   const measured = gridWidth !== null || typeof ResizeObserver === 'undefined'
+  // A list read before this mount may have a shell the daemon closed while the task was not
+  // shown. Its pane would attach and start a new shell. A shell with a live terminal in the cache
+  // still runs, so the grid waits for the list read on mount only for the other shells. Once open,
+  // it stays open: a shell the user adds or one that ends must not unmount the grid.
+  const listChecked = useRef(false)
+  listChecked.current ||=
+    open.isFetchedAfterMount ||
+    (open.data ?? []).every(
+      (name) =>
+        name === '1' ||
+        added.includes(name) ||
+        exited.includes(name) ||
+        hasTerminal(terminalKey(taskId, name)),
+    )
   const phone = usePhone()
   const names = terminalNames(
     [...(open.data ?? []), ...exited].filter((name) => !closing.includes(name)),
@@ -294,6 +308,7 @@ export function ShellPanes({
         className="hm-fade-in grid min-h-0 flex-1 auto-rows-[minmax(12rem,1fr)] gap-2 overflow-auto"
       >
         {measured &&
+          listChecked.current &&
           names.map((name) => {
             const state = agentState(name)
             const isAgent = state !== undefined

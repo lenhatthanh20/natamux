@@ -191,6 +191,12 @@ export function disposeTerminal(key: string): void {
   }
 }
 
+// A terminal in the cache whose shell has not ended.
+export function hasTerminal(key: string): boolean {
+  const entry = entries.get(key)
+  return entry !== undefined && !entry.discard
+}
+
 // Follows the task list: the terminals of a done, cancelled, deleted task, or one whose workspace
 // was removed, leave the cache. Hidden ones now, the ones on screen when they leave it.
 export function syncTaskTerminals(
