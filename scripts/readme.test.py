@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
-INSTALL = ROOT / "site/src/content/docs/docs/getting-started/install.md"
+INSTALL = ROOT / "site/src/content/docs/docs/getting-started/install.mdx"
 DOCKER = ROOT / "docs/docker.md"
 
 

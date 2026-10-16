@@ -20,20 +20,20 @@ description: Which Natamux documents to update for a change, and how to write th
 
 | Change | Update |
 |---|---|
-| Terminal, shells, fonts | `guides/terminal.md` |
-| Board, table, panels, dialogs | `guides/dashboard.md` |
-| Changes and History tabs, commit, push, PR | `guides/changes-and-history.md`, `guides/github.md` |
+| Terminal, shells, fonts | `guides/terminal.mdx` |
+| Board, table, panels, dialogs | `guides/dashboard.mdx` |
+| Changes and History tabs, commit, push, PR | `guides/changes-and-history.mdx`, `guides/github.md` |
 | Several agents on one task | `guides/fan-out.md` |
 | Desktop app, updates | `guides/desktop-app.md`, `docs/design-desktop-update.md` |
 | Docker | `guides/self-host-docker.md`, `docs/docker.md` |
-| Stages, tasks, workspaces, hooks | `concepts/*.md` |
+| Stages, tasks, workspaces, hooks | `concepts/*.md(x)` |
 | One agent (Claude Code, Codex, …) | `agents/<agent>.md` |
 | `natamux` commands and flags | `reference/cli.md` |
 | HTTP routes | `reference/http-api.md` |
 | Settings, env vars | `reference/configuration.md`, `reference/environment-variables.md` |
 | Shortcuts | `reference/shortcuts.md` (and `lib/commands.ts`, which the shortcut sheet reads) |
 | Design tokens, components | `docs/ui-spec.md` |
-| Install, first run | `getting-started/*.md` |
+| Install, first run | `getting-started/*.mdx` |
 | Common problems | `help/troubleshooting.md`, `help/faq.md` |
 
 Every user-visible change also gets:
