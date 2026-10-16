@@ -135,8 +135,8 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    // Name, approval, workflow, end the shell, and the prompt.
-    expect(within(spec).getAllByText('Default')).toHaveLength(5)
+    // Name, approval, workflow, and the prompt. Spec runs in Shell 1, so it cannot end its shell.
+    expect(within(spec).getAllByText('Default')).toHaveLength(4)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
   })
