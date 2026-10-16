@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.32 (2026-10-16)
+
+- **Progress** folds each path a task did not take into one row marked **Not taken**. Click it to see its stages. The branch says which path it took and why. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
+- The **Progress** overview shows the times sent back only when there are any, and the current stage scrolls to the middle.
+- New guide pages: [Build a workflow](/docs/guides/workflows/) and [Mix agents in one task](/docs/guides/mix-agents/).
+
 ## v0.1.31 (2026-10-16)
 
 - A stage in Shell 1 no longer closes it with **End the agent and close its shell when the stage is done**. Shell 1 keeps the task's agent and its session; the stage settings say so. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
