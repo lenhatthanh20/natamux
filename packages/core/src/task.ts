@@ -58,7 +58,7 @@ export function splitTaskId(title: string): { id: string | null; title: string }
 
 export const taskSchema = z.object({
   id: taskIdSchema,
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(400),
   description: z.string().default(''),
   state: taskStateSchema.default('draft'),
   priority: z.enum(TASK_PRIORITIES).default('normal'),

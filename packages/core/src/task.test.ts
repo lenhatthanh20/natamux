@@ -140,6 +140,14 @@ describe('taskSchema', () => {
     }
   })
 
+  it('takes a title of 1 to 400 characters', () => {
+    const parse = (title: string) => taskSchema.safeParse({ ...minimalTask, title })
+    expect(parse('a'.repeat(400)).success).toBe(true)
+    for (const title of ['', '   ', 'a'.repeat(401)]) {
+      expect(parse(title).success).toBe(false)
+    }
+  })
+
   it('rejects a pr that is not a URL', () => {
     expect(taskSchema.safeParse({ ...minimalTask, pr: 'pull 12' }).success).toBe(false)
   })
