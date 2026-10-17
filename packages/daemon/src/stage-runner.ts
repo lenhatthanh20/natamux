@@ -1637,9 +1637,13 @@ export class StageRunner {
   // CI takes minutes, so it runs after the report has its answer. Its result counts only for the
   // round of the stage that asked for it.
   private async ciRound(taskId: string, stageId: string, seq: number, passes: string[]) {
-    const task = this.tasks.getTask(taskId)
-    const input = { worktree: task.workspace ?? '', branch: task.branch ?? '' }
-    const ci = await this.checkCi(input).catch(ciError)
+    const { workspace, branch } = this.tasks.getTask(taskId)
+    // The workspace can be removed while CI waits, then the daemon restarts. An empty worktree
+    // would run git in the daemon's own folder and push that checkout.
+    const ci =
+      workspace === null || branch === null
+        ? ciError('The task has no workspace or branch for the CI check.')
+        : await this.checkCi({ worktree: workspace, branch }).catch(ciError)
     if (this.lastStart(taskId, stageId).seq !== seq) {
       return
     }
