@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { splitTaskId, taskContextSchema, taskSchema, upgradeTaskFields } from './task.js'
+import {
+  issueLinkSchema,
+  splitTaskId,
+  taskContextSchema,
+  taskSchema,
+  upgradeTaskFields,
+} from './task.js'
 
 const minimalTask = {
   id: 'T-42',
@@ -156,9 +162,44 @@ describe('taskSchema', () => {
     }
   })
 
-  it('rejects a pr that is not a URL', () => {
-    expect(taskSchema.safeParse({ ...minimalTask, pr: 'pull 12' }).success).toBe(false)
+  it.each(['https://github.com/o/r/pull/1', 'http://git.example.com/o/r/pull/1'])(
+    'keeps a pr at %s',
+    (pr) => {
+      expect(taskSchema.parse({ ...minimalTask, pr }).pr).toBe(pr)
+    },
+  )
+
+  // A click on the link would open the handler of its scheme on the user's machine. A bad
+  // stored value drops the link, so the task list still loads.
+  it.each(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:alert(1)', 'pull 12'])(
+    'drops a pr at %s',
+    (pr) => {
+      expect(taskSchema.parse({ ...minimalTask, pr }).pr).toBeNull()
+    },
+  )
+
+  it('drops an issue link with a URL that is not http or https', () => {
+    const issue = { provider: 'jira', key: 'ABC-1', url: 'vscode://file/etc/passwd' }
+    expect(taskSchema.parse({ ...minimalTask, issue }).issue).toBeNull()
   })
+})
+
+describe('issueLinkSchema', () => {
+  const link = (url: string) => issueLinkSchema.safeParse({ provider: 'jira', key: 'ABC-1', url })
+
+  it.each(['https://jira.example.com/browse/ABC-1', 'http://10.0.0.5:8080/browse/ABC-1'])(
+    'takes %s',
+    (url) => {
+      expect(link(url).success).toBe(true)
+    },
+  )
+
+  it.each(['vscode://file/etc/passwd', 'file:///etc/passwd', 'javascript:alert(1)'])(
+    'refuses %s',
+    (url) => {
+      expect(link(url).success).toBe(false)
+    },
+  )
 })
 
 describe('upgradeTaskFields', () => {

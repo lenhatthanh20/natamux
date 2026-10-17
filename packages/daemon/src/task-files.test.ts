@@ -84,6 +84,20 @@ describe('task files', () => {
     expect(parsed.state).toBe('draft')
   })
 
+  it('loads a file with a pr link of another scheme, without the link', () => {
+    const text = [
+      '---',
+      'id: T-0001',
+      'title: Written by hand',
+      'pr: vscode://file/etc/passwd',
+      'createdAt: 2026-10-08T09:00:00Z',
+      'updatedAt: 2026-10-08T09:00:00Z',
+      '---',
+    ].join('\n')
+
+    expect(parseTaskFile(text).pr).toBeNull()
+  })
+
   it('throws on a file that is not a valid task', () => {
     expect(() => parseTaskFile('---\nid: nope\n---\n')).toThrow()
   })
