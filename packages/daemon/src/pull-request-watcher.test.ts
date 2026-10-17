@@ -388,7 +388,11 @@ describe('PullRequestWatcher finds a pull request opened outside Natamux', () =>
     await watcher.checkAll()
 
     const lists = calls.filter(({ args }) => args[0] === 'pr' && args[1] === 'list')
-    expect(lists.map(({ cwd }) => cwd).sort()).toEqual(['/work/natamux/t-1', '/work/natamux/t-4'])
+    expect(lists).toHaveLength(2)
+    // Any task of the project will do.
+    const [inDefault, inWeb] = lists.map(({ cwd }) => cwd).sort()
+    expect(['/work/natamux/t-1', '/work/natamux/t-2', '/work/natamux/t-3']).toContain(inDefault)
+    expect(inWeb).toBe('/work/natamux/t-4')
     expect(lists.every(({ args }) => !args.includes('--head'))).toBe(true)
     expect(tasks.getTask(first.id).pr).toBe('https://github.com/o/r/pull/1')
     expect(tasks.getTask(second.id).pr).toBe('https://github.com/o/r/pull/2')
