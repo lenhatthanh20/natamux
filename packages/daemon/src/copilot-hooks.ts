@@ -16,10 +16,27 @@ export const copilotInputSchema = z.object({
   // A JSON text or an object, depending on the tool.
   toolArgs: z.unknown().optional(),
   recoverable: z.boolean().optional(),
+  // Copilot 1.0.98 sends snake_case; it sends other payloads in camelCase too. Unknown, so a
+  // value of another type gives no signal instead of failing the hook.
+  notification_type: z.unknown().optional(),
+  notificationType: z.unknown().optional(),
   error: z.unknown().optional(),
 })
 
 export type CopilotInput = z.infer<typeof copilotInputSchema>
+
+// The notifications that mean a prompt is on the screen, with what the pane says meanwhile.
+const ASKING_NOTIFICATIONS = new Map([
+  ['permission_prompt', 'Waiting for permission'],
+  ['elicitation_dialog', 'Asking a question'],
+])
+
+function askingSummary(input: CopilotInput): string | undefined {
+  const type = [input.notification_type, input.notificationType].find(
+    (value) => typeof value === 'string',
+  )
+  return typeof type === 'string' ? ASKING_NOTIFICATIONS.get(type) : undefined
+}
 
 export function copilotSignal(input: CopilotInput): AgentSignal | undefined {
   switch (input[COPILOT_EVENT_FIELD]) {
@@ -29,8 +46,10 @@ export function copilotSignal(input: CopilotInput): AgentSignal | undefined {
     case 'postToolUse':
     case 'postToolUseFailure':
       return 'activity'
-    case 'permissionRequest':
-      return 'asking'
+    // Not permissionRequest: it fires before the permission rules, so also for each tool call that
+    // --allow-all-tools approves at once.
+    case 'notification':
+      return askingSummary(input) === undefined ? undefined : 'asking'
     case 'agentStop':
       return 'turn-ended'
     // An error Copilot gets over (a retried model call) does not end the work.
@@ -74,7 +93,9 @@ export const copilotAdapter: AgentAdapter = {
           })
         : event === 'userPromptSubmitted'
           ? 'Reading the prompt'
-          : undefined
+          : event === 'notification'
+            ? askingSummary(input)
+            : undefined
     return {
       signal,
       cwd: input.cwd,

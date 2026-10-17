@@ -47,11 +47,11 @@ Natamux also adds the worktree to `trustedFolders` in `~/.copilot/config.json`, 
 |---|---|---|
 | `userPromptSubmitted` | A prompt was sent | running |
 | `preToolUse`, `postToolUse`, `postToolUseFailure` | The agent works | no change |
-| `permissionRequest` | Copilot asks for permission | needs input |
+| `notification` with type `permission_prompt` or `elicitation_dialog` | Copilot asks for permission, or asks you a question | needs input |
 | `agentStop` | The turn ended | needs input |
 | `errorOccurred` with `recoverable: false` | An error ended the work | failed |
 
-A recoverable error is ignored.
+A recoverable error is ignored. Other notifications, such as `shell_completed`, change nothing. Natamux does not use `permissionRequest`: Copilot sends it before it checks its permission rules, so also for each tool that `--allow-all-tools` lets run at once.
 
 ## Skills
 

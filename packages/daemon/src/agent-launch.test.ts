@@ -430,6 +430,9 @@ describe('the hook settings', () => {
         timeoutSec: 5,
       },
     ])
+    // permissionRequest fires for each tool call, also one --allow-all-tools approves at once.
+    expect(Object.keys(copilotHookFile().hooks)).toContain('notification')
+    expect(Object.keys(copilotHookFile().hooks)).not.toContain('permissionRequest')
     expect(cursorHookFile()).toMatchObject({
       version: 1,
       hooks: { stop: [{ command: 'natamux hook cursor', timeout: 5 }] },

@@ -118,7 +118,7 @@ const COPILOT_EVENTS = [
   'preToolUse',
   'postToolUse',
   'postToolUseFailure',
-  'permissionRequest',
+  'notification',
   'agentStop',
   'errorOccurred',
 ] as const
