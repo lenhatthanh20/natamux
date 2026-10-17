@@ -1,5 +1,6 @@
 """Acceptance checks for the root README; run with python3 scripts/readme.test.py."""
 
+import os
 from pathlib import Path
 import re
 import unittest
@@ -7,16 +8,31 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-README = ROOT / "README.md"
+README = Path(os.environ.get("README", ROOT / "README.md"))
 INSTALL = ROOT / "site/src/content/docs/docs/getting-started/install.mdx"
 DOCKER = ROOT / "docs/docker.md"
+HEADINGS = [
+    "Why Natamux", "Features", "How it works", "Works with your agents", "Install", "Quick start",
+    "Command line", "Security and privacy", "Repository guide", "Contributing", "License",
+]
+LINK_HOSTS = {"github.com", "natamux.github.io", "codespaces.new"}
+IMAGE_HOSTS = {"img.shields.io"}
+STAND_IN = "The dashboard and the stages are real. Only the agents' terminal text comes from a stand-in script."
 
 
 def links(markdown):
-    return [
-        (match.group(0).startswith("!"), match.group(1), match.group(2))
+    """(kind, text, destination): kind is "link" or "image"; covers markdown and HTML."""
+    found = [
+        ("image" if match.group(0).startswith("!") else "link", match.group(1), match.group(2))
         for match in re.finditer(r"!?\[([^\]]+)\]\(([^)\s]+)\)", markdown)
     ]
+    found += [("link", "", url) for url in re.findall(r'<a [^>]*href="([^"]+)"', markdown)]
+    found += [("image", "", url) for url in re.findall(r'<(?:img|source) [^>]*(?:src|srcset)="([^"]+)"', markdown)]
+    return found
+
+
+def strip_html(text):
+    return re.sub(r"<[^>]+>", " ", re.sub(r"(?s)<!--.*?-->", " ", text))
 
 
 def exact_case_path(path):
@@ -52,6 +68,11 @@ def local_link_resolves(destination):
     return True
 
 
+def png_width(path):
+    data = (ROOT / path).read_bytes()[:24]
+    return int.from_bytes(data[16:20], "big") if data[:8] == b"\x89PNG\r\n\x1a\n" else 0
+
+
 class ReadmeAcceptance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -62,26 +83,32 @@ class ReadmeAcceptance(unittest.TestCase):
 
     def test_case_1_first_impression_and_entry_points(self):
         opening = self.readme.split("\n## ", 1)[0]
-        self.assertTrue(opening.startswith("# Natamux\n"))
-        self.assertEqual(len(re.findall(r"^# ", self.readme, re.MULTILINE)), 1)
+        self.assertTrue(opening.startswith('<p align="center">'))
+        self.assertIn('src="site/public/icon.svg"', opening)
+        self.assertEqual(len(re.findall(r"^# |<h1[ >]", self.readme, re.MULTILINE)), 1)
+        self.assertIn('<h1 align="center">Natamux</h1>', opening)
+        text = strip_html(opening)
         for word in ("coding agents", "worktree", "terminal", "dashboard"):
-            self.assertIn(word, opening.lower())
-        self.assertLess(len(opening.split()), 150, "entry points should appear near the top")
+            self.assertIn(word, text.lower())
+        self.assertLess(len(text.split()), 150, "entry points should appear near the top")
 
-        images = [(alt, target) for is_image, alt, target in links(opening) if is_image]
-        self.assertEqual(len(images), 1)
-        alt, target = images[0]
+        self.assertNotIn("![", opening, "the hero is a <picture>, not a markdown image")
+        pictures = re.findall(r"(?s)<picture>.*?</picture>", opening)
+        self.assertEqual(len(pictures), 1)
+        hero = pictures[0]
+        alt = re.search(r'<img [^>]*alt="([^"]+)"', hero).group(1)
         self.assertIn("dashboard", alt.lower())
         self.assertGreaterEqual(len(alt.split()), 7)
         self.assertNotIn(".png", alt.lower())
-        self.assertTrue(target.startswith("site/public/screens/"))
-        image = ROOT / target
-        self.assertTrue(image.is_file())
-        png = image.read_bytes()[:24]
-        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
-        self.assertGreaterEqual(int.from_bytes(png[16:20], "big"), 1000)
+        self.assertIn('media="(prefers-color-scheme: dark)"', hero)
+        self.assertIn('media="(prefers-color-scheme: light)"', hero)
+        for target in re.findall(r'(?:src|srcset)="([^"]+)"', hero):
+            with self.subTest(hero=target):
+                self.assertTrue(target.startswith("site/public/screens/"))
+                self.assertTrue((ROOT / target).is_file())
+                self.assertGreaterEqual(png_width(target), 1000)
 
-        destinations = [target for is_image, _, target in links(opening) if not is_image]
+        destinations = [target for kind, _, target in links(opening) if kind == "link"]
         self.assertIn("https://github.com/lenhatthanh20/natamux/releases/latest", destinations)
         self.assertIn("https://natamux.github.io/docs/getting-started/install/", destinations)
         self.assertIn("https://codespaces.new/lenhatthanh20/natamux", destinations)
@@ -103,19 +130,21 @@ class ReadmeAcceptance(unittest.TestCase):
 
     def test_case_3_scannable_workflow_and_repository_map(self):
         headings = re.findall(r"^## (.+)$", self.readme, re.MULTILINE)
-        self.assertEqual(headings, ["Get started", "What you can do", "Repository guide", "Security and privacy", "License"])
-        feature_section = self.readme.split("## What you can do\n", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(headings, HEADINGS)
+        feature_section = self.readme.split("## Features\n", 1)[1].split("\n## ", 1)[0]
         self.assertGreaterEqual(len(re.findall(r"^- \*\*", feature_section, re.MULTILINE)), 5)
         for concept in ("task", "git worktree", "terminal", "agent", "stages", "Needs you", "review"):
             self.assertIn(concept.lower(), self.readme.lower())
+        for agent in ("Claude Code", "Codex", "Gemini CLI", "Copilot", "Cursor"):
+            self.assertIn(agent, self.readme)
         for package in ("core", "daemon", "web", "desktop", "cli"):
             self.assertIn(f"packages/{package}/", self.readme)
         self.assertIn("plugins/natamux/", self.readme)
         for guide in ("getting-started/install/", "getting-started/quick-start/", "docs/dev-setup.md"):
             self.assertIn(guide, self.readme)
         paragraphs = [
-            block for block in re.split(r"\n\s*\n", self.readme)
-            if not block.startswith(("|", "-", "1.", "2.", "3.", "```"))
+            strip_html(block) for block in re.split(r"\n\s*\n", self.readme)
+            if not re.match(r"\||-|\d+\.|```", block)
         ]
         self.assertLess(max(len(paragraph.split()) for paragraph in paragraphs), 100)
 
@@ -127,17 +156,27 @@ class ReadmeAcceptance(unittest.TestCase):
                 self.assertIn(step, text)
         self.assertIn("installed and logged in", self.install)
         self.assertIn("need git", self.readme)
-        self.assertIn("no account or telemetry", self.readme)
+        self.assertIn("no account or telemetry", self.readme.lower())
         self.assertIn("no account", (ROOT / "PRIVACY.md").read_text())
         self.assertIn("no telemetry", (ROOT / "PRIVACY.md").read_text())
+        self.assertIn("update check is off", self.readme)
+        self.assertIn("Natamux does not sandbox agents", self.readme)
+        self.assertIn("Natamux does not sandbox agents", (ROOT / "SECURITY.md").read_text())
         self.assertIn("private vulnerability reporting", self.readme)
         self.assertTrue((ROOT / "LICENSE").read_text().startswith("MIT License"))
         for target in ("PRIVACY.md", "SECURITY.md", "LICENSE"):
             self.assertIn(target, [destination for _, _, destination in self.links])
-        self.assertNotRegex(self.readme.lower(), r"(nothing|no data) leaves your machine|agents are sandboxed")
+        self.assertNotRegex(
+            self.readme.lower(),
+            r"(nothing|no data) leaves your machine|agents are sandboxed|notarized|safe by default",
+        )
+        if re.search(r'(?:src|srcset)="[^"]+\.(?:gif|webm|mp4)"', self.readme):
+            self.assertIn(STAND_IN, self.readme, "every recording needs the stand-in note")
 
-    def test_case_5_markdown_links_and_change_scope(self):
-        self.assertEqual(self.readme.count("```"), 2)
+    def test_case_5_markdown_links_media_and_change_scope(self):
+        self.assertEqual(re.findall(r"^```(\S+)$", self.readme, re.MULTILINE), ["mermaid", "json", "sh"])
+        self.assertEqual(self.readme.count("```"), 6)
+        self.assertNotRegex(self.readme, r"<(video|iframe|script|style)\b| style=")
         self.assertTrue(local_link_resolves("docs/docker.md#production"))
         self.assertFalse(local_link_resolves("docs/Docker.md#production"))
         local = [target for _, _, target in self.links if not urlsplit(target).scheme]
@@ -145,15 +184,26 @@ class ReadmeAcceptance(unittest.TestCase):
         for target in local:
             with self.subTest(target=target):
                 self.assertTrue(local_link_resolves(target))
-        for _, _, target in self.links:
+                if (ROOT / target).suffix in {".png", ".webp", ".gif", ".svg"}:
+                    self.assertLessEqual((ROOT / target).stat().st_size, 4 * 1024 * 1024)
+        for kind, _, target in self.links:
             if urlsplit(target).scheme:
                 with self.subTest(target=target):
                     self.assertEqual(urlsplit(target).scheme, "https")
-                    self.assertIn(urlsplit(target).hostname, {"github.com", "natamux.github.io", "codespaces.new"})
+                    hosts = LINK_HOSTS | IMAGE_HOSTS if kind == "image" else LINK_HOSTS
+                    self.assertIn(urlsplit(target).hostname, hosts)
                     if urlsplit(target).hostname == "natamux.github.io":
                         route = urlsplit(target).path.removeprefix("/docs/").strip("/")
                         page = ROOT / "site/src/content/docs/docs" / (route or "index")
                         self.assertTrue(page.with_suffix(".md").is_file() or page.with_suffix(".mdx").is_file())
+        for img in re.findall(r"<img [^>]*>", self.readme):
+            with self.subTest(img=img[:60]):
+                self.assertRegex(img, r'alt="[^"]{3,}"')
+        for picture in re.findall(r"(?s)<picture>.*?</picture>", self.readme):
+            with self.subTest(picture=picture[:60]):
+                self.assertIn("(prefers-color-scheme: dark)", picture)
+                self.assertIn("(prefers-color-scheme: light)", picture)
+                self.assertIn("<img ", picture)
 
 
 if __name__ == "__main__":
