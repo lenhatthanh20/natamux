@@ -5,13 +5,15 @@
 <h1 align="center">Natamux</h1>
 
 <p align="center">
-  <b>Parallel coding agents that check each other's work.</b>
+  <b>Write your workflow once. Every task runs it, with the coding agents you pick.</b>
 </p>
 
 <p align="center">
-  An open-source desktop app for macOS, Windows and Linux.<br>
-  Run Claude Code, Codex, Gemini CLI, Copilot and Cursor on many tasks at once,<br>
-  each in its own git worktree and terminal, with one dashboard that shows what needs you.
+  Stages, approvals, branches and send backs live in one committed file, <code>.natamux.json</code>.<br>
+  <b>Solo:</b> approve the spec, and the rest runs without you.<br>
+  <b>Team:</b> everyone shares one process, and each task takes the path that fits it.<br>
+  Every task gets its own git worktree and terminal, each stage can use a different agent<br>
+  (Claude Code, Codex, Gemini CLI, Copilot or Cursor), and one dashboard shows what needs you.
 </p>
 
 <p align="center">
