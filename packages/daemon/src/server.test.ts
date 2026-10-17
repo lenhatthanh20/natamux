@@ -284,7 +284,7 @@ describe('authentication', () => {
       ['GET', '/tasks/T-0001/attachments/..\\..\\..\\health'],
       ['GET', '/tasks/T-0001/files/..\\..\\..\\tasks\\T-0001\\terminal?ticket=x'],
       ['GET', `/tasks/T-0001/files/..\\..\\..\\events?token=${TOKEN}`],
-    ]) {
+    ] as const) {
       expect(await statusOf(method, path), `${method} ${path}`).toBe(401)
     }
   })
