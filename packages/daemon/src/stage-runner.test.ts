@@ -773,6 +773,45 @@ describe('agent stages', () => {
     expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
 
+  // The agent runs `natamux done` while a person clicks Mark as done.
+  it('runs the checks once for two reports at the same time, and keeps the agent its try', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', kind: 'agent', gate: 'manual', check: 'make test' }],
+    }
+    const calls: string[] = []
+    let finish: () => void = () => undefined
+    runCommand = (command) => {
+      calls.push(command)
+      return new Promise((resolve) => {
+        finish = () => resolve({ code: 1, output: 'tests failed' })
+      })
+    }
+    const task = await implementing()
+
+    const reports = Promise.all([
+      runner.act(task.id, 'report', { terminal: '1' }),
+      runner.act(task.id, 'report'),
+    ])
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+    finish()
+    await reports
+
+    const failures = tasks
+      .listEvents(task.id)
+      .filter(({ event }) => event.type === 'stage.check-failed')
+    expect(failures.map(({ event }) => event.payload.final)).toEqual([false])
+    expect(tasks.getTask(task.id).state).toBe('running')
+    await expectSubmitted(ptys[0], 'The checks of this stage failed')
+
+    // Once the first check ended, a report checks again.
+    const again = runner.act(task.id, 'report', { terminal: '1' })
+    await vi.waitFor(() => expect(calls).toHaveLength(2))
+    finish()
+    await again
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+  })
+
   it('waits for approval when the output has its sections, and drops the turn end after', async () => {
     const task = await withWorkspace((await atSpec()).id)
     writeWorking(

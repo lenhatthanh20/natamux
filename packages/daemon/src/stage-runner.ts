@@ -318,6 +318,10 @@ export class StageRunner {
   private readonly ciCleaned = new Set<string>()
   // The CI checks that run now, by task and stage. A second report waits for the first check.
   private readonly ciRounds = new Set<string>()
+  // The local checks that run now, by task, stage and round. Two reports at once (the agent's
+  // and a person's) would run them twice in one worktree, and the second failure would count as
+  // the agent's last try.
+  private readonly checking = new Set<string>()
   private unsubscribe: (() => void) | undefined
 
   constructor(options: StageRunnerOptions) {
@@ -1540,6 +1544,19 @@ export class StageRunner {
   }
 
   private async check(taskId: string, stageId: string): Promise<void> {
+    const key = `${taskId}/${stageId}/${this.lastStart(taskId, stageId).seq}`
+    if (this.checking.has(key)) {
+      return
+    }
+    this.checking.add(key)
+    try {
+      await this.checkOnce(taskId, stageId)
+    } finally {
+      this.checking.delete(key)
+    }
+  }
+
+  private async checkOnce(taskId: string, stageId: string): Promise<void> {
     const task = this.tasks.getTask(taskId)
     const step = this.stepOf(task)
     const stage = stagesOf(step).find((candidate) => candidate.id === stageId)
