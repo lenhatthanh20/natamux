@@ -849,6 +849,9 @@ export class GitHubError extends Error {
 
 export type RunGh = (cwd: string, args: readonly string[]) => Promise<string>
 
+// A gh that hangs, for example after the machine sleeps, must not block every later PR check.
+const GH_TIMEOUT_MS = 60_000
+
 // Runs the GitHub CLI without prompts. Its errors become GitHubError.
 export const runGh: RunGh = async (cwd, args) => {
   try {
@@ -856,16 +859,28 @@ export const runGh: RunGh = async (cwd, args) => {
       cwd,
       maxBuffer: MAX_OUTPUT_BYTES,
       env: { ...process.env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' },
+      timeout: GH_TIMEOUT_MS,
     })
     return stdout
   } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-      throw new GitHubError('gh is not installed or not on the PATH')
-    }
-    const output =
-      typeof error === 'object' && error !== null && 'stdout' in error ? String(error.stdout) : ''
-    throw new GitHubError(errorText(error), output)
+    throw ghError(error)
   }
+}
+
+// The GitHubError for an error of execFile('gh', ...).
+export function ghError(error: unknown): GitHubError {
+  if (typeof error === 'object' && error !== null) {
+    if ('code' in error && error.code === 'ENOENT') {
+      return new GitHubError('gh is not installed or not on the PATH')
+    }
+    // The default text of a killed gh is only "Command failed".
+    if ('killed' in error && error.killed === true) {
+      return new GitHubError(`gh did not finish in ${GH_TIMEOUT_MS / 1000} seconds`)
+    }
+  }
+  const output =
+    typeof error === 'object' && error !== null && 'stdout' in error ? String(error.stdout) : ''
+  return new GitHubError(errorText(error), output)
 }
 
 const PULL_REQUEST_URL = /https:\/\/\S+\/pull\/\d+/

@@ -57,6 +57,10 @@ const FIRST_CHECK_MS = 30_000
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000
 // A quick check would only flash the popup.
 const POPUP_MIN_MS = 600
+// A hung request would keep the state at checking or downloading, and stop every later check.
+const FETCH_TIMEOUT_MS = 30_000
+// shortcut: below about 85 KB/s a 150 MB build cannot finish; use a stall timer if users hit it.
+const DOWNLOAD_TIMEOUT_MS = 30 * 60_000
 
 type State =
   | { name: 'idle' }
@@ -205,7 +209,8 @@ export class Updater {
       const sums = await fetchSignedSums({
         release,
         current: this.options.version,
-        fetch: (url) => net.fetch(url, { headers: this.headers }),
+        fetch: (url) =>
+          net.fetch(url, { headers: this.headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }),
       })
       this.log(`check: ${SUMS_FILE} is signed for natamux ${release.tag}`)
       const name = assetName(this.kind, process.arch)
@@ -304,14 +309,24 @@ export class Updater {
       for (const [name, value] of Object.entries(this.headers)) {
         request.setHeader(name, value)
       }
+      // net.request takes no AbortSignal.
+      const timer = setTimeout(() => {
+        reject(new Error(`No answer from ${url} in ${FETCH_TIMEOUT_MS / 1000} seconds`))
+        request.abort()
+      }, FETCH_TIMEOUT_MS)
       request.on('redirect', (_status, _method, redirectUrl) => {
+        clearTimeout(timer)
         resolve(redirectUrl)
         request.abort()
       })
       request.on('response', (response) => {
+        clearTimeout(timer)
         reject(new Error(`GitHub answered ${response.statusCode} for ${url}, not a redirect`))
       })
-      request.on('error', reject)
+      request.on('error', (error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
       request.end()
     })
   }
@@ -373,7 +388,11 @@ export class Updater {
     file: string,
     progress: (done: number, total: number | undefined) => void,
   ): Promise<string> {
-    const response = await net.fetch(url, { headers: this.headers })
+    // The signal also ends the body stream, so a download stuck halfway fails the pipeline.
+    const response = await net.fetch(url, {
+      headers: this.headers,
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    })
     if (!response.ok || response.body === null) {
       throw new Error(`Download of ${url} failed: HTTP ${response.status}`)
     }
