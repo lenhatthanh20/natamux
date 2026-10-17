@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { request } from 'node:http'
 import { join } from 'node:path'
 import { CLOSE_GONE, GATE_EVENT_TYPES, SILENT_CLOSE_MS, type TaskEvent } from '@natamux/core'
 import type { FastifyInstance } from 'fastify'
@@ -254,6 +255,38 @@ describe('authentication', () => {
   it('does not accept the token in the query string outside /events', async () => {
     const response = await app.inject({ method: 'GET', url: `/tasks?token=${TOKEN}` })
     expect(response.statusCode).toBe(401)
+  })
+
+  // new URL reads "\" as "/" and resolves "..", the router does not. A real request, because inject
+  // parses the URL with new URL before Fastify sees it.
+  it('decides by the route that matched, not by a path with "\\" in it', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the dashboard' },
+    })
+    const address = await app.listen({ port: 0, host: '127.0.0.1' })
+    const statusOf = (method: string, path: string) =>
+      new Promise<number | undefined>((resolve, reject) => {
+        request(address, { method, path }, (response) => {
+          response.resume()
+          resolve(response.statusCode)
+        })
+          .on('error', reject)
+          .end()
+      })
+    for (const [method, path] of [
+      ['POST', '/hooks/claude-code\\..\\..\\health'],
+      ['GET', '/tasks/T-0001/files/..\\..\\..\\health'],
+      // Before, a task that does not exist answered 404, so anyone could tell which ones exist.
+      ['GET', '/tasks/T-9999/files/..\\..\\..\\health'],
+      ['GET', '/tasks/T-0001/attachments/..\\..\\..\\health'],
+      ['GET', '/tasks/T-0001/files/..\\..\\..\\tasks\\T-0001\\terminal?ticket=x'],
+      ['GET', `/tasks/T-0001/files/..\\..\\..\\events?token=${TOKEN}`],
+    ] as const) {
+      expect(await statusOf(method, path), `${method} ${path}`).toBe(401)
+    }
   })
 })
 
