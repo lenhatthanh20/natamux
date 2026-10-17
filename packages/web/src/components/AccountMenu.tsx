@@ -1,4 +1,4 @@
-import { CircleUser, Keyboard, LogOut, Type } from 'lucide-react'
+import { Bug, CircleUser, Keyboard, LogOut, Type } from 'lucide-react'
 import { useState } from 'react'
 import { shortcutOf } from '../lib/commands'
 import { applyTheme, type Theme, useThemeChoice } from '../lib/theme'
@@ -13,12 +13,15 @@ const THEMES: readonly { value: Theme; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ]
 
+const ISSUES_URL = 'https://github.com/lenhatthanh20/natamux/issues/new'
+
 type AccountMenuProps = {
   onSignOut: () => void
   onShortcuts: () => void
 }
 
-// Theme, UI size, terminal font, shortcuts and sign out in one menu. Signing out asks first.
+// Theme, UI size, terminal font, shortcuts, issue reporting and sign out in one menu. Signing out
+// asks first.
 export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
   const theme = useThemeChoice()
   const size = useUiSize()
@@ -52,6 +55,11 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
             icon: Keyboard,
             shortcut: shortcutOf('help.shortcuts'),
             onSelect: onShortcuts,
+          },
+          {
+            label: 'Report an issue',
+            icon: Bug,
+            onSelect: () => window.open(ISSUES_URL, '_blank', 'noopener,noreferrer'),
           },
           { type: 'separator' },
           { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => setAsking(true) },
