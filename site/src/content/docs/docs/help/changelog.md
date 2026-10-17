@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.34 (2026-10-17)
+
+- The notice of a task that needs input, failed or waits for review, with its actions, is now in the current stage card of **Progress**, not in the workspace header. Click the state in the header to open the details at that stage. See [Control a stage by hand](/docs/concepts/stages/#control-a-stage-by-hand).
+- **Account → Report an issue** opens a new GitHub issue in your browser. See [Account menu](/docs/guides/dashboard/#account-menu).
+
 ## v0.1.33 (2026-10-17)
 
 - `natamux done` from a stage that does not run now is refused, so a Review agent that sent a task back no longer passes Implement. A send back also closes the shell of a stage with **End the agent and close its shell when the stage is done**. See [What `natamux done` does](/docs/concepts/stages/#what-natamux-done-does).
