@@ -1023,7 +1023,7 @@ describe('a report from the shell of a stage of another step', () => {
       payload: { to: 'ready', stage: 'build' },
     })
     const task = await withWorkspace(made.id)
-    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
+    writeWorking(task, 'test-spec.md', '# Cases\n- x\n')
     await runner.act(task.id, 'report', { terminal: '2' })
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
