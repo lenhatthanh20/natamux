@@ -217,10 +217,10 @@ export function ChangesView({
 
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
-  // A new question comes with a task change, so the time of the task is in the key. The last
-  // answer stays while the next one loads.
+  // A new question comes with a logged event, which has the list read again (see
+  // applyLiveMessages). The last answer stays while the next one loads.
   const events = useQuery({
-    queryKey: ['question-events', task.id, task.updatedAt],
+    queryKey: ['question-events', task.id],
     queryFn: loadEvents,
     enabled: waiting,
     placeholderData: keepPreviousData,

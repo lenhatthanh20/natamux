@@ -41,7 +41,7 @@ function timeline(loadEvents: () => Promise<StoredEvent[]>) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const element = () => (
     <QueryClientProvider client={client}>
-      <Timeline taskId="T-0001" updatedAt="2026-10-08T09:30:00.000Z" loadEvents={loadEvents} />
+      <Timeline taskId="T-0001" loadEvents={loadEvents} />
     </QueryClientProvider>
   )
   const view = render(element())

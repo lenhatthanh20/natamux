@@ -21,6 +21,7 @@ import {
   deleteRemoteRef,
   fetchUpstream,
   findPullRequest,
+  findPullRequests,
   GitError,
   GitHubError,
   ghError,
@@ -1520,6 +1521,44 @@ describe('findPullRequest', () => {
   it('fails with a GitHubError on an answer that is not JSON', async () => {
     const gh: RunGh = async () => 'not json'
     await expect(findPullRequest('/w', 'b', gh)).rejects.toThrow(GitHubError)
+  })
+})
+
+describe('findPullRequests', () => {
+  it('asks gh once for the newest pull requests of the repository, by branch', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return JSON.stringify([
+        { url: 'https://github.com/o/r/pull/9', state: 'OPEN', headRefName: 'a' },
+        { url: 'https://github.com/o/r/pull/8', state: 'MERGED', headRefName: 'b' },
+        { url: 'https://github.com/o/r/pull/7', state: 'MERGED', headRefName: 'a' },
+      ])
+    }
+
+    expect(await findPullRequests('/w', gh)).toEqual(
+      new Map([
+        ['a', 'https://github.com/o/r/pull/9'],
+        ['b', 'https://github.com/o/r/pull/8'],
+      ]),
+    )
+    expect(calls.map((args) => args.join(' '))).toEqual([
+      'pr list --state all --json url,state,headRefName --limit 100',
+    ])
+  })
+
+  it('leaves out a branch whose newest pull request is closed', async () => {
+    const gh: RunGh = async () =>
+      JSON.stringify([
+        { url: 'https://github.com/o/r/pull/9', state: 'CLOSED', headRefName: 'a' },
+        { url: 'https://github.com/o/r/pull/7', state: 'MERGED', headRefName: 'a' },
+      ])
+    expect(await findPullRequests('/w', gh)).toEqual(new Map())
+  })
+
+  it('fails with a GitHubError on an answer that is not a JSON list', async () => {
+    await expect(findPullRequests('/w', async () => 'not json')).rejects.toThrow(GitHubError)
+    await expect(findPullRequests('/w', async () => '{}')).rejects.toThrow(GitHubError)
   })
 })
 

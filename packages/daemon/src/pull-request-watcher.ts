@@ -2,6 +2,7 @@ import type { EventType, Task } from '@natamux/core'
 import type { DaemonMessage, EventBus } from './event-bus.js'
 import {
   findPullRequest,
+  findPullRequests,
   GitHubError,
   hasRemoteBranch,
   type PullRequestRef,
@@ -66,8 +67,10 @@ export function isWatched(task: Task): boolean {
   return task.prStatus === null || task.prStatus.state === 'open' || task.prStatus.state === 'draft'
 }
 
+export type Candidate = Task & { branch: string; workspace: string }
+
 // A task whose pull request may have been opened outside Natamux, by its agent or on GitHub.
-export function isCandidate(task: Task): task is Task & { branch: string; workspace: string } {
+export function isCandidate(task: Task): task is Candidate {
   return (
     task.pr === null &&
     task.branch !== null &&
@@ -91,7 +94,8 @@ type RepoBatch = {
 
 // Asks GitHub about the pull requests of tasks once a minute, so a task shows its CI and moves to
 // done when its pull request is merged. One gh call per GitHub repository. It also links a pull
-// request that the agent or a person opened from the task branch outside Natamux.
+// request that the agent or a person opened from the task branch outside Natamux, with one gh call
+// per project.
 export class PullRequestWatcher {
   private readonly tasks: TaskService
   private readonly cwdOf: (repo: string | null) => string
@@ -170,10 +174,8 @@ export class PullRequestWatcher {
       this.report(error)
     }
     try {
-      for (const task of this.tasks.listTasks().filter(isCandidate)) {
-        // The batch below reads the status of a pull request found here.
-        await this.findPullRequest(task.id).catch(report)
-      }
+      // The batch below reads the status of a pull request found here.
+      await this.findPullRequests(report)
       const batches = new Map<string, RepoBatch>()
       for (const task of this.tasks.listTasks().filter(isWatched)) {
         const ref = parsePullRequestRef(task.pr ?? '')
@@ -240,6 +242,46 @@ export class PullRequestWatcher {
       }
     } finally {
       this.finding.delete(taskId)
+    }
+  }
+
+  // Links the pull requests of all candidates, with one gh call per project: a call per task
+  // would use up the GitHub limit that gh shares with the user. Runs gh in the workspace of the
+  // first task of the project.
+  private async findPullRequests(report: (error: unknown) => void): Promise<void> {
+    const byRepo = new Map<string | null, { cwd: string; tasks: Candidate[] }>()
+    for (const task of this.tasks.listTasks().filter(isCandidate)) {
+      if (this.finding.has(task.id)) {
+        continue
+      }
+      try {
+        if (!(await this.hasRemoteBranch(task.workspace, task.branch))) {
+          this.onOrigin.delete(task.id)
+          continue
+        }
+      } catch (error) {
+        report(error)
+        continue
+      }
+      this.onOrigin.add(task.id)
+      const batch = byRepo.get(task.repo) ?? { cwd: task.workspace, tasks: [] }
+      batch.tasks.push(task)
+      byRepo.set(task.repo, batch)
+    }
+    for (const { cwd, tasks } of byRepo.values()) {
+      try {
+        const urls = await findPullRequests(cwd, this.gh)
+        for (const task of tasks) {
+          const url = urls.get(task.branch)
+          // A check may have linked it while gh ran.
+          if (url !== undefined && this.tasks.getTask(task.id).pr === null) {
+            this.tasks.recordGit(task.id, 'pr.opened', { url, detected: 'true' })
+            this.onOrigin.delete(task.id)
+          }
+        }
+      } catch (error) {
+        report(error)
+      }
     }
   }
 

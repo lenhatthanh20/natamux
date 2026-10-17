@@ -117,13 +117,14 @@ export function ProgressTab({
     queryFn: loadSettings,
   })
   const events = useQuery({
-    queryKey: ['stage-events', task.id, task.updatedAt],
+    // Read again when the task logs an event (see applyLiveMessages), not when only its time moves.
+    queryKey: ['stage-events', task.id],
     queryFn: loadEvents,
     // Keep the old list while the next one loads, or the view (and an open dialog) would blink.
     placeholderData: keepPreviousData,
   })
   const files = useQuery({
-    queryKey: ['stage-files', task.id, task.updatedAt],
+    queryKey: ['stage-files', task.id],
     queryFn: loadFiles,
     placeholderData: keepPreviousData,
   })
