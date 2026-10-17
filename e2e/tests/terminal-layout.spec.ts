@@ -2,9 +2,9 @@ import { type APIRequestContext, expect, type Page, test } from '@playwright/tes
 import { headers, openTask, signIn } from './helpers'
 import { makeShellTask, pane, removeTasks, rows, runIn } from './terminal-helpers'
 
-// T-0089. A pane that changes size (New shell, Close shell, a banner of a stage change) hides its
-// screen until the shell drew for the new size, then fades it in. No frame shows the screen at a
-// size between the old and the final one.
+// T-0089. A pane that changes size (New shell, Close shell) hides its screen until the shell drew
+// for the new size, then fades it in. No frame shows the screen at a size between the old and the
+// final one. T-0113: a state change does not change the size at all, so nothing hides.
 
 const made: string[] = []
 
@@ -96,6 +96,13 @@ function expectCalm(frames: Frame[]): void {
   expect(frames.some((frame) => frame.visible && frame.fade)).toBe(true)
 }
 
+// Every frame drawn, at one size, with no fade: the pane did not notice the change.
+function expectStill(frames: Frame[]): void {
+  expect(frames.length).toBeGreaterThan(0)
+  expect(frames.filter((frame) => !frame.visible || frame.fade)).toEqual([])
+  expect(new Set(frames.map((frame) => frame.size)).size).toBe(1)
+}
+
 async function setState(request: APIRequestContext, id: string, to: string): Promise<void> {
   await request.post(`/api/tasks/${id}/events`, {
     headers,
@@ -139,26 +146,30 @@ test('shows Shell 1 at its final size only, after New shell and Close shell', as
   expect(sizes.slice(before)).toEqual([expect.stringMatching(/^1: /)])
 })
 
-test('shows Shell 1 at its final size only, when a stage banner comes and goes', async ({
+test('keeps Shell 1 as it is while the task enters and leaves review and needs-input', async ({
   page,
   request,
 }) => {
   const sizes = watchSizes(page)
-  const { task } = await openShells(page, request, 'banner')
-  const banner = page.getByRole('main').getByText(/^Ready for review/)
-  await expect(banner).toBeVisible()
+  const { task } = await openShells(page, request, 'notice')
+  const view = page.getByRole('main')
+  const review = view.getByRole('status').filter({ hasText: /^Ready for review/ })
+  await expect(review).toBeVisible()
 
-  let before = sizes.length
-  await sampleShell1(page)
-  await setState(request, task.id, 'running')
-  await expect(banner).toBeHidden()
-  expectCalm(await shell1Frames(page))
-  expect(sizes.slice(before)).toEqual([expect.stringMatching(/^1: /)])
-
-  before = sizes.length
-  await sampleShell1(page)
-  await setState(request, task.id, 'review')
-  await expect(banner).toBeVisible()
-  expectCalm(await shell1Frames(page))
-  expect(sizes.slice(before)).toEqual([expect.stringMatching(/^1: /)])
+  for (const [to, notice] of [
+    ['running', review],
+    ['needs-input', view.getByRole('status').filter({ hasText: /^The agent/ })],
+    ['review', review],
+  ] as const) {
+    const before = sizes.length
+    await sampleShell1(page)
+    await setState(request, task.id, to)
+    if (to === 'running') {
+      await expect(notice).toBeHidden()
+    } else {
+      await expect(notice).toBeVisible()
+    }
+    expectStill(await shell1Frames(page))
+    expect(sizes.slice(before)).toEqual([])
+  }
 })

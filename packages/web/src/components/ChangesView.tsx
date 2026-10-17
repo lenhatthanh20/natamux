@@ -12,6 +12,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useActivity } from '../hooks/useActivity'
+import { usePhone } from '../hooks/useLayoutMode'
 import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import type { StageFile, StoredEvent, TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
@@ -129,6 +130,7 @@ export function ChangesView({
   const [docFile, setDocFile] = useState<string | null>(null)
   const [tabActions, setTabActions] = useState<HTMLElement | null>(null)
   const [focusToken, setFocusToken] = useState(0)
+  const phone = usePhone()
   const queryClient = useQueryClient()
   // What the agent of each shell does now.
   const terminalActivity = useActivity((all) => all.byTerminal[task.id])
@@ -307,6 +309,37 @@ export function ChangesView({
     }
   }
 
+  // What the task waits for. In the header row, so a state change never resizes the shells and
+  // makes them redraw. A phone has no room in the header: there it is a row under it.
+  const notice = waiting ? (
+    <NeedsInputBanner
+      inline={!phone}
+      reason={reason}
+      failed={task.state === 'failed'}
+      resuming={resuming}
+      starting={starting.isPending}
+      onAnswer={() => {
+        pickTab('terminal')
+        setFocusToken((value) => value + 1)
+      }}
+      onResume={resume}
+      onStartAgent={
+        task.state === 'failed' && startAgent !== undefined
+          ? (agent) => starting.mutate(agent)
+          : undefined
+      }
+      agent={task.agent}
+    />
+  ) : task.state === 'review' && approveStage !== undefined && onSendBack !== undefined ? (
+    <ReviewBanner
+      inline={!phone}
+      task={task}
+      approving={approval.isPending ? (approval.variables ?? null) : null}
+      onApprove={(stage) => approval.mutate(stage)}
+      onSendBack={onSendBack}
+    />
+  ) : undefined
+
   const commitFiles = async (message: string, fileCount: number) => {
     try {
       await gitAction.mutateAsync({ action: 'commit', message, fileCount })
@@ -329,34 +362,9 @@ export function ChangesView({
         onPush={() => gitAction.mutate({ action: 'push' })}
         onPullRequest={() => gitAction.mutate({ action: 'pull-request' })}
         onCommit={openCommit}
+        notice={phone ? undefined : notice}
       />
-      {waiting && (
-        <NeedsInputBanner
-          reason={reason}
-          failed={task.state === 'failed'}
-          resuming={resuming}
-          starting={starting.isPending}
-          onAnswer={() => {
-            pickTab('terminal')
-            setFocusToken((value) => value + 1)
-          }}
-          onResume={resume}
-          onStartAgent={
-            task.state === 'failed' && startAgent !== undefined
-              ? (agent) => starting.mutate(agent)
-              : undefined
-          }
-          agent={task.agent}
-        />
-      )}
-      {task.state === 'review' && approveStage !== undefined && onSendBack !== undefined && (
-        <ReviewBanner
-          task={task}
-          approving={approval.isPending ? (approval.variables ?? null) : null}
-          onApprove={(stage) => approval.mutate(stage)}
-          onSendBack={onSendBack}
-        />
-      )}
+      {phone && notice}
       {finished && onRemoveWorkspace !== undefined && (
         <FinishedBanner
           task={task}

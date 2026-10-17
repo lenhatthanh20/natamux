@@ -22,10 +22,12 @@ type BannerProps = {
   icon: LucideIcon
   children: ReactNode
   actions?: ReactNode
+  // One line inside the workspace header, so a state change never changes the size of the shells.
+  inline?: boolean
 }
 
 // A full-width line under the workspace header: what the task waits for, and what to do.
-export function Banner({ tone, icon: Icon, children, actions }: BannerProps) {
+export function Banner({ tone, icon: Icon, children, actions, inline = false }: BannerProps) {
   const textId = useId()
   const text = useRef<HTMLParagraphElement>(null)
   const [expanded, setExpanded] = useState(false)
@@ -45,6 +47,28 @@ export function Banner({ tone, icon: Icon, children, actions }: BannerProps) {
     observer?.observe(element)
     return () => observer?.disconnect()
   }, [expanded, children])
+
+  if (inline) {
+    // No More: it would make the header taller. The tooltip shows a cut text. -my-px keeps the
+    // border out of the row height, where buttons fill it (touch screens).
+    return (
+      <div
+        role="status"
+        data-state={tone === 'signal' ? undefined : tone}
+        className={`-my-px flex min-w-0 flex-1 items-center gap-2 rounded-md border pr-0.5 pl-2.5 ${FRAME[tone]}`}
+      >
+        <Icon
+          size={ICON.md}
+          aria-hidden="true"
+          className={`shrink-0 ${tone === 'signal' ? 'text-signal' : 'text-(--chip-fg)'}`}
+        />
+        <p data-tip-overflow className="min-w-0 flex-1 truncate text-ink">
+          {children}
+        </p>
+        {actions !== undefined && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+      </div>
+    )
+  }
 
   return (
     <div

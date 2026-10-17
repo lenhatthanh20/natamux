@@ -6,6 +6,7 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { usePhone } from '../hooks/useLayoutMode'
 import { copyText } from '../lib/clipboard'
@@ -36,6 +37,9 @@ type WorkspaceHeaderProps = {
   onPullRequest: () => void
   // Opens the commit box in the Changes tab.
   onCommit: () => void
+  // What the task waits for and what to do (a one-line banner), in the row, not under it: a row
+  // that comes and goes would resize the shells below, and they would redraw.
+  notice?: ReactNode
 }
 
 // One row: who, what, where, and the two git actions. Results of the actions are toasts, so
@@ -51,11 +55,14 @@ export function WorkspaceHeader({
   onPush,
   onPullRequest,
   onCommit,
+  notice,
 }: WorkspaceHeaderProps) {
   const [ref, width] = useElementWidth<HTMLElement>()
   const phone = usePhone()
   // Unmeasured counts as wide, so nothing flickers in the first frame.
   const compact = width !== null && width < COMPACT_BELOW
+  // A narrow row has no room for both the notice and the git buttons.
+  const gitInMenu = phone || (compact && notice !== undefined)
   const push = pushButton(task.branch, pushStatus, uncommitted)
   const pullRequest = pullRequestButton(task.branch, ahead, base, uncommitted)
   const busy = pending !== null
@@ -96,11 +103,11 @@ export function WorkspaceHeader({
       <span className="shrink-0 font-mono text-xs text-muted">{task.id}</span>
       <h2
         data-tip-overflow
-        className={`min-w-0 text-lg font-semibold tracking-tight ${phone ? 'line-clamp-2' : 'truncate'}`}
+        className={`${notice === undefined ? 'min-w-0' : 'min-w-24'} text-lg font-semibold tracking-tight ${phone ? 'line-clamp-2' : 'truncate'}`}
       >
         {task.title}
       </h2>
-      {/* While the agent waits, the banner under the header says it. One amber place is enough. */}
+      {/* While the agent waits, the notice says it. One amber place is enough. */}
       {task.state !== 'needs-input' && <StateBadge state={task.state} lanes={laneSummary(task)} />}
       {/* In a narrow header the title needs the room more. The sidebar row and the details show
           the branch too. */}
@@ -116,9 +123,9 @@ export function WorkspaceHeader({
           <MiddleTruncate text={task.branch} />
         </button>
       )}
-      <span className="min-w-0 flex-1" />
-      {phone && menu.length > 0 && <Menu label="Git actions" items={menu} size="sm" />}
-      {!phone && !finished && commitFirst && (
+      {notice ?? <span className="min-w-0 flex-1" />}
+      {gitInMenu && menu.length > 0 && <Menu label="Git actions" items={menu} size="sm" />}
+      {!gitInMenu && !finished && commitFirst && (
         <Button
           icon={GitCommitHorizontal}
           disabled={busy}
@@ -128,7 +135,7 @@ export function WorkspaceHeader({
           Commit…
         </Button>
       )}
-      {!phone && !finished && !commitFirst && (
+      {!gitInMenu && !finished && !commitFirst && (
         <Button
           icon={ArrowUpFromLine}
           busy={pending === 'push'}
@@ -140,7 +147,7 @@ export function WorkspaceHeader({
           {push.label}
         </Button>
       )}
-      {!phone && !finished && task.pr === null && (
+      {!gitInMenu && !finished && task.pr === null && (
         <Button
           // Primary only when it works: a blocked primary would draw the eye to a control
           // that does nothing, and the switch marks the moment the task is ready to ship.
@@ -155,7 +162,7 @@ export function WorkspaceHeader({
           {pullRequest.label}
         </Button>
       )}
-      {!phone && task.pr !== null && (
+      {!gitInMenu && task.pr !== null && (
         <a
           href={task.pr}
           target="_blank"
