@@ -78,6 +78,7 @@ beforeEach(() => {
   finishCi = () => undefined
   tasks = new TaskService({ dataDir, index, bus, settingsOf: () => settings })
   workspaces = new WorkspaceService({
+    dataDir,
     tasks,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
@@ -424,6 +425,27 @@ describe('context', () => {
     const task = await created({ title: 'Export tasks' })
     const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
     expect(context).toBe('# Export tasks\n\n(No notes.)\n')
+  })
+})
+
+describe('stage files of a removed workspace', () => {
+  it('puts the latest spec into the next workspace, not the last archived one', async () => {
+    const task = await created({ title: 'Export tasks' })
+    // Held for review, so no agent starts in the workspaces.
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'spec' },
+    })
+    writeFileSync(join(archiveDir(dataDir, task.id), 'spec.md'), 'spec v1\n')
+    const first = await withWorkspace(task.id)
+    writeFileSync(join(first.workspace ?? '', STAGE_DIR, 'spec.md'), 'spec v2\n')
+
+    await workspaces.remove(task.id, { deleteBranch: false })
+    await runner.settle()
+    const next = await withWorkspace(task.id)
+
+    expect(readFileSync(join(next.workspace ?? '', STAGE_DIR, 'spec.md'), 'utf8')).toBe('spec v2\n')
   })
 })
 

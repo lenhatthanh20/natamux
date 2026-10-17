@@ -38,6 +38,7 @@ function build(settingsOf?: SettingsOf) {
     ...(settingsOf === undefined ? {} : { settingsOf }),
   })
   const workspaces = new WorkspaceService({
+    dataDir,
     tasks,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),

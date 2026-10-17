@@ -67,6 +67,7 @@ const issueLinker = new IssueLinker({
 })
 issueLinker.start()
 const workspaces = new WorkspaceService({
+  dataDir: config.dataDir,
   tasks: service,
   worktreesDir: config.worktreesDir,
   repos,

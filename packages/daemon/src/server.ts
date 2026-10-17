@@ -67,13 +67,7 @@ import {
   RepoNotFoundError,
   type RepoService,
 } from './repo-service.js'
-import {
-  archiveStageFiles,
-  listStageFiles,
-  readStageFile,
-  StageFileError,
-  writeStageFile,
-} from './stage-files.js'
+import { listStageFiles, readStageFile, StageFileError, writeStageFile } from './stage-files.js'
 import {
   STAGE_ACTIONS,
   type StageAction,
@@ -696,7 +690,6 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   app.delete('/tasks/:id/workspace', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)
     const query = removeWorkspaceQuerySchema.parse(request.query)
-    archiveStageFiles(options.dataDir, options.service.getTask(id))
     return options.workspaces.remove(id, { deleteBranch: query.deleteBranch === 'true' })
   })
 

@@ -77,6 +77,7 @@ beforeEach(async () => {
     tasks: () => service.listTasks(),
   })
   const workspaces = new WorkspaceService({
+    dataDir,
     tasks: service,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),

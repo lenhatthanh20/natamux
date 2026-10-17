@@ -14,6 +14,7 @@ import { type DaemonMessage, EventBus } from './event-bus.js'
 import { GitError, gitSpawnCount, NothingToCommitError, type RunGh, worktreeState } from './git.js'
 import { addBareOrigin, createTestRepo, runGit, type TestRepo } from './git-repo.fixture.js'
 import { RepoService } from './repo-service.js'
+import { archiveDir, excludeStageDir, STAGE_DIR } from './stage-files.js'
 import { TaskIndex } from './task-index.js'
 import { TaskNotFoundError, TaskService } from './task-service.js'
 import {
@@ -34,13 +35,14 @@ let index: TaskIndex
 let messages: DaemonMessage[]
 let tasks: TaskService
 let workspaces: WorkspaceService
+let dataDir: string
 // The clock of the git reads that are kept for a moment.
 let clock: number
 
 beforeEach(() => {
   clock = 0
   repo = createTestRepo()
-  const dataDir = join(repo.root, 'data')
+  dataDir = join(repo.root, 'data')
   mkdirSync(dataDir)
   index = new TaskIndex(':memory:')
   messages = []
@@ -48,6 +50,7 @@ beforeEach(() => {
   bus.subscribe((message) => messages.push(message))
   tasks = new TaskService({ dataDir, index, bus })
   workspaces = new WorkspaceService({
+    dataDir,
     tasks,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),
@@ -106,6 +109,7 @@ describe('create', () => {
     const trees = join(repo.root, 'other-trees')
     await repos.add({ path: other, worktreesDir: trees })
     const withRepos = new WorkspaceService({
+      dataDir,
       tasks,
       worktreesDir: join(repo.root, 'worktrees'),
       repos,
@@ -296,6 +300,7 @@ describe('remove', () => {
   it('refuses a worktree with changes not committed, before ending its shells', async () => {
     const closed: string[] = []
     const guarded = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -319,6 +324,73 @@ describe('remove', () => {
     expect(closed).toEqual([task.id])
   })
 
+  describe('stage files', () => {
+    const archived = (taskId: string) =>
+      readFileSync(join(archiveDir(dataDir, taskId), 'spec.md'), 'utf8')
+
+    async function withSpec(service: WorkspaceService, text: string) {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      const created = await service.create(task.id)
+      const workspace = created.workspace ?? ''
+      await excludeStageDir(workspace)
+      mkdirSync(archiveDir(dataDir, task.id), { recursive: true })
+      writeFileSync(join(archiveDir(dataDir, task.id), 'spec.md'), 'spec v1\n')
+      mkdirSync(join(workspace, STAGE_DIR), { recursive: true })
+      writeFileSync(join(workspace, STAGE_DIR, 'spec.md'), text)
+      return { task, workspace }
+    }
+
+    it('archives the stage files that no stage archived yet', async () => {
+      const { task } = await withSpec(workspaces, 'spec v2\n')
+
+      await workspaces.remove(task.id, { deleteBranch: false })
+
+      expect(archived(task.id)).toBe('spec v2\n')
+    })
+
+    it('archives a stage file the agent wrote while its shells ended', async () => {
+      let workspace = ''
+      const service = new WorkspaceService({
+        dataDir,
+        tasks,
+        repoDir: repo.dir,
+        worktreesDir: join(repo.root, 'worktrees'),
+        closeTerminals: () => writeFileSync(join(workspace, STAGE_DIR, 'spec.md'), 'spec v3\n'),
+      })
+      const made = await withSpec(service, 'spec v2\n')
+      workspace = made.workspace
+
+      await service.remove(made.task.id, { deleteBranch: false })
+
+      expect(archived(made.task.id)).toBe('spec v3\n')
+    })
+
+    it('leaves the archive alone when the removal is refused', async () => {
+      const { task, workspace } = await withSpec(workspaces, 'spec v2\n')
+      writeFileSync(join(workspace, 'notes.txt'), 'work in progress')
+
+      await expect(workspaces.remove(task.id, { deleteBranch: false })).rejects.toThrow(
+        WorkspaceConflictError,
+      )
+
+      expect(archived(task.id)).toBe('spec v1\n')
+    })
+
+    it('keeps the worktree and stops the agent when the archive cannot be written', async () => {
+      const { task, workspace } = await withSpec(workspaces, 'spec v2\n')
+      tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
+      tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
+      // A file where the archive folder should be makes the copy fail.
+      rmSync(archiveDir(dataDir, task.id), { recursive: true })
+      writeFileSync(archiveDir(dataDir, task.id), 'not a folder')
+
+      await expect(workspaces.remove(task.id, { deleteBranch: false })).rejects.toThrow()
+
+      expect(readFileSync(join(workspace, STAGE_DIR, 'spec.md'), 'utf8')).toBe('spec v2\n')
+      expect(tasks.getTask(task.id)).toMatchObject({ state: 'ready', workspace })
+    })
+  })
+
   it('makes the stage of the agent it ends wait to start again', async () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await workspaces.create(task.id)
@@ -338,6 +410,7 @@ describe('remove', () => {
     tasks.applyEvent(task.id, { source: 'human', type: 'task.readied' })
     tasks.applyEvent(task.id, { source: 'agent', type: 'agent.started' })
     const ending = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -507,6 +580,7 @@ describe('remove', () => {
     const closed: string[] = []
     const workspaceWhenClosed: (string | null)[] = []
     const service = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir,
@@ -1065,6 +1139,7 @@ describe('commit, push and pull request', () => {
       return `${PR_URL}\n`
     }
     workspaces = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -1154,6 +1229,7 @@ describe('draftCommitMessage', () => {
     logged = []
     answer = async () => 'Add the fix\n'
     workspaces = new WorkspaceService({
+      dataDir,
       log: (message) => logged.push(message),
       tasks,
       repoDir: repo.dir,
@@ -1279,6 +1355,7 @@ describe('draftCommitMessage', () => {
     }
     const first = heldAgent()
     workspaces = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -1300,6 +1377,7 @@ describe('draftCommitMessage', () => {
 
     const second = heldAgent()
     workspaces = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -1443,6 +1521,7 @@ describe('touch', () => {
     const bus = new EventBus()
     bus.subscribe((message) => sent.push(message))
     touching = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),
@@ -1568,6 +1647,7 @@ describe('onCreated', () => {
   it('is told about a new workspace, and its failure does not undo the workspace', async () => {
     const seen: string[] = []
     const watched = new WorkspaceService({
+      dataDir,
       tasks,
       repoDir: repo.dir,
       worktreesDir: join(repo.root, 'worktrees'),

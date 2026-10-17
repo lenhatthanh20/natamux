@@ -43,6 +43,7 @@ import {
 } from './git.js'
 import { mapLimit } from './map-limit.js'
 import type { RepoService } from './repo-service.js'
+import { archiveStageFiles } from './stage-files.js'
 import type { TaskService } from './task-service.js'
 import { TtlCache } from './ttl-cache.js'
 
@@ -61,6 +62,8 @@ export class FileNotChangedError extends Error {
 }
 
 type WorkspaceServiceOptions = {
+  // Where the stage files of a task are archived.
+  dataDir: string
   tasks: TaskService
   // The repository of every task, when there is no `repos`.
   repoDir?: string
@@ -149,6 +152,7 @@ export function branchNameFor(task: Pick<Task, 'id' | 'title'>): string {
 }
 
 export class WorkspaceService {
+  private readonly dataDir: string
   private readonly tasks: TaskService
   private readonly repoDir: string | undefined
   private readonly worktreesDir: string
@@ -174,6 +178,7 @@ export class WorkspaceService {
   private readonly dirty = new Map<string, DirtyState>()
 
   constructor(options: WorkspaceServiceOptions) {
+    this.dataDir = options.dataDir
     this.tasks = options.tasks
     this.repoDir = options.repoDir
     this.repos = options.repos
@@ -304,6 +309,8 @@ export class WorkspaceService {
       // A stale entry keeps git from deleting the branch or adding the worktree again.
       if (state !== 'missing') {
         try {
+          // After the shells ended, so the agent writes no stage file after the copy.
+          archiveStageFiles(this.dataDir, task)
           await removeWorktree(repoDir, task.workspace, submodules)
         } catch (error) {
           // The agent ended with its shell. Left running, the task would wait for it forever.
