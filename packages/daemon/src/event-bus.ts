@@ -54,8 +54,9 @@ export class EventBus {
     for (const listener of this.listeners) {
       try {
         listener(message)
-      } catch {
+      } catch (error) {
         // A failing listener must not stop the others.
+        console.error(`A listener failed on ${message.kind}: ${String(error)}`)
       }
     }
     if (this.clients.size === 0) {
@@ -65,8 +66,9 @@ export class EventBus {
     for (const client of this.clients) {
       try {
         client(text)
-      } catch {
+      } catch (error) {
         // Same as above.
+        console.error(`A dashboard failed on ${message.kind}: ${String(error)}`)
       }
     }
   }

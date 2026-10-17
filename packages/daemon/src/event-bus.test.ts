@@ -57,15 +57,21 @@ describe('EventBus', () => {
     expect(received).toEqual([])
   })
 
-  it('keeps delivering when one subscriber throws', () => {
+  it('keeps delivering when one subscriber throws, and logs the error', () => {
     const bus = new EventBus()
     const received: DaemonMessage[] = []
     bus.subscribe(() => {
       throw new Error('broken listener')
     })
     bus.subscribe((next) => received.push(next))
-
-    bus.publish(message)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      bus.publish(message)
+      expect(error).toHaveBeenCalledOnce()
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('broken listener'))
+    } finally {
+      error.mockRestore()
+    }
 
     expect(received).toEqual([message])
   })
@@ -104,6 +110,25 @@ describe('EventBus clients', () => {
 
     expect(texts).toEqual([0, 1, 2].map(() => JSON.stringify(message)))
     expect(services).toEqual([message])
+  })
+
+  it('keeps sending when one dashboard throws, and logs the error', () => {
+    const bus = new EventBus()
+    const texts: string[] = []
+    bus.subscribeClient(() => {
+      throw new Error('closed socket')
+    })
+    bus.subscribeClient((text) => texts.push(text))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      bus.publish(message)
+      expect(error).toHaveBeenCalledOnce()
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('closed socket'))
+    } finally {
+      error.mockRestore()
+    }
+
+    expect(texts).toEqual([JSON.stringify(message)])
   })
 
   it('makes no text without dashboards', () => {
