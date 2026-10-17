@@ -276,11 +276,15 @@ function createWindow(): void {
   }
 }
 
+// A hung daemon must not hold Cmd+Q; with no answer, quit goes on without the dialog.
+const RUNNING_TASKS_TIMEOUT_MS = 3000
+
 // The number of tasks whose agent works now. Quitting stops them.
 async function runningTasks(): Promise<number> {
   try {
     const response = await fetch(`${dashboardUrl}/tasks?state=running`, {
       headers: { authorization: `Bearer ${daemonToken}` },
+      signal: AbortSignal.timeout(RUNNING_TASKS_TIMEOUT_MS),
     })
     const body = (await response.json()) as { tasks?: unknown[] }
     return body.tasks?.length ?? 0

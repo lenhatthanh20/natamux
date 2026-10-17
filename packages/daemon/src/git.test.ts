@@ -23,6 +23,7 @@ import {
   findPullRequest,
   GitError,
   GitHubError,
+  ghError,
   gitSpawnCount,
   hasRemoteBranch,
   ImageSideMissingError,
@@ -1671,6 +1672,28 @@ describe('gitSpawnCount', () => {
     await expect(runGh(missing, ['--version'])).rejects.toThrow(GitHubError)
     await expect(runGh(missing, ['--version'])).rejects.toThrow(GitHubError)
     expect(gitSpawnCount() - before).toBe(5)
+  })
+})
+
+describe('ghError', () => {
+  it('says gh timed out when the time limit killed it', () => {
+    const killed = Object.assign(new Error('Command failed: gh pr view'), {
+      killed: true,
+      signal: 'SIGTERM',
+      stdout: '',
+    })
+    expect(ghError(killed).message).toBe('GitHub CLI failed: gh did not finish in 60 seconds')
+  })
+
+  it('keeps the stderr and stdout of a gh that failed by itself', () => {
+    const failed = Object.assign(new Error('Command failed'), {
+      killed: false,
+      stderr: 'not logged in\n',
+      stdout: '{"data":{}}',
+    })
+    const error = ghError(failed)
+    expect(error.message).toBe('GitHub CLI failed: not logged in')
+    expect(error.output).toBe('{"data":{}}')
   })
 })
 
