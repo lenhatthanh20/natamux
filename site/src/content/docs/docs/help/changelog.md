@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.33 (2026-10-17)
+
+- `natamux done` from a stage that does not run now is refused, so a Review agent that sent a task back no longer passes Implement. A send back also closes the shell of a stage with **End the agent and close its shell when the stage is done**. See [What `natamux done` does](/docs/concepts/stages/#what-natamux-done-does).
+- Wait states survive a daemon restart, two done reports run the checks once, and removing a workspace keeps the latest stage files.
+- Copilot asks for input only when it shows a prompt. A Cursor or Copilot hook file with a hook of your own is kept. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+- A hidden cursor stays hidden when a terminal opens again, and quitting waits for every shell to end.
+- A hand edit of a task file is no longer lost to a change right after it, and PR and issue links take only `http` and `https` URLs.
+- Time limits on `gh` and update requests, one pull request lookup per project, and a stricter token check.
+- A new homepage and a regrouped guide.
+
 ## v0.1.32 (2026-10-16)
 
 - **Progress** folds each path a task did not take into one row marked **Not taken**. Click it to see its stages. The branch says which path it took and why. See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition).
@@ -170,7 +180,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 ## v0.1.8 (2026-10-11)
 
 - Run a hard stage as a Claude Code workflow: more accurate, but many more tokens. In **Project settings**, an agent stage has **Tasks can run it as a workflow** (`"workflow": true`), on by default for **Plan** and **Implement**. On a task, the stage card in **Progress** has **Run with a workflow**, off by default. Only Claude Code runs workflows. The CLI has `natamux stage workflow <task> on|off --stage <id>`, and the API has `PUT /tasks/:id/workflow`. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow).
-- The **Start a task** dialog has two groups. **Context** holds **Title**, **Context from**, **Notes** or **Reference**, and **Attachments**, under a line that says what the agent reads for the source you pick. **Workspace and agent** holds **Project**, **Branch from** and **Agent**. **Notes** is taller and suggests what to write, and **Reference** has a hint under it. See [Add a task](/docs/getting-started/quick-start/#start-a-task).
+- The **Start a task** dialog has two groups. **Context** holds **Title**, **Context from**, **Notes** or **Reference**, and **Attachments**, under a line that says what the agent reads for the source you pick. **Workspace and agent** holds **Project**, **Branch from** and **Agent**. **Notes** is taller and suggests what to write, and **Reference** has a hint under it. See [Add a task](/docs/getting-started/quick-start/#2-add-a-task).
 
 ## v0.1.7 (2026-10-11)
 
