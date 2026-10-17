@@ -226,7 +226,6 @@ const terminalQuerySchema = terminalSizeSchema.extend({
   offset: z.coerce.number().int().min(0).optional(),
 })
 const terminalParamsSchema = z.object({ id: taskIdSchema, terminal: terminalNameSchema })
-const TERMINAL_PATH = /^\/tasks\/[^/]+\/terminal$/
 // An /events socket with more than this not sent yet skips messages, and gets `resync` once it
 // is below again, every DRAIN_CHECK_MS.
 export const EVENTS_HIGH_WATER = 1024 * 1024
@@ -339,22 +338,21 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
   // Browsers cannot set headers on a WebSocket, so only /events accepts ?token=. The terminal
   // socket checks a one-time ticket itself instead (see TerminalService.issueTicket).
+  // Decide by the route that matched, never by the path parsed again: new URL reads "\" as "/"
+  // and resolves "..", the router does not.
   app.addHook('onRequest', async (request, reply) => {
-    const url = new URL(request.url, 'http://localhost')
-    if (url.pathname === '/health' || servesPage?.(request) === true) {
+    const route = request.routeOptions.url
+    if (route === '/health' || servesPage?.(request) === true) {
       return
     }
-    if (request.method !== 'GET' || !NO_PROGRAM_ROUTES.has(request.routeOptions.url ?? '')) {
+    if (request.method !== 'GET' || !NO_PROGRAM_ROUTES.has(route ?? '')) {
       await options.ready
     }
-    if (
-      request.method === 'GET' &&
-      TERMINAL_PATH.test(url.pathname) &&
-      url.searchParams.has('ticket')
-    ) {
+    const query = new URL(request.url, 'http://localhost').searchParams
+    if (request.method === 'GET' && route === '/tasks/:id/terminal' && query.has('ticket')) {
       return
     }
-    const queryToken = url.pathname === '/events' ? url.searchParams.get('token') : null
+    const queryToken = route === '/events' ? query.get('token') : null
     const provided = bearerToken(request.headers.authorization) ?? queryToken ?? undefined
     if (!isAuthorized(provided, options.token) && !isAuthorized(provided, options.agentToken)) {
       return reply.code(401).send({ error: 'unauthorized' })
