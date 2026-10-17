@@ -956,7 +956,9 @@ export class TaskService {
   setWithoutAgent(taskId: string, on: boolean): void {
     const task = this.getTask(taskId)
     if ((task.withoutAgent === true) !== on) {
-      this.store({ ...task, withoutAgent: on ? true : undefined }, [])
+      // Left out, not undefined: the YAML of the task file cannot hold undefined.
+      const { withoutAgent: _withoutAgent, ...rest } = task
+      this.store(on ? { ...task, withoutAgent: true } : rest, [])
     }
   }
 
