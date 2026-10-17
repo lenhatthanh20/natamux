@@ -68,6 +68,9 @@ export function useLiveTasks(
         }
         if (message.kind === 'task') {
           onTaskRef.current(message.task)
+          if (message.logged) {
+            batch.push(message)
+          }
         } else if (message.kind === 'task.deleted') {
           onDeletedRef.current?.(message.taskId)
         } else if (message.kind === 'repos.changed') {

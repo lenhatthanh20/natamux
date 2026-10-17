@@ -144,6 +144,23 @@ describe('useLiveTasks', () => {
     expect(keys).toContainEqual(['diffstats'])
   })
 
+  it('reads the log of a task again for a logged event, not for a change of its time only', () => {
+    const { socket, onTask } = live()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const later = { ...task, updatedAt: '2026-10-08T09:00:30.000Z' }
+
+    socket.receive({ kind: 'task.changed', task: later })
+    flush()
+    expect(onTask).toHaveBeenCalledWith(later)
+    expect(invalidate).not.toHaveBeenCalled()
+
+    socket.receive({ kind: 'task.updated', task: later, accepted: true, event: {} })
+    flush()
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    expect(keys).toContainEqual(['events', 'T-0001'])
+    expect(keys).toContainEqual(['stage-events', 'T-0001'])
+  })
+
   it('reads everything again after a resync', () => {
     const { socket } = live()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')

@@ -482,7 +482,7 @@ export function TaskDetail({
             </dl>
           </DetailSection>
 
-          <Timeline taskId={task.id} updatedAt={task.updatedAt} loadEvents={loadEvents} />
+          <Timeline taskId={task.id} loadEvents={loadEvents} />
         </div>
       )}
 

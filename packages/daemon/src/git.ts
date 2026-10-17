@@ -1103,6 +1103,42 @@ export async function findPullRequest(
   return typeof pr?.url === 'string' && pr.state !== 'CLOSED' ? pr.url : undefined
 }
 
+// How many of the newest pull requests findPullRequests reads. shortcut: a branch whose pull
+// request is older is not found here; findPullRequest (on an agent's stop) still finds it.
+const LISTED_PULL_REQUESTS = 100
+
+// The address of the newest pull request of each branch, by branch, from one gh call for the
+// whole repository. Left out as in findPullRequest: a branch whose newest one is closed.
+export async function findPullRequests(
+  cwd: string,
+  gh: RunGh = runGh,
+): Promise<Map<string, string>> {
+  const args = ['--state', 'all', '--json', 'url,state,headRefName']
+  const output = await gh(cwd, ['pr', 'list', ...args, '--limit', String(LISTED_PULL_REQUESTS)])
+  let found: unknown
+  try {
+    found = JSON.parse(output)
+  } catch {
+    found = undefined
+  }
+  if (!Array.isArray(found)) {
+    throw new GitHubError(`could not read the pull requests: ${output.slice(0, 200)}`)
+  }
+  const byBranch = new Map<string, string>()
+  const seen = new Set<string>()
+  // Newest first, so the first one of a branch is its newest.
+  for (const { url, state, headRefName } of found as Record<string, unknown>[]) {
+    if (typeof headRefName !== 'string' || seen.has(headRefName)) {
+      continue
+    }
+    seen.add(headRefName)
+    if (typeof url === 'string' && state !== 'CLOSED') {
+      byBranch.set(headRefName, url)
+    }
+  }
+  return byBranch
+}
+
 // Sums `git diff --numstat`. Binary files count as files, without lines.
 export function parseNumstat(output: string): DiffStat {
   const stat: DiffStat = { files: 0, added: 0, removed: 0 }

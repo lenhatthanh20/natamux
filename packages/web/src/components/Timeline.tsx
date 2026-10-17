@@ -8,18 +8,17 @@ import { DetailSection } from './DetailSection'
 
 type TimelineProps = {
   taskId: string
-  // Changes whenever the task does, so the list is read again.
-  updatedAt: string
   loadEvents: () => Promise<StoredEvent[]>
 }
 
-export function Timeline({ taskId, updatedAt, loadEvents }: TimelineProps) {
+// The live feed has the list read again when the task logs an event (see applyLiveMessages).
+export function Timeline({ taskId, loadEvents }: TimelineProps) {
   const query = useQuery({
-    queryKey: ['events', taskId, updatedAt],
+    queryKey: ['events', taskId],
     queryFn: loadEvents,
   })
 
-  // "Agent is working" lines only keep the time of the last update fresh. They are not news.
+  // "Agent is working" lines, in logs written before they were dropped, are not news.
   // Newest first. Worked out once per read, not on every render.
   const lines = useMemo(
     () =>

@@ -289,15 +289,16 @@ describe('PullRequestWatcher', () => {
 })
 
 // A task with a workspace on `branch`, and no pull request yet.
-function taskOnBranch(branch: string): Task {
-  const task = tasks.createTask({ title: branch })
+function taskOnBranch(branch: string, repo?: string): Task {
+  const task = tasks.createTask({ title: branch, ...(repo === undefined ? {} : { repo }) })
   return tasks.recordWorkspace(task.id, { workspace: `/work/${branch}`, branch })
 }
 
 type FoundPullRequest = { url: string; state: string }
 
-// Answers `gh pr list --head` with the pull request of each branch, and `gh pr view` and
-// `gh api graphql` with the state of that pull request.
+// Answers `gh pr list --head` with the pull request of that branch, `gh pr list` without it with
+// the pull request of each branch, and `gh pr view` and `gh api graphql` with the state of that
+// pull request.
 function github(prs: Record<string, FoundPullRequest>, calls: GhCall[] = []): RunGh {
   const byNumber = Object.fromEntries(
     Object.values(prs).map((pr) => [Number(pr.url.split('/').at(-1)), pr.state]),
@@ -306,6 +307,10 @@ function github(prs: Record<string, FoundPullRequest>, calls: GhCall[] = []): Ru
   return async (cwd, args) => {
     calls.push({ cwd, args })
     if (args[0] === 'pr' && args[1] === 'list') {
+      if (!args.includes('--head')) {
+        const all = Object.entries(prs).map(([headRefName, pr]) => ({ ...pr, headRefName }))
+        return JSON.stringify(all)
+      }
       const pr = prs[valuesOf({ cwd, args }, '--head')[0] ?? '']
       return JSON.stringify(pr === undefined ? [] : [pr])
     }
@@ -357,6 +362,84 @@ describe('PullRequestWatcher finds a pull request opened outside Natamux', () =>
     expect(calls[0]?.cwd).toBe('/work/natamux/t-1')
     const opened = tasks.listEvents(task.id).filter(({ event }) => event.type === 'pr.opened')
     expect(opened.map(({ event }) => event.payload)).toEqual([{ url, detected: 'true' }])
+  })
+
+  it('lists the pull requests once per project, in the workspace of one of its tasks', async () => {
+    const first = taskOnBranch('natamux/t-1')
+    const second = taskOnBranch('natamux/t-2')
+    taskOnBranch('natamux/t-3')
+    const web = taskOnBranch('natamux/t-4', 'web')
+    const calls: GhCall[] = []
+    const gh = github(
+      {
+        'natamux/t-1': { url: 'https://github.com/o/r/pull/1', state: 'OPEN' },
+        'natamux/t-2': { url: 'https://github.com/o/r/pull/2', state: 'MERGED' },
+        'natamux/t-4': { url: 'https://github.com/o/web/pull/4', state: 'OPEN' },
+      },
+      calls,
+    )
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+    })
+
+    await watcher.checkAll()
+
+    const lists = calls.filter(({ args }) => args[0] === 'pr' && args[1] === 'list')
+    expect(lists.map(({ cwd }) => cwd).sort()).toEqual(['/work/natamux/t-1', '/work/natamux/t-4'])
+    expect(lists.every(({ args }) => !args.includes('--head'))).toBe(true)
+    expect(tasks.getTask(first.id).pr).toBe('https://github.com/o/r/pull/1')
+    expect(tasks.getTask(second.id).pr).toBe('https://github.com/o/r/pull/2')
+    expect(tasks.getTask(web.id).pr).toBe('https://github.com/o/web/pull/4')
+  })
+
+  it('goes on with the other projects when gh fails for one', async () => {
+    taskOnBranch('natamux/t-1')
+    const web = taskOnBranch('natamux/t-2', 'web')
+    const logged: string[] = []
+    const answer = github({ 'natamux/t-2': { url, state: 'OPEN' } })
+    const gh: RunGh = async (cwd, args) => {
+      if (cwd === '/work/natamux/t-1') {
+        throw new GitHubError('HTTP 502')
+      }
+      return answer(cwd, args)
+    }
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+      log: (message) => logged.push(message),
+    })
+
+    await watcher.checkAll()
+
+    expect(tasks.getTask(web.id).pr).toBe(url)
+    expect(logged).toEqual(['Pull request check: GitHub CLI failed: HTTP 502'])
+  })
+
+  it('does not link a pull request twice when a check linked it meanwhile', async () => {
+    const task = taskOnBranch('natamux/t-1')
+    const answer = github({ 'natamux/t-1': { url, state: 'OPEN' } })
+    const gh: RunGh = async (cwd, args) => {
+      if (args[1] === 'list' && tasks.getTask(task.id).pr === null) {
+        tasks.recordGit(task.id, 'pr.opened', { url })
+      }
+      return answer(cwd, args)
+    }
+    const watcher = new PullRequestWatcher({
+      tasks,
+      cwdOf: () => '/repo',
+      gh,
+      hasRemoteBranch: onOrigin,
+    })
+
+    await watcher.checkAll()
+
+    const opened = tasks.listEvents(task.id).filter(({ event }) => event.type === 'pr.opened')
+    expect(opened).toHaveLength(1)
   })
 
   it('asks GitHub nothing while origin does not have the branch', async () => {

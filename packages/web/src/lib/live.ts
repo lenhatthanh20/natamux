@@ -12,7 +12,9 @@ export function liveSocketUrl(
 
 // A message of the live feed that the dashboard uses, read once.
 export type LiveMessage =
-  | { kind: 'task'; task: Task }
+  // `logged`: the change added a line to the task's log. A sign of life of its agent moves only
+  // its time.
+  | { kind: 'task'; task: Task; logged: boolean }
   | { kind: 'task.deleted'; taskId: string }
   | { kind: 'repos.changed' }
   // What the task's agents do now: the line of each terminal, and the newest line. {}: nothing.
@@ -40,7 +42,8 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
   }
   if ('task' in message) {
     const parsed = taskSchema.safeParse(message.task)
-    return parsed.success ? { kind: 'task', task: parsed.data } : undefined
+    const logged = 'kind' in message && message.kind === 'task.updated'
+    return parsed.success ? { kind: 'task', task: parsed.data, logged } : undefined
   }
   const { kind, taskId, activity } = message as Record<string, unknown>
   const id = typeof taskId === 'string' ? taskId : null
@@ -78,6 +81,9 @@ export const DIFFSTATS_KEY = ['diffstats']
 export const DIFFSTATS_EVERY_MS = 15_000
 // The queries of a workspace's files, by task id: the Changes, History and Docs tabs.
 const WORKSPACE_KEYS = ['changes', 'file-diff', 'graph', 'stage-files']
+// The queries of a task's log, by task id, and the stage files that a logged event may have
+// written. Not keyed on the time of the task: a busy agent moves it every 30 seconds.
+const LOG_KEYS = ['events', 'stage-events', 'stage-files', 'question-events']
 
 // One task's activity in the cache. The other tasks keep their objects, so what shows them does
 // not render again.
@@ -148,6 +154,10 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
         add([key, message.taskId])
       }
       sizesChanged = true
+    } else if (message.kind === 'task' && message.logged) {
+      for (const key of LOG_KEYS) {
+        add([key, message.task.id])
+      }
     }
   }
   // Before the first read there is nothing to change: that read brings the activity.

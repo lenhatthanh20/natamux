@@ -664,18 +664,18 @@ describe('recordActivity', () => {
     return task
   }
 
-  it('moves the time of the last update of a running task and logs the sign of life', () => {
+  it('moves the time of the last update of a running task, with no line in the log', () => {
     const task = startedTask()
+    const logged = activityService.listEvents(task.id)
     later(31)
 
     expect(activityService.recordActivity(task.id)).toBe(true)
 
-    expect(activityService.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
-    expect(activityService.listEvents(task.id).at(-1)).toMatchObject({
-      accepted: true,
-      event: { type: 'agent.active', source: 'agent', at: '2026-10-08T09:00:31.000Z' },
-    })
-    expect(seen.at(-1)).toMatchObject({ kind: 'task.updated', accepted: true })
+    const updated = activityService.getTask(task.id)
+    expect(updated.updatedAt).toBe('2026-10-08T09:00:31.000Z')
+    expect(activityService.listEvents(task.id)).toEqual(logged)
+    expect(readEventLog(dataDir, task.id)).toHaveLength(logged.length)
+    expect(seen.at(-1)).toEqual({ kind: 'task.changed', task: updated })
   })
 
   it('does not change the state of the task', () => {
@@ -689,12 +689,13 @@ describe('recordActivity', () => {
     const task = startedTask()
     later(31)
     activityService.recordActivity(task.id)
-    const count = activityService.listEvents(task.id).length
+    const count = seen.length
 
     later(10)
 
     expect(activityService.recordActivity(task.id)).toBe(false)
-    expect(activityService.listEvents(task.id)).toHaveLength(count)
+    expect(activityService.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:31.000Z')
+    expect(seen).toHaveLength(count)
   })
 
   it('uses the interval it is given', () => {

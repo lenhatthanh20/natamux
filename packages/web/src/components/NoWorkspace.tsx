@@ -43,7 +43,7 @@ function FinishedSummary({
   const summary = pullRequestSummary(task)
   // The same key as the activity in the details.
   const events = useQuery({
-    queryKey: ['events', task.id, task.updatedAt],
+    queryKey: ['events', task.id],
     queryFn: () => loadEvents?.() ?? Promise.resolve([]),
     enabled: loadEvents !== undefined,
   })

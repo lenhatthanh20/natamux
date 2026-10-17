@@ -152,12 +152,14 @@ function progress(options: Options = {}) {
   const createIssue = vi.fn(async () => TASK)
   const onOpenFile = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const view = (task: Task, events: StoredEvent[]) => (
+  let logged = options.events ?? EVENTS
+  const loadEvents = vi.fn(async () => logged)
+  const view = (task: Task) => (
     <QueryClientProvider client={client}>
       <ProgressTab
         task={task}
         loadSettings={async () => options.settings ?? SETTINGS}
-        loadEvents={async () => events}
+        loadEvents={loadEvents}
         loadFiles={options.loadFiles ?? (async () => FILES)}
         act={act}
         createIssue={createIssue}
@@ -171,9 +173,18 @@ function progress(options: Options = {}) {
       />
     </QueryClientProvider>
   )
-  const { rerender } = render(view(options.task ?? TASK, options.events ?? EVENTS))
-  const update = (task: Task, events: StoredEvent[]) => rerender(view(task, events))
-  return { act, createIssue, onOpenFile, setWorkflow, setCi, client, update }
+  const { rerender } = render(view(options.task ?? TASK))
+  // A logged event: the live feed brings the task, and has the log read again.
+  const update = (task: Task, events: StoredEvent[]) => {
+    logged = events
+    rerender(view(task))
+    actOn(() => {
+      void client.invalidateQueries()
+    })
+  }
+  // Only the time of the task moved, as for a sign of life of its agent.
+  const touch = (task: Task) => rerender(view(task))
+  return { act, createIssue, onOpenFile, setWorkflow, setCi, client, update, touch, loadEvents }
 }
 
 describe('ProgressTab', () => {
@@ -809,14 +820,22 @@ describe('the data of the progress', () => {
     await screen.findByRole('list', { name: 'Stages' })
     const cache = client.getQueryCache()
     expect(cache.find({ queryKey: ['settings', 'default'], exact: true })).toBeTruthy()
-    expect(
-      cache.find({ queryKey: ['stage-events', 'T-0001', TASK.updatedAt], exact: true }),
-    ).toBeTruthy()
+    expect(cache.find({ queryKey: ['stage-events', 'T-0001'], exact: true })).toBeTruthy()
     await waitFor(() =>
-      expect(
-        cache.find({ queryKey: ['stage-files', 'T-0001', TASK.updatedAt], exact: true }),
-      ).toBeTruthy(),
+      expect(cache.find({ queryKey: ['stage-files', 'T-0001'], exact: true })).toBeTruthy(),
     )
+  })
+
+  it('does not read the events again when only the time of the task moves', async () => {
+    const { touch, loadEvents } = progress()
+
+    await screen.findByRole('list', { name: 'Stages' })
+    await waitFor(() => expect(loadEvents).toHaveBeenCalledTimes(1))
+    touch({ ...TASK, updatedAt: '2026-10-10T09:00:30.000Z' })
+    touch({ ...TASK, updatedAt: '2026-10-10T09:01:00.000Z' })
+
+    await screen.findByRole('list', { name: 'Stages' })
+    expect(loadEvents).toHaveBeenCalledTimes(1)
   })
 
   it('follows the task when a stage moves on', async () => {

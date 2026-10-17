@@ -1004,11 +1004,12 @@ export class TaskService {
     return updated
   }
 
-  // Writes down that the agent of a running task is still at work, so the time of its last update
-  // is the time of its last sign of life. At most once per `minIntervalMs`, so a busy agent does
-  // not fill the log, except that the first sign of life ends a wait for background work at once.
-  // Terminal output alone is no such sign: a redraw after a resize prints too while the agent
-  // still waits. So with `endsWait: false` the wait stays. Returns whether it wrote anything.
+  // Moves the time of the last update of a running task to its agent's last sign of life. No line
+  // in the log: dashboards read the log again for each logged event, so a busy agent would make
+  // them read it every 30 seconds. At most once per `minIntervalMs`, except that the first sign of
+  // life ends a wait for background work at once. Terminal output alone is no such sign: a redraw
+  // after a resize prints too while the agent still waits. So with `endsWait: false` the wait
+  // stays. Returns whether it changed anything.
   recordActivity(
     taskId: string,
     { minIntervalMs = ACTIVITY_INTERVAL_MS, endsWait = true }: ActivityOptions = {},
@@ -1024,7 +1025,6 @@ export class TaskService {
       return false
     }
 
-    const event: TaskEvent = { taskId, source: 'agent', type: 'agent.active', at, payload: {} }
     const updated: Task = {
       ...task,
       backgroundSince: endsWait ? null : task.backgroundSince,
@@ -1037,8 +1037,8 @@ export class TaskService {
       writtenAt === undefined ||
       Date.parse(at) - Date.parse(writtenAt) >= ACTIVITY_FILE_INTERVAL_MS
 
-    this.store(updated, [{ event, accepted: true }], writeFile)
-    this.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    this.store(updated, [], writeFile)
+    this.bus.publish({ kind: 'task.changed', task: updated })
     return true
   }
 

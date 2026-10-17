@@ -20,7 +20,7 @@ import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
 import { removedText } from '../lib/finished'
 import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
-import { ACTIVITY_KEY, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../lib/live'
+import { ACTIVITY_KEY, applyLiveMessages, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../lib/live'
 import type { PaletteScope } from '../lib/palette'
 import { agentPaneTasks, MAX_PANES } from '../lib/panes'
 import { prefetchWhenIdle } from '../lib/prefetch'
@@ -188,9 +188,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     [queryClient],
   )
   useEffect(() => () => batch.cancel(), [batch])
+  // The user's own action logged an event, so the views of the log read it again, even while
+  // the live feed is down.
   const mergeTask = (task: Task) => {
     batch.push(task)
     batch.flush()
+    applyLiveMessages(queryClient, [{ kind: 'task', task, logged: true }])
   }
 
   // A task the user just deleted must not also raise "there is no task".

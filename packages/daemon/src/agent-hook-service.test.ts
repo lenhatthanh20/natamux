@@ -678,8 +678,7 @@ describe('AgentHookService, sign of life', () => {
     clock = new Date(clock.getTime() + seconds * 1000)
   }
 
-  const activityEvents = (taskId: string) =>
-    tasks.listEvents(taskId).filter((entry) => entry.event.type === 'agent.active')
+  const updatedAt = (taskId: string) => tasks.getTask(taskId).updatedAt
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'natamux-activity-'))
@@ -706,13 +705,16 @@ describe('AgentHookService, sign of life', () => {
     const task = runningTask()
     later(45)
 
+    const logged = tasks.listEvents(task.id)
+
     service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
 
-    expect(activityEvents(task.id)).toHaveLength(1)
-    expect(tasks.getTask(task.id).updatedAt).toBe('2026-10-08T09:00:45.000Z')
+    expect(updatedAt(task.id)).toBe('2026-10-08T09:00:45.000Z')
+    // Only the time moves: the log, which the dashboard reads again, stays as it was.
+    expect(tasks.listEvents(task.id)).toEqual(logged)
   })
 
-  it('does not fill the log when hooks come quickly one after the other', () => {
+  it('moves the time at most once per interval when hooks come quickly one after the other', () => {
     const task = runningTask()
     later(45)
     service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
@@ -722,7 +724,7 @@ describe('AgentHookService, sign of life', () => {
       service.handle('claude-code', { hook_event_name: 'PostToolUse' }, task.id)
     }
 
-    expect(activityEvents(task.id)).toHaveLength(1)
+    expect(updatedAt(task.id)).toBe('2026-10-08T09:00:45.000Z')
   })
 
   it('keeps the time the wait for background work began', () => {
@@ -761,7 +763,7 @@ describe('AgentHookService, sign of life', () => {
     service.handle('claude-code', { hook_event_name: 'Stop' }, task.id)
     service.handle('claude-code', { hook_event_name: 'SessionEnd' }, task.id)
 
-    expect(activityEvents(task.id)).toHaveLength(0)
+    expect(updatedAt(task.id)).toBe(task.updatedAt)
   })
 })
 

@@ -67,12 +67,16 @@ describe('parseLiveMessage', () => {
   const parse = (message: unknown) => parseLiveMessage(JSON.stringify(message))
 
   it('reads the task of a created message', () => {
-    expect(parse({ kind: 'task.created', task })).toEqual({ kind: 'task', task })
+    expect(parse({ kind: 'task.created', task })).toEqual({ kind: 'task', task, logged: false })
   })
 
-  it('reads the task of an updated message and ignores the other fields', () => {
+  it('reads the task of an updated message, which logged an event', () => {
     const message = { kind: 'task.updated', task, accepted: true, event: {} }
-    expect(parse(message)).toEqual({ kind: 'task', task })
+    expect(parse(message)).toEqual({ kind: 'task', task, logged: true })
+  })
+
+  it('reads the task of a changed message, which logged nothing', () => {
+    expect(parse({ kind: 'task.changed', task })).toEqual({ kind: 'task', task, logged: false })
   })
 
   it.each([
@@ -247,6 +251,33 @@ describe('applyLiveMessages', () => {
     dirty('T-0001')
     expect(sizeReads()).toBe(5)
     vi.useRealTimers()
+  })
+
+  it('reads the log of a task again when it logged an event, once however many came', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyLiveMessages(queryClient, [
+      { kind: 'task', task, logged: true },
+      { kind: 'task', task, logged: true },
+    ])
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    expect(keys).toEqual([
+      ['events', 'T-0001'],
+      ['stage-events', 'T-0001'],
+      ['stage-files', 'T-0001'],
+      ['question-events', 'T-0001'],
+    ])
+  })
+
+  it('reads nothing again when only the time of a task moved', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyLiveMessages(queryClient, [{ kind: 'task', task, logged: false }])
+
+    expect(invalidate).not.toHaveBeenCalled()
   })
 
   it('reads everything again after a resync', () => {

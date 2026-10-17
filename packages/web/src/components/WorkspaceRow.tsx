@@ -141,9 +141,10 @@ export const WorkspaceRow = memo(function WorkspaceRow({
     (task.state === 'needs-input' || task.state === 'failed') &&
     task.workspace !== null &&
     loadEvents !== undefined
-  // Only a row that asks follows each change of its task; the others keep one idle entry.
+  // Only a row that asks follows the log of its task; the others keep one idle entry, apart from
+  // the events that the details read.
   const question = useQuery({
-    queryKey: ['events', task.id, asks ? task.updatedAt : null],
+    queryKey: ['events', task.id, asks],
     queryFn: () => loadEvents?.(task.id) ?? Promise.resolve<StoredEvent[]>([]),
     enabled: asks,
     select: questionOf,
