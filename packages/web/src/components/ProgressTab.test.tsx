@@ -123,7 +123,9 @@ type Options = {
   act?: Act
   activity?: string
   startAgent?: (agent: AgentId) => Promise<Task>
-  startInBanner?: boolean
+  resume?: () => void
+  resuming?: boolean
+  onAnswer?: () => void
   setWorkflow?: SetWorkflow
   setCi?: SetWorkflow
   setSkip?: SetWorkflow
@@ -166,7 +168,9 @@ function progress(options: Options = {}) {
         onOpenFile={onOpenFile}
         activity={options.activity}
         startAgent={options.startAgent}
-        startInBanner={options.startInBanner}
+        resume={options.resume}
+        resuming={options.resuming}
+        onAnswer={options.onAnswer}
         setWorkflow={setWorkflow}
         setCi={setCi}
         setSkip={options.setSkip}
@@ -576,6 +580,15 @@ describe('the actions of the current stage', () => {
     expect(within(spec).getByRole('button', { name: 'Mark as done' })).toBeTruthy()
   })
 
+  it('shows the Approve key of a review in the tooltip', async () => {
+    progress()
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const approve = within(spec).getByRole('button', { name: 'Approve' })
+    expect(approve.getAttribute('data-tip')).toBe('Approve')
+    expect(approve.getAttribute('data-tip-kbd')).toBe('a')
+  })
+
   it('sends one request for a double click', async () => {
     let finish: (task: Task) => void = () => undefined
     const { act } = progress({
@@ -635,7 +648,7 @@ describe('the actions of the current stage', () => {
     expect(useToasts.getState().toasts).toEqual([])
   })
 
-  it('shows why the agent failed in red, and Start agent once per screen', async () => {
+  it('shows why the agent failed in red, once, with Start agent', async () => {
     const failed = stored(5, 'agent.failed', '2026-10-10T08:15:00.000Z', {
       stage: 'spec',
       reason: 'claude: command not found',
@@ -644,13 +657,98 @@ describe('the actions of the current stage', () => {
       task: { ...TASK, state: 'failed' },
       events: [...EVENTS, failed],
       startAgent: async () => TASK,
-      startInBanner: true,
     })
 
     const spec = await screen.findByRole('article', { name: 'Spec' })
     const reason = within(spec).getByText('claude: command not found')
     expect(reason.closest('ul')?.getAttribute('data-state')).toBe('failed')
-    expect(within(spec).queryByRole('button', { name: 'Start agent' })).toBeNull()
+    expect(within(spec).getAllByText(/claude: command not found/)).toHaveLength(1)
+    expect(within(spec).getByRole('button', { name: 'Start agent' })).toBeTruthy()
+    expect(within(spec).queryByRole('button', { name: 'Resume' })).toBeNull()
+  })
+
+  it('says a failed stage failed when its agent gave no reason', async () => {
+    progress({ task: { ...TASK, state: 'failed' }, startAgent: async () => TASK })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    const reason = within(spec).getByText('The agent failed.')
+    expect(reason.getAttribute('data-state')).toBe('failed')
+  })
+
+  it('shows the question of a waiting agent, with Answer in terminal and Resume', async () => {
+    const asked = stored(5, 'agent.asked', '2026-10-10T08:15:00.000Z', {
+      message: 'Which test runner?',
+    })
+    const resume = vi.fn()
+    const onAnswer = vi.fn()
+    progress({
+      task: { ...TASK, state: 'needs-input' },
+      events: [...EVENTS, asked],
+      startAgent: async () => TASK,
+      resume,
+      onAnswer,
+    })
+    const user = userEvent.setup()
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    expect(within(spec).getByText('The agent asks: Which test runner?')).toBeTruthy()
+    const names = within(spec)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent)
+    const order = ['Approve anyway', 'Answer in terminal', 'Resume', 'Mark as done', 'Skip']
+    expect(names.filter((name) => order.includes(name ?? ''))).toEqual(order)
+    expect(names.at(-1)).toBe('Send back')
+
+    await user.click(within(spec).getByRole('button', { name: 'Answer in terminal' }))
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+    await user.click(within(spec).getByRole('button', { name: 'Resume' }))
+    expect(resume).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Answer in terminal only for a question, with a terminal beside', async () => {
+    progress({ task: { ...TASK, state: 'needs-input' }, resume: vi.fn(), onAnswer: vi.fn() })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    expect(
+      within(spec).getByText('The agent ended its turn. Reply in the terminal, or resume it.'),
+    ).toBeTruthy()
+    expect(within(spec).queryByRole('button', { name: 'Answer in terminal' })).toBeNull()
+    expect(within(spec).getByRole('button', { name: 'Resume' })).toBeTruthy()
+    cleanup()
+
+    const asked = stored(5, 'agent.asked', '2026-10-10T08:15:00.000Z', { message: 'Which?' })
+    progress({ task: { ...TASK, state: 'needs-input' }, events: [...EVENTS, asked] })
+    const card = await screen.findByRole('article', { name: 'Spec' })
+    expect(within(card).getByText('The agent asks: Which?')).toBeTruthy()
+    expect(within(card).queryByRole('button', { name: 'Answer in terminal' })).toBeNull()
+    expect(within(card).queryByRole('button', { name: 'Resume' })).toBeNull()
+  })
+
+  it('shows Resume busy while the resume is on its way', async () => {
+    progress({ task: { ...TASK, state: 'needs-input' }, resume: vi.fn(), resuming: true })
+
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    expect(within(spec).getByRole('button', { name: 'Resume' }).getAttribute('aria-busy')).toBe(
+      'true',
+    )
+  })
+
+  it('shows no wait text in review, nor beside the reasons of failed checks', async () => {
+    progress({ resume: vi.fn() })
+    const spec = await screen.findByRole('article', { name: 'Spec' })
+    expect(within(spec).queryByText(/The agent/)).toBeNull()
+    expect(within(spec).queryByRole('button', { name: 'Resume' })).toBeNull()
+    cleanup()
+
+    const checks = stored(5, 'stage.check-failed', '2026-10-10T08:15:00.000Z', {
+      stage: 'spec',
+      reasons: ['spec.md is empty'],
+      final: true,
+    })
+    progress({ task: { ...TASK, state: 'needs-input' }, events: [...EVENTS, checks] })
+    const card = await screen.findByRole('article', { name: 'Spec' })
+    expect(within(card).getAllByText(/spec.md is empty/)).toHaveLength(1)
+    expect(within(card).queryByText(/The checks failed/)).toBeNull()
   })
 
   it('skips the stage and marks a running one as done', async () => {

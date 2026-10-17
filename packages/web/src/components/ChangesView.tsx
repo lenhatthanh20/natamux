@@ -74,6 +74,8 @@ type ChangesViewProps = {
   // For a task in review: approve a stage, or open the form that sends the task back.
   approveStage?: (stage: string) => Promise<Task>
   onSendBack?: () => void
+  // Opens the details on the progress, where the current stage holds the actions above.
+  onShowProgress?: () => void
   // For a done or cancelled task: the last screens of its shells, and the dialog that removes its
   // workspace.
   loadEndedShells?: () => Promise<EndedShell[]>
@@ -118,6 +120,7 @@ export function ChangesView({
   startAgent,
   approveStage,
   onSendBack,
+  onShowProgress,
   loadEndedShells,
   onRemoveWorkspace,
   loadStageFiles,
@@ -220,11 +223,12 @@ export function ChangesView({
   // A failed task shows why, too, and lets the agent be started again.
   const waiting = task.state === 'needs-input' || task.state === 'failed'
   // A new question comes with a logged event, which has the list read again (see
-  // applyLiveMessages). The last answer stays while the next one loads.
+  // applyLiveMessages). The last answer stays while the next one loads. Only the phone banner
+  // shows it; wider screens have it in the stage card of the details.
   const events = useQuery({
     queryKey: ['question-events', task.id],
     queryFn: loadEvents,
-    enabled: waiting,
+    enabled: waiting && phone,
     placeholderData: keepPreviousData,
     refetchInterval: FALLBACK_POLL_MS,
   })
@@ -309,19 +313,22 @@ export function ChangesView({
     }
   }
 
-  // What the task waits for. In the header row, so a state change never resizes the shells and
-  // makes them redraw. A phone has no room in the header: there it is a row under it.
+  const answer = () => {
+    pickTab('terminal')
+    setFocusToken((value) => value + 1)
+  }
+  // Answer in terminal of the stage card in the details.
+  useAppEvent('answer-in-terminal', answer)
+
+  // What the task waits for, on a phone only: a row under the header that comes and goes resizes
+  // the shells, and they redraw. Wider screens show it in the current stage card of the details.
   const notice = waiting ? (
     <NeedsInputBanner
-      inline={!phone}
       reason={reason}
       failed={task.state === 'failed'}
       resuming={resuming}
       starting={starting.isPending}
-      onAnswer={() => {
-        pickTab('terminal')
-        setFocusToken((value) => value + 1)
-      }}
+      onAnswer={answer}
       onResume={resume}
       onStartAgent={
         task.state === 'failed' && startAgent !== undefined
@@ -332,7 +339,6 @@ export function ChangesView({
     />
   ) : task.state === 'review' && approveStage !== undefined && onSendBack !== undefined ? (
     <ReviewBanner
-      inline={!phone}
       task={task}
       approving={approval.isPending ? (approval.variables ?? null) : null}
       onApprove={(stage) => approval.mutate(stage)}
@@ -362,7 +368,7 @@ export function ChangesView({
         onPush={() => gitAction.mutate({ action: 'push' })}
         onPullRequest={() => gitAction.mutate({ action: 'pull-request' })}
         onCommit={openCommit}
-        notice={phone ? undefined : notice}
+        onShowProgress={onShowProgress}
       />
       {phone && notice}
       {finished && onRemoveWorkspace !== undefined && (

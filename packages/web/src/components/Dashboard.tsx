@@ -1015,7 +1015,21 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                         startAgent={(agent) =>
                           agentMutation.mutateAsync({ task: detailTask, agent })
                         }
-                        startInBanner={dockedBesideWorkspace}
+                        resume={() =>
+                          eventMutation.mutate({ taskId: detailTask.id, type: 'agent.resumed' })
+                        }
+                        resuming={eventMutation.isPending}
+                        onAnswer={
+                          detailTask.id === changesTask?.id && changesTask.workspace !== null
+                            ? () => {
+                                // A sheet would cover the terminal.
+                                if (!dockedBesideWorkspace) {
+                                  setDetailOpen(detailTask.id, false)
+                                }
+                                fireAppEvent('answer-in-terminal')
+                              }
+                            : undefined
+                        }
                         setWorkflow={async (stage, on) => {
                           const updated = await api.setWorkflow(detailTask.id, stage, on)
                           mergeTask(updated)
@@ -1147,6 +1161,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               showProgress(changesTask.id)
               setTimeout(() => fireAppEvent('send-back'), 80)
             }}
+            onShowProgress={() => showProgress(changesTask.id)}
             loadEndedShells={() => api.listEndedShells(changesTask.id)}
             onRemoveWorkspace={() => setRemovingId(changesTask.id)}
           />

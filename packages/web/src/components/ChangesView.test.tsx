@@ -28,7 +28,7 @@ function stubPhone() {
   vi.stubGlobal('innerWidth', 500)
 }
 
-// The banner or notice that holds Resume.
+// The phone banner that holds Resume.
 const waitNotice = () => screen.getByRole('button', { name: 'Resume' }).closest('[role="status"]')
 const workspaceHeader = () => screen.getByRole('heading', { name: TASK.title }).closest('header')
 
@@ -503,16 +503,14 @@ describe('ChangesView', () => {
     })
   })
 
-  it('approves the stage of a task in review from the banner', async () => {
+  it('approves the stage of a task in review from the banner on a phone', async () => {
+    stubPhone()
     const approveStage = vi.fn(async () => TASK)
     const onSendBack = vi.fn()
     view({ task: { ...TASK, state: 'review', stage: 'plan' }, approveStage, onSendBack })
     const user = userEvent.setup()
 
-    // In the header row, so the shells below keep their size when the task enters review.
-    expect(screen.getByText('Ready for review: Plan').closest('header')?.textContent).toContain(
-      TASK.title,
-    )
+    expect(screen.getByText('Ready for review: Plan').closest('header')).toBeNull()
     await user.click(screen.getByRole('button', { name: /^Approve/ }))
     await waitFor(() => expect(approveStage).toHaveBeenCalledWith('plan'))
 
@@ -521,16 +519,27 @@ describe('ChangesView', () => {
   })
 
   it('shows no review banner while the agent works', () => {
+    stubPhone()
     view({ approveStage: async () => TASK, onSendBack: () => {} })
 
     expect(screen.queryByText(/Ready for review/)).toBeNull()
   })
 
-  it('shows the needs-input notice inside the header row', () => {
-    view({ task: { ...TASK, state: 'needs-input' } })
+  // The current stage card of the details says it, so no row comes and goes over the shells.
+  it('shows no notice on a wide screen while the task needs the user', () => {
+    for (const state of ['needs-input', 'failed', 'review'] as const) {
+      view({
+        task: { ...TASK, state, stage: 'plan' },
+        approveStage: async () => TASK,
+        onSendBack: vi.fn(),
+      })
 
-    expect(waitNotice()).not.toBeNull()
-    expect(waitNotice()?.closest('header')).toBe(workspaceHeader())
+      expect(screen.queryByText(/^(Ready for review|The agent)/)).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull()
+      expect(workspaceHeader()?.querySelector('.state-chip')).not.toBeNull()
+      cleanup()
+    }
   })
 
   it('puts the needs-input banner under the header on a phone', () => {

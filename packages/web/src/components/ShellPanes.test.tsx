@@ -388,7 +388,7 @@ describe('ShellPanes agent state', () => {
     expect(amber('Shell 2')).toEqual([])
   })
 
-  // The notice in the header already says it, so the only agent shell adds nothing.
+  // The header chip already says it, so the only agent shell adds nothing.
   it('does not mark the only agent shell when it waits', async () => {
     renderShells(
       { id: 'T-0001', state: 'needs-input', stage: 'implement', lanes: {}, agent: 'claude-code' },

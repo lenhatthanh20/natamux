@@ -69,9 +69,12 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   const view = page.getByRole('region', { name: /^Changes of / })
+  const details = page.getByRole('complementary', { name: /^Details of / })
 
-  // The reason: on the task's card in the tree, and in the banner.
-  await expect(view.getByRole('status').filter({ hasText: STOPPED })).toBeVisible()
+  // The reason: on the task's card in the tree, and in the current stage card of the details.
+  // Nothing over the shells says it, so they keep their size.
+  await expect(details.locator('article[data-current]').getByText(STOPPED)).toBeVisible()
+  await expect(view.getByText(STOPPED)).toHaveCount(0)
   const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
   await expect(sidebar.getByRole('region', { name: 'Needs you' })).toHaveCount(0)
   const tree = sidebar.getByRole('region', { name: 'Workspaces' })
@@ -81,8 +84,9 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   const pill = page.getByRole('banner').getByRole('button', { name: /^\d+ needs? you$/ })
   await expect(pill).toBeVisible()
 
-  // The banner stands for the state chip, and the only agent shell has no mark.
-  await expect(view.locator('header .state-chip')).toHaveCount(0)
+  // The header has the state chip, a way to the progress; the only agent shell has no mark.
+  await expect(view.locator('header .state-chip')).toHaveText('Needs input')
+  await expect(view.getByRole('button', { name: /show in progress/i })).toBeVisible()
   const shell = view.getByRole('region', { name: 'Shell 1' })
   await expect(shell.locator('header [data-tip-overflow]')).toHaveCount(0)
   await expect(shell.locator('.bg-signal, .bg-signal-soft, .text-signal')).toHaveCount(0)
@@ -99,11 +103,16 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
     })
   }
 
-  // The banner and Resume stay on every tab.
+  // The reason and Resume stay beside every tab. The Changes tab closes the details to give the
+  // diff room (main under 900 px); the header chip opens them again on the current stage.
   for (const name of ['Changes', 'History', 'Docs', 'Terminal']) {
     await tabs.getByRole('tab', { name }).click()
-    await expect(view.getByText(STOPPED)).toBeVisible()
-    await expect(view.getByRole('button', { name: 'Resume' })).toBeVisible()
+    if (name === 'Changes') {
+      await expect(details).toBeHidden()
+      await view.getByRole('button', { name: /show in progress/i }).click()
+    }
+    await expect(details.getByText(STOPPED)).toBeVisible()
+    await expect(details.getByRole('button', { name: 'Resume' })).toBeVisible()
   }
 })
 
@@ -154,8 +163,8 @@ test('keeps Start agent inside the stage card', async ({ page, request }) => {
 
 test('shows the Approve key in the tooltip, not on the button', async ({ page }) => {
   await openTask(page, DEMO_TITLE)
-  const banner = page.getByRole('status').filter({ hasText: 'Ready for review' })
-  const approve = banner.getByRole('button', { name: 'Approve', exact: true })
+  const details = page.getByRole('complementary', { name: /^Details of / })
+  const approve = details.getByRole('button', { name: 'Approve', exact: true })
   await expect(approve).toHaveText('Approve')
   await approve.hover()
   await expect(page.getByRole('tooltip')).toContainText('Approve')

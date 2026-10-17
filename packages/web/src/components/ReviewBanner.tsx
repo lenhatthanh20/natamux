@@ -11,25 +11,16 @@ type ReviewBannerProps = {
   approving: string | null
   onApprove: (stage: string) => void
   onSendBack: () => void
-  // One line in the workspace header, see Banner.
-  inline?: boolean
 }
 
-// In the workspace header (under it on a phone) while a stage waits for review, so it can be
-// approved at any width, also while the details are closed.
-export function ReviewBanner({
-  task,
-  approving,
-  onApprove,
-  onSendBack,
-  inline = false,
-}: ReviewBannerProps) {
+// Under the workspace header on a phone while a stage waits for review. Wider screens show it in
+// the current stage card of the details.
+export function ReviewBanner({ task, approving, onApprove, onSendBack }: ReviewBannerProps) {
   const stages = reviewStages(task)
   const names = stages.map((id) => stageName({ id }))
   const busy = approving !== null
   return (
     <Banner
-      inline={inline}
       tone="review"
       icon={CircleDot}
       actions={

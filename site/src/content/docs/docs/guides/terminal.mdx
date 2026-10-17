@@ -94,7 +94,7 @@ Inside a terminal, the shell gets your keys. On macOS the ⌘ shortcuts of Natam
 
 Click in the pane and type. Your keys go straight to the agent. This is how you answer a question.
 
-When an agent asks something, the task goes to **Needs input** and the header of the workspace shows what it asks (on a phone, a banner under the header). Point at a cut question to read all of it. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
+When an agent asks something, the task goes to **Needs input** and the current stage card in the **Progress** view of the details shows what it asks (on a phone, a banner under the header). With the details closed, click **Needs input** in the workspace header to open them. When the workspace shows more than one agent pane, the waiting pane says **Needs input** in its header. Click **Answer in terminal** to put the cursor in Shell 1. If you answered another way, click **Resume**. When the agent ended its turn and still runs, **Resume** asks it to go on with the stage.
 
 After you quit and open the app again, Natamux starts the agent of each running, waiting or in-review task again, in its terminal. Claude Code goes on with the same conversation; other agents start again with the stage prompt. The task keeps its state. The other shells of the task come back too, see [A shell after a daemon restart](#a-shell-after-a-daemon-restart).
 
@@ -106,7 +106,7 @@ This works only while an agent runs in Shell 1. Otherwise Natamux answers `No ag
 
 ### Needs input or failed
 
-A failed task shows the reason in the header of the workspace. Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/docs/concepts/tasks/).
+A failed task shows the reason in its current stage card in the details (on a phone, in a banner under the header). Use **Start agent** or **Restart agent** to run the agent again. For the task states, see [Tasks](/docs/concepts/tasks/).
 
 ## The Agents view
 
