@@ -174,8 +174,8 @@ class ReadmeAcceptance(unittest.TestCase):
             self.assertIn(STAND_IN, self.readme, "every recording needs the stand-in note")
 
     def test_case_5_markdown_links_media_and_change_scope(self):
-        self.assertEqual(re.findall(r"^```(\S+)$", self.readme, re.MULTILINE), ["mermaid", "json", "sh"])
-        self.assertEqual(self.readme.count("```"), 6)
+        self.assertEqual(re.findall(r"^```(\S+)$", self.readme, re.MULTILINE), ["sh"])
+        self.assertEqual(self.readme.count("```"), 2)
         self.assertNotRegex(self.readme, r"<(video|iframe|script|style)\b| style=")
         self.assertTrue(local_link_resolves("docs/docker.md#production"))
         self.assertFalse(local_link_resolves("docs/Docker.md#production"))

@@ -105,19 +105,15 @@ Natamux gives that work a shape. You write the workflow once: the stages, the ap
 
 ## How it works
 
-Every task runs through stages. The default pipeline:
+You write the workflow once, in **Project settings → Stages** or in `.natamux.json`, and every task runs it. Below, three tasks run the workflow of a sample project: a bug takes the **Bug fix** path, two agents work side by side, Codex reviews and sends one task back, and the last word is yours.
 
-```mermaid
-flowchart LR
-  subgraph build [Side by side]
-    direction TB
-    testspec["Test spec<br/>you approve"]
-    implement[Implement]
-  end
-  context[Context] --> spec["Spec<br/>you approve"] --> plan["Plan<br/>you approve"] --> build
-  build --> tests[Automated tests] --> review[Review] --> release["Release<br/>your merge ends it"]
-  review -. "sends back with the reason" .-> implement
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/public/screens/readme-workflow-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset="site/public/screens/readme-workflow-light.gif">
+  <img src="site/public/screens/readme-workflow-dark.gif" width="100%" alt="Animated diagram of a workflow: a condition sends a bug down the Bug fix path to Cursor, Gemini CLI and Claude Code work side by side, Codex sends a task back to Implement, Copilot runs a security review, and you approve the manual review. The .natamux.json file of the workflow is shown next to it.">
+</picture>
+
+Without a file, a task runs the default stages: `Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release`.
 
 1. You approve the spec and the plan that the task's agent writes.
 2. Test spec and Implement start together, in Shell 2 and Shell 1. You approve the test spec.
@@ -125,23 +121,7 @@ flowchart LR
 4. The Review agent writes `review.md`. With findings, it sends the task back to Implement, at most two times; then it asks you.
 5. Release waits for your pull request. The merge finishes the task.
 
-Change any of it in **Project settings → Stages**, or in the file itself. A branch takes the first path whose condition holds (**File has text** or **Command succeeds**), and a red CI run goes back to the agent with the end of the failed log. An excerpt of a `.natamux.json`:
-
-```json
-{
-  "stages": [
-    { "id": "spec", "kind": "agent", "gate": "manual", "output": "spec.md" },
-    { "id": "build", "name": "Test spec and Implement", "parallel": [
-      { "id": "test-spec", "kind": "agent", "gate": "auto", "output": "test-spec.md", "agent": "copilot" },
-      { "id": "implement", "kind": "agent", "gate": "auto", "ci": true }
-    ] },
-    { "id": "agent-review", "name": "Review", "kind": "agent", "gate": "auto",
-      "output": "review.md", "agent": "cursor" }
-  ]
-}
-```
-
-Start from a recipe, Solo or Team, in [Build a workflow](https://natamux.github.io/docs/guides/workflows/). See also [the review loop](https://natamux.github.io/docs/concepts/review-loop/) and [stages](https://natamux.github.io/docs/concepts/stages/).
+A branch takes the first path whose condition holds (**File has text** or **Command succeeds**), and a red CI run goes back to the agent with the end of the failed log. Start from a recipe, Solo or Team, in [Build a workflow](https://natamux.github.io/docs/guides/workflows/). See also [the review loop](https://natamux.github.io/docs/concepts/review-loop/) and [stages](https://natamux.github.io/docs/concepts/stages/).
 
 ## Works with your agents
 
