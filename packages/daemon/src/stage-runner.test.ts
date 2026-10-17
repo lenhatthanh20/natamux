@@ -468,7 +468,8 @@ describe('failed side work', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
 
-    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+    // Implement runs in the step "build" of the default pipeline. Testing comes after it.
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'testing', state: 'running' })
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining(`Could not archive the stage files of ${task.id}`),
     )
@@ -489,7 +490,7 @@ describe('failed side work', () => {
 
     const after = await withWorkspace(task.id)
 
-    expect(after).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(after).toMatchObject({ stage: 'build', state: 'running' })
     const attachment = join(after.workspace ?? '', STAGE_DIR, 'attachments', 'login.png')
     expect(existsSync(attachment)).toBe(true)
     expect(error).toHaveBeenCalledWith(
