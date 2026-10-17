@@ -10,7 +10,27 @@ import { ChangesView } from './ChangesView'
 afterEach(() => {
   cleanup()
   useToasts.setState({ toasts: [] })
+  vi.unstubAllGlobals()
 })
+
+// A phone-sized window.
+function stubPhone() {
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    matches: false,
+    media,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+  vi.stubGlobal('innerWidth', 500)
+}
+
+// The banner or notice that holds Resume.
+const waitNotice = () => screen.getByRole('button', { name: 'Resume' }).closest('[role="status"]')
+const workspaceHeader = () => screen.getByRole('heading', { name: TASK.title }).closest('header')
 
 const TASK: Task = {
   id: 'T-0002',
@@ -489,7 +509,10 @@ describe('ChangesView', () => {
     view({ task: { ...TASK, state: 'review', stage: 'plan' }, approveStage, onSendBack })
     const user = userEvent.setup()
 
-    expect(screen.getByText('Ready for review: Plan')).toBeTruthy()
+    // In the header row, so the shells below keep their size when the task enters review.
+    expect(screen.getByText('Ready for review: Plan').closest('header')?.textContent).toContain(
+      TASK.title,
+    )
     await user.click(screen.getByRole('button', { name: /^Approve/ }))
     await waitFor(() => expect(approveStage).toHaveBeenCalledWith('plan'))
 
@@ -501,6 +524,22 @@ describe('ChangesView', () => {
     view({ approveStage: async () => TASK, onSendBack: () => {} })
 
     expect(screen.queryByText(/Ready for review/)).toBeNull()
+  })
+
+  it('shows the needs-input notice inside the header row', () => {
+    view({ task: { ...TASK, state: 'needs-input' } })
+
+    expect(waitNotice()).not.toBeNull()
+    expect(waitNotice()?.closest('header')).toBe(workspaceHeader())
+  })
+
+  it('puts the needs-input banner under the header on a phone', () => {
+    stubPhone()
+    view({ task: { ...TASK, state: 'needs-input' } })
+
+    expect(waitNotice()).not.toBeNull()
+    expect(waitNotice()?.closest('header')).toBeNull()
+    expect(workspaceHeader()?.querySelector('[role="status"]')).toBeNull()
   })
 })
 

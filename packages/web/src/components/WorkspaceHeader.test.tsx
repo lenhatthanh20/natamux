@@ -1,6 +1,7 @@
 import type { PushStatus, Task } from '@natamux/core'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceHeader } from './WorkspaceHeader'
 
@@ -48,11 +49,13 @@ function header({
   ahead = 0,
   push = tracked(0),
   uncommitted = 0,
+  notice,
 }: {
   task?: Task
   ahead?: number
   push?: PushStatus | null
   uncommitted?: number
+  notice?: ReactNode
 }) {
   const handlers = { onPush: vi.fn(), onPullRequest: vi.fn(), onCommit: vi.fn() }
   render(
@@ -63,6 +66,7 @@ function header({
       push={push}
       uncommitted={uncommitted}
       pending={null}
+      notice={notice}
       {...handlers}
     />,
   )
@@ -85,6 +89,20 @@ function stubPhone() {
   }))
   vi.stubGlobal('innerWidth', 500)
 }
+
+// A header of `width` px: jsdom has no layout, so the measure is stubbed.
+function stubHeaderWidth(width: number) {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = () => undefined
+      disconnect = () => undefined
+    },
+  )
+  return vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(width)
+}
+
+const NOTICE = <div role="status">The agent asks: Which test runner?</div>
 
 describe('WorkspaceHeader', () => {
   it('puts Commit in place of Push while files are not committed and none unpushed', async () => {
@@ -230,6 +248,43 @@ describe('WorkspaceHeader', () => {
     header({ ahead: 1, push: tracked(1) })
     await userEvent.setup().click(screen.getByRole('button', { name: 'Git actions' }))
     expect(screen.getByRole('menuitem', { name: 'Create PR' })).toBeTruthy()
+  })
+
+  it('puts the notice inside the header row, so a state change never adds a row', () => {
+    header({ task: { ...TASK, state: 'needs-input' }, notice: NOTICE })
+
+    const row = screen.getByRole('banner')
+    expect(row.contains(screen.getByRole('status'))).toBe(true)
+    expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
+  })
+
+  it('moves the git steps into the menu while a narrow header shows a notice', async () => {
+    const width = stubHeaderWidth(800)
+    try {
+      header({ ahead: 1, push: tracked(1) })
+      expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Git actions' })).toBeNull()
+      cleanup()
+
+      header({ ahead: 1, push: tracked(1), notice: NOTICE })
+      expect(screen.queryByRole('button', { name: 'Create PR' })).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Git actions' }))
+      expect(screen.getByRole('menuitem', { name: 'Create PR' })).toBeTruthy()
+    } finally {
+      width.mockRestore()
+    }
+  })
+
+  it('keeps the git steps in the row of a wide header with a notice', () => {
+    const width = stubHeaderWidth(1200)
+    try {
+      header({ ahead: 1, push: tracked(1), notice: NOTICE })
+      expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Git actions' })).toBeNull()
+    } finally {
+      width.mockRestore()
+    }
   })
 
   it('has no git menu on a phone for a finished task without a pull request', () => {
