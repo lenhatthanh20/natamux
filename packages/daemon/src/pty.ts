@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
 import { spawn } from 'node-pty'
-import { commandsUnder, descendants } from './process-tree.js'
+import { commandsUnder, descendants, stillRunning } from './process-tree.js'
 import { shellCommand } from './shell-command.js'
 import type { SpawnPty } from './terminal-service.js'
 import { TtlCache } from './ttl-cache.js'
@@ -18,22 +18,34 @@ async function readProcessTable(): Promise<string> {
   return stdout
 }
 
-// An agent runs as a job of the shell. Ending only the shell leaves it running with no terminal,
-// so every process under the shell gets the signal too.
-function signalTree(root: number, signal: string | undefined): void {
-  let table = ''
+function processTableNow(): string {
   try {
-    table = execFileSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' })
+    return execFileSync('ps', ['-A', '-o', 'pid=,ppid=,stat='], { encoding: 'utf8' })
   } catch {
-    return
+    return ''
   }
-  for (const pid of descendants(table, root).reverse()) {
+}
+
+// An agent runs as a job of the shell. Ending only the shell leaves it running with no terminal,
+// so every process under the shell gets the signal too. So do the ones of `others` that still
+// run, and what runs under them: processes an earlier signal reached, which may have outlived the
+// shell. An ended one is skipped, as its pid may belong to another process by now. Gives the pids
+// it signalled.
+function signalTree(root: number, signal: string | undefined, others: number[] = []): number[] {
+  const table = processTableNow()
+  const alive = stillRunning(table, others)
+  const pids = new Set([root, ...alive].flatMap((pid) => descendants(table, pid).reverse()))
+  for (const pid of alive) {
+    pids.add(pid)
+  }
+  for (const pid of pids) {
     try {
       process.kill(pid, (signal ?? 'SIGHUP') as NodeJS.Signals)
     } catch {
       // It ended already.
     }
   }
+  return [...pids]
 }
 
 // The real pseudo terminal. Only main.ts imports this file, so tests never load the native module.
@@ -49,6 +61,10 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
     env,
     encoding: null,
   })
+  // The processes the SIGHUP of a close reached. One that ignored it may outlive the shell, so the
+  // SIGKILL goes to it too. shortcut: a pid could be reused before the SIGKILL; pids count up, so
+  // within KILL_GRACE_MS this is very unlikely.
+  let hungUp: number[] = []
   return {
     onData: (listener) => {
       // Windows gives text whatever the encoding.
@@ -66,10 +82,16 @@ export const spawnShell: SpawnPty = ({ cols, rows, cwd, env }) => {
     // Windows has no signals; the shell and what runs in it are ended outright there.
     kill: (signal) => {
       if (process.platform !== 'win32') {
-        signalTree(pty.pid, signal)
+        if (signal === 'SIGKILL') {
+          signalTree(pty.pid, signal, hungUp)
+          hungUp = []
+        } else {
+          hungUp = signalTree(pty.pid, signal)
+        }
       }
       pty.kill(process.platform === 'win32' ? undefined : signal)
     },
+    leftover: () => hungUp.length > 0 && stillRunning(processTableNow(), hungUp).length > 0,
     foreground: () => pty.process,
     // Windows has no `ps`.
     commands: async () => {
