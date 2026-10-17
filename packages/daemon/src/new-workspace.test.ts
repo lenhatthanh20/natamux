@@ -125,6 +125,26 @@ describe('newWorkspace', () => {
     expect(ptys).toHaveLength(1)
   })
 
+  it('still starts no agent after the daemon restarts', async () => {
+    parts.stages.stop()
+    build(() => DEFAULT_PROJECT_SETTINGS)
+    const task = await newWorkspace(parts, { title: 'Fix the login page' })
+    await parts.stages.settle()
+
+    parts.stages.stop()
+    build(() => DEFAULT_PROJECT_SETTINGS)
+    parts.stages.resumeAgents()
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'spec' },
+    })
+    await parts.stages.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ withoutAgent: true, state: 'ready' })
+    expect(ptys).toHaveLength(0)
+  })
+
   it('puts the attachments into the new worktree and lists them in the context', async () => {
     parts.stages.stop()
     build(() => DEFAULT_PROJECT_SETTINGS)
