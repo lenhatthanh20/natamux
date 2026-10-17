@@ -153,6 +153,7 @@ async function startServer() {
     env: { PATH: '/bin' },
   })
   const workspaces = new WorkspaceService({
+    dataDir,
     tasks: service,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),

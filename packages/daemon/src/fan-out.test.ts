@@ -26,6 +26,7 @@ beforeEach(() => {
   index = new TaskIndex(':memory:')
   tasks = new TaskService({ dataDir, index, bus: new EventBus() })
   const workspaces = new WorkspaceService({
+    dataDir,
     tasks,
     repoDir: repo.dir,
     worktreesDir: join(repo.root, 'worktrees'),

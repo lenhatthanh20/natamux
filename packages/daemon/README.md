@@ -23,7 +23,7 @@ Run in a codespace: `pnpm --filter @natamux/daemon dev`. Build `@natamux/core` f
 
 - Tasks are markdown files with YAML front matter: `<data dir>/tasks/T-0001.md`. They are the source of truth.
 - `<data dir>/index.sqlite` (Node's built-in `node:sqlite`, Node 22.13 or newer) is a cache of the task files plus the event log. The task cache is rebuilt from the files at start. The event log is kept as one JSON line per event in `<data dir>/tasks/T-0001.events.jsonl` next to the task file, and the index is rebuilt from it.
-- Stage files of a task are in `.natamux-task/` in its worktree; copies are archived in `<data dir>/tasks/T-0001/` when a stage ends and restored into a new worktree.
+- Stage files of a task are in `.natamux-task/` in its worktree; copies are archived in `<data dir>/tasks/T-0001/` when a stage ends and before the workspace is removed, and restored into a new worktree.
 - Per-repository settings (the stage pipeline, checks) are `.natamux.json` in the repository, read through `/repos/:id/settings`.
 
 ## API
