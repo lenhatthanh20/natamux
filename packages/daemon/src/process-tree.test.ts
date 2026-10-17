@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandsUnder, descendants } from './process-tree.js'
+import { commandsUnder, descendants, stillRunning } from './process-tree.js'
 
 describe('descendants', () => {
   it('finds the processes under a shell, at any depth, and no others', () => {
@@ -32,5 +32,14 @@ describe('commandsUnder', () => {
       '/usr/local/lib/node_modules/@openai/codex/vendor/codex/codex',
     ])
     expect(commandsUnder(ps, 12)).toEqual([])
+  })
+})
+
+describe('stillRunning', () => {
+  it('keeps the processes that still run; a zombie or a missing one has ended', () => {
+    const ps = ['  1     0 Ss', ' 11     1 S+', ' 13     1 Z', ''].join('\n')
+    expect(stillRunning(ps, [11, 12, 13])).toEqual([11])
+    expect(stillRunning(ps, [13])).toEqual([])
+    expect(stillRunning(ps, [])).toEqual([])
   })
 })

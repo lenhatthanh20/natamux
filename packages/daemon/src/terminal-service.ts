@@ -30,6 +30,8 @@ export type PtyProcess = {
   resume: () => void
   // A signal name such as 'SIGHUP'. Without one, the default of the platform.
   kill: (signal?: string) => void
+  // True when a process that the last SIGHUP reached still runs, though the shell may have ended.
+  leftover?: () => boolean
   // The name of the program in the foreground, such as "bash" or "node".
   foreground?: () => string | undefined
   // The command lines of the processes under the shell, parents first, when the platform tells.
@@ -547,6 +549,8 @@ type Session = {
   resyncTimer?: NodeJS.Timeout
   // Set when the shell is being closed: the pending SIGKILL is not needed once it has ended.
   stopKillTimer?: () => void
+  // Set when the shell is being closed: ends when the SIGKILL went out or is not needed.
+  killDone?: Promise<void>
   // Set while the shell of an ended task waits, with no client, to be closed.
   idleTimer?: NodeJS.Timeout
   // Input that waits for its turn, see write().
@@ -1413,9 +1417,17 @@ export class TerminalService {
     session.clients.clear()
 
     // A shell that ignores SIGHUP (or a program in it that does) must not stay alive.
-    const timer = setTimeout(() => session.pty.kill('SIGKILL'), KILL_GRACE_MS)
-    timer.unref()
-    session.stopKillTimer = () => clearTimeout(timer)
+    session.killDone = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        session.pty.kill('SIGKILL')
+        resolve()
+      }, KILL_GRACE_MS)
+      timer.unref()
+      session.stopKillTimer = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+    })
     // A paused shell blocks on its output and might never get to end.
     this.setPaused(session, false)
     session.pty.kill('SIGHUP')
@@ -1448,8 +1460,9 @@ export class TerminalService {
   }
 
   private async waitForEnd(sessions: Session[], close: () => void): Promise<void> {
-    const ended = Promise.all(sessions.map(exitOf))
+    const exited = Promise.all(sessions.map(exitOf))
     close()
+    const ended = Promise.all([exited, ...sessions.map((session) => session.killDone)])
     let timer: NodeJS.Timeout | undefined
     const limit = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, KILL_GRACE_MS + EXIT_WAIT_MS)
@@ -1533,7 +1546,10 @@ export class TerminalService {
       }
     })
     pty.onExit((code) => {
-      session.stopKillTimer?.()
+      // A program that ignored SIGHUP can outlive its shell. It still gets the SIGKILL.
+      if (!pty.leftover?.()) {
+        session.stopKillTimer?.()
+      }
       clearTimeout(session.idleTimer)
       clearTimeout(session.writeTimer)
       clearTimeout(session.resyncTimer)

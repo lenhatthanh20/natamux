@@ -36,3 +36,15 @@ export function commandsUnder(psOutput: string, root: number): string[] {
   }
   return descendants(psOutput, root).flatMap((pid) => args.get(pid) ?? [])
 }
+
+// The ones of `pids` that still run. A zombie has ended: it only waits for its parent to read
+// its exit. Reads `ps -A -o pid=,ppid=,stat=` output.
+export function stillRunning(psOutput: string, pids: number[]): number[] {
+  const wanted = new Set(pids)
+  return psOutput.split('\n').flatMap((line) => {
+    const [pid, , stat] = line.trim().split(/\s+/)
+    return wanted.has(Number(pid)) && stat !== undefined && !stat.startsWith('Z')
+      ? [Number(pid)]
+      : []
+  })
+}

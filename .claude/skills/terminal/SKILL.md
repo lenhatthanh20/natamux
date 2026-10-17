@@ -20,7 +20,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 | File | What |
 |---|---|
 | `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs, flow control. `splitFrames`, `sliceEnd` |
-| `packages/daemon/src/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell |
+| `packages/daemon/src/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell. SIGKILL also reaches the processes the SIGHUP reached, after the shell ended; `leftover` tells if one still runs |
 | `packages/daemon/src/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
 | `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
 | `packages/daemon/src/agent-runner.ts`, `stage-runner.ts` | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
@@ -45,7 +45,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 - **Ending.**
   - A done or cancelled task ends all its shells (`stage-runner.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
-  - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`.
+  - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`. The SIGKILL still goes out when the shell ended but a program that ignored SIGHUP (`leftover`) runs on; `closeAndWait` and `closeAllAndWait` wait for it.
   - Daemon shutdown awaits `closeAllAndWait`, so no shell outlives a quit. The desktop app waits for the daemon to exit (at most `DAEMON_STOP_WAIT_MS`, 5 s) before it quits.
 - **Pane.** Resizes work like VS Code's `terminalResizeDebouncer` (`resizeNow`, `settle`).
   - While the pane changes size, the rows change in xterm at once (`fit.proposeDimensions()`). The columns change at once too while the buffer (`buffer.normal.length`) has fewer than `REFLOW_WAIT_ROWS` (200) rows; a longer one waits, because columns reflow every wrapped line.
@@ -221,7 +221,7 @@ Before calling something a Natamux bug, check whether the bytes are wrong (daemo
 - **Daemon:** `terminal-service.test.ts`.
   - Clients are `client()`: `frames` holds binary and control frames. Helpers: `bytesOf`, `outputOf`, `controls`, `isBytes`, `numbered(count)`, `screenOf(frames, size)`, `headless(size)`, `mixedLines(cols, count)` (colors, wide, emoji, wraps, Vietnamese), `nextTurn()`.
   - `onEachSlice(between)` spies on `SerializeAddon.serialize` and calls `between` on every history slice: use it to send output or resize while a sliced snapshot runs.
-  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` takes text or bytes and delivers a Buffer, as the real pty; it still delivers while paused. Set `program` to fake the foreground, and `stubborn` to ignore SIGHUP.
+  - `fakeSpawner()` and `FakePty` (`terminal-fake.fixture.ts`) record `written`, `sizes`, `signals`, and `flow` (`pause`/`resume` calls in order) with `paused`. `emit()` takes text or bytes and delivers a Buffer, as the real pty; it still delivers while paused. Set `program` to fake the foreground, `stubborn` to ignore SIGHUP, and `orphan` for a program that ignores SIGHUP while the shell ends.
   - Flow control helpers: `frameOf(i)` (one full 64 KB frame of numbered lines), `ackingClient(service, terminal?)` (acks like the dashboard, a microtask later; `arrivals` has live bytes and times), `catchUps(frames)` (catch-ups after the attach snapshot), `sinceSnapshot(frames)`, `sentTo(frames)`, `expectSameScreen(frames, daemonFrames)` (compares as deep as the daemon's history), `flood(pty, ms, bytes?)` (fake timers), `first(items)`.
   - A file-level `afterEach` runs `closeAll()` on every service made by `setup()`, so resync timers and snapshots of one test never run in the next.
   - `screenOf()` replays a client's output into a headless xterm to compare screens. Use Unicode 11, as the code does.

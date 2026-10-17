@@ -11,6 +11,9 @@ export class FakePty implements PtyProcess {
   readonly signals: (string | undefined)[] = []
   // A process that ignores everything but SIGKILL, like a program that traps SIGHUP.
   stubborn = false
+  // A program under the shell that ignores SIGHUP: the shell ends, the program lives on until
+  // SIGKILL.
+  orphan = false
   // The program in the foreground; tests set it to pretend an agent runs.
   program = 'bash'
   // The command lines of the processes under the shell; undefined where the platform cannot list
@@ -59,8 +62,19 @@ export class FakePty implements PtyProcess {
     this.flow.push('resume')
   }
 
+  leftover(): boolean {
+    return this.orphan
+  }
+
   kill(signal?: string): void {
     this.signals.push(signal)
+    if (signal === 'SIGKILL') {
+      this.orphan = false
+    }
+    // A real shell reports its end once.
+    if (this.killed) {
+      return
+    }
     if (this.stubborn && signal !== 'SIGKILL') {
       return
     }

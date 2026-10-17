@@ -590,6 +590,54 @@ describe('closing a shell', () => {
     expect(ptys[0]?.signals).toEqual(['SIGHUP'])
   })
 
+  it('kills a program that ignored SIGHUP and outlived its shell, after the grace time', () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size, '2')
+    const shell = ptys[0]
+    if (!shell) {
+      throw new Error('No shell was started.')
+    }
+    shell.orphan = true
+
+    service.closeOne('T-0001', '2')
+    expect(shell.killed).toBe(true)
+    vi.advanceTimersByTime(KILL_GRACE_MS - 1)
+    expect(shell.signals).toEqual(['SIGHUP'])
+
+    vi.advanceTimersByTime(1)
+    expect(shell.signals).toEqual(['SIGHUP', 'SIGKILL'])
+    expect(shell.orphan).toBe(false)
+  })
+
+  it.each([
+    ['closeAndWait', (service: TerminalService) => service.closeAndWait('T-0001')],
+    ['closeAllAndWait', (service: TerminalService) => service.closeAllAndWait()],
+  ])('%s waits until a program that outlived its shell is killed', async (_name, close) => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0001', client(), size, '2')
+    const shell = ptys[1]
+    if (!shell) {
+      throw new Error('No second shell was started.')
+    }
+    shell.orphan = true
+    let ended = false
+
+    const closing = close(service).then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS - 1)
+    expect(ended).toBe(false)
+    expect(shell.signals).toEqual(['SIGHUP'])
+
+    await vi.advanceTimersByTimeAsync(1)
+    await closing
+    expect(shell.signals).toEqual(['SIGHUP', 'SIGKILL'])
+    expect(ptys[0]?.signals).toEqual(['SIGHUP'])
+  })
+
   it('waits until the shells have ended, at most until a stubborn one is killed', async () => {
     vi.useFakeTimers()
     const { service, ptys } = setup()
