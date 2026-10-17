@@ -905,6 +905,153 @@ describe('an agent review', () => {
     }
     expect(tasks.getTask(task.id).stage).toBe('agent-review')
   })
+
+  const reportsOf = (id: string, stage: string) =>
+    tasks
+      .listEvents(id)
+      .filter((entry) => entry.event.type === 'stage.reported')
+      .filter((entry) => entry.event.payload.stage === stage)
+
+  it('refuses natamux done from the reviewer after it sent the task back', async () => {
+    const task = await atReview()
+    await runner.act(task.id, 'reopen', { terminal: '5', reason: 'Fix the dates' })
+    await runner.settle()
+
+    await expect(runner.act(task.id, 'report', { terminal: '5' })).rejects.toThrow(
+      /agent-review stage of Shell 5 does not run now/,
+    )
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(reportsOf(task.id, 'implement')).toHaveLength(1)
+
+    // The Implement agent still reports its own stage.
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+  })
+
+  it('refuses natamux done from Shell 1 while the reviewer runs in its own shell', async () => {
+    const task = await atReview()
+
+    await expect(runner.act(task.id, 'report', { terminal: '1' })).rejects.toThrow(
+      /No stage of Shell 1 runs now/,
+    )
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+    expect(reportsOf(task.id, 'agent-review')).toHaveLength(0)
+  })
+
+  it('takes a report of the stage named, from any shell', async () => {
+    const task = await atReview()
+    await runner.act(task.id, 'reopen', { terminal: '5', reason: 'Fix the dates' })
+    await runner.settle()
+
+    await runner.act(task.id, 'report', { terminal: '5', stage: 'implement' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+  })
+
+  it('refuses the other actions from the reviewer after its send back, unless they name the stage', async () => {
+    const task = await atReview()
+    await runner.act(task.id, 'reopen', { terminal: '5', reason: 'Fix the dates' })
+    await runner.settle()
+
+    for (const action of ['approve', 'skip', 'pass', 'fail'] as const) {
+      await expect(runner.act(task.id, action, { terminal: '5' })).rejects.toThrow(
+        /agent-review stage of Shell 5 does not run now/,
+      )
+    }
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+
+    const failed = await runner.act(task.id, 'fail', {
+      terminal: '5',
+      stage: 'implement',
+      reason: 'Stuck',
+    })
+    expect(failed).toMatchObject({ stage: 'implement', state: 'failed' })
+  })
+
+  it('takes a report from a shell that no stage uses, as before', async () => {
+    const task = await atReview()
+
+    await runner.act(task.id, 'report', { terminal: '3' })
+    await runner.settle()
+
+    // Reported and checked: review.md is missing, so the stage runs on.
+    expect(reportsOf(task.id, 'agent-review')).toHaveLength(1)
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+  })
+})
+
+describe('a report from the shell of a stage of another step', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        {
+          id: 'build',
+          parallel: [
+            {
+              id: 'test-spec',
+              kind: 'agent',
+              gate: 'auto',
+              output: 'test-spec.md',
+              sections: ['Cases'],
+            },
+            { id: 'implement', kind: 'agent', gate: 'auto' },
+          ],
+        },
+        {
+          id: 'agent-review',
+          kind: 'agent',
+          gate: 'auto',
+          output: 'review.md',
+          sections: ['Findings'],
+          ownShell: true,
+          agent: 'cursor',
+        },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+  })
+
+  // Test spec ran in Shell 2 and Implement in Shell 1; the reviewer runs in Shell 6.
+  async function atReview(): Promise<Task> {
+    const made = await created({ title: 'Export tasks', agent: 'claude-code' })
+    tasks.applyEvent(made.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    const task = await withWorkspace(made.id)
+    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
+    await runner.act(task.id, 'report', { terminal: '2' })
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+    return tasks.getTask(task.id)
+  }
+
+  it('keeps Implement running when the reviewer reports after its send back', async () => {
+    const task = await atReview()
+    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement', reason: 'Fix it' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    const reports = () =>
+      tasks.listEvents(task.id).filter((entry) => entry.event.type === 'stage.reported')
+    const before = reports()
+
+    await expect(runner.act(task.id, 'report', { terminal: '6' })).rejects.toThrow(
+      /agent-review stage of Shell 6 does not run now/,
+    )
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'build', state: 'running' })
+    expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
+    expect(reports()).toEqual(before)
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+  })
 })
 
 describe('a stage of your own with its own agent', () => {
@@ -1779,6 +1926,109 @@ describe('a stage that ends its shell', () => {
     expect(launchesOf(task.id, 'codex')).toHaveLength(1)
   })
 
+  it('closes its shell when its agent sends the task back, and starts a new agent next round', async () => {
+    withStages({ endShell: true })
+    const task = await writingDocs()
+
+    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement', reason: 'Fix the dates' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys[1]?.killed).toBe(true)
+    expect(ptys[0]?.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1'])
+    // The killed agent never ends its turn, so nothing waits for it.
+    expect(runner.takeReport(task.id, '6')).toBe(false)
+    await expectWritten(ptys[0], 'What to change: Fix the dates')
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'running' })
+    expect(ptys).toHaveLength(3)
+    expect(ptys[2]?.killed).toBe(false)
+    expect(launchesOf(task.id, 'codex')).toHaveLength(2)
+    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+  })
+
+  it('closes its shell when a person sends the task back', async () => {
+    withStages({ endShell: true })
+    const task = await writingDocs()
+
+    await runner.act(task.id, 'reopen', { to: 'implement' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys[1]?.killed).toBe(true)
+    expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  it('keeps its shell when its agent sends the task back the most times', async () => {
+    withStages({ endShell: true })
+    const task = await writingDocs()
+    for (let round = 0; round < MAX_AGENT_SEND_BACKS; round += 1) {
+      await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })
+      await runner.settle()
+      await runner.act(task.id, 'report', { terminal: '1' })
+      await runner.settle()
+    }
+    const shell = ptys.at(-1)
+
+    await expect(runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })).rejects.toThrow(
+      /waits for the user/,
+    )
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'needs-input' })
+    expect(shell?.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1', '6'])
+  })
+
+  it('keeps its shell when the task goes back to the same stage', async () => {
+    withStages({ endShell: true })
+    const task = await writingDocs()
+
+    await runner.act(task.id, 'reopen', { to: 'write-docs', reason: 'Fix the dates' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'running' })
+    expect(ptys[1]?.killed).toBe(false)
+    expect(launchesOf(task.id, 'codex')).toHaveLength(1)
+  })
+
+  it('keeps the shell of a stage without it on a send back, and gives the agent there the prompt', async () => {
+    withStages({})
+    const task = await writingDocs()
+    const shell = ptys[1]
+
+    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })
+    await runner.settle()
+    expect(shell?.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1', '6'])
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'running' })
+    expect(ptys.some((pty) => pty.killed)).toBe(false)
+    expect(launchesOf(task.id, 'codex')).toHaveLength(1)
+    await expectSubmitted(shell, 'Task: Export')
+  })
+
+  it('never closes Shell 1 on a send back', async () => {
+    withStages({}, [{ id: 'polish', kind: 'agent', gate: 'auto', endShell: true }])
+    const task = await writingDocs()
+    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.settle()
+    expect(tasks.getTask(task.id).stage).toBe('polish')
+
+    await runner.act(task.id, 'reopen', { terminal: '1', to: 'implement' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys[0]?.killed).toBe(false)
+    expect(launchesOf(task.id, 'claude-code')).toHaveLength(1)
+  })
+
   it('keeps the shell while the stage waits for approval, and closes it on approval', async () => {
     withStages({ gate: 'manual', endShell: true })
     const task = await writingDocs()
@@ -1938,6 +2188,77 @@ describe('a stage that ends its shell', () => {
     expect(tasks.getTask(task.id).stage).toBe('finish')
     expect(ptys[1]?.killed).toBe(true)
     expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  it('closes the shell of a command when the task is sent back from its stage', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'testing', kind: 'testing', gate: 'auto', command: 'make test', endShell: true },
+        { id: 'finish', kind: 'agent', gate: 'auto' },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+    const task = await implementing()
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(terminals.list(task.id)).toEqual(['1', '2'])
+
+    await runner.act(task.id, 'reopen', { to: 'implement', reason: 'Fix the dates' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    expect(ptys[1]?.killed).toBe(true)
+    expect(ptys[0]?.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  const lastEvent = (id: string, type: EventType) =>
+    tasks
+      .listEvents(id)
+      .filter((entry) => entry.event.type === type)
+      .at(-1)?.event
+
+  // A testing stage of your own with its own agent in Shell 6 fails on CI, so the task goes back
+  // to Implement.
+  async function failedOnCi(endShell: boolean): Promise<Task> {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+        { id: 'smoke', kind: 'testing', gate: 'auto', agent: 'codex', ci: true, endShell },
+        { id: 'release', kind: 'release', gate: 'manual' },
+      ],
+    }
+    const task = await implementing()
+    tasks.setCi(task.id, 'smoke', true)
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'smoke', state: 'running' })
+    expect(terminals.list(task.id)).toEqual(['1', '6'])
+
+    await runner.act(task.id, 'report', { terminal: '6' })
+    finishCi({ passed: false, reasons: ['CI E2E failure: u'], passes: [], final: false })
+    await runner.settle()
+    expect(lastEvent(task.id, 'stage.reopened')?.payload).toMatchObject({ from: 'smoke', ci: true })
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
+    return task
+  }
+
+  it('closes its shell when CI sends the task back from it', async () => {
+    const task = await failedOnCi(true)
+
+    expect(ptys[1]?.killed).toBe(true)
+    expect(ptys[0]?.killed).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  it('keeps the shell of a stage without it when CI sends the task back', async () => {
+    const task = await failedOnCi(false)
+
+    expect(ptys.some((pty) => pty.killed)).toBe(false)
+    expect(terminals.list(task.id)).toEqual(['1', '6'])
   })
 
   it('leaves the last stage to the finish of the task, which keeps the screens', async () => {
