@@ -1422,6 +1422,44 @@ describe('a check on CI', () => {
     expect(tasks.getTask(task.id).state).toBe('review')
   })
 
+  // An empty worktree would run git in the daemon's own folder and push that checkout.
+  it.each([
+    ['workspace', true, false],
+    ['branch', false, true],
+    ['workspace and branch', true, true],
+  ])('fails CI after a restart with no %s', async (_, noWorkspace, noBranch) => {
+    const task = await reported(true)
+    expect(ciCalls).toHaveLength(1)
+    const failures = () =>
+      tasks.listEvents(task.id).filter(({ event }) => event.type === 'stage.check-failed')
+
+    runner.stop()
+    tasks.recordWorkspace(task.id, {
+      workspace: noWorkspace ? null : task.workspace,
+      branch: noBranch ? null : task.branch,
+    })
+    runner = makeRunner(agents)
+    runner.start()
+    await runner.settle()
+
+    expect(ciCalls).toHaveLength(1)
+    expect(lastOf(task.id, 'stage.check-failed')?.payload).toEqual({
+      stage: 'implement',
+      reasons: ['The task has no workspace or branch for the CI check.'],
+      final: true,
+    })
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+    expect(lastOf(task.id, 'stage.reopened')).toBeUndefined()
+    expect(failures()).toHaveLength(1)
+
+    runner.stop()
+    runner = makeRunner(agents)
+    runner.start()
+    await runner.settle()
+    expect(ciCalls).toHaveLength(1)
+    expect(failures()).toHaveLength(1)
+  })
+
   it('does not wait for CI when the task did not ask for it', async () => {
     const task = await reported(false)
 
