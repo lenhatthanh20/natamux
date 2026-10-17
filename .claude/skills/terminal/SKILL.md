@@ -46,6 +46,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
   - A done or cancelled task ends all its shells (`stage-runner.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
   - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`.
+  - Daemon shutdown awaits `closeAllAndWait`, so no shell outlives a quit. The desktop app waits for the daemon to exit (at most `DAEMON_STOP_WAIT_MS`, 5 s) before it quits.
 - **Pane.** Resizes work like VS Code's `terminalResizeDebouncer` (`resizeNow`, `settle`).
   - While the pane changes size, the rows change in xterm at once (`fit.proposeDimensions()`). The columns change at once too while the buffer (`buffer.normal.length`) has fewer than `REFLOW_WAIT_ROWS` (200) rows; a longer one waits, because columns reflow every wrapped line.
   - These resizes are local: `holdSize` keeps `onResize` from sending them. When the pane settles (`FIT_DELAY_MS`, 100 ms after the last change), `settle` fits (the columns catch up) and sends one resize. A hide or dispose before that sends nothing.

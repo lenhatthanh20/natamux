@@ -58,6 +58,9 @@ let daemonReady = false
 let marksLogged = false
 let window: BrowserWindow | undefined
 let quitConfirmed = false
+// A daemon that does not exit must not keep the app from quitting.
+const DAEMON_STOP_WAIT_MS = 5000
+let daemonStopWaited = false
 let updater: Updater | undefined
 const lastLines: string[] = []
 
@@ -439,9 +442,21 @@ if (!app.requestSingleInstanceLock()) {
     })
   })
 
-  app.on('will-quit', () => {
+  // The daemon waits up to 3 s for its shells to end. The app waits for it: its exit would cut the
+  // daemon short and leave a shell that ignores SIGHUP running.
+  app.on('will-quit', (event) => {
+    if (daemon !== undefined && !daemonExited && !daemonStopWaited) {
+      event.preventDefault()
+      daemonStopWaited = true
+      const timer = setTimeout(() => app.quit(), DAEMON_STOP_WAIT_MS)
+      daemon.once('exit', () => {
+        clearTimeout(timer)
+        app.quit()
+      })
+      daemon.kill()
+      return
+    }
     updater?.installOnQuit()
-    daemon?.kill()
   })
 
   // On macOS the app, the daemon and the agents keep running with no window, as other Mac apps do.

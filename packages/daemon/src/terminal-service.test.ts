@@ -16,6 +16,7 @@ import {
   CLIENT_HIGH_WATER,
   ENDED_IDLE_MS,
   ENTER_AFTER_PASTE_MS,
+  EXIT_WAIT_MS,
   HIDDEN_BUDGET_BYTES,
   HIDDEN_BUDGET_WINDOW_MS,
   INPUT_GAP_MS,
@@ -610,6 +611,106 @@ describe('closing a shell', () => {
     await vi.advanceTimersByTimeAsync(1)
     await closing
     expect(stubborn.killed).toBe(true)
+    expect(service.list('T-0001')).toEqual([])
+  })
+
+  it('at shutdown waits for the shells of every task, until a stubborn one is killed', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0002', client(), size)
+    const stubborn = ptys[1]
+    if (!stubborn) {
+      throw new Error('No second shell was started.')
+    }
+    stubborn.stubborn = true
+    let ended = false
+
+    const closing = service.closeAllAndWait().then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS - 1)
+    expect(ended).toBe(false)
+    expect(stubborn.killed).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await closing
+    expect(ptys[0]?.signals).toEqual(['SIGHUP'])
+    expect(stubborn.signals).toEqual(['SIGHUP', 'SIGKILL'])
+    expect(service.list('T-0001')).toEqual([])
+    expect(service.list('T-0002')).toEqual([])
+  })
+
+  it('at shutdown ends as soon as the last shell ends on SIGHUP, with no SIGKILL', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    service.attach('T-0002', client(), size)
+    const slow = ptys[1]
+    if (!slow) {
+      throw new Error('No second shell was started.')
+    }
+    // It takes a while to end after SIGHUP.
+    slow.kill = (signal) => {
+      slow.signals.push(signal)
+    }
+    let ended = false
+
+    const closing = service.closeAllAndWait().then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS / 2)
+    expect(ended).toBe(false)
+
+    slow.exit(0)
+    await vi.advanceTimersByTimeAsync(0)
+    await closing
+    expect(ended).toBe(true)
+    expect(ptys[0]?.signals).toEqual(['SIGHUP'])
+    expect(slow.signals).toEqual(['SIGHUP'])
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS)
+    expect(slow.signals).toEqual(['SIGHUP'])
+  })
+
+  it('at shutdown stops waiting for a shell that never reports its end', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    const silent = ptys[0]
+    if (!silent) {
+      throw new Error('No shell was started.')
+    }
+    silent.kill = (signal) => {
+      silent.signals.push(signal)
+    }
+    let ended = false
+
+    const closing = service.closeAllAndWait().then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(KILL_GRACE_MS + EXIT_WAIT_MS - 1)
+    expect(ended).toBe(false)
+    expect(silent.signals).toEqual(['SIGHUP', 'SIGKILL'])
+
+    await vi.advanceTimersByTimeAsync(1)
+    await closing
+    expect(service.list('T-0001')).toEqual([])
+  })
+
+  // With fake timers that never move, a wait on a timer would never end: these must end at once.
+  it('at shutdown ends at once when no shell is open, also when called twice', async () => {
+    vi.useFakeTimers()
+    const { service } = setup()
+    await Promise.all([service.closeAllAndWait(), service.closeAllAndWait()])
+  })
+
+  it('at shutdown ends at once when called again after the shells are closed', async () => {
+    vi.useFakeTimers()
+    const { service } = setup()
+    service.attach('T-0001', client(), size)
+    await service.closeAllAndWait()
+
+    await service.closeAllAndWait()
     expect(service.list('T-0001')).toEqual([])
   })
 

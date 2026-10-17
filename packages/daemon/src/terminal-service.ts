@@ -112,8 +112,8 @@ export const RESYNC_MAX_WAIT_MS = 2000
 export const ACK_STALL_MS = 5000
 // A shell gets this long to end after SIGHUP, then it is killed.
 export const KILL_GRACE_MS = 2000
-// How long a killed shell may take to end before closeAndWait stops waiting for it.
-const EXIT_WAIT_MS = 1000
+// How long a killed shell may take to end before closeAndWait or closeAllAndWait stops waiting.
+export const EXIT_WAIT_MS = 1000
 // Time between a DEL and other input that a program must read apart, see TerminalService.write.
 export const INPUT_GAP_MS = 25
 // Time between a paste and its Enter, see TerminalService.paste.
@@ -1430,10 +1430,26 @@ export class TerminalService {
 
   // Ends every shell of a task and waits until they have ended. Windows does not let git delete a
   // folder that a process still has open. The wait ends a moment after a stubborn shell is killed.
-  async closeAndWait(taskId: string): Promise<void> {
+  closeAndWait(taskId: string): Promise<void> {
     const sessions = [...this.sessions.values()].filter((session) => session.taskId === taskId)
+    return this.waitForEnd(sessions, () => this.close(taskId))
+  }
+
+  // At shutdown: the daemon must not exit before a shell that ignores SIGHUP is killed, or it
+  // lives on with no parent.
+  closeAllAndWait(): Promise<void> {
+    return this.waitForEnd([...this.sessions.values()], () => this.closeAll())
+  }
+
+  closeAll(): void {
+    for (const session of [...this.sessions.values()]) {
+      this.closeOne(session.taskId, session.terminal)
+    }
+  }
+
+  private async waitForEnd(sessions: Session[], close: () => void): Promise<void> {
     const ended = Promise.all(sessions.map(exitOf))
-    this.close(taskId)
+    close()
     let timer: NodeJS.Timeout | undefined
     const limit = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, KILL_GRACE_MS + EXIT_WAIT_MS)
@@ -1442,12 +1458,6 @@ export class TerminalService {
       await Promise.race([ended, limit])
     } finally {
       clearTimeout(timer)
-    }
-  }
-
-  closeAll(): void {
-    for (const session of [...this.sessions.values()]) {
-      this.closeOne(session.taskId, session.terminal)
     }
   }
 
