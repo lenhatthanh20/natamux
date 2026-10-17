@@ -123,6 +123,53 @@ describe('createTask', () => {
     expect(service.createTask({ title: 'Next' }).id).toBe('T-0004')
   })
 
+  // A task whose file is gone from outside stays in memory, with its event log and agents.
+  it.each([
+    ['T-0002', ['First', 'Second'], 'T-0003'],
+    ['T-0001', ['Only'], 'T-0002'],
+  ])('does not reuse the id %s when its file is gone', (removed, titles, next) => {
+    for (const title of titles) {
+      service.createTask({ title })
+    }
+    rmSync(taskFilePath(dataDir, removed))
+
+    const task = service.createTask({ title: 'Next' })
+
+    expect(task.id).toBe(next)
+    expect(readTaskFile(dataDir, next)).toEqual(task)
+    expect(service.listEvents(next).map(({ event }) => event.type)).toEqual(['task.created'])
+    expect(service.listEvents(removed)).toHaveLength(1)
+  })
+
+  // deleteTask clears memory and disk, so the id counts no more; nothing of the task is left.
+  it.each([
+    ['T-0002', 'T-0002'],
+    ['T-0001', 'T-0003'],
+  ])('after deleteTask(%s) gives the next id %s', (deleted, next) => {
+    service.createTask({ title: 'First' })
+    service.createTask({ title: 'Second' })
+    service.deleteTask(deleted)
+
+    const task = service.createTask({ title: 'Next' })
+
+    expect(task.id).toBe(next)
+    expect(service.listEvents(next).map(({ event }) => event.type)).toEqual(['task.created'])
+  })
+
+  it('rejects an id the user chose when only memory holds that task', () => {
+    const first = service.createTask({ title: 'TASK-0005: First' })
+    rmSync(taskFilePath(dataDir, first.id))
+    const published = messages.length
+
+    const create = () => service.createTask({ title: 'TASK-0005: Other' })
+    expect(create).toThrow(TaskEditError)
+    expect(create).toThrow('Task id TASK-0005 is already used')
+    expect(readTaskFile(dataDir, first.id)).toBeUndefined()
+    expect(service.getTask(first.id)).toEqual(first)
+    expect(service.listEvents(first.id)).toHaveLength(1)
+    expect(messages).toHaveLength(published)
+  })
+
   it('logs and publishes the task with the id the user chose', () => {
     const task = service.createTask({ title: '  Task-0005  :   Fix bug xxx  ' })
 

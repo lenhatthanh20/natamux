@@ -440,7 +440,7 @@ export class TaskService {
       this.checkParent(input.parentId)
     }
     const chosen = splitId ? splitTaskId(input.title) : { id: null, title: input.title }
-    if (chosen.id && readTaskFile(this.dataDir, chosen.id)) {
+    if (chosen.id && (this.tasks.has(chosen.id) || readTaskFile(this.dataDir, chosen.id))) {
       throw new TaskEditError(`Task id ${chosen.id} is already used`)
     }
     const at = this.timestamp()
@@ -1047,8 +1047,9 @@ export class TaskService {
   }
 
   private nextTaskId(): string {
-    // Ids the user chose with another prefix do not move the default numbers.
-    const highest = listTaskIds(this.dataDir)
+    // Ids the user chose with another prefix do not move the default numbers. A task whose file is
+    // gone stays in memory, so its id counts too.
+    const highest = [...this.tasks.keys(), ...listTaskIds(this.dataDir)]
       .filter((id) => id.startsWith('T-'))
       .reduce((max, id) => Math.max(max, Number(id.slice(2))), 0)
     return `T-${String(highest + 1).padStart(4, '0')}`
