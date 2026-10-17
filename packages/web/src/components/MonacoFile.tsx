@@ -1,8 +1,9 @@
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { useEffect, useRef } from 'react'
-import { trimTrailingNewline } from '../lib/changes'
+import { type CodeSelection, trimTrailingNewline } from '../lib/changes'
 import { TERMINAL_FONT } from '../lib/fonts'
 import { languageForPath } from '../lib/language'
+import { attachAskAgent } from '../lib/monaco-ask'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
@@ -14,6 +15,7 @@ type MonacoFileProps = {
   kind: 'added' | 'removed'
   wrap: boolean
   onLine?: (line: number) => void
+  onAsk?: (selection: CodeSelection) => void
 }
 
 // Every line marked as added or removed.
@@ -35,7 +37,7 @@ function wholeFile(
 
 // A file that did not exist before (or is gone now) is not a diff. It is shown whole, read only,
 // with every line marked, and without the empty last line that its final line break would add.
-export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFileProps) {
+export default function MonacoFile({ path, text, kind, wrap, onLine, onAsk }: MonacoFileProps) {
   const container = useRef<HTMLElement>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const decorationsRef = useRef<MonacoEditor.IEditorDecorationsCollection | null>(null)
@@ -47,6 +49,8 @@ export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFil
   const quiet = useRef(false)
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
+  const onAskRef = useRef(onAsk)
+  onAskRef.current = onAsk
   const theme = useResolvedTheme()
   const themeRef = useRef(theme)
   themeRef.current = theme
@@ -96,10 +100,15 @@ export default function MonacoFile({ path, text, kind, wrap, onLine }: MonacoFil
       }
     })
 
+    // A new file has only new lines, a deleted one only lines of the last commit.
+    const askAgent = (selection: CodeSelection) => onAskRef.current?.(selection)
+    const ask = attachAskAgent(editor, path, kind === 'added' ? 'new' : 'old', askAgent)
+
     return () => {
       editorRef.current = null
       decorationsRef.current = null
       shownText.current = null
+      ask.dispose()
       cursor.dispose()
       editor.setModel(null)
       model.dispose()
