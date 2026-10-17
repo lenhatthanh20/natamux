@@ -33,6 +33,7 @@ import {
   SCREEN_HIGH_WATER,
   SCREEN_LOW_WATER,
   ShellGoneError,
+  SNAPSHOT_FIRST_SLICE_ROWS,
   SNAPSHOT_SEND_BYTES,
   SNAPSHOT_SYNC_WAIT_MS,
   sliceEnd,
@@ -175,6 +176,24 @@ async function replay(text: string, screen: TerminalSize) {
   const result = { text: serializer.serialize(), cursor: [buffer.cursorX, buffer.cursorY] }
   terminal.dispose()
   return result
+}
+
+// Whether a fresh dashboard terminal hides its cursor after this output. xterm has no public API
+// for it, so a parser handler watches DECTCEM. Snapshots hold no reset, so only ?25h/l count.
+async function cursorHiddenAfter(text: string): Promise<boolean> {
+  const terminal = headless(size)
+  let hidden = false
+  const watch = (shown: boolean) => (params: (number | number[])[]) => {
+    if (params.includes(25)) {
+      hidden = !shown
+    }
+    return false
+  }
+  terminal.parser.registerCsiHandler({ prefix: '?', final: 'h' }, watch(true))
+  terminal.parser.registerCsiHandler({ prefix: '?', final: 'l' }, watch(false))
+  await new Promise<void>((resolve) => terminal.write(text, resolve))
+  terminal.dispose()
+  return hidden
 }
 
 // The daemon's screen after these steps (output, or a resize between output), serialized in one
@@ -1108,6 +1127,82 @@ describe('attaching to a running shell', () => {
     await service.settled('T-0001')
 
     expect(outputOf(later.frames)).toContain('\u001b[?2004h')
+  })
+
+  // Agents such as the Cursor CLI hide the cursor once and draw their own. The dashboard resets
+  // before a snapshot, so without this it shows a second, blinking cursor.
+  describe('a cursor a program hid', () => {
+    // The snapshot a client attached after these reads of the shell gets.
+    async function snapshotAfter(...reads: string[]) {
+      const { service, ptys } = setup()
+      service.attach('T-0001', client(), size)
+      for (const read of reads) {
+        first(ptys).emit(read)
+      }
+      const later = client()
+      service.attach('T-0001', later, size)
+      await service.settled('T-0001')
+      return { frames: later.frames, output: outputOf(later.frames) }
+    }
+
+    it.each([
+      ['with the text', ['\u001b[?25l→ Add a follow-up']],
+      ['before the text', ['\u001b[?25l', '→ Add a follow-up']],
+      ['split across two reads', ['\u001b[?2', '5l→ Add a follow-up']],
+      ['with other modes in the same sequence', ['\u001b[?1049;25l→ Add a follow-up']],
+      ['again after it showed it', ['\u001b[?25l', '\u001b[?25h', '\u001b[?25l$ ']],
+      ['again after a reset', ['\u001b[?25l', '\u001bc', '\u001b[?25l$ ']],
+    ])('stays hidden, hidden %s', async (_, reads) => {
+      const { output } = await snapshotAfter(...reads)
+
+      expect(output.endsWith('\u001b[?25l')).toBe(true)
+      expect(await cursorHiddenAfter(output)).toBe(true)
+    })
+
+    it('is hidden once in the snapshot, however many times the program hid it', async () => {
+      const { output } = await snapshotAfter('\u001b[?25l', '\u001b[?25lwork', '\u001b[?25l$ ')
+
+      expect(output.split('\u001b[?25l')).toHaveLength(2)
+    })
+
+    it.each([
+      ['shows it again', ['\u001b[?25l', '\u001b[?25h$ ']],
+      ['shows it again with other modes', ['\u001b[?25l', '\u001b[?25;1049h$ ']],
+      ['resets (RIS)', ['\u001b[?25l', '\u001bc$ ']],
+      ['soft resets (DECSTR)', ['\u001b[?25l', '\u001b[!p$ ']],
+    ])('shows when the program %s', async (_, reads) => {
+      const { output } = await snapshotAfter(...reads)
+
+      expect(output).not.toContain('\u001b[?25l')
+      expect(await cursorHiddenAfter(output)).toBe(false)
+    })
+
+    it.each([
+      ['other private modes', '\u001b[?1049l\u001b[?7l'],
+      ['modes whose number holds 25', '\u001b[?2025l\u001b[?125h'],
+      ['a mode 25 that is not private', '\u001b[25l'],
+      ['a show with nothing hidden', '\u001b[?25h'],
+      ['a reset with nothing hidden', '\u001bc'],
+    ])('stays shown after %s', async (_, read) => {
+      const { output } = await snapshotAfter(`${read}$ `)
+
+      expect(output).not.toContain('\u001b[?25l')
+      expect(await cursorHiddenAfter(output)).toBe(false)
+    })
+
+    // A handler that returned true would keep xterm from switching screens. The alt screen keeps
+    // the cursor column, hence the \r.
+    it('still lets xterm handle the sequences it watches', async () => {
+      const inAlt = await snapshotAfter('\u001b[?25lmain', '\u001b[?1049;25h', '\ralt')
+      expect(await screenOf(inAlt.frames)).toEqual(['alt'])
+      expect(inAlt.output).toContain('\u001b[?1049h')
+      expect(await cursorHiddenAfter(inAlt.output)).toBe(false)
+
+      const back = await snapshotAfter('main', '\u001b[?1049;25h', '\ralt', '\u001b[?1049;25l')
+      expect(await screenOf(back.frames)).toEqual(['main'])
+      expect(back.output).not.toContain('\u001b[?1049h')
+      expect(await cursorHiddenAfter(back.output)).toBe(true)
+    })
   })
 })
 
@@ -2319,6 +2414,31 @@ describe('a sliced snapshot', () => {
 
     expect(serialize.mock.calls).toEqual([[]])
   })
+
+  // A short history, one row past the first slice, and many slices.
+  it.each([
+    ['in one piece', 100, false],
+    ['just past the first slice', SNAPSHOT_FIRST_SLICE_ROWS + size.rows, true],
+    ['in many slices', 2000, true],
+  ])('keeps a hidden cursor hidden %s, once, at the end', async (_, lines, sliced) => {
+    const { service, ptys } = setup()
+    service.attach('T-0001', client(), size)
+    ptys[0]?.emit(`\u001b[?25l${numbered(lines)}`)
+    await service.settled('T-0001')
+    const serialize = vi.spyOn(SerializeAddon.prototype, 'serialize')
+
+    const later = client()
+    service.attach('T-0001', later, size)
+    await service.settled('T-0001')
+
+    expect(serialize.mock.calls.some(([options]) => options?.range !== undefined)).toBe(sliced)
+    const output = outputOf(later.frames)
+    // Once, at the end: so the history parts before the last one hold none.
+    expect(output.endsWith('\u001b[?25l')).toBe(true)
+    expect(output.split('\u001b[?25l')).toHaveLength(2)
+    expect(await cursorHiddenAfter(output)).toBe(true)
+    expect(await screenOf(later.frames)).toEqual(numberedLines(lines))
+  })
 })
 
 describe('sending a large snapshot', () => {
@@ -2906,6 +3026,28 @@ describe('catching up a client that is behind', () => {
       type: 'replayed',
       offset: 9 * OUTPUT_FRAME_BYTES,
     })
+  })
+
+  it('keeps a cursor the program hid hidden in a catch-up snapshot', async () => {
+    vi.useFakeTimers()
+    const { service, ptys } = setup()
+    const stuck = client()
+    service.attach('T-0001', stuck, size)
+    await vi.advanceTimersByTimeAsync(0)
+    const pty = first(ptys)
+    pty.emit('\u001b[?25l')
+    for (let index = 0; index < 9; index += 1) {
+      pty.emit(frameOf(index))
+    }
+
+    await vi.advanceTimersByTimeAsync(ACK_STALL_MS + 500)
+
+    expect(catchUps(stuck.frames)).toEqual([{ type: 'snapshot', ...size }])
+    expect(controls(stuck.frames).at(-1)).toMatchObject({ type: 'replayed' })
+    const output = outputOf(sinceSnapshot(stuck.frames))
+    expect(output.endsWith('\u001b[?25l')).toBe(true)
+    vi.useRealTimers()
+    expect(await cursorHiddenAfter(output)).toBe(true)
   })
 
   it('does not give a hidden client whose acks stopped a snapshot', async () => {
