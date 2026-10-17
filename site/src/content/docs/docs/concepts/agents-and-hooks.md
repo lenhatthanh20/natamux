@@ -81,7 +81,7 @@ Notes:
 - The other agents run `natamux hook <agent>` as a command. It reads the hook JSON from stdin and sends it to the daemon. It prints nothing, and it never makes the agent fail. If the daemon is down, it exits quietly. Outside a Natamux terminal it does nothing.
 - Codex asks you to trust every hook it has not seen, and Natamux hooks change with the daemon. `--dangerously-bypass-hook-trust` skips that question for runs that Natamux starts.
 - For Copilot and Cursor, Natamux writes the hook file in the worktree and adds its path to the ignore list of your repository (`.git/info/exclude`). The file never reaches a commit.
-- If the worktree already has a hook file at that path that is not from Natamux, Natamux leaves it alone. The agent then runs without Natamux hooks. The terminal still works.
+- If the worktree already has a hook file at that path with any hook of your own, Natamux leaves it alone. The agent then runs without Natamux hooks. The terminal still works. Natamux updates the file only when every hook in it runs `natamux hook`.
 
 `natamux hooks claude-code` prints the Claude Code settings, for use in a setup that Natamux did not start.
 

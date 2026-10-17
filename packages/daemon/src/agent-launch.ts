@@ -288,9 +288,31 @@ export function oneShotCommand(
   }
 }
 
-// Writes the agent's hook file into the workspace and keeps it out of git. A file of the user's
-// own at that place is left alone: the agent then runs without Natamux's hooks, and its terminal
-// still shows that it works. Returns whether Natamux's hooks are in place.
+// Whether a hook file holds Natamux's hooks only, so writing it again loses nothing of the user's.
+function isNatamuxHookFile(text: string): boolean {
+  let hooks: unknown
+  try {
+    hooks = JSON.parse(text)?.hooks
+  } catch {
+    return false
+  }
+  if (typeof hooks !== 'object' || hooks === null || Array.isArray(hooks)) {
+    return false
+  }
+  // Cursor names a hook's command `command`; Copilot `bash` and `powershell`.
+  const commands = Object.values(hooks)
+    .flat()
+    .flatMap((hook) => [hook?.command, hook?.bash, hook?.powershell])
+    .filter((command) => command !== undefined)
+  return (
+    commands.length > 0 &&
+    commands.every((command) => typeof command === 'string' && command.startsWith(HOOK))
+  )
+}
+
+// Writes the agent's hook file into the workspace and keeps it out of git. A file with a hook of
+// the user's own at that place is left alone: the agent then runs without Natamux's hooks, and its
+// terminal still shows that it works. Returns whether Natamux's hooks are in place.
 export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boolean {
   const file = WORKSPACE_FILES[agent]?.()
   if (file === undefined) {
@@ -299,7 +321,7 @@ export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boo
   const target = join(workspace, file.path)
   if (existsSync(target)) {
     const current = readFileSync(target, 'utf8')
-    if (current !== file.content && !current.includes(HOOK)) {
+    if (current !== file.content && !isNatamuxHookFile(current)) {
       return false
     }
   }
