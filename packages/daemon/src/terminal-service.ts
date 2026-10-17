@@ -166,6 +166,8 @@ export class ScreenState {
   private unparsed = 0
   private full = false
   private readonly onFull: (full: boolean) => void
+  // The serializer leaves out a hidden cursor (DECTCEM), and xterm has no public API to read it.
+  private cursorHidden = false
 
   // onFull(true) when the screen falls too far behind, onFull(false) when it has caught up.
   constructor(
@@ -184,6 +186,25 @@ export class ScreenState {
     // The same widths as the dashboard (TerminalView.tsx), so an emoji takes two cells in both.
     this.terminal.loadAddon(new Unicode11Addon())
     this.terminal.unicode.activeVersion = '11'
+    // Each handler returns false, so xterm still handles the sequence itself.
+    const cursorShown = (shown: boolean) => (params: (number | number[])[]) => {
+      if (params.includes(25)) {
+        this.cursorHidden = !shown
+      }
+      return false
+    }
+    const parser = this.terminal.parser
+    parser.registerCsiHandler({ prefix: '?', final: 'h' }, cursorShown(true))
+    parser.registerCsiHandler({ prefix: '?', final: 'l' }, cursorShown(false))
+    // RIS and DECSTR show the cursor again.
+    parser.registerEscHandler({ final: 'c' }, () => {
+      this.cursorHidden = false
+      return false
+    })
+    parser.registerCsiHandler({ intermediates: '!', final: 'p' }, () => {
+      this.cursorHidden = false
+      return false
+    })
   }
 
   write(data: Buffer): void {
@@ -356,7 +377,7 @@ export class ScreenState {
       k += 1
     }
     if (history <= this.sliceRows || wrapped(history - k)) {
-      done([Buffer.from(this.serializer.serialize())])
+      done([Buffer.from(this.serializer.serialize() + this.cursorMode())])
       return
     }
     const historyEnd = history - k
@@ -392,10 +413,16 @@ export class ScreenState {
       if (this.disposed) {
         return
       }
-      parts.push(Buffer.from(this.serializer.serialize({ scrollback: k })))
+      parts.push(Buffer.from(this.serializer.serialize({ scrollback: k }) + this.cursorMode()))
       done(parts)
     }
     turn()
+  }
+
+  // The dashboard resets before a snapshot, which shows the cursor. A program that hid it to draw
+  // its own would then have two.
+  private cursorMode(): string {
+    return this.cursorHidden ? '\x1b[?25l' : ''
   }
 }
 
