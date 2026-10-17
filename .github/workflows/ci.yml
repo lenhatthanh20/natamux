@@ -38,6 +38,7 @@ jobs:
       - run: scripts/sign-release.test.sh
       - run: scripts/icons.test.sh
       - run: scripts/agents.test.sh
+      - run: scripts/site-deploy.test.sh
 
   # Apps trust updates signed by RELEASE_SIGNER only. Fails when it is not a minisign public key
   # (a placeholder) or is a test key, or when the docs do not show it.
