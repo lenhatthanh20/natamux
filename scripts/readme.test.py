@@ -17,7 +17,7 @@ HEADINGS = [
 ]
 LINK_HOSTS = {"github.com", "natamux.github.io", "codespaces.new"}
 IMAGE_HOSTS = {"img.shields.io"}
-STAND_IN = "The dashboard and the stages are real. Only the agents' terminal text comes from a stand-in script."
+STAND_IN = "Recorded in the app. The agents' terminal output is scripted for the demo."
 
 
 def links(markdown):

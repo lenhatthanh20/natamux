@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  An open-source Agent Development Environment for macOS, Windows and Linux.<br>
-  Every task gets its own git worktree, branch and terminal, runs a workflow you write once,<br>
-  and shows up on one dashboard that tells you which task needs you.
+  An open-source desktop app for macOS, Windows and Linux.<br>
+  Run Claude Code, Codex, Gemini CLI, Copilot and Cursor on many tasks at once,<br>
+  each in its own git worktree and terminal, with one dashboard that shows what needs you.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/public/screens/readme-workflow.png">
   <source media="(prefers-color-scheme: light)" srcset="site/public/screens/readme-workflow-light.png">
-  <img src="site/public/screens/readme-workflow.png" width="100%" alt="Natamux dashboard with an open bug task: five agents of different providers worked in their own shells, the branch took Bug fix, Review sent the task back once, and the Progress panel shows Implement ×2 with Manual review waiting for you">
+  <img src="site/public/screens/readme-workflow.png" width="100%" alt="Natamux dashboard with an open bug task: five agents of different providers worked in their own shells, the workflow took the Bug fix path, Review sent the task back once, and the Progress panel shows Implement ×2 with Manual review waiting for you">
 </picture>
 
 <p align="center">
@@ -49,7 +49,7 @@ Coding agents are good at one job at a time. Run five of them and you start to j
 - Work that nobody checked before it reaches a pull request.
 - A team where each person runs agents their own way, with no shared process.
 
-Natamux gives that work a shape. You write the workflow once: the stages, the approvals, the paths a task can take and when work goes back. Every task then runs it in its own worktree, with the agents you already use, and you step in only where the workflow asks for you.
+Natamux puts each task in its own worktree, so agents never share a checkout. It shows every agent's state on one dashboard and brings questions and permission prompts to you. It runs a review stage before the pull request, and it keeps the process in one file the team commits. You step in only where that workflow asks for you.
 
 ## Features
 
@@ -59,14 +59,14 @@ Natamux gives that work a shape. You write the workflow once: the stages, the ap
   <img src="site/public/screens/readme-agents-dark.gif" width="100%" alt="Screen recording of the Agents view: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI and Cursor work on five tasks at the same time, each in its own live terminal pane">
 </picture>
 
-<p align="center"><sub>The dashboard and the stages are real. Only the agents' terminal text comes from a stand-in script.</sub></p>
+<p align="center"><sub>Recorded in the app. The agents' terminal output is scripted for the demo.</sub></p>
 
-- **Agents that check each other.** After you approve the plan, one agent writes test cases from the spec without reading the code, while another writes the code. A third agent reviews the diff in a session of its own and sends the task back to Implement when it finds problems.
+- **Agents that check each other.** Work is checked twice before it reaches you. In the default workflow, one agent writes test cases from the spec without reading the code while another writes the code, and a third agent reviews the diff in a fresh session and sends the task back to Implement when it finds problems.
 - **A worktree, a branch and a terminal per task.** Each task works in its own folder on a branch such as `natamux/t-0001-fix-login`, so agents never edit the same checkout. Its shells keep running when you close the dashboard and come back with their screen.
 - **One place for what needs you.** The title bar counts the tasks that wait for you: a question, a stage ready for review, a failure, or an agent quiet for 10 minutes. A question becomes a sidebar card with **Answer**. Turn on **Notify me** for system notifications.
-- **Your workflow is a file.** Pick stages from a catalog of 28, choose which ones wait for your approval, run 2 to 4 stages side by side, split the pipeline into paths with a condition, and check a stage on CI. Everything lives in `.natamux.json`, so the whole team runs one process.
+- **One workflow for the whole team.** It lives in `.natamux.json`, so you commit it like code. Pick stages from a catalog of 28, choose which ones wait for your approval, run 2 to 4 stages side by side, split the pipeline into paths with a condition, and check a stage on CI.
 - **An agent per stage.** Give each stage its own agent and model: Claude Code to implement, Cursor to review, Copilot to watch CI, each in its own shell.
-- **Every task at a glance.** Switch between **Table**, **Board** and **Progress** views, open **Agents** for a grid of up to six live terminals, or press <kbd>Cmd</kbd>+<kbd>K</kbd> / <kbd>Ctrl</kbd>+<kbd>K</kbd> to find any task or command.
+- **Every task at a glance.** Switch between **Table**, **Board** and **Progress** views, open **Agents** for a grid of up to six live terminals, or press <kbd>Cmd</kbd>+<kbd>K</kbd> (<kbd>Ctrl</kbd>+<kbd>K</kbd> outside a terminal) or <kbd>F1</kbd> to find any task or command.
 - **Review and ship from the task.** Read side-by-side or inline diffs, including image diffs. Send a line comment to the agent, let the agent draft the commit message, then commit, push and open a pull request. A merged pull request finishes the task.
 - **Fits the project you already have.** A `.natamux-setup` script (`.natamux-setup.ps1` on Windows) prepares each new worktree. Each task gets ten ports, the first in `$PORT`, so dev servers do not clash.
 
@@ -87,25 +87,15 @@ Natamux gives that work a shape. You write the workflow once: the stages, the ap
 <b>Paths and send back.</b> See which path a task took, and why.
 </td>
 <td width="50%" valign="top">
-<picture><source media="(prefers-color-scheme: dark)" srcset="site/public/media/v2/stage-agent-dark-1000.webp"><source media="(prefers-color-scheme: light)" srcset="site/public/media/v2/stage-agent-light-1000.webp"><img src="site/public/media/v2/stage-agent-dark-1000.webp" alt="Project settings of storefront, Stages tab. The chart shows the If node. The Review stage is selected, with Agent set to Codex and the Arguments field."></picture>
-<b>Agent per stage.</b> Review on Codex, set once for the team.
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
 <picture><source media="(prefers-color-scheme: dark)" srcset="site/public/media/v2/changes-dark-1000.webp"><source media="(prefers-color-scheme: light)" srcset="site/public/media/v2/changes-light-1000.webp"><img src="site/public/media/v2/changes-dark-1000.webp" alt="The Changes tab of a task in review: a side-by-side diff of checkout.ts, a comment box for the agent, and Generate, Commit all and Create PR."></picture>
 <b>Changes.</b> Diff, comment, commit and open the pull request.
-</td>
-<td width="50%" valign="top">
-<picture><source media="(prefers-color-scheme: dark)" srcset="site/public/media/v2/table-dark-1000.webp"><source media="(prefers-color-scheme: light)" srcset="site/public/media/v2/table-light-1000.webp"><img src="site/public/media/v2/table-dark-1000.webp" alt="The All tasks table of storefront. A task that needs input sorts first, and the title bar says how many need you."></picture>
-<b>Table.</b> Tasks that need you sort first.
 </td>
 </tr>
 </table>
 
 ## How it works
 
-You write the workflow once, in **Project settings → Stages** or in `.natamux.json`, and every task runs it. Below, three tasks run the workflow of a sample project: a bug takes the **Bug fix** path, two agents work side by side, Codex reviews and sends one task back, and the last word is yours.
+Build the workflow in **Project settings → Stages**, or edit `.natamux.json` directly. Below, three tasks run the workflow of a sample project: a bug takes the **Bug fix** path, two agents work side by side, Codex reviews and sends one task back, and the last word is yours.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/public/screens/readme-workflow-dark.gif">
@@ -113,15 +103,15 @@ You write the workflow once, in **Project settings → Stages** or in `.natamux.
   <img src="site/public/screens/readme-workflow-dark.gif" width="100%" alt="Animated diagram of a workflow: a condition sends a bug down the Bug fix path to Cursor, Gemini CLI and Claude Code work side by side, Codex sends a task back to Implement, Copilot runs a security review, and you approve the manual review. The .natamux.json file of the workflow is shown next to it.">
 </picture>
 
-Without a file, a task runs the default stages: `Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release`.
+The animation shows a custom workflow. With no `.natamux.json`, a task runs the default stages: `Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests → Review → Release`.
 
 1. You approve the spec and the plan that the task's agent writes.
-2. Test spec and Implement start together, in Shell 2 and Shell 1. You approve the test spec.
+2. Test spec and Implement start together, each in its own shell. You approve the test spec.
 3. Automated tests adds a test for each case and runs all tests.
 4. The Review agent writes `review.md`. With findings, it sends the task back to Implement, at most two times; then it asks you.
 5. Release waits for your pull request. The merge finishes the task.
 
-A branch takes the first path whose condition holds (**File has text** or **Command succeeds**), and a red CI run goes back to the agent with the end of the failed log. Start from a recipe, Solo or Team, in [Build a workflow](https://natamux.github.io/docs/guides/workflows/). See also [the review loop](https://natamux.github.io/docs/concepts/review-loop/) and [stages](https://natamux.github.io/docs/concepts/stages/).
+A workflow branch takes the first path whose condition holds (**File has text** or **Command succeeds**), and a red CI run goes back to the agent with the end of the failed log. Start from a recipe, Solo or Team, in [Build a workflow](https://natamux.github.io/docs/guides/workflows/). See also [the review loop](https://natamux.github.io/docs/concepts/review-loop/) and [stages](https://natamux.github.io/docs/concepts/stages/).
 
 ## Works with your agents
 
@@ -129,7 +119,7 @@ Natamux starts the agent CLIs you already have and adds hooks, so the dashboard 
 
 | Agent | Command | How Natamux follows it |
 |---|---|---|
-| Claude Code | `claude` | Hooks in its settings file. The only agent that can run a stage as a workflow. |
+| Claude Code | `claude` | Hooks in a settings file passed with `--settings` for that run. The only agent that can run a stage as a workflow. |
 | Codex | `codex` | Hooks passed on the command line for that run. |
 | Gemini CLI | `gemini` | Hooks in a system settings file that Natamux points it to. |
 | GitHub Copilot CLI | `copilot` | Hooks in the worktree, kept out of git. |
@@ -154,7 +144,7 @@ Download the file for your system from the [latest release](https://github.com/l
 > [!NOTE]
 > The apps are not signed with an Apple or Windows certificate yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. Check any file against the signed `SHA256SUMS.txt` of the release.
 
-Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS and Linux apps can update themselves; on Windows the app opens the release page of the new version. The update check is off until you turn it on.
+Desktop releases support **macOS on Apple silicon** and Intel, **Windows** 10 (1809 or later) and 11 on x64, and **Linux** on x64. The macOS app (installed in Applications), the AppImage and the .deb can update themselves; the Windows installer and the .tar.gz open the release page of the new version. The update check is off until you turn it on.
 
 For real work, you need git and an installed, logged-in coding agent: Claude Code, Codex, Gemini CLI, GitHub Copilot CLI or Cursor. The GitHub CLI (`gh`) is optional, for pull requests, issues and CI. The [install guide](https://natamux.github.io/docs/getting-started/install/) has every step.
 
@@ -195,13 +185,13 @@ See the [CLI reference](https://natamux.github.io/docs/reference/cli/) and [CLI 
 
 ## Security and privacy
 
-- **No account or telemetry.** Natamux has no account or telemetry and no server of its own. Tasks and their history stay in the `.natamux/` folder of each repository.
-- **Local daemon.** It listens on 127.0.0.1 and wants a token on every request.
+- **No account or telemetry.** Natamux has no server of its own. Tasks and their history stay in the `.natamux/` folder of each repository.
+- **Local daemon.** It listens on 127.0.0.1 and wants a token on every request. In Docker it listens inside the container, and the production compose file publishes the port to loopback only.
 - **Your services, your sign-in.** Coding agents send your prompts and code to their own providers. Pull requests, issues and CI use your own `git` and `gh` login.
 - **Checked updates.** The update check is off by default. Before it installs an update, the app checks the minisign signature of the release's `SHA256SUMS.txt` and the SHA-256 of the download.
 
 > [!IMPORTANT]
-> Natamux does not sandbox agents: an agent has your user's rights. By default Natamux starts each agent with a flag that skips most permission prompts, and only Claude Code checks each action. Set `"agents": { "permissionMode": "ask" }` in `.natamux.json` to turn the flags off.
+> Natamux does not sandbox agents: an agent has your user's rights. By default Natamux starts each agent with its flag for fewer prompts: Claude Code in auto mode, which checks each action, and the other agents with prompts off (Codex stays in its workspace-write sandbox). Set `"agents": { "permissionMode": "ask" }` in `.natamux.json` to turn the flags off.
 
 Read [Privacy](PRIVACY.md) for what stays on your machine and what leaves it, and [Security](SECURITY.md) for protection details and private vulnerability reporting.
 
