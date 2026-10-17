@@ -198,14 +198,21 @@ if (config.tokenWasGenerated) {
   console.log(`Token for this run: ${config.token}`)
 }
 
+let shuttingDown = false
+
 async function shutdown(): Promise<void> {
+  // A second signal must not exit before the shells have ended.
+  if (shuttingDown) {
+    return
+  }
+  shuttingDown = true
   // Before the shells end, so they all come back at the next start.
   openShells.stop((taskId, terminal) => stages.agentRuns(taskId, terminal))
-  terminals.closeAll()
+  const shellsEnded = terminals.closeAllAndWait()
   stages.stop()
   issueLinker.stop()
   pullRequests.stop()
-  await app.close()
+  await Promise.all([shellsEnded, app.close()])
   index.close()
   process.exit(0)
 }
