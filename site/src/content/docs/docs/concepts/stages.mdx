@@ -180,7 +180,9 @@ natamux done
 natamux done --task T-0001 --stage implement
 ```
 
-Use `--stage` only when two stages run side by side and Natamux cannot tell which one you mean. Every stage prompt ends with the line `When you are done, run natamux done, unless the steps above say not to.`
+Use `--stage` only when two stages run side by side and Natamux cannot tell which one you mean.
+
+`natamux done` in the shell of a stage that does not run now is refused, for example from Review after it sent the task back. Implement stays running until its own agent reports. Every stage prompt ends with the line `When you are done, run natamux done, unless the steps above say not to.`
 
 The turn end that follows `natamux done` does not count as "stopped early".
 
@@ -263,7 +265,8 @@ A stage that only writes a report can run in its own shell with a new session: `
 
 Check **End the agent and close its shell when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Shell 1.
 
-- Done means the stage passed, was approved or was skipped. A stage that waits for your approval keeps its shell until you approve.
+- Done means the stage passed, was approved or was skipped, or sent the task back to an earlier stage. A stage that waits for your approval keeps its shell until you approve.
+- Without the setting, Natamux does not close the stage's shell while the task runs.
 - Natamux ends the agent or command in the stage's shell and closes the shell. Other shells go on.
 - Shell 1 is never closed, because it keeps the task's agent and its session. A stage there shows "This stage runs in Shell 1, which cannot be closed." in place of the checkbox, and `"endShell": true` on it is ignored.
 - A next stage in the same shell starts a new agent with a new session and the full stage prompt.

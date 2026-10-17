@@ -310,6 +310,8 @@ export class StageRunner {
   private readonly chosenAgents = new Map<string, string>()
   // The terminal where each task runs its stage command.
   private readonly commandTerminals = new Map<string, string>()
+  // The step each task leaves by the send back it is sending now. The event does not say it.
+  private readonly leaving = new Map<string, Step>()
   // The stages each task is starting now, so an action can answer with the task after them.
   private readonly startWork = new Map<string, Promise<void>>()
   private readonly starting = new Set<string>()
@@ -473,6 +475,9 @@ export class StageRunner {
     if (ENDS_STAGE.includes(event.type)) {
       this.endStageShell(task, event)
     }
+    if (event.type === 'stage.reopened') {
+      this.endLeftShells(task)
+    }
     if (message.moved === true) {
       this.startInBackground(task.id, ['ready'], event)
     } else if (event.type === 'agent.resumed' && event.source !== 'agent') {
@@ -503,28 +508,47 @@ export class StageRunner {
     const steps = this.tasks.stepsOf(task)
     const step = stepToRun(steps, stageId)
     const stage = step && stagesOf(step).find((each) => each.id === stageId)
-    if (step === undefined || stage?.endShell !== true || !canEndShell(stage)) {
-      return
-    }
-    if (endsShell1(steps, stage)) {
+    if (step === undefined || stage === undefined) {
       return
     }
     // Still in the step and not done: a stage that waits for approval, or a lane still at work.
     if (task.stage === step.id && task.lanes[stageId] !== 'done') {
       return
     }
+    this.closeStageShell(task.id, steps, stage)
+  }
+
+  // A send back is the end of the stages it leaves, as a pass is. One that goes back inside the
+  // same step leaves none: the stages there run on or run again.
+  private endLeftShells(task: Task): void {
+    const left = this.leaving.get(task.id)
+    if (left === undefined || task.stage === left.id) {
+      return
+    }
+    const steps = this.tasks.stepsOf(task)
+    for (const stage of stagesOf(left)) {
+      this.closeStageShell(task.id, steps, stage)
+    }
+  }
+
+  // Ends the agent or command of a stage set to end its shell, and closes the shell. Shell 1 keeps
+  // the task's agent and is never closed.
+  private closeStageShell(taskId: string, steps: readonly Step[], stage: Stage): void {
+    if (stage.endShell !== true || !canEndShell(stage) || endsShell1(steps, stage)) {
+      return
+    }
     const command = stage.kind === 'testing' && stage.command !== undefined
-    const terminal = command ? this.commandTerminals.get(task.id) : terminalOfStage(steps, stageId)
+    const terminal = command ? this.commandTerminals.get(taskId) : terminalOfStage(steps, stage.id)
     if (terminal === undefined) {
       return
     }
     if (command) {
-      this.commandTerminals.delete(task.id)
+      this.commandTerminals.delete(taskId)
     }
-    this.terminals.closeOne(task.id, terminal)
+    this.terminals.closeOne(taskId, terminal)
     // The killed agent never ends its turn, so its report would swallow the first turn end of the
     // next agent in this shell.
-    const key = `${task.id}/${terminal}`
+    const key = `${taskId}/${terminal}`
     this.reported.delete(key)
     this.launched.delete(key)
     this.outputTails.delete(key)
@@ -1300,7 +1324,8 @@ export class StageRunner {
   }
 
   // The stage an action is about: the one named, the one of the terminal, or the only stage of
-  // the step that can take the action.
+  // the step that can take the action. A terminal of a stage that does not run now is refused: a
+  // reviewer that sent the task back must not report Implement done.
   private resolveStage(
     task: Task,
     step: Step,
@@ -1315,14 +1340,25 @@ export class StageRunner {
       }
       return named
     }
-    if (isStage(step)) {
-      return step
-    }
     if (input.terminal !== undefined) {
-      const fromTerminal = stageOfTerminal(this.tasks.stepsOf(task), step, input.terminal)
+      const steps = this.tasks.stepsOf(task)
+      const fromTerminal = stageOfTerminal(steps, step, input.terminal)
       if (fromTerminal !== undefined) {
         return fromTerminal
       }
+      const others = steps
+        .flatMap(stagesOf)
+        .filter((stage) => terminalOfStage(steps, stage.id) === input.terminal)
+      if (others.length > 0) {
+        const what =
+          others.length === 1
+            ? `The ${others[0]?.id} stage of Shell ${input.terminal} does not run now`
+            : `No stage of Shell ${input.terminal} runs now`
+        throw new StageActionError(`${what}: ${task.id} is at ${task.stage}. Stop here.`)
+      }
+    }
+    if (isStage(step)) {
+      return step
     }
     const fitting = stages.filter((stage) => states.includes(laneState(task, step, stage.id)))
     if (fitting.length === 1 && fitting[0] !== undefined) {
@@ -1355,18 +1391,23 @@ export class StageRunner {
       // A person can type the command in a task shell too; only an agent there counts.
       const byAgent = input.terminal !== undefined && this.agentRuns(taskId, input.terminal)
       const from = byAgent ? this.agentSendsBack(task, step, input.terminal ?? '') : undefined
-      await this.apply(
-        taskId,
-        'stage.reopened',
-        {
-          ...(input.to === undefined ? {} : { to: input.to }),
-          ...(input.reason === undefined ? {} : { reason: input.reason }),
-          ...(from === undefined ? {} : { from, byAgent: true }),
-        },
-        source,
-      )
-      if (from !== undefined) {
-        // Its turn ends after this, as after `natamux done`.
+      this.leaving.set(taskId, step)
+      try {
+        await this.apply(
+          taskId,
+          'stage.reopened',
+          {
+            ...(input.to === undefined ? {} : { to: input.to }),
+            ...(input.reason === undefined ? {} : { reason: input.reason }),
+            ...(from === undefined ? {} : { from, byAgent: true }),
+          },
+          source,
+        )
+      } finally {
+        this.leaving.delete(taskId)
+      }
+      // Its turn ends after this, as after `natamux done`. A closed shell has no turn left.
+      if (from !== undefined && this.terminals.list(taskId).includes(input.terminal ?? '')) {
         this.reported.set(`${taskId}/${input.terminal}`, from)
       }
       return this.afterStart(taskId)
@@ -1697,11 +1738,16 @@ export class StageRunner {
       ...(own ? logs.map((log) => plainText(log).trimEnd()) : []),
       'Read the failed log with `gh run view <run id> --log-failed`; the id ends the run url.',
     ].join('\n')
-    this.tasks.applyEvent(taskId, {
-      source: 'system',
-      type: 'stage.reopened',
-      payload: { to: to.id, reason, from: stageId, byAgent: true, ci: true },
-    })
+    this.leaving.set(taskId, this.stepOf(task))
+    try {
+      this.tasks.applyEvent(taskId, {
+        source: 'system',
+        type: 'stage.reopened',
+        payload: { to: to.id, reason, from: stageId, byAgent: true, ci: true },
+      })
+    } finally {
+      this.leaving.delete(taskId)
+    }
     return true
   }
 
