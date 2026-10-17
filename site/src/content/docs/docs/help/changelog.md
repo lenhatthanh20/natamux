@@ -12,7 +12,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - `natamux done` from a stage that does not run now is refused, so a Review agent that sent a task back no longer passes Implement. A send back also closes the shell of a stage with **End the agent and close its shell when the stage is done**. See [What `natamux done` does](/docs/concepts/stages/#what-natamux-done-does).
 - Wait states survive a daemon restart, two done reports run the checks once, and removing a workspace keeps the latest stage files.
 - Copilot asks for input only when it shows a prompt. A Cursor or Copilot hook file with a hook of your own is kept. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
-- A hidden cursor stays hidden when a terminal opens again, and quitting waits for every shell to end.
+- The task notice is in the workspace header, so the shells no longer blink when the task changes state. A hidden cursor stays hidden when a terminal opens again, and quitting waits for every shell to end.
 - A hand edit of a task file is no longer lost to a change right after it, and PR and issue links take only `http` and `https` URLs.
 - Time limits on `gh` and update requests, one pull request lookup per project, and a stricter token check.
 - A new homepage and a regrouped guide.
