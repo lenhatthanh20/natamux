@@ -30,6 +30,8 @@ Run in a codespace: `pnpm --filter @natamux/daemon dev`. Build `@natamux/core` f
 
 Send `Authorization: Bearer <token>`. `/health` needs no token.
 
+A change to a task answers 409 `conflict` when its task file was edited by hand and the daemon has not read the edit yet. The daemon reads the edit then; send the change again.
+
 | Method and path | Meaning |
 |---|---|
 | `GET /health` | Liveness |
@@ -78,7 +80,7 @@ Send `Authorization: Bearer <token>`. `/health` needs no token.
 | `GET /diffstats` | The size of the work of every task with a workspace: `{ stats: { 'T-0001': { files, added, removed } } }`, counted from where the branch left the branch of the main checkout, uncommitted changes included. Files git does not track yet are not counted. A workspace is read again only after it may have changed (a hook, its terminals going quiet, a change through the daemon) or after 5 minutes |
 | `GET /github/issues` | Open issues of the repository, from `gh issue list` (at most 100): `{ issues: [{ number, title, body, url, labels, taskId }] }`. `taskId` names the task made from the issue, or is null |
 | `POST /github/issues/import` | Body `{ numbers }`. Makes a draft task from each open issue that was not imported yet: its title, its body plus `Imported from <url>` as notes, its labels. Returns `{ tasks }` |
-| `POST /hooks/:agent` | Where an agent posts its hook, for example `/hooks/claude-code`. The adapter of that agent turns the hook into task events. Always answers `200 {}` (even for a hook that matches no task or changes nothing), `404` for an agent without an adapter, `400` for input that is not a hook of that agent. The task comes from the `X-Natamux-Task` header or from the workspace that holds the hook's `cwd`. See `docs/agent-adapters.md` and `docs/claude-code-adapter.md` |
+| `POST /hooks/:agent` | Where an agent posts its hook, for example `/hooks/claude-code`. The adapter of that agent turns the hook into task events. Always answers `200 {}` (even for a hook that matches no task or changes nothing), `404` for an agent without an adapter, `400` for input that is not a hook of that agent, `409` when the task file was just edited by hand (see above). The task comes from the `X-Natamux-Task` header or from the workspace that holds the hook's `cwd`. See `docs/agent-adapters.md` and `docs/claude-code-adapter.md` |
 | `GET /events` (WebSocket) | Live task changes. Also sends `{ "kind": "repos.changed" }` when a repository is added or removed, so dashboards read `GET /repos` again; `activity.changed` `{ taskId, activity }` (the task's whole activity, as in `GET /activity`); `shells.changed` `{ taskId }` when a terminal starts or ends, its foreground program changes, or a hook changes the state of an agent on no stage; `workspace.dirty` `{ taskId }` when workspace files may have changed (750 ms after a change; after 3 in a row, at most once per task every 10 s while changes go on); and `resync` to a socket that fell more than 1 MiB behind, once it caught up. Use `?token=<token>` because browsers cannot set headers |
 
 ## Deep links
