@@ -96,6 +96,9 @@ export const taskSchema = z.object({
   // Later stages the user chose to skip: each is skipped when the task reaches it. Left out when
   // none.
   skipStages: z.array(stageIdSchema).optional().catch(undefined),
+  // Made with no agent: its stages wait for a person to start one. Kept in the file, so a restart
+  // does not start an agent in the person's shell. Left out when not.
+  withoutAgent: z.literal(true).optional().catch(undefined),
   context: taskContextSchema.nullable().default(null),
   issue: issueLinkSchema.nullable().default(null),
   createdAt: z.iso.datetime(),

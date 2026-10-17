@@ -952,6 +952,14 @@ export class TaskService {
     return updated
   }
 
+  // Marks a task as left to a person, or not. Only the stage runner reads it, so no event.
+  setWithoutAgent(taskId: string, on: boolean): void {
+    const task = this.getTask(taskId)
+    if ((task.withoutAgent === true) !== on) {
+      this.store({ ...task, withoutAgent: on ? true : undefined }, [])
+    }
+  }
+
   // Writes down an event that changes no state, such as fetched context.
   recordEvent(
     taskId: string,

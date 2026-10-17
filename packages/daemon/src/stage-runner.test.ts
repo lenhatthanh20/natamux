@@ -3980,6 +3980,111 @@ describe('a resume after a restart', () => {
         expect(terminals.list(task.id)).toEqual(['2'])
       })
     })
+
+    describe('a stage that waits', () => {
+      // The daemon stops, which ends every shell, and starts again.
+      async function restart(): Promise<void> {
+        runner.stop()
+        for (const task of tasks.listTasks()) {
+          terminals.close(task.id)
+        }
+        runner = makeRunner(agents)
+        runner.start()
+        await resumeAll()
+      }
+
+      it('starts once the tasks it depends on are done', async () => {
+        const first = await created({ title: 'Schema' })
+        const task = await withWorkspace(
+          (await created({ title: 'Export tasks', agent: 'claude-code', dependsOn: [first.id] }))
+            .id,
+        )
+        expect(task).toMatchObject({ stage: 'spec', state: 'ready' })
+        await restart()
+
+        tasks.applyEvent(first.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'done' },
+        })
+        await runner.settle()
+
+        expect(tasks.getTask(task.id).state).toBe('running')
+        expect(launchScript(task.id)).toContain('Task: Export tasks')
+      })
+
+      it('starts once the task gets its workspace', async () => {
+        const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+        expect(task).toMatchObject({ stage: 'spec', state: 'ready' })
+        await restart()
+
+        await withWorkspace(task.id)
+
+        expect(tasks.getTask(task.id).state).toBe('running')
+        expect(launchScript(task.id)).toContain('Task: Export tasks')
+      })
+
+      it('starts no agent in a task left to a person', async () => {
+        const task = await created({ title: 'By hand' })
+        runner.leaveToPerson(task.id)
+        await withWorkspace(task.id)
+        await restart()
+
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'ready', stage: 'spec' },
+        })
+        await runner.settle()
+
+        expect(tasks.getTask(task.id).state).toBe('ready')
+        expect(terminals.list(task.id)).toEqual([])
+      })
+
+      it("starts no stage's own agent in a task left to a person", async () => {
+        withOwnAgent()
+        const task = await created({ title: 'By hand' })
+        runner.leaveToPerson(task.id)
+        await withWorkspace(task.id)
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'ready', stage: 'build' },
+        })
+        await runner.settle()
+        tasks.applyEvent(task.id, {
+          source: 'human',
+          type: 'state.overridden',
+          payload: { to: 'running' },
+        })
+        await runner.settle()
+        expect(tasks.getTask(task.id).lanes).toEqual({
+          implement: 'running',
+          'test-spec': 'running',
+        })
+
+        await restart()
+
+        expect(terminals.list(task.id)).toEqual([])
+      })
+
+      it.each([
+        ['Start', (id: string) => runner.act(id, 'start')],
+        ['Start agent', (id: string) => runner.startByHand(id, 'claude-code')],
+      ])('is no longer left to a person after %s', async (_name, start) => {
+        const task = await created({ title: 'By hand', agent: 'claude-code' })
+        runner.leaveToPerson(task.id)
+        expect(tasks.getTask(task.id).withoutAgent).toBe(true)
+        await withWorkspace(task.id)
+        expect(terminals.list(task.id)).toEqual([])
+
+        await start(task.id)
+        await runner.settle()
+
+        expect(tasks.getTask(task.id).withoutAgent).toBeUndefined()
+        expect(tasks.getTask(task.id).state).toBe('running')
+      })
+    })
   })
 })
 

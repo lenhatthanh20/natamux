@@ -61,6 +61,14 @@ describe('taskSchema', () => {
     expect(taskSchema.parse({ ...minimalTask, skipStages: 'testing' }).skipStages).toBeUndefined()
   })
 
+  it('reads whether the task is left to a person, and a bad value as not', () => {
+    expect(taskSchema.parse({ ...minimalTask, withoutAgent: true }).withoutAgent).toBe(true)
+    expect(taskSchema.parse(minimalTask).withoutAgent).toBeUndefined()
+    for (const withoutAgent of [false, 'x', 1]) {
+      expect(taskSchema.parse({ ...minimalTask, withoutAgent }).withoutAgent).toBeUndefined()
+    }
+  })
+
   it('reads the path taken at each branch, and the paths of a branch in its steps', () => {
     const stages = [
       'plan',

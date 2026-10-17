@@ -308,8 +308,6 @@ export class StageRunner {
   private readonly outputTails = new Map<string, string>()
   // The agent a person picked, while the stage it starts is starting.
   private readonly chosenAgents = new Map<string, string>()
-  // Tasks made for a plain shell. Their agent stages wait for a person to start an agent.
-  private readonly withoutAgent = new Set<string>()
   // The terminal where each task runs its stage command.
   private readonly commandTerminals = new Map<string, string>()
   // The stages each task is starting now, so an action can answer with the task after them.
@@ -530,7 +528,6 @@ export class StageRunner {
     this.commandTerminals.delete(taskId)
     this.waitingForWorkspace.delete(taskId)
     this.waitingForTasks.delete(taskId)
-    this.withoutAgent.delete(taskId)
     this.openShells?.forget(taskId)
   }
 
@@ -606,7 +603,7 @@ export class StageRunner {
   // A task made with no agent: its stages that need one stay ready, and no agent starts in its
   // shell until a person starts one.
   leaveToPerson(taskId: string): void {
-    this.withoutAgent.add(taskId)
+    this.tasks.setWithoutAgent(taskId, true)
   }
 
   // Starts the stages that waited for other tasks, once those are done.
@@ -759,7 +756,7 @@ export class StageRunner {
       this.waitingForTasks.add(task.id)
       return
     }
-    if (this.withoutAgent.has(task.id) && !this.chosenAgents.has(task.id)) {
+    if (task.withoutAgent === true && !this.chosenAgents.has(task.id)) {
       return
     }
     await excludeStageDir(task.workspace).catch(() => undefined)
@@ -819,7 +816,8 @@ export class StageRunner {
   // Agents end with the daemon. At its start, each stage an agent worked on gets its agent back,
   // and the task keeps its state. A stage in review gets it too, so you can ask it for changes.
   resumeAgents(): void {
-    for (const task of this.tasks.listTasks()) {
+    const all = this.tasks.listTasks()
+    for (const task of all) {
       if (task.state === 'done' || task.state === 'cancelled') {
         continue
       }
@@ -827,6 +825,16 @@ export class StageRunner {
         const step = this.stepOf(task)
         for (const stage of stagesOf(step)) {
           const state = laneState(task, step, stage.id)
+          // A stage that waited for its workspace or for other tasks waits again: the restart
+          // emptied those lists. Checked in the order startAgent and startCommand check.
+          if (state === 'ready' && (stage.kind === 'agent' || stage.kind === 'testing')) {
+            if (task.workspace === null) {
+              this.waitingForWorkspace.add(task.id)
+            } else if (runByAgent(stage) && waitingOn(task, all).length > 0) {
+              this.waitingForTasks.add(task.id)
+            }
+            continue
+          }
           // The restart killed the shell of a test command, so its result never comes. It runs
           // again. A stage that waits for CI is resumeCiChecks' work.
           if (
@@ -846,8 +854,10 @@ export class StageRunner {
             continue
           }
           const working = RESUMED_STATES.includes(state)
-          // No agent Natamux started for it: a person runs their own in the shell.
-          const agent = stageAgent(step, stage).agent ?? task.agent
+          // No agent Natamux started for it, or a task left to a person: a person runs their own
+          // in the shell.
+          const agent =
+            task.withoutAgent === true ? null : (stageAgent(step, stage).agent ?? task.agent)
           if (working && agent !== null && isLaunchable(agent)) {
             // In a group, the newest session of the folder may be the other stage's.
             this.relaunch(task, step, stage, !isGroup(step), true)
@@ -999,7 +1009,7 @@ export class StageRunner {
     prompt?: string,
     makeWorkspace?: () => Promise<unknown>,
   ): Promise<Task> {
-    this.withoutAgent.delete(taskId)
+    this.tasks.setWithoutAgent(taskId, false)
     if (makeWorkspace !== undefined && this.tasks.getTask(taskId).workspace === null) {
       // The new workspace starts the stage that waits for it. It must start the agent picked
       // here, not the task's own.
@@ -1301,7 +1311,7 @@ export class StageRunner {
     const step = this.stepOf(task)
     const source = input.byAgent === true ? 'agent' : 'human'
     if (action === 'start') {
-      this.withoutAgent.delete(taskId)
+      this.tasks.setWithoutAgent(taskId, false)
       await this.startLanes(taskId, ['draft', 'ready'])
       return this.tasks.getTask(taskId)
     }
