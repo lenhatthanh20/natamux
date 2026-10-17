@@ -31,26 +31,6 @@ describe('ReviewBanner', () => {
     expect(onSendBack).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps its text and buttons in the inline form of the header', async () => {
-    const onApprove = vi.fn()
-    render(
-      <ReviewBanner
-        task={{ stage: 'plan', lanes: {} }}
-        inline
-        approving={null}
-        onApprove={onApprove}
-        onSendBack={vi.fn()}
-      />,
-    )
-
-    const banner = screen.getByRole('status')
-    expect(banner.getAttribute('data-state')).toBe('review')
-    expect(banner.querySelector('[data-tip-overflow]')?.textContent).toBe('Ready for review: Plan')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Approve' }))
-    expect(onApprove).toHaveBeenCalledWith('plan')
-    expect(screen.getByRole('button', { name: 'Send back' })).toBeTruthy()
-  })
-
   it('approves the one stage of a group that is in review', async () => {
     const onApprove = vi.fn()
     render(

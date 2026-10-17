@@ -41,7 +41,9 @@ test('starts the agent again when you resume a stage that has none', async ({ pa
   const rows = page.getByRole('region', { name: 'Terminal screen' }).first().locator('.xterm-rows')
   await expect(rows).toContainText('$')
 
-  await page.getByRole('button', { name: 'Resume', exact: true }).click()
+  // In the current stage card of the details beside the workspace.
+  const details = page.getByRole('complementary', { name: /^Details of / })
+  await details.getByRole('button', { name: 'Resume', exact: true }).click()
 
   // The fake agent gets the stage prompt and works on it in the same terminal.
   await expect(rows).toContainText('natamux done', { timeout: 30_000 })

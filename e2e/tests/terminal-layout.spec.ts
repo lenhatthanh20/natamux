@@ -4,7 +4,8 @@ import { makeShellTask, pane, removeTasks, rows, runIn } from './terminal-helper
 
 // T-0089. A pane that changes size (New shell, Close shell) hides its screen until the shell drew
 // for the new size, then fades it in. No frame shows the screen at a size between the old and the
-// final one. T-0113: a state change does not change the size at all, so nothing hides.
+// final one. T-0113: a state change does not change the size at all, so nothing hides. T-0115:
+// what the task waits for is in the stage card of the details, a column of its own.
 
 const made: string[] = []
 
@@ -152,13 +153,17 @@ test('keeps Shell 1 as it is while the task enters and leaves review and needs-i
 }) => {
   const sizes = watchSizes(page)
   const { task } = await openShells(page, request, 'notice')
-  const view = page.getByRole('main')
-  const review = view.getByRole('status').filter({ hasText: /^Ready for review/ })
+  const card = page
+    .getByRole('complementary', { name: /^Details of / })
+    .locator('article[data-current]')
+  const review = card.getByRole('button', { name: 'Approve', exact: true })
   await expect(review).toBeVisible()
+  const view = page.getByRole('region', { name: /^Changes of / })
+  await expect(view.getByText(/^Ready for review/)).toHaveCount(0)
 
   for (const [to, notice] of [
     ['running', review],
-    ['needs-input', view.getByRole('status').filter({ hasText: /^The agent/ })],
+    ['needs-input', card.getByText(/^The agent/)],
     ['review', review],
   ] as const) {
     const before = sizes.length
@@ -171,5 +176,47 @@ test('keeps Shell 1 as it is while the task enters and leaves review and needs-i
     }
     expectStill(await shell1Frames(page))
     expect(sizes.slice(before)).toEqual([])
+  }
+})
+
+// T-0113 drew the review notice's buttons over the git buttons in a header of 900 px or more.
+test('keeps the header controls apart beside the details while the task is in review', async ({
+  page,
+  request,
+}) => {
+  const task = await makeShellTask(
+    request,
+    `Terminal e2e header with a long title that does not fit in the row ${Date.now()}`,
+  )
+  made.push(task.id)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await signIn(page)
+  await openTask(page, task.title)
+  const header = page
+    .getByRole('region', { name: /^Changes of / })
+    .locator('header')
+    .filter({ has: page.getByRole('heading', { name: task.title }) })
+  // 1600 leaves the header 900 px or more, so the branch and every git button are in the row.
+  for (const width of [1280, 1600]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(header.locator('.state-chip')).toHaveText('In review')
+    await expect(page.getByRole('complementary', { name: /^Details of / })).toBeVisible()
+    // The branch shows from a header of 900 px, so its state says the row has its new width.
+    await expect(header.getByRole('button', { name: /^Branch / })).toHaveCount(
+      width === 1600 ? 1 : 0,
+    )
+    await expect(header.getByRole('button', { name: 'Create PR' })).toBeVisible()
+    const boxes = (
+      await Promise.all(
+        (await header.locator(':scope > *').all()).map((part) => part.boundingBox()),
+      )
+    ).filter((box) => box !== null && box.width > 0)
+    for (const [index, a] of boxes.entries()) {
+      for (const b of boxes.slice(index + 1)) {
+        if (a !== null && b !== null) {
+          expect(a.x + a.width <= b.x + 0.5 || b.x + b.width <= a.x + 0.5).toBe(true)
+        }
+      }
+    }
   }
 })

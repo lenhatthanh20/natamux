@@ -1,7 +1,6 @@
 import type { PushStatus, Task } from '@natamux/core'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceHeader } from './WorkspaceHeader'
 
@@ -49,13 +48,13 @@ function header({
   ahead = 0,
   push = tracked(0),
   uncommitted = 0,
-  notice,
+  onShowProgress,
 }: {
   task?: Task
   ahead?: number
   push?: PushStatus | null
   uncommitted?: number
-  notice?: ReactNode
+  onShowProgress?: () => void
 }) {
   const handlers = { onPush: vi.fn(), onPullRequest: vi.fn(), onCommit: vi.fn() }
   render(
@@ -66,7 +65,7 @@ function header({
       push={push}
       uncommitted={uncommitted}
       pending={null}
-      notice={notice}
+      onShowProgress={onShowProgress}
       {...handlers}
     />,
   )
@@ -101,8 +100,6 @@ function stubHeaderWidth(width: number) {
   )
   return vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(width)
 }
-
-const NOTICE = <div role="status">The agent asks: Which test runner?</div>
 
 describe('WorkspaceHeader', () => {
   it('puts Commit in place of Push while files are not committed and none unpushed', async () => {
@@ -218,13 +215,31 @@ describe('WorkspaceHeader', () => {
     expect(pullRequest().dataset.variant).toBe('primary')
   })
 
-  it('shows the state chip, but not while the agent waits: the banner says it', () => {
+  it('shows the state chip in every state, also while the agent waits', () => {
     header({})
     expect(document.querySelector('.state-chip')?.textContent).toBe('Running')
     cleanup()
 
     header({ task: { ...TASK, state: 'needs-input' } })
-    expect(document.querySelector('.state-chip')).toBeNull()
+    expect(document.querySelector('.state-chip')?.textContent).toBe('Needs input')
+  })
+
+  it('makes the chip a way to the progress only while the task needs the user', async () => {
+    const user = userEvent.setup()
+    for (const state of ['needs-input', 'failed', 'review'] as const) {
+      const onShowProgress = vi.fn()
+      header({ task: { ...TASK, state }, onShowProgress })
+      const chip = screen.getByRole('button', { name: /show in progress/i })
+      expect(chip.getAttribute('data-tip')).toBe('Show in progress')
+      expect(chip.querySelector('.state-chip')).not.toBeNull()
+      await user.click(chip)
+      expect(onShowProgress).toHaveBeenCalledTimes(1)
+      cleanup()
+    }
+
+    header({ onShowProgress: vi.fn() })
+    expect(screen.queryByRole('button', { name: /show in progress/i })).toBeNull()
+    expect(document.querySelector('.state-chip')?.textContent).toBe('Running')
   })
 
   it('leaves the git steps of a finished task to its banner, but keeps its pull request', () => {
@@ -250,38 +265,15 @@ describe('WorkspaceHeader', () => {
     expect(screen.getByRole('menuitem', { name: 'Create PR' })).toBeTruthy()
   })
 
-  it('puts the notice inside the header row, so a state change never adds a row', () => {
-    header({ task: { ...TASK, state: 'needs-input' }, notice: NOTICE })
-
-    const row = screen.getByRole('banner')
-    expect(row.contains(screen.getByRole('status'))).toBe(true)
-    expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
-  })
-
-  it('moves the git steps into the menu while a narrow header shows a notice', async () => {
+  // The details hold what the task waits for, so the row has room for the git steps at any width.
+  it('keeps the git steps in the row of a narrow header while the task waits', () => {
     const width = stubHeaderWidth(800)
     try {
-      header({ ahead: 1, push: tracked(1) })
+      header({ task: { ...TASK, state: 'needs-input' }, ahead: 1, push: tracked(1) })
       expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /^Push/ })).toBeTruthy()
       expect(screen.queryByRole('button', { name: 'Git actions' })).toBeNull()
-      cleanup()
-
-      header({ ahead: 1, push: tracked(1), notice: NOTICE })
-      expect(screen.queryByRole('button', { name: 'Create PR' })).toBeNull()
-      expect(screen.queryByRole('button', { name: /^Push/ })).toBeNull()
-      await userEvent.setup().click(screen.getByRole('button', { name: 'Git actions' }))
-      expect(screen.getByRole('menuitem', { name: 'Create PR' })).toBeTruthy()
-    } finally {
-      width.mockRestore()
-    }
-  })
-
-  it('keeps the git steps in the row of a wide header with a notice', () => {
-    const width = stubHeaderWidth(1200)
-    try {
-      header({ ahead: 1, push: tracked(1), notice: NOTICE })
-      expect(screen.getByRole('button', { name: 'Create PR' })).toBeTruthy()
-      expect(screen.queryByRole('button', { name: 'Git actions' })).toBeNull()
+      expect(screen.queryByRole('status')).toBeNull()
     } finally {
       width.mockRestore()
     }

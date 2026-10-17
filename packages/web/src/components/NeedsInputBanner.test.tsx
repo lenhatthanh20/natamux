@@ -24,28 +24,6 @@ describe('NeedsInputBanner', () => {
     expect(screen.getByRole('button', { name: 'Answer in terminal' })).toBeTruthy()
   })
 
-  it('fits one line of the header in its inline form, the full text in a tooltip', () => {
-    const question = `Which test runner? ${'Some long detail. '.repeat(20)}`
-    render(
-      <NeedsInputBanner
-        reason={{ kind: 'asked', question }}
-        inline
-        resuming={false}
-        onAnswer={noop}
-        onResume={noop}
-      />,
-    )
-
-    const banner = screen.getByRole('status')
-    expect(banner.className).toContain('bg-signal-soft')
-    const text = banner.querySelector('[data-tip-overflow]')
-    expect(text?.textContent).toBe(`The agent asks: ${question}`)
-    expect(text?.className).toContain('truncate')
-    expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Answer in terminal' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Resume' })).toBeTruthy()
-  })
-
   it('shows a failure in the failed colors, with a busy Start agent while it starts', () => {
     render(
       <NeedsInputBanner

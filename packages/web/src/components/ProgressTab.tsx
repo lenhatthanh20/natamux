@@ -26,6 +26,7 @@ import type {
   StoredEvent,
 } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import { shortcutOf } from '../lib/commands'
 import { describeEvent } from '../lib/events'
 import {
   branchStatus,
@@ -42,6 +43,7 @@ import {
 } from '../lib/stage-view'
 import { contextText, STATE_LABEL } from '../lib/tasks'
 import { toast } from '../lib/toasts'
+import { bannerText, type WaitReason, waitReason } from '../lib/workspace'
 import { Age } from './Age'
 import { STATE_TONE } from './Banner'
 import { DetailSection } from './DetailSection'
@@ -64,9 +66,12 @@ type ProgressTabProps = {
   activity?: string
   // Starts an agent for the stage, for one that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
-  // The banner of the workspace beside the details offers Start agent for a failed task, so the
-  // stage card does not offer it a second time.
-  startInBanner?: boolean
+  // Resumes the agent of a task that waits, and whether that is on its way.
+  resume?: () => void
+  resuming?: boolean
+  // Shows the terminal of the open workspace, where the waiting agent asks. Only for the task of
+  // that workspace.
+  onAnswer?: () => void
   // Chooses whether a stage runs as a workflow the next time it starts.
   setWorkflow?: (stage: string, on: boolean) => Promise<Task>
   // Whether a stage waits for CI before it passes.
@@ -107,7 +112,9 @@ export function ProgressTab({
   onOpenFile,
   activity,
   startAgent,
-  startInBanner = false,
+  resume,
+  resuming = false,
+  onAnswer,
   setWorkflow,
   setCi,
   setSkip,
@@ -221,6 +228,7 @@ export function ProgressTab({
     setSendingBack(null)
     setSendBackAsked(false)
   }
+  const wait = waitReason(loadedEvents)
   const latest = loadedEvents
     // "Agent is working" lines only keep the clock fresh; they would fill the list.
     .filter((entry) => entry.accepted && entry.event.type !== 'agent.active')
@@ -246,7 +254,10 @@ export function ProgressTab({
         agent={task.agent}
         missingSkills={missing.get(stage.id)?.names ?? []}
         skillsAgent={missing.get(stage.id)?.agent ?? task.agent}
-        startInBanner={startInBanner}
+        wait={wait}
+        resume={resume}
+        resuming={resuming}
+        onAnswer={onAnswer}
         starting={starting.isPending}
         onStartAgent={startAgent === undefined ? undefined : (agent) => starting.mutate(agent)}
         ranWorkflow={workflowRuns.has(stage.id)}
@@ -690,7 +701,10 @@ function StageCard({
   agent,
   missingSkills: missingNames,
   skillsAgent,
-  startInBanner,
+  wait,
+  resume,
+  resuming,
+  onAnswer,
   starting,
   onStartAgent,
   ranWorkflow,
@@ -715,7 +729,11 @@ function StageCard({
   missingSkills: readonly string[]
   // The agent that did not get them.
   skillsAgent: string | null
-  startInBanner: boolean
+  // Why the task waits, for a stage in needs-input or failed.
+  wait: WaitReason
+  resume?: () => void
+  resuming: boolean
+  onAnswer?: () => void
   starting: boolean
   onStartAgent?: (agent: AgentId) => void
   stage: Stage
@@ -748,6 +766,15 @@ function StageCard({
   const sentBack = progress.rounds - 1
   // The failed runs of a CI send back. The log after them is for the agent.
   const ciRuns = progress.sentBackByCi ? progress.sentBackFor?.split('\n\n')[0] : undefined
+  // The reasons box already says why a check or the agent failed; else this says why it waits.
+  const waitText =
+    current && (state === 'needs-input' || state === 'failed') && progress.reasons.length === 0
+      ? bannerText(
+          state === 'failed' && wait.kind !== 'failed' && wait.kind !== 'check-failed'
+            ? { kind: 'failed', reason: null }
+            : wait,
+        )
+      : null
 
   if (progress.status === 'not-taken') {
     return (
@@ -963,6 +990,15 @@ function StageCard({
             </ul>
           )}
 
+          {waitText !== null && (
+            <p
+              data-state={state === 'failed' ? 'failed' : undefined}
+              className={`m-0 mt-2.5 rounded-lg border px-3 py-2 text-sm whitespace-pre-wrap break-words text-ink ${state === 'failed' ? STATE_TONE : 'border-signal-line bg-signal-soft'}`}
+            >
+              {waitText}
+            </p>
+          )}
+
           {current && missingNames.length > 0 && (
             <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 rounded-lg border border-signal-line bg-signal-soft px-3 py-2 text-sm">
               {missingNames.map((name) => (
@@ -1004,12 +1040,32 @@ function StageCard({
                   variant="primary"
                   className="w-full"
                   disabled={busy}
+                  // The key approves a review; needs-input has no key.
+                  data-tip={state === 'review' ? 'Approve' : undefined}
+                  data-tip-kbd={
+                    state === 'review' ? shortcutOf('task.review.approved') : undefined
+                  }
                   onClick={() => onAction('approve')}
                 >
                   {state === 'needs-input' ? 'Approve anyway' : 'Approve'}
                 </Button>
               )}
               <div className="flex flex-wrap items-center gap-1.5">
+                {state === 'needs-input' && wait.kind === 'asked' && onAnswer !== undefined && (
+                  <Button size="xs" variant="secondary" onClick={onAnswer}>
+                    Answer in terminal
+                  </Button>
+                )}
+                {state === 'needs-input' && resume !== undefined && (
+                  <Button size="xs" variant="ghost" busy={resuming} onClick={resume}>
+                    Resume
+                  </Button>
+                )}
+                {(state === 'failed' || state === 'needs-input') &&
+                  STARTS_ITSELF.has(stage.kind) &&
+                  onStartAgent !== undefined && (
+                    <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />
+                  )}
                 {(state === 'running' || state === 'needs-input') && (
                   <Button
                     size="xs"
@@ -1033,11 +1089,6 @@ function StageCard({
                     Start
                   </Button>
                 )}
-                {((state === 'failed' && !startInBanner) || state === 'needs-input') &&
-                  STARTS_ITSELF.has(stage.kind) &&
-                  onStartAgent !== undefined && (
-                    <StartAgentControl current={agent} busy={starting} onStart={onStartAgent} />
-                  )}
                 <Button size="xs" variant="ghost" disabled={busy} onClick={() => onAction('skip')}>
                   Skip
                 </Button>

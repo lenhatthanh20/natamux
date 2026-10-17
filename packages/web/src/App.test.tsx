@@ -821,20 +821,25 @@ describe('App', () => {
     await user.click(within(details).getByRole('button', { name: 'View changes' }))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
-    expect(await within(view).findByText('The agent asks: Which test runner?')).toBeTruthy()
-    // Said on the task's card in the tree and in the workspace banner; the banner stands for the
-    // state chip.
+    // In the current stage card of the details beside the workspace, not over the shells.
+    const beside = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    const question = await within(beside).findByText('The agent asks: Which test runner?')
+    const card = question.closest('article') as HTMLElement
+    expect(within(view).queryByText('The agent asks: Which test runner?')).toBeNull()
+    // Said on the task's card in the tree and in the stage card.
     await waitFor(() =>
       expect(screen.getAllByText('The agent asks: Which test runner?')).toHaveLength(2),
     )
-    expect(view.querySelector('.state-chip')).toBeNull()
+    expect(within(view).getByRole('button', { name: /show in progress/i })).toBeTruthy()
 
-    await user.click(within(view).getByRole('button', { name: 'Answer in terminal' }))
-    expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(
-      'true',
+    await user.click(within(card).getByRole('button', { name: 'Answer in terminal' }))
+    await waitFor(() =>
+      expect(
+        within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected'),
+      ).toBe('true'),
     )
 
-    await user.click(within(view).getByRole('button', { name: 'Resume' }))
+    await user.click(within(card).getByRole('button', { name: 'Resume' }))
     await waitFor(() =>
       expect(
         calls.some((call) => call.method === 'POST' && call.path === '/api/tasks/T-0001/events'),
@@ -861,12 +866,13 @@ describe('App', () => {
     await screen.findByRole('table')
     openWorkspace('T-0001')
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     const tokenOfShell = async () => {
       const pane = await within(view).findByRole('region', { name: 'Shell 1' })
       return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
     }
 
-    await user.click(await within(view).findByRole('button', { name: 'Answer in terminal' }))
+    await user.click(await within(details).findByRole('button', { name: 'Answer in terminal' }))
     await waitFor(async () => expect(await tokenOfShell()).not.toBe(''))
 
     await user.click(within(view).getByRole('tab', { name: 'Changes' }))

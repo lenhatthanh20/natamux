@@ -17,12 +17,10 @@ type NeedsInputBannerProps = {
   // For a failed task: start an agent again, in place of Resume.
   onStartAgent?: (agent: AgentId) => void
   agent?: string | null
-  // One line in the workspace header, see Banner.
-  inline?: boolean
 }
 
-// In the workspace header while the agent waits (under it on a phone): the question as text, and
-// what to do.
+// Under the workspace header on a phone while the agent waits: the question as text, and what to
+// do. Wider screens show it in the current stage card of the details.
 export function NeedsInputBanner({
   reason,
   failed = false,
@@ -32,11 +30,9 @@ export function NeedsInputBanner({
   onResume,
   onStartAgent,
   agent = null,
-  inline = false,
 }: NeedsInputBannerProps) {
   return (
     <Banner
-      inline={inline}
       tone={failed ? 'failed' : 'signal'}
       icon={failed ? CircleX : CircleQuestionMark}
       actions={
