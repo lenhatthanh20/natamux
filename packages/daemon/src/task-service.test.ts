@@ -1186,9 +1186,7 @@ describe('outside edits without a watch event', () => {
     expect(polled.getTask(task.id).title).toBe('Edited by hand')
     expect(messages).toEqual([{ kind: 'task.changed', task: polled.getTask(task.id) }])
     expect(polled.listEvents(task.id).map(({ event }) => event.type)).toEqual(['task.created'])
-    expect(readEventLog(dataDir, task.id)?.map(({ event }) => event.type)).toEqual([
-      'task.created',
-    ])
+    expect(readEventLog(dataDir, task.id)?.map(({ event }) => event.type)).toEqual(['task.created'])
 
     // Sent again, the change keeps the edit.
     polled.updateTask(task.id, { priority: 'high' })
