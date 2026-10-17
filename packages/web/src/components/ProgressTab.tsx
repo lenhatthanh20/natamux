@@ -1042,9 +1042,7 @@ function StageCard({
                   disabled={busy}
                   // The key approves a review; needs-input has no key.
                   data-tip={state === 'review' ? 'Approve' : undefined}
-                  data-tip-kbd={
-                    state === 'review' ? shortcutOf('task.review.approved') : undefined
-                  }
+                  data-tip-kbd={state === 'review' ? shortcutOf('task.review.approved') : undefined}
                   onClick={() => onAction('approve')}
                 >
                   {state === 'needs-input' ? 'Approve anyway' : 'Approve'}

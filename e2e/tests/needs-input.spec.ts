@@ -103,9 +103,14 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
     })
   }
 
-  // The reason and Resume stay beside every tab.
+  // The reason and Resume stay beside every tab. The Changes tab closes the details to give the
+  // diff room (main under 900 px); the header chip opens them again on the current stage.
   for (const name of ['Changes', 'History', 'Docs', 'Terminal']) {
     await tabs.getByRole('tab', { name }).click()
+    if (name === 'Changes') {
+      await expect(details).toBeHidden()
+      await view.getByRole('button', { name: /show in progress/i }).click()
+    }
     await expect(details.getByText(STOPPED)).toBeVisible()
     await expect(details.getByRole('button', { name: 'Resume' })).toBeVisible()
   }
