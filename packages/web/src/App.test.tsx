@@ -2339,9 +2339,9 @@ describe('App', () => {
     await screen.findByRole('table')
 
     await user.click(screen.getByRole('button', { name: 'Account' }))
-    const items = [
-      ...screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'),
-    ].map((item) => item.textContent)
+    const items = [...screen.getByRole('menu').querySelectorAll('[role^="menuitem"]')].map(
+      (item) => item.textContent,
+    )
     const at = items.findIndex((text) => text?.includes('Report an issue'))
     expect(items[at - 1]).toContain('Keyboard shortcuts')
     expect(items[at + 1]).toContain('Sign out')
