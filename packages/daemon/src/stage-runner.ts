@@ -370,7 +370,9 @@ export class StageRunner {
   }
 
   private startInBackground(taskId: string, states: readonly TaskState[], cause?: TaskEvent) {
-    const work = this.startLanes(taskId, states, cause).catch(() => undefined)
+    const work = this.startLanes(taskId, states, cause).catch((error: unknown) => {
+      console.error(`Could not start the stages of ${taskId}: ${String(error)}`)
+    })
     this.startWork.set(taskId, work)
     this.background(
       work.finally(() => {
@@ -424,21 +426,42 @@ export class StageRunner {
       return
     }
     const { task, event } = message
+    // Each piece of side work below has its own try, so a failed one does not stop the next stage.
     if (['stage.approved', 'stage.passed', 'stage.checked'].includes(event.type)) {
-      archiveStageFiles(this.dataDir, task)
+      try {
+        archiveStageFiles(this.dataDir, task)
+      } catch (error) {
+        console.error(`Could not archive the stage files of ${task.id}: ${String(error)}`)
+      }
     }
     const finished = task.state === 'done' || task.state === 'cancelled'
     const usedCi = (task.ciStages ?? []).length > 0 && !this.ciCleaned.has(task.id)
     if (finished && usedCi && task.branch !== null) {
       this.ciCleaned.add(task.id)
-      // The CI branch only held snapshots for checks. Gone already, or offline: nothing to do.
+      // The CI branch only held snapshots for checks. Gone already, or offline: only logged.
       const ref = ciBranchOf(task.branch)
-      this.background(deleteRemoteRef(this.repoPath(task.repo), ref).catch(() => undefined))
+      this.background(
+        deleteRemoteRef(this.repoPath(task.repo), ref).catch((error: unknown) => {
+          console.error(`Could not delete the CI branch ${ref} of ${task.id}: ${String(error)}`)
+        }),
+      )
     }
     if (event.type === 'workspace.created' && task.workspace !== null) {
-      restoreStageFiles(this.dataDir, task)
-      restoreAttachments(this.dataDir, task)
-      this.background(excludeStageDir(task.workspace))
+      try {
+        restoreStageFiles(this.dataDir, task)
+      } catch (error) {
+        console.error(`Could not restore the stage files of ${task.id}: ${String(error)}`)
+      }
+      try {
+        restoreAttachments(this.dataDir, task)
+      } catch (error) {
+        console.error(`Could not restore the attachments of ${task.id}: ${String(error)}`)
+      }
+      this.background(
+        excludeStageDir(task.workspace).catch((error: unknown) => {
+          console.error(`Could not ignore the stage folder of ${task.id}: ${String(error)}`)
+        }),
+      )
       if (this.waitingForWorkspace.delete(task.id)) {
         this.startInBackground(task.id, ['ready', 'draft'])
       }

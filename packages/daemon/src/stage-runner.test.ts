@@ -9,7 +9,7 @@ import {
   type Step,
   type Task,
 } from '@natamux/core'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 import { trustPaths } from './agent-launch.js'
 import { AgentRunner } from './agent-runner.js'
 import { decodeAttachments } from './attachments.js'
@@ -446,6 +446,80 @@ describe('stage files of a removed workspace', () => {
     const next = await withWorkspace(task.id)
 
     expect(readFileSync(join(next.workspace ?? '', STAGE_DIR, 'spec.md'), 'utf8')).toBe('spec v2\n')
+  })
+})
+
+describe('failed side work', () => {
+  let error: MockInstance<typeof console.error>
+
+  beforeEach(() => {
+    error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    error.mockRestore()
+  })
+
+  it('logs a failed archive of the stage files, and still starts the next stage', async () => {
+    const task = await implementing()
+    // A folder with the name of a stage file cannot be copied.
+    mkdirSync(join(task.workspace ?? '', STAGE_DIR, 'x.md'))
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining(`Could not archive the stage files of ${task.id}`),
+    )
+  })
+
+  it('logs a failed restore of the stage files, and still restores the attachments and starts the stage', async () => {
+    const files = decodeAttachments([
+      { name: 'login.png', data: Buffer.from('image').toString('base64') },
+    ])
+    const task = tasks.createTask({ title: 'Export', agent: 'claude-code' }, files)
+    await runner.settle()
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'implement' },
+    })
+    mkdirSync(join(archiveDir(dataDir, task.id), 'x.md'))
+
+    const after = await withWorkspace(task.id)
+
+    expect(after).toMatchObject({ stage: 'implement', state: 'running' })
+    const attachment = join(after.workspace ?? '', STAGE_DIR, 'attachments', 'login.png')
+    expect(existsSync(attachment)).toBe(true)
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining(`Could not restore the stage files of ${task.id}`),
+    )
+  })
+
+  it('logs a failed delete of the CI branch of a finished task', async () => {
+    // The test repository has no origin, so the push fails.
+    const task = await implementing()
+    tasks.setCi(task.id, 'testing', true)
+
+    tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
+
+    const ref = `natamux-ci/${task.branch}`
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining(`Could not delete the CI branch ${ref} of ${task.id}`),
+    )
+  })
+
+  it('logs stages that fail to start', async () => {
+    const task = await implementing()
+    vi.spyOn(runner, 'startLanes').mockRejectedValue(new Error('disk full'))
+
+    await runner.act(task.id, 'report', { terminal: '1' })
+    await runner.settle()
+
+    const logged = `Could not start the stages of ${task.id}: Error: disk full`
+    expect(error).toHaveBeenCalledWith(logged)
   })
 })
 
