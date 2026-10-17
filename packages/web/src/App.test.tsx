@@ -2329,6 +2329,33 @@ describe('App', () => {
     expect(window.localStorage.getItem('natamux.ui-size')).toBe('large')
   })
 
+  it('opens a new GitHub issue from the account menu', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('open', open)
+    installDaemon([reviewTask])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(screen.getByRole('button', { name: 'Account' }))
+    const items = [
+      ...screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'),
+    ].map((item) => item.textContent)
+    const at = items.findIndex((text) => text?.includes('Report an issue'))
+    expect(items[at - 1]).toContain('Keyboard shortcuts')
+    expect(items[at + 1]).toContain('Sign out')
+
+    await user.click(screen.getByRole('menuitem', { name: 'Report an issue' }))
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(open).toHaveBeenCalledWith(
+      'https://github.com/lenhatthanh20/natamux/issues/new',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('asks before it signs out, and keeps the session on Cancel', async () => {
     installDaemon([reviewTask])
     const user = userEvent.setup()

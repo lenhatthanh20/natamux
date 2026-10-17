@@ -632,7 +632,7 @@ Shared shell:
 ### 4.28 Status bar items (`components/StatusBar.tsx`)
 - Item: height 24, pad 0 6, radius 6, gap 6, icon 14, text 12/16 muted; hover bg-hover + ink; clickable items are buttons with tooltips. Bar pad 0 6, gap 2.
 - Left (workspace-wide, high priority): Live dot (6px add / signal) + "Live"/"Reconnecting" (tooltip explains); "3 running" (click: filter Running); "2 need you" in signal (click: jump palette scoped to needs-you).
-- Right (lower priority, drop labels first): Projects (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, separator, Sign out (confirm dialog "Sign out of Natamux? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
+- Right (lower priority, drop labels first): Projects (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, Report an issue (`Bug`, opens a new GitHub issue in the browser), separator, Sign out (confirm dialog "Sign out of Natamux? Your tasks keep running."). Theme and sign out are no longer two 21px icons side by side (NAV-19).
 - No shortcut hint text in the bar.
 
 ### 4.29 View header and workspace header
