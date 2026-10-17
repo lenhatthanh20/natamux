@@ -130,3 +130,28 @@ export function wrapsByDefault(path: string): boolean {
   }
   return ['md', 'markdown', 'txt', 'rst'].includes(name.slice(dot + 1).toLowerCase())
 }
+
+// Lines picked in the diff, to quote to the agent. `old` lines are from the last commit.
+export type CodeSelection = {
+  path: string
+  side: 'new' | 'old'
+  start: number
+  end: number
+  text: string
+}
+
+// The lines a selection touches. A drag over full lines ends at column 1 of the next line, which
+// the user did not mean to pick.
+export function wholeLines(range: {
+  startLineNumber: number
+  endLineNumber: number
+  endColumn: number
+}): { start: number; end: number } {
+  const { startLineNumber: start, endLineNumber: end } = range
+  return { start, end: range.endColumn === 1 && end > start ? end - 1 : end }
+}
+
+// "line 12" or "lines 12–14". The agent gets a plain hyphen, the UI an en dash.
+export function linesLabel({ start, end }: { start: number; end: number }, dash = '–'): string {
+  return start === end ? `line ${start}` : `lines ${start}${dash}${end}`
+}

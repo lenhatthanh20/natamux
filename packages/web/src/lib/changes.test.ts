@@ -10,6 +10,7 @@ import {
   stepFile,
   trimTrailingNewline,
   wholeFileKind,
+  wholeLines,
   wrapsByDefault,
 } from './changes'
 
@@ -167,5 +168,27 @@ describe('wrapsByDefault', () => {
     expect(wrapsByDefault('.gitignore')).toBe(true)
     expect(wrapsByDefault('src/a.ts')).toBe(false)
     expect(wrapsByDefault('v1.2/app.json')).toBe(false)
+  })
+})
+
+describe('wholeLines', () => {
+  const range = (startLineNumber: number, endLineNumber: number, endColumn: number) => ({
+    startLineNumber,
+    endLineNumber,
+    endColumn,
+  })
+
+  it('covers every line the selection touches', () => {
+    expect(wholeLines(range(4, 4, 9))).toEqual({ start: 4, end: 4 })
+    expect(wholeLines(range(4, 7, 3))).toEqual({ start: 4, end: 7 })
+  })
+
+  it('leaves out a last line that the selection only reaches at column 1', () => {
+    expect(wholeLines(range(4, 7, 1))).toEqual({ start: 4, end: 6 })
+    expect(wholeLines(range(4, 5, 1))).toEqual({ start: 4, end: 4 })
+  })
+
+  it('keeps a one-line selection that starts at column 1', () => {
+    expect(wholeLines(range(4, 4, 1))).toEqual({ start: 4, end: 4 })
   })
 })
