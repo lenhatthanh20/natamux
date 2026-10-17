@@ -624,6 +624,16 @@ figcaption b { color: var(--text); font-weight: 600; }
 }
 .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: none; padding: 0; font-size: 0.8125rem; }
 .cmd button { flex: none; height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font: 500 0.8125rem/1 var(--sans); cursor: pointer; }
+.first-start {
+  display: flex; gap: 14px; margin-top: 22px; max-width: 72ch;
+  padding: 16px 18px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+  border-left-width: 4px; background: color-mix(in srgb, var(--amber) 9%, var(--panel)); font-size: 0.9375rem;
+}
+.first-start-icon { flex: none; width: 22px; height: 22px; margin-top: 1px; fill: none; stroke: var(--amber); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.first-start > div { min-width: 0; }
+.first-start p { margin: 0; }
+.first-start .first-start-title { color: var(--strong); font-weight: 600; margin-bottom: 4px; }
+.first-start .cmd { background: var(--panel); }
 
 .dl-all { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(24px, 4vw, 56px); margin-top: 36px; align-items: start; }
 .dl-all table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
