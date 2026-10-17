@@ -70,10 +70,76 @@ describe('GitHub Copilot CLI', () => {
     ['userPromptSubmitted', 'prompt'],
     ['preToolUse', 'activity'],
     ['postToolUseFailure', 'activity'],
-    ['permissionRequest', 'asking'],
     ['agentStop', 'turn-ended'],
   ])('%s is %s', (event, signal) => {
     expect(hook(event)?.signal).toBe(signal)
+  })
+
+  // permissionRequest fires before the permission rules, also for tools --allow-all-tools approves.
+  it('does not take permissionRequest as asking', () => {
+    expect(hook('permissionRequest')).toBeUndefined()
+  })
+
+  it.each([
+    ['permission_prompt', 'asking', 'Waiting for permission'],
+    ['elicitation_dialog', 'asking', 'Asking a question'],
+    ['shell_completed', undefined, undefined],
+    ['shell_detached_completed', undefined, undefined],
+    ['agent_completed', undefined, undefined],
+    ['agent_idle', undefined, undefined],
+  ])('a %s notification is %s', (type, signal, summary) => {
+    const result = hook('notification', { notification_type: type })
+    expect(result?.signal).toBe(signal)
+    expect(result?.summary).toBe(summary)
+  })
+
+  it.each([
+    ['permission_prompt', 'Waiting for permission'],
+    ['elicitation_dialog', 'Asking a question'],
+  ])('reads a %s notification in camelCase too', (type, summary) => {
+    expect(hook('notification', { notificationType: type })).toMatchObject({
+      signal: 'asking',
+      summary,
+    })
+  })
+
+  it('takes the snake_case type when both spellings are there', () => {
+    const snake = { notification_type: 'permission_prompt', notificationType: 'agent_idle' }
+    const camel = { notification_type: 'shell_completed', notificationType: 'permission_prompt' }
+    expect(hook('notification', snake)?.signal).toBe('asking')
+    expect(hook('notification', camel)).toBeUndefined()
+  })
+
+  it.each([
+    ['null', { notification_type: null }],
+    ['a number', { notification_type: 7 }],
+    ['an empty text', { notification_type: '' }],
+    ['no type', {}],
+    ['an unknown type', { notification_type: 'toString' }],
+    ['a camelCase null', { notificationType: null }],
+  ])('gives no signal and does not throw for %s', (_name, rest) => {
+    expect(hook('notification', rest)).toBeUndefined()
+  })
+
+  it('reads the notification of a real Copilot CLI 1.0.98 session', () => {
+    // Recorded on 2026-10-17: the stdin of the notification hook when Copilot asked to run a
+    // command. Only cwd is made shorter.
+    const recorded = {
+      sessionId: '7fa32534-1e09-4549-90df-d1a12eb4d059',
+      timestamp: 1792242222365,
+      cwd: '/tmp/cp-record/repo',
+      message: 'Run command: touch made-by-copilot.txt && ls -l made-by-copilot.txt',
+      title: 'Permission needed',
+      hook_event_name: 'Notification',
+      notification_type: 'permission_prompt',
+    }
+    const result = normalize('copilot', { ...recorded, [COPILOT_EVENT_FIELD]: 'notification' })
+    expect(result).toMatchObject({
+      signal: 'asking',
+      cwd: '/tmp/cp-record/repo',
+      details: { hook: 'notification', sessionId: recorded.sessionId },
+      summary: 'Waiting for permission',
+    })
   })
 
   it('fails only on an error Copilot cannot get over', () => {
