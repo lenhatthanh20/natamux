@@ -493,6 +493,97 @@ describe('prepareWorkspace', () => {
     expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toContain('say done')
   })
 
+  it("keeps a Cursor file that mixes Natamux's hooks with one of the user's own", () => {
+    mkdirSync(join(repo, '.cursor'))
+    const text =
+      '{"version":1,"hooks":{"stop":[{"command":"natamux hook cursor"},{"command":"say done"}]}}'
+    writeFileSync(join(repo, '.cursor/hooks.json'), text)
+    expect(prepareWorkspace('cursor', repo)).toBe(false)
+    prepareAgentHooks(repo)
+    expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toBe(text)
+  })
+
+  it('updates a file with only Natamux hooks, such as one from an older version', () => {
+    mkdirSync(join(repo, '.cursor'))
+    writeFileSync(
+      join(repo, '.cursor/hooks.json'),
+      '{"version":1,"hooks":{"stop":[{"command":"natamux hook cursor"}]}}',
+    )
+    expect(prepareWorkspace('cursor', repo)).toBe(true)
+    expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toBe(
+      `${JSON.stringify(cursorHookFile(), null, 2)}\n`,
+    )
+  })
+
+  it("keeps a Copilot file with a bash or powershell hook of the user's own", () => {
+    mkdirSync(join(repo, '.github/hooks'), { recursive: true })
+    const command = 'natamux hook copilot agentStop'
+    for (const own of ['bash', 'powershell']) {
+      const hook = { bash: command, powershell: command, [own]: 'say done' }
+      const text = JSON.stringify({ version: 1, hooks: { agentStop: [hook] } })
+      writeFileSync(join(repo, '.github/hooks/natamux.json'), text)
+      expect(prepareWorkspace('copilot', repo)).toBe(false)
+      expect(readFileSync(join(repo, '.github/hooks/natamux.json'), 'utf8')).toBe(text)
+    }
+  })
+
+  it('updates a Copilot file with only Natamux hooks', () => {
+    mkdirSync(join(repo, '.github/hooks'), { recursive: true })
+    const command = 'natamux hook copilot agentStop'
+    const hooks = { agentStop: [{ bash: command, powershell: command }] }
+    writeFileSync(join(repo, '.github/hooks/natamux.json'), JSON.stringify({ version: 1, hooks }))
+    expect(prepareWorkspace('copilot', repo)).toBe(true)
+    expect(readFileSync(join(repo, '.github/hooks/natamux.json'), 'utf8')).toBe(
+      `${JSON.stringify(copilotHookFile(), null, 2)}\n`,
+    )
+  })
+
+  it('keeps a file that is not JSON, has no hook command, or has one not from Natamux', () => {
+    const own = '{"command":"natamux hook cursor"}'
+    const texts = [
+      '',
+      ' \n',
+      'natamux hook cursor {',
+      '{"version":1,"hooks":{}}',
+      '{"version":1}',
+      `{"hooks":[${own}]}`,
+      '{"hooks":"natamux hook cursor"}',
+      '{"hooks":null}',
+      '{"hooks":{"stop":[{"timeout":5}]}}',
+      `{"hooks":{"stop":[${own},{"command":5}]}}`,
+      `{"hooks":{"stop":[${own},{"command":null}]}}`,
+      `[${own}]`,
+      'null',
+      '5',
+      '{"hooks":{"stop":[{"command":"say natamux hook"}]}}',
+      '{"hooks":{"stop":[{"command":"echo natamux hook cursor"}]}}',
+      // A command must start with `natamux hook`, so leading space makes it the user's own.
+      '{"hooks":{"stop":[{"command":" natamux hook cursor"}]}}',
+      `{"hooks":{"stop":[${own}],"afterFileEdit":[${own},{"command":"say done"}]}}`,
+    ]
+    mkdirSync(join(repo, '.cursor'))
+    for (const text of texts) {
+      writeFileSync(join(repo, '.cursor/hooks.json'), text)
+      expect(prepareWorkspace('cursor', repo), text).toBe(false)
+      expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toBe(text)
+    }
+  })
+
+  it('keeps a Copilot file with a foreign bash hook alone or in a later event', () => {
+    const command = 'natamux hook copilot agentStop'
+    const own = { bash: command, powershell: command }
+    const texts = [
+      { agentStop: [{ bash: 'say done' }] },
+      { agentStop: [own], errorOccurred: [own, { ...own, bash: 'say done' }] },
+    ].map((hooks) => JSON.stringify({ version: 1, hooks }))
+    mkdirSync(join(repo, '.github/hooks'), { recursive: true })
+    for (const text of texts) {
+      writeFileSync(join(repo, '.github/hooks/natamux.json'), text)
+      expect(prepareWorkspace('copilot', repo), text).toBe(false)
+      expect(readFileSync(join(repo, '.github/hooks/natamux.json'), 'utf8')).toBe(text)
+    }
+  })
+
   it('writes the hook files of all agents, for an agent started by hand in a shell', () => {
     prepareAgentHooks(repo)
     expect(readFileSync(join(repo, '.cursor/hooks.json'), 'utf8')).toContain('natamux hook cursor')
