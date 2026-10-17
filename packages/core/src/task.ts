@@ -29,11 +29,14 @@ export const taskContextSchema = z.object({
 
 export type TaskContext = z.infer<typeof taskContextSchema>
 
+// A link the dashboard shows. Another scheme (vscode:, file:) would open its handler on a click.
+const webUrlSchema = z.url({ protocol: /^https?$/ })
+
 // The item that tracks the task outside Natamux: a GitHub issue (#42), a Jira ticket (ABC-123).
 export const issueLinkSchema = z.object({
   provider: z.string().trim().min(1).max(40),
   key: z.string().trim().min(1).max(100),
-  url: z.url(),
+  url: webUrlSchema,
 })
 
 export type IssueLink = z.infer<typeof issueLinkSchema>
@@ -66,7 +69,8 @@ export const taskSchema = z.object({
   agent: z.string().min(1).nullable().default(null),
   branch: z.string().min(1).nullable().default(null),
   workspace: z.string().min(1).nullable().default(null),
-  pr: z.url().nullable().default(null),
+  // A bad stored link means none, so the task still loads. Same for `issue`.
+  pr: webUrlSchema.nullable().default(null).catch(null),
   prStatus: pullRequestStatusSchema.nullable().default(null),
   dependsOn: z.array(taskIdSchema).default([]),
   // The task this one is a part of. One level only: a subtask has no subtasks.
@@ -100,7 +104,7 @@ export const taskSchema = z.object({
   // does not start an agent in the person's shell. Left out when not.
   withoutAgent: z.literal(true).optional().catch(undefined),
   context: taskContextSchema.nullable().default(null),
-  issue: issueLinkSchema.nullable().default(null),
+  issue: issueLinkSchema.nullable().default(null).catch(null),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })

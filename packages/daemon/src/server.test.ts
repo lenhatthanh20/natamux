@@ -418,6 +418,37 @@ describe('tasks', () => {
     expect(long.json().message).toMatch(/^title: /)
   })
 
+  it('links an issue by an http or https URL only', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Linked' },
+    })
+    const link = (url: string) =>
+      app.inject({
+        method: 'PUT',
+        url: '/tasks/T-0001/issue',
+        headers: authorization,
+        payload: { provider: 'jira', key: 'ABC-1', url },
+      })
+
+    for (const url of ['vscode://file/etc/passwd', 'file:///etc/passwd']) {
+      const refused = await link(url)
+      expect(refused.statusCode).toBe(400)
+      expect(refused.json()).toMatchObject({
+        error: 'invalid_request',
+        issues: [{ path: ['url'] }],
+      })
+    }
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(task.json().task.issue).toBeNull()
+
+    const linked = await link('https://jira.example.com/browse/ABC-1')
+    expect(linked.statusCode).toBe(200)
+    expect(linked.json().task.issue.url).toBe('https://jira.example.com/browse/ABC-1')
+  })
+
   it('deletes a task and the tasks that pointed at it stay', async () => {
     await app.inject({
       method: 'POST',
