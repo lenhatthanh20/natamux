@@ -34,18 +34,31 @@ jobs:
         working-directory: site
       - run: pnpm build
         working-directory: site
-      # A pull request's build, to look at before it merges.
+      # The deploy job pushes this; on a pull request it is there to look at before it merges.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: github.event_name == 'pull_request'
         with:
           name: site-dist
           path: site/dist
           retention-days: 7
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/old-address
+
+  # Its own job, because package scripts of pnpm install can set BASH_ENV for later steps of
+  # the build job and read the deploy key there. This job runs no code from the repo or packages.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: dist
       # Pages actions deploy only to their own repository, so push the build
       # with a deploy key that can write to natamux.github.io.
       - name: Push to natamux.github.io
-        if: github.event_name != 'pull_request'
-        working-directory: site/dist
+        working-directory: dist
         env:
           DEPLOY_SSH: ${{ secrets.PAGES_DEPLOY_SSH }}
           GH_TOKEN: ${{ github.token }}
@@ -62,9 +75,6 @@ jobs:
             commit -qm "Site from lenhatthanh20/natamux@${GITHUB_SHA}"
           GIT_SSH_COMMAND='ssh -i ~/.ssh/pages -o IdentitiesOnly=yes' \
             git push -f git@github.com:natamux/natamux.github.io.git main
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: site/old-address
 
   redirect:
     if: github.event_name != 'pull_request'
