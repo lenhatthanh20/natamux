@@ -30,6 +30,7 @@ import {
   isTaskEnded,
   type SettingsOf,
   TaskEditError,
+  TaskFileChangedError,
   TaskNotFoundError,
   TaskService,
 } from './task-service.js'
@@ -1170,6 +1171,31 @@ describe('outside edits without a watch event', () => {
 
     expect(messages).toEqual([])
     expect(polled.getTask(task.id).title).toBe('Renamed')
+  })
+
+  it('does not write over an edit by hand it has not read yet, and reads it instead', () => {
+    const task = service.createTask({ title: 'First' })
+    startPolled()
+    editByHand(task, 'Edited by hand')
+
+    // Within a second of the last look, so getTask still has the task from before the edit.
+    clock = 500
+    expect(() => polled.updateTask(task.id, { priority: 'high' })).toThrow(TaskFileChangedError)
+
+    expect(readTaskFile(dataDir, task.id)?.title).toBe('Edited by hand')
+    expect(polled.getTask(task.id).title).toBe('Edited by hand')
+    expect(messages).toEqual([{ kind: 'task.changed', task: polled.getTask(task.id) }])
+    expect(polled.listEvents(task.id).map(({ event }) => event.type)).toEqual(['task.created'])
+    expect(readEventLog(dataDir, task.id)?.map(({ event }) => event.type)).toEqual([
+      'task.created',
+    ])
+
+    // Sent again, the change keeps the edit.
+    polled.updateTask(task.id, { priority: 'high' })
+    expect(readTaskFile(dataDir, task.id)).toMatchObject({
+      title: 'Edited by hand',
+      priority: 'high',
+    })
   })
 
   it('keeps the last good task while its file cannot be read, and logs it once', () => {

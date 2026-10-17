@@ -84,6 +84,7 @@ import {
 import {
   applyEventInputSchema,
   TaskEditError,
+  TaskFileChangedError,
   TaskNotFoundError,
   type TaskService,
 } from './task-service.js'
@@ -419,7 +420,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof StageActionError ||
       error instanceof IssueLinkError ||
       error instanceof RepoInUseError ||
-      error instanceof SettingsChangedError
+      error instanceof SettingsChangedError ||
+      error instanceof TaskFileChangedError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }

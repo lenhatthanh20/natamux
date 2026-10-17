@@ -191,6 +191,14 @@ export class TaskEditError extends Error {
   }
 }
 
+// The task file changed since this service read or wrote it, so a write would lose that edit.
+export class TaskFileChangedError extends Error {
+  constructor(taskId: string) {
+    super(`The file of task ${taskId} was changed outside Natamux. It is read again; try again`)
+    this.name = 'TaskFileChangedError'
+  }
+}
+
 type TaskServiceOptions = {
   dataDir: string
   index: TaskIndex
@@ -390,6 +398,7 @@ export class TaskService {
   private store(task: Task, events: readonly LoggedEvent[], writeFile = true): void {
     const files: TaskFiles = {}
     if (writeFile) {
+      this.refuseUnreadEdit(task.id)
       files.task = writeTaskFile(this.dataDir, task)
       this.fileStats.set(task.id, files.task)
       this.writtenAt.set(task.id, task.updatedAt)
@@ -399,6 +408,23 @@ export class TaskService {
     }
     this.tasks.set(task.id, Object.freeze(task))
     this.index.record(task.id, { task, events, files })
+  }
+
+  // checkFile looks once a second and the watcher waits a moment, so the task in memory may be
+  // older than an edit by hand. Then that edit is read and the change is refused. A missing file
+  // is written as before. shortcut: an edit between this stat and the write is still lost; that
+  // needs a file lock.
+  private refuseUnreadEdit(taskId: string): void {
+    if (!this.started) {
+      return
+    }
+    const stat = statFile(taskFilePath(this.dataDir, taskId))
+    if (stat === undefined || sameStat(stat, this.fileStats.get(taskId))) {
+      return
+    }
+    this.checkedAt.set(taskId, this.clock())
+    this.tryReload(taskId)
+    throw new TaskFileChangedError(taskId)
   }
 
   // The attachments are written before the task is published, so its context stage, which starts
