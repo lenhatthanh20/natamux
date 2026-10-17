@@ -830,9 +830,15 @@ pnpm db:seed</pre>
                 </div>
                 <ol class="dl-steps">
                   <li>Open the <code>.dmg</code> and drag Natamux to Applications.</li>
-                  <li>The app is not signed yet, so macOS blocks the first start. Open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</li>
                 </ol>
-                <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
+                <div class="first-start" role="note">
+                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
+                  <div>
+                    <p class="first-start-title">macOS blocks the first start</p>
+                    <p>The app is not signed with an Apple certificate yet. Open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. Or run:</p>
+                    <div class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Natamux.app</code><button type="button" data-copy>Copy</button></div>
+                  </div>
+                </div>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-win" aria-labelledby="tab-win" data-active="false" inert>
                 <div class="dl-buttons">
@@ -840,9 +846,15 @@ pnpm db:seed</pre>
                 </div>
                 <ol class="dl-steps">
                   <li>Run <code>Natamux-win-x64.exe</code>. It needs no administrator rights.</li>
-                  <li>The installer is not signed yet. If SmartScreen says <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</li>
                   <li>Task terminals run PowerShell. For a new version, run the new installer; it keeps your data.</li>
                 </ol>
+                <div class="first-start" role="note">
+                  <svg class="first-start-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6z"/><path d="M12 8v5M12 16.5v.5"/></svg>
+                  <div>
+                    <p class="first-start-title">SmartScreen stops the first start</p>
+                    <p>The installer is not signed with a Windows certificate yet. If you see <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
+                  </div>
+                </div>
               </div>
               <div class="dl-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" data-active="false" inert>
                 <div class="dl-buttons">
