@@ -24,8 +24,8 @@ export function hasSmokeOutput(output: string): boolean {
 }
 
 // Made by the real minisign tool with a test key, in the legacy form that releases use
-// (minisign -S -l); the same files are in src/fixtures/minisign. The smoke check runs it in the
-// packaged app, so CI proves that Electron's crypto (BoringSSL, not OpenSSL) checks release
+// (minisign -S -l); the same files are in src/__tests__/fixtures/minisign. The smoke check runs it
+// in the packaged app, so CI proves that Electron's crypto (BoringSSL, not OpenSSL) checks release
 // signatures on every system.
 export const SIGNATURE_FIXTURE = {
   publicKey: 'RWRlDDYUMCwx+Oo1OxIoyy7UaN2jSLqaEfEX9pmWdYLOJWE1WCES0Jkf',

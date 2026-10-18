@@ -16,6 +16,7 @@ Natamux: an Agent Development Environment (ADE). Run many coding agents in paral
 - Run `pnpm` and `node` only in Codespaces or CI, never on the local machine. Local work is editing files only. The Claude Code settings (`.claude/settings.json`) deny these commands.
 - Keep dependencies few. Ask before adding a package.
 - Confirm with the user before deleting anything.
+- Unit tests and their fixtures go in a `__tests__` folder inside the folder of the code they test.
 - Follow `docs/plan-tech-stack.md` section 10 for build order. Do not skip ahead.
 
 ## Skills (.claude/skills)
