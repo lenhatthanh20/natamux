@@ -48,9 +48,9 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 | PTY | node-pty | Standard way to run agent CLIs in a terminal |
 | Terminal UI | xterm.js | Standard in-browser terminal |
 | Git | Shell out to the `git` binary | Worktree support is complete there; no heavy library |
-| Storage: tasks | Markdown files with YAML front matter in `.natamux/tasks/` of each repo | Human-readable, diffable, git-friendly |
-| Storage: runtime | SQLite through Node's built-in `node:sqlite` (Node 22.13 or newer) | Fast queries, event log, index of the task files. No native package to install. Marked "active development" in Node 22, so keep all SQL in one file (`task-index.ts`) |
-| Index rule | The SQLite index is a cache that can be rebuilt from the files | No lock-in, easy recovery |
+| Storage: tasks | Markdown files with YAML front matter in `<data dir>/tasks/` | Human-readable, diffable, easy to back up |
+| Storage: runtime | SQLite through Node's built-in `node:sqlite` (Node 22.13 or newer) | Fast restart, a copy of the event logs, index of the task files. No native package to install. Marked "active development" in Node 22, so keep all SQL in one file (`task-index.ts`) |
+| Index rule | The SQLite index is a cache that can be rebuilt from the files. No other database (section 5) | No lock-in, easy recovery |
 | UI framework | React + Vite | Large ecosystem, fast dev loop |
 | UI components | Tailwind CSS + shadcn/ui primitives | Quick to build a clean, consistent dashboard |
 | UI state | TanStack Query for server data; Zustand for local UI state | Small and well understood |
@@ -69,11 +69,11 @@ Status must come from events, not screen scraping.
 - **Generic adapter:** use process exit code, output-idle time and terminal bell. Mark states as "estimated" in the UI.
 - **Git and CI:** watch the worktree for diff size; poll the GitHub API for PR and CI state.
 
-Event shape (draft): `{ taskId, source, type, at, payload }`. The task file holds the current state. Each event is applied to that state and logged in SQLite, accepted or not. The log is append-only and is not rebuilt from the files.
+Event shape (draft): `{ taskId, source, type, at, payload }`. The task file holds the current state. Each event is applied to that state and logged, accepted or not: first in `tasks/<id>.events.jsonl`, then in SQLite. The log is append-only; SQLite is rebuilt from it.
 
 ## 5. Data model (draft)
 
-Task file `.natamux/tasks/<id>.md`:
+Task file `<data dir>/tasks/<id>.md`:
 
 ```
 ---
@@ -93,7 +93,40 @@ updatedAt: 2026-10-08T09:00:00Z
 Task description in markdown. Run notes are appended below.
 ```
 
-SQLite tables: `tasks_index`, `events`, `workspaces`, `agent_runs`, `settings`.
+SQLite tables (`task-index.ts`): `tasks_index`, `events`, `task_files`.
+
+### Storage decision (2026-10-18)
+
+Files are the source of truth. `index.sqlite` is a cache. Natamux uses no other database.
+
+Why:
+- One daemon per user writes all data, so no locking between processes is needed.
+- The data is small. The daemon keeps every task in memory; SQLite only makes restarts fast.
+- Files are easy to read, diff and back up, and survive a lost `index.sqlite`.
+- A database server or an ORM adds an install step or a package for a single-user app.
+
+Where data lives (`<data dir>` is `NATAMUX_DATA_DIR`, default `<cwd>/.natamux`; the desktop app uses its app data folder):
+
+| Data | Place |
+|---|---|
+| Projects | `repos.json`, `repos-removed.json`, `repos-default-added` |
+| Project settings, agent choice and permission mode | `.natamux.json` in each repository |
+| Tasks | `tasks/<id>.md` |
+| Task events | `tasks/<id>.events.jsonl`, copied into SQLite |
+| Stage files, attachments | `.natamux-task/` in the worktree, archived in `tasks/<id>/` |
+| Shells to restore | `tasks/<id>.open-shells.json`, `tasks/<id>.shells.json` |
+| Templates | `templates/<id>.md` |
+| Agent hook settings | `claude-code-settings.json`, `gemini-settings.json` |
+| Task list cache, file stats, event copy | `index.sqlite` (tables `tasks_index`, `events`, `task_files`) |
+| UI preferences | browser `localStorage` |
+
+Look at this again when:
+- more than one process must write the same data, such as a shared team server;
+- data must sync between machines or users;
+- thousands of tasks make start-up or lists slow;
+- a feature needs queries across data that now sits in separate JSON files.
+
+Then first move more data into `index.sqlite`, before any new database engine.
 
 ## 6. Desktop shell (Decided)
 
