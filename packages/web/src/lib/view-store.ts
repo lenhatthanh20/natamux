@@ -482,14 +482,14 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
               detailsView: 'progress' as const,
             }
           : {}
-        const editor = route.tab === 'editor' && route.file !== null
+        const editorFile = route.tab === 'editor' ? route.file : null
         return {
           changesTaskId: route.id,
           changesTab: route.tab,
-          changesFile: editor ? current.changesFile : route.file,
-          ...(editor
-            ? { editorFileByTask: { ...current.editorFileByTask, [route.id]: route.file } }
-            : {}),
+          changesFile: editorFile === null ? route.file : current.changesFile,
+          ...(editorFile === null
+            ? {}
+            : { editorFileByTask: { ...current.editorFileByTask, [route.id]: editorFile } }),
           agentsOpen: false,
           selectedId: route.id,
           recent,
