@@ -374,10 +374,7 @@ type FileInWorktree = {
 }
 
 // The file in the worktree, or null when it is not there. A link that leaves the worktree is refused.
-export async function readInside(
-  root: string,
-  path: string,
-): Promise<FileInWorktree | null> {
+export async function readInside(root: string, path: string): Promise<FileInWorktree | null> {
   let real: string
   try {
     real = await realpath(resolve(root, path))

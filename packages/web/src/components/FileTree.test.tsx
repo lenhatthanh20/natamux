@@ -32,7 +32,10 @@ afterEach(() => {
 function tree({
   changes = [],
   openPath = null,
-}: { changes?: ChangeEntry[]; openPath?: string | null } = {}) {
+}: {
+  changes?: ChangeEntry[]
+  openPath?: string | null
+} = {}) {
   taskCount += 1
   const taskId = `T-${taskCount}`
   const loadFolder = vi.fn(async (path: string) => FOLDERS[path] ?? [])

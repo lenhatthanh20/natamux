@@ -165,6 +165,7 @@ describe('readWorkspaceFile', () => {
     mkdirSync(join(root, 'src'))
 
     await expect(readWorkspaceFile(root, '../secret.txt')).rejects.toThrow(OutsideWorkspaceError)
+    await expect(readWorkspaceFile(root, '../not-there.txt')).rejects.toThrow(OutsideWorkspaceError)
     await expect(readWorkspaceFile(root, join(base, 'secret.txt'))).rejects.toThrow(
       OutsideWorkspaceError,
     )

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { readdir, realpath, stat, writeFile } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { TreeEntry, WorkspaceFile } from '@natamux/core'
-import { looksBinary, MAX_FILE_BYTES, readInside } from './git.js'
+import { looksBinary, MAX_FILE_BYTES, OutsideWorkspaceError, readInside } from './git.js'
 
 export class WorkspacePathNotFoundError extends Error {
   constructor(path: string) {
@@ -59,6 +59,11 @@ function isText(bytes: Buffer): boolean {
 // The path in the worktree, with the guards of every explorer request: inside the worktree (links
 // too), not in .git, and there.
 async function resolveInside(root: string, path: string) {
+  // Checked before the disk is read, so the answer never tells whether a file outside is there.
+  const wanted = relative(resolve(root), resolve(root, path))
+  if (wanted === '..' || wanted.startsWith(`..${sep}`) || isAbsolute(wanted)) {
+    throw new OutsideWorkspaceError(path)
+  }
   const found = await readInside(root, path)
   if (found === null) {
     throw new WorkspacePathNotFoundError(path)
