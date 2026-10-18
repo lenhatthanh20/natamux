@@ -488,7 +488,7 @@ export const COMMANDS: readonly Command[] = [
   },
   {
     id: 'diff.comment',
-    title: 'Comment on the file for the agent',
+    title: 'Comment on the file or the selection for the agent',
     category: 'Workspace',
     shortcuts: ['Mod+Shift+A'],
     group: 'Diff',

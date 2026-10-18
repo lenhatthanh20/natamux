@@ -1,8 +1,9 @@
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { useEffect, useRef } from 'react'
-import { trimTrailingNewline } from '../lib/changes'
+import { type CodeSelection, trimTrailingNewline } from '../lib/changes'
 import { TERMINAL_FONT } from '../lib/fonts'
 import { languageForPath } from '../lib/language'
+import { attachAskAgent } from '../lib/monaco-ask'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
 import { uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
@@ -15,6 +16,8 @@ type MonacoFileProps = {
   kind: 'added' | 'removed' | 'edit'
   wrap: boolean
   onLine?: (line: number) => void
+  // Not for `edit`: asking the agent about lines is for the Changes tab.
+  onAsk?: (selection: CodeSelection) => void
   // Edit only: the text after each change by the user, and Mod+S.
   onChange?: (text: string) => void
   onSave?: () => void
@@ -56,6 +59,7 @@ export default function MonacoFile({
   kind,
   wrap,
   onLine,
+  onAsk,
   onChange,
   onSave,
 }: MonacoFileProps) {
@@ -70,6 +74,8 @@ export default function MonacoFile({
   const quiet = useRef(false)
   const onLineRef = useRef(onLine)
   onLineRef.current = onLine
+  const onAskRef = useRef(onAsk)
+  onAskRef.current = onAsk
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const onSaveRef = useRef(onSave)
@@ -135,10 +141,17 @@ export default function MonacoFile({
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => onSaveRef.current?.())
     }
 
+    // A new file has only new lines, a deleted one only lines of the last commit.
+    const askAgent = (selection: CodeSelection) => onAskRef.current?.(selection)
+    const ask = editing
+      ? null
+      : attachAskAgent(editor, path, kind === 'added' ? 'new' : 'old', askAgent)
+
     return () => {
       editorRef.current = null
       decorationsRef.current = null
       modelText.current = null
+      ask?.dispose()
       cursor.dispose()
       typed.dispose()
       editor.setModel(null)

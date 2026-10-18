@@ -2,6 +2,7 @@ import type { editor as MonacoEditor } from 'monaco-editor'
 import { useEffect, useRef } from 'react'
 import { useAppEvent } from '../lib/app-events'
 import {
+  type CodeSelection,
   changeAnchor,
   changeAt,
   countLineChanges,
@@ -10,6 +11,7 @@ import {
 } from '../lib/changes'
 import { TERMINAL_FONT } from '../lib/fonts'
 import { languageForPath } from '../lib/language'
+import { attachAskAgent } from '../lib/monaco-ask'
 import { DARK_THEME, LIGHT_THEME, monaco } from '../lib/monaco-setup'
 import { type ResolvedTheme, uiZoom, useResolvedTheme } from '../lib/theme'
 import { useUiSize } from '../lib/ui-size'
@@ -32,6 +34,8 @@ type MonacoDiffProps = {
   onLine?: (line: number) => void
   // Which change the cursor is in (-1 for none), and how many there are.
   onChanges?: (info: { index: number; total: number }) => void
+  // Lines selected on either side, to quote to the agent.
+  onAsk?: (selection: CodeSelection) => void
 }
 
 type Texts = { original: string; modified: string }
@@ -58,6 +62,7 @@ export default function MonacoDiff({
   onStats,
   onLine,
   onChanges,
+  onAsk,
 }: MonacoDiffProps) {
   const container = useRef<HTMLElement>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneDiffEditor | null>(null)
@@ -72,6 +77,8 @@ export default function MonacoDiff({
   onStatsRef.current = onStats
   const onChangesRef = useRef(onChanges)
   onChangesRef.current = onChanges
+  const onAskRef = useRef(onAsk)
+  onAskRef.current = onAsk
   const wrapRef = useRef(wrap)
   wrapRef.current = wrap
   const sideBySideRef = useRef(sideBySide)
@@ -245,12 +252,18 @@ export default function MonacoDiff({
       ),
     )
 
+    const askAgent = (selection: CodeSelection) => onAskRef.current?.(selection)
+    const asks = [
+      attachAskAgent(editor.getOriginalEditor(), path, 'old', askAgent),
+      attachAskAgent(modifiedEditor, path, 'new', askAgent),
+    ]
+
     return () => {
       editorRef.current = null
       modelsRef.current = null
       shownTexts.current = null
-      for (const action of actions) {
-        action.dispose()
+      for (const disposable of [...actions, ...asks]) {
+        disposable.dispose()
       }
       updated.dispose()
       cursor.dispose()

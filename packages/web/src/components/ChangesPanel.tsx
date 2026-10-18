@@ -7,7 +7,7 @@ import { useFileViewMode } from '../hooks/useFileViewMode'
 import { useStoredFlag } from '../hooks/useStoredFlag'
 import { useAppEvent } from '../lib/app-events'
 import { fileOrder } from '../lib/change-tree'
-import { stepFile, wholeFileKind, wrapsByDefault } from '../lib/changes'
+import { type CodeSelection, stepFile, wholeFileKind, wrapsByDefault } from '../lib/changes'
 import { FALLBACK_POLL_MS } from '../lib/live'
 import { AgentComment } from './AgentComment'
 import { ChangedFiles } from './ChangedFiles'
@@ -115,6 +115,7 @@ type FileBodyProps = {
   onShowWhitespace: () => void
   loadImage: (path: string, side: ImageSide) => Promise<Blob>
   onLine: (line: number) => void
+  onAsk: (selection: CodeSelection) => void
   onStats: (stats: LineStats) => void
   onChanges: (info: ChangeInfo) => void
 }
@@ -133,6 +134,7 @@ function FileBody({
   onShowWhitespace,
   loadImage,
   onLine,
+  onAsk,
   onStats,
   onChanges,
 }: FileBodyProps) {
@@ -164,7 +166,14 @@ function FileBody({
     }
     return (
       <LazyView label="viewer" fallback={viewer}>
-        <MonacoFile path={file.path} text={whole} kind={kind} wrap={wrap} onLine={onLine} />
+        <MonacoFile
+          path={file.path}
+          text={whole}
+          kind={kind}
+          wrap={wrap}
+          onLine={onLine}
+          onAsk={onAsk}
+        />
       </LazyView>
     )
   }
@@ -207,6 +216,7 @@ function FileBody({
           ignoreWhitespace={ignoreWhitespace}
           showMoves={showMoves}
           onLine={onLine}
+          onAsk={onAsk}
           onStats={onStats}
           onChanges={onChanges}
         />
@@ -251,6 +261,8 @@ export function ChangesPanel({
   const [drafting, setDrafting] = useState(false)
   const messageBox = useRef<HTMLTextAreaElement>(null)
   const [line, setLine] = useState<number | null>(null)
+  // Lines picked in the diff for the comment box.
+  const [quote, setQuote] = useState<CodeSelection | null>(null)
   const [stats, setStats] = useState<({ path: string } & LineStats) | null>(null)
   const [changeInfo, setChangeInfo] = useState<({ path: string } & ChangeInfo) | null>(null)
   const [viewMode, setViewMode] = useFileViewMode()
@@ -302,6 +314,7 @@ export function ChangesPanel({
   const body = bodyKindOf(shown, svgPreview, sameText)
   const fileStats = current !== null && stats?.path === current.path ? stats : null
   const fileChanges = current !== null && changeInfo?.path === current.path ? changeInfo : null
+  const fileQuote = current !== null && quote?.path === current.path ? quote : null
   // The preview switch is for an SVG that is shown as text. A big SVG is an image anyway.
   const svgSwitch =
     isSvg && shown !== undefined && !shown.binary && !shown.tooLarge ? svgPreview : null
@@ -310,6 +323,7 @@ export function ChangesPanel({
     if (path !== null) {
       setSelectedPath(path)
       setLine(null)
+      setQuote(null)
     }
   }
   const step = (by: 1 | -1) => choose(stepFile(order, current?.path ?? null, by))
@@ -327,6 +341,10 @@ export function ChangesPanel({
   useAppEvent<number>('diff-step', (by) => step(by < 0 ? -1 : 1))
   useAppEvent('refresh-changes', refresh)
   useAppEvent('diff-comment', () => document.getElementById('agent-comment')?.focus())
+  const ask = (selection: CodeSelection) => {
+    setQuote(selection)
+    document.getElementById('agent-comment')?.focus()
+  }
 
   // The address bar names the file, and follows the one that shows.
   // Only a new address moves the selection, so selectedPath is not a trigger.
@@ -494,12 +512,21 @@ export function ChangesPanel({
             onShowWhitespace={() => setIgnoreWhitespace(false)}
             loadImage={loadImage}
             onLine={setLine}
+            onAsk={ask}
             onStats={(next) => setStats({ path: current.path, ...next })}
             onChanges={(next) => setChangeInfo({ path: current.path, ...next })}
           />
         )}
       </div>
-      {current !== null && <AgentComment path={current.path} line={line} send={sendToAgent} />}
+      {current !== null && (
+        <AgentComment
+          path={current.path}
+          line={line}
+          quote={fileQuote}
+          onClearQuote={() => setQuote(null)}
+          send={sendToAgent}
+        />
+      )}
     </div>
   )
 
