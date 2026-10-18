@@ -24,6 +24,7 @@ import {
   type RepoItem,
 } from '../lib/palette'
 import { formatAge } from '../lib/tasks'
+import { DEFAULT_REPO_ID } from '../lib/workspace-groups'
 import { StatusGlyph } from './StatusGlyph'
 import { lockPage } from './ui/Dialog'
 import { Kbd } from './ui/Kbd'
@@ -169,8 +170,14 @@ export function capRows(sections: PaletteSection[]): PaletteSection[] {
 
 const TWO_LINE: readonly PaletteRow['kind'][] = ['task', 'shell']
 
-function nextScope(scope: PaletteScope): PaletteScope {
-  return scope === null ? 'needs-you' : null
+const scopeKey = (scope: PaletteScope) =>
+  scope === null || scope === 'needs-you' ? scope : `repo:${scope.repo}`
+
+// Tab goes from no scope to Needs you, then to each project that has a task, then back.
+function nextScope(scope: PaletteScope, projects: readonly RepoItem[]): PaletteScope {
+  const order: PaletteScope[] = [null, 'needs-you', ...projects.map(({ id }) => ({ repo: id }))]
+  const at = order.findIndex((item) => scopeKey(item) === scopeKey(scope))
+  return order[(at + 1) % order.length] ?? null
 }
 
 // The command palette (Mod+K) and the jump palette (Mod+J), UI spec 4.17. The rows are worked out
@@ -304,6 +311,14 @@ export function CommandPalette({
     }
   }
 
+  const projects = repos.filter((repo) =>
+    snapshot.tasks.some((task) => (task.repo ?? DEFAULT_REPO_ID) === repo.id),
+  )
+  const scopeName =
+    scope === null || scope === 'needs-you'
+      ? 'Needs you'
+      : (repos.find((repo) => repo.id === scope.repo)?.name ?? scope.repo)
+
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) {
       return
@@ -337,7 +352,7 @@ export function CommandPalette({
         return
       case 'Tab':
         event.preventDefault()
-        setScope(nextScope(scope))
+        setScope(nextScope(scope, projects))
         setActiveKey(null)
         return
       case 'Backspace':
@@ -360,9 +375,11 @@ export function CommandPalette({
         ? 'No command matches.'
         : scope === 'needs-you'
           ? 'Nothing needs you.'
-          : mode === 'jump'
-            ? 'No workspace yet.'
-            : 'Nothing to show yet. Type to search.'
+          : scope !== null
+            ? `No workspace in ${scopeName}.`
+            : mode === 'jump'
+              ? 'No workspace yet.'
+              : 'Nothing to show yet. Type to search.'
       : null
 
   let position = -1
@@ -416,10 +433,10 @@ export function CommandPalette({
                 setActiveKey(null)
                 input.current?.focus()
               }}
-              aria-label="Remove the Needs you scope"
-              className="flex h-6 shrink-0 items-center gap-1 rounded-full border border-signal-line bg-signal-soft pr-1.5 pl-2.5 text-xs font-medium text-signal"
+              aria-label={`Remove the ${scopeName} scope`}
+              className={`flex h-6 max-w-40 min-w-0 items-center gap-1 rounded-full border pr-1.5 pl-2.5 text-xs font-medium ${scope === 'needs-you' ? 'border-signal-line bg-signal-soft text-signal' : 'border-line bg-raised text-ink-2'}`}
             >
-              Needs you
+              <span className="truncate">{scopeName}</span>
               <X size={ICON.xs} aria-hidden="true" />
             </button>
           )}

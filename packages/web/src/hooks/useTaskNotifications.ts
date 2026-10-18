@@ -6,6 +6,7 @@ import {
   tasksThatFinished,
   tasksThatStartedWaiting,
 } from '../lib/notify'
+import { useStableCallback } from './useStableCallback'
 
 export type NotifyPermission = NotificationPermission | 'unsupported'
 
@@ -14,9 +15,10 @@ function currentPermission(): NotifyPermission {
 }
 
 // Shows a system notification when a task starts to wait, or is done, while the dashboard is not
-// in front.
-export function useTaskNotifications(tasks: readonly Task[]) {
+// in front. A click on one opens its task.
+export function useTaskNotifications(tasks: readonly Task[], onOpen: (taskId: string) => void) {
   const [permission, setPermission] = useState<NotifyPermission>(currentPermission)
+  const open = useStableCallback(onOpen)
   const seen = useRef<Map<string, TaskState> | null>(null)
 
   useEffect(() => {
@@ -29,9 +31,13 @@ export function useTaskNotifications(tasks: readonly Task[]) {
     for (const task of [...waiting, ...tasksThatFinished(previous, tasks)]) {
       const { title, body } = notificationFor(task)
       const notification = new Notification(title, { body, tag: task.id })
-      notification.onclick = () => window.focus()
+      notification.onclick = () => {
+        window.focus()
+        open(task.id)
+        notification.close()
+      }
     }
-  }, [tasks, permission])
+  }, [tasks, permission, open])
 
   const askPermission = async () => {
     if (typeof Notification !== 'undefined') {

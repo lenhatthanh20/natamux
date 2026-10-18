@@ -314,3 +314,36 @@ describe('digitOf', () => {
     expect(digitOf(9)).toBeNull()
   })
 })
+
+describe('the project scope', () => {
+  const tasks = [
+    task('T-0001', 'running', { repo: 'r1' }),
+    task('T-0002', 'needs-input', { repo: 'r1' }),
+    task('T-0003', 'needs-input', { repo: 'r2' }),
+    task('T-0004', 'done'),
+  ]
+  const jump = (query: string, repo: string) =>
+    ids(jumpSections({ query, tasks, recent: [], now: NOW, scope: { repo } }))
+
+  it('lists only the workspaces of that project in the jump palette', () => {
+    expect(jump('', 'r1').sort()).toEqual(['T-0001', 'T-0002'])
+    // A task with no repo belongs to the default project.
+    expect(jump('', 'default')).toEqual(['T-0004'])
+  })
+
+  it('narrows a typed query inside the project', () => {
+    expect(jump('T-0002', 'r1')).toEqual(['T-0002'])
+    expect(jump('T-0003', 'r1')).toEqual(['new-workspace'])
+  })
+
+  it('keeps only the waiting tasks of the project when nothing is typed', () => {
+    const scope = { repo: 'r1' }
+    const sections = allSections({ ...base, query: '', tasks, scope, recent: ['T-0001'] })
+    expect(sections.map((section) => section.title)).toEqual(['Needs you'])
+    expect(ids(sections)).toEqual(['T-0002'])
+
+    const typed = flatRows(allSections({ ...base, query: 'Task', tasks, scope }))
+    const found = typed.filter((row) => row.kind === 'task').map(labelOf)
+    expect(found.sort()).toEqual(['T-0001', 'T-0002'])
+  })
+})

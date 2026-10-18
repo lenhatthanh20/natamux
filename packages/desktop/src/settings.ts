@@ -6,16 +6,19 @@ export type DesktopSettings = {
   repoDir?: string
   // True turns the timed update checks on. Missing means off.
   autoUpdate?: boolean
+  // False lets the computer sleep while agents run. Missing means on.
+  keepAwake?: boolean
 }
 
 export function loadSettings(file: string): DesktopSettings {
   try {
     const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
     if (typeof parsed === 'object' && parsed !== null) {
-      const { repoDir, autoUpdate } = parsed as Record<string, unknown>
+      const { repoDir, autoUpdate, keepAwake } = parsed as Record<string, unknown>
       return {
         ...(typeof repoDir === 'string' && repoDir !== '' ? { repoDir } : {}),
         ...(typeof autoUpdate === 'boolean' ? { autoUpdate } : {}),
+        ...(typeof keepAwake === 'boolean' ? { keepAwake } : {}),
       }
     }
   } catch {
@@ -31,6 +34,10 @@ export function saveSettings(file: string, settings: DesktopSettings): void {
 
 export function autoUpdateOn(settings: DesktopSettings): boolean {
   return settings.autoUpdate === true
+}
+
+export function keepAwakeOn(settings: DesktopSettings): boolean {
+  return settings.keepAwake !== false
 }
 
 // A git repository has .git at its top: a folder, or a file in a worktree.

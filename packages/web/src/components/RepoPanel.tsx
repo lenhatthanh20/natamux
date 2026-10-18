@@ -6,13 +6,6 @@ import { Button } from './ui/Button'
 import { Dialog } from './ui/Dialog'
 import { ICON, inputLg } from './ui/styles'
 
-declare global {
-  interface Window {
-    // Set by the desktop app's preload. A plain browser tab has none.
-    natamux?: { pickFolder: () => Promise<string | undefined> }
-  }
-}
-
 type RepoPanelProps = {
   repos: readonly Repo[]
   // The daemon's worktree folder. Undefined until known, or from an older daemon.

@@ -22,10 +22,13 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 |---|---|
 | **File → Add Project…** (`Cmd/Ctrl+Shift+O`) | Pick a git repository and add it as a project. No restart |
 | **File → Show Daemon Log** | Opens the daemon log file |
+| **File → Keep Computer Awake While Agents Run** | On by default. While an agent runs, the computer does not go to sleep on its own. The display can still turn off, and closing a laptop lid still puts it to sleep |
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Windows and Linux |
 | **Check for Updates Automatically** | Off by default. Tick it to check every 6 hours. Next to the item above |
 
 The app also has the standard Edit, View and Window menus.
+
+The app icon shows how many tasks need you: in the Dock on macOS, in the launcher on Linux. Windows shows no count.
 
 Links to other sites open in your browser. Only `http`, `https` and `mailto` links open at all.
 

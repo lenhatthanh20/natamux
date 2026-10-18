@@ -7,6 +7,7 @@ import {
   discardTerminal,
   disposeAllTerminals,
   disposeTerminal,
+  HIDDEN_TERMINAL_TTL_MS,
   HOLDER_ID,
   hasTerminal,
   KEEP_ALIVE_TERMINALS,
@@ -342,5 +343,59 @@ describe('disposeAllTerminals', () => {
     await afterMicrotasks()
     expect(lease.session.disposed).toBe(0)
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 1 })
+  })
+})
+
+describe('the age limit of hidden terminals', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('disposes a terminal hidden longer than the limit', async () => {
+    vi.useFakeTimers()
+    const session = showAndHide('T-0001/1')
+    await vi.advanceTimersByTimeAsync(HIDDEN_TERMINAL_TTL_MS - 1)
+    expect(session.disposed).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(2)
+    expect(session.disposed).toBe(1)
+    expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
+  })
+
+  it('starts the age again for a terminal shown again before the limit', async () => {
+    vi.useFakeTimers()
+    const session = showAndHide('T-0001/1')
+    const other = showAndHide('T-0002/1')
+    await vi.advanceTimersByTimeAsync(HIDDEN_TERMINAL_TTL_MS / 2)
+    acquireTerminal('T-0001/1', fakeSession).release()
+
+    await vi.advanceTimersByTimeAsync(HIDDEN_TERMINAL_TTL_MS / 2 + 1)
+    expect(other.disposed).toBe(1)
+    expect(session.disposed).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(HIDDEN_TERMINAL_TTL_MS / 2)
+    expect(session.disposed).toBe(1)
+  })
+
+  it('never disposes a terminal on screen', async () => {
+    vi.useFakeTimers()
+    showAndHide('T-0001/1')
+    const shown = fakeSession()
+    acquireTerminal('T-0001/1', fakeSession)
+    acquireTerminal('T-0002/1', () => shown)
+
+    await vi.advanceTimersByTimeAsync(HIDDEN_TERMINAL_TTL_MS * 3)
+    expect(cachedTerminalCount()).toEqual({ mounted: 2, hidden: 0 })
+    expect(shown.disposed).toBe(0)
+  })
+
+  it('leaves no timer behind after the cache is reset', async () => {
+    vi.useFakeTimers()
+    showAndHide('T-0001/1')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.getTimerCount()).toBe(1)
+
+    resetTerminalCache()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

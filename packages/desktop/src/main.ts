@@ -10,10 +10,12 @@ import {
   Menu,
   type MenuItemConstructorOptions,
   nativeTheme,
+  powerSaveBlocker,
   shell,
   type UtilityProcess,
   utilityProcess,
 } from 'electron'
+import { AwakeGuard, readAgentStatus } from './agent-status.js'
 import { writeCliShim } from './cli-shim.js'
 import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
 import { daemonEnv } from './daemon-env.js'
@@ -23,6 +25,7 @@ import { findParts } from './paths.js'
 import {
   autoUpdateOn,
   isGitRepository,
+  keepAwakeOn,
   loadSettings,
   saveSettings,
   startingRepoDir,
@@ -62,6 +65,10 @@ let quitConfirmed = false
 const DAEMON_STOP_WAIT_MS = 5000
 let daemonStopWaited = false
 let updater: Updater | undefined
+const awake = new AwakeGuard(powerSaveBlocker)
+let keepAwake = keepAwakeOn(loadSettings(settingsFile))
+// The last count the dashboard reported.
+let runningAgents = 0
 const lastLines: string[] = []
 
 function log(text: string): void {
@@ -359,6 +366,16 @@ function buildMenu(): void {
       submenu: [
         { label: 'Add Project…', accelerator: 'CmdOrCtrl+Shift+O', click: addProjectFromMenu },
         { label: 'Show Daemon Log', click: () => void shell.openPath(logFile) },
+        {
+          label: 'Keep Computer Awake While Agents Run',
+          type: 'checkbox',
+          checked: keepAwake,
+          click: (item) => {
+            keepAwake = item.checked
+            saveSettings(settingsFile, { ...loadSettings(settingsFile), keepAwake })
+            awake.update(runningAgents > 0 && keepAwake)
+          },
+        },
         { type: 'separator' },
         mac ? { role: 'close' } : { role: 'quit' },
       ],
@@ -407,6 +424,23 @@ ipcMain.handle('natamux:pick-folder', (event) => {
     return undefined
   }
   return pickRepository()
+})
+
+// The dashboard reports how many tasks need the user and how many run: the count shows on the app
+// icon, and running agents keep the computer awake. Only the dashboard may report.
+ipcMain.on('natamux:status', (event, value: unknown) => {
+  const from = event.senderFrame?.url ?? ''
+  const status = readAgentStatus(value)
+  if (
+    status === undefined ||
+    dashboardUrl === '' ||
+    !isDashboardUrl(from, new URL(dashboardUrl).origin)
+  ) {
+    return
+  }
+  app.setBadgeCount(status.needsYou)
+  runningAgents = status.running
+  awake.update(runningAgents > 0 && keepAwake)
 })
 
 // The terminals of the dashboard use Ghostty's font when the user has one and picked none.

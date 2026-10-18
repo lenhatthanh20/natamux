@@ -251,6 +251,42 @@ describe('the command palette', () => {
     expect(screen.getByRole('button', { name: 'Remove the Needs you scope' })).toBeTruthy()
   })
 
+  it('cycles the scope with Tab: Needs you, then each project that has a task', async () => {
+    const tasks = [
+      task('T-0001', 'running', { repo: 'a' }),
+      task('T-0002', 'running', { repo: 'b' }),
+    ]
+    const repos = [
+      { id: 'a', name: 'Alpha' },
+      { id: 'b', name: 'Beta' },
+      { id: 'c', name: 'Gamma' },
+    ]
+    palette({ mode: 'jump', repos }, handlers(), tasks)
+    const user = userEvent.setup()
+    const chip = () =>
+      screen.queryByRole('button', { name: /^Remove the .* scope$/ })?.getAttribute('aria-label')
+    expect(chip()).toBeUndefined()
+
+    for (const name of ['Needs you', 'Alpha', 'Beta']) {
+      await user.keyboard('{Tab}')
+      expect(chip()).toBe(`Remove the ${name} scope`)
+    }
+    expect(optionText()).toHaveLength(1)
+    expect(optionText()[0]).toContain('T-0002')
+    await user.keyboard('{Tab}')
+    expect(chip()).toBeUndefined()
+  })
+
+  it('removes a project scope with Backspace, and says when it has no workspace', async () => {
+    const tasks = [task('T-0001', 'draft', { repo: 'a', workspace: null })]
+    const repos = [{ id: 'a', name: 'Alpha' }]
+    palette({ mode: 'jump', repos, initialScope: { repo: 'a' } }, handlers(), tasks)
+    expect(screen.getByText('No workspace in Alpha.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove the Alpha scope' })).toBeTruthy()
+    await userEvent.setup().keyboard('{Backspace}')
+    expect(screen.queryByRole('button', { name: 'Remove the Alpha scope' })).toBeNull()
+  })
+
   it('closes with Escape and keeps the page behind it inert while open', async () => {
     const root = document.createElement('div')
     root.id = 'root'

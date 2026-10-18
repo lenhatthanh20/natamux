@@ -129,12 +129,12 @@ Press `Mod+K` or `F1`, or click **Search or run a command**. Type to search task
 
 | You type | Result |
 |---|---|
-| Nothing | Needs you, recent workspaces and suggested commands |
+| Nothing | Needs you, recent workspaces and suggested commands. With a **Needs you** or project scope, only the tasks of that scope that wait for you |
 | `>` and text | Commands only |
 | `#` and digits | Tasks by id |
 | Text with no match | **Add a task** or **Start a task** with that text as the title |
 
-Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to `Alt+9` pick a row by number. `Tab` changes the scope.
+Press `Enter` to open a row. `Shift+Enter` adds a task to **Agents**. `Alt+1` to `Alt+9` pick a row by number. `Tab` changes the scope: **Needs you**, then each project that has a task, then no scope. Typed text searches inside the scope. Click the chip's X, or press `Backspace` with nothing typed, to remove it.
 
 <Figure src="/screens/v2/palette" alt="The command palette open over a task, after typing >. It lists commands such as Workspace: Jump to a workspace, View: Show or hide the sidebar and Task: Approve, each with its key." caption="The command palette finds tasks, commands and projects. Type > to list only commands." />
 
@@ -173,7 +173,7 @@ A running task whose agent waits for background work, such as a test run in a ba
 
 ## Notifications
 
-Click **Notify me** in the status bar to allow system notifications. When a task starts to wait for you, or is done, while the dashboard is not in front, you get a notification titled with the task id and state, such as `T-0003: Needs input` or `T-0003: Done`, with the task title as text. Click it to bring the dashboard forward. A cancelled task does not notify.
+Click **Notify me** in the status bar to allow system notifications. When a task starts to wait for you, or is done, while the dashboard is not in front, you get a notification titled with the task id and state, such as `T-0003: Needs input` or `T-0003: Done`, with the task title as text. Click it to bring the dashboard forward and open the task. A cancelled task does not notify.
 
 Natamux does not notify about tasks that already waited when you opened the dashboard.
 

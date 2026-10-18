@@ -5,6 +5,7 @@ import { type ComponentProps, type FormEvent, useEffect, useMemo, useRef, useSta
 import { useShallow } from 'zustand/react/shallow'
 import { useActivity, useDiffStats } from '../hooks/useActivity'
 import { useDelayedFlag } from '../hooks/useDelayedFlag'
+import { useDesktopStatus } from '../hooks/useDesktopStatus'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { useFrozenOrder } from '../hooks/useFrozenOrder'
 import { useKeyboard } from '../hooks/useKeyboard'
@@ -780,7 +781,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const showSkeleton = useDelayedFlag(tasksQuery.isPending)
   const waitingCount = waiting.length
-  const notifications = useTaskNotifications(tasks)
+  const notifications = useTaskNotifications(tasks, openTask)
   useEffect(() => {
     document.title = waitingCount > 0 ? `(${waitingCount}) Natamux` : 'Natamux'
   }, [waitingCount])
@@ -814,6 +815,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   }, [tasksQuery.isSuccess, tasks, changesTaskId, selectedId, closeChanges, select])
 
   const runningCount = tasks.filter((task) => task.state === 'running').length
+  useDesktopStatus(waitingCount, runningCount)
   const repoNameOf = (task: Task) =>
     repos.find((repo) => repo.id === (task.repo ?? 'default'))?.name ?? task.repo
 

@@ -28,7 +28,10 @@ try {
   // Storage is off: the terminals use the built-in font.
 }
 
-// The page is isolated, so it gets this one function instead of ipcRenderer. Undefined: canceled.
+// The page is isolated, so it gets these functions instead of ipcRenderer. pickFolder gives
+// undefined when canceled. reportStatus sends the counts for the app icon and the awake hold.
 electron.contextBridge.exposeInMainWorld('natamux', {
   pickFolder: (): Promise<string | undefined> => electron.ipcRenderer.invoke('natamux:pick-folder'),
+  reportStatus: (status: { needsYou: number; running: number }): void =>
+    electron.ipcRenderer.send('natamux:status', status),
 })
