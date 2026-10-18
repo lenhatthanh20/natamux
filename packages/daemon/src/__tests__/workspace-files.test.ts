@@ -194,7 +194,8 @@ describe('writeWorkspaceFile', () => {
 
     expect(saved).toEqual({ path: 'run.sh', version: sha('echo b\n') })
     expect(readFileSync(path, 'utf8')).toBe('echo b\n')
-    expect(statSync(path).mode & 0o777).toBe(0o755)
+    // Windows has no Unix mode bits: chmod sets only read-only, so stat answers 0o666.
+    if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o755)
   })
 
   it('does not replace a file that changed after it was read', async () => {

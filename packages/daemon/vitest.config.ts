@@ -6,5 +6,6 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, '**/.natamux/**'],
     testTimeout: process.platform === 'linux' ? 5_000 : 30_000,
+    hookTimeout: process.platform === 'linux' ? 10_000 : 30_000,
   },
 })
