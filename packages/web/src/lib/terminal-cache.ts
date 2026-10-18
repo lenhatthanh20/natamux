@@ -6,6 +6,9 @@ import type { Task } from '@natamux/core'
 
 // Each hidden terminal keeps its xterm buffer, socket and DOM, so they are capped.
 export const KEEP_ALIVE_TERMINALS = 8
+// A count cap alone never frees an idle terminal, so one hidden this long is freed too. Showing it
+// again then costs one normal attach.
+export const HIDDEN_TERMINAL_TTL_MS = 20 * 60_000
 export const HOLDER_ID = 'terminal-holder'
 
 // What the cache needs from a live terminal.
@@ -29,6 +32,8 @@ type Entry = {
   session: CachedTerminal
   mounted: boolean
   hiddenAt: number
+  // When it left the screen, for the age limit.
+  hiddenMs: number
   // Disposed when it leaves the screen, not hidden.
   discard: boolean
 }
@@ -37,6 +42,8 @@ const entries = new Map<string, Entry>()
 // Counts hides, so "hidden longest" needs no clock.
 let sequence = 0
 let evictionQueued = false
+// Set for the entry hidden longest.
+let ageTimer: ReturnType<typeof setTimeout> | undefined
 // The task ids of the last task list, and the ones whose shells end. Null until the first list:
 // before it, no task counts as gone.
 let knownTasks: Set<string> | null = null
@@ -87,6 +94,31 @@ function evict(): void {
   for (const entry of hidden.slice(0, Math.max(0, hidden.length - KEEP_ALIVE_TERMINALS))) {
     remove(entry)
   }
+  planAgeCheck()
+}
+
+function planAgeCheck(): void {
+  clearTimeout(ageTimer)
+  ageTimer = undefined
+  let oldest = Number.POSITIVE_INFINITY
+  for (const entry of entries.values()) {
+    if (!entry.mounted) {
+      oldest = Math.min(oldest, entry.hiddenMs)
+    }
+  }
+  if (oldest !== Number.POSITIVE_INFINITY) {
+    ageTimer = setTimeout(dropOld, Math.max(0, oldest + HIDDEN_TERMINAL_TTL_MS - Date.now()))
+  }
+}
+
+function dropOld(): void {
+  const now = Date.now()
+  for (const entry of [...entries.values()]) {
+    if (!entry.mounted && now - entry.hiddenMs >= HIDDEN_TERMINAL_TTL_MS) {
+      remove(entry)
+    }
+  }
+  planAgeCheck()
 }
 
 function ownedLease<T extends CachedTerminal>(session: T): TerminalLease<T> {
@@ -125,6 +157,7 @@ function cachedLease<T extends CachedTerminal>(entry: Entry): TerminalLease<T> {
       entry.session.hide(holder())
       sequence += 1
       entry.hiddenAt = sequence
+      entry.hiddenMs = Date.now()
       // React runs the cleanups of the old view before the effects of the new one in the same
       // commit. Counting now would evict a terminal the new view takes back right after.
       if (!evictionQueued) {
@@ -158,6 +191,7 @@ export function acquireTerminal<T extends CachedTerminal>(
     session: create(),
     mounted: true,
     hiddenAt: 0,
+    hiddenMs: 0,
     discard: false,
   }
   entries.set(key, created)
@@ -228,6 +262,8 @@ export function disposeAllTerminals(): void {
   for (const entry of [...entries.values()]) {
     remove(entry)
   }
+  clearTimeout(ageTimer)
+  ageTimer = undefined
   knownTasks = null
   endedTasks = new Set()
 }
