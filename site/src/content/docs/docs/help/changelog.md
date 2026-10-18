@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.35 (2026-10-18)
+
+- Select lines in a diff and click **Ask agent** or press `Mod+Shift+A`: the agent gets the file, the line range and the code with your comment. See [Ask about selected lines](/docs/guides/changes-and-history/#ask-about-selected-lines).
+- The new **Files** view of the details panel lists the files of the task's worktree. Drag one onto a terminal to paste its path, or open it in an editor tab to change and save it. See [Files of the worktree](/docs/guides/dashboard/#files-of-the-worktree).
+
 ## v0.1.34 (2026-10-17)
 
 - The notice of a task that needs input, failed or waits for review, with its actions, is now in the current stage card of **Progress**, not in the workspace header. Click the state in the header to open the details at that stage. See [Control a stage by hand](/docs/concepts/stages/#control-a-stage-by-hand).
