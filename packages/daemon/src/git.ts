@@ -313,6 +313,14 @@ async function untrackedCounts(worktreePath: string, path: string): Promise<Line
   return lines === null ? { added: null, removed: null } : { added: lines, removed: 0 }
 }
 
+// For the status and diff reads the dashboard polls. If they took index.lock, an agent's git add or
+// commit in the same worktree would fail. `git diff` writes the index even with optional locks off.
+const READ = {
+  env: withGitConfig({ GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT }, [
+    ['diff.autoRefreshIndex', 'false'],
+  ]),
+}
+
 async function lineCounts(
   worktreePath: string,
   entries: readonly ChangeEntry[],
@@ -321,7 +329,7 @@ async function lineCounts(
   try {
     // `-M` finds renames even when the user's git config turns them off.
     tracked = parseNumstatZ(
-      await git(worktreePath, ['diff', '--numstat', '-z', '-M', 'HEAD', '--']),
+      await git(worktreePath, ['diff', '--numstat', '-z', '-M', 'HEAD', '--'], READ),
     )
   } catch (error) {
     // A repository without a commit has no HEAD to compare with.
@@ -350,12 +358,11 @@ export async function listChanges(
   worktreePath: string,
   options: { counts?: boolean } = {},
 ): Promise<ChangeEntry[]> {
-  const output = await git(worktreePath, [
-    'status',
-    '--porcelain=v1',
-    '-z',
-    '--untracked-files=all',
-  ])
+  const output = await git(
+    worktreePath,
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    READ,
+  )
   const entries = parseStatus(output).sort((a, b) => a.path.localeCompare(b.path))
   return options.counts === true ? lineCounts(worktreePath, entries) : entries
 }
@@ -1160,7 +1167,7 @@ export function parseNumstat(output: string): DiffStat {
 export async function readDiffStat(worktreePath: string, base: string | null): Promise<DiffStat> {
   const from =
     base === null ? 'HEAD' : (await git(worktreePath, ['merge-base', 'HEAD', base])).trim()
-  return parseNumstat(await git(worktreePath, ['diff', '--numstat', from, '--']))
+  return parseNumstat(await git(worktreePath, ['diff', '--numstat', from, '--'], READ))
 }
 
 // The top folder of the repository that holds `path`. Throws GitError when it is not in one.

@@ -350,7 +350,7 @@ export class WorkspaceService {
   // reaching any other file.
   async fileDiff(taskId: string, path: string): Promise<FileDiff> {
     const workspace = this.workspaceOf(taskId)
-    return readFileDiff(workspace, await this.changedFile(workspace, path))
+    return readFileDiff(workspace, await this.changedFile(taskId, path))
   }
 
   // One side of a changed image, with the same guard as fileDiff.
@@ -360,7 +360,7 @@ export class WorkspaceService {
     side: ImageSide,
   ): Promise<{ type: string; bytes: Buffer }> {
     const workspace = this.workspaceOf(taskId)
-    return readFileImage(workspace, await this.changedFile(workspace, path), side)
+    return readFileImage(workspace, await this.changedFile(taskId, path), side)
   }
 
   // The files explorer: one folder, one file, and a save by hand.
@@ -383,8 +383,11 @@ export class WorkspaceService {
     return saved
   }
 
-  private async changedFile(workspace: string, path: string): Promise<ChangeEntry> {
-    const change = (await listChanges(workspace)).find((entry) => entry.path === path)
+  // The kept list first: the dashboard asks for the changes and a diff at the same moment. A file
+  // that changed after that list was read gets one fresh read.
+  private async changedFile(taskId: string, path: string): Promise<ChangeEntry> {
+    const find = (entries: ChangeEntry[]) => entries.find((entry) => entry.path === path)
+    const change = find(await this.changes(taskId)) ?? find(await this.changes(taskId, true))
     if (!change) {
       throw new FileNotChangedError(path)
     }

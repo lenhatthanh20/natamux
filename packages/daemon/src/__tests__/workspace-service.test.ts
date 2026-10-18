@@ -1099,8 +1099,32 @@ describe('changes and fileDiff', () => {
     writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
     expect((await workspaces.changes(task.id)).length).toBe(1)
     rmSync(join(workspace, 'notes.txt'))
+    // As a hook or shell of the task does after a change.
+    workspaces.touch(task.id)
 
     await expect(workspaces.fileDiff(task.id, 'notes.txt')).rejects.toThrow(FileNotChangedError)
+  })
+
+  it('reuses the kept list of changes for the diff of a file', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'tracked.txt'), 'one\n')
+    runGit(workspace, 'add', 'tracked.txt')
+    runGit(workspace, 'commit', '-m', 'add tracked')
+    writeFileSync(join(workspace, 'tracked.txt'), 'two\n')
+    await workspaces.changes(task.id)
+
+    const before = gitSpawnCount()
+    expect((await workspaces.fileDiff(task.id, 'tracked.txt')).modified).toBe('two\n')
+    // `cat-file -s` and `show` only, no git status.
+    expect(gitSpawnCount() - before).toBe(2)
+  })
+
+  it('reads the changes again for a file that changed after the kept list', async () => {
+    const { task, workspace } = await taskWithWorkspace()
+    await workspaces.changes(task.id)
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    expect((await workspaces.fileDiff(task.id, 'notes.txt')).modified).toBe('hello\n')
   })
 
   it('gives one side of a changed image, and refuses an image that did not change', async () => {

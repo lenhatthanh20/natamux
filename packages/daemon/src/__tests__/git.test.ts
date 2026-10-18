@@ -5,6 +5,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -1760,5 +1761,33 @@ describe('diff size', () => {
 
     expect(await readDiffStat(worktreePath, 'main')).toEqual({ files: 1, added: 3, removed: 1 })
     expect(await readDiffStat(worktreePath, null)).toEqual({ files: 1, added: 1, removed: 0 })
+  })
+})
+
+describe('the reads the dashboard polls', () => {
+  it('leave the index alone, so an agent can still take its lock', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    const file = join(worktreePath, 'tracked.txt')
+    writeFileSync(file, 'one\n')
+    runGit(worktreePath, 'add', 'tracked.txt')
+    runGit(worktreePath, 'commit', '-m', 'add tracked')
+    // Same content, new time: git would write the new time back into the index.
+    const hourAgo = new Date(Date.now() - 3_600_000)
+    utimesSync(file, hourAgo, hourAgo)
+    const index = resolve(
+      worktreePath,
+      runGit(worktreePath, 'rev-parse', '--git-path', 'index').trim(),
+    )
+    const before = readFileSync(index)
+
+    expect(await listChanges(worktreePath, { counts: true })).toEqual([])
+    expect(await readDiffStat(worktreePath, null)).toEqual({ files: 0, added: 0, removed: 0 })
+    expect(await readDiffStat(worktreePath, 'main')).toEqual({ files: 1, added: 1, removed: 0 })
+    await readGitGraph(worktreePath, 'main')
+    expect(readFileSync(index).equals(before)).toBe(true)
+
+    // Proves the file was stat-dirty: a plain status does write the index.
+    runGit(worktreePath, 'status')
+    expect(readFileSync(index).equals(before)).toBe(false)
   })
 })
