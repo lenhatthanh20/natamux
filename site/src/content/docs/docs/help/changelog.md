@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.36 (2026-10-18)
+
+- The desktop app no longer shows **Sign out**, because it signs in by itself. In a browser, Sign out says it removes the daemon token from this browser. See [Account menu](/docs/guides/dashboard/#account-menu).
+
 ## v0.1.35 (2026-10-18)
 
 - Select lines in a diff and click **Ask agent** or press `Mod+Shift+A`: the agent gets the file, the line range and the code with your comment. See [Ask about selected lines](/docs/guides/changes-and-history/#ask-about-selected-lines).
