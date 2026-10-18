@@ -216,6 +216,66 @@ describe('the shown tab', () => {
     useViewStore.getState().openChanges('T-0002')
     expect(useViewStore.getState().changesFile).toBeNull()
   })
+
+  it('does not remember the editor tab, which needs an open file', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().openChanges('T-0001', 'terminal')
+    useViewStore.getState().rememberTab('T-0001', 'editor')
+    expect(useViewStore.getState().changesTab).toBe('editor')
+    expect(useViewStore.getState().tabByTask['T-0001']).toBeUndefined()
+  })
+})
+
+describe('the open file', () => {
+  const reset = () => useViewStore.setState({ ...initialViewData })
+
+  it('opens the workspace of the task on the editor tab', () => {
+    reset()
+    useViewStore.getState().setChangesFile('changed.ts')
+    useViewStore.getState().openFile('T-0004', 'src/a.ts')
+    expect(useViewStore.getState()).toMatchObject({
+      changesTaskId: 'T-0004',
+      changesTab: 'editor',
+      editorFileByTask: { 'T-0004': 'src/a.ts' },
+      agentsOpen: false,
+    })
+    expect(useViewStore.getState().recent[0]).toBe('T-0004')
+  })
+
+  it('keeps the file of the Changes tab of the same workspace', () => {
+    reset()
+    useViewStore.getState().openChanges('T-0004', 'changes')
+    useViewStore.getState().setChangesFile('changed.ts')
+    useViewStore.getState().openFile('T-0004', 'src/a.ts')
+    expect(useViewStore.getState().changesFile).toBe('changed.ts')
+  })
+
+  it('closes back to the tab the user picked last, or the terminal', () => {
+    reset()
+    useViewStore.getState().openChanges('T-0004', 'changes')
+    useViewStore.getState().rememberTab('T-0004', 'history')
+    useViewStore.getState().openFile('T-0004', 'src/a.ts')
+    useViewStore.getState().closeFile('T-0004')
+    expect(useViewStore.getState().changesTab).toBe('history')
+    expect(useViewStore.getState().editorFileByTask).toEqual({})
+
+    useViewStore.getState().openFile('T-0005', 'b.ts')
+    useViewStore.getState().closeFile('T-0005')
+    expect(useViewStore.getState().changesTab).toBe('terminal')
+  })
+
+  it('takes the file of an editor address, and keeps the file of the Changes tab', () => {
+    reset()
+    useViewStore.getState().setChangesFile('changed.ts')
+    useViewStore
+      .getState()
+      .applyRoute({ kind: 'workspace', id: 'T-0007', tab: 'editor', file: 'src/a.ts' })
+    expect(useViewStore.getState()).toMatchObject({
+      changesTab: 'editor',
+      changesFile: 'changed.ts',
+      editorFileByTask: { 'T-0007': 'src/a.ts' },
+    })
+  })
 })
 
 describe('the shell to focus', () => {
@@ -365,6 +425,16 @@ describe('the view of the details', () => {
     expect(() => store.getState().setDetailsView('details')).not.toThrow()
     expect(store.getState().detailsView).toBe('details')
     vi.unstubAllGlobals()
+  })
+
+  it('opens the details of a task on its files, and remembers that view', () => {
+    useViewStore.setState({ ...initialViewData })
+    useViewStore.getState().showFiles('T-0003')
+    expect(useViewStore.getState()).toMatchObject({
+      detailOpenByTask: { 'T-0003': true },
+      detailsView: 'files',
+    })
+    expect(globalThis.localStorage.getItem('natamux.details-view')).toBe('files')
   })
 
   it('opens the details of a task on its progress', () => {

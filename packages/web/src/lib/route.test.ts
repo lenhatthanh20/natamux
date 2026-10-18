@@ -36,6 +36,16 @@ describe('parseRoute', () => {
     expect(parseRoute('/w/T-0018/terminal', '?file=src/a.ts')).toMatchObject({ file: null })
   })
 
+  it('reads the open file of the editor tab, and opens the terminal without one', () => {
+    expect(parseRoute('/w/T-0018/editor', '?file=src/a.ts')).toEqual({
+      kind: 'workspace',
+      id: 'T-0018',
+      tab: 'editor',
+      file: 'src/a.ts',
+    })
+    expect(parseRoute('/w/T-0018/editor')).toMatchObject({ tab: 'terminal', file: null })
+  })
+
   it('opens the terminal when the tab is missing or unknown', () => {
     expect(parseRoute('/w/T-0018')).toMatchObject({ tab: 'terminal' })
     expect(parseRoute('/w/T-0018/other')).toMatchObject({ tab: 'terminal' })
@@ -97,6 +107,7 @@ describe('routePath', () => {
       { kind: 'task', id: 'T-0007' },
       { kind: 'workspace', id: 'T-0007', tab: 'terminal', file: null },
       { kind: 'workspace', id: 'T-0007', tab: 'changes', file: 'docs/a & b/readme.md' },
+      { kind: 'workspace', id: 'T-0007', tab: 'editor', file: 'src/a b.ts' },
     ]
     for (const route of routes) {
       const [path = '', query = ''] = routePath(route).split('?')
@@ -136,6 +147,24 @@ describe('routeOf', () => {
       routeOf({ ...view, selectedId: 'T-0002', detailOpenByTask: { 'T-0002': false } }),
     ).toEqual({ kind: 'tasks' })
     expect(routeOf({ ...view, layout: 'board' })).toEqual({ kind: 'board' })
+  })
+
+  it('names the open file of the editor tab, not the file of the Changes tab', () => {
+    const editor = {
+      ...view,
+      changesTaskId: 'T-0001',
+      changesTab: 'editor' as const,
+      changesFile: 'changed.ts',
+    }
+    expect(routeOf({ ...editor, editorFileByTask: { 'T-0001': 'src/a.ts' } })).toMatchObject({
+      tab: 'editor',
+      file: 'src/a.ts',
+    })
+    // No open file: the address of the tab would open the terminal.
+    expect(routeOf({ ...editor, editorFileByTask: {} })).toMatchObject({
+      tab: 'terminal',
+      file: null,
+    })
   })
 })
 

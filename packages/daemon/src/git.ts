@@ -35,7 +35,7 @@ const MAX_OUTPUT_BYTES = 10 * 1024 * 1024
 
 // A file bigger than this is not sent to the dashboard, and the text of a file is binary when a
 // zero byte shows up in its first bytes.
-const MAX_FILE_BYTES = 1_000_000
+export const MAX_FILE_BYTES = 1_000_000
 const BINARY_SCAN_BYTES = 8000
 
 export class GitError extends Error {
@@ -360,20 +360,24 @@ export async function listChanges(
   return options.counts === true ? lineCounts(worktreePath, entries) : entries
 }
 
-function looksBinary(buffer: Buffer): boolean {
+export function looksBinary(buffer: Buffer): boolean {
   return buffer.subarray(0, BINARY_SCAN_BYTES).includes(0)
 }
 
 type FileInWorktree = {
   real: string
   isFile: boolean
+  isFolder: boolean
   size: number
   mtimeMs: number
   read: () => Promise<Buffer>
 }
 
 // The file in the worktree, or null when it is not there. A link that leaves the worktree is refused.
-async function readInside(root: string, path: string): Promise<FileInWorktree | null> {
+export async function readInside(
+  root: string,
+  path: string,
+): Promise<FileInWorktree | null> {
   let real: string
   try {
     real = await realpath(resolve(root, path))
@@ -392,6 +396,7 @@ async function readInside(root: string, path: string): Promise<FileInWorktree | 
   return {
     real,
     isFile: stats.isFile(),
+    isFolder: stats.isDirectory(),
     size: stats.size,
     mtimeMs: stats.mtimeMs,
     read: () => readFile(real),

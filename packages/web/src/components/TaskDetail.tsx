@@ -81,6 +81,8 @@ type TaskDetailProps = {
   onClose: () => void
   // The progress of the task. When it is set, a row of tabs switches between it and the details.
   progress?: ReactNode
+  // The files of the worktree, for a task that has one. A Files tab sits between the two above.
+  files?: ReactNode
   view?: DetailsView
   onViewChange?: (view: DetailsView) => void
 }
@@ -117,6 +119,7 @@ export function TaskDetail({
   onDelete,
   onClose,
   progress,
+  files,
   view = 'details',
   onViewChange,
 }: TaskDetailProps) {
@@ -135,7 +138,9 @@ export function TaskDetail({
   const canFanOut = onFanOut !== undefined && !isFinished && agentButton !== null
   const page = mode === 'page'
   // The edit form is part of the details, so it shows them while it is open.
-  const shown: DetailsView = progress === undefined || editing ? 'details' : view
+  // Files picked last falls back to the progress for a task without a worktree.
+  const picked = view === 'files' && files === undefined ? 'progress' : view
+  const shown: DetailsView = progress === undefined || editing ? 'details' : picked
 
   // The E key is a command, see lib/commands.ts.
   useAppEvent('edit-task', () => setEditing(true))
@@ -213,6 +218,7 @@ export function TaskDetail({
           background="surface"
           tabs={[
             { id: 'progress', label: 'Progress' },
+            ...(files === undefined ? [] : [{ id: 'files' as const, label: 'Files' }]),
             { id: 'details', label: 'Details' },
           ]}
         />
@@ -224,6 +230,13 @@ export function TaskDetail({
           className="flex min-h-0 flex-1 flex-col"
         >
           {progress}
+        </div>
+      ) : shown === 'files' ? (
+        <div
+          {...tabPanelProps('details', 'files', 'Files')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {files}
         </div>
       ) : editing ? (
         <TaskEditForm

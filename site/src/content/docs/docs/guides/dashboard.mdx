@@ -20,7 +20,7 @@ The window has five parts.
 | Title bar | The sidebar toggle, where you are, **Search or run a command**, the "N need you" chip, **Start a task** and the details toggle |
 | Sidebar | A filter field, **All tasks**, **Agents** and **Workspaces** grouped by project |
 | Main area | The task list as a table, board or progress view, or the open workspace |
-| Details panel | The selected task, in two views: **Progress** (its stages, with Approve) and **Details** (notes, workspace, pull request, subtasks, tries) |
+| Details panel | The selected task, in three views: **Progress** (its stages, with Approve), **Files** (the files of its worktree) and **Details** (notes, workspace, pull request, subtasks, tries) |
 | Status bar | The connection state, running count, **Projects**, **Import issues**, **Notify me**, shortcuts and the account menu |
 
 The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
@@ -30,6 +30,18 @@ The details panel is open by default beside a workspace, so the stages stay in s
 Under 768 px wide the status bar is hidden and the sidebar becomes a drawer. The status items move to the foot of the drawer.
 
 Press `Mod+B` to hide or show the sidebar. Press `Mod+Alt+B` to hide or show the details. `Mod` is ⌘ on macOS and Ctrl elsewhere. Press `F6` to move between the parts. Drag the edge of the sidebar or the details panel to resize it.
+
+## Files of the worktree
+
+The **Files** view of the details panel lists the files and folders of the task's worktree. It shows only for a task with a workspace.
+
+- Click a folder, or press `Right` and `Left`, to open or close it. A folder is read when you open it.
+- A changed file has the same letter and color as in the [Changes tab](/docs/guides/changes-and-history/#changed-files). A folder with changes below has a dot.
+- Drag a file or folder onto a terminal of the same task to type its path there, such as `src/app.ts `. Natamux pastes it, so the agent gets it as one piece, and does not press Enter. A path with a space is quoted. This works where the details sit beside the terminal, in a wide window.
+- Click a file, or press `Enter`, to open it in a tab of the workspace named after the file (`5`). Edit it and press `Mod+S` or **Save**. **Revert** drops your changes and **Close the file** closes the tab.
+- An edit that is not saved stays when you switch tabs, files or tasks. The file shows **edited** in the list. The browser asks before you close the page.
+- When the agent changes the file after you began to edit it, **This file changed on disk.** asks what to keep: **Reload** shows the new file and drops your changes, **Keep mine** lets the next save replace it.
+- A binary file or a file over 1 MB is not shown. `.git` is never listed. The editor cannot make, rename or delete files.
 
 ## Sidebar
 

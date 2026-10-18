@@ -678,6 +678,18 @@ Shared shell:
 - Still: no motion, so it reads the same with reduced motion. Light and dark through tokens only.
 - Accessible: an `ol` named "Pipeline: Context, then Spec, …, then Test spec and Implement side by side, …"; a group is a nested list "<names>, side by side"; each node is a button named like the stage row, and a click selects the stage.
 
+### 4.33 Files explorer and editor tab (`components/FileTree.tsx`, `FileEditor.tsx`, `MonacoFile.tsx`, `TerminalView.tsx`)
+- Place: the **Files** tab of the details (`Progress | Files | Details`), only for a task with a workspace. In the details, not in a workspace tab, so the terminal stays in sight for a drag. A stored `files` pick shows **Progress** for a task without a workspace.
+- Header (32, like the Changes list): the hint "Drag a file onto a terminal to type its path." and **Refresh** (xs icon button).
+- Tree: rows of `--row-h`, the row recipe of the Changes tree (4.24): indent 12 per level, chevron for a folder, `FileIcon` for a file, the name, then `edited` (2xs, `--signal`) for an unsaved draft, then the status letter in its tone. A folder with changes below gets the 6 px dot in `--modified`. Folders first, then files, each by name with numbers in order. One request per folder, when it opens; open folders are kept per task while the page lives. `workspace.dirty` reads the open folders again.
+- Keys: the roving tree of the Changes list: `Up`/`Down`/`Home`/`End`, `Right` opens or goes to the first child, `Left` closes or goes to the parent, `Enter` or `Space` opens a file or toggles a folder, type-ahead. `role="tree"` "Files of the worktree", rows `treeitem` with level, position and `aria-expanded`; the open file is `aria-selected`.
+- Drag: a row puts `{ path, kind }` under the type `application/x-natamux-path-<task id>` and the path as `text/plain`. A terminal of the same task (`TerminalView`, open shell only) shows a 2 px `--focus` outline inside while the drag is over it, and on the drop pastes the path from the worktree root (folder with `/`, quoted in `'…'` when it has other characters than `A-Z a-z 0-9 . _ / @ + -`), then a space, with xterm `paste` (bracketed paste), no Enter, and takes the focus. Another task's drag keeps the browser's "not allowed".
+- Editor tab: `editor` after **Docs**, only while a file is open, label = file name, icon `FileCode`, key `5`. Address `/w/<id>/editor?file=<path>`; without a file the address opens the terminal. Closing goes back to the tab picked last.
+- Editor header (40): `FileIcon`, the path (`PathText`), `Modified` (2xs, `--signal`) while there is a draft, **Revert** (ghost, asks first), **Save** (primary, `Mod+S`, off without a draft or while the banner shows), **Close the file** (x; asks first when there is a draft).
+- Body: `MonacoFile` with `kind="edit"`: the options of the file view, editable, no whole-file marks, the last line break kept, wrap for prose files. Notices instead: "Binary file. Not shown.", "Larger than 1 MB. Not shown.".
+- Drafts: an edit is kept per task and path while the page lives (`lib/file-drafts.ts`), with the version it began on. `beforeunload` asks while one exists. A new text on disk goes into the editor in place when there is no draft.
+- Banner (under the header, `role="alert"`, xs): "This file changed on disk." with **Reload** (drop the draft) and **Keep mine** (the draft takes the new version; the next save replaces the file). It shows when the draft's version is not the one on disk, also after a save answered 409.
+
 ---------------------------------------------------------------------
 
 ## 5. Interaction
@@ -825,7 +837,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 | Floating surfaces | one recipe, three elevation levels | 2.6 |
 | Settings | theme, UI size, density later | 4.28 account menu; full settings page later |
 
-Not matched on purpose (for now): embedded browser, file explorer/editor tabs, image diff, SSH, plugins, usage meters (no data source yet).
+Not matched on purpose (for now): embedded browser, several editor tabs, image diff, SSH, plugins, usage meters (no data source yet). The files explorer opens one file at a time (4.33).
 
 ---------------------------------------------------------------------
 

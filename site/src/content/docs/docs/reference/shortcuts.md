@@ -61,6 +61,7 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 | Show the Changes tab | `2` | A workspace is open |
 | Show the History tab | `3` | A workspace is open |
 | Show the Docs tab | `4` | A workspace is open |
+| Show the open file | `5` | A file is open in the editor tab |
 | Read the changes and the history again | `Shift+R` | A workspace is open |
 
 `n` closes the open workspace and puts the cursor in the **Add a task to the backlog (n)** field.
@@ -142,5 +143,6 @@ Some commands are only in the palette (`Mod+K`, then type the name):
 - **Text size: Compact**, **Default**, **Large**
 - **Add a project**, **Import GitHub issues**
 - **Show the task progress**, for the open or selected task (opens the details on **Progress**)
+- **Show the files of the worktree**, for the open workspace (opens the details on **Files**)
 - **Mark ready**, **Block**, **Resume the agent**, **Unblock**, **Retry**, for the selected task
 - **Skip the stage**, **Mark the stage as done**, **Approve the stage anyway**, **Send the task back to an earlier stage**, for the selected task in a workspace

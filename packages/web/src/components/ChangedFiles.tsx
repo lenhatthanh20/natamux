@@ -37,7 +37,7 @@ import { FileIcon } from './FileIcon'
 import { IconButton } from './ui/IconButton'
 import { ICON } from './ui/styles'
 
-const STATUS_TONE: Record<ChangeStatus, string> = {
+export const STATUS_TONE: Record<ChangeStatus, string> = {
   M: 'text-modified',
   A: 'text-add',
   U: 'text-add',

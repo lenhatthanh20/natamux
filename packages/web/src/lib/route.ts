@@ -9,6 +9,7 @@ import type { WorkspaceTab } from './view-store'
 //   /w/T-0018/terminal         the workspace of T-0018 (also changes, history, docs)
 //   /w/T-0018/progress         the old Progress tab: the terminal, and the details on Progress
 //   /w/T-0018/changes?file=src/a.ts
+//   /w/T-0018/editor?file=src/a.ts   a file of the worktree, open in the editor tab
 export type Route =
   | { kind: 'tasks' }
   | { kind: 'board' }
@@ -23,7 +24,7 @@ export type Route =
       showProgress?: boolean
     }
 
-const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history', 'docs']
+const TABS: readonly WorkspaceTab[] = ['terminal', 'changes', 'history', 'docs', 'editor']
 const TASK_ID = /^[A-Za-z]+-\d+$/
 
 function taskId(segment: string | undefined): string | null {
@@ -37,6 +38,11 @@ function taskId(segment: string | undefined): string | null {
     return null
   }
   return TASK_ID.test(decoded) ? decoded.toUpperCase() : null
+}
+
+// The tabs whose address names a file.
+function hasFile(tab: WorkspaceTab): boolean {
+  return tab === 'changes' || tab === 'editor'
 }
 
 // An unknown address is the task list: a link must never lead to a blank page.
@@ -63,9 +69,13 @@ export function parseRoute(pathname: string, search = ''): Route {
     if (third === 'progress') {
       return { kind: 'workspace', id, tab: 'terminal', file: null, showProgress: true }
     }
+    const file = new URLSearchParams(search).get('file') || null
     const tab = TABS.find((candidate) => candidate === third) ?? 'terminal'
-    const file = new URLSearchParams(search).get('file')
-    return { kind: 'workspace', id, tab, file: tab === 'changes' && file ? file : null }
+    // The editor tab is nothing without its file.
+    if (tab === 'editor' && file === null) {
+      return { kind: 'workspace', id, tab: 'terminal', file: null }
+    }
+    return { kind: 'workspace', id, tab, file: hasFile(tab) ? file : null }
   }
   return { kind: 'tasks' }
 }
@@ -85,7 +95,7 @@ export function routePath(route: Route): string {
     case 'workspace': {
       const path = `/w/${route.id}/${route.tab}`
       // Slashes stay readable in the address.
-      return route.tab === 'changes' && route.file
+      return hasFile(route.tab) && route.file
         ? `${path}?file=${encodeURIComponent(route.file).replaceAll('%2F', '/')}`
         : path
     }
@@ -97,6 +107,7 @@ export type RouteView = {
   changesTaskId: string | null
   changesTab: WorkspaceTab
   changesFile: string | null
+  editorFileByTask?: Readonly<Record<string, string>>
   agentsOpen: boolean
   selectedId: string | null
   detailOpenByTask: Readonly<Record<string, boolean>>
@@ -105,6 +116,12 @@ export type RouteView = {
 
 export function routeOf(view: RouteView): Route {
   if (view.changesTaskId !== null) {
+    if (view.changesTab === 'editor') {
+      const file = view.editorFileByTask?.[view.changesTaskId] ?? null
+      return file === null
+        ? { kind: 'workspace', id: view.changesTaskId, tab: 'terminal', file: null }
+        : { kind: 'workspace', id: view.changesTaskId, tab: 'editor', file }
+    }
     return {
       kind: 'workspace',
       id: view.changesTaskId,

@@ -4,9 +4,10 @@ import { type PaneLayout, parsePaneLayout } from './panes'
 import type { Route } from './route'
 import type { TaskSort } from './tasks'
 
-export type WorkspaceTab = 'changes' | 'history' | 'terminal' | 'docs'
+// `editor` shows only while a file of the worktree is open.
+export type WorkspaceTab = 'changes' | 'history' | 'terminal' | 'docs' | 'editor'
 export type Layout = 'table' | 'board' | 'progress'
-export type DetailsView = 'progress' | 'details'
+export type DetailsView = 'progress' | 'files' | 'details'
 
 const LAYOUT_KEY = 'natamux.layout'
 const PINNED_KEY = 'natamux.pinned'
@@ -77,7 +78,7 @@ function saveSidebarOpen(open: boolean): void {
 function savedDetailsView(): DetailsView | null {
   try {
     const saved = globalThis.localStorage?.getItem(DETAILS_VIEW_KEY)
-    return saved === 'progress' || saved === 'details' ? saved : null
+    return saved === 'progress' || saved === 'files' || saved === 'details' ? saved : null
   } catch {
     return null
   }
@@ -284,6 +285,8 @@ type ViewData = {
   changesTab: WorkspaceTab
   // The file that the Changes tab shows. Null: the first one.
   changesFile: string | null
+  // The file open in the editor tab of each workspace. Not remembered after a reload.
+  editorFileByTask: Record<string, string>
   // The workspaces that were opened, newest first.
   recent: string[]
   // A shell that the next view of a workspace should focus, asked for by the jump palette. Null
@@ -316,10 +319,15 @@ type ViewActions = {
   setDetailsView: (view: DetailsView) => void
   // Opens the details of a task on its progress.
   showProgress: (taskId: string) => void
+  // Opens the details of a task on the files of its worktree.
+  showFiles: (taskId: string) => void
   setSidebarOpen: (open: boolean) => void
   setDrawerOpen: (open: boolean) => void
   openChanges: (taskId: string, tab?: WorkspaceTab) => void
   setChangesFile: (file: string | null) => void
+  // Opens a file of the worktree in the editor tab of the task's workspace.
+  openFile: (taskId: string, path: string) => void
+  closeFile: (taskId: string) => void
   requestShell: (taskId: string, name: string) => void
   clearShellRequest: () => void
   // Makes the view match an address: the address bar, a back button or a link.
@@ -347,6 +355,7 @@ export const initialViewData: ViewData = {
   changesTaskId: null,
   changesTab: 'changes',
   changesFile: null,
+  editorFileByTask: {},
   recent: [],
   shellRequest: null,
   tabByTask: {},
@@ -404,6 +413,12 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
       const detailOpenByTask = withDetailOpen(current.detailOpenByTask, taskId, true)
       return { detailOpenByTask, detailsView: 'progress' }
     }),
+  showFiles: (taskId) =>
+    set((current) => {
+      saveDetailsView('files')
+      const detailOpenByTask = withDetailOpen(current.detailOpenByTask, taskId, true)
+      return { detailOpenByTask, detailsView: 'files' }
+    }),
   setSidebarOpen: (open) => {
     saveSidebarOpen(open)
     set({ sidebarOpen: open })
@@ -430,6 +445,29 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
       }
     }),
   setChangesFile: (changesFile) => set({ changesFile }),
+  openFile: (taskId, path) =>
+    set((current) => {
+      const recent = withRecent(current.recent, taskId)
+      saveRecent(recent)
+      const same = current.changesTaskId === taskId
+      return {
+        changesTaskId: taskId,
+        changesTab: 'editor',
+        changesFile: same ? current.changesFile : null,
+        editorFileByTask: { ...current.editorFileByTask, [taskId]: path },
+        agentsOpen: false,
+        recent,
+        shellRequest: same ? current.shellRequest : null,
+      }
+    }),
+  closeFile: (taskId) =>
+    set((current) => {
+      const { [taskId]: _closed, ...editorFileByTask } = current.editorFileByTask
+      const back = current.changesTaskId === taskId && current.changesTab === 'editor'
+      return back
+        ? { editorFileByTask, changesTab: current.tabByTask[taskId] ?? 'terminal' }
+        : { editorFileByTask }
+    }),
   requestShell: (taskId, name) => set({ shellRequest: { taskId, name, at: Date.now() } }),
   clearShellRequest: () => set({ shellRequest: null }),
   applyRoute: (route) =>
@@ -444,10 +482,14 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
               detailsView: 'progress' as const,
             }
           : {}
+        const editor = route.tab === 'editor' && route.file !== null
         return {
           changesTaskId: route.id,
           changesTab: route.tab,
-          changesFile: route.file,
+          changesFile: editor ? current.changesFile : route.file,
+          ...(editor
+            ? { editorFileByTask: { ...current.editorFileByTask, [route.id]: route.file } }
+            : {}),
           agentsOpen: false,
           selectedId: route.id,
           recent,
@@ -478,7 +520,8 @@ export const useViewStore = create<ViewData & ViewActions>()((set) => ({
   rememberTab: (taskId, tab) =>
     set((current) => {
       const shown = current.changesTaskId === taskId ? { changesTab: tab } : {}
-      if (current.tabByTask[taskId] === tab) {
+      // A reload has no open file, so the editor tab is never the one to come back to.
+      if (tab === 'editor' || current.tabByTask[taskId] === tab) {
         return shown
       }
       const tabByTask = withTab(current.tabByTask, taskId, tab)

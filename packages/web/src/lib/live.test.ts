@@ -210,8 +210,9 @@ describe('applyLiveMessages', () => {
     ])
 
     const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    const workspaceKeys = ['changes', 'file-diff', 'graph', 'stage-files', 'tree', 'workspace-file']
     for (const id of ['T-0001', 'T-0002']) {
-      for (const key of ['changes', 'file-diff', 'graph', 'stage-files']) {
+      for (const key of workspaceKeys) {
         expect(keys).toContainEqual([key, id])
       }
     }

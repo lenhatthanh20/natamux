@@ -569,6 +569,35 @@ describe('project settings', () => {
     expect(isConflict(new Error('boom'))).toBe(false)
   })
 
+  it('lists one folder of the worktree, the root by default', async () => {
+    const entries = [{ name: 'src', kind: 'folder' }]
+    const { calls, fetchFunction } = fakeFetch(() => json({ entries }))
+    const api = createApi('secret', fetchFunction)
+
+    expect(await api.listFolder('T-0001', '')).toEqual(entries)
+    await api.listFolder('T-0001', 'packages/web src')
+
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/tree?path=')
+    expect(calls[1]?.url).toBe('/api/tasks/T-0001/tree?path=packages%2Fweb%20src')
+  })
+
+  it('reads a file of the worktree and saves it with the version it read', async () => {
+    const file = { path: 'a.ts', text: 'x', binary: false, tooLarge: false, version: 'v1' }
+    const { calls, fetchFunction } = fakeFetch(() =>
+      calls.length === 1 ? json(file) : json({ path: 'a.ts', version: 'v2' }),
+    )
+    const api = createApi('secret', fetchFunction)
+
+    expect(await api.readWorkspaceFile('T-0001', 'a.ts')).toEqual(file)
+    expect(await api.writeWorkspaceFile('T-0001', 'a.ts', 'y', 'v1')).toBe('v2')
+
+    expect(calls[0]?.url).toBe('/api/tasks/T-0001/file?path=a.ts')
+    expect(calls[1]?.method).toBe('PUT')
+    expect(calls[1]?.url).toBe('/api/tasks/T-0001/file?path=a.ts')
+    expect(calls[1]?.headers.get('if-match')).toBe('v1')
+    expect(calls[1]?.body).toEqual({ text: 'y' })
+  })
+
   it('lists the skills of the agents, with the notices', async () => {
     const skill = {
       name: 'fetch-ticket',

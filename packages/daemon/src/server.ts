@@ -93,6 +93,13 @@ import {
 } from './terminal-service.js'
 import { registerWebFallback, stripApiPrefix } from './web-fallback.js'
 import {
+  FileChangedOnDiskError,
+  FileTooLargeError,
+  GitFolderError,
+  WorkspacePathError,
+  WorkspacePathNotFoundError,
+} from './workspace-files.js'
+import {
   FileNotChangedError,
   WorkspaceConflictError,
   type WorkspaceService,
@@ -139,6 +146,8 @@ export const NO_PROGRAM_ROUTES = new Set([
   '/tasks/:id/events',
   '/tasks/:id/files',
   '/tasks/:id/files/:name',
+  '/tasks/:id/tree',
+  '/tasks/:id/file',
   '/tasks/:id/attachments',
   '/tasks/:id/attachments/:name',
   '/templates',
@@ -158,6 +167,11 @@ const changedFileQuerySchema = z.object({ path: z.string().min(1).max(1024) })
 // A manual refresh: git is read now, not the answer kept from a timed read.
 const freshQuerySchema = z.object({ fresh: z.enum(['1']).optional() })
 const changedImageQuerySchema = changedFileQuerySchema.extend({ side: z.enum(IMAGE_SIDES) })
+// The worktree root is the empty path.
+const treeQuerySchema = z.object({ path: z.string().max(1024).default('') })
+const workspaceFileBodySchema = z.object({ text: z.string() })
+// A text of 1 MB, sent as JSON: escapes can make it a few times longer.
+const WORKSPACE_FILE_BODY_LIMIT = 4 * 1024 * 1024
 const fanOutBodySchema = z.object({
   count: z.number().int().min(1).max(MAX_TRIES),
   start: z.boolean().default(false),
@@ -393,13 +407,17 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     if (error instanceof TemplateNotFoundError || error instanceof RepoNotFoundError) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
-    if (error instanceof FileNotChangedError || error instanceof ImageSideMissingError) {
+    if (
+      error instanceof FileNotChangedError ||
+      error instanceof ImageSideMissingError ||
+      error instanceof WorkspacePathNotFoundError
+    ) {
       return reply.code(404).send({ error: 'not_found', message: error.message })
     }
-    if (error instanceof NotAnImageError) {
+    if (error instanceof NotAnImageError || error instanceof WorkspacePathError) {
       return reply.code(400).send({ error: 'invalid_request', message: error.message })
     }
-    if (error instanceof ImageTooLargeError) {
+    if (error instanceof ImageTooLargeError || error instanceof FileTooLargeError) {
       return reply.code(413).send({ error: 'too_large', message: error.message })
     }
     if (
@@ -415,7 +433,9 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       error instanceof IssueLinkError ||
       error instanceof RepoInUseError ||
       error instanceof SettingsChangedError ||
-      error instanceof TaskFileChangedError
+      error instanceof TaskFileChangedError ||
+      error instanceof GitFolderError ||
+      error instanceof FileChangedOnDiskError
     ) {
       return reply.code(409).send({ error: 'conflict', message: error.message })
     }
@@ -717,6 +737,31 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
       .header('x-content-type-options', 'nosniff')
       .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
       .send(bytes)
+  })
+
+  // The files explorer. One folder per request, so a big worktree is read only where it is opened.
+  app.get('/tasks/:id/tree', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { path } = treeQuerySchema.parse(request.query)
+    return { entries: await options.workspaces.tree(id, path) }
+  })
+
+  app.get('/tasks/:id/file', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { path } = changedFileQuerySchema.parse(request.query)
+    return options.workspaces.readFile(id, path)
+  })
+
+  // `If-Match` holds the version the editor read; a file that changed since is not replaced.
+  app.put('/tasks/:id/file', { bodyLimit: WORKSPACE_FILE_BODY_LIMIT }, async (request, reply) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { path } = changedFileQuerySchema.parse(request.query)
+    const { text } = workspaceFileBodySchema.parse(request.body)
+    const version = singleHeader(request.headers['if-match'])
+    if (version === undefined) {
+      return reply.code(400).send({ error: 'invalid_request', message: 'If-Match is missing' })
+    }
+    return options.workspaces.writeFile(id, path, text, version)
   })
 
   app.get('/tasks/:id/graph', async (request) => {

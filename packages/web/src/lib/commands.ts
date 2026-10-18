@@ -38,6 +38,8 @@ export type CommandActions = {
   showTab: (tab: WorkspaceTab) => void
   // Opens the details of the task on its progress.
   showProgress: () => void
+  // Opens the details of the task on the files of its worktree.
+  showFiles: () => void
   back: () => void
   showAllTasks: () => void
   showAgents: () => void
@@ -147,6 +149,13 @@ const stageCommands: Command[] = [
     when: ({ state }) => state.workspaceOpen || state.hasSelection,
     run: ({ actions }) => actions.showProgress(),
   },
+  {
+    id: 'files.show',
+    title: 'Show the files of the worktree',
+    category: 'Workspace',
+    when: inWorkspace,
+    run: ({ actions }) => actions.showFiles(),
+  },
 ]
 
 const THEMES: readonly { theme: Theme; title: string }[] = [
@@ -165,6 +174,8 @@ const TABS: readonly { tab: WorkspaceTab; key: string; title: string }[] = [
   { tab: 'changes', key: '2', title: 'Show the Changes tab' },
   { tab: 'history', key: '3', title: 'Show the History tab' },
   { tab: 'docs', key: '4', title: 'Show the Docs tab' },
+  // Only while a file is open; the workspace ignores it otherwise.
+  { tab: 'editor', key: '5', title: 'Show the open file' },
 ]
 
 export const COMMANDS: readonly Command[] = [
