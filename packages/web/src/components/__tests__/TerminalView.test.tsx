@@ -1,13 +1,6 @@
 import { CLOSE_GONE, type TaskState } from '@natamux/core'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireAppEvent } from '../../lib/app-events'
-import { GIVE_BACK_DELAY_MS, gpuBudget } from '../../lib/gpu-renderer'
-import type { TerminalConnectQuery } from '../../lib/terminal'
-import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../../lib/terminal-cache'
-import { fontStack, saveTerminalFont } from '../../lib/terminal-font'
-import { DISPOSE_DELAY_MS, importWebgl } from '../../lib/terminal-session'
-import { terminalTheme } from '../../lib/terminal-theme'
 import {
   type FakeSocket,
   type FakeTerminal,
@@ -15,6 +8,13 @@ import {
   fakes,
   resetFakes,
 } from '../../lib/__tests__/xterm-fake.fixture'
+import { fireAppEvent } from '../../lib/app-events'
+import { GIVE_BACK_DELAY_MS, gpuBudget } from '../../lib/gpu-renderer'
+import type { TerminalConnectQuery } from '../../lib/terminal'
+import { cachedTerminalCount, HOLDER_ID, resetTerminalCache } from '../../lib/terminal-cache'
+import { fontStack, saveTerminalFont } from '../../lib/terminal-font'
+import { DISPOSE_DELAY_MS, importWebgl } from '../../lib/terminal-session'
+import { terminalTheme } from '../../lib/terminal-theme'
 import TerminalView, { RESTORE_FADE_MS } from '../TerminalView'
 
 vi.mock('@xterm/xterm', async () => ({
