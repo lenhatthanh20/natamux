@@ -39,7 +39,7 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
 - The scripts that start agents are written with mode `0600`.
-- Sign out in the dashboard's account menu to remove the token from the browser.
+- In a browser, Sign out in the dashboard's account menu removes the token from that browser. The desktop app has no Sign out.
 
 ## Updates
 

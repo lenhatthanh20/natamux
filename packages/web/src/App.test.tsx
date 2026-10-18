@@ -2372,7 +2372,11 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Account' }))
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
     const dialog = screen.getByRole('dialog', { name: 'Sign out of Natamux?' })
-    expect(within(dialog).getByText('Your tasks keep running.')).toBeTruthy()
+    expect(
+      within(dialog).getByText(
+        'This removes the daemon token from this browser. Your tasks keep running.',
+      ),
+    ).toBeTruthy()
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('table')).toBeTruthy()
@@ -2385,6 +2389,24 @@ describe('App', () => {
     // A cached terminal would keep its socket and shell alive for the next sign-in.
     expect(cached.dispose).toHaveBeenCalledTimes(1)
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
+  })
+
+  it('has no sign out in the desktop app, which signs in by itself', async () => {
+    window.natamux = { pickFolder: vi.fn(async () => undefined) }
+    try {
+      installDaemon([reviewTask])
+      const user = userEvent.setup()
+      render(<App />)
+      await signIn(user)
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: 'Account' }))
+      const menu = screen.getByRole('menu')
+      expect(within(menu).queryByRole('menuitem', { name: 'Sign out' })).toBeNull()
+      expect(menu.lastElementChild?.textContent).toContain('Report an issue')
+    } finally {
+      delete window.natamux
+    }
   })
 
   it('drops the cached terminals of a done task when the task list comes', async () => {
