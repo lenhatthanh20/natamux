@@ -149,6 +149,14 @@ const stageCommands: Command[] = [
     when: ({ state }) => state.workspaceOpen || state.hasSelection,
     run: ({ actions }) => actions.showProgress(),
   },
+  // Palette only: 5 showed the Docs tab before. The workspace ignores it while no file is open.
+  {
+    id: 'tab.editor',
+    title: 'Show the open file',
+    category: 'View',
+    when: inWorkspace,
+    run: ({ actions }) => actions.showTab('editor'),
+  },
   {
     id: 'files.show',
     title: 'Show the files of the worktree',
@@ -174,8 +182,6 @@ const TABS: readonly { tab: WorkspaceTab; key: string; title: string }[] = [
   { tab: 'changes', key: '2', title: 'Show the Changes tab' },
   { tab: 'history', key: '3', title: 'Show the History tab' },
   { tab: 'docs', key: '4', title: 'Show the Docs tab' },
-  // Only while a file is open; the workspace ignores it otherwise.
-  { tab: 'editor', key: '5', title: 'Show the open file' },
 ]
 
 export const COMMANDS: readonly Command[] = [

@@ -167,7 +167,7 @@ export function ChangesView({
     setTab(next)
     onTabPicked?.(next)
   }
-  // The keys 1 to 5 are commands. A new address (back button, link) can name another tab too.
+  // The keys 1 to 4 are commands. A new address (back button, link) can name another tab too.
   useAppEvent<WorkspaceTab>('workspace-tab', pickTab)
   // A stage file picked in the progress in the details.
   useAppEvent<string>('open-doc', (name) => {
