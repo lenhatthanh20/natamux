@@ -29,7 +29,7 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 
 - The desktop app keeps its daemon token in its user data folder, readable only by your user (file mode `0600`).
 - The scripts that start agents (`agent-launch-<task>.sh`) are written with mode `0600`, so the prompt and settings in them are not readable by other users.
-- The dashboard keeps the token in the browser's `localStorage` for its own address only. Sign out in the account menu to remove it.
+- The dashboard keeps the token in the browser's `localStorage` for its own address only. In a browser, Sign out in the account menu removes it. The desktop app has no Sign out: it puts the token back on every page load.
 
 ### Agents and hooks
 
