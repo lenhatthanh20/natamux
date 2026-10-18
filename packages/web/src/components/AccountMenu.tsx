@@ -21,8 +21,9 @@ type AccountMenuProps = {
 }
 
 // Theme, UI size, terminal font, shortcuts, issue reporting and sign out in one menu. Signing out
-// asks first.
+// asks first. The desktop app has no sign out: its preload puts the token back on every load.
 export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
+  const desktop = window.natamux !== undefined
   const theme = useThemeChoice()
   const size = useUiSize()
   const [asking, setAsking] = useState(false)
@@ -61,15 +62,19 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
             icon: Bug,
             onSelect: () => window.open(ISSUES_URL, '_blank', 'noopener,noreferrer'),
           },
-          { type: 'separator' },
-          { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => setAsking(true) },
+          ...(desktop
+            ? []
+            : ([
+                { type: 'separator' },
+                { label: 'Sign out', icon: LogOut, danger: true, onSelect: () => setAsking(true) },
+              ] as const)),
         ]}
       />
       {pickingFont && <TerminalFontDialog onClose={() => setPickingFont(false)} />}
       {asking && (
         <ConfirmDialog
           title="Sign out of Natamux?"
-          description="Your tasks keep running."
+          description="This removes the daemon token from this browser. Your tasks keep running."
           confirmLabel="Sign out"
           onConfirm={onSignOut}
           onClose={() => setAsking(false)}
