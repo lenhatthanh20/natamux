@@ -145,12 +145,12 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 | What | Where |
 |---|---|
-| `TERMINAL_LOOK` values, and the options that cost speed stay off | `lib/terminal-theme.test.ts` |
-| Inactive selection color in both themes | `lib/terminal-theme.test.ts` |
-| JetBrains Mono first, icon font next, UI keeps Geist Mono; icon font also behind a user font | `lib/terminal-font.test.ts` |
-| xterm opens with `TERMINAL_LOOK` | `lib/terminal-session.test.ts` |
-| Atlas cleared when the icon font loads, not for other fonts, not after dispose | `lib/terminal-session.test.ts` |
-| Font dialog names JetBrains Mono, 13px | `components/TerminalFontDialog.test.tsx` |
+| `TERMINAL_LOOK` values, and the options that cost speed stay off | `lib/__tests__/terminal-theme.test.ts` |
+| Inactive selection color in both themes | `lib/__tests__/terminal-theme.test.ts` |
+| JetBrains Mono first, icon font next, UI keeps Geist Mono; icon font also behind a user font | `lib/__tests__/terminal-font.test.ts` |
+| xterm opens with `TERMINAL_LOOK` | `lib/__tests__/terminal-session.test.ts` |
+| Atlas cleared when the icon font loads, not for other fonts, not after dispose | `lib/__tests__/terminal-session.test.ts` |
+| Font dialog names JetBrains Mono, 13px | `components/__tests__/TerminalFontDialog.test.tsx` |
 | No pane dimmed; the focused pane has the outline and a click moves it | `e2e/tests/terminal-look.spec.ts` |
 | Icon font not loaded until an icon shows, loaded after | `e2e/tests/terminal-look.spec.ts` |
 

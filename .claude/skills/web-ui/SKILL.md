@@ -50,12 +50,12 @@ The dashboard runs for hours with many agents. A change of one task must render 
 - **Store selectors.** `Dashboard` reads `useViewStore` with `useShallow` and only the fields it shows. Actions and values needed only in a handler come from `useViewStore.getState()`.
 - **Data at the leaves.** `Dashboard` owns the activity and diffstats queries but does not read them (`notifyOnChangeProps: []`, or a `select`). Parts read them with `useActivity(select)` and `useDiffStats()` from `hooks/useActivity.ts`; these never fetch. A sidebar row reads its own activity and question.
 - **Memo rows.** `WorkspaceRow` and `AgentRow` are `memo`. Give them stable props: callbacks through `useStableCallback`, strings and booleans instead of new objects, `tabStop` and `activate` instead of `roving.item(key)` (the row calls `rovingItem`), and no `children` when there is nothing under the row.
-- `src/render-scope.test.tsx` counts renders: one task's activity change renders `Dashboard` 0 times and only that task's row. Keep it green.
+- `src/__tests__/render-scope.test.tsx` counts renders: one task's activity change renders `Dashboard` 0 times and only that task's row. Keep it green.
 - **Long lists:** `cv-row` (in `styles.css`) adds `content-visibility: auto`. Set `--cv-h` to the row height, for example `[--cv-h:2.5rem]`. Not on rows with a focus ring outside the box, or with a menu that is not portaled.
 
 ## Tests
 
-- Vitest with jsdom and Testing Library. A `X.test.tsx` sits next to `X.tsx`.
+- Vitest with jsdom and Testing Library. A `X.test.tsx` sits in `__tests__/` next to `X.tsx`.
 - Call `cleanup()` (and `vi.restoreAllMocks()`) in `afterEach`.
 - Query with `screen.getByRole(role, { name })`, not CSS or test ids. The code has no `data-testid`.
 - Pure logic goes into `lib/` with a plain unit test, so components stay thin.
