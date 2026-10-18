@@ -69,3 +69,24 @@ export const diffStatSchema = z.object({
 })
 
 export type DiffStat = z.infer<typeof diffStatSchema>
+
+// One entry of a folder of the worktree, for the files explorer.
+export const treeEntrySchema = z.object({
+  name: z.string().min(1),
+  kind: z.enum(['file', 'folder']),
+})
+
+export type TreeEntry = z.infer<typeof treeEntrySchema>
+
+// A file of the worktree as the editor opens it. `text` is null when the file is binary or too
+// large. `version` is the sha256 of the bytes: a save sends it back, so it never replaces a newer
+// file.
+export const workspaceFileSchema = z.object({
+  path: z.string().min(1),
+  text: z.string().nullable(),
+  binary: z.boolean(),
+  tooLarge: z.boolean(),
+  version: z.string(),
+})
+
+export type WorkspaceFile = z.infer<typeof workspaceFileSchema>

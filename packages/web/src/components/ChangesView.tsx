@@ -7,15 +7,17 @@ import type {
   GitGraph as GitGraphData,
   ImageSide,
   Task,
+  WorkspaceFile,
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
+import { FileCode, FileDiff as FileDiffIcon, FileText, History, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useActivity } from '../hooks/useActivity'
 import { usePhone } from '../hooks/useLayoutMode'
 import { type AgentId, agentLabel, DEFAULT_AGENT, isAgentId } from '../lib/agents'
 import type { StageFile, StoredEvent, TaskShells } from '../lib/api'
 import { useAppEvent } from '../lib/app-events'
+import { splitPath } from '../lib/changes'
 import { isFinishedState } from '../lib/finished'
 import { FALLBACK_POLL_MS } from '../lib/live'
 import { finishedText } from '../lib/notify'
@@ -25,6 +27,7 @@ import type { WorkspaceTab } from '../lib/view-store'
 import { nextGitStep, pushButton, waitReason } from '../lib/workspace'
 import { ChangesPanel } from './ChangesPanel'
 import { DocsTab } from './DocsTab'
+import { FileEditor } from './FileEditor'
 import { FinishedBanner } from './FinishedBanner'
 import { GitGraph } from './GitGraph'
 import { NeedsInputBanner } from './NeedsInputBanner'
@@ -80,6 +83,12 @@ type ChangesViewProps = {
   // workspace.
   loadEndedShells?: () => Promise<EndedShell[]>
   onRemoveWorkspace?: () => void
+  // The file of the worktree open in the editor tab. The tab shows only while one is open.
+  editorFile?: string | null
+  readWorkspaceFile?: (path: string) => Promise<WorkspaceFile>
+  // Answers the new version.
+  writeWorkspaceFile?: (path: string, text: string, version: string) => Promise<string>
+  onCloseFile?: () => void
 }
 
 type GitAction = {
@@ -128,8 +137,18 @@ export function ChangesView({
   writeStageFile,
   loadAttachments,
   readAttachment,
+  editorFile = null,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+  onCloseFile,
 }: ChangesViewProps) {
-  const [tab, setTab] = useState<WorkspaceTab>(initialTab)
+  const [pickedTab, setTab] = useState<WorkspaceTab>(initialTab)
+  const editor =
+    editorFile !== null && readWorkspaceFile !== undefined && writeWorkspaceFile !== undefined
+      ? { path: editorFile, readFile: readWorkspaceFile, writeFile: writeWorkspaceFile }
+      : null
+  // The editor tab is nothing without its file.
+  const tab = pickedTab === 'editor' && editor === null ? 'terminal' : pickedTab
   const [docFile, setDocFile] = useState<string | null>(null)
   const [tabActions, setTabActions] = useState<HTMLElement | null>(null)
   const [focusToken, setFocusToken] = useState(0)
@@ -142,6 +161,9 @@ export function ChangesView({
   useEffect(() => reportTab.current?.(tab), [tab])
 
   const pickTab = (next: WorkspaceTab) => {
+    if (next === 'editor' && editor === null) {
+      return
+    }
     setTab(next)
     onTabPicked?.(next)
   }
@@ -414,6 +436,9 @@ export function ChangesView({
           },
           { id: 'history', label: 'History', icon: History },
           { id: 'docs', label: 'Docs', icon: FileText },
+          ...(editor === null
+            ? []
+            : [{ id: 'editor' as const, label: splitPath(editor.path).name, icon: FileCode }]),
         ]}
       />
 
@@ -488,6 +513,21 @@ export function ChangesView({
             writeFile={writeStageFile}
             loadAttachments={loadAttachments}
             readAttachment={readAttachment}
+          />
+        </div>
+      )}
+
+      {tab === 'editor' && editor !== null && (
+        <div
+          {...tabPanelProps('workspace', 'editor', 'Editor')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <FileEditor
+            taskId={task.id}
+            path={editor.path}
+            readFile={editor.readFile}
+            writeFile={editor.writeFile}
+            onClose={() => onCloseFile?.()}
           />
         </div>
       )}

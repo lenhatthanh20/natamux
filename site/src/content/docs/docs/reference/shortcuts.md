@@ -142,5 +142,7 @@ Some commands are only in the palette (`Mod+K`, then type the name):
 - **Text size: Compact**, **Default**, **Large**
 - **Add a project**, **Import GitHub issues**
 - **Show the task progress**, for the open or selected task (opens the details on **Progress**)
+- **Show the files of the worktree**, for the open workspace (opens the details on **Files**)
+- **Show the open file**, while a file is open in the editor tab
 - **Mark ready**, **Block**, **Resume the agent**, **Unblock**, **Retry**, for the selected task
 - **Skip the stage**, **Mark the stage as done**, **Approve the stage anyway**, **Send the task back to an earlier stage**, for the selected task in a workspace

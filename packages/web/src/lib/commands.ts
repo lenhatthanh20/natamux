@@ -38,6 +38,8 @@ export type CommandActions = {
   showTab: (tab: WorkspaceTab) => void
   // Opens the details of the task on its progress.
   showProgress: () => void
+  // Opens the details of the task on the files of its worktree.
+  showFiles: () => void
   back: () => void
   showAllTasks: () => void
   showAgents: () => void
@@ -146,6 +148,21 @@ const stageCommands: Command[] = [
     category: 'Workspace',
     when: ({ state }) => state.workspaceOpen || state.hasSelection,
     run: ({ actions }) => actions.showProgress(),
+  },
+  // Palette only: 5 showed the Docs tab before. The workspace ignores it while no file is open.
+  {
+    id: 'tab.editor',
+    title: 'Show the open file',
+    category: 'View',
+    when: inWorkspace,
+    run: ({ actions }) => actions.showTab('editor'),
+  },
+  {
+    id: 'files.show',
+    title: 'Show the files of the worktree',
+    category: 'Workspace',
+    when: inWorkspace,
+    run: ({ actions }) => actions.showFiles(),
   },
 ]
 

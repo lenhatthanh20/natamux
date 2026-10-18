@@ -80,7 +80,7 @@ export const DIFFSTATS_KEY = ['diffstats']
 // With busy agents some workspace always changes, so the sizes are read at most once per this time.
 export const DIFFSTATS_EVERY_MS = 15_000
 // The queries of a workspace's files, by task id: the Changes, History and Docs tabs.
-const WORKSPACE_KEYS = ['changes', 'file-diff', 'graph', 'stage-files']
+const WORKSPACE_KEYS = ['changes', 'file-diff', 'graph', 'stage-files', 'tree', 'workspace-file']
 // The queries of a task's log, by task id, and the stage files that a logged event may have
 // written. Not keyed on the time of the task: a busy agent moves it every 30 seconds.
 const LOG_KEYS = ['events', 'stage-events', 'stage-files', 'question-events']

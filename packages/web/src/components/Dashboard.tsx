@@ -18,6 +18,7 @@ import { fireAppEvent } from '../lib/app-events'
 import type { Command, CommandActions, CommandState } from '../lib/commands'
 import { shortcutOf } from '../lib/commands'
 import { focusKind } from '../lib/dispatch'
+import { useWarnOnUnsavedFiles } from '../lib/file-drafts'
 import { removedText } from '../lib/finished'
 import { effectiveSidebarWidth, PANEL_WIDTH } from '../lib/layout-mode'
 import { ACTIVITY_KEY, applyLiveMessages, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../lib/live'
@@ -48,6 +49,7 @@ import { AppShell } from './AppShell'
 import { ChangesView } from './ChangesView'
 import { CommandPalette, type PaletteMode } from './CommandPalette'
 import { DrawerFooter } from './DrawerFooter'
+import { FileTree } from './FileTree'
 import { IssueImport } from './IssueImport'
 import { NeedsYouAnnouncer } from './NeedsYouAnnouncer'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
@@ -103,6 +105,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     changesTaskId,
     changesTab,
     changesFile,
+    editorFileByTask,
     recent,
     layout,
     agentsOpen,
@@ -124,6 +127,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
       changesTaskId: view.changesTaskId,
       changesTab: view.changesTab,
       changesFile: view.changesFile,
+      editorFileByTask: view.editorFileByTask,
       recent: view.recent,
       layout: view.layout,
       agentsOpen: view.agentsOpen,
@@ -142,6 +146,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setDetailOpen,
     setDetailsView,
     showProgress,
+    showFiles,
+    openFile,
+    closeFile,
     setSidebarOpen,
     setDrawerOpen,
     openChanges,
@@ -159,6 +166,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setShowFinished,
     markSeen,
   } = useViewStore.getState()
+
+  useWarnOnUnsavedFiles()
 
   const [newTitle, setNewTitle] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -730,6 +739,11 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         showProgress(detailTask.id)
       }
     },
+    showFiles: () => {
+      if (detailTask && detailTask.workspace !== null) {
+        showFiles(detailTask.id)
+      }
+    },
     back: () => {
       const focused = document.activeElement
       if (focused instanceof HTMLElement && focusKind(focused) === 'field') {
@@ -998,6 +1012,17 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onClose={() => setDetailOpen(detailTask.id, false)}
                     view={detailsViewFor(detailsView, besideWorkspace)}
                     onViewChange={setDetailsView}
+                    files={
+                      detailTask.workspace === null ? undefined : (
+                        <FileTree
+                          taskId={detailTask.id}
+                          loadFolder={(path) => api.listFolder(detailTask.id, path)}
+                          loadChanges={() => api.listChanges(detailTask.id)}
+                          openPath={editorFileByTask[detailTask.id] ?? null}
+                          onOpen={(path) => openFile(detailTask.id, path)}
+                        />
+                      )
+                    }
                     progress={
                       <LiveProgressTab
                         task={detailTask}
@@ -1164,6 +1189,12 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onShowProgress={() => showProgress(changesTask.id)}
             loadEndedShells={() => api.listEndedShells(changesTask.id)}
             onRemoveWorkspace={() => setRemovingId(changesTask.id)}
+            editorFile={editorFileByTask[changesTask.id] ?? null}
+            readWorkspaceFile={(path) => api.readWorkspaceFile(changesTask.id, path)}
+            writeWorkspaceFile={(path, text, version) =>
+              api.writeWorkspaceFile(changesTask.id, path, text, version)
+            }
+            onCloseFile={() => closeFile(changesTask.id)}
           />
         ) : agentsOpen ? (
           <LiveAgentPanes

@@ -731,3 +731,49 @@ describe('TerminalView of a shell that comes back after a restart', () => {
     expect(strip.querySelector('.hm-late-in svg.hm-spin8')).toBeTruthy()
   })
 })
+
+describe('a path dropped from the files explorer', () => {
+  async function dropZone() {
+    const { made, connect } = sockets(1)
+    render(<TerminalView connect={connect} dropTaskId="T-0001" />)
+    await flush()
+    act(() => made[0]?.open())
+    const zone = document.querySelector('.hm-terminal')
+    if (zone === null) {
+      throw new Error('No terminal on screen.')
+    }
+    return { zone, terminal: lastTerminal() }
+  }
+
+  const drag = (type: string, data: unknown) => ({
+    dataTransfer: {
+      types: [type, 'text/plain'],
+      getData: (asked: string) => (asked === type ? JSON.stringify(data) : ''),
+      dropEffect: 'none',
+    },
+  })
+
+  it('pastes the path of its own task, quoted when needed, and takes the focus', async () => {
+    const { zone, terminal } = await dropZone()
+    const event = drag('application/x-natamux-path-t-0001', { path: 'docs/a b.md', kind: 'file' })
+    const focuses = terminal.focuses
+
+    fireEvent.dragOver(zone, event)
+    expect(event.dataTransfer.dropEffect).toBe('copy')
+    fireEvent.drop(zone, event)
+
+    expect(terminal.pasted).toEqual(["'docs/a b.md' "])
+    expect(terminal.focuses).toBe(focuses + 1)
+  })
+
+  it('refuses a path from the explorer of another task', async () => {
+    const { zone, terminal } = await dropZone()
+    const event = drag('application/x-natamux-path-t-0002', { path: 'src', kind: 'folder' })
+
+    fireEvent.dragOver(zone, event)
+    expect(event.dataTransfer.dropEffect).toBe('none')
+    fireEvent.drop(zone, event)
+
+    expect(terminal.pasted).toEqual([])
+  })
+})

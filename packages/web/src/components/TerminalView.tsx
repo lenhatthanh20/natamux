@@ -1,8 +1,16 @@
 import type { TaskState } from '@natamux/core'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowDown, SquareTerminal } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  type DragEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { useAppEvent } from '../lib/app-events'
+import { dropText, pathDragType } from '../lib/explorer-tree'
 import { watchVisible } from '../lib/gpu-renderer'
 import type { TerminalConnectQuery } from '../lib/terminal'
 import { acquireTerminal, discardTerminal } from '../lib/terminal-cache'
@@ -36,6 +44,19 @@ type TerminalViewProps = {
   restoring?: string
   // Told once the shell ended: its exit code, or null when the daemon closed it.
   onExit?: (code: number | null) => void
+  // A file or folder dragged from the files explorer of this task types its path here.
+  dropTaskId?: string
+}
+
+// The drag data of a row of the files explorer, or null for anything else.
+function draggedPath(raw: string): { path: string; kind: 'file' | 'folder' } | null {
+  try {
+    const { path, kind } = JSON.parse(raw)
+    const known = typeof path === 'string' && (kind === 'file' || kind === 'folder')
+    return known ? { path, kind } : null
+  } catch {
+    return null
+  }
 }
 
 // The spinner of a shell that came back fades out in this long (duration-150 below).
@@ -77,6 +98,7 @@ export default function TerminalView({
   focusOnOpen = true,
   restoring,
   onExit,
+  dropTaskId,
 }: TerminalViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
@@ -88,6 +110,7 @@ export default function TerminalView({
   // Set before paint, so effects and handlers of this commit already see the session.
   const sessionRef = useRef<TerminalSession | null>(null)
   const [findOpen, setFindOpen] = useState(false)
+  const [dropping, setDropping] = useState(false)
   const theme = useResolvedTheme()
   const uiSize = useUiSize()
   const font = useTerminalFont()
@@ -182,9 +205,49 @@ export default function TerminalView({
     setAttempt((value) => value + 1)
   }
 
+  // Only a drag of this task's explorer is taken. Its type names the task, and the data can only
+  // be read on the drop. Any other drag keeps the browser's "not allowed".
+  const dragType = dropTaskId === undefined ? null : pathDragType(dropTaskId)
+  const takesDrag = (event: DragEvent) =>
+    dragType !== null && status === 'open' && event.dataTransfer.types.includes(dragType)
+  const dropEvents = {
+    onDragOver: (event: DragEvent<HTMLDivElement>) => {
+      if (takesDrag(event)) {
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+        setDropping(true)
+      }
+    },
+    onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+      const next = event.relatedTarget
+      if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
+        setDropping(false)
+      }
+    },
+    onDrop: (event: DragEvent<HTMLDivElement>) => {
+      setDropping(false)
+      if (!takesDrag(event) || dragType === null) {
+        return
+      }
+      event.preventDefault()
+      const dragged = draggedPath(event.dataTransfer.getData(dragType))
+      const terminal = sessionRef.current?.terminal
+      if (dragged !== null && terminal !== undefined) {
+        // A paste, so an agent in bracketed paste mode gets the path as one piece.
+        terminal.paste(dropText(dragged.path, dragged.kind))
+        terminal.focus()
+      }
+    },
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="hm-terminal relative flex min-h-0 flex-1 flex-col">
+      <div
+        {...dropEvents}
+        className={`hm-terminal relative flex min-h-0 flex-1 flex-col ${
+          dropping ? 'outline outline-2 -outline-offset-2 outline-focus' : ''
+        }`}
+      >
         {/* The fit addon reads the height of xterm's parent, padding included, so the padding is
             on a wrapper. With it on the parent, the last row fell under the bottom edge.
             xterm keeps room for its 8px scrollbar on the right, so 2px more there makes the same

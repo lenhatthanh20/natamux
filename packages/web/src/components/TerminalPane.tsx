@@ -48,6 +48,8 @@ type TerminalPaneProps = {
   closeTip?: string
   // Kept mounted, so the shell keeps running, but not drawn.
   hidden?: boolean
+  // A path dragged from this task's files explorer is typed into the shell.
+  dropTaskId?: string
   style?: CSSProperties
 }
 
@@ -75,6 +77,7 @@ export function TerminalPane({
   closeTip,
   hidden,
   style,
+  dropTaskId,
 }: TerminalPaneProps) {
   const pane = useRef<HTMLElement>(null)
   // Mod+Shift+Enter is a command; it maximizes the pane that has the focus.
@@ -150,6 +153,7 @@ export function TerminalPane({
               : `Restoring ${restoring === null ? 'shell' : agentLabel(restoring)}…`
           }
           onExit={onExit}
+          dropTaskId={dropTaskId}
         />
       </LazyView>
     </section>

@@ -340,6 +340,7 @@ export function ShellPanes({
                 needsInput={own === 'needs-input' && markWaiting}
                 connect={(size) => connect(size, name)}
                 cacheKey={terminalKey(taskId, name)}
+                dropTaskId={taskId}
                 focusToken={focusing?.name === name ? focusing.at : undefined}
                 focusOnOpen={!asked && name === visible[0]}
                 taskState={task.state}

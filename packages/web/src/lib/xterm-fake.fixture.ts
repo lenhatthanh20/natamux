@@ -47,6 +47,8 @@ export class FakeTerminal {
   refreshes = 0
   atlasClears = 0
   focuses = 0
+  // Each paste, as xterm's paste() got it.
+  pasted: string[] = []
   disposed = false
   private readonly listeners = new Map<FakeEvent, Set<Listener>>()
 
@@ -106,6 +108,10 @@ export class FakeTerminal {
 
   focus(): void {
     this.focuses += 1
+  }
+
+  paste(text: string): void {
+    this.pasted.push(text)
   }
 
   scrollToBottom(): void {

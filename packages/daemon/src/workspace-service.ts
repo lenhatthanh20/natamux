@@ -8,6 +8,8 @@ import type {
   ImageSide,
   PullRequestStatus,
   Task,
+  TreeEntry,
+  WorkspaceFile,
 } from '@natamux/core'
 import { DEFAULT_PROGRAMS, isLaunchable, type LaunchableAgent } from './agent-launch.js'
 import {
@@ -46,6 +48,7 @@ import type { RepoService } from './repo-service.js'
 import { archiveStageFiles } from './stage-files.js'
 import type { TaskService } from './task-service.js'
 import { TtlCache } from './ttl-cache.js'
+import { listFolder, readWorkspaceFile, writeWorkspaceFile } from './workspace-files.js'
 
 export class WorkspaceConflictError extends Error {
   constructor(message: string) {
@@ -358,6 +361,26 @@ export class WorkspaceService {
   ): Promise<{ type: string; bytes: Buffer }> {
     const workspace = this.workspaceOf(taskId)
     return readFileImage(workspace, await this.changedFile(workspace, path), side)
+  }
+
+  // The files explorer: one folder, one file, and a save by hand.
+  tree(taskId: string, path: string): Promise<TreeEntry[]> {
+    return listFolder(this.workspaceOf(taskId), path)
+  }
+
+  readFile(taskId: string, path: string): Promise<WorkspaceFile> {
+    return readWorkspaceFile(this.workspaceOf(taskId), path)
+  }
+
+  async writeFile(
+    taskId: string,
+    path: string,
+    text: string,
+    version: string,
+  ): Promise<{ path: string; version: string }> {
+    const saved = await writeWorkspaceFile(this.workspaceOf(taskId), path, text, version)
+    this.touch(taskId)
+    return saved
   }
 
   private async changedFile(workspace: string, path: string): Promise<ChangeEntry> {

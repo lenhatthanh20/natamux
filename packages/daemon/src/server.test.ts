@@ -1473,6 +1473,120 @@ describe('changes', () => {
   })
 })
 
+describe('files explorer', () => {
+  async function taskWithWorkspace(): Promise<string> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    return created.json().task.workspace
+  }
+
+  const get = (url: string) => app.inject({ method: 'GET', url, headers: authorization })
+
+  it('lists one folder of the worktree, without .git', async () => {
+    const workspace = await taskWithWorkspace()
+    mkdirSync(join(workspace, 'src'))
+    writeFileSync(join(workspace, 'src', 'a.ts'), '')
+    writeFileSync(join(workspace, 'notes.txt'), '')
+
+    const root = await get('/tasks/T-0001/tree')
+    expect(root.statusCode).toBe(200)
+    expect(root.json().entries).toEqual([
+      { name: 'src', kind: 'folder' },
+      { name: 'notes.txt', kind: 'file' },
+    ])
+    expect((await get('/tasks/T-0001/tree?path=src')).json().entries).toEqual([
+      { name: 'a.ts', kind: 'file' },
+    ])
+  })
+
+  it('refuses folders and files outside the worktree or inside .git', async () => {
+    await taskWithWorkspace()
+    expect((await get('/tasks/T-0001/tree?path=..')).statusCode).toBe(409)
+    expect((await get('/tasks/T-0001/tree?path=.git')).statusCode).toBe(409)
+    expect((await get('/tasks/T-0001/file?path=..%2F..%2Fetc%2Fpasswd')).statusCode).toBe(409)
+    expect((await get('/tasks/T-0001/tree?path=nope')).statusCode).toBe(404)
+    expect((await get('/tasks/T-0001/file?path=nope.ts')).statusCode).toBe(404)
+    expect((await get('/tasks/T-0001/file')).statusCode).toBe(400)
+  })
+
+  it('reads a file and saves it with the version it read', async () => {
+    const workspace = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+
+    const read = await get('/tasks/T-0001/file?path=notes.txt')
+    expect(read.statusCode).toBe(200)
+    const { text, version } = read.json()
+    expect(text).toBe('hello\n')
+
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/tasks/T-0001/file?path=notes.txt',
+      headers: { ...authorization, 'if-match': version },
+      payload: { text: 'bye\n' },
+    })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json().version).not.toBe(version)
+    expect(readFileSync(join(workspace, 'notes.txt'), 'utf8')).toBe('bye\n')
+
+    // The editor still holds the first version: the file changed since, so it is not replaced.
+    const stale = await app.inject({
+      method: 'PUT',
+      url: '/tasks/T-0001/file?path=notes.txt',
+      headers: { ...authorization, 'if-match': version },
+      payload: { text: 'mine\n' },
+    })
+    expect(stale.statusCode).toBe(409)
+    expect(readFileSync(join(workspace, 'notes.txt'), 'utf8')).toBe('bye\n')
+  })
+
+  it('refuses a save without If-Match, of a folder, or over 1 MB', async () => {
+    const workspace = await taskWithWorkspace()
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+    mkdirSync(join(workspace, 'src'))
+    const { version } = (await get('/tasks/T-0001/file?path=notes.txt')).json()
+    const put = (path: string, text: string, headers: Record<string, string>) =>
+      app.inject({
+        method: 'PUT',
+        url: `/tasks/T-0001/file?path=${path}`,
+        headers: { ...authorization, ...headers },
+        payload: { text },
+      })
+
+    expect((await put('notes.txt', 'x', {})).statusCode).toBe(400)
+    expect((await put('src', 'x', { 'if-match': version })).statusCode).toBe(400)
+    expect((await put('new.ts', 'x', { 'if-match': version })).statusCode).toBe(404)
+    const big = await put('notes.txt', 'a'.repeat(1_000_001), { 'if-match': version })
+    expect(big.statusCode).toBe(413)
+    expect(readFileSync(join(workspace, 'notes.txt'), 'utf8')).toBe('hello\n')
+  })
+
+  it('reads the changes again after a save', async () => {
+    const workspace = await taskWithWorkspace()
+    const changes = async () => (await get('/tasks/T-0001/changes')).json().changes
+    // The list is kept until the workspace may have changed.
+    expect(await changes()).toEqual([])
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+    const { version } = (await get('/tasks/T-0001/file?path=notes.txt')).json()
+
+    await app.inject({
+      method: 'PUT',
+      url: '/tasks/T-0001/file?path=notes.txt',
+      headers: { ...authorization, 'if-match': version },
+      payload: { text: 'bye\n' },
+    })
+    expect(await changes()).toMatchObject([{ path: 'notes.txt' }])
+  })
+})
+
 describe('changed images', () => {
   const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])
 
