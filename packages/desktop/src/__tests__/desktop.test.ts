@@ -11,6 +11,7 @@ import { isDashboardUrl, isLoadingPage, loadingPageUrl, opensInBrowser } from '.
 import {
   autoUpdateOn,
   isGitRepository,
+  keepAwakeOn,
   loadSettings,
   saveSettings,
   startingRepoDir,
@@ -117,6 +118,24 @@ describe('settings', () => {
     expect(autoUpdateOn(loadSettings(file))).toBe(false)
     saveSettings(file, { autoUpdate: true })
     expect(autoUpdateOn(loadSettings(file))).toBe(true)
+  })
+
+  it('keeps the computer awake unless the user turned it off', () => {
+    const file = join(dir, 'settings.json')
+    expect(keepAwakeOn(loadSettings(file))).toBe(true)
+    saveSettings(file, { keepAwake: false })
+    expect(loadSettings(file)).toEqual({ keepAwake: false })
+    expect(keepAwakeOn(loadSettings(file))).toBe(false)
+    writeFileSync(file, '{"keepAwake":"no"}')
+    expect(loadSettings(file)).toEqual({})
+    expect(keepAwakeOn(loadSettings(file))).toBe(true)
+  })
+
+  it('has a File menu item for the awake hold', () => {
+    const main = mainSource()
+    const start = main.indexOf("label: 'Keep Computer Awake While Agents Run'")
+    expect(start).toBeGreaterThan(-1)
+    expect(main.slice(start, start + 300)).toContain("type: 'checkbox'")
   })
 
   it('knows a git repository by its .git', () => {
@@ -606,7 +625,7 @@ describe('the preload', () => {
     expect(handler).toContain("event.senderFrame?.url ?? ''")
   })
 
-  it('gives the page only a folder picker, which the main process opens for the dashboard only', () => {
+  it('gives the page a folder picker and a status report, for the dashboard only', () => {
     expect(preload).toContain("contextBridge.exposeInMainWorld('natamux'")
     expect(preload).toContain("invoke('natamux:pick-folder')")
     const main = mainSource()
@@ -616,6 +635,19 @@ describe('the preload', () => {
     expect(handler).toContain("event.senderFrame?.url ?? ''")
     expect(handler).toContain('isDashboardUrl(')
     expect(handler).toContain('pickRepository(')
+  })
+
+  it('takes the status report only from the dashboard, for the badge and the awake hold', () => {
+    expect(preload).toContain("ipcRenderer.send('natamux:status'")
+    const main = mainSource()
+    const start = main.indexOf("ipcMain.on('natamux:status'")
+    expect(start).toBeGreaterThan(-1)
+    const handler = main.slice(start, main.indexOf('\n})', start))
+    expect(handler).toContain("event.senderFrame?.url ?? ''")
+    expect(handler).toContain('isDashboardUrl(')
+    expect(handler).toContain('readAgentStatus(')
+    expect(handler).toContain('setBadgeCount(')
+    expect(handler).toContain('awake.update(')
   })
 })
 
