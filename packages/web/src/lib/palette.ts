@@ -2,6 +2,7 @@ import type { Task } from '@natamux/core'
 import { COMMANDS, type Command, type CommandContext, paletteTitle, runnable } from './commands'
 import { type FuzzyMatch, fuzzyMatch, type Range } from './fuzzy'
 import { isQuiet, needsMeTasks, STATE_ORDER, taskNumber } from './tasks'
+import { DEFAULT_REPO_ID } from './workspace-groups'
 
 export type RepoItem = { id: string; name: string }
 
@@ -16,8 +17,8 @@ export type PaletteRow =
 
 export type PaletteSection = { id: string; title: string | null; rows: PaletteRow[] }
 
-// "Needs you" narrows the lists to the tasks that wait for the user.
-export type PaletteScope = 'needs-you' | null
+// "Needs you" narrows the lists to the tasks that wait for the user, a project to its tasks.
+export type PaletteScope = 'needs-you' | { repo: string } | null
 
 export const MAX_NEEDS_YOU = 5
 export const MAX_RECENT = 5
@@ -76,6 +77,9 @@ function matchTask(task: Task, query: string): Matched<PaletteRow> | null {
 function scoped(tasks: readonly Task[], scope: PaletteScope, now: Date): Task[] {
   if (scope === null) {
     return [...tasks]
+  }
+  if (scope !== 'needs-you') {
+    return tasks.filter((task) => (task.repo ?? DEFAULT_REPO_ID) === scope.repo)
   }
   const waiting = new Set(needsMeTasks(tasks, now).map((task) => task.id))
   return tasks.filter((task) => waiting.has(task.id))

@@ -127,7 +127,7 @@ These work when a workspace is open.
 | Move in the list | `↑` `↓` |
 | Open the row, or add it to Agents | `Enter`, `Shift+Enter` |
 | Pick row 1 to 9 | `Alt+1` to `Alt+9` |
-| Change the scope | `Tab` |
+| Change the scope (Needs you, then each project) | `Tab` |
 | Close | `Esc` |
 
 In the palette, type `>` to search commands only and `#` to search tasks by id. See [Dashboard](/docs/guides/dashboard/#command-palette).
