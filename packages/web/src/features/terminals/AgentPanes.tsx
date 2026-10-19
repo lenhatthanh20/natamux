@@ -1,0 +1,186 @@
+import type { Task, TerminalLane } from '@natamux/core'
+import { LayoutGrid } from 'lucide-react'
+import { useState } from 'react'
+import { StatusGlyph } from '../../components/StatusGlyph'
+import { Button } from '../../components/ui/Button'
+import { Combobox } from '../../components/ui/Combobox'
+import { CountBadge } from '../../components/ui/CountBadge'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { Segmented } from '../../components/ui/Segmented'
+import { useElementWidth } from '../../hooks/useElementWidth'
+import {
+  agentPaneTasks,
+  columnsFor,
+  MAX_PANES,
+  maxColumns,
+  otherTerminalHint,
+  type PaneLayout,
+  paneSpan,
+  paneStateText,
+  terminalState,
+} from '../../lib/panes'
+import { TerminalPane } from './TerminalPane'
+import type { TerminalConnectQuery } from './terminal'
+import { terminalKey } from './terminal-cache'
+
+type AgentPanesProps = {
+  tasks: readonly Task[]
+  // The task ids the user picked, or null for the default: the agents that work or wait.
+  chosen: readonly string[] | null
+  onChange: (ids: string[]) => void
+  layout: PaneLayout
+  onLayout: (layout: PaneLayout) => void
+  // What each agent does now, by task id, then shell name.
+  activity?: Readonly<Record<string, Readonly<Record<string, string>>>>
+  // The shells of each task where an agent runs, with the stage each one works on.
+  terminals?: Readonly<Record<string, Readonly<Record<string, TerminalLane>>>>
+  // By task id: Shell 1 comes back after a restart, with this agent (null: a plain shell).
+  restoring?: Readonly<Record<string, string | null>>
+  connect: (taskId: string, query: TerminalConnectQuery) => Promise<WebSocket>
+  onOpenTask: (id: string) => void
+}
+
+const LAYOUT_OPTIONS: readonly { value: PaneLayout; label: string; columns: number }[] = [
+  { value: '1', label: '1', columns: 1 },
+  { value: '2', label: '2', columns: 2 },
+  { value: '4', label: '4', columns: 4 },
+  { value: 'auto', label: 'Auto', columns: 1 },
+]
+
+// Several agents at once: shell 1 of each task, in a grid.
+export function AgentPanes({
+  tasks,
+  chosen,
+  onChange,
+  layout,
+  onLayout,
+  activity,
+  terminals,
+  restoring,
+  connect,
+  onOpenTask,
+}: AgentPanesProps) {
+  const [gridRef, gridWidth] = useElementWidth<HTMLDivElement>()
+  const [maximized, setMaximized] = useState<string | null>(null)
+  const shown = agentPaneTasks(chosen, tasks)
+  const ids = shown.map((task) => task.id)
+  const others = tasks.filter(
+    (task) =>
+      task.workspace !== null &&
+      task.state !== 'done' &&
+      task.state !== 'cancelled' &&
+      !ids.includes(task.id),
+  )
+  const focused = shown.find((task) => task.id === maximized)?.id ?? null
+  const visible = focused === null ? shown : shown.filter((task) => task.id === focused)
+  const columns = focused === null ? columnsFor(layout, shown.length, gridWidth) : 1
+  const fits = maxColumns(gridWidth)
+
+  return (
+    <section aria-label="Agents" className="flex min-h-0 flex-1 flex-col">
+      <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-1.5">
+        <h2 className="text-md font-semibold tracking-tight">Agents</h2>
+        <CountBadge count={shown.length} />
+        <span className="flex-1" />
+        {others.length > 0 && shown.length < MAX_PANES && (
+          <Combobox
+            label="Add a pane"
+            placeholder="Add a pane"
+            options={others.map((task) => ({ value: task.id, label: task.title, hint: task.id }))}
+            onPick={(id) => onChange([...ids, id])}
+            className="w-64 max-w-full"
+          />
+        )}
+        <Segmented
+          label="Columns"
+          value={layout}
+          onChange={onLayout}
+          options={LAYOUT_OPTIONS.map((option) => ({
+            value: option.value,
+            label: option.label,
+            disabledReason:
+              option.value !== 'auto' && option.columns > fits ? 'Needs a wider window' : undefined,
+          }))}
+        />
+      </header>
+      {shown.length === 0 ? (
+        <EmptyState
+          icon={LayoutGrid}
+          title="No agent is working"
+          actions={
+            others.length > 0 ? (
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() =>
+                  document
+                    .querySelector<HTMLInputElement>('input[aria-label="Add a pane"]')
+                    ?.focus()
+                }
+              >
+                Add a pane
+              </Button>
+            ) : undefined
+          }
+        >
+          Start an agent on a task, or add a pane.
+        </EmptyState>
+      ) : (
+        <div
+          ref={gridRef}
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          className="grid min-h-0 flex-1 auto-rows-[minmax(14rem,1fr)] gap-2 overflow-auto p-2 max-md:auto-rows-[60vh]"
+        >
+          {shown.map((task) => {
+            const index = visible.findIndex((item) => item.id === task.id)
+            // The pane is Shell 1, so it shows the stage of Shell 1, not the whole task.
+            const lane = terminals?.[task.id]?.['1']
+            const state = (lane === undefined ? null : terminalState(task, lane)) ?? task.state
+            return (
+              <TerminalPane
+                key={task.id}
+                hidden={index === -1}
+                style={
+                  index === -1
+                    ? undefined
+                    : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
+                }
+                label={`Agent of ${task.id}`}
+                icon={<StatusGlyph state={state} />}
+                title={
+                  <>
+                    <span className="shrink-0 font-mono font-normal">{task.id}</span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenTask(task.id)}
+                      data-tip={`Open workspace ${task.id}`}
+                      className="min-w-0 cursor-pointer truncate text-left hover:underline"
+                    >
+                      {task.title}
+                    </button>
+                  </>
+                }
+                agent={(lane?.agent === undefined ? task.agent : lane.agent) || undefined}
+                stateText={paneStateText(state, activity?.[task.id]?.['1'])}
+                hint={otherTerminalHint(task, terminals?.[task.id])}
+                needsInput={state === 'needs-input'}
+                connect={(size) => connect(task.id, size)}
+                // The same key as Shell 1 in the task view: the terminal moves, no second socket.
+                cacheKey={terminalKey(task.id, '1')}
+                restoring={restoring?.[task.id]}
+                maximized={focused === task.id}
+                onToggleMaximize={() => setMaximized(focused === task.id ? null : task.id)}
+                openWorkspace={{
+                  label: `Open workspace ${task.id}`,
+                  run: () => onOpenTask(task.id),
+                }}
+                onClose={() => onChange(ids.filter((id) => id !== task.id))}
+                closeTip="Remove from Agents (the agent keeps running)"
+              />
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}

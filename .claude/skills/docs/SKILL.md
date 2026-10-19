@@ -31,7 +31,7 @@ description: Which Natamux documents to update for a change, and how to write th
 | `natamux` commands and flags | `reference/cli.md` |
 | HTTP routes | `reference/http-api.md` |
 | Settings, env vars | `reference/configuration.md`, `reference/environment-variables.md` |
-| Shortcuts | `reference/shortcuts.md` (and `lib/commands.ts`, which the shortcut sheet reads) |
+| Shortcuts | `reference/shortcuts.md` (and `lib/commands/`, which the shortcut sheet reads) |
 | Design tokens, components | `docs/ui-spec.md` |
 | Install, first run | `getting-started/*.mdx` |
 | Common problems | `help/troubleshooting.md`, `help/faq.md` |

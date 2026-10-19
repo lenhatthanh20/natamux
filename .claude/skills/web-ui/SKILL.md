@@ -11,21 +11,24 @@ The spec is `docs/ui-spec.md` (tokens, layout, components). Read the section for
 
 | Path | What |
 |---|---|
-| `src/components/` | Screens and parts. `Dashboard.tsx` holds the state and wires everything |
+| `src/features/<name>/` | One feature: its components, logic, feature-only hooks and `__tests__/`. `app` (shell; `Dashboard.tsx` renders the screens, its `use*.ts` hooks hold queries, mutations, layout and commands), `tasks`, `stages` (+ `editor/`), `projects`, `git`, `files`, `terminals`, `workspaces`, `sidebar`, `palette` |
+| `src/components/` | Domain parts used by 2+ features (`StateBadge`, `ShapeGlyph`, `Markdown`, …) |
 | `src/components/ui/` | Shared controls: `Button`, `IconButton`, `Menu`, `Dialog`, `Tabs`, `Segmented`, `Select`, `Combobox`, `Tooltip`, `Toaster`, … |
 | `src/components/ui/styles.ts` | Class builders `button()`, `iconButton()`, `input`, and the `ICON` sizes. Use them; do not restyle controls by hand |
-| `src/lib/` | Logic without React: `api.ts`, `commands.ts` (palette and shortcuts), `dispatch.ts` (keys), `tasks.ts` (labels, row names), `theme.ts`, `route.ts`, … Each has a `*.test.ts` |
+| `src/lib/` | Shared logic without React: `api/`, `commands/` (palette and shortcuts), `view-store/`, `dispatch.ts` (keys), `tasks.ts` (labels, row names), `theme.ts`, `route.ts`, … |
+| `src/hooks/` | Generic hooks used by 2+ features |
 | `src/styles.css` | Color tokens on `:root`, redefined for dark. `@theme inline` maps them to Tailwind colors |
 
 ## Rules
 
-- **Colors only through tokens:** `bg-surface`, `bg-raised`, `text-ink`, `text-ink-2`, `text-muted`, `border-line`, `text-accent`, `text-danger`, `text-signal`, `bg-hover`, and so on. Never a hex value in a component. xterm and Monaco need real colors, so `lib/terminal-theme.ts` and `lib/monaco-setup.ts` hold matching values.
+- **Where code goes:** new code goes in its feature folder. Move it to `components/`, `lib/` or `hooks/` only when 2 or more features use it. No feature-wide `index.ts`: it would pull lazy views (`MonacoDiff`, `TerminalView`, `MarkdownBody`) into the first load (`first-load.test.ts`).
+- **Colors only through tokens:** `bg-surface`, `bg-raised`, `text-ink`, `text-ink-2`, `text-muted`, `border-line`, `text-accent`, `text-danger`, `text-signal`, `bg-hover`, and so on. Never a hex value in a component. xterm and Monaco need real colors, so `features/terminals/terminal-theme.ts` and `features/files/monaco-setup.ts` hold matching values.
 - **Dark mode:** `data-theme="dark"` or `"light"` on `<html>` (from `lib/theme.ts`). Tokens switch by themselves. Check both themes.
 - **Accessible names are the API.**
   - Every control has one: `IconButton` requires `label`.
   - Task rows and cards are named `"<title>, <state>, <id>, <age>"` (`lib/tasks.ts`).
   - Tests in `src/**/*.test.tsx` and in `e2e/` query by role and name. Renaming a label means updating those tests in the same change.
-- **Keyboard first.** A new action gets a command in `lib/commands.ts`, so the palette (Mod+K) and the shortcut sheet (`?`) show it. Keys go through `lib/dispatch.ts`. A terminal keeps its keys unless `keyBelongsToShell` says otherwise.
+- **Keyboard first.** A new action gets a command in `lib/commands/`, so the palette (Mod+K) and the shortcut sheet (`?`) show it. Keys go through `lib/dispatch.ts`. A terminal keeps its keys unless `keyBelongsToShell` says otherwise.
 - **Phone width.**
   - No sideways scroll at 390 px.
   - Labels may become aria-labels on narrow widths (for example `Segmented` under 560 px). The accessible name must stay the same.

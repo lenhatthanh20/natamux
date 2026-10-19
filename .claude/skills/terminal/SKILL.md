@@ -19,21 +19,22 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 
 | File | What |
 |---|---|
-| `packages/daemon/src/terminal-service.ts` | `TerminalService`: sessions, attach and detach, size, input queue, close. `ScreenState`. Batching, ring, snapshot jobs, flow control. `splitFrames`, `sliceEnd` |
-| `packages/daemon/src/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell. SIGKILL also reaches the processes the SIGHUP reached, after the shell ended; `leftover` tells if one still runs |
-| `packages/daemon/src/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
-| `packages/daemon/src/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
-| `packages/daemon/src/agent-runner.ts`, `stage-runner.ts` | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
-| `packages/core/src/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
-| `packages/web/src/components/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one, shows status (an overlay strip), find, "Jump to latest" |
-| `packages/web/src/lib/terminal-session.ts` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load. `session.search()` makes the `SearchAddon` at the first find (`TerminalFind` calls it); `importWebgl()` loads `@xterm/addon-webgl` with the first GPU renderer |
-| `packages/web/src/lib/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
-| `packages/web/src/lib/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (8), `GIVE_BACK_DELAY_MS` (10 s), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
+| `packages/daemon/src/terminals/terminal-service.ts` | `TerminalService`: sessions, attach and detach, close. The work is in free functions on a `Session`: `session-lifecycle.ts` (spawn, wire output and exit, close), `session-output.ts` (batching, ring, flow control), `session-snapshot.ts` (snapshot jobs, resume, catch-up), `session-input.ts` (input queue, size) |
+| `packages/daemon/src/terminals/screen-state.ts`, `terminal-limits.ts`, `terminal-types.ts` | `ScreenState`, `splitFrames`, `sliceEnd`; the tuning constants; the shared types and errors |
+| `packages/daemon/src/terminals/pty.ts` | node-pty spawn with `encoding: null`: output stays UTF-8 bytes (Windows gives text, encoded once). `pause`/`resume`. `kill` signals the whole process tree (needs `ps`), then the shell. SIGKILL also reaches the processes the SIGHUP reached, after the shell ended; `leftover` tells if one still runs |
+| `packages/daemon/src/terminals/shell-command.ts` | Which shell: `$SHELL` or bash, as a login shell |
+| `packages/daemon/src/http/server.ts` | WebSocket route. A one-time ticket (`POST /tasks/:id/terminal/ticket`, 30 s) replaces the token, because a browser cannot set headers. Answers `ping`, drops a socket silent for `SILENT_CLOSE_MS`, closes a resume of a gone shell with `CLOSE_GONE` |
+| `packages/daemon/src/agents/agent-runner.ts`, `stages/stage-runner.ts` (`stage-shells.ts`) | An agent starts by sourcing `<dataDir>/agent-launch-<id>.sh` in shell 1. `agentRuns` counts the agent as running while the foreground program is not in `SHELLS` |
+| `packages/core/src/terminals/terminal.ts` | Message schemas, close codes, `shellIdSchema`. `ACK_EVERY_BYTES` (64 KB). Heartbeat and reconnect constants. `TERMINAL_HISTORY_BYTES` (10 MB), `scrollbackLines(cols)` (1,000 to 10,000 rows) |
+| `packages/web/src/features/terminals/TerminalView.tsx` | React view: takes a session from the cache in a layout effect, shows it in a second one, shows status (an overlay strip), find, "Jump to latest" |
+| `packages/web/src/features/terminals/session/` | One live terminal outside React: xterm 6, fit, Unicode 11, search, links, socket, reconnect and heartbeat, `sendSize`/`claimSize`, `show`/`hide`. Only `TerminalView.tsx` imports it, so xterm stays out of the first load. `session.search()` makes the `SearchAddon` at the first find (`TerminalFind` calls it); `importWebgl()` loads `@xterm/addon-webgl` with the first GPU renderer |
+| `packages/web/src/features/terminals/terminal-cache.ts` | Live terminals by key, `KEEP_ALIVE_TERMINALS` (8), the hidden holder `#terminal-holder`, dispose rules. Never imports xterm (it is in the first load) |
+| `packages/web/src/features/terminals/gpu-renderer.ts` | WebGL budget for the page: `GPU_CONTEXTS` (8), `GIVE_BACK_DELAY_MS` (10 s), `MAX_CONTEXT_LOSSES` (2), `watchVisible` |
 | `packages/web/src/lib/prefetch.ts` | `prefetchWhenIdle`: the dashboard loads the TerminalView chunk when the page is idle, or after 3 s at most. Pointing at or focusing Agents in the sidebar loads it too |
-| `packages/web/src/lib/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
+| `packages/web/src/features/terminals/terminal-theme.ts` | Palettes, scrollbar colors, `TERMINAL_LOOK` (cursor, bold, line height, contrast, fast scroll, scrollbar width through `overviewRuler.width`) |
 | `packages/web/src/lib/fonts.ts`, `src/assets/fonts/` | `TERMINAL_FONT`: JetBrains Mono, then the bundled Nerd Font icons (`ICON_FONT`, `@font-face` in `styles.css`) |
-| `packages/web/src/lib/terminal-font.ts`, `TerminalFontDialog.tsx` | Font: the user's choice, then Ghostty's, then the default. localStorage `natamux.terminal-font` and `natamux.ghostty-font` |
-| `packages/desktop/src/ghostty-config.ts` | Reads `font-family` and `font-size` from the Ghostty config files |
+| `packages/web/src/features/terminals/terminal-font.ts`, `TerminalFontDialog.tsx` | Font: the user's choice, then Ghostty's, then the default. localStorage `natamux.terminal-font` and `natamux.ghostty-font` |
+| `packages/desktop/src/app/ghostty-config.ts` | Reads `font-family` and `font-size` from the Ghostty config files |
 
 ## Rules the code keeps
 
@@ -43,7 +44,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 - **Input goes through `write()`, never `pty.write` directly.** It splits DEL (`\x7f`) runs from other text and keeps `INPUT_GAP_MS` (25 ms) between them. Plain typing, pastes and a held Backspace are not delayed. `paste` sends its Enter as a separate piece, `ENTER_AFTER_PASTE_MS` (100 ms) after the paste, because the Cursor CLI ignores an Enter read together with the paste end.
 - **Limits.** At most `MAX_SESSIONS` = 20 shells. History is limited by memory, not by a fixed row count.
 - **Ending.**
-  - A done or cancelled task ends all its shells (`stage-runner.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
+  - A done or cancelled task ends all its shells (`stage-shells.ts` `finish`). Removing a workspace ends them and waits (`closeAndWait`).
   - The shell of an ended task with no client ends after `ENDED_IDLE_MS` (60 s), unless a non-shell program runs in it. It is checked again later.
   - `closeOne` sends SIGHUP, then SIGKILL after `KILL_GRACE_MS`. The SIGKILL still goes out when the shell ended but a program that ignored SIGHUP (`leftover`) runs on; `closeAndWait` and `closeAllAndWait` wait for it.
   - Daemon shutdown awaits `closeAllAndWait`, so no shell outlives a quit. The desktop app waits for the daemon to exit (at most `DAEMON_STOP_WAIT_MS`, 5 s) before it quits.
@@ -84,7 +85,7 @@ The dashboard keeps live terminals in a cache (`terminal-cache.ts`). A pane that
 
 ## Protocol
 
-Output is binary. Everything else is one JSON text frame. Schemas: `packages/core/src/terminal.ts`. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`, and for a resume `&shellId[&offset]`). The daemon ignores binary frames from the client.
+Output is binary. Everything else is one JSON text frame. Schemas: `packages/core/src/terminals/terminal.ts`. Socket: `server.ts` (ticket, then `?cols&rows&terminal&visible=0|1`, and for a resume `&shellId[&offset]`). The daemon ignores binary frames from the client.
 
 | Message | Dir | Meaning |
 |---|---|---|
@@ -117,7 +118,7 @@ Close codes (core): `CLOSE_UNAUTHORIZED` 4401 (bad ticket or query), `CLOSE_REFU
 ## Batching (daemon)
 
 - The pty gives bytes. A read can stop inside a UTF-8 character: `start` keeps those first bytes in `session.partial` (`wholeChars`) and adds them to the next read. So the screen, the frames, a snapshot cut and `onOutput` always get whole characters.
-- `onOutput` listeners get the bytes. They decode only when they need text: the bell check looks for byte `0x07`; the launch check (`generic-signals.ts`) and the Windows title check (`stage-runner.ts`) decode.
+- `onOutput` listeners get the bytes. They decode only when they need text: the bell check looks for byte `0x07`; the launch check (`generic-signals.ts`) and the Windows title check (`stage-shells.ts`) decode.
 - `queueOutput` collects the chunks in `session.batch`, with no copy (the flush copies once). A frame goes out when the batch reaches `OUTPUT_FRAME_BYTES` (64 KB; full frames at once, the rest stays).
 - A chunk after a quiet moment (`OUTPUT_COALESCE_MS` = 4 ms since the last flush) and a batch under `OUTPUT_IDLE_BYTES` (1024): flush on the next turn (`setImmediate`). Typing echo is not delayed.
 - Anything else waits `OUTPUT_COALESCE_MS` for more.

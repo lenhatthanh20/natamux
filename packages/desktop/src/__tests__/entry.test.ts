@@ -14,7 +14,7 @@ describe('entry.ts', () => {
 
 describe('paths.ts', () => {
   it('starts the daemon from its entry, not from main.js', () => {
-    const source = readFileSync(new URL('../paths.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../daemon/paths.ts', import.meta.url), 'utf8')
     expect(source).toContain("'entry.js'")
     expect(source).not.toMatch(/daemonMain:.*'main\.js'/)
   })

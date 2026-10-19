@@ -112,9 +112,9 @@ The check is one `HEAD` request to `github.com` without any data about you or yo
 
 ## Files
 
-- `packages/desktop/src/update-check.ts`: no Electron: version compare, install kind, file pick, checksum parse, the install script.
+- `packages/desktop/src/update/update-check.ts`: no Electron: version compare, install kind, file pick, checksum parse, the install script.
 - `packages/desktop/src/release-signature.ts`: no Electron: `RELEASE_SIGNER` and the minisign check.
-- `packages/desktop/src/update-popup.ts`: no Electron: the popup page, its texts and its window options.
-- `packages/desktop/src/updater.ts`: the Electron side: timers, network, dialogs, menu state, install.
+- `packages/desktop/src/update/update-popup.ts`: no Electron: the popup page, its texts and its window options.
+- `packages/desktop/src/update/updater.ts`: the Electron side: timers, network, dialogs, menu state, install.
 - `packages/desktop/src/main.ts`: the menu items and the quit hook.
-- `packages/desktop/src/settings.ts`: `autoUpdate`.
+- `packages/desktop/src/app/settings.ts`: `autoUpdate`.

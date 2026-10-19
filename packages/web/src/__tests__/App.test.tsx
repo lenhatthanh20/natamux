@@ -10,24 +10,28 @@ import userEvent from '@testing-library/user-event'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
+import {
+  acquireTerminal,
+  cachedTerminalCount,
+  resetTerminalCache,
+} from '../features/terminals/terminal-cache'
 import { routeOf } from '../lib/route'
-import { acquireTerminal, cachedTerminalCount, resetTerminalCache } from '../lib/terminal-cache'
 import { useToasts } from '../lib/toasts'
 import { initialViewData, useViewStore } from '../lib/view-store'
 
 // Monaco needs a real browser, so the tests use a plain stand-in.
-vi.mock('../components/MonacoDiff', () => ({
+vi.mock('../features/git/MonacoDiff', () => ({
   default: ({ path, original, modified }: { path: string; original: string; modified: string }) =>
     createElement('pre', { 'aria-label': `Changes in ${path}` }, `${original} -> ${modified}`),
 }))
 
-vi.mock('../components/MonacoFile', () => ({
+vi.mock('../features/files/MonacoFile', () => ({
   default: ({ path, kind, text }: { path: string; kind: string; text: string }) =>
     createElement('pre', { 'aria-label': `New file ${path}` }, `${kind}: ${text}`),
 }))
 
 // It shows the focus token it gets, which makes the real terminal take the keyboard.
-vi.mock('../components/TerminalView', () => ({
+vi.mock('../features/terminals/TerminalView', () => ({
   default: ({ focusToken }: { focusToken?: number }) =>
     createElement('p', { 'data-focus-token': focusToken ?? '' }, 'Terminal stand-in'),
 }))

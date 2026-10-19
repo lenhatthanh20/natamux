@@ -1,7 +1,7 @@
 // Checks the minisign signature of SHA256SUMS.txt before the updater trusts any hash in it. Node
 // crypto only, so it needs no Electron and no new package. See docs/design-desktop-update.md.
 import { createPublicKey, type KeyObject, verify } from 'node:crypto'
-import { isNewer, type Release, SIGNATURE_FILE, SUMS_FILE } from './update-check.js'
+import { isNewer, type Release, SIGNATURE_FILE, SUMS_FILE } from './update/update-check.js'
 
 // The minisign public key of the release signer, key id 3F449A1E170BB7A0. The secret key never
 // leaves the owner's Mac.
@@ -161,4 +161,51 @@ export async function fetchSignedSums(input: {
     )
   }
   return sums
+}
+
+// Made by the real minisign tool with a test key, in the legacy form that releases use
+// (minisign -S -l); the same files are in src/__tests__/fixtures/minisign. The smoke check runs it
+// in the packaged app, so CI proves that Electron's crypto (BoringSSL, not OpenSSL) checks release
+// signatures on every system.
+export const SIGNATURE_FIXTURE = {
+  publicKey: 'RWRlDDYUMCwx+Oo1OxIoyy7UaN2jSLqaEfEX9pmWdYLOJWE1WCES0Jkf',
+  tag: 'v1.2.3',
+  sums: [
+    '85158a9de88b51d7eef46fd691356e8c838ce691939a458bd4f4bac5e36cd2f2  Natamux-linux-amd64.deb',
+    '33ed21af8680f0b16480bb972e8a9a1231ddc80e65fa717ccd86e177d468a80f  Natamux-linux-x64.tar.gz',
+    'c44f3b7d10d8dc7cc09bbc7bb66d6a15a13375241849fb9aa144bc7ba37d2cd3  Natamux-linux-x86_64.AppImage',
+    'a3a807cf10fc02efe46f50cd4fd0eaa7a457d787c9d8a1bbfac1fa036e26cc36  Natamux-mac-arm64.dmg',
+    '170785bba691a0e8dfd5c28229fc5258a10741d574fd21dbe7829cee8fb715eb  Natamux-mac-x64.dmg',
+    '1e6e7727b0190c0bb0bcc8a7460595cf535a3d6bf886c2c3250555b271aeff85  Natamux-win-x64.exe',
+    '',
+  ].join('\n'),
+  signature: [
+    'untrusted comment: signature from minisign secret key',
+    'RWRlDDYUMCwx+LaEHd99fDk59rGxpBnK7QgvowzUsviMSX0/tO7lwaEccTYdHYsk68fqJOgyU6LNp9MhTsC5lCJLt2Fm93WhiwU=',
+    'trusted comment: natamux v1.2.3',
+    'RtSEQ8Umu5X2lgBppgcPsGTBZARBP+teDQG7LJGCCNg7rxpgQe05kRXlz2QMCQl+50JHQ0wooNeR1IUlvCmsCA==',
+    '',
+  ].join('\n'),
+}
+
+// Throws what failed. Returns a line for the log.
+export function checkReleaseSignature(): string {
+  const { sums, ...rest } = SIGNATURE_FIXTURE
+  const input = { ...rest, current: '0.0.0' }
+  try {
+    verifySums({ ...input, sums: Buffer.from(sums) })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`the release signature check failed: ${message}`)
+  }
+  let changedPassed = true
+  try {
+    verifySums({ ...input, sums: Buffer.from(sums.replace('85158a9d', '85158a9e')) })
+  } catch {
+    changedPassed = false
+  }
+  if (changedPassed) {
+    throw new Error('the release signature check passed a changed SHA256SUMS.txt')
+  }
+  return 'the release signature check works'
 }

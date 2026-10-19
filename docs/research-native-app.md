@@ -160,9 +160,9 @@ The shortlist is Electron (recommended) and Tauri 2 (spike). Native per OS is sh
 
 | Need | Electron (today) | Tauri 2 | Native per OS (B) |
 |---|---|---|---|
-| PTY on macOS and Linux | node-pty in the Electron utility process (`packages/daemon/src/pty.ts`) | node-pty in a packaged Node sidecar. node-pty also needs `spawn-helper` next to it. No confirmed working example | Daemon unchanged (node-pty) |
+| PTY on macOS and Linux | node-pty in the Electron utility process (`packages/daemon/src/terminals/pty.ts`) | node-pty in a packaged Node sidecar. node-pty also needs `spawn-helper` next to it. No confirmed working example | Daemon unchanged (node-pty) |
 | ConPTY on Windows | node-pty's ConPTY files | Same files must ship in the sidecar. Not proven | Daemon unchanged; UI has no PTY |
-| Rendering | xterm.js WebGL in Chromium (`packages/web/src/lib/terminal-session.ts`), same as the browser tab | macOS WKWebView: WebKit bug 264268 (artifacts with WebGL and transparency). Windows WebView2 is Chromium, so it matches today | macOS: SwiftTerm or libghostty. Windows: libghostty has no Windows renderer; only a WIP fork with WinUI 3 and immature ConPTY controls |
+| Rendering | xterm.js WebGL in Chromium (`packages/web/src/features/terminals/session/`), same as the browser tab | macOS WKWebView: WebKit bug 264268 (artifacts with WebGL and transparency). Windows WebView2 is Chromium, so it matches today | macOS: SwiftTerm or libghostty. Windows: libghostty has no Windows renderer; only a WIP fork with WinUI 3 and immature ConPTY controls |
 | Vietnamese IME | Chromium IME. Natamux already tunes for input methods that send DEL then a letter (`INPUT_GAP_MS`, `.claude/skills/terminal/SKILL.md`) | WebKit bug 239360 (IME popup in the wrong place in WKWebView) is still open; xterm.js issue 4486 (Chinese IMEs). The `INPUT_GAP_MS` tuning must be re-tested on WebKit | Each widget handles IME itself. Zed fixed CJK IME in its terminal only in 2026-03 |
 | Large scrollback | xterm.js scrollback; the daemon keeps history in `@xterm/headless` (`packages/daemon/package.json`) | Same code; WebKit speed not measured | Depends on the widget; unknown |
 | Same engine as the browser tab | Yes (Chromium) | No on macOS (WebKit) | No |

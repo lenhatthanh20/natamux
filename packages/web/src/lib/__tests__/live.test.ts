@@ -1,10 +1,15 @@
 import type { Task } from '@natamux/core'
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import changesPanel from '../../components/ChangesPanel.tsx?raw'
-import changesView from '../../components/ChangesView.tsx?raw'
-import dashboard from '../../components/Dashboard.tsx?raw'
-import docsTab from '../../components/DocsTab.tsx?raw'
+import dashboardView from '../../features/app/Dashboard.tsx?raw'
+import liveParts from '../../features/app/LiveParts.tsx?raw'
+import dashboardCommands from '../../features/app/useDashboardCommands.ts?raw'
+import dashboardLayout from '../../features/app/useDashboardLayout.ts?raw'
+import dashboard from '../../features/app/useDashboardQueries.ts?raw'
+import taskMutations from '../../features/app/useTaskMutations.ts?raw'
+import changesPanel from '../../features/git/ChangesPanel.tsx?raw'
+import changesView from '../../features/workspaces/ChangesView.tsx?raw'
+import docsTab from '../../features/workspaces/DocsTab.tsx?raw'
 import type { AgentActivity } from '../api'
 import {
   ACTIVITY_KEY,
@@ -337,6 +342,13 @@ describe('the fallback poll', () => {
     // A number here would be a poll of its own, such as the old 3, 5, 10 or 15 seconds.
     expect(source.match(/refetchInterval: \d/g)).toBeNull()
     expect(source).toContain('FALLBACK_POLL_MS')
+  })
+
+  // The dashboard polls only in useDashboardQueries, never in its other parts.
+  it.each(
+    Object.entries({ dashboardView, liveParts, dashboardCommands, dashboardLayout, taskMutations }),
+  )('has no poll of its own in %s', (_name, source) => {
+    expect(source.match(/refetchInterval: \d/g)).toBeNull()
   })
 
   // One poll per task row, so it waits longer than the others.

@@ -1,45 +1,18 @@
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  Menu,
-  type MenuItemConstructorOptions,
-  nativeTheme,
-  powerSaveBlocker,
-  shell,
-  type UtilityProcess,
-  utilityProcess,
-} from 'electron'
-import { AwakeGuard, readAgentStatus } from './agent-status.js'
-import { writeCliShim } from './cli-shim.js'
-import { addProject, loadOrCreateDaemonToken } from './daemon-access.js'
-import { daemonEnv } from './daemon-env.js'
-import { readGhosttyFont } from './ghostty-config.js'
-import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
-import { findParts } from './paths.js'
-import {
-  autoUpdateOn,
-  isGitRepository,
-  keepAwakeOn,
-  loadSettings,
-  saveSettings,
-  startingRepoDir,
-} from './settings.js'
-import { checkReleaseSignature, runSmoke } from './smoke.js'
-import {
-  freePort,
-  loginPathLogLine,
-  loginShellPath,
-  startupMarks,
-  waitForHealth,
-} from './startup.js'
-import { Updater } from './updater.js'
-import { windowOptions } from './window-options.js'
+import { app, dialog, ipcMain, powerSaveBlocker } from 'electron'
+import { AwakeGuard, readAgentStatus } from './app/agent-status.js'
+import { readGhosttyFont } from './app/ghostty-config.js'
+import { buildMenu } from './app/menu.js'
+import { isDashboardUrl } from './app/navigation.js'
+import { confirmStop } from './app/quit.js'
+import { keepAwakeOn, loadSettings, startingRepoDir } from './app/settings.js'
+import type { AppContext, AppState } from './app/state.js'
+import { createWindow } from './app/window.js'
+import { DAEMON_STOP_WAIT_MS, pickRepository, startDaemon } from './daemon/process.js'
+import { startupMarks } from './daemon/startup.js'
+import { makeUpdater } from './update/make-updater.js'
 
 const marks = startupMarks()
 marks.mark('module start')
@@ -49,364 +22,31 @@ app.setName('Natamux')
 const here = dirname(fileURLToPath(import.meta.url))
 const userData = app.getPath('userData')
 const settingsFile = join(userData, 'settings.json')
-const logFile = join(userData, 'logs', 'daemon.log')
-const PREFERRED_PORT = 4317
 
-let daemon: UtilityProcess | undefined
-let daemonExited = false
-let daemonToken = ''
-let dashboardUrl = ''
-// False while the window shows the loading page and waits for the daemon.
-let daemonReady = false
-let marksLogged = false
-let window: BrowserWindow | undefined
-let quitConfirmed = false
-// A daemon that does not exit must not keep the app from quitting.
-const DAEMON_STOP_WAIT_MS = 5000
-let daemonStopWaited = false
-let updater: Updater | undefined
 const awake = new AwakeGuard(powerSaveBlocker)
-let keepAwake = keepAwakeOn(loadSettings(settingsFile))
-// The last count the dashboard reported.
-let runningAgents = 0
-const lastLines: string[] = []
-
-function log(text: string): void {
-  for (const line of text.split('\n').filter((part) => part.trim() !== '')) {
-    lastLines.push(line)
-    if (lastLines.length > 40) {
-      lastLines.shift()
-    }
-  }
-  try {
-    appendFileSync(logFile, text)
-  } catch {
-    // The log is a help, not a need.
-  }
+const state: AppState = {
+  daemon: undefined,
+  daemonExited: false,
+  daemonToken: '',
+  dashboardUrl: '',
+  daemonReady: false,
+  marksLogged: false,
+  window: undefined,
+  quitConfirmed: false,
+  daemonStopWaited: false,
+  updater: undefined,
+  keepAwake: keepAwakeOn(loadSettings(settingsFile)),
+  runningAgents: 0,
+  lastLines: [],
 }
-
-// Asks for a folder until a git repository is picked. Undefined: the user gave up.
-async function pickRepository(): Promise<string | undefined> {
-  for (;;) {
-    const answer = await dialog.showOpenDialog({
-      title: 'Add a project',
-      message: 'Pick the top folder of a git repository.',
-      buttonLabel: 'Add',
-      properties: ['openDirectory'],
-    })
-    const dir = answer.filePaths[0]
-    if (answer.canceled || dir === undefined) {
-      return undefined
-    }
-    if (isGitRepository(dir)) {
-      return dir
-    }
-    await dialog.showMessageBox({
-      type: 'warning',
-      message: `${dir} is not a git repository`,
-      detail: 'Pick the top folder of a repository, the one that holds .git.',
-    })
-  }
-}
-
-// onForked runs in the same tick as the fork, so the window opens while the daemon starts.
-async function startDaemon(repoDir: string | undefined, onForked: () => void): Promise<void> {
-  // Right after login the shell can take seconds, so the daemon starts meanwhile and gets the PATH
-  // later (see packages/daemon/src/login-path.ts).
-  const login = process.platform === 'win32' ? undefined : loginShellPath(process.env.SHELL)
-  // The packaged app keeps the built dashboard in its resources (electron-builder.yml).
-  const parts = findParts({
-    ...process.env,
-    NATAMUX_WEB_DIR:
-      process.env.NATAMUX_WEB_DIR ??
-      (app.isPackaged ? join(process.resourcesPath, 'web') : undefined),
-  })
-  const binDir = join(userData, 'bin')
-  writeCliShim(binDir, process.execPath, parts.cliMain, process.platform)
-  const port = await freePort(PREFERRED_PORT)
-  daemonToken = loadOrCreateDaemonToken(join(userData, 'daemon-token'))
-  dashboardUrl = `http://127.0.0.1:${port}`
-
-  mkdirSync(dirname(logFile), { recursive: true })
-  log(`\n--- ${new Date().toISOString()} starting the daemon on port ${port}\n`)
-  const place = {
-    port,
-    dataDir: join(userData, 'data'),
-    repoDir,
-    webDir: parts.webDir,
-    binDir,
-    loginPath: undefined,
-  }
-  daemonExited = false
-  // While it starts, the caller reports a failure, so the exit handler stays quiet.
-  let starting = true
-  const child = utilityProcess.fork(parts.daemonMain, [], {
-    env: {
-      ...daemonEnv(process.env, daemonToken, place),
-      ...(login === undefined ? {} : { NATAMUX_PATH_PENDING: '1' }),
-    },
-    // Not a project folder: the daemon may run with none.
-    cwd: app.getPath('home'),
-    stdio: 'pipe',
-    serviceName: 'Natamux daemon',
-  })
-  daemon = child
-  marks.mark('daemon forked')
-  onForked()
-  let ready = (): void => undefined
-  const readyMessage = new Promise<void>((resolve) => {
-    ready = resolve
-  })
-  child.on('message', (message: unknown) => {
-    if (message !== 'ready') {
-      return
-    }
-    marks.mark('daemon ready')
-    ready()
-    void login?.then((answer) => {
-      const problem = loginPathLogLine(answer, process.env.PATH)
-      if (problem !== undefined) {
-        log(problem)
-      }
-      const loginPath = 'path' in answer ? answer.path : undefined
-      const env = daemonEnv(process.env, daemonToken, { ...place, loginPath })
-      if (!daemonExited) {
-        child.postMessage({ path: env.PATH })
-      }
-    })
-  })
-  child.stdout?.on('data', (chunk: Buffer) => log(chunk.toString()))
-  child.stderr?.on('data', (chunk: Buffer) => log(chunk.toString()))
-  child.on('exit', (code) => {
-    daemonExited = true
-    log(`--- the daemon exited with code ${code}\n`)
-    if (!quitConfirmed && !starting) {
-      void dialog
-        .showMessageBox({
-          type: 'error',
-          message: 'The Natamux daemon stopped',
-          detail: `${lastLines.slice(-12).join('\n')}\n\nThe full log: ${logFile}`,
-          buttons: ['Quit'],
-        })
-        .then(() => app.quit())
-    }
-  })
-
-  try {
-    await waitForHealth(`${dashboardUrl}/health`, {
-      timeoutMs: 30_000,
-      exited: () => daemonExited,
-      ready: readyMessage,
-    })
-  } finally {
-    starting = false
-  }
-}
-
-function createWindow(): void {
-  const dark = nativeTheme.shouldUseDarkColors
-  const origin = new URL(dashboardUrl).origin
-  const created = new BrowserWindow(windowOptions(join(here, 'preload.cjs'), dark))
-  window = created
-  marks.mark('window created')
-  // By origin, not by the exact loading page URL: Chromium may rewrite a data: URL.
-  const onDashboard = (): boolean => created.webContents.getURL().startsWith(`${origin}/`)
-  created.once('ready-to-show', () => {
-    marks.mark('ready-to-show')
-    created.show()
-  })
-  created.webContents.on('did-finish-load', () => {
-    if (!marksLogged && onDashboard()) {
-      marksLogged = true
-      marks.mark('did-finish-load')
-      log(marks.line())
-    }
-  })
-  created.on('closed', () => {
-    window = undefined
-  })
-
-  created.webContents.setWindowOpenHandler(({ url }) => {
-    if (opensInBrowser(url)) {
-      void shell.openExternal(url)
-    }
-    return { action: 'deny' }
-  })
-  created.webContents.on('will-navigate', (event, url) => {
-    if (!isDashboardUrl(url, origin)) {
-      event.preventDefault()
-      if (opensInBrowser(url)) {
-        void shell.openExternal(url)
-      }
-    }
-  })
-  if (process.env.NATAMUX_DESKTOP_SMOKE === '1') {
-    // A check for CI and the codespace: the dashboard loads signed in, a terminal and an agent work
-    // (smoke.ts), then the app quits. The exit code tells: on Windows the app's output may not reach
-    // the console.
-    created.webContents.on('did-finish-load', async () => {
-      // The loading page finishes first.
-      if (!onDashboard()) {
-        return
-      }
-      await new Promise((resolve) => setTimeout(resolve, 4000))
-      const signedIn: unknown = await created.webContents.executeJavaScript(
-        `document.querySelector('[aria-label="Daemon token"]') === null && document.querySelector('#root')?.childElementCount > 0`,
-      )
-      console.log(`natamux-desktop: ${created.webContents.getURL()} signed in: ${String(signedIn)}`)
-      const shot = process.env.NATAMUX_DESKTOP_SMOKE_SHOT
-      if (shot) {
-        writeFileSync(shot, (await created.webContents.capturePage()).toPNG())
-      }
-      let passed = signedIn === true
-      if (passed) {
-        // Also in the daemon log, which CI reads on Windows.
-        let result = 'natamux-desktop: smoke passed, the terminal and the agent work'
-        try {
-          await runSmoke(dashboardUrl, daemonToken, process.env, process.platform)
-          result += `, ${checkReleaseSignature()}`
-        } catch (error) {
-          passed = false
-          const message = error instanceof Error ? error.message : String(error)
-          result = `natamux-desktop: smoke failed: ${message}`
-        }
-        console.log(result)
-        log(`${result}\n`)
-      }
-      quitConfirmed = true
-      daemon?.kill()
-      app.exit(passed ? 0 : 1)
-    })
-  }
-  if (daemonReady) {
-    void created.loadURL(`${dashboardUrl}/`)
-  } else {
-    // The dashboard load cuts this one short when the daemon is quick, and that rejects.
-    created.loadURL(loadingPageUrl(dark)).catch(() => undefined)
-  }
-}
-
-// A hung daemon must not hold Cmd+Q; with no answer, quit goes on without the dialog.
-const RUNNING_TASKS_TIMEOUT_MS = 3000
-
-// The number of tasks whose agent works now. Quitting stops them.
-async function runningTasks(): Promise<number> {
-  try {
-    const response = await fetch(`${dashboardUrl}/tasks?state=running`, {
-      headers: { authorization: `Bearer ${daemonToken}` },
-      signal: AbortSignal.timeout(RUNNING_TASKS_TIMEOUT_MS),
-    })
-    const body = (await response.json()) as { tasks?: unknown[] }
-    return body.tasks?.length ?? 0
-  } catch {
-    return 0
-  }
-}
-
-async function confirmStop(action: string): Promise<boolean> {
-  const running = await runningTasks()
-  if (running === 0) {
-    return true
-  }
-  const answer = await dialog.showMessageBox({
-    type: 'warning',
-    message: `${running === 1 ? 'An agent is' : `${running} agents are`} still working`,
-    detail: `${action} stops the daemon, and with it every agent and shell. Tasks, worktrees and their changes stay, and the agents start again when Natamux does.`,
-    buttons: [action, 'Cancel'],
-    defaultId: 1,
-    cancelId: 1,
-  })
-  return answer.response === 0
-}
-
-// The daemon tells the open dashboards, so the project shows up without a restart.
-async function addProjectFromMenu(): Promise<void> {
-  if (dashboardUrl === '' || daemonExited) {
-    return
-  }
-  const dir = await pickRepository()
-  if (dir === undefined) {
-    return
-  }
-  const problem = await addProject(dashboardUrl, daemonToken, dir)
-  if (problem !== undefined) {
-    await dialog.showMessageBox({
-      type: 'warning',
-      message: `Natamux could not add ${dir}`,
-      detail: problem,
-    })
-  }
-}
-
-function buildMenu(): void {
-  const mac = process.platform === 'darwin'
-  const updates = updater?.menuItems() ?? []
-  const template: MenuItemConstructorOptions[] = [
-    ...(mac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: 'about' },
-              ...(updates.length > 0 ? [{ type: 'separator' as const }, ...updates] : []),
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
-            ] satisfies MenuItemConstructorOptions[],
-          },
-        ]
-      : []),
-    {
-      label: 'File',
-      submenu: [
-        { label: 'Add Project…', accelerator: 'CmdOrCtrl+Shift+O', click: addProjectFromMenu },
-        { label: 'Show Daemon Log', click: () => void shell.openPath(logFile) },
-        {
-          label: 'Keep Computer Awake While Agents Run',
-          type: 'checkbox',
-          checked: keepAwake,
-          click: (item) => {
-            keepAwake = item.checked
-            saveSettings(settingsFile, { ...loadSettings(settingsFile), keepAwake })
-            awake.update(runningAgents > 0 && keepAwake)
-          },
-        },
-        { type: 'separator' },
-        mac ? { role: 'close' } : { role: 'quit' },
-      ],
-    },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
-    ...(!mac && updates.length > 0 ? [{ label: 'Help', submenu: updates }] : []),
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
-}
-
-// Only a packaged app updates: a run from the repository has no release to replace.
-function makeUpdater(): Updater | undefined {
-  if (!app.isPackaged || process.env.NATAMUX_DESKTOP_SMOKE === '1') {
-    return undefined
-  }
-  return new Updater({
-    userData,
-    version: process.env.NATAMUX_UPDATE_AS_VERSION || app.getVersion(),
-    autoUpdate: autoUpdateOn(loadSettings(settingsFile)),
-    saveAutoUpdate: (on) =>
-      saveSettings(settingsFile, { ...loadSettings(settingsFile), autoUpdate: on }),
-    confirmRestart: () => confirmStop('Restart'),
-    quit: () => {
-      quitConfirmed = true
-      app.quit()
-    },
-    changed: buildMenu,
-    parent: () => window,
-  })
+const ctx: AppContext = {
+  state,
+  marks,
+  awake,
+  userData,
+  settingsFile,
+  logFile: join(userData, 'logs', 'daemon.log'),
+  preloadFile: join(here, 'preload.cjs'),
 }
 
 // The page reads the token once, as it loads. Only the dashboard may ask. Not a window argument:
@@ -414,13 +54,15 @@ function makeUpdater(): Updater | undefined {
 ipcMain.on('natamux:daemon-token', (event) => {
   const from = event.senderFrame?.url ?? ''
   event.returnValue =
-    dashboardUrl !== '' && isDashboardUrl(from, new URL(dashboardUrl).origin) ? daemonToken : ''
+    state.dashboardUrl !== '' && isDashboardUrl(from, new URL(state.dashboardUrl).origin)
+      ? state.daemonToken
+      : ''
 })
 
 // The Browse button of the projects panel. Only the dashboard may open a dialog.
 ipcMain.handle('natamux:pick-folder', (event) => {
   const from = event.senderFrame?.url ?? ''
-  if (dashboardUrl === '' || !isDashboardUrl(from, new URL(dashboardUrl).origin)) {
+  if (state.dashboardUrl === '' || !isDashboardUrl(from, new URL(state.dashboardUrl).origin)) {
     return undefined
   }
   return pickRepository()
@@ -433,14 +75,14 @@ ipcMain.on('natamux:status', (event, value: unknown) => {
   const status = readAgentStatus(value)
   if (
     status === undefined ||
-    dashboardUrl === '' ||
-    !isDashboardUrl(from, new URL(dashboardUrl).origin)
+    state.dashboardUrl === '' ||
+    !isDashboardUrl(from, new URL(state.dashboardUrl).origin)
   ) {
     return
   }
   app.setBadgeCount(status.needsYou)
-  runningAgents = status.running
-  awake.update(runningAgents > 0 && keepAwake)
+  state.runningAgents = status.running
+  awake.update(state.runningAgents > 0 && state.keepAwake)
 })
 
 // The terminals of the dashboard use Ghostty's font when the user has one and picked none.
@@ -454,24 +96,24 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (window?.isMinimized()) {
-      window.restore()
+    if (state.window?.isMinimized()) {
+      state.window.restore()
     }
-    window?.focus()
+    state.window?.focus()
   })
 
   app.on('before-quit', (event) => {
-    if (quitConfirmed || daemon === undefined || daemonExited) {
+    if (state.quitConfirmed || state.daemon === undefined || state.daemonExited) {
       return
     }
     event.preventDefault()
-    void confirmStop('Quit').then((yes) => {
+    void confirmStop(state, 'Quit').then((yes) => {
       if (yes) {
-        quitConfirmed = true
+        state.quitConfirmed = true
         app.quit()
-      } else if (window === undefined && dashboardUrl !== '') {
+      } else if (state.window === undefined && state.dashboardUrl !== '') {
         // Closing the last window on Windows or Linux asked to quit. Cancel keeps the app usable.
-        createWindow()
+        createWindow(ctx)
       }
     })
   })
@@ -479,9 +121,10 @@ if (!app.requestSingleInstanceLock()) {
   // The daemon waits up to 3 s for its shells to end. The app waits for it: its exit would cut the
   // daemon short and leave a shell that ignores SIGHUP running.
   app.on('will-quit', (event) => {
-    if (daemon !== undefined && !daemonExited && !daemonStopWaited) {
+    const daemon = state.daemon
+    if (daemon !== undefined && !state.daemonExited && !state.daemonStopWaited) {
       event.preventDefault()
-      daemonStopWaited = true
+      state.daemonStopWaited = true
       const timer = setTimeout(() => app.quit(), DAEMON_STOP_WAIT_MS)
       daemon.once('exit', () => {
         clearTimeout(timer)
@@ -490,7 +133,7 @@ if (!app.requestSingleInstanceLock()) {
       daemon.kill()
       return
     }
-    updater?.installOnQuit()
+    state.updater?.installOnQuit()
   })
 
   // On macOS the app, the daemon and the agents keep running with no window, as other Mac apps do.
@@ -501,29 +144,29 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('activate', () => {
-    if (window === undefined && dashboardUrl !== '') {
-      createWindow()
+    if (state.window === undefined && state.dashboardUrl !== '') {
+      createWindow(ctx)
     }
   })
 
   void app.whenReady().then(async () => {
     marks.mark('whenReady')
-    updater = makeUpdater()
-    buildMenu()
+    state.updater = makeUpdater(ctx)
+    buildMenu(ctx)
     try {
-      await startDaemon(startingRepoDir(loadSettings(settingsFile)), createWindow)
+      await startDaemon(ctx, startingRepoDir(loadSettings(settingsFile)), () => createWindow(ctx))
     } catch (error) {
-      quitConfirmed = true
+      state.quitConfirmed = true
       await dialog.showMessageBox({
         type: 'error',
         message: 'Natamux could not start its daemon',
-        detail: `${error instanceof Error ? error.message : String(error)}\n\n${lastLines.slice(-12).join('\n')}`,
+        detail: `${error instanceof Error ? error.message : String(error)}\n\n${state.lastLines.slice(-12).join('\n')}`,
       })
       app.quit()
       return
     }
-    daemonReady = true
-    void window?.loadURL(`${dashboardUrl}/`)
-    updater?.start()
+    state.daemonReady = true
+    void state.window?.loadURL(`${state.dashboardUrl}/`)
+    state.updater?.start()
   })
 }

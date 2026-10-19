@@ -1,4 +1,4 @@
-import type { PtyProcess, SpawnPty } from '../terminal-service.js'
+import type { PtyProcess, SpawnPty } from '../terminals/terminal-types.js'
 
 // A pseudo terminal for tests. It echoes what is written, and remembers how it was started.
 let nextPid = 1000

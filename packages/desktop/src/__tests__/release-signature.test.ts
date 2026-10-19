@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  checkReleaseSignature,
   fetchSignedSums,
   MAX_SIGNED_BYTES,
   RELEASE_SIGNER,
+  SIGNATURE_FIXTURE,
   verifySums,
 } from '../release-signature.js'
-import { checkReleaseSignature, SIGNATURE_FIXTURE } from '../smoke.js'
 
 // Made by minisign 0.12 (Docker image jedisct1/minisign) with two throwaway keys, made with
 // minisign -G -W -p <name>.pub -s <name>.sec. Releases are signed in the legacy form (-l).
@@ -261,11 +262,11 @@ describe('fetchSignedSums', () => {
   // The manual install kind (Windows and others) only opens the release page; it must not be
   // offered an unsigned release either.
   it('runs in the updater before the release page is offered or a file downloads', () => {
-    const source = readFileSync(new URL('../updater.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../update/updater.ts', import.meta.url), 'utf8')
     const check = source.indexOf('await fetchSignedSums(')
     expect(check).toBeGreaterThan(-1)
     expect(check).toBeLessThan(source.indexOf('await this.offerPage(release, manual)'))
-    expect(check).toBeLessThan(source.indexOf('await this.download(release, name, sums)'))
+    expect(check).toBeLessThan(source.indexOf('await downloadRelease('))
   })
 })
 

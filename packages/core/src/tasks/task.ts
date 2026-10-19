@@ -1,0 +1,137 @@
+import { z } from 'zod'
+import { CONTEXT_SOURCE_TYPES } from '../projects/project-settings.js'
+import { repoIdSchema } from '../projects/repo.js'
+import { LEGACY_STEP_REFS, stepRefSchema } from '../stages/default-pipeline.js'
+import { stageIdSchema } from '../stages/schema.js'
+import { lanesSchema } from '../stages/terminal-lane.js'
+import { taskStateSchema } from './task-state.js'
+
+export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
+
+export const PULL_REQUEST_STATES = ['open', 'draft', 'merged', 'closed'] as const
+export const CHECK_STATES = ['passing', 'failing', 'pending', 'none'] as const
+
+// What GitHub last said about the task's pull request and its checks (CI).
+export const pullRequestStatusSchema = z.object({
+  state: z.enum(PULL_REQUEST_STATES),
+  checks: z.enum(CHECK_STATES),
+})
+
+export type PullRequestStatus = z.infer<typeof pullRequestStatusSchema>
+
+// Where the context of a task came from, and what it was asked for: an issue number, a ticket key.
+export const taskContextSchema = z.object({
+  source: z.enum(CONTEXT_SOURCE_TYPES),
+  // Picks one of several skills or MCP servers in the project settings.
+  name: z.string().trim().min(1).max(60).optional(),
+  // A skill picked when the task was started, with no source in the project settings.
+  skill: z.string().trim().min(1).max(200).optional(),
+  ref: z.string().trim().max(500).default(''),
+})
+
+export type TaskContext = z.infer<typeof taskContextSchema>
+
+// A link the dashboard shows. Another scheme (vscode:, file:) would open its handler on a click.
+const webUrlSchema = z.url({ protocol: /^https?$/ })
+
+// The item that tracks the task outside Natamux: a GitHub issue (#42), a Jira ticket (ABC-123).
+export const issueLinkSchema = z.object({
+  provider: z.string().trim().min(1).max(40),
+  key: z.string().trim().min(1).max(100),
+  url: webUrlSchema,
+})
+
+export type IssueLink = z.infer<typeof issueLinkSchema>
+
+export const taskIdSchema = z
+  .string()
+  .max(32)
+  .regex(/^[A-Z]+-\d+$/, 'Task id looks like T-42 or ABC-42')
+
+// A title that starts with a task id, such as "Task-0005: Fix bug" or "ABC-12 Fix it".
+const TITLE_WITH_ID = /^([A-Za-z]+-\d+)(?:\s*:|\s)\s*(.*)$/
+
+// Splits the id the user chose from the start of a title. The id is upper case, because task
+// files may live on a file system that does not tell `Task-5.md` from `TASK-5.md`.
+export function splitTaskId(title: string): { id: string | null; title: string } {
+  const trimmed = title.trim()
+  const match = TITLE_WITH_ID.exec(trimmed)
+  return match?.[1] && match[2]
+    ? { id: match[1].toUpperCase(), title: match[2] }
+    : { id: null, title: trimmed }
+}
+
+export const taskSchema = z.object({
+  id: taskIdSchema,
+  title: z.string().trim().min(1).max(400),
+  description: z.string().default(''),
+  state: taskStateSchema.default('draft'),
+  priority: z.enum(TASK_PRIORITIES).default('normal'),
+  labels: z.array(z.string().min(1)).default([]),
+  agent: z.string().min(1).nullable().default(null),
+  branch: z.string().min(1).nullable().default(null),
+  workspace: z.string().min(1).nullable().default(null),
+  // A bad stored link means none, so the task still loads. Same for `issue`.
+  pr: webUrlSchema.nullable().default(null).catch(null),
+  prStatus: pullRequestStatusSchema.nullable().default(null),
+  dependsOn: z.array(taskIdSchema).default([]),
+  // The task this one is a part of. One level only: a subtask has no subtasks.
+  parentId: taskIdSchema.nullable().default(null),
+  // The repository of the task. Null is the one with the id DEFAULT_REPO.
+  repo: repoIdSchema.nullable().default(null),
+  // The current step: a stage id, or a group id while stages run side by side. Inside a branch,
+  // the current stage of the path.
+  stage: stageIdSchema.default('implement'),
+  // The steps the task goes through, copied from its project when it was made.
+  stages: z.array(stepRefSchema).min(1).default(LEGACY_STEP_REFS),
+  // The state of each stage of the current group. Empty outside a group.
+  lanes: lanesSchema.default({}),
+  // The path the task took at each branch it reached: branch id -> path id, '' when it skipped
+  // the branch. Part of the position, so it is rebuilt from the events.
+  paths: z.record(z.string(), z.string()).default({}),
+  // When the current step started.
+  stageSince: z.iso.datetime().nullable().default(null),
+  // When the running agent ended its turn to wait for its background work, which wakes it again.
+  // Null when it does not wait. A waiting task is not "quiet".
+  backgroundSince: z.iso.datetime().nullable().default(null),
+  // The stages the user chose to run as a workflow, used the next time each one starts. A bad
+  // value in a hand-edited file means none, so the task still loads.
+  workflowStages: z.array(stageIdSchema).catch([]),
+  // The stages the user chose to check on CI before they pass. Left out when none.
+  ciStages: z.array(stageIdSchema).optional().catch(undefined),
+  // Later stages the user chose to skip: each is skipped when the task reaches it. Left out when
+  // none.
+  skipStages: z.array(stageIdSchema).optional().catch(undefined),
+  // Made with no agent: its stages wait for a person to start one. Kept in the file, so a restart
+  // does not start an agent in the person's shell. Left out when not.
+  withoutAgent: z.literal(true).optional().catch(undefined),
+  context: taskContextSchema.nullable().default(null),
+  issue: issueLinkSchema.nullable().default(null).catch(null),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+})
+
+export type Task = z.infer<typeof taskSchema>
+
+const IMPORTED_ISSUE = /Imported from (https:\/\/github\.com\/[^\s]+\/issues\/(\d+))\s*$/
+
+// Fills the stage fields of a task written before stages existed, from its state: a task in
+// review is at the review stage, a done task finished its last stage, any other is implementing.
+// An issue import line in its notes becomes its issue link.
+export function upgradeTaskFields(raw: Record<string, unknown>): Record<string, unknown> {
+  if (raw.stage !== undefined) {
+    return raw
+  }
+  const state = raw.state
+  const stage = state === 'review' ? 'review' : state === 'done' ? 'release' : 'implement'
+  const imported =
+    typeof raw.description === 'string' ? IMPORTED_ISSUE.exec(raw.description.trim()) : null
+  return {
+    ...raw,
+    stage,
+    stages: LEGACY_STEP_REFS,
+    ...(raw.issue === undefined && imported?.[1] && imported[2]
+      ? { issue: { provider: 'github', key: `#${imported[2]}`, url: imported[1] } }
+      : {}),
+  }
+}

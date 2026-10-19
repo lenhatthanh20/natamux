@@ -25,7 +25,7 @@ function findAll(pattern: RegExp): string[] {
 
 describe('the words of the UI', () => {
   it('reads the source files', () => {
-    expect(Object.keys(SOURCES)).toContain('../../components/NewWorkspaceDialog.tsx')
+    expect(Object.keys(SOURCES)).toContain('../../features/workspaces/NewWorkspaceDialog.tsx')
   })
 
   it('says "Start a task", not "New workspace"', () => {
@@ -35,8 +35,8 @@ describe('the words of the UI', () => {
   it('keeps "Create workspace" for a task that is already there', () => {
     const files = findAll(/Create workspace/).map((match) => match.split(':')[0])
     expect([...new Set(files)].sort()).toEqual([
-      'components/NoWorkspace.tsx',
-      'components/TaskDetail.tsx',
+      'features/tasks/TaskDetail.tsx',
+      'features/workspaces/NoWorkspace.tsx',
     ])
   })
 
@@ -44,6 +44,6 @@ describe('the words of the UI', () => {
     expect(findAll(/\bRepos\b|\bRepo:|'Repo'/)).toEqual([])
     expect(findAll(/repositor/i).filter((match) => !/git[ /]repositor/i.test(match))).toEqual([])
     const files = findAll(/repositor/i).map((match) => match.split(':')[0])
-    expect([...new Set(files)]).toEqual(['components/RepoPanel.tsx'])
+    expect([...new Set(files)]).toEqual(['features/projects/RepoPanel.tsx'])
   })
 })

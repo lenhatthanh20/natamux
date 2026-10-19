@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import type { ComponentProps, FunctionComponent } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
-import type { WorkspaceRow } from '../components/WorkspaceRow'
+import type { WorkspaceRow } from '../features/sidebar/WorkspaceRow'
 import { initialViewData, useViewStore } from '../lib/view-store'
 
 type RowProps = ComponentProps<typeof WorkspaceRow>
@@ -12,8 +12,8 @@ type RowProps = ComponentProps<typeof WorkspaceRow>
 // How often each part rendered. Test-only: the stand-ins below count, the real parts do not.
 const renders = vi.hoisted(() => ({ dashboard: 0, rows: new Map<string, number>() }))
 
-vi.mock('../components/Dashboard', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/Dashboard')>()
+vi.mock('../features/app/Dashboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/app/Dashboard')>()
   return {
     ...actual,
     Dashboard: (props: ComponentProps<typeof actual.Dashboard>) => {
@@ -25,8 +25,8 @@ vi.mock('../components/Dashboard', async (importOriginal) => {
 
 // The row is memo(render). The stand-in is the same memo around a render that counts, so it
 // renders exactly when the real row would.
-vi.mock('../components/WorkspaceRow', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/WorkspaceRow')>()
+vi.mock('../features/sidebar/WorkspaceRow', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/sidebar/WorkspaceRow')>()
   const { memo } = await import('react')
   const inner = (actual.WorkspaceRow as unknown as { type: FunctionComponent<RowProps> }).type
   return {
@@ -40,8 +40,8 @@ vi.mock('../components/WorkspaceRow', async (importOriginal) => {
 
 // The dashboard loads the terminal's and the diff's code when idle; xterm and Monaco need a real
 // browser.
-vi.mock('../components/TerminalView', () => ({ default: () => null }))
-vi.mock('../components/MonacoDiff', () => ({ default: () => null }))
+vi.mock('../features/terminals/TerminalView', () => ({ default: () => null }))
+vi.mock('../features/git/MonacoDiff', () => ({ default: () => null }))
 
 class FakeSocket {
   static instances: FakeSocket[] = []

@@ -8,7 +8,8 @@ export const SHOW_LIMIT_MS = 100
 // AC 8: the final screen of a 10,000 line history shows within this time of the click.
 export const SHOW_HISTORY_LIMIT_MS = 500
 export const HEAP_PER_TERMINAL_MB = 15
-// KEEP_ALIVE_TERMINALS of packages/web/src/lib/terminal-cache.ts. e2e cannot import web code.
+// KEEP_ALIVE_TERMINALS of packages/web/src/features/terminals/terminal-cache.ts. e2e cannot
+// import web code.
 export const KEEP_ALIVE = 8
 export const PROMPT = 'e2e> '
 

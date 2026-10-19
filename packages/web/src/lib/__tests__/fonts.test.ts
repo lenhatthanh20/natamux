@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import diff from '../../components/MonacoDiff.tsx?raw'
-import file from '../../components/MonacoFile.tsx?raw'
-import setup from '../monaco-setup.ts?raw'
+import file from '../../features/files/MonacoFile.tsx?raw'
+import setup from '../../features/files/monaco-setup.ts?raw'
+import diff from '../../features/git/MonacoDiff.tsx?raw'
 
 describe('the code views', () => {
   it('use the font of the terminal, so code looks the same in a diff and in a shell', () => {

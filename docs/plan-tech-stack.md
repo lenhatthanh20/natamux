@@ -203,6 +203,8 @@ natamux/
 └── pnpm-workspace.yaml
 ```
 
+Inside each package, code is grouped by feature (`tasks`, `stages`, `workspaces`, `terminals`, …). The rules are in `AGENTS.md` (Code layout).
+
 ## 10. Build order
 
 1. `core`: task model, state machine, event types, with unit tests.
