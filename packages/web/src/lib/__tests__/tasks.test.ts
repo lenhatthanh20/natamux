@@ -483,6 +483,12 @@ describe('agentAction', () => {
     expect(agentAction({ state: 'failed', agent: 'claude-code' })).toBe('restart')
     expect(agentAction({ state: 'review', agent: 'claude-code' })).toBe('restart')
   })
+
+  it('has nothing to offer for a finished task, which no agent can move', () => {
+    expect(agentAction({ state: 'done', agent: 'claude-code' })).toBeNull()
+    expect(agentAction({ state: 'cancelled', agent: 'claude-code' })).toBeNull()
+    expect(agentAction({ state: 'cancelled', agent: null })).toBeNull()
+  })
 })
 
 describe('contextText', () => {

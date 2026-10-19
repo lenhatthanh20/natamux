@@ -24,4 +24,22 @@ describe('the drawer footer', () => {
     expect(onRepos).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: 'Repos' })).toBeNull()
   })
+
+  it.each([
+    [1, '1 needs you'],
+    [2, '2 need you'],
+  ])('counts %i waiting task the way the status bar does', (needsYou, text) => {
+    render(
+      <DrawerFooter
+        liveStatus="live"
+        running={0}
+        needsYou={needsYou}
+        onRepos={vi.fn()}
+        onImport={vi.fn()}
+        onShortcuts={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(text)).toBeTruthy()
+  })
 })

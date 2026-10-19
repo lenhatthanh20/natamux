@@ -113,10 +113,10 @@ export class TaskService {
     attachments: readonly AttachmentFile[] = [],
     { splitId = true }: { splitId?: boolean } = {},
   ): Task {
-    const input = createTaskInputSchema.parse(rawInput)
-    if (input.parentId) {
-      this.checkParent(input.parentId)
-    }
+    const parsed = createTaskInputSchema.parse(rawInput)
+    const parent = parsed.parentId ? this.checkParent(parsed.parentId) : null
+    // A subtask is part of its parent's work, so it is in the same project.
+    const input = parent && !parsed.repo ? { ...parsed, repo: parent.repo } : parsed
     const chosen = splitId ? splitTaskId(input.title) : { id: null, title: input.title }
     if (chosen.id && (this.sync.tasks.has(chosen.id) || readTaskFile(this.dataDir, chosen.id))) {
       throw new TaskEditError(`Task id ${chosen.id} is already used`)
@@ -313,7 +313,7 @@ export class TaskService {
   }
 
   // Subtasks are one level deep: the parent must exist and must not be a subtask itself.
-  private checkParent(parentId: string): void {
+  private checkParent(parentId: string): Task {
     const parent = this.findTask(parentId)
     if (!parent) {
       throw new TaskEditError(`No such task: ${parentId}`)
@@ -321,6 +321,7 @@ export class TaskService {
     if (parent.parentId !== null) {
       throw new TaskEditError(`${parentId} is a subtask; a subtask cannot have subtasks`)
     }
+    return parent
   }
 
   private checkDependencies(taskId: string, dependsOn: readonly string[]): void {

@@ -133,10 +133,11 @@ export function isQuiet(task: Task, now: Date): boolean {
   )
 }
 
-// What the agent button of a task does. While the agent works or waits there is nothing to start.
-// After it ended or failed, starting it again is a restart.
+// What the agent button of a task does. While the agent works or waits there is nothing to start,
+// and a finished task cannot leave done or cancelled. After it ended or failed, starting it again
+// is a restart.
 export function agentAction(task: Pick<Task, 'state' | 'agent'>): 'start' | 'restart' | null {
-  if (task.state === 'running' || task.state === 'needs-input') {
+  if (['running', 'needs-input', 'done', 'cancelled'].includes(task.state)) {
     return null
   }
   return task.agent === null ? 'start' : 'restart'

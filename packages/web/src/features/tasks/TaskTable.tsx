@@ -16,7 +16,7 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
-import { type MouseEvent, memo, useMemo, useState } from 'react'
+import { type MouseEvent, memo, useMemo, useRef, useState } from 'react'
 import { AgentName } from '../../components/AgentBadge'
 import { DiffSize } from '../../components/DiffSize'
 import { StateBadge } from '../../components/StateBadge'
@@ -131,7 +131,8 @@ type RowProps = {
   // The row holds the tab stop of the list.
   tabStop: boolean
   activate: (id: string) => void
-  onSelect: (id: string) => void
+  // clicks: the click count of the event (2 for the second click of a double click).
+  onSelect: (id: string, clicks: number) => void
   onOpen: (id: string) => void
   onMenu: (event: MouseEvent, task: Task) => void
 }
@@ -152,7 +153,7 @@ const CardRow = memo(function CardRow({
     // biome-ignore lint/a11y/useKeyWithClickEvents: the button inside takes the keys (roving focus).
     <li
       data-selected={selected}
-      onClick={() => onSelect(task.id)}
+      onClick={(event) => onSelect(task.id, event.detail)}
       onDoubleClick={() => onOpen(task.id)}
       onContextMenu={(event) => onMenu(event, task)}
       className="h-14 border-b border-line [content-visibility:auto] last:border-b-0 hover:bg-hover data-[selected=true]:bg-selected group-focus-within/table:data-[selected=true]:bg-selection-active"
@@ -288,7 +289,7 @@ const TableRow = memo(function TableRow({
   return (
     <tr
       data-selected={selected}
-      onClick={() => onSelect(task.id)}
+      onClick={(event) => onSelect(task.id, event.detail)}
       onDoubleClick={() => onOpen(task.id)}
       onContextMenu={(event) => onMenu(event, task)}
       className="group h-10 cursor-pointer has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-focus"
@@ -459,8 +460,20 @@ export function TaskTable({
     [mainWidth, hasChanges, hasPr],
   )
 
-  const select = useStableCallback((id: string) => onSelect(id, true))
-  const open = useStableCallback(onOpen)
+  // The first click can open the details panel, and the page moves under the pointer, so the
+  // second click of a double click may land on another row. Both go to the row of the first.
+  const firstClick = useRef<string | null>(null)
+  const select = useStableCallback((id: string, clicks: number) => {
+    if (clicks > 1) {
+      return
+    }
+    firstClick.current = id
+    onSelect(id, true)
+  })
+  const open = useStableCallback((id: string) => {
+    onOpen(firstClick.current ?? id)
+    firstClick.current = null
+  })
   const menu = useStableCallback((event: MouseEvent, task: Task) =>
     openContextMenu(event, menuFor(task), `Actions for ${task.id}`),
   )

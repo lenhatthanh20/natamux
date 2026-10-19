@@ -1,6 +1,6 @@
 import type { SearchAddon } from '@xterm/addon-search'
 import { CaseSensitive, ChevronDown, ChevronUp, Regex, X } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useMemo, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { IconButton } from '../../components/ui/IconButton'
 import { fieldBox } from '../../components/ui/styles'
 import { useResolvedTheme } from '../../lib/theme'
@@ -35,13 +35,21 @@ export function TerminalFind({ search: searchOf, onClose }: TerminalFindProps) {
     }
   }, [search])
 
+  const flags = useRef({ caseSensitive, regex })
+
   // Searching again as the user types or flips an option keeps the current match where it is.
   // biome-ignore lint/correctness/useExhaustiveDependencies: options is built from these values.
   useEffect(() => {
+    const flipped = flags.current.caseSensitive !== caseSensitive || flags.current.regex !== regex
+    flags.current = { caseSensitive, regex }
     if (term === '') {
       search.clearDecorations()
       setResults(null)
       return
+    }
+    // The addon keeps the highlights and count of the same term when an option changes.
+    if (flipped) {
+      search.clearDecorations()
     }
     search.findNext(term, { ...options, incremental: true })
   }, [term, caseSensitive, regex, search])

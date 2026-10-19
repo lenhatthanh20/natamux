@@ -36,11 +36,21 @@ function makeTask(overrides: Partial<Task> = {}): Task {
   }
 }
 
-const announcer = (waiting: Task[]) => <NeedsYouAnnouncer waiting={waiting} />
+const announcer = (waiting: Task[], loaded = true) => (
+  <NeedsYouAnnouncer waiting={waiting} loaded={loaded} />
+)
 
 describe('NeedsYouAnnouncer', () => {
   it('says nothing for the tasks that wait when the page opens', () => {
     render(announcer([makeTask()]))
+
+    expect(screen.getByRole('status').textContent).toBe('')
+  })
+
+  it('says nothing for the tasks that wait when the task list first loads', () => {
+    const view = render(announcer([], false))
+
+    view.rerender(announcer([makeTask()]))
 
     expect(screen.getByRole('status').textContent).toBe('')
   })

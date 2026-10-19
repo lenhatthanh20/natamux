@@ -1435,6 +1435,15 @@ describe('subtasks', () => {
     expect(service.createTask({ title: 'Top' }).parentId).toBeNull()
   })
 
+  it('puts a subtask in the project of its parent, unless it names one', () => {
+    const parent = service.createTask({ title: 'Release 1.0', repo: 'shop' })
+
+    expect(service.createTask({ title: 'Notes', parentId: parent.id }).repo).toBe('shop')
+    expect(service.createTask({ title: 'Site', parentId: parent.id, repo: 'site' }).repo).toBe(
+      'site',
+    )
+  })
+
   it('refuses an unknown parent and a second level', () => {
     const parent = service.createTask({ title: 'Release 1.0' })
     const child = service.createTask({ title: 'Write the notes', parentId: parent.id })

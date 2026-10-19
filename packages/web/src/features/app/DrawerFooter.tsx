@@ -33,7 +33,11 @@ export function DrawerFooter({
         />
         <span>{LIVE_TEXT[liveStatus]}</span>
         <span>{running} running</span>
-        {needsYou > 0 && <span className="text-signal">{needsYou} need you</span>}
+        {needsYou > 0 && (
+          <span className="text-signal">
+            {needsYou} {needsYou === 1 ? 'needs' : 'need'} you
+          </span>
+        )}
       </p>
       <div className="flex items-center gap-1">
         <IconButton label="Projects" icon={FolderGit2} onClick={onRepos} />

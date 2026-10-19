@@ -258,6 +258,20 @@ describe('busyShells', () => {
 
     expect(busyShells(shells)).toEqual([{ name: '3', program: 'node' }])
   })
+
+  // The daemon gives a lane to any program in front of a shell; agent null means it is no agent.
+  it('lists a program that has a lane but no agent', () => {
+    const shells = {
+      terminals: ['1', '2'],
+      lanes: {
+        '1': { stage: 'implement', state: 'running' as const, agent: 'claude-code' },
+        '2': { stage: null, state: null, agent: null },
+      },
+      programs: { '1': 'claude', '2': 'sleep' },
+    }
+
+    expect(busyShells(shells)).toEqual([{ name: '2', program: 'sleep' }])
+  })
 })
 
 describe('removedText', () => {

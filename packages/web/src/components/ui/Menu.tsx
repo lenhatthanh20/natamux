@@ -58,7 +58,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
     null,
   )
 
-  // Place it, flip it above when there is no room below, and focus the first or last item.
+  // Place it, and flip it above when there is no room below.
   useLayoutEffect(() => {
     const box = list.current
     if (box === null) {
@@ -78,10 +78,20 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
       left: Math.max(EDGE, Math.min(wanted, window.innerWidth - size.width - EDGE)),
       flipped,
     })
+  }, [anchor])
+
+  // Then focus the first or last item: a browser does not focus it while the list is hidden.
+  const placed = position !== null
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new anchor places the list again.
+  useLayoutEffect(() => {
+    const box = list.current
+    if (box === null || !placed) {
+      return
+    }
     const entries = box.querySelectorAll<HTMLElement>(ENTRY)
     const target = focus === 'last' ? entries[entries.length - 1] : entries[0]
     target?.focus()
-  }, [anchor, focus])
+  }, [placed, anchor, focus])
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {

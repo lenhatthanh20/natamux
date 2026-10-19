@@ -145,8 +145,9 @@ export function useTaskMutations({
   const templateMutation = useMutation({
     mutationFn: (task: Task) =>
       api.saveTemplate({
-        name: task.title,
-        title: task.title,
+        // A task title can be longer than a template allows.
+        name: task.title.slice(0, 100),
+        title: task.title.slice(0, 200),
         description: task.description,
         priority: task.priority,
         labels: task.labels,

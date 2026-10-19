@@ -34,8 +34,11 @@ export async function fanOut(
     parts.tasks.updateTask(source.id, { labels: [...source.labels, label] })
   }
 
+  const tries = parts.tasks.listTasks().filter((task) => task.labels.includes(label))
+  // The task is try 1, and a second fan out goes on from the tries made before.
+  const first = tries.filter((task) => task.id !== source.id).length + 2
   const created: Task[] = []
-  for (let number = 2; number < options.count + 2; number += 1) {
+  for (let number = first; number < options.count + first; number += 1) {
     let task = parts.tasks.createTask(
       {
         title: `${source.title} (try ${number})`.slice(0, 200),
