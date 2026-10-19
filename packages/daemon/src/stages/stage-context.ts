@@ -3,8 +3,8 @@ import { resolveSkill } from '../agents/agent-skills.js'
 import { type GhIssue, issueContext, parseIssueRef } from '../github/issue-ref.js'
 import { listAttachments, withAttachmentSection } from '../tasks/attachments.js'
 import { StageActionError } from './stage-actions.js'
-import { writeStageFile } from './stage-files.js'
-import { contextPrompt, manualContext } from './stage-prompts.js'
+import { workingDir, writeStageFile } from './stage-files.js'
+import { contextPrompt, manualContext, withParentSection } from './stage-prompts.js'
 import type { StageRun } from './stage-run.js'
 
 // A source that an agent reads the context from.
@@ -66,7 +66,10 @@ export class StageContext {
     }
     const output = stage.output ?? 'context.md'
     try {
-      const text = source.type === 'github-issue' ? await this.readIssue(task) : manualContext(task)
+      const own = source.type === 'github-issue' ? await this.readIssue(task) : manualContext(task)
+      const parent = task.parentId === null ? null : this.run.tasks.getTask(task.parentId)
+      const text =
+        parent === null ? own : withParentSection(own, parent, workingDir(this.run.dataDir, parent))
       const attachments = listAttachments(this.run.dataDir, task.id)
       // The task may have got its workspace while the issue was read: write where it is now.
       writeStageFile(

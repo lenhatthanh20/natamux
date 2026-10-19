@@ -89,7 +89,9 @@ async function readAttachments(paths: readonly string[]): Promise<AttachmentUplo
 
 async function createTask(command: Of<'task.create'>, { client, io, env }: Context) {
   const attachments = await readAttachments(command.attach ?? [])
-  const repo = command.repo ?? (await projectOf(client, env))
+  // A subtask has no repo of its own unless named: the daemon uses the parent's project.
+  const repo =
+    command.repo ?? (command.parentId === undefined ? await projectOf(client, env) : undefined)
   const task = await client.createTask({
     title: command.title,
     description: command.description,
@@ -100,6 +102,7 @@ async function createTask(command: Of<'task.create'>, { client, io, env }: Conte
     ...(command.context === undefined ? {} : { context: command.context }),
     ...(attachments.length === 0 ? {} : { attachments }),
     repo,
+    ...(command.parentId === undefined ? {} : { parentId: command.parentId }),
   })
   output(io, command.json, task, () => `Created ${task.id}  ${task.title}\n`)
 }

@@ -10,7 +10,12 @@ import {
   type Task,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
-import { createTestRepo, runGit, type TestRepo } from '../../__tests__/git-repo.fixture.js'
+import {
+  addBareOrigin,
+  createTestRepo,
+  runGit,
+  type TestRepo,
+} from '../../__tests__/git-repo.fixture.js'
 import { type FakePty, fakeSpawner } from '../../__tests__/terminal-fake.fixture.js'
 import { trustPaths } from '../../agents/agent-launch.js'
 import { AgentRunner } from '../../agents/agent-runner.js'
@@ -235,6 +240,19 @@ describe('context', () => {
       'stage.checked',
       'stage.passed',
     ])
+  })
+
+  it('ends the context of a subtask with its parent', async () => {
+    const parent = await created({ title: 'Export', description: 'Use CSV.' })
+    const task = await created({ title: 'Part A', parentId: parent.id })
+
+    const context = readFileSync(join(archiveDir(dataDir, task.id), 'context.md'), 'utf8')
+    expect(context).toContain('## Parent task')
+    expect(context).toContain(`${parent.id}: Export`)
+    expect(context).toContain('Use CSV.')
+    expect(context).toContain(`Stage files of the parent: ${archiveDir(dataDir, parent.id)}`)
+    const own = readFileSync(join(archiveDir(dataDir, parent.id), 'context.md'), 'utf8')
+    expect(own).not.toContain('## Parent task')
   })
 
   it('reads a GitHub issue with its comments and links the issue', async () => {
@@ -5068,5 +5086,105 @@ describe('a pipeline of its own', () => {
     expect(ptys[0]?.killed).toBe(true)
     expect(ptys).toHaveLength(2)
     expect(terminals.list(task.id)).toEqual(['2'])
+  })
+})
+
+describe('a parent with subtasks', () => {
+  beforeEach(() => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [
+        { id: 'implement', kind: 'agent', gate: 'manual' },
+        { id: 'review', kind: 'review', gate: 'manual' },
+      ],
+    }
+  })
+
+  // A parent whose Implement waits to start in its workspace, and one draft subtask.
+  async function waitingParent(): Promise<{ parent: Task; child: Task }> {
+    const task = await created({ title: 'Export', agent: 'claude-code' })
+    const child = tasks.createTask({ title: 'Part A', parentId: task.id })
+    await withWorkspace(task.id)
+    const parent = await runner.act(task.id, 'start')
+    await runner.settle()
+    return { parent: tasks.getTask(parent.id), child }
+  }
+
+  async function finish(id: string): Promise<void> {
+    tasks.applyEvent(id, { source: 'human', type: 'state.overridden', payload: { to: 'done' } })
+    await runner.settle()
+  }
+
+  // The remote copy of the parent's branch got a merged subtask.
+  function mergedOnRemote(parent: Task): void {
+    const origin = addBareOrigin(repo)
+    runGit(parent.workspace ?? '', 'push', '-u', 'origin', parent.branch ?? '')
+    const other = join(repo.root, 'other')
+    runGit(repo.root, 'clone', '--branch', parent.branch ?? '', origin, other)
+    runGit(other, 'commit', '--allow-empty', '-m', 'merged subtask')
+    runGit(other, 'push', 'origin', parent.branch ?? '')
+  }
+
+  it('starts a new stage once its open subtasks are done', async () => {
+    const { parent, child } = await waitingParent()
+    expect(parent).toMatchObject({ stage: 'implement', state: 'draft' })
+    expect(ptys).toHaveLength(0)
+
+    await finish(child.id)
+
+    expect(tasks.getTask(parent.id).state).toBe('running')
+    expect(ptys).toHaveLength(1)
+  })
+
+  it('stops waiting when its subtask is cancelled or deleted', async () => {
+    const { parent, child } = await waitingParent()
+    const other = tasks.createTask({ title: 'Part B', parentId: parent.id })
+
+    tasks.applyEvent(child.id, { source: 'human', type: 'task.cancelled' })
+    await runner.settle()
+    expect(tasks.getTask(parent.id).state).toBe('draft')
+
+    tasks.deleteTask(other.id)
+    await runner.settle()
+    expect(tasks.getTask(parent.id).state).toBe('running')
+  })
+
+  it('does not stop a stage that runs when a subtask is added', async () => {
+    const task = await created({ title: 'Export', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    await runner.act(task.id, 'start')
+    await runner.settle()
+    expect(tasks.getTask(task.id).state).toBe('running')
+    tasks.createTask({ title: 'Part A', parentId: task.id })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id).state).toBe('running')
+    expect(ptys[0]?.killed).not.toBe(true)
+  })
+
+  it('pulls the merged work of its subtasks before the stage starts', async () => {
+    const { parent, child } = await waitingParent()
+    mergedOnRemote(parent)
+
+    await finish(child.id)
+
+    expect(tasks.getTask(parent.id).state).toBe('running')
+    expect(runGit(parent.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('merged subtask')
+  })
+
+  it('fails the stage when the pull fails', async () => {
+    const { parent, child } = await waitingParent()
+    mergedOnRemote(parent)
+    runGit(parent.workspace ?? '', 'commit', '--allow-empty', '-m', 'local only')
+
+    await finish(child.id)
+
+    const failed = tasks
+      .listEvents(parent.id)
+      .find((entry) => entry.event.type === 'stage.check-failed')
+    expect(String(failed?.event.payload.reasons)).toContain(
+      'Could not pull the work of the subtasks',
+    )
+    expect(ptys).toHaveLength(0)
   })
 })

@@ -3,6 +3,7 @@ import {
   completeEvent,
   entersBranch,
   isBranch,
+  openSubtasks,
   RECORD_ONLY_EVENT_TYPES,
   type Stage,
   type Step,
@@ -199,6 +200,8 @@ export class StageRunner {
   private onMessage(message: DaemonMessage): void {
     if (message.kind === 'task.deleted') {
       this.run.shells.finish(message.taskId, { keepScreens: false })
+      // A deleted subtask no longer holds its parent.
+      this.startWaiting()
       return
     }
     if (message.kind === 'task.created') {
@@ -244,7 +247,8 @@ export class StageRunner {
     if (ended && !RECORD_ONLY_EVENT_TYPES.includes(event.type)) {
       this.run.shells.finish(task.id, { keepScreens: true })
     }
-    if (task.state === 'done' || event.type === 'task.edited') {
+    // A cancelled subtask no longer holds its parent.
+    if (ended || event.type === 'task.edited') {
       this.startWaiting()
     }
   }
@@ -307,7 +311,10 @@ export class StageRunner {
     const all = this.run.tasks.listTasks()
     for (const id of [...this.run.waitingForTasks]) {
       const task = all.find((candidate) => candidate.id === id)
-      if (task === undefined || waitingOn(task, all).length === 0) {
+      if (
+        task === undefined ||
+        (waitingOn(task, all).length === 0 && openSubtasks(task, all).length === 0)
+      ) {
         this.run.waitingForTasks.delete(id)
         if (task !== undefined) {
           this.startInBackground(id, ['ready', 'draft'])

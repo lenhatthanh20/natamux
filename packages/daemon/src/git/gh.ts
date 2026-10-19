@@ -55,11 +55,11 @@ export function pullRequestUrl(output: string): string | undefined {
   return PULL_REQUEST_URL.exec(output)?.[0]
 }
 
-// Opens a pull request from `branch` into the default branch of the repository. When one is open
-// for the branch already, gives its address instead.
+// Opens a pull request from `branch` into `base`, or else the default branch of the repository.
+// When one is open for the branch already, gives its address instead.
 export async function createPullRequest(
   worktreePath: string,
-  request: { branch: string; title: string; body: string },
+  request: { branch: string; title: string; body: string; base?: string },
   gh: RunGh = runGh,
 ): Promise<string> {
   let output: string
@@ -69,6 +69,7 @@ export async function createPullRequest(
       'create',
       '--head',
       request.branch,
+      ...(request.base === undefined ? [] : ['--base', request.base]),
       '--title',
       request.title,
       '--body',

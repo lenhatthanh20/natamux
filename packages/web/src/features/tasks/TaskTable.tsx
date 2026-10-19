@@ -1,4 +1,4 @@
-import { type DiffStat, type EventType, type Task, waitingOn } from '@natamux/core'
+import { type DiffStat, type EventType, type Task, waitsFor } from '@natamux/core'
 import {
   ArrowDown,
   ArrowUp,
@@ -9,6 +9,7 @@ import {
   Copy,
   ExternalLink,
   FileDiff,
+  ListPlus,
   type LucideIcon,
   PanelRight,
   Play,
@@ -70,6 +71,8 @@ type TaskTableProps = {
   // Enter or a double click: the workspace of the task.
   onOpen: (id: string) => void
   onToggleDetails: (id: string) => void
+  // Opens the dialog for a subtask. Only a task with no parent gets the menu item.
+  onAddSubtask?: (task: Task) => void
   // A key moved the selection, so the rows should hold still for a moment.
   onKeyboardMove?: () => void
   // The task actions of the row menu, so the table can triage without opening each task.
@@ -319,6 +322,7 @@ export function TaskTable({
   onSelect,
   onOpen,
   onToggleDetails,
+  onAddSubtask,
   onKeyboardMove,
   onAction,
   onStartAgent,
@@ -368,7 +372,7 @@ export function TaskTable({
       }))
     const agent = agentAction(task)
     if (onStartAgent !== undefined && agent !== null && STARTS_AGENT.has(task.state)) {
-      const waits = waitingOn(task, allTasks)
+      const waits = waitsFor(task, allTasks)
       items.push({
         label: agent === 'restart' ? 'Restart agent' : 'Start agent',
         icon: agent === 'restart' ? RotateCcw : Play,
@@ -396,6 +400,9 @@ export function TaskTable({
         shortcut: shortcutOf('task.details'),
         onSelect: () => onSelect(task.id, true),
       },
+      ...(task.parentId === null && onAddSubtask !== undefined
+        ? [{ label: 'Add subtask…', icon: ListPlus, onSelect: () => onAddSubtask(task) }]
+        : []),
       { type: 'separator' },
       ...taskActionsFor(task),
       { label: 'Copy task id', icon: Copy, onSelect: () => copyText(task.id, 'the task id') },
@@ -536,7 +543,7 @@ export function TaskTable({
               columns={columns}
               stat={diffStats[task.id]}
               note={task.state === 'running' ? activity[task.id] : undefined}
-              waits={waitingOn(task, allTasks).join(', ')}
+              waits={waitsFor(task, allTasks).join(', ')}
               showRepo={showRepo}
             />
           ))}

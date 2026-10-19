@@ -49,6 +49,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--label <name>` | `task create`, `task edit` | A label. Repeat for more |
 | `--agent <name>` | `task create`, `agent start` | The agent that works on the task, or the agent to start (default for `agent start`: `claude-code`) |
 | `--depends-on <id>` | `task create`, `task edit` | A task that must finish first. Repeat for more |
+| `--parent <id>` | `task create` | Make the task a subtask of this task. A subtask cannot have subtasks. Without `--repo`, it is in the project of the parent |
 | `--context <source>` | `task create` | Where the context comes from: `manual`, `github-issue`, `skill` or `mcp`, as `source` or `source:ref`, such as `github-issue:42` |
 | `--repo <id>` | `task create` | The project of the task. Default: the project of the `NATAMUX_TASK_ID` task, or the only project |
 | `--attach <path>` | `task create` | A file for the agents to read, such as a document or a screenshot. Repeat for more. At most 20 files, 20 MB each and 50 MB together |
@@ -75,6 +76,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 natamux task create "Fix the login bug" --priority high --label bug
 natamux task create "Add export" --depends-on T-41 --context github-issue:42
 natamux task create "Update the docs" --repo my-app
+natamux task create "Part A" --parent T-42
 natamux task create "ABC-12: Fix the login bug"
 natamux task list --state running
 natamux task show T-42

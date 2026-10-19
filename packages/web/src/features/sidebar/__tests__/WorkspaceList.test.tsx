@@ -91,6 +91,7 @@ function callbacks() {
     onOpen: vi.fn(),
     onViewChanges: vi.fn(),
     onRename: vi.fn(),
+    onAddSubtask: vi.fn(),
     onTogglePin: vi.fn(),
     onRemove: vi.fn(),
     onRemoveFinished: vi.fn(),
@@ -1756,5 +1757,31 @@ describe('rows far off screen', () => {
     expect(live?.className).toContain('[--cv-h:2.5rem]')
     expect(quiet?.classList.contains('cv-row')).toBe(true)
     expect(quiet?.className).toContain('[--cv-h:1.5rem]')
+  })
+})
+
+describe('row menu: Add subtask', () => {
+  it('is offered for a parent, and calls onAddSubtask with the task', async () => {
+    const user = userEvent.setup()
+    const { onAddSubtask } = list({
+      tasks: [makeTask({ id: 'T-0001', title: 'Parent' })],
+      pinnedIds: [],
+    })
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Parent') })
+    await user.click(screen.getByRole('menuitem', { name: /^Add subtask/ }))
+
+    expect(onAddSubtask).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0001' }))
+  })
+
+  it('is not offered for a subtask', async () => {
+    const user = userEvent.setup()
+    // The subtask row shows under its parent while the parent is open.
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Child') })
+
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('menuitem', { name: /^Add subtask/ })).toBeNull()
   })
 })

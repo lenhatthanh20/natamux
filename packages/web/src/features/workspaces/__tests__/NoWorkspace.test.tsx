@@ -2,6 +2,7 @@ import type { Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StoredEvent } from '../../../lib/api'
 import { NoWorkspace } from '../NoWorkspace'
@@ -51,7 +52,7 @@ const events: StoredEvent[] = [
   },
 ]
 
-function view(shown: Task = task) {
+function view(shown: Task = task, more: Partial<ComponentProps<typeof NoWorkspace>> = {}) {
   const handlers = {
     onCreateWorkspace: vi.fn(),
     onStartAgent: vi.fn(),
@@ -67,6 +68,7 @@ function view(shown: Task = task) {
         waitingFor={[]}
         loadEvents={async () => events}
         {...handlers}
+        {...more}
       />
     </QueryClientProvider>,
   )
@@ -109,5 +111,27 @@ describe('NoWorkspace of a finished task', () => {
 
     expect(screen.getByRole('button', { name: 'Create workspace' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: /is done/ })).toBeNull()
+  })
+})
+
+describe('NoWorkspace of a subtask', () => {
+  const branches = {
+    branches: ['main', 'natamux/t-0001', 'other'],
+    current: 'other',
+    defaultBranch: 'main',
+  }
+  const subtask: Task = { ...task, state: 'ready', pr: null, prStatus: null, parentId: 'T-0001' }
+  const field = () => screen.getByRole('combobox', { name: 'Branch from' }) as HTMLInputElement
+
+  it('starts from the branch of the parent when it is in the list', () => {
+    view(subtask, { branches, parentBranch: 'natamux/t-0001' })
+
+    expect(field().value).toBe('natamux/t-0001 (default)')
+  })
+
+  it('starts from the default branch when the parent branch is not in the list', () => {
+    view(subtask, { branches, parentBranch: 'natamux/gone' })
+
+    expect(field().value).toBe('main (default)')
   })
 })

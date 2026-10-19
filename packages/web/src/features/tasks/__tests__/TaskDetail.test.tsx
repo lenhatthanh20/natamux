@@ -2,7 +2,7 @@ import type { Task } from '@natamux/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetailsMode } from '../../../lib/layout-mode'
 import type { DetailsView } from '../../../lib/view-store/helpers'
@@ -47,16 +47,22 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-type DetailsOptions = { view?: DetailsView; progress?: ReactNode; mode?: DetailsMode }
+type DetailsOptions = {
+  view?: DetailsView
+  progress?: ReactNode
+  mode?: DetailsMode
+  task?: Task
+  more?: Partial<ComponentProps<typeof TaskDetail>>
+}
 
-function details({ view, progress, mode }: DetailsOptions = {}) {
+function details({ view, progress, mode, task = TASK, more }: DetailsOptions = {}) {
   const onViewChange = vi.fn()
   const onDelete = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <TaskDetail
-        task={TASK}
+        task={task}
         busy={false}
         loadEvents={async () => []}
         onAction={vi.fn()}
@@ -72,6 +78,7 @@ function details({ view, progress, mode }: DetailsOptions = {}) {
         view={view}
         onViewChange={onViewChange}
         progress={progress}
+        {...more}
       />
     </QueryClientProvider>,
   )
@@ -162,6 +169,40 @@ describe('TaskDetail views', () => {
 
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.getByText('No notes. Add some with Edit.')).toBeTruthy()
+  })
+})
+
+describe('TaskDetail of a subtask and of a parent', () => {
+  const branches = {
+    branches: ['main', 'natamux/t-0001', 'other'],
+    current: 'other',
+    defaultBranch: 'main',
+  }
+  const subtask: Task = {
+    ...TASK,
+    id: 'T-0002',
+    state: 'ready',
+    workspace: null,
+    parentId: 'T-0001',
+  }
+  const startField = () => screen.getByRole('combobox', { name: 'Start from branch' })
+
+  it('starts from the branch of the parent when it is in the list', () => {
+    details({ task: subtask, more: { branches, parentBranch: 'natamux/t-0001' } })
+
+    expect((startField() as HTMLInputElement).value).toBe('natamux/t-0001 (default)')
+  })
+
+  it('starts from the default branch when the parent branch is not in the list', () => {
+    details({ task: subtask, more: { branches, parentBranch: 'natamux/gone' } })
+
+    expect((startField() as HTMLInputElement).value).toBe('main (default)')
+  })
+
+  it('says a ready parent waits for its open subtask', () => {
+    details({ task: { ...TASK, state: 'ready' }, more: { waitingFor: ['T-0002'] } })
+
+    expect(screen.getByText('Waits for T-0002 to be done')).toBeTruthy()
   })
 })
 

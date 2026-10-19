@@ -1,6 +1,12 @@
 import { DEFAULT_PIPELINE, defaultPrompt, type Stage, stagesOf } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
-import { contextPrompt, manualContext, stagePrompt, WORKFLOW_LINE } from '../stage-prompts.js'
+import {
+  contextPrompt,
+  manualContext,
+  stagePrompt,
+  WORKFLOW_LINE,
+  withParentSection,
+} from '../stage-prompts.js'
 
 const task = { title: 'Export tasks', description: '', context: null }
 const DONE = 'When you are done, run `natamux done`, unless the steps above say not to.'
@@ -152,5 +158,23 @@ describe('manualContext', () => {
         '# Fix the login\n\n(No notes.)\n',
       )
     }
+  })
+})
+
+describe('withParentSection', () => {
+  const parent = { id: 'T-0001', title: 'Export', description: ' Use CSV. ' }
+
+  it('adds the parent, its notes and its stage folder after the context', () => {
+    expect(withParentSection('# Part A\n\n(No notes.)\n', parent, '/w/.natamux-task')).toBe(
+      '# Part A\n\n(No notes.)\n\n## Parent task\n\nT-0001: Export\n\nUse CSV.\n\n' +
+        'Stage files of the parent: /w/.natamux-task\n',
+    )
+  })
+
+  it('says there are no notes, and keeps a blank line after a context with no line end', () => {
+    expect(withParentSection('# Part A', { ...parent, description: '' }, '/d')).toBe(
+      '# Part A\n\n## Parent task\n\nT-0001: Export\n\n(No notes.)\n\n' +
+        'Stage files of the parent: /d\n',
+    )
   })
 })

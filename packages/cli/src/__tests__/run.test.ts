@@ -225,6 +225,23 @@ describe('runCli', () => {
       expect(result.calls[1]).toMatchObject({ method: 'POST', body: { repo: 'web' } })
     })
 
+    it('sends parentId and no repo with --parent and no --repo', async () => {
+      const result = await run(['task', 'create', 'Part', '--parent', 'T-0001'], {
+        handler: () => jsonResponse({ task: makeTask() }, 201),
+      })
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.calls).toHaveLength(1)
+      expect(result.calls[0]?.body).toMatchObject({ parentId: 'T-0001' })
+      expect(result.calls[0]?.body).not.toHaveProperty('repo')
+    })
+
+    it('still sends the repo with --parent and --repo', async () => {
+      const result = await run(['task', 'create', 'Part', '--parent', 'T-0001', '--repo', 'web'], {
+        handler: () => jsonResponse({ task: makeTask() }, 201),
+      })
+      expect(result.calls[0]?.body).toMatchObject({ parentId: 'T-0001', repo: 'web' })
+    })
+
     it('asks for --repo and lists the projects when there are several', async () => {
       const result = await run(['task', 'create', 'Fix the dashboard'], {
         handler: () =>

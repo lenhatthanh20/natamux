@@ -1217,6 +1217,55 @@ describe('commit, push and pull request', () => {
     await expect(workspaces.openPullRequest(task.id)).rejects.toThrow(WorkspaceConflictError)
   })
 
+  it('pushes the parent branch and opens the pull request of a subtask into it', async () => {
+    const remote = addBareOrigin(repo)
+    const parent = await workspaces.create(tasks.createTask({ title: 'Parent' }).id)
+    const child = tasks.createTask({ title: 'Part A', parentId: parent.id })
+    const created = await workspaces.create(child.id)
+    writeFileSync(join(created.workspace ?? '', 'part.txt'), 'part\n')
+    await workspaces.commit(child.id, 'Part A')
+
+    await workspaces.openPullRequest(child.id)
+
+    expect(runGit(remote, 'branch', '--list', parent.branch ?? '').trim()).not.toBe('')
+    expect(ghCalls).toEqual([
+      [
+        'pr',
+        'create',
+        '--head',
+        created.branch,
+        '--base',
+        parent.branch,
+        '--title',
+        'Part A',
+        '--body',
+        `Task ${child.id} in Natamux.`,
+      ],
+    ])
+  })
+
+  it('opens a later subtask pull request when origin has the parent branch ahead', async () => {
+    const remote = addBareOrigin(repo)
+    const parent = await workspaces.create(tasks.createTask({ title: 'Parent' }).id)
+    runGit(parent.workspace ?? '', 'push', '-u', 'origin', parent.branch ?? '')
+    // A subtask merged into the parent branch on GitHub: the local copy is behind.
+    const other = join(repo.root, 'other')
+    runGit(repo.root, 'clone', '--branch', parent.branch ?? '', remote, other)
+    runGit(other, 'commit', '--allow-empty', '-m', 'merged subtask')
+    runGit(other, 'push', 'origin', parent.branch ?? '')
+    const merged = runGit(other, 'rev-parse', 'HEAD').trim()
+    const child = tasks.createTask({ title: 'Part B', parentId: parent.id })
+    const created = await workspaces.create(child.id)
+    writeFileSync(join(created.workspace ?? '', 'part.txt'), 'part\n')
+    await workspaces.commit(child.id, 'Part B')
+
+    const updated = await workspaces.openPullRequest(child.id)
+
+    expect(updated.pr).toBe(PR_URL)
+    expect(ghCalls[0]?.slice(4, 6)).toEqual(['--base', parent.branch])
+    expect(runGit(remote, 'rev-parse', parent.branch ?? '').trim()).toBe(merged)
+  })
+
   it('does not ask gh when the push fails', async () => {
     const task = await taskWithWork()
     await expect(workspaces.openPullRequest(task.id)).rejects.toThrow(GitError)
@@ -1748,6 +1797,31 @@ describe('base branch', () => {
     const created = await workspaces.create(task.id, 'release')
 
     expect(runGit(created.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('on release')
+  })
+
+  it('starts a subtask from its parent branch, unless a base is given', async () => {
+    const parent = await workspaces.create(tasks.createTask({ title: 'Parent' }).id)
+    runGit(parent.workspace ?? '', 'commit', '--allow-empty', '-m', 'on parent')
+    runGit(repo.dir, 'branch', 'release')
+
+    const child = await workspaces.create(
+      tasks.createTask({ title: 'Part A', parentId: parent.id }).id,
+    )
+    const picked = await workspaces.create(
+      tasks.createTask({ title: 'Part B', parentId: parent.id }).id,
+      'release',
+    )
+
+    expect(runGit(child.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('on parent')
+    expect(runGit(picked.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('init')
+  })
+
+  it('starts a subtask from the default branch when its parent has no branch', async () => {
+    const parent = tasks.createTask({ title: 'Parent' })
+    const child = await workspaces.create(
+      tasks.createTask({ title: 'Part A', parentId: parent.id }).id,
+    )
+    expect(runGit(child.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('init')
   })
 
   it('refuses a branch that does not exist', async () => {

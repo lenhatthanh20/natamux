@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   findStep,
   isGroup,
+  openSubtasks,
   runsWorkflow,
   type Stage,
   type Step,
@@ -16,6 +17,7 @@ import {
 import { isLaunchable, LAST_SESSION } from '../agents/agent-launch.js'
 import { quoteArgument } from '../agents/agent-runner.js'
 import { fillSkills, type SkillContext } from '../agents/agent-skills.js'
+import { pullFastForward } from '../git/commit-push.js'
 import { MAIN_TERMINAL } from '../terminals/terminal-limits.js'
 import {
   KEEPS_TURN,
@@ -90,9 +92,10 @@ export class StageLauncher {
       this.run.waitingForWorkspace.add(task.id)
       return
     }
-    // The agent may not start before the tasks it depends on are done. The stage stays ready and
-    // starts when they are.
-    if (waitingOn(task, this.run.tasks.listTasks()).length > 0) {
+    // The agent may not start before the tasks it depends on are done, nor a new stage before the
+    // open subtasks, whose work it goes on with. The stage stays ready and starts when they are.
+    const all = this.run.tasks.listTasks()
+    if (waitingOn(task, all).length > 0 || (!resumed && openSubtasks(task, all).length > 0)) {
       this.run.waitingForTasks.add(task.id)
       return
     }
@@ -100,6 +103,8 @@ export class StageLauncher {
       return
     }
     await excludeStageDir(task.workspace).catch(() => undefined)
+    // Before the head is read, so the stage's own commits do not count the pulled ones.
+    const pullError = resumed ? null : await this.pullSubtasks(task, task.workspace, all)
     const head = await currentHead(task.workspace)
     const own = stageAgent(step, stage)
     const agent = own.agent ?? this.run.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
@@ -117,7 +122,29 @@ export class StageLauncher {
     if (!this.markStarted(task, stage, { head, ...missing, ...workflow }) || running) {
       return
     }
+    if (pullError !== null) {
+      this.failStage(task.id, stage.id, `Could not pull the work of the subtasks: ${pullError}`)
+      return
+    }
     this.launch(task.id, stage.id, agent, terminal, prompt?.text ?? '', session, own)
+  }
+
+  // Merged subtasks are in the remote copy of the task's branch: the stage goes on with them.
+  // Gives git's message when the pull fails.
+  private async pullSubtasks(
+    task: Task,
+    workspace: string,
+    all: readonly Task[],
+  ): Promise<string | null> {
+    if (!all.some((other) => other.parentId === task.id && other.state === 'done')) {
+      return null
+    }
+    try {
+      await pullFastForward(workspace)
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
   }
 
   // A person resumed a stage that waited for them. Its agent may be gone, for example after a

@@ -6,6 +6,7 @@ import {
   FolderMinus,
   GitBranch,
   GitPullRequest,
+  ListPlus,
   ListTree,
   Pencil,
   Pin,
@@ -71,6 +72,8 @@ type WorkspaceRowProps = {
   onOpen: (id: string) => void
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
+  // Opens the dialog for a subtask. Only a task with no parent gets the menu item.
+  onAddSubtask?: (task: Task) => void
   onTogglePin: (id: string) => void
   // Opens the dialog that asks before the workspace is removed.
   onRemove: (id: string) => void
@@ -130,6 +133,7 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   onOpen,
   onViewChanges,
   onRename,
+  onAddSubtask,
   onTogglePin,
   onRemove,
   onDelete,
@@ -210,6 +214,9 @@ export const WorkspaceRow = memo(function WorkspaceRow({
   const items: MenuItem[] = [
     { label: 'View changes', icon: FileDiff, onSelect: () => onViewChanges(task.id) },
     { label: 'Rename', icon: Pencil, shortcut: 'F2', onSelect: startRename },
+    ...(task.parentId === null && onAddSubtask !== undefined
+      ? [{ label: 'Add subtask…', icon: ListPlus, onSelect: () => onAddSubtask(task) }]
+      : []),
     {
       label: pinned ? 'Unpin' : 'Pin to the top',
       icon: pinned ? PinOff : Pin,
