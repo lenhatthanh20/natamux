@@ -146,6 +146,18 @@ export function shellRows(
   )
   const rows = terminals.map((name): ShellRow => {
     const lane = shells?.lanes[name]
+    // An agent that comes back after a restart once the task is opened.
+    const restoring = shells?.restoring?.[name]
+    if (lane === undefined && typeof restoring === 'string') {
+      return {
+        key: `shell:${name}`,
+        label: `Shell ${name}`,
+        agent: restoring,
+        state: null,
+        shell: name,
+        plain: false,
+      }
+    }
     if (lane === undefined) {
       const program = shells?.programs[name] ?? null
       return {

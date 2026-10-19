@@ -17,6 +17,7 @@ import {
   type TrustPaths,
   trustPaths,
   trustWorkspace,
+  type WorkspaceHooks,
 } from './agent-launch.js'
 
 export class TaskWaitingError extends Error {
@@ -50,6 +51,8 @@ type AgentRunnerOptions = {
   claudeSettingsPath: string
   // Gemini CLI settings with its hooks (see geminiHookSettings). Default: next to Claude's.
   geminiSettingsPath?: string
+  // What the hook files in the workspace need from the daemon (see prepareWorkspace).
+  workspaceHooks?: WorkspaceHooks
   // The command of each agent (NATAMUX_<AGENT>_COMMAND), and words to add to its command line
   // (NATAMUX_<AGENT>_ARGS), such as --model sonnet for Claude Code.
   programs?: Partial<Record<LaunchableAgent, string | undefined>>
@@ -84,6 +87,7 @@ export class AgentRunner {
   private readonly terminals: TerminalService
   private readonly claudeSettingsPath: string
   private readonly geminiSettingsPath: string
+  private readonly workspaceHooks: WorkspaceHooks
   private readonly programs: Record<LaunchableAgent, string>
   private readonly extraArgs: Partial<Record<LaunchableAgent, string>>
   private readonly platform: NodeJS.Platform
@@ -99,6 +103,7 @@ export class AgentRunner {
     this.geminiSettingsPath =
       options.geminiSettingsPath ??
       join(dirname(options.claudeSettingsPath), 'gemini-settings.json')
+    this.workspaceHooks = options.workspaceHooks ?? {}
     const given = { ...options.programs }
     given['claude-code'] ??= options.claudeCommand
     given.copilot ??= options.copilotCommand
@@ -146,8 +151,9 @@ export class AgentRunner {
     if (waiting.length > 0) {
       throw new TaskWaitingError(taskId, waiting)
     }
+    let workspaceHooks = false
     if (task.workspace !== null) {
-      prepareWorkspace(agent, task.workspace)
+      workspaceHooks = prepareWorkspace(agent, task.workspace, this.workspaceHooks)
       trustWorkspace(agent, task.workspace, this.trustPaths)
     }
     const command = launchCommand(agent, {
@@ -166,6 +172,7 @@ export class AgentRunner {
       // Read at each start, so a saved change counts for the next agent.
       permissionMode: this.tasks.settingsOf(task.repo).agents.permissionMode,
       workspace: task.workspace,
+      workspaceHooks,
     })
 
     this.terminals.run(taskId, this.launchLine(taskId, command, terminal), terminal)

@@ -87,11 +87,12 @@ const workspaces = new WorkspaceService({
 // Shells run on the same machine as the daemon, so they reach it on loopback. They get the agent
 // token and the address for `natamux` and for the hooks of the agents they start.
 const daemonUrl = `http://127.0.0.1:${config.port}`
+const claudeSettings = `${JSON.stringify(claudeCodeHookSettings(daemonUrl), null, 2)}\n`
 const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
   // An agent the user starts by hand in the shell finds its hooks there.
   spawn: (options) => {
-    prepareAgentHooks(options.cwd)
+    prepareAgentHooks(options.cwd, { claudeSettings })
     // The service copied the environment before the login PATH came.
     const env = loginPath === undefined ? options.env : { ...options.env, PATH: loginPath }
     return spawnShell({ ...options, env })
@@ -108,7 +109,7 @@ const terminals = new TerminalService({
 })
 
 const claudeSettingsPath = join(config.dataDir, 'claude-code-settings.json')
-writeFileSync(claudeSettingsPath, `${JSON.stringify(claudeCodeHookSettings(daemonUrl), null, 2)}\n`)
+writeFileSync(claudeSettingsPath, claudeSettings)
 const geminiSettingsPath = join(config.dataDir, 'gemini-settings.json')
 writeFileSync(geminiSettingsPath, `${JSON.stringify(geminiHookSettings(), null, 2)}\n`)
 // NATAMUX_CLAUDE_COMMAND, NATAMUX_CODEX_ARGS and so on: the agent id in capitals.
@@ -124,6 +125,7 @@ const agents = new AgentRunner({
   terminals,
   claudeSettingsPath,
   geminiSettingsPath,
+  workspaceHooks: { claudeSettings },
   programs: perAgent('COMMAND'),
   extraArgs: perAgent('ARGS'),
   binDir: process.env.NATAMUX_BIN_DIR,
@@ -137,6 +139,8 @@ const openShells = new OpenShells({
   terminals,
   bus,
   isEnded: (taskId) => isTaskEnded(service, taskId),
+  agentRuns: (taskId, terminal) => stages.agentRuns(taskId, terminal),
+  agentIn: (taskId, terminal) => stages.agentIn(taskId, terminal),
 })
 
 const stages = new StageRunner({
@@ -208,7 +212,7 @@ async function shutdown(): Promise<void> {
   }
   shuttingDown = true
   // Before the shells end, so they all come back at the next start.
-  openShells.stop((taskId, terminal) => stages.agentRuns(taskId, terminal))
+  openShells.stop()
   const shellsEnded = terminals.closeAllAndWait()
   stages.stop()
   issueLinker.stop()

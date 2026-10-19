@@ -21,7 +21,7 @@ type ShellsPart = {
   finish(taskId: string, options: { keepScreens: boolean }): void
   loadOpenShells(): void
   onOutput(taskId: string, terminal: string, data: Buffer): void
-  restoreShell(taskId: string, terminal: string): void
+  restoreTask(taskId: string, attached: string): void
 }
 
 type LauncherPart = {

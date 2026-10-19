@@ -20,7 +20,7 @@ import {
 } from '@natamux/core'
 import type { EventBus } from '../shared/event-bus.js'
 import { deleteEndedShells } from '../terminals/ended-shells.js'
-import { deleteOpenShells } from '../terminals/open-shells.js'
+import { deleteOpenShells } from '../terminals/open-shells-file.js'
 import { type AttachmentFile, saveAttachments } from './attachments.js'
 import { eventLogPath, type LoggedEvent } from './event-log.js'
 import { archiveDir, listTaskIds, readTaskFile, taskFilePath } from './task-files.js'

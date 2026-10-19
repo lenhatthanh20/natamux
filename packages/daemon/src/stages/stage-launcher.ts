@@ -170,6 +170,7 @@ export class StageLauncher {
         // A stage the settings no longer have: the task waits for a person, the daemon starts.
       }
     }
+    this.run.openShells?.releaseHeld()
   }
 
   private resumeLane(task: Task, step: Step, stage: Stage, all: readonly Task[]): void {
@@ -195,7 +196,10 @@ export class StageLauncher {
     // No agent Natamux started for it, or a task left to a person: a person runs their own
     // in the shell.
     const agent = task.withoutAgent === true ? null : (stageAgent(step, stage).agent ?? task.agent)
-    if (working && agent !== null && isLaunchable(agent)) {
+    // An agent the person quit before the app closed stays quit; the stage can be resumed.
+    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stage.id)
+    const quit = this.run.openShells?.wasRunning(task.id, terminal) === false
+    if (working && agent !== null && isLaunchable(agent) && !quit) {
       // In a group, the newest session of the folder may be the other stage's.
       this.relaunch(task, step, stage, !isGroup(step), true)
     }
@@ -220,8 +224,9 @@ export class StageLauncher {
     }
   }
 
-  // Starts the agent of a stage again when it is gone. Claude Code goes on with its session of the
-  // stage, or with `newest` the newest of the folder; other agents get the stage prompt again.
+  // Starts the agent of a stage again when it is gone. It goes on with the last session it
+  // reported in its shell; Claude Code also with its session of the stage, or with `newest` the
+  // newest of the folder. With none, it gets the stage prompt again.
   // At the daemon's start (`restart`) its pane shows a spinner until the agent runs.
   private relaunch(task: Task, step: Step, stage: Stage, newest = false, restart = false): void {
     if (!runByAgent(stage) || task.workspace === null) {
@@ -234,6 +239,7 @@ export class StageLauncher {
     const own = stageAgent(step, stage)
     const agent = own.agent ?? task.agent ?? 'claude-code'
     const session =
+      this.run.openShells?.sessionOf(task.id, terminal, agent) ??
       this.lastSession(task, stage.id, agent, terminal) ??
       (newest && agent === 'claude-code' ? LAST_SESSION : undefined)
     const text = session === undefined ? this.promptOf(task, stage)(agent).text : ''

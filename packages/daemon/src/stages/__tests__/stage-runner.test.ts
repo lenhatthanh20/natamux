@@ -23,10 +23,11 @@ import { TaskService } from '../../tasks/task-service.js'
 import { readEndedShells } from '../../terminals/ended-shells.js'
 import {
   type OpenShell,
-  OpenShells,
   openShellsPath,
+  readOpenShells,
   saveOpenShells,
-} from '../../terminals/open-shells.js'
+} from '../../terminals/open-shells-file.js'
+import { OpenShells } from '../../terminals/open-shells.js'
 import { TerminalService } from '../../terminals/terminal-service.js'
 import { WorkspaceService } from '../../workspaces/workspace-service.js'
 import type { CiResult } from '../ci-check.js'
@@ -4550,7 +4551,7 @@ describe('shells that come back after a restart', () => {
   let shells: OpenShells | undefined
 
   afterEach(() => {
-    shells?.stop(() => false)
+    shells?.stop()
     shells = undefined
     vi.restoreAllMocks()
   })
@@ -4569,8 +4570,8 @@ describe('shells that come back after a restart', () => {
   }
 
   // The spec runs in Shell 1.
-  async function specRunning(): Promise<Task> {
-    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+  async function specRunning(agent = 'claude-code'): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent })
     await withWorkspace(task.id)
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
     return tasks.getTask(task.id)
@@ -4596,8 +4597,8 @@ describe('shells that come back after a restart', () => {
     const open = restart(task.id, shellsOfT0075)
     const before = ptys.length
 
-    runner.restoreShell(task.id, '6')
-    runner.restoreShell(task.id, '6')
+    runner.restoreTask(task.id, '6')
+    runner.restoreTask(task.id, '6')
 
     expect(ptys).toHaveLength(before + 1)
     expect(launchScript(task.id, '6')).toMatch(/^copilot /)
@@ -4608,21 +4609,32 @@ describe('shells that come back after a restart', () => {
     expect(runner.agentRuns(task.id, '6')).toBe(true)
   })
 
-  it('leaves a plain shell, and an agent with no session, to the attach', async () => {
+  it('brings back every agent of the task when any shell of it is attached', async () => {
     const task = await specRunning()
     const open = restart(task.id, [
-      { name: '6', agent: 'copilot', session: null },
+      { name: '6', agent: 'copilot', session: 'c-6' },
       { name: '7', agent: null, session: null },
+      { name: '8', agent: 'codex', session: 'x-8' },
     ])
 
-    runner.restoreShell(task.id, '6')
-    runner.restoreShell(task.id, '7')
-    runner.restoreShell(task.id, '9')
+    // The agents grid attaches Shell 1 only.
+    runner.restoreTask(task.id, '1')
 
-    expect(terminals.list(task.id)).not.toContain('6')
+    expect(launchScript(task.id, '6')).toContain("--resume 'c-6'")
+    expect(launchScript(task.id, '8')).toMatch(/^codex resume .*'x-8'/)
+    // A plain shell starts with its own attach.
     expect(terminals.list(task.id)).not.toContain('7')
-    expect(terminals.list(task.id)).not.toContain('9')
-    expect(open.waiting(task.id)).toEqual([])
+    expect(open.waiting(task.id)).toEqual(['7'])
+  })
+
+  it('brings back an agent with no session on the newest session of the folder', async () => {
+    const task = await specRunning()
+    restart(task.id, [{ name: '6', agent: 'copilot', session: null }])
+
+    runner.restoreTask(task.id, '6')
+
+    expect(launchScript(task.id, '6')).toMatch(/^copilot .*--continue/)
+    expect(launchScript(task.id, '6')).not.toContain('Export tasks')
   })
 
   it('leaves the shell to the attach when its agent cannot start', async () => {
@@ -4633,10 +4645,23 @@ describe('shells that come back after a restart', () => {
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    expect(() => runner.restoreShell(task.id, '6')).not.toThrow()
+    expect(() => runner.restoreTask(task.id, '6')).not.toThrow()
 
     expect(open.restoring(task.id)).toEqual({ '7': null })
     expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('lets a shell that was not attached wait again when its agent cannot start', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, shellsOfT0075)
+    vi.spyOn(agents, 'start').mockImplementation(() => {
+      throw new Error('At most 30 terminals can be open')
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    runner.restoreTask(task.id, '7')
+
+    expect(open.restoring(task.id)).toEqual({ '6': 'copilot', '7': null })
   })
 
   it('keeps no shells of a task without a workspace', async () => {
@@ -4665,9 +4690,62 @@ describe('shells that come back after a restart', () => {
     runner.resumeAgents()
     await runner.settle()
 
-    // As before: the stage reported no session, so Claude Code takes the newest of the folder.
-    expect(launchScript(task.id)).toContain('--continue')
+    // The events have no session of the stage; the shell's list has the last one.
+    expect(launchScript(task.id)).toContain("--resume 's-1'")
     expect(open.restoring(task.id)).toEqual({ '1': 'claude-code', '6': 'copilot', '7': null })
+  })
+
+  it('goes on with the session of the shell for an agent other than Claude Code', async () => {
+    const task = await specRunning('codex')
+    restart(task.id, [{ name: '1', agent: 'codex', session: 'x-1' }])
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    expect(launchScript(task.id)).toMatch(/^codex resume .*'x-1'/)
+    expect(launchScript(task.id)).not.toContain('Export tasks')
+  })
+
+  it('takes the session of the shell over an older one in the events', async () => {
+    const task = await specRunning()
+    tasks.applyEvent(task.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 'old' },
+    })
+    expect(tasks.getTask(task.id).state).toBe('needs-input')
+    restart(task.id, [{ name: '1', agent: 'claude-code', session: 'new' }])
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    expect(launchScript(task.id)).toContain("--resume 'new'")
+  })
+
+  it('leaves the agent of a working stage quit when the person quit it', async () => {
+    const task = await specRunning()
+    restart(task.id, [{ name: '1', agent: null, session: null }])
+    const before = ptys.length
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    expect(ptys).toHaveLength(before)
+    expect(tasks.getTask(task.id).state).toBe('running')
+  })
+
+  it('lets the shell of a stage wait when its agent cannot start again', async () => {
+    const task = await specRunning()
+    const open = restart(task.id, shellsOfT0075)
+    vi.spyOn(agents, 'start').mockImplementation(() => {
+      throw new Error('At most 30 terminals can be open')
+    })
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    expect(open.waiting(task.id).sort()).toEqual(['1', '6', '7'])
+    expect(readOpenShells(dataDir, task.id)).toContainEqual(shellsOfT0075[0])
   })
 })
 

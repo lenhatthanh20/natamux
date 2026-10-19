@@ -34,7 +34,8 @@ import { TaskIndex } from '../../tasks/task-index.js'
 import { TaskService } from '../../tasks/task-service.js'
 import { TemplateService } from '../../tasks/template-service.js'
 import { saveEndedShells } from '../../terminals/ended-shells.js'
-import { OpenShells, saveOpenShells } from '../../terminals/open-shells.js'
+import { saveOpenShells } from '../../terminals/open-shells-file.js'
+import { OpenShells } from '../../terminals/open-shells.js'
 import { TerminalService } from '../../terminals/terminal-service.js'
 import { WorkspaceService } from '../../workspaces/workspace-service.js'
 import { isAuthorized } from '../auth.js'
@@ -2253,7 +2254,7 @@ describe('terminal', () => {
     expect(bad.statusCode).toBe(400)
   })
 
-  it('lists the shells that wait to come back, and brings each back when it is attached', async () => {
+  it('lists the shells that wait to come back, and brings them back when the task is opened', async () => {
     await taskWithWorkspace()
     const { dataDir, terminals, agents, bus } = serverOptions
     // Claude Code, as Copilot and Cursor would trust the workspace in the real home folder.
@@ -2307,11 +2308,13 @@ describe('terminal', () => {
       expect(await closeCode(lost)).toBe(CLOSE_GONE)
       expect(ptys).toHaveLength(0)
 
-      await restoring.injectWS(
-        `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=6`,
-      )
+      // The plain shell opens the task: the agent of shell 6 comes back with it.
       await restoring.injectWS(
         `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=7`,
+      )
+      expect(ptys).toHaveLength(2)
+      await restoring.injectWS(
+        `/tasks/T-0001/terminal?ticket=${await shellTicket()}&cols=80&rows=24&terminal=6`,
       )
 
       expect(ptys).toHaveLength(2)
@@ -2324,7 +2327,7 @@ describe('terminal', () => {
         restoring: { '6': 'claude-code' },
       })
     } finally {
-      openShells.stop(() => false)
+      openShells.stop()
       await restoring.close()
     }
   })

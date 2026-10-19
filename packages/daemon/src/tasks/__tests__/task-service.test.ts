@@ -21,7 +21,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DaemonMessage, EventBus } from '../../shared/event-bus.js'
 import { endedShellsPath, saveEndedShells } from '../../terminals/ended-shells.js'
-import { openShellsPath, saveOpenShells } from '../../terminals/open-shells.js'
+import { openShellsPath, saveOpenShells } from '../../terminals/open-shells-file.js'
 import { decodeAttachments, listAttachments } from '../attachments.js'
 import { eventLogPath, readEventLog } from '../event-log.js'
 import {

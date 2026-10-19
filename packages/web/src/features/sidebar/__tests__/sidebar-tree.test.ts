@@ -243,6 +243,15 @@ describe('shellRows', () => {
     ])
   })
 
+  it('shows a shell whose agent comes back after a restart as an agent row', () => {
+    const waiting = shells({}, {}, ['2', '3'])
+    const rows = shellRows(makeTask({}), { ...waiting, restoring: { '2': 'codex', '3': null } })
+    expect(rows.map((row) => [row.label, row.agent, row.plain, row.state])).toEqual([
+      ['Shell 2', 'codex', false, null],
+      ['Shell', null, true, null],
+    ])
+  })
+
   it('keeps a parallel stage that no shell works on', () => {
     const rows = shellRows(task, shells({ '1': { stage: 'alpha', state: null } }))
     expect(rows.map((row) => row.key)).toEqual(['shell:1', 'lane:beta'])

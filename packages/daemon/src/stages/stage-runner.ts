@@ -403,8 +403,8 @@ export class StageRunner {
     this.run.shells.loadOpenShells()
   }
 
-  restoreShell(taskId: string, terminal: string): void {
-    this.run.shells.restoreShell(taskId, terminal)
+  restoreTask(taskId: string, attached: string): void {
+    this.run.shells.restoreTask(taskId, attached)
   }
 
   startByHand(
