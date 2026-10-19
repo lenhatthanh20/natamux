@@ -109,6 +109,22 @@ describe('navigation', () => {
     expect(decodeURIComponent(loadingPageUrl(true))).toContain('background:#18181b')
     expect(decodeURIComponent(loadingPageUrl(false))).toContain('background:#ffffff')
   })
+
+  it('shows the dashboard spinner in the center, in the muted ink of the theme', () => {
+    const dark = decodeURIComponent(loadingPageUrl(true))
+    expect(dark).toContain('<svg')
+    expect(dark).toContain('place-items:center')
+    expect(dark).toContain('steps(8)')
+    expect(dark).toContain('color:#8d919a')
+    expect(decodeURIComponent(loadingPageUrl(false))).toContain('color:#5f6570')
+  })
+
+  it('shows still dots instead of turning dashes with reduced motion', () => {
+    const page = decodeURIComponent(loadingPageUrl(true))
+    const reduced = page.slice(page.indexOf('@media (prefers-reduced-motion:reduce)'))
+    expect(reduced).toContain('animation:none')
+    expect(reduced).toContain('.boot-dots{display:inline}')
+  })
 })
 
 describe('the window', () => {

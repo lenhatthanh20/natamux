@@ -7,9 +7,39 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Natamux</title>
+    <!-- The spinner until React draws: the same as the desktop loading page (desktop app/navigation.ts). -->
+    <style>
+      #boot{position:fixed;inset:0;display:grid;place-items:center;color:#5f6570}
+      #boot svg{animation:boot-spin 1s steps(8) infinite}
+      @keyframes boot-spin{to{transform:rotate(360deg)}}
+      #boot .boot-dots{display:none}
+      #root:not(:empty)+#boot{display:none}
+      :root:not([data-theme]) body{background:#ffffff}
+      @media (prefers-color-scheme:dark){:root:not([data-theme]) body{background:#18181b}#boot{color:#8d919a}}
+      @media (prefers-reduced-motion:reduce){#boot svg{animation:none}#boot .boot-dashes{display:none}#boot .boot-dots{display:inline}}
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" role="status" aria-label="Loading">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+        <g class="boot-dashes" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(0 12 12)" opacity="1" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(45 12 12)" opacity="0.3" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(90 12 12)" opacity="0.3" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(135 12 12)" opacity="0.3" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(180 12 12)" opacity="0.36" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(225 12 12)" opacity="0.48" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(270 12 12)" opacity="0.64" />
+          <path d="M10.89 4.08A8 8 0 0 1 13.11 4.08" transform="rotate(315 12 12)" opacity="0.82" />
+        </g>
+        <g class="boot-dots" fill="currentColor">
+          <circle cx="5" cy="12" r="2.1" />
+          <circle cx="12" cy="12" r="2.1" />
+          <circle cx="19" cy="12" r="2.1" />
+        </g>
+      </svg>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
