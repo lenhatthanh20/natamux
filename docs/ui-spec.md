@@ -253,7 +253,7 @@ Three levels only. Hierarchy between parts comes from surface steps, not shadows
 | 1 | `--shadow-1` | `0 8px 24px rgb(0 0 0 / 0.36), inset 0 1px 0 rgb(255 255 255 / 0.04)` | `0 8px 24px rgb(15 17 20 / 0.12), 0 0 0 1px rgb(15 17 20 / 0.04)` | menu, tooltip, toast, select popup, combobox list |
 | 2 | `--shadow-2` | `0 24px 64px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.05)` | `0 24px 64px rgb(15 17 20 / 0.18)` | dialog, palette, drawer, details sheet |
 
-z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer), `--z-toast 40`, `--z-popover 50` (menu), `--z-dialog 70`, `--z-palette 80`, `--z-tooltip 90`.
+z-index tokens: `--z-sticky 10`, `--z-sheet 30` (details overlay, sidebar drawer), `--z-toast 40`, `--z-dialog 70`, `--z-popover 75` (menu, above a dialog that opens it), `--z-palette 80`, `--z-tooltip 90`.
 
 ### 2.7 Icons
 

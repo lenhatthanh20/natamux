@@ -296,8 +296,10 @@ describe('remove', () => {
     const created = await guarded.create(task.id)
     writeFileSync(join(created.workspace ?? '', 'notes.txt'), 'work in progress')
 
-    await expect(guarded.remove(task.id, { deleteBranch: true })).rejects.toThrow(
-      WorkspaceConflictError,
+    const refusal = guarded.remove(task.id, { deleteBranch: true })
+    await expect(refusal).rejects.toThrow(WorkspaceConflictError)
+    await expect(refusal).rejects.toThrow(
+      `${task.id} has 1 change that is not committed. Commit or discard it first`,
     )
 
     expect(closed).toEqual([])

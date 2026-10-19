@@ -22,4 +22,27 @@ describe('TerminalFind', () => {
     expect(search).toHaveBeenCalledTimes(1)
     expect(findNext).toHaveBeenCalledWith('npm', expect.objectContaining({ incremental: true }))
   })
+
+  // The addon keeps its highlights, and so its count, for the same term even when an option
+  // changes (it saves the new options before it compares them).
+  it.each(['Match case', 'Use regular expression'])('finds afresh when %s flips', (name) => {
+    const addon = new FakeSearchAddon()
+    const calls: string[] = []
+    vi.spyOn(addon, 'clearDecorations').mockImplementation(() => {
+      calls.push('clear')
+    })
+    vi.spyOn(addon, 'findNext').mockImplementation(() => {
+      calls.push('find')
+      return true
+    })
+    render(
+      <TerminalFind search={() => addon as unknown as SearchAddon} onClose={() => undefined} />,
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find' }), { target: { value: 'npm' } })
+    calls.length = 0
+
+    fireEvent.click(screen.getByRole('button', { name }))
+
+    expect(calls).toEqual(['clear', 'find'])
+  })
 })

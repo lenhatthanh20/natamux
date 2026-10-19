@@ -275,12 +275,19 @@ export function branchChoice(
   return unknown
 }
 
+// A shell where an agent runs. The daemon gives a lane to any program in front of a shell, with
+// agent null for a program that is no agent.
+export function isAgentShell(shells: Pick<TaskShells, 'lanes'>, name: string): boolean {
+  const lane = shells.lanes[name]
+  return lane !== undefined && lane.agent !== null
+}
+
 // The shells where a program that is no agent runs, such as a dev server. Removing the workspace
 // stops them.
 export function busyShells(shells: TaskShells): { name: string; program: string }[] {
   return shells.terminals.flatMap((name) => {
     const program = shells.programs[name] ?? null
-    const busy = shells.lanes[name] === undefined && program !== null
+    const busy = !isAgentShell(shells, name) && program !== null
     return busy && !SHELL_PROGRAMS.includes(program) ? [{ name, program }] : []
   })
 }

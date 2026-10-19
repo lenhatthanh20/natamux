@@ -8,7 +8,7 @@ import { Dialog } from '../../components/ui/Dialog'
 import { ICON } from '../../components/ui/styles'
 import type { TaskShells } from '../../lib/api'
 import { CHANGE_LABEL } from '../../lib/changes'
-import { branchChoice, busyShells, isFinishedState } from '../../lib/finished'
+import { branchChoice, busyShells, isAgentShell, isFinishedState } from '../../lib/finished'
 import { taskShellsQuery } from '../../lib/task-shells'
 import { STATE_LABEL } from '../../lib/tasks'
 
@@ -115,8 +115,9 @@ export function RemoveWorkspaceDialog({
   const deleteBranch = choice.canDelete && !keepBranch
   const busy = shells.data === undefined ? [] : busyShells(shells.data)
   // An agent shell has its own row, "Stops the agent".
-  const lanes = shells.data?.lanes ?? {}
-  const others = (shells.data?.terminals ?? []).filter((name) => lanes[name] === undefined)
+  const data = shells.data
+  const others =
+    data === undefined ? [] : data.terminals.filter((name) => !isAgentShell(data, name))
   const plain = others.length - busy.length
   const shellsText =
     busy.length > 0

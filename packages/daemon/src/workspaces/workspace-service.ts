@@ -200,10 +200,11 @@ export class WorkspaceService {
         // proves nothing, so its error stops the removal too.
         const changes = await listChanges(task.workspace)
         if (changes.length > 0) {
-          const count = changes.length === 1 ? '1 change' : `${changes.length} changes`
-          throw new WorkspaceConflictError(
-            `${taskId} has ${count} that are not committed. Commit or discard them first`,
-          )
+          const count =
+            changes.length === 1
+              ? '1 change that is not committed. Commit or discard it'
+              : `${changes.length} changes that are not committed. Commit or discard them`
+          throw new WorkspaceConflictError(`${taskId} has ${count} first`)
         }
         // git also refuses a clean worktree with submodules checked out. The status above counts
         // changes inside submodules too, so forcing loses no work.

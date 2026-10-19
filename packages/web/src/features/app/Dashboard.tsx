@@ -1033,7 +1033,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
         />
       )}
 
-      <NeedsYouAnnouncer waiting={waiting} />
+      <NeedsYouAnnouncer waiting={waiting} loaded={tasksQuery.isSuccess} />
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
       {palette !== null && (
         <CommandPalette

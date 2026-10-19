@@ -97,6 +97,15 @@ describe('fanOut', () => {
     expect(ptys).toHaveLength(0)
   })
 
+  it('numbers the tries of a second fan out after the first ones', async () => {
+    const source = tasks.createTask({ title: 'Speed up search' })
+
+    await fanOut(parts, source.id, { count: 2, start: false })
+    const more = await fanOut(parts, source.id, { count: 1, start: false })
+
+    expect(more.map((task) => task.title)).toEqual(['Speed up search (try 4)'])
+  })
+
   it('gives each try the attachments of the task', async () => {
     const files = decodeAttachments([
       { name: 'a.png', data: Buffer.from('image').toString('base64') },

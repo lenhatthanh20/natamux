@@ -1064,6 +1064,23 @@ describe('App', () => {
     expect(await within(screen.getByRole('table')).findByText('Fix the login')).toBeTruthy()
   })
 
+  // A task title may be longer than a template's name (100) and title (200).
+  it('saves a task with a long title as a template', async () => {
+    const title = `Fix it ${'x'.repeat(250)}`
+    installDaemon([makeTask({ id: 'T-0001', title })])
+    const user = userEvent.setup()
+    render(<App />)
+    await signIn(user)
+    await screen.findByRole('table')
+
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: /Fix it/ }))
+    const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
+    await user.click(within(details).getByRole('button', { name: 'More actions for T-0001' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Save as template' }))
+
+    expect(await screen.findByText(`Saved as the template "${title.slice(0, 100)}".`)).toBeTruthy()
+  })
+
   it('adds tasks typed one after another without waiting for the daemon', async () => {
     installDaemon([])
     const user = userEvent.setup()

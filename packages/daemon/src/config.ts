@@ -56,5 +56,13 @@ export function shellEnv(
   config: Pick<DaemonConfig, 'agentToken'>,
   daemonUrl: string,
 ): NodeJS.ProcessEnv {
-  return { ...env, NATAMUX_TOKEN: config.agentToken, NATAMUX_URL: daemonUrl }
+  // With no locale (the Docker image, an app started from the Dock) a shell reads non-ASCII
+  // input, such as Vietnamese, as Meta keys and garbles it.
+  const noLocale = !env.LC_ALL && !env.LC_CTYPE && !env.LANG
+  return {
+    ...env,
+    ...(noLocale ? { LANG: 'C.UTF-8' } : {}),
+    NATAMUX_TOKEN: config.agentToken,
+    NATAMUX_URL: daemonUrl,
+  }
 }

@@ -50,6 +50,7 @@ Every terminal of a task gets the daemon's environment plus:
 | `NATAMUX_TERMINAL` | The terminal's name (`1`, `2`, ...). The agent runs in `1` |
 | `NATAMUX_PORT` | The first port of the task's own block of 10 ports, from 20000 |
 | `PORT` | The same value, for a dev server |
+| `LANG` | `C.UTF-8`, only when the daemon has none of `LANG`, `LC_ALL` and `LC_CTYPE`. Without a UTF-8 locale, a shell garbles typed letters such as Vietnamese |
 
 ## Desktop app
 

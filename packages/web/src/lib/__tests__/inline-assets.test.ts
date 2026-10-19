@@ -10,10 +10,12 @@ describe('inlineAsset', () => {
     expect(inlineAsset('C:\\repo\\node_modules\\material-icon-theme\\icons\\go.svg')).toBe(false)
   })
 
+  // The page's content security policy loads fonts from the page's own origin only.
+  it.each(['a.woff2', 'a.woff', 'a.ttf'])('keeps a font as a file: %s', (name) => {
+    expect(inlineAsset(`/repo/node_modules/@fontsource-variable/geist/files/${name}`)).toBe(false)
+  })
+
   it('leaves every other file to the size limit of Vite', () => {
     expect(inlineAsset('/repo/packages/web/src/logo.svg')).toBeUndefined()
-    expect(inlineAsset('/repo/node_modules/@fontsource-variable/geist/files/a.woff2')).toBe(
-      undefined,
-    )
   })
 })

@@ -40,6 +40,21 @@ describe('loadConfig', () => {
     expect(shell.NATAMUX_TOKEN).not.toBe(config.token)
   })
 
+  it('gives task shells a UTF-8 locale when the daemon has none', () => {
+    const config = loadConfig({}, '/work/repo')
+    const url = 'http://127.0.0.1:4317'
+    expect(shellEnv({ PATH: '/bin' }, config, url).LANG).toBe('C.UTF-8')
+    expect(shellEnv({ LANG: '' }, config, url).LANG).toBe('C.UTF-8')
+  })
+
+  it('keeps the locale the daemon has', () => {
+    const config = loadConfig({}, '/work/repo')
+    const url = 'http://127.0.0.1:4317'
+    expect(shellEnv({ LANG: 'vi_VN.UTF-8' }, config, url).LANG).toBe('vi_VN.UTF-8')
+    expect(shellEnv({ LC_ALL: 'en_US.UTF-8' }, config, url).LANG).toBeUndefined()
+    expect(shellEnv({ LC_CTYPE: 'UTF-8' }, config, url).LANG).toBeUndefined()
+  })
+
   it('uses the configured token, port and data directory', () => {
     const config = loadConfig(
       { NATAMUX_TOKEN: ' secret ', NATAMUX_PORT: '5000', NATAMUX_DATA_DIR: '/data' },

@@ -1,5 +1,5 @@
 import type { Task } from '@natamux/core'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ContextMenuHost } from '../../../components/ui/Menu'
@@ -90,6 +90,29 @@ const rowOf = (title: string) =>
   screen.getByRole('button', { name: new RegExp(title) }).closest('tr') as HTMLElement
 
 describe('TaskTable', () => {
+  // The first click can open the details panel; the page then moves, and the second click of the
+  // double click lands on the row next to it.
+  it('opens the row of the first click of a double click', () => {
+    const { onSelect, onOpen } = table()
+
+    fireEvent.click(rowOf('Write release notes'), { detail: 1 })
+    fireEvent.click(rowOf('Fix flaky login test'), { detail: 2 })
+    fireEvent.doubleClick(rowOf('Fix flaky login test'))
+
+    expect(onSelect.mock.calls.map(([id]) => id)).toEqual(['T-0002'])
+    expect(onOpen).toHaveBeenCalledWith('T-0002')
+  })
+
+  it('opens the row of a double click', () => {
+    const { onOpen } = table()
+
+    fireEvent.click(rowOf('Fix flaky login test'), { detail: 1 })
+    fireEvent.click(rowOf('Fix flaky login test'), { detail: 2 })
+    fireEvent.doubleClick(rowOf('Fix flaky login test'))
+
+    expect(onOpen).toHaveBeenCalledWith('T-0001')
+  })
+
   it('names the agent as the pickers do, and a dash for no agent', () => {
     table()
 
