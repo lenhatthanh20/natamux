@@ -1,0 +1,86 @@
+// The logic of the Stages tab of Project settings. The draft is the text of `.natamux.json`; the
+// tab reads `stages` from it and writes them back, and keeps every other key as it is.
+
+export {
+  addBranch,
+  addPath,
+  blankCondition,
+  type ConditionField,
+  conditionProblems,
+  editCondition,
+  removePath,
+  retypeCondition,
+  setBranchName,
+  setOtherwise,
+  setPathCondition,
+  setPathName,
+} from './branches'
+export {
+  addCatalogStage,
+  addCustomStage,
+  CUSTOM_KINDS,
+  type CustomKind,
+  type CustomStageInput,
+  type CustomStageProblems,
+  catalogChoices,
+  customStageProblems,
+  idFromName,
+  isCatalogStage,
+  uniqueIssues,
+} from './catalog'
+export { findBranch, findPlace, findStage, groupOf, usedIds } from './find'
+export {
+  approvalLabel,
+  branchLabel,
+  branchName,
+  groupName,
+  joinNames,
+  KIND_LABEL,
+  pathLabel,
+  pathName,
+  pipelineLabel,
+  stepName,
+} from './labels'
+export {
+  canMove,
+  dropStage,
+  joinAbove,
+  joinProblem,
+  moveStage,
+  removeStage,
+  runAlone,
+} from './move'
+export {
+  type Draft,
+  formatSettings,
+  mergeChanges,
+  parseDraft,
+  type RawSettings,
+  sameJson,
+  sameSettings,
+  trackerOf,
+  withCreateIssue,
+  withSteps,
+} from './settings-json'
+export {
+  alwaysWaits,
+  defaultCi,
+  defaultGate,
+  defaultWorkflow,
+  hasCustomPrompt,
+  isDefaultGate,
+  runsInShellOne,
+  type ShellField,
+  setCi,
+  setEnabled,
+  setEndShell,
+  setGate,
+  setSections,
+  setText,
+  setWorkflow,
+  shellFields,
+  shownDefaultPrompt,
+  type TextField,
+  takesOwnAgent,
+  takesPrompt,
+} from './stage-fields'

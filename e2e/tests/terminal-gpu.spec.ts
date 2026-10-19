@@ -7,8 +7,8 @@ import { goToAllTasks, makeShellTask, pane, removeTasks, runIn } from './termina
 // its renderer back (to a new terminal, or after the give-back delay), the renderer changes while
 // the terminal has no size, and lost contexts turn WebGL off. The screen is then a canvas, so the test counts drawn pixels instead of reading text.
 
-// GPU_CONTEXTS of packages/web/src/lib/gpu-renderer.ts and MAX_PANES of lib/panes.ts. e2e cannot
-// import web code.
+// GPU_CONTEXTS of packages/web/src/features/terminals/gpu-renderer.ts and MAX_PANES of
+// lib/panes.ts. e2e cannot import web code.
 const GPU_CONTEXTS = 8
 const MAX_PANES = 6
 // GIVE_BACK_DELAY_MS of the same file (10 s), and a little more.

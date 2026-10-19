@@ -410,7 +410,7 @@ Other rules:
 
 ### The stage catalog
 
-The catalog lives in `packages/core/src/stage-catalog.ts`, so the daemon and the web app read the same list. Each entry has a stage (id, name, kind, gate, output, sections), a phase (Understand, Design, Build, Check, Ship), a sentence for the picker, and a default prompt for agent and testing kinds. The default pipeline is built from 8 of its entries: `context`, `spec`, `plan`, `test-spec`, `implement`, `review`, `testing` and `release`. The table of all 27 entries is in the user docs (`reference/configuration.md`, "Stage catalog").
+The catalog lives in `packages/core/src/stages/stage-catalog.ts`, so the daemon and the web app read the same list. Each entry has a stage (id, name, kind, gate, output, sections), a phase (Understand, Design, Build, Check, Ship), a sentence for the picker, and a default prompt for agent and testing kinds. The default pipeline is built from 8 of its entries: `context`, `spec`, `plan`, `test-spec`, `implement`, `review`, `testing` and `release`. The table of all 27 entries is in the user docs (`reference/configuration.md`, "Stage catalog").
 
 - A catalog stage that is gone from the settings keeps its catalog settings for a task on its way (`resolveSteps`).
 - `lint` and `e2e` are testing stages that need the project's own `command`.

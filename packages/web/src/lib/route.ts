@@ -1,4 +1,4 @@
-import type { WorkspaceTab } from './view-store'
+import type { WorkspaceTab } from './view-store/helpers'
 
 // The address bar follows the view, so a reload or a link brings it back (UI spec 5.5).
 //   /                          all tasks, as a table

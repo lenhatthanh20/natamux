@@ -16,8 +16,23 @@ Natamux: an Agent Development Environment (ADE). Run many coding agents in paral
 - Run `pnpm` and `node` only in Codespaces or CI, never on the local machine. Local work is editing files only. The Claude Code settings (`.claude/settings.json`) deny these commands.
 - Keep dependencies few. Ask before adding a package.
 - Confirm with the user before deleting anything.
-- Unit tests and their fixtures go in a `__tests__` folder inside the folder of the code they test.
+- Unit tests and their fixtures go in a `__tests__` folder inside the folder of the code they test. A fixture used by tests in 3 or more folders goes in `src/__tests__/`.
 - Follow `docs/plan-tech-stack.md` section 10 for build order. Do not skip ahead.
+
+## Code layout
+
+- Folder by feature. Same plural names in every package: `tasks`, `stages`, `events`, `workspaces`, `terminals`, `git`, `github`, `agents`, `projects`. Put new code in the feature it belongs to.
+- Per package:
+  - core: `src/<feature>/`. Root `index.ts` exports every file.
+  - daemon: `src/<feature>/`, plus `http/` (server and routes, one routes file per feature) and `shared/` (code used by 3 or more features). Root keeps `main`, `entry`, `index`, `config`, `startup-marks`.
+  - web: `src/features/<feature>/` holds that feature's components, logic, hooks and tests. Shared by type: `components/` (domain parts used by 2+ features), `components/ui/` (primitives), `lib/` (shared logic), `hooks/` (generic hooks).
+  - desktop: `update/`, `daemon/`, `app/`. Entry, `preload.cts`, `smoke.ts`, `release-signature.ts` stay at root (CI and packaging name them).
+  - cli: flat.
+- No folder with a single file, unless it is a feature root.
+- Barrels: core, daemon, cli, desktop use NodeNext, so `./x.js` never means `x/index.js`; only the package root `index.ts` re-exports. web may split one module in place as `<name>/index.ts`; no feature-wide barrels (they break lazy chunks, see `first-load.test.ts`).
+- No import cycles between files.
+- Size guide: a file of 500 lines or less, a function of 80 lines or less. Split by concern before you pass it.
+- Moving a file: `git mv`, keep its name, and move its tests with it.
 
 ## Skills (.claude/skills)
 

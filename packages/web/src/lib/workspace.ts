@@ -1,6 +1,6 @@
 import type { PushStatus, Task, TaskState } from '@natamux/core'
 import type { StoredEvent } from './api'
-import type { WorkspaceTab } from './view-store'
+import type { WorkspaceTab } from './view-store/helpers'
 
 type GitButton = {
   label: string

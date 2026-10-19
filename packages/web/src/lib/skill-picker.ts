@@ -1,6 +1,6 @@
 import type { SkillInfo, SkillOrigin } from '@natamux/core'
+import { joinNames } from '../features/stages/editor/pipeline-editor'
 import { AGENT_CHOICES, agentLabel } from './agents'
-import { joinNames } from './pipeline-editor'
 
 // The groups of the skill picker: shared with the team first, then this machine only.
 export const SKILL_GROUPS: readonly { origin: SkillOrigin; label: string }[] = [

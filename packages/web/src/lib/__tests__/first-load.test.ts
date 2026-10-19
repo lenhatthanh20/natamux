@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-// The source of the app, without tests, by path from src: "components/Dashboard.tsx".
+// The source of the app, without tests, by path from src: "features/app/Dashboard.tsx".
 const SOURCES: Record<string, string> = Object.fromEntries(
   Object.entries(
     import.meta.glob<string>(['../../**/*.{ts,tsx}', '!../../**/__tests__/**'], {
@@ -11,7 +11,7 @@ const SOURCES: Record<string, string> = Object.fromEntries(
   ).map(([file, text]) => [srcPath(file), text]),
 )
 
-// Vite names files by their path from this test: "../x.ts" in lib, "../../components/x.tsx".
+// Vite names files by their path from this test: "../x.ts" in lib, "../../features/x.tsx".
 function srcPath(file: string): string {
   return file.startsWith('../../') ? file.slice('../../'.length) : `lib/${file.slice(3)}`
 }
@@ -85,8 +85,8 @@ function firstLoad(): { files: Set<string>; packages: Set<string> } {
 describe('the first load of the dashboard', () => {
   it('reaches the dashboard and its usual libraries', () => {
     const { files, packages } = firstLoad()
-    expect(files).toContain('components/Dashboard.tsx')
-    expect(files).toContain('components/TaskTable.tsx')
+    expect(files).toContain('features/app/Dashboard.tsx')
+    expect(files).toContain('features/tasks/TaskTable.tsx')
     expect(packages).toContain('react')
     expect(packages).toContain('@tanstack/react-query')
   })
@@ -105,9 +105,9 @@ describe('the first load of the dashboard', () => {
   it('counts the search, the board and the progress view in the first load', () => {
     const { files } = firstLoad()
     for (const file of [
-      'components/CommandPalette.tsx',
-      'components/TaskBoard.tsx',
-      'components/ProgressBoard.tsx',
+      'features/palette/CommandPalette.tsx',
+      'features/tasks/TaskBoard.tsx',
+      'features/stages/ProgressBoard.tsx',
     ]) {
       expect(files).toContain(file)
     }
@@ -116,12 +116,12 @@ describe('the first load of the dashboard', () => {
   it('keeps the lazy views out of the first load', () => {
     const { files } = firstLoad()
     for (const file of [
-      'components/TerminalView.tsx',
-      'components/MonacoDiff.tsx',
-      'components/MonacoFile.tsx',
+      'features/terminals/TerminalView.tsx',
+      'features/git/MonacoDiff.tsx',
+      'features/files/MonacoFile.tsx',
       'components/MarkdownBody.tsx',
-      'lib/monaco-setup.ts',
-      'lib/terminal-session.ts',
+      'features/files/monaco-setup.ts',
+      'features/terminals/session/index.ts',
     ]) {
       expect(files).not.toContain(file)
     }
@@ -130,13 +130,13 @@ describe('the first load of the dashboard', () => {
   // The panes and the dashboard use the cache, so it must not import xterm (see the test above).
   it('counts the terminal cache and the prefetch in the first load', () => {
     const { files } = firstLoad()
-    expect(files).toContain('lib/terminal-cache.ts')
+    expect(files).toContain('features/terminals/terminal-cache.ts')
     expect(files).toContain('lib/prefetch.ts')
   })
 
   it('prefetches the diff when idle, so the first diff does not wait for Monaco', () => {
-    expect(SOURCES['components/Dashboard.tsx']).toContain(
-      "prefetchWhenIdle(() => import('./MonacoDiff'))",
+    expect(SOURCES['features/app/useDashboardQueries.ts']).toContain(
+      "prefetchWhenIdle(() => import('../git/MonacoDiff'))",
     )
   })
 

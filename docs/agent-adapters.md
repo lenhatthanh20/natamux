@@ -110,7 +110,7 @@ Notes:
 
 ## Skills
 
-Checked on 2026-10-11 by reading each vendor's docs. Agents change quickly: check again before relying on it. The code is `packages/daemon/src/agent-skills.ts` (`SKILL_SOURCES`).
+Checked on 2026-10-11 by reading each vendor's docs. Agents change quickly: check again before relying on it. The code is `packages/daemon/src/agents/agent-skills.ts` (`SKILL_SOURCES`).
 
 | Agent | Project folders | User folders | Other | How a prompt calls a skill | Label |
 |---|---|---|---|---|---|

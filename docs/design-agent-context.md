@@ -18,12 +18,12 @@ The rule we take from [ECC](https://github.com/affaan-m/ECC) (read on 2026-10-15
 | What | How it reaches the agent | Where in the code |
 |---|---|---|
 | Stage prompt | The command line at launch. Or, when an agent already runs in the shell, pasted into it | `StageRunner.launch`, `AgentRunner.start` |
-| Earlier stages | File paths only: "Read {dir}/spec.md and {dir}/plan.md". `{dir}` is `.natamux-task` | `core/src/stage-catalog.ts` |
-| Task context | `context.md`, written by the Context stage. For a GitHub issue it includes the body and **all** comments | `issueContext` in `stage-runner.ts` |
+| Earlier stages | File paths only: "Read {dir}/spec.md and {dir}/plan.md". `{dir}` is `.natamux-task` | `core/src/stages/stage-catalog.ts` |
+| Task context | `context.md`, written by the Context stage. For a GitHub issue it includes the body and **all** comments | `issueContext` in `daemon/src/github/issue-ref.ts` |
 | Send back | The stage prompt plus `What to change: <reason>`. The reason is not capped | `promptOf`, `sendBackReason` |
 | CI failure | The reason lines plus the last 3000 chars of each failed log. Agent stages only | `checkOnCi` (`LOG_TAIL_CHARS`), `sendBackForCi` |
 | Failed stage check | Reasons pasted into the terminal. A `check` command's output is cut to the last 2000 chars | `failChecks`, `stage-checks.ts` |
-| Review comment from the dashboard | Pasted into Shell 1. Not capped | `POST /tasks/:id/agent/message` in `server.ts` |
+| Review comment from the dashboard | Pasted into Shell 1. Not capped | `POST /tasks/:id/agent/message` in `daemon/src/http/routes/agents.ts` |
 | Project rules | Natamux does nothing. Each agent reads its own file from the worktree. This repo has only `CLAUDE.md` | — |
 
 Sessions:
@@ -40,7 +40,7 @@ Each change can ship alone. The order in section 8 is from the least risky to th
 
 **Problem.** In Shell 1 the transcript grows from Spec to the last round of Implement. Old exploration, abandoned ideas and tool output stay in the window. Auto-compact then runs at a random point, and sometimes in the middle of an edit. ECC's advice is the same as ours: compact at a phase boundary, never in the middle of the code work.
 
-**Setting.** Add `session: "keep" | "new"` to `stageSchema` (`core/src/stage.ts`), so it can be set in `.natamux.json` and on the Stages tab.
+**Setting.** Add `session: "keep" | "new"` to `stageSchema` (`core/src/stages/schema.ts`), so it can be set in `.natamux.json` and on the Stages tab.
 
 | Value | Meaning |
 |---|---|
@@ -85,7 +85,7 @@ Each change can ship alone. The order in section 8 is from the least risky to th
 
 ### C2. Review always starts fresh
 
-**Problem.** Agent Review is `ownShell` so that it reviews "with fresh eyes" (comment on `ownShell` in `core/src/stage.ts`). After a send back, Implement fixes the code and Review runs again. Its agent in Shell 5 still runs, so `launch` pastes the new prompt into the old session. The second review remembers the first one and its own findings.
+**Problem.** Agent Review is `ownShell` so that it reviews "with fresh eyes" (comment on `ownShell` in `core/src/stages/schema.ts`). After a send back, Implement fixes the code and Review runs again. Its agent in Shell 5 still runs, so `launch` pastes the new prompt into the old session. The second review remembers the first one and its own findings.
 
 **Change.** An `ownShell` stage defaults to `session: "new"` (C1). Every forward start of Review then gets a new agent. No new code beyond C1.
 

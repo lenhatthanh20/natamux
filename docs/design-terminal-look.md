@@ -26,16 +26,16 @@ Sources: ghostty.org/docs/config/reference, code.visualstudio.com/docs/terminal/
 | Part | Before | After | Where |
 |---|---|---|---|
 | Font | Geist Mono 13 px | JetBrains Mono 13 px (`@fontsource-variable/jetbrains-mono`, normal and italic). The rest of the UI and Monaco keep Geist Mono | `lib/fonts.ts` `TERMINAL_FONT`, `main.tsx` |
-| Code views (Monaco diff and file) | Geist Mono | JetBrains Mono, the terminal stack, so code looks the same in a diff and in a shell. Monaco measures the font again once it loads. Small mono labels in the UI keep Geist Mono | `MonacoDiff.tsx`, `MonacoFile.tsx`, `lib/monaco-setup.ts` |
+| Code views (Monaco diff and file) | Geist Mono | JetBrains Mono, the terminal stack, so code looks the same in a diff and in a shell. Monaco measures the font again once it loads. Small mono labels in the UI keep Geist Mono | `MonacoDiff.tsx`, `MonacoFile.tsx`, `features/files/monaco-setup.ts` |
 | Icons | Empty boxes without a Nerd Font | Bundled Symbols Nerd Font Mono v3.4.0, right after the main font, also behind a font the user picks | `src/assets/fonts/`, `@font-face` in `styles.css` |
-| Line height | 1.3 (22px rows) | 1 (about 17px rows at 13px, as Ghostty and VS Code). xterm multiplies the font's own line height, about 1.3 em for JetBrains Mono, so 1.2 gave 20px rows, looser than any native terminal | `TERMINAL_LOOK` in `lib/terminal-theme.ts` |
+| Line height | 1.3 (22px rows) | 1 (about 17px rows at 13px, as Ghostty and VS Code). xterm multiplies the font's own line height, about 1.3 em for JetBrains Mono, so 1.2 gave 20px rows, looser than any native terminal | `TERMINAL_LOOK` in `features/terminals/terminal-theme.ts` |
 | Bold | Bright color, weight 700 | Own color, weight 700 (`bold`, as Ghostty, VS Code and JetBrains IDEs) | `TERMINAL_LOOK` |
 | Cursor | Block, blinks | Block, blinks while focused, outline when unfocused | `TERMINAL_LOOK` |
 | Fast scroll | xterm default | Alt + wheel 5× (set on purpose) | `TERMINAL_LOOK` |
 | Padding | 8 top/bottom, 10 left, 0 right | 8 top/bottom, 10 left, 2 right. xterm keeps 8 px for its scrollbar, so text has 10 px on both sides and the scrollbar sits in the right padding | `TerminalView.tsx` |
 | Unfocused panes | Same as the focused one | Same as the focused one. T-0005 added a dim layer (`--terminal` at 0.3); T-0032 removed it, so every pane reads at full brightness. The focused pane keeps its focus outline | `TerminalPane.tsx` |
 | Selection | One color | Dimmer color when the terminal does not have the focus | `selectionInactiveBackground` |
-| Colors | See "Current" below | "Night" | `lib/terminal-theme.ts`, `--terminal` in `styles.css` |
+| Colors | See "Current" below | "Night" | `features/terminals/terminal-theme.ts`, `--terminal` in `styles.css` |
 
 ### Icon font
 
@@ -53,7 +53,7 @@ Four designs, dark and light. All are Natamux's own; popular themes were ideas o
 
 The demo screen shows a Claude Code style session, `ls --color`, `git log --graph`, `git diff --stat`, Vietnamese text with a selection, and the 16 colors. The browser drew `->` as an arrow there; xterm draws no ligatures.
 
-To switch to another palette later, copy its values into `DARK` and `LIGHT` in `packages/web/src/lib/terminal-theme.ts`, set `--terminal` in `packages/web/src/styles.css` (both themes) to its background, and update the table in `docs/ui-spec.md`.
+To switch to another palette later, copy its values into `DARK` and `LIGHT` in `packages/web/src/features/terminals/terminal-theme.ts`, set `--terminal` in `packages/web/src/styles.css` (both themes) to its background, and update the table in `docs/ui-spec.md`.
 
 ### Current (before this change)
 | | Dark (on `#0b0c0e`) | Light (on `#fbfbfc`) |
@@ -145,12 +145,12 @@ Claude Code draws most of its own UI in RGB colors, so the palette changes mostl
 
 | What | Where |
 |---|---|
-| `TERMINAL_LOOK` values, and the options that cost speed stay off | `lib/__tests__/terminal-theme.test.ts` |
-| Inactive selection color in both themes | `lib/__tests__/terminal-theme.test.ts` |
-| JetBrains Mono first, icon font next, UI keeps Geist Mono; icon font also behind a user font | `lib/__tests__/terminal-font.test.ts` |
-| xterm opens with `TERMINAL_LOOK` | `lib/__tests__/terminal-session.test.ts` |
-| Atlas cleared when the icon font loads, not for other fonts, not after dispose | `lib/__tests__/terminal-session.test.ts` |
-| Font dialog names JetBrains Mono, 13px | `components/__tests__/TerminalFontDialog.test.tsx` |
+| `TERMINAL_LOOK` values, and the options that cost speed stay off | `features/terminals/__tests__/terminal-theme.test.ts` |
+| Inactive selection color in both themes | `features/terminals/__tests__/terminal-theme.test.ts` |
+| JetBrains Mono first, icon font next, UI keeps Geist Mono; icon font also behind a user font | `features/terminals/__tests__/terminal-font.test.ts` |
+| xterm opens with `TERMINAL_LOOK` | `features/terminals/__tests__/terminal-session.test.ts` |
+| Atlas cleared when the icon font loads, not for other fonts, not after dispose | `features/terminals/__tests__/terminal-session.test.ts` |
+| Font dialog names JetBrains Mono, 13px | `features/terminals/__tests__/TerminalFontDialog.test.tsx` |
 | No pane dimmed; the focused pane has the outline and a click moves it | `e2e/tests/terminal-look.spec.ts` |
 | Icon font not loaded until an icon shows, loaded after | `e2e/tests/terminal-look.spec.ts` |
 

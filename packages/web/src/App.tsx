@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
-import { Dashboard } from './components/Dashboard'
-import { SignIn } from './components/SignIn'
+import { Dashboard } from './features/app/Dashboard'
+import { SignIn } from './features/app/SignIn'
+import { disposeAllTerminals } from './features/terminals/terminal-cache'
 import { isUnauthorized } from './lib/api'
 import { clearToken, loadToken, saveToken } from './lib/auth-storage'
-import { disposeAllTerminals } from './lib/terminal-cache'
 
 export function App() {
   const [queryClient] = useState(
