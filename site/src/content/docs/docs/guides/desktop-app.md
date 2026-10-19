@@ -9,6 +9,8 @@ The desktop app is a window around the dashboard. It holds no task logic of its 
 
 ## What the app does at start
 
+The window opens at once and shows a spinner in its center until the dashboard is ready.
+
 1. Starts the daemon on port 4317, or on another free port when 4317 is taken. The daemon listens on `127.0.0.1` only.
 2. Passes the daemon the PATH of your login shell, so agents installed with Homebrew, nvm and similar tools are found even when you start the app from the Dock. The shell can take seconds right after you log in, so the app reads it while the daemon starts. Until the PATH arrives, the dashboard shows your tasks, but changes, branches, terminals and agents wait.
 3. Puts the `natamux` and `nmx` commands first on that PATH, for the terminals of your tasks.
