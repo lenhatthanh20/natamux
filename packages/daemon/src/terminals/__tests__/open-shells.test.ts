@@ -4,16 +4,14 @@ import { join } from 'node:path'
 import type { Task, TaskEvent } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DaemonMessage, EventBus } from '../../shared/event-bus.js'
+import { EXIT_CONFIRM_MS, OpenShells, RESTORE_POLL_MS, RESTORE_SPINNER_MS } from '../open-shells.js'
 import {
   deleteOpenShells,
   type OpenShell,
-  OpenShells,
   openShellsPath,
-  RESTORE_POLL_MS,
-  RESTORE_SPINNER_MS,
   readOpenShells,
   saveOpenShells,
-} from '../open-shells.js'
+} from '../open-shells-file.js'
 
 let dataDir: string
 
@@ -51,6 +49,16 @@ class FakeTerminals {
     this.bus.publish({ kind: 'shells.changed', taskId })
   }
 
+  // An agent starts or quits: the foreground changes, as TerminalService tells.
+  setProgram(taskId: string, terminal: string, program: string | undefined): void {
+    if (program === undefined) {
+      this.programs.delete(`${taskId}/${terminal}`)
+    } else {
+      this.programs.set(`${taskId}/${terminal}`, program)
+    }
+    this.bus.publish({ kind: 'shells.changed', taskId })
+  }
+
   endShell(taskId: string, terminal: string): void {
     this.open.set(
       taskId,
@@ -61,7 +69,10 @@ class FakeTerminals {
   }
 }
 
-function setup(ended: string[] = []) {
+function setup(
+  ended: string[] = [],
+  agentIn: (taskId: string, terminal: string) => Promise<string | null> = async () => null,
+) {
   const bus = new EventBus()
   const terminals = new FakeTerminals(bus)
   const writes: OpenShell[][] = []
@@ -70,6 +81,9 @@ function setup(ended: string[] = []) {
     terminals,
     bus,
     isEnded: (taskId) => ended.includes(taskId),
+    // An agent runs where a program other than the shell is in the foreground.
+    agentRuns: (taskId, terminal) => terminals.programs.has(`${taskId}/${terminal}`),
+    agentIn,
     save: (dir, taskId, list) => {
       writes.push(list)
       saveOpenShells(dir, taskId, list)
@@ -108,7 +122,8 @@ describe('the open-shells file', () => {
 })
 
 describe('OpenShells', () => {
-  it('writes down each shell that starts as a plain shell, and drops one that ends', () => {
+  it('writes down each shell that starts as a plain shell, and drops one that stays ended', () => {
+    vi.useFakeTimers()
     const { terminals } = setup()
 
     terminals.startShell('T-0076', '1')
@@ -119,9 +134,12 @@ describe('OpenShells', () => {
     ])
 
     terminals.endShell('T-0076', '6')
+    expect(readOpenShells(dataDir, 'T-0076')).toHaveLength(2)
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
     expect(readOpenShells(dataDir, 'T-0076')).toEqual([{ name: '1', agent: null, session: null }])
 
     terminals.endShell('T-0076', '1')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
     expect(existsSync(openShellsPath(dataDir, 'T-0076'))).toBe(false)
   })
 
@@ -163,20 +181,27 @@ describe('OpenShells', () => {
     expect(existsSync(openShellsPath(dataDir, 'T-0076'))).toBe(false)
   })
 
-  it('keeps the list through the shutdown, and clears an agent that was quit', () => {
+  it('keeps the list through the shutdown, with the agent the person quit cleared', () => {
+    vi.useFakeTimers()
     const { terminals, shells } = setup()
-    terminals.startShell('T-0076', '1')
-    terminals.startShell('T-0076', '6')
-    terminals.startShell('T-0076', '7')
-    shells.noteSession('T-0076', '1', 'claude-code', 'a-1')
-    shells.noteSession('T-0076', '6', 'copilot', 'c-1')
-    shells.noteSession('T-0076', '7', 'cursor', 'u-1')
+    for (const [name, agent, session] of [
+      ['1', 'claude-code', 'a-1'],
+      ['6', 'copilot', 'c-1'],
+      ['7', 'cursor', 'u-1'],
+    ] as const) {
+      terminals.startShell('T-0076', name)
+      terminals.setProgram('T-0076', name, agent)
+      shells.noteSession('T-0076', name, agent, session)
+    }
 
     // The person quit Cursor in shell 7 and kept the shell.
-    shells.stop((_taskId, terminal) => terminal !== '7')
+    terminals.setProgram('T-0076', '7', undefined)
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    shells.stop()
     terminals.endShell('T-0076', '1')
     terminals.endShell('T-0076', '6')
     terminals.endShell('T-0076', '7')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
 
     expect(readOpenShells(dataDir, 'T-0076')).toEqual([
       { name: '1', agent: 'claude-code', session: 'a-1' },
@@ -198,11 +223,11 @@ describe('OpenShells', () => {
     shells.load('T-0076', ['8'])
 
     expect(shells.waiting('T-0076')).toEqual(['1', '6', '7', '9'])
-    // Shell 7 has no session, so it comes back plain.
+    // Shell 7 has no session: Cursor goes on with the newest of the folder.
     expect(shells.restoring('T-0076')).toEqual({
       '1': 'claude-code',
       '6': 'copilot',
-      '7': null,
+      '7': 'cursor',
       '9': null,
     })
   })
@@ -214,7 +239,7 @@ describe('OpenShells', () => {
 
     expect(shells.take('T-0076', '6')).toEqual(copilot)
     expect(shells.take('T-0076', '6')).toBeUndefined()
-    expect(shells.take('T-0076', '7')).toEqual({ name: '7', agent: null, session: null })
+    expect(shells.take('T-0076', '7')).toEqual({ name: '7', agent: 'cursor', session: null })
     expect(shells.take('T-0076', '9')).toBeUndefined()
     expect(shells.waiting('T-0076')).toEqual([])
   })
@@ -312,5 +337,239 @@ describe('OpenShells', () => {
 
     vi.advanceTimersByTime(RESTORE_POLL_MS)
     expect(shells.restoring('T-0076')).toEqual({})
+  })
+})
+
+describe('OpenShells across restarts', () => {
+  // The daemon starts again on the same data folder. The old one was killed or stopped, so its
+  // timers are gone and its shells with it.
+  function restart(old: OpenShells, skip: string[] = []) {
+    old.stop()
+    const next = setup()
+    next.shells.load('T-0128', skip)
+    return next
+  }
+
+  // Shell 2 runs Codex on session x-2, shell 3 Claude Code on session a-3.
+  function twoAgents() {
+    vi.useFakeTimers()
+    const first = setup()
+    for (const [name, agent, session] of [
+      ['2', 'codex', 'x-2'],
+      ['3', 'claude-code', 'a-3'],
+    ] as const) {
+      first.terminals.startShell('T-0128', name)
+      first.terminals.setProgram('T-0128', name, agent)
+      first.shells.noteSession('T-0128', name, agent, session)
+    }
+    return first
+  }
+
+  it('writes down a quit once the agent stayed gone, so a kill keeps it quit', () => {
+    const first = twoAgents()
+
+    first.terminals.setProgram('T-0128', '2', undefined)
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    // Killed: no stop, the file is what was written.
+    const { shells } = restart(first.shells)
+
+    expect(shells.restoring('T-0128')).toEqual({ '2': null, '3': 'claude-code' })
+  })
+
+  it('brings back an agent that ended just before the kill', () => {
+    const first = twoAgents()
+
+    first.terminals.setProgram('T-0128', '2', undefined)
+    first.terminals.endShell('T-0128', '3')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS - 1000)
+    const { shells } = restart(first.shells)
+
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex', '3': 'claude-code' })
+  })
+
+  it('drops a shell that stayed closed', () => {
+    const first = twoAgents()
+
+    first.terminals.endShell('T-0128', '3')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    const { shells } = restart(first.shells)
+
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex' })
+  })
+
+  it('gives the same file after a stop as after a kill', () => {
+    const killed = twoAgents()
+    killed.terminals.setProgram('T-0128', '2', undefined)
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    const afterKill = readOpenShells(dataDir, 'T-0128')
+    killed.shells.stop()
+    rmSync(join(dataDir, 'tasks'), { recursive: true, force: true })
+
+    const stopped = twoAgents()
+    stopped.terminals.setProgram('T-0128', '2', undefined)
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    stopped.shells.stop()
+    stopped.terminals.endShell('T-0128', '2')
+    stopped.terminals.endShell('T-0128', '3')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+
+    expect(readOpenShells(dataDir, 'T-0128')).toEqual(afterKill)
+  })
+
+  it('does not count an agent as quit while it starts', () => {
+    vi.useFakeTimers()
+    const { terminals, shells } = setup()
+    terminals.startShell('T-0128', '2')
+    shells.noteLaunch('T-0128', '2', 'codex')
+    // Not in the foreground yet, but agentRuns says it runs (its launch time).
+    terminals.programs.set('T-0128/2', 'zsh')
+
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS * 3)
+
+    expect(readOpenShells(dataDir, 'T-0128')).toEqual([
+      { name: '2', agent: 'codex', session: null },
+    ])
+  })
+
+  it('keeps a held shell through a sync, and lets it wait once released', () => {
+    saveOpenShells(dataDir, 'T-0128', [
+      { name: '1', agent: 'claude-code', session: 'a-1' },
+      { name: '2', agent: 'codex', session: 'x-2' },
+    ])
+    const { terminals, shells, messages } = setup()
+    shells.load('T-0128', ['1'])
+    expect(shells.waiting('T-0128')).toEqual(['2'])
+    expect(shells.wasRunning('T-0128', '1')).toBe(true)
+    expect(shells.sessionOf('T-0128', '1', 'claude-code')).toBe('a-1')
+    expect(shells.sessionOf('T-0128', '1', 'codex')).toBeUndefined()
+
+    // A dashboard opens shell 2 before resumeAgents ran.
+    shells.take('T-0128', '2')
+    terminals.startShell('T-0128', '2')
+    expect(readOpenShells(dataDir, 'T-0128')).toContainEqual({
+      name: '1',
+      agent: 'claude-code',
+      session: 'a-1',
+    })
+
+    // Its stage could not start the agent.
+    messages.length = 0
+    shells.releaseHeld()
+    expect(shells.waiting('T-0128')).toEqual(['1'])
+    expect(shells.restoring('T-0128')).toEqual({ '1': 'claude-code' })
+    expect(messages).toContainEqual({ kind: 'shells.changed', taskId: 'T-0128' })
+  })
+
+  it('leaves a held shell that its stage started alone', () => {
+    saveOpenShells(dataDir, 'T-0128', [{ name: '1', agent: 'claude-code', session: 'a-1' }])
+    const { terminals, shells } = setup()
+    shells.load('T-0128', ['1'])
+
+    terminals.startShell('T-0128', '1')
+    shells.releaseHeld()
+
+    expect(shells.waiting('T-0128')).toEqual([])
+  })
+
+  it('lets a shell wait again when its agent could not come back', () => {
+    saveOpenShells(dataDir, 'T-0128', [{ name: '2', agent: 'codex', session: 'x-2' }])
+    const { shells } = setup()
+    shells.load('T-0128', [])
+
+    shells.take('T-0128', '2')
+    shells.putBack('T-0128', '2')
+
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex' })
+  })
+
+  it('keeps the agent of a shell that came back plain, for the next start', () => {
+    vi.useFakeTimers()
+    saveOpenShells(dataDir, 'T-0128', [{ name: '2', agent: 'codex', session: 'x-2' }])
+    const first = setup()
+    first.shells.load('T-0128', [])
+
+    // The agent could not start, so the attach started a plain shell.
+    first.shells.take('T-0128', '2')
+    first.terminals.startShell('T-0128', '2')
+    vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+    const { shells } = restart(first.shells)
+
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex' })
+  })
+
+  it('writes down an agent typed by hand, from its process', async () => {
+    const { terminals, shells } = setup([], async (_taskId, terminal) =>
+      terminal === '2' ? 'claude-code' : null,
+    )
+    terminals.startShell('T-0128', '2')
+
+    terminals.setProgram('T-0128', '2', 'claude')
+    await vi.waitFor(() =>
+      expect(readOpenShells(dataDir, 'T-0128')).toEqual([
+        { name: '2', agent: 'claude-code', session: null },
+      ]),
+    )
+    // Its hooks, if any, name the session later.
+    shells.noteSession('T-0128', '2', 'claude-code', 'a-2')
+    expect(readOpenShells(dataDir, 'T-0128')).toEqual([
+      { name: '2', agent: 'claude-code', session: 'a-2' },
+    ])
+  })
+
+  it('brings back one agent of a kind with no session, the others plain', () => {
+    saveOpenShells(dataDir, 'T-0128', [
+      { name: '2', agent: 'claude-code', session: null },
+      { name: '3', agent: 'claude-code', session: null },
+      { name: '4', agent: 'claude-code', session: 'a-4' },
+      { name: '5', agent: 'codex', session: null },
+    ])
+    const { shells } = setup()
+    shells.load('T-0128', [])
+
+    expect(shells.restoring('T-0128')).toEqual({
+      '2': 'claude-code',
+      '3': null,
+      '4': 'claude-code',
+      '5': 'codex',
+    })
+  })
+
+  it('keeps the agent of a held stage shell with no session, beside a hand-typed one', () => {
+    saveOpenShells(dataDir, 'T-0128', [
+      { name: '2', agent: 'codex', session: null },
+      { name: '3', agent: 'codex', session: null },
+    ])
+    const { shells } = setup()
+    // Shell 3 belongs to a working stage; Codex there has not reported a session yet.
+    shells.load('T-0128', ['3'])
+
+    expect(shells.wasRunning('T-0128', '3')).toBe(true)
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex' })
+    shells.releaseHeld()
+    expect(shells.restoring('T-0128')).toEqual({ '2': 'codex', '3': 'codex' })
+  })
+
+  it('keeps the same agents through many restarts, killed or stopped, opened or not', () => {
+    let current = twoAgents()
+    const expected = { '2': 'codex', '3': 'claude-code' }
+    for (const round of [0, 1, 2, 3, 4]) {
+      const next = restart(current.shells)
+      expect(next.shells.restoring('T-0128')).toEqual(expected)
+      if (round % 2 === 0) {
+        // Opened: both agents come back on their sessions and report them again.
+        for (const name of ['2', '3']) {
+          const shell = next.shells.take('T-0128', name)
+          next.terminals.startShell('T-0128', name)
+          next.terminals.setProgram('T-0128', name, shell?.agent ?? undefined)
+          next.shells.noteLaunch('T-0128', name, shell?.agent ?? '', shell?.session ?? undefined)
+        }
+        vi.advanceTimersByTime(EXIT_CONFIRM_MS)
+      }
+      current = next
+    }
+    expect(readOpenShells(dataDir, 'T-0128')).toEqual([
+      { name: '2', agent: 'codex', session: 'x-2' },
+      { name: '3', agent: 'claude-code', session: 'a-3' },
+    ])
   })
 })

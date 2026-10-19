@@ -11,11 +11,13 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { claudeCodeHookSettings } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   AUTO_FLAGS,
   agentOfCommand,
   codexHookArgs,
+  codexHookFile,
   copilotHookFile,
   cursorHookFile,
   DEFAULT_PROGRAMS,
@@ -45,6 +47,8 @@ const base: LaunchOptions = {
 }
 
 const auto: LaunchOptions = { ...base, permissionMode: 'auto' }
+
+const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
 
 describe('launchCommand', () => {
   it('starts each agent in its auto mode, before the extra words and the prompt', () => {
@@ -594,9 +598,108 @@ describe('prepareWorkspace', () => {
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' })).toBe('')
   })
 
-  it('needs no file for agents that take their hooks another way', () => {
+  it('writes no Claude Code file without the settings of the daemon', () => {
+    expect(prepareWorkspace('claude-code', repo)).toBe(true)
+    expect(existsSync(join(repo, '.claude'))).toBe(false)
+  })
+})
+
+describe('the hook files of Claude Code, Gemini CLI and Codex', () => {
+  let repo: string
+  const claudeSettings = json(claudeCodeHookSettings('http://127.0.0.1:7777'))
+  const status = () =>
+    execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' })
+
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), 'natamux-launch-'))
+    execFileSync('git', ['init', '-q'], { cwd: repo })
+  })
+
+  afterEach(() => {
+    rmSync(repo, { recursive: true, force: true })
+  })
+
+  it('writes each one with the hooks of the launch, out of git', () => {
+    prepareAgentHooks(repo, { claudeSettings })
+
+    expect(readFileSync(join(repo, '.claude/settings.local.json'), 'utf8')).toBe(claudeSettings)
+    expect(readFileSync(join(repo, '.gemini/settings.json'), 'utf8')).toBe(
+      json(geminiHookSettings()),
+    )
+    const codex = readFileSync(join(repo, '.codex/config.toml'), 'utf8')
+    expect(codex).toBe(codexHookFile())
+    // The same values as the `-c` overrides of a launch, so those replace them one by one.
+    const args = codexHookArgs().filter((arg) => arg !== '-c')
+    const lines = codex.split('\n').filter((line) => line.includes('=') && !line.startsWith('#'))
+    expect(lines).toEqual(args.map((arg) => arg.replace(/^hooks\.(\w+)=/, '$1 = ')))
+    expect(status()).toBe('')
+  })
+
+  it("leaves the user's own files alone", () => {
+    const own = {
+      '.claude/settings.local.json':
+        '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}]}}',
+      '.gemini/settings.json': '{"model":{"name":"gemini-pro"}}',
+      '.codex/config.toml': 'model = "o3"\n',
+    }
+    for (const [path, text] of Object.entries(own)) {
+      mkdirSync(dirname(join(repo, path)), { recursive: true })
+      writeFileSync(join(repo, path), text)
+    }
+
+    expect(prepareWorkspace('claude-code', repo, { claudeSettings })).toBe(false)
+    expect(prepareWorkspace('gemini', repo)).toBe(false)
+    expect(prepareWorkspace('codex', repo)).toBe(false)
+    for (const [path, text] of Object.entries(own)) {
+      expect(readFileSync(join(repo, path), 'utf8')).toBe(text)
+    }
+  })
+
+  it('writes the hooks again for a new daemon address, and keeps what Claude Code saved', () => {
+    const old = JSON.parse(json(claudeCodeHookSettings('http://127.0.0.1:1111')))
+    mkdirSync(join(repo, '.claude'))
+    const allowed = { allow: ['Bash(pnpm test)'] }
+    writeFileSync(join(repo, '.claude/settings.local.json'), json({ ...old, permissions: allowed }))
+
+    expect(prepareWorkspace('claude-code', repo, { claudeSettings })).toBe(true)
+
+    const written = JSON.parse(readFileSync(join(repo, '.claude/settings.local.json'), 'utf8'))
+    expect(written).toEqual({ ...JSON.parse(claudeSettings), permissions: allowed })
+  })
+
+  it('writes a Codex file of an older Natamux again, by its first line', () => {
+    mkdirSync(join(repo, '.codex'))
+    writeFileSync(join(repo, '.codex/config.toml'), `${codexHookFile().split('\n')[0]}\n[hooks]\n`)
+
     expect(prepareWorkspace('codex', repo)).toBe(true)
-    expect(existsSync(join(repo, '.codex'))).toBe(false)
+    expect(readFileSync(join(repo, '.codex/config.toml'), 'utf8')).toBe(codexHookFile())
+  })
+
+  it('does not take an http hook without the task header for one of Natamux', () => {
+    mkdirSync(join(repo, '.claude'))
+    const text =
+      '{"hooks":{"Stop":[{"hooks":[{"type":"http","url":"http://x/hooks/claude-code"}]}]}}'
+    writeFileSync(join(repo, '.claude/settings.local.json'), text)
+
+    expect(prepareWorkspace('claude-code', repo, { claudeSettings })).toBe(false)
+    expect(readFileSync(join(repo, '.claude/settings.local.json'), 'utf8')).toBe(text)
+  })
+})
+
+describe('one copy of each hook', () => {
+  it('leaves out the Gemini system settings when the workspace has the hooks', () => {
+    const gemini = { ...base, prompt: '', workspaceHooks: true }
+    expect(launchCommand('gemini', gemini)).toBe('GEMINI_CLI_TRUST_WORKSPACE=true x')
+    expect(launchCommand('gemini', { ...gemini, platform: 'win32' })).toBe(
+      "$env:GEMINI_CLI_TRUST_WORKSPACE='true'; x",
+    )
+  })
+
+  it('keeps the hooks of the other agents on the launch line', () => {
+    // Claude Code runs a handler that two settings files name once; Codex's `-c` replaces a key.
+    const own = { ...base, workspaceHooks: true }
+    expect(launchCommand('claude-code', own)).toContain("--settings '/data/claude.json'")
+    expect(launchCommand('codex', own)).toContain('hooks.Stop=')
   })
 })
 

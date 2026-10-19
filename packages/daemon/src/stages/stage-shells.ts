@@ -12,7 +12,7 @@ import {
   type TaskEvent,
   terminalOfStage,
 } from '@natamux/core'
-import { agentOfCommand, type LaunchableAgent } from '../agents/agent-launch.js'
+import { agentOfCommand, LAST_SESSION, type LaunchableAgent } from '../agents/agent-launch.js'
 import { AGENT_EXITED_TITLE } from '../agents/agent-runner.js'
 import { readEndedShells, saveEndedShells } from '../terminals/ended-shells.js'
 import { MAIN_TERMINAL, SHELLS } from '../terminals/terminal-limits.js'
@@ -205,8 +205,8 @@ export class StageShells {
   }
 
   // At the daemon's start, before the dashboards connect: the shells that were open come back
-  // once a dashboard attaches to them, except those of the stages whose agent resumeAgents starts
-  // at once. A finished task, or one without a workspace, keeps none.
+  // once a dashboard opens their task. Those of the stages whose agent resumeAgents starts at once
+  // are held until it ran. A finished task, or one without a workspace, keeps none.
   loadOpenShells(): void {
     for (const task of this.run.tasks.listTasks()) {
       if (task.state === 'done' || task.state === 'cancelled' || task.workspace === null) {
@@ -227,23 +227,38 @@ export class StageShells {
     }
   }
 
-  // A dashboard attaches to a shell that waits to come back after a restart. Its agent goes on
-  // with its session, with no prompt. A plain shell, or an agent that cannot start, is left to the
-  // attach, which starts a plain shell.
-  restoreShell(taskId: string, terminal: string): void {
-    const shell = this.run.openShells?.take(taskId, terminal)
-    if (shell === undefined || shell.agent === null || shell.session === null) {
+  // A dashboard attaches to a shell of a task, so the task is open: every agent of it that waits to
+  // come back after a restart goes on with its session, with no prompt, the attached shell's
+  // first. A plain shell is left to its own attach.
+  restoreTask(taskId: string, attached: string): void {
+    const waiting = this.run.openShells?.waiting(taskId) ?? []
+    for (const terminal of [attached, ...waiting.filter((name) => name !== attached)]) {
+      this.restoreShell(taskId, terminal, terminal === attached)
+    }
+  }
+
+  // An agent that cannot start: the attached shell starts plain and keeps its agent in the list for
+  // the next start; any other shell waits again.
+  private restoreShell(taskId: string, terminal: string, attached: boolean): void {
+    const open = this.run.openShells
+    if (open === undefined || typeof open.restoring(taskId)[terminal] !== 'string') {
+      return
+    }
+    const shell = open.take(taskId, terminal)
+    if (shell === undefined || shell.agent === null) {
       return
     }
     try {
-      this.run.agents.start(taskId, shell.agent, undefined, terminal, shell.session, {
-        restored: true,
-      })
+      const session = shell.session ?? LAST_SESSION
+      this.run.agents.start(taskId, shell.agent, undefined, terminal, session, { restored: true })
       this.run.launched.set(`${taskId}/${terminal}`, { agent: shell.agent, at: this.run.now() })
-      this.run.openShells?.markStarting(taskId, terminal, shell.agent)
+      open.markStarting(taskId, terminal, shell.agent)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       console.warn(`Shell ${terminal} of ${taskId} comes back without its agent: ${reason}`)
+      if (!attached) {
+        open.putBack(taskId, terminal)
+      }
     }
   }
 

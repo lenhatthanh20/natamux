@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
-import type { PermissionMode } from '@natamux/core'
+import { type PermissionMode, TASK_ID_HEADER } from '@natamux/core'
 import { SHELLS } from '../terminals/terminal-limits.js'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
@@ -87,12 +87,25 @@ const CODEX_EVENTS = [
   'Interrupt',
 ] as const
 
-export function codexHookArgs(): string[] {
+// The TOML value of one event's hooks.
+function codexHookValue(event: (typeof CODEX_EVENTS)[number]): string {
   const tools: readonly string[] = ['PreToolUse', 'PostToolUse', 'PermissionRequest']
-  return CODEX_EVENTS.flatMap((event) => [
-    '-c',
-    `hooks.${event}=[{${tools.includes(event) ? 'matcher="*",' : ''}hooks=[{type="command",command="${HOOK} codex",timeout=5}]}]`,
-  ])
+  return `[{${tools.includes(event) ? 'matcher="*",' : ''}hooks=[{type="command",command="${HOOK} codex",timeout=5}]}]`
+}
+
+export function codexHookArgs(): string[] {
+  return CODEX_EVENTS.flatMap((event) => ['-c', `hooks.${event}=${codexHookValue(event)}`])
+}
+
+// The first line of the Codex project config Natamux writes; a file without it is the user's.
+const CODEX_FILE_MARK = '# Natamux hooks: Natamux writes this file again.'
+
+// The same hooks as codexHookArgs, for a Codex started by hand. Codex reads it only in a folder
+// it trusts. A Codex that Natamux starts gets them again with `-c`, which replaces each key, so
+// every hook runs once.
+export function codexHookFile(): string {
+  const lines = CODEX_EVENTS.map((event) => `${event} = ${codexHookValue(event)}`)
+  return `${[CODEX_FILE_MARK, '[hooks]', ...lines].join('\n')}\n`
 }
 
 // Gemini CLI reads these as its system settings when GEMINI_CLI_SYSTEM_SETTINGS_PATH names the
@@ -156,18 +169,29 @@ export function cursorHookFile() {
   }
 }
 
-// A file an agent reads from the workspace, where no flag or variable can pass its hooks.
+// A file an agent reads from the workspace, so an agent the user starts by hand reports too.
 export type WorkspaceFile = { path: string; content: string }
 
-const WORKSPACE_FILES: Partial<Record<LaunchableAgent, () => WorkspaceFile>> = {
-  copilot: () => ({
-    path: '.github/hooks/natamux.json',
-    content: `${JSON.stringify(copilotHookFile(), null, 2)}\n`,
-  }),
-  cursor: () => ({
-    path: '.cursor/hooks.json',
-    content: `${JSON.stringify(cursorHookFile(), null, 2)}\n`,
-  }),
+// Hook settings that only the daemon knows: the text of its Claude Code settings file, which
+// names the daemon's URL.
+export type WorkspaceHooks = { claudeSettings?: string }
+
+const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
+
+type HookFileOf = (hooks: WorkspaceHooks) => WorkspaceFile | undefined
+
+const WORKSPACE_FILES: Record<LaunchableAgent, HookFileOf> = {
+  // The same handlers as the launch's `--settings`: Claude Code runs a handler that two settings
+  // files name once.
+  'claude-code': ({ claudeSettings }) =>
+    claudeSettings === undefined
+      ? undefined
+      : { path: '.claude/settings.local.json', content: claudeSettings },
+  // The launch leaves out its own copy when this file is in place (see launchCommand).
+  gemini: () => ({ path: '.gemini/settings.json', content: json(geminiHookSettings()) }),
+  codex: () => ({ path: '.codex/config.toml', content: codexHookFile() }),
+  copilot: () => ({ path: '.github/hooks/natamux.json', content: json(copilotHookFile()) }),
+  cursor: () => ({ path: '.cursor/hooks.json', content: json(cursorHookFile()) }),
 }
 
 // Codex splits a `-c` key at each dot, so the path goes into a table value. That may hide the
@@ -193,6 +217,8 @@ export type LaunchOptions = {
   permissionMode: PermissionMode
   // The task's worktree, which the agent is told to trust. Null: no trust is added.
   workspace: string | null
+  // The agent's hook file is in the worktree (prepareWorkspace), so the launch need not pass them.
+  workspaceHooks?: boolean
 }
 
 // The command line that starts an agent in its interactive mode, with its first prompt and the
@@ -244,10 +270,15 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
         ...(prompt.length > 0 ? ['-i', ...prompt] : []),
       ]
       const settings = quote(options.geminiSettingsPath)
-      // Folder trust is off by default; when the user turned it on, this skips its question.
-      return options.platform === 'win32'
-        ? `$env:GEMINI_CLI_TRUST_WORKSPACE='true'; $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings}; ${command.join(' ')}`
-        : `GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings} ${command.join(' ')}`
+      // Folder trust is off by default; when the user turned it on, this skips its question. With
+      // the hooks in the workspace's settings, the system settings would run each hook twice.
+      const system = options.workspaceHooks !== true
+      if (options.platform === 'win32') {
+        const env = system ? ` $env:GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings};` : ''
+        return `$env:GEMINI_CLI_TRUST_WORKSPACE='true';${env} ${command.join(' ')}`
+      }
+      const env = system ? ` GEMINI_CLI_SYSTEM_SETTINGS_PATH=${settings}` : ''
+      return `GEMINI_CLI_TRUST_WORKSPACE=true${env} ${command.join(' ')}`
     }
     case 'copilot':
       return [
@@ -288,46 +319,83 @@ export function oneShotCommand(
   }
 }
 
-// Whether a hook file holds Natamux's hooks only, so writing it again loses nothing of the user's.
-function isNatamuxHookFile(text: string): boolean {
-  let hooks: unknown
-  try {
-    hooks = JSON.parse(text)?.hooks
-  } catch {
+// One hook handler of Natamux's: a command that runs `natamux hook`, or Claude Code's http hook,
+// which names the task in a header. Cursor names a command `command`; Copilot `bash` and
+// `powershell`.
+function isNatamuxHook(hook: unknown): boolean {
+  if (typeof hook !== 'object' || hook === null) {
     return false
   }
-  if (typeof hooks !== 'object' || hooks === null || Array.isArray(hooks)) {
-    return false
+  const { command, bash, powershell, url, headers } = hook as Record<string, unknown>
+  if (url !== undefined) {
+    return (
+      typeof url === 'string' &&
+      typeof headers === 'object' &&
+      headers !== null &&
+      TASK_ID_HEADER in headers
+    )
   }
-  // Cursor names a hook's command `command`; Copilot `bash` and `powershell`.
-  const commands = Object.values(hooks)
-    .flat()
-    .flatMap((hook) => [hook?.command, hook?.bash, hook?.powershell])
-    .filter((command) => command !== undefined)
+  const commands = [command, bash, powershell].filter((each) => each !== undefined)
   return (
     commands.length > 0 &&
-    commands.every((command) => typeof command === 'string' && command.startsWith(HOOK))
+    commands.every((each) => typeof each === 'string' && each.startsWith(HOOK))
   )
+}
+
+// The JSON of a hook file that holds Natamux's hooks only, so writing them again loses no hook of
+// the user's. Other keys (Claude Code keeps the permissions the user allowed here) stay. Undefined
+// for any other file. Claude Code and Gemini put the handlers of an event in `hooks`.
+function natamuxHookJson(text: string): Record<string, unknown> | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  const hooks = (parsed as { hooks?: unknown } | null)?.hooks
+  if (typeof hooks !== 'object' || hooks === null || Array.isArray(hooks)) {
+    return undefined
+  }
+  const handlers = Object.values(hooks)
+    .flat()
+    .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [entry]))
+  return handlers.length > 0 && handlers.every(isNatamuxHook)
+    ? (parsed as Record<string, unknown>)
+    : undefined
+}
+
+// The text to write over `current`, or undefined to leave a file of the user's alone.
+function hookFileText(file: WorkspaceFile, current: string): string | undefined {
+  if (current === file.content) {
+    return current
+  }
+  if (file.path.endsWith('.toml')) {
+    return current.startsWith(CODEX_FILE_MARK) ? file.content : undefined
+  }
+  const old = natamuxHookJson(current)
+  return old === undefined ? undefined : json({ ...old, ...JSON.parse(file.content) })
 }
 
 // Writes the agent's hook file into the workspace and keeps it out of git. A file with a hook of
 // the user's own at that place is left alone: the agent then runs without Natamux's hooks, and its
 // terminal still shows that it works. Returns whether Natamux's hooks are in place.
-export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boolean {
-  const file = WORKSPACE_FILES[agent]?.()
+export function prepareWorkspace(
+  agent: LaunchableAgent,
+  workspace: string,
+  hooks: WorkspaceHooks = {},
+): boolean {
+  const file = WORKSPACE_FILES[agent](hooks)
   if (file === undefined) {
     return true
   }
   const target = join(workspace, file.path)
-  if (existsSync(target)) {
-    const current = readFileSync(target, 'utf8')
-    if (current !== file.content && !isNatamuxHookFile(current)) {
-      return false
-    }
+  const text = existsSync(target) ? hookFileText(file, readFileSync(target, 'utf8')) : file.content
+  if (text === undefined) {
+    return false
   }
   try {
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, file.content)
+    writeFileSync(target, text)
   } catch {
     // A folder that cannot be written: the agent still starts, followed by its terminal only.
     return false
@@ -336,11 +404,11 @@ export function prepareWorkspace(agent: LaunchableAgent, workspace: string): boo
   return true
 }
 
-// The hook files of all agents that read them from the workspace, so an agent the user starts by
-// hand in any shell reports to the daemon too.
-export function prepareAgentHooks(workspace: string): void {
+// The hook files of all agents, so an agent the user starts by hand in any shell reports to the
+// daemon too.
+export function prepareAgentHooks(workspace: string, hooks: WorkspaceHooks = {}): void {
   for (const agent of LAUNCHABLE_AGENTS) {
-    prepareWorkspace(agent, workspace)
+    prepareWorkspace(agent, workspace, hooks)
   }
 }
 

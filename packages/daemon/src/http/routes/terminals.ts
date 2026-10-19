@@ -139,9 +139,10 @@ function handleTerminalSocket(
 
   let detach: () => void
   try {
-    // A client that lost its socket only resumes a shell that runs, never one that waits.
+    // A client that lost its socket only resumes a shell that runs, never one that waits. Any
+    // other attach opens the task: all its agents come back.
     if (shellId === undefined) {
-      options.stages.restoreShell(taskId, terminal)
+      options.stages.restoreTask(taskId, terminal)
     }
     detach = options.terminals.attach(taskId, client, { cols, rows }, terminal, attachOptions)
   } catch (error) {
