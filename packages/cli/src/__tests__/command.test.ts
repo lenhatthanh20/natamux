@@ -53,6 +53,15 @@ describe('parseCommand', () => {
       })
     })
 
+    it('reads --parent as parentId and rejects a bad id', () => {
+      expect(parseCommand(['task', 'create', 'x', '--parent', 'T-0001'])).toMatchObject({
+        parentId: 'T-0001',
+      })
+      expect(() => parseCommand(['task', 'create', 'x', '--parent', 'nope'])).toThrow(
+        /not a task id/,
+      )
+    })
+
     it('needs a title', () => {
       expect(() => parseCommand(['task', 'create'])).toThrow(UsageError)
     })

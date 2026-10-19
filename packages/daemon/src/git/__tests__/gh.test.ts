@@ -42,6 +42,29 @@ describe('pull requests', () => {
     ])
   })
 
+  it('asks for the base branch when one is given', async () => {
+    const calls: (readonly string[])[] = []
+    const gh: RunGh = async (_cwd, args) => {
+      calls.push(args)
+      return 'https://github.com/o/r/pull/13\n'
+    }
+    await createPullRequest('/w', { ...request, base: 'natamux/t-0000' }, gh)
+    expect(calls).toEqual([
+      [
+        'pr',
+        'create',
+        '--head',
+        'natamux/t-0001',
+        '--base',
+        'natamux/t-0000',
+        '--title',
+        'Fix it',
+        '--body',
+        'Body',
+      ],
+    ])
+  })
+
   it('gives the address of the pull request that exists already', async () => {
     const gh: RunGh = async () => {
       throw new GitHubError(

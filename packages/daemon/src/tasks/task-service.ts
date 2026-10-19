@@ -115,6 +115,9 @@ export class TaskService {
   ): Task {
     const parsed = createTaskInputSchema.parse(rawInput)
     const parent = parsed.parentId ? this.checkParent(parsed.parentId) : null
+    if (parent) {
+      this.checkNotOnParent(parent.id, parsed.dependsOn)
+    }
     // A subtask is part of its parent's work, so it is in the same project.
     const input = parent && !parsed.repo ? { ...parsed, repo: parent.repo } : parsed
     const chosen = splitId ? splitTaskId(input.title) : { id: null, title: input.title }
@@ -209,6 +212,9 @@ export class TaskService {
     const input = updateTaskInputSchema.parse(rawInput)
     if (input.dependsOn !== undefined) {
       this.checkDependencies(taskId, input.dependsOn)
+      if (task.parentId !== null) {
+        this.checkNotOnParent(task.parentId, input.dependsOn)
+      }
     }
     const next = { ...task, ...input }
     const changed = EDITABLE_FIELDS.filter(
@@ -322,6 +328,14 @@ export class TaskService {
       throw new TaskEditError(`${parentId} is a subtask; a subtask cannot have subtasks`)
     }
     return parent
+  }
+
+  // The parent's next stage waits for its subtasks, so a subtask waiting for the parent would
+  // wait forever.
+  private checkNotOnParent(parentId: string, dependsOn: readonly string[]): void {
+    if (dependsOn.includes(parentId)) {
+      throw new TaskEditError('A subtask cannot depend on its parent')
+    }
   }
 
   private checkDependencies(taskId: string, dependsOn: readonly string[]): void {

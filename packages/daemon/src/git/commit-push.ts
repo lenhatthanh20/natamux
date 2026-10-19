@@ -35,10 +35,10 @@ const GITHUB_CREDENTIALS: [string, string][] = [
   ['credential.https://github.com.helper', '!gh auth git-credential'],
 ]
 
-// A push can take a while, but one that hangs must not hold the stage forever.
+// A push or a pull can take a while, but one that hangs must not hold the stage forever.
 const PUSH_TIMEOUT_MS = 2 * 60 * 1000
 
-async function push(worktreePath: string, args: readonly string[]): Promise<void> {
+async function remote(worktreePath: string, args: readonly string[]): Promise<void> {
   try {
     await execFileAsync('git', [...args], {
       cwd: worktreePath,
@@ -52,7 +52,19 @@ async function push(worktreePath: string, args: readonly string[]): Promise<void
 }
 
 export async function pushBranch(worktreePath: string, branch: string): Promise<void> {
-  await push(worktreePath, ['push', '--set-upstream', 'origin', branch])
+  await remote(worktreePath, ['push', '--set-upstream', 'origin', branch])
+}
+
+// Brings in the new commits of the branch's upstream, such as the merged pull requests of
+// subtasks. False when the branch has no upstream. Fails when the two went different ways.
+export async function pullFastForward(worktreePath: string): Promise<boolean> {
+  try {
+    await git(worktreePath, ['rev-parse', '--abbrev-ref', '@{upstream}'])
+  } catch {
+    return false
+  }
+  await remote(worktreePath, ['pull', '--ff-only', '--quiet'])
+  return true
 }
 
 // A commit of the worktree as it is now, with the files that are not committed, made without
@@ -113,9 +125,9 @@ export async function readCommitDiff(worktreePath: string, maxChars: number): Pr
 
 // Puts a commit on a branch of origin, in place of what is there.
 export async function pushRef(worktreePath: string, sha: string, ref: string): Promise<void> {
-  await push(worktreePath, ['push', '--force', '--quiet', 'origin', `${sha}:refs/heads/${ref}`])
+  await remote(worktreePath, ['push', '--force', '--quiet', 'origin', `${sha}:refs/heads/${ref}`])
 }
 
 export async function deleteRemoteRef(worktreePath: string, ref: string): Promise<void> {
-  await push(worktreePath, ['push', '--quiet', 'origin', '--delete', ref])
+  await remote(worktreePath, ['push', '--quiet', 'origin', '--delete', ref])
 }

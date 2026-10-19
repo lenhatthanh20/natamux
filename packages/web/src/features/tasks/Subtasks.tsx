@@ -12,7 +12,8 @@ type SubtasksProps = {
   onAdd: (title: string) => void
 }
 
-// The parts of a task. Each is a task of its own, with its own state and workspace.
+// The parts of a task. Each is a task of its own, with its own state and workspace. A subtask
+// starts from the parent's branch, and its pull request goes into that branch.
 export function Subtasks({ subtasks, busy, onSelect, onAdd }: SubtasksProps) {
   const [title, setTitle] = useState('')
   const done = subtasks.filter((task) => task.state === 'done').length

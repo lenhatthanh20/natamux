@@ -1,4 +1,4 @@
-import { type Task, waitingOn } from '@natamux/core'
+import { type Task, waitsFor } from '@natamux/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { Columns3, ListChecks, ListTodo, Plus, Rows3, SearchX, SquareTerminal } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -32,6 +32,7 @@ import { ProjectSettingsDialog } from '../projects/ProjectSettingsDialog'
 import { RepoPanel } from '../projects/RepoPanel'
 import { Sidebar } from '../sidebar/Sidebar'
 import { WorkspaceList } from '../sidebar/WorkspaceList'
+import { AddSubtaskDialog } from '../tasks/AddSubtaskDialog'
 import { StateFilter } from '../tasks/StateFilter'
 import { terminalSocketUrl } from '../terminals/terminal'
 import { ChangesView } from '../workspaces/ChangesView'
@@ -63,6 +64,11 @@ type DashboardProps = {
   token: string
   onSignOut: () => void
   onUnauthorized: () => void
+}
+
+// A subtask starts from the branch of its parent.
+function parentBranchOf(task: Task, tasks: readonly Task[]): string | null {
+  return tasks.find((parent) => parent.id === task.parentId)?.branch ?? null
 }
 
 export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) {
@@ -146,6 +152,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
   const [newTitle, setNewTitle] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  // The task a subtask is being added to from a row menu. Null: the dialog is closed.
+  const [subtaskParent, setSubtaskParent] = useState<Task | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // The new workspace dialog, with the repository it opens on. Null: closed.
   const [newWorkspace, setNewWorkspace] = useState<{ repo?: string; title?: string } | null>(null)
@@ -466,6 +474,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onRename={(id, title) =>
                       editMutation.mutate({ taskId: id, changes: { title } })
                     }
+                    onAddSubtask={setSubtaskParent}
                     onTogglePin={togglePin}
                     onRemove={setRemovingId}
                     onDelete={(id) => deleteMutation.mutate(id)}
@@ -519,12 +528,13 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                       workspaceMutation.mutate({ taskId: detailTask.id, base })
                     }}
                     branches={branchesQuery.data}
+                    parentBranch={parentBranchOf(detailTask, tasks)}
                     onRemoveWorkspace={() => setRemovingId(detailTask.id)}
                     onViewChanges={() => openChanges(detailTask.id)}
                     onStartAgent={() => agentMutation.mutate({ task: detailTask })}
                     onEdit={(changes) => editMutation.mutate({ taskId: detailTask.id, changes })}
                     onCheckPullRequest={() => pullRequestMutation.mutate(detailTask.id)}
-                    waitingFor={waitingOn(detailTask, tasks)}
+                    waitingFor={waitsFor(detailTask, tasks)}
                     onSaveTemplate={() => templateMutation.mutate(detailTask)}
                     subtasks={tasks.filter((task) => task.parentId === detailTask.id)}
                     onAddSubtask={(title) =>
@@ -623,8 +633,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             key={changesTask.id}
             task={changesTask}
             busy={busy}
-            waitingFor={waitingOn(changesTask, tasks)}
+            waitingFor={waitsFor(changesTask, tasks)}
             branches={branchesQuery.data}
+            parentBranch={parentBranchOf(changesTask, tasks)}
             onCreateWorkspace={(base) => {
               workspaceMutation.mutate({ taskId: changesTask.id, base })
             }}
@@ -945,6 +956,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   onSelect={(id, showDetails) => (showDetails ? chooseTask(id) : select(id))}
                   onOpen={openTask}
                   onToggleDetails={(id) => setDetailOpen(id, detailOpenByTask[id] !== true)}
+                  onAddSubtask={setSubtaskParent}
                   onKeyboardMove={frozen.hold}
                   onAction={runAction}
                   onStartAgent={(task) => agentMutation.mutate({ task })}
@@ -1016,6 +1028,24 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
           save={(raw, version) => api.saveSettings(settingsRepo.id, raw, version)}
           loadSkills={() => api.getSkills(settingsRepo.id)}
           onClose={() => setSettingsRepo(null)}
+        />
+      )}
+      {subtaskParent !== null && (
+        <AddSubtaskDialog
+          parent={subtaskParent}
+          busy={subtaskMutation.isPending}
+          onAdd={(title) =>
+            subtaskMutation.mutate(
+              { parentId: subtaskParent.id, title },
+              {
+                onSuccess: (task) => {
+                  setSubtaskParent(null)
+                  toast(`Added ${task.id} to ${subtaskParent.id}`)
+                },
+              },
+            )
+          }
+          onClose={() => setSubtaskParent(null)}
         />
       )}
       {importOpen && (

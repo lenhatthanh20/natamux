@@ -12,6 +12,7 @@ import {
   commitAll,
   deleteRemoteRef,
   NothingToCommitError,
+  pullFastForward,
   pushBranch,
   pushRef,
   readCommitDiff,
@@ -79,6 +80,39 @@ describe('pushBranch', () => {
   it('fails with a GitError without an origin', async () => {
     await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
     await expect(pushBranch(worktreePath, 'natamux/t-0001-example')).rejects.toThrow(GitError)
+  })
+})
+
+describe('pullFastForward', () => {
+  it('skips a branch with no upstream', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    expect(await pullFastForward(worktreePath)).toBe(false)
+  })
+
+  it('brings in the commits that were merged on the remote', async () => {
+    const remote = addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    await pushBranch(worktreePath, 'natamux/t-0001-example')
+    const other = join(repo.root, 'other')
+    runGit(repo.root, 'clone', '--branch', 'natamux/t-0001-example', remote, other)
+    runGit(other, 'commit', '--allow-empty', '-m', 'merged subtask')
+    runGit(other, 'push', 'origin', 'natamux/t-0001-example')
+
+    expect(await pullFastForward(worktreePath)).toBe(true)
+    expect(runGit(worktreePath, 'log', '-1', '--format=%s').trim()).toBe('merged subtask')
+  })
+
+  it('fails with a GitError when the branch went another way', async () => {
+    const remote = addBareOrigin(repo)
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    await pushBranch(worktreePath, 'natamux/t-0001-example')
+    const other = join(repo.root, 'other')
+    runGit(repo.root, 'clone', '--branch', 'natamux/t-0001-example', remote, other)
+    runGit(other, 'commit', '--allow-empty', '-m', 'merged subtask')
+    runGit(other, 'push', 'origin', 'natamux/t-0001-example')
+    runGit(worktreePath, 'commit', '--allow-empty', '-m', 'local only')
+
+    await expect(pullFastForward(worktreePath)).rejects.toThrow(GitError)
   })
 })
 

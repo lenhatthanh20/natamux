@@ -61,6 +61,8 @@ type TaskDetailProps = {
   onCreateWorkspace: (base?: string) => void
   // Local branches a workspace can start from, the one the checkout is on, and the default one.
   branches?: BranchList
+  // The branch of the parent of a subtask. It is the default base when it is in the list.
+  parentBranch?: string | null
   onRemoveWorkspace: () => void
   onViewChanges: () => void
   onStartAgent: () => void
@@ -102,6 +104,7 @@ export function TaskDetail({
   onAction,
   onCreateWorkspace,
   branches,
+  parentBranch = null,
   onRemoveWorkspace,
   onViewChanges,
   onStartAgent,
@@ -125,7 +128,10 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const [editing, setEditing] = useState(false)
   const [base, setBase] = useState('')
-  const start = branches?.defaultBranch ?? branches?.current ?? null
+  const start =
+    parentBranch !== null && branches?.branches.includes(parentBranch)
+      ? parentBranch
+      : (branches?.defaultBranch ?? branches?.current ?? null)
   const [asking, setAsking] = useState<'cancel' | 'delete' | 'tries' | null>(null)
   const actions = actionsFor(task.state)
   const stateActions = actions.filter((action) => !action.confirm)

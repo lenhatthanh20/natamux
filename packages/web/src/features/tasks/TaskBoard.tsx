@@ -1,4 +1,4 @@
-import { type DiffStat, needsMe, type Task, type TaskState, waitingOn } from '@natamux/core'
+import { type DiffStat, needsMe, type Task, type TaskState, waitsFor } from '@natamux/core'
 import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-react'
 import { memo, useState } from 'react'
 import { AgentName } from '../../components/AgentBadge'
@@ -244,7 +244,7 @@ export function TaskBoard({
                     task={task}
                     selected={task.id === selectedId}
                     stat={diffStats[task.id]}
-                    waits={waitingOn(task, allTasks).join(', ')}
+                    waits={waitsFor(task, allTasks).join(', ')}
                     onSelect={select}
                     onOpen={open}
                   />

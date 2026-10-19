@@ -4,6 +4,7 @@ import { listChanges } from '../git/changes.js'
 import { draftCommitMessage, MAX_DIFF_CHARS, type RunAgentOnce } from '../git/commit-drafter.js'
 import { commitAll, pushBranch, readCommitDiff } from '../git/commit-push.js'
 import { createPullRequest, type RunGh } from '../git/gh.js'
+import { hasRemoteBranch } from '../git/graph.js'
 import type { TaskService } from '../tasks/task-service.js'
 import { WorkspaceConflictError } from './workspace-errors.js'
 
@@ -76,7 +77,8 @@ export class WorkspacePublish {
     return this.host.exclusive(taskId, async () => this.pushNow(taskId))
   }
 
-  // Pushes, then opens a pull request into the default branch. A task that has one keeps it.
+  // Pushes, then opens a pull request into the default branch, or into the parent's branch for a
+  // subtask. A task that has one keeps it.
   async openPullRequest(taskId: string): Promise<Task> {
     return this.host.exclusive(taskId, async () => {
       const task = this.host.tasks.getTask(taskId)
@@ -84,12 +86,19 @@ export class WorkspacePublish {
         throw new WorkspaceConflictError(`${taskId} has a pull request already: ${task.pr}`)
       }
       const pushed = await this.pushNow(taskId)
+      const base = task.parentId === null ? null : this.host.tasks.getTask(task.parentId).branch
+      // The base of a pull request must be on the remote. Pushed only once: after a subtask is
+      // merged, the local copy is behind origin and a push would be refused.
+      if (base !== null && !(await hasRemoteBranch(this.host.workspaceOf(taskId), base))) {
+        await pushBranch(this.host.workspaceOf(taskId), base)
+      }
       const url = await createPullRequest(
         this.host.workspaceOf(taskId),
         {
           branch: pushed.branch ?? '',
           title: pushed.title,
           body: await this.host.pullRequestBody(pushed),
+          ...(base === null ? {} : { base }),
         },
         this.host.gh,
       )

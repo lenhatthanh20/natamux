@@ -124,7 +124,27 @@ How waiting works:
 
 A subtask is a task with a `parentId`. It shows the chip `part of T-0001`. Subtasks go one level deep: a subtask cannot have subtasks.
 
-Add a subtask in the task details on the dashboard. A subtask is a normal task, with its own state, workspace and stages.
+A subtask is a normal task, with its own state, workspace and stages. It is also part of the work of its parent.
+
+Add a subtask in one of these ways:
+
+- In the task details on the dashboard.
+- **Add subtask…** in the row menu of a task. A subtask has no such item.
+- `natamux task create "Part A" --parent T-0001`. An agent can use this to split its work. Without `--repo`, the subtask is in the project of the parent.
+
+A new subtask is a draft. You start it yourself. Then:
+
+- Its `context.md` ends with a `## Parent task` section: the id, title and notes of the parent, and the folder of the parent's stage files, so the agent can read the spec and the plan.
+- Its workspace starts from the branch of the parent, when that branch exists. A base you choose wins.
+- Its pull request goes into the branch of the parent, not the default branch. Natamux pushes the parent's branch first. When the pull request is merged, the subtask is done.
+- A subtask cannot depend on its parent. Natamux refuses it.
+
+The parent waits for its open subtasks, as it does for [dependencies](#dependencies). An open subtask is one that is not `done` and not `cancelled`.
+
+- The next stage of the parent starts when the last open subtask is done or cancelled, or is deleted.
+- A stage that is already running keeps running. A stage that resumes after a restart does not wait.
+- Before the agent starts, if a subtask is done, Natamux runs `git pull --ff-only` in the worktree of the parent. This brings in the merged work. A branch with no upstream is not pulled.
+- If the pull fails, the stage fails with `Could not pull the work of the subtasks: <git message>`. Fix the branch, then retry.
 
 ## The Needs you list
 

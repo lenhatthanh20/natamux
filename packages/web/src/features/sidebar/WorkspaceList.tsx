@@ -67,6 +67,7 @@ type WorkspaceListProps = {
   onOpenShell: (taskId: string, shell: string | null) => void
   onViewChanges: (id: string) => void
   onRename: (id: string, title: string) => void
+  onAddSubtask?: (task: Task) => void
   onTogglePin: (id: string) => void
   onRemove: (id: string) => void
   onDelete?: (id: string) => void
@@ -106,6 +107,7 @@ export function WorkspaceList({
   onOpenShell,
   onViewChanges,
   onRename,
+  onAddSubtask,
   onTogglePin,
   onRemove,
   onDelete,
@@ -122,6 +124,7 @@ export function WorkspaceList({
   const openShell = useStableCallback(onOpenShell)
   const viewChanges = useStableCallback(onViewChanges)
   const rename = useStableCallback(onRename)
+  const addSubtask = useStableCallback((task: Task) => onAddSubtask?.(task))
   const togglePin = useStableCallback(onTogglePin)
   const remove = useStableCallback(onRemove)
   const deleteTask = useStableCallback((id: string) => onDelete?.(id))
@@ -325,6 +328,7 @@ export function WorkspaceList({
         onOpen={openTask}
         onViewChanges={viewChanges}
         onRename={rename}
+        onAddSubtask={onAddSubtask === undefined ? undefined : addSubtask}
         onTogglePin={togglePin}
         onRemove={remove}
         onDelete={onDelete === undefined ? undefined : deleteTask}

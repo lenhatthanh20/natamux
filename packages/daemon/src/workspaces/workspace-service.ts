@@ -125,7 +125,8 @@ export class WorkspaceService {
     return listBranches(this.repoDirOf(repo))
   }
 
-  // Makes the worktree from `base` when given (a local branch), or else from the default branch,
+  // Makes the worktree from `base` when given (a local branch), or else from the parent's branch
+  // for a subtask, or else from the default branch,
   // as its remote has it now. The local branch when it has commits that are not pushed, or has no
   // remote. HEAD when the repository has no branch to start from.
   async create(taskId: string, base?: string): Promise<Task> {
@@ -148,7 +149,9 @@ export class WorkspaceService {
       const worktreePath = this.worktreePathFor(task)
       const branch = kept ?? branchNameFor(task)
       if (kept === null) {
-        const from = base ?? defaultBranch
+        // A subtask's work is merged into its parent's branch, so it starts there.
+        const parent = task.parentId === null ? null : this.tasks.getTask(task.parentId).branch
+        const from = base ?? (parent !== null && branches.includes(parent) ? parent : defaultBranch)
         if (from === null) {
           await addWorktree(repoDir, worktreePath, branch)
         } else {

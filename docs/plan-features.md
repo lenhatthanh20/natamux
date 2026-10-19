@@ -80,7 +80,7 @@ Scope: tasks only. No sprints, no teams, no rosters, no diaries.
 | Task fields: id, title, description, state, priority, labels, agent, workspace, branch, PR link, created and updated time | MVP |
 | States: `draft`, `ready`, `running`, `needs-input`, `review`, `blocked`, `failed`, `done`, `cancelled` | MVP |
 | Create a task from the app, the CLI, or an agent | MVP |
-| Subtasks (one level). Done: add them in the details of a task, which counts how many are done; a subtask shows its parent | v1 |
+| Subtasks (one level). Done: add them in the details of a task (which counts how many are done), with **Add subtask…** in the row menu, or with `natamux task create --parent`; a subtask shows its parent, its context names the parent, it starts from the parent's branch, and its pull request goes into the parent's branch; the next stage of the parent waits for open subtasks and pulls their merged work | v1 |
 | Dependencies between tasks (a task waits until others are `done`). Done: set in the edit form; unknown tasks and loops are refused; a waiting task shows what it waits for and cannot start an agent | v1 |
 | Approval gates: a task can require a human decision before it moves on. Done: each stage has a manual or auto gate (docs/design-task-stages.md) | v1 |
 | Stages per project: Context → Spec → Plan → [Test spec ‖ Implement] → Review → Testing → Release by default, changed in `.natamux.json` (drop, reorder, add, run side by side). Done: the daemon starts each stage, takes `natamux done`, checks the result (file, sections, commits, clean worktree, a command), and sends failed checks back to the agent once. A stage can end its agent and close its shell when it is done (`endShell`) | v1 |

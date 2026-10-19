@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makesCycle, waitingOn } from '../dependencies.js'
+import { makesCycle, openSubtasks, waitingOn, waitsFor } from '../dependencies.js'
 
 describe('waitingOn', () => {
   const tasks = [
@@ -33,5 +33,33 @@ describe('makesCycle', () => {
   it('allows a chain without a loop', () => {
     expect(makesCycle('T-0004', ['T-0001', 'T-0003'], tasks)).toBe(false)
     expect(makesCycle('T-0003', [], tasks)).toBe(false)
+  })
+})
+
+describe('openSubtasks', () => {
+  const tasks = [
+    { id: 'T-0001', state: 'ready' as const, parentId: null },
+    { id: 'T-0002', state: 'running' as const, parentId: 'T-0001' },
+    { id: 'T-0003', state: 'done' as const, parentId: 'T-0001' },
+    { id: 'T-0004', state: 'cancelled' as const, parentId: 'T-0001' },
+    { id: 'T-0005', state: 'draft' as const, parentId: 'T-0001' },
+    { id: 'T-0006', state: 'draft' as const, parentId: 'T-0009' },
+  ]
+
+  it('lists the subtasks that are not done or cancelled', () => {
+    expect(openSubtasks({ id: 'T-0001' }, tasks)).toEqual(['T-0002', 'T-0005'])
+    expect(openSubtasks({ id: 'T-0002' }, tasks)).toEqual([])
+  })
+
+  it('adds open subtasks to the dependencies only while a stage has not started', () => {
+    const all = [...tasks, { id: 'T-0007', state: 'running' as const, parentId: null }]
+    expect(waitsFor({ id: 'T-0001', state: 'ready', dependsOn: ['T-0007'] }, all)).toEqual([
+      'T-0007',
+      'T-0002',
+      'T-0005',
+    ])
+    expect(waitsFor({ id: 'T-0001', state: 'running', dependsOn: ['T-0007'] }, all)).toEqual([
+      'T-0007',
+    ])
   })
 })

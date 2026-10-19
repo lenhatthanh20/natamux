@@ -48,6 +48,8 @@ export type Command =
       attach?: string[]
       // Without it, the project of NATAMUX_TASK_ID's task, or the only project.
       repo?: string
+      // Makes the task a subtask; the daemon takes the parent's project.
+      parentId?: string
       json: boolean
     }
   | { name: 'task.list'; state?: TaskState; json: boolean }
@@ -168,6 +170,7 @@ function parseOptions(argv: readonly string[]) {
         url: { type: 'string' },
         provider: { type: 'string' },
         repo: { type: 'string' },
+        parent: { type: 'string' },
         attach: { type: 'string', multiple: true },
       },
     })
@@ -220,6 +223,7 @@ export function parseCommand(argv: readonly string[]): Command {
         dependsOn: (values['depends-on'] ?? []).map((id) => taskId(id)),
         ...(values.context === undefined ? {} : { context: contextOption(values.context) }),
         ...(values.repo === undefined ? {} : { repo: repoId(values.repo) }),
+        ...(values.parent === undefined ? {} : { parentId: taskId(values.parent) }),
         ...(values.attach === undefined ? {} : { attach: values.attach }),
         json,
       }

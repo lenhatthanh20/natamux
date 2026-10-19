@@ -89,6 +89,26 @@ function attachmentLines(attachments: readonly Attachment[]): string[] {
   ]
 }
 
+// A subtask's context ends with its parent: the agent reads the parent's spec and plan there.
+export function withParentSection(
+  text: string,
+  parent: Pick<Task, 'id' | 'title' | 'description'>,
+  folder: string,
+): string {
+  const gap = text === '' || text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n'
+  const notes = parent.description.trim() === '' ? '(No notes.)' : parent.description.trim()
+  return [
+    `${text}${gap}## Parent task`,
+    '',
+    `${parent.id}: ${parent.title}`,
+    '',
+    notes,
+    '',
+    `Stage files of the parent: ${folder}`,
+    '',
+  ].join('\n')
+}
+
 // The context of a task whose source is typed by hand: its title, notes and reference.
 export function manualContext(task: Pick<Task, 'title' | 'description' | 'context'>): string {
   const ref = task.context?.ref ?? ''

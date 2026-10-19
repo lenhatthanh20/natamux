@@ -1451,6 +1451,20 @@ describe('subtasks', () => {
     expect(() => service.createTask({ title: 'x', parentId: 'T-0099' })).toThrow(/T-0099/)
     expect(() => service.createTask({ title: 'x', parentId: child.id })).toThrow(/subtask/)
   })
+
+  it('refuses a subtask that depends on its parent', () => {
+    const parent = service.createTask({ title: 'Release 1.0' })
+    const other = service.createTask({ title: 'Other' })
+    expect(() =>
+      service.createTask({ title: 'Notes', parentId: parent.id, dependsOn: [parent.id] }),
+    ).toThrow('A subtask cannot depend on its parent')
+
+    const child = service.createTask({ title: 'Notes', parentId: parent.id })
+    expect(() => service.updateTask(child.id, { dependsOn: [parent.id] })).toThrow(
+      'A subtask cannot depend on its parent',
+    )
+    expect(service.updateTask(child.id, { dependsOn: [other.id] }).dependsOn).toEqual([other.id])
+  })
 })
 
 describe('event log files', () => {

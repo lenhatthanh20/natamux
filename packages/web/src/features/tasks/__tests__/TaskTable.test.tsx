@@ -66,6 +66,7 @@ function table(tasks: readonly Task[] = TASKS) {
     onSelect: vi.fn(),
     onOpen: vi.fn(),
     onToggleDetails: vi.fn(),
+    onAddSubtask: vi.fn(),
     onAction: vi.fn(),
     onStartAgent: vi.fn(),
     onDelete: vi.fn(),
@@ -143,6 +144,22 @@ describe('TaskTable', () => {
     await user.pointer({ keys: '[MouseRight]', target: rowOf('Fix flaky login test') })
     await user.click(screen.getByRole('menuitem', { name: /^Restart agent/ }))
     expect(onStartAgent).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0001' }))
+  })
+
+  it('adds a subtask from the row menu of a task with no parent only', async () => {
+    const { onAddSubtask } = table([
+      makeTask(),
+      makeTask({ id: 'T-0002', title: 'Write release notes', parentId: 'T-0001' }),
+    ])
+    const user = userEvent.setup()
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Write release notes') })
+    expect(screen.queryByRole('menuitem', { name: /^Add subtask/ })).toBeNull()
+    await user.keyboard('{Escape}')
+
+    await user.pointer({ keys: '[MouseRight]', target: rowOf('Fix flaky login test') })
+    await user.click(screen.getByRole('menuitem', { name: /^Add subtask/ }))
+    expect(onAddSubtask).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-0001' }))
   })
 
   it('asks before it cancels a task from the row menu', async () => {

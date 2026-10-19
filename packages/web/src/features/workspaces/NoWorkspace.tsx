@@ -21,6 +21,8 @@ type NoWorkspaceProps = {
   waitingFor: readonly string[]
   // Local branches a workspace can start from, the one the checkout is on, and the default one.
   branches?: BranchList
+  // The branch of the parent of a subtask. It is the default base when it is in the list.
+  parentBranch?: string | null
   onCreateWorkspace: (base?: string) => void
   onStartAgent: (base?: string) => void
   // For a done or cancelled task: its progress in the details, and a new task that goes on from it.
@@ -117,6 +119,7 @@ export function NoWorkspace({
   busy,
   waitingFor,
   branches,
+  parentBranch = null,
   onCreateWorkspace,
   onStartAgent,
   onShowProgress,
@@ -125,7 +128,10 @@ export function NoWorkspace({
 }: NoWorkspaceProps) {
   const [base, setBase] = useState<string | undefined>(undefined)
   const finished = task.state === 'done' || task.state === 'cancelled'
-  const start = branches?.defaultBranch ?? branches?.current ?? null
+  const start =
+    parentBranch !== null && branches?.branches.includes(parentBranch)
+      ? parentBranch
+      : (branches?.defaultBranch ?? branches?.current ?? null)
   const from = base ?? start ?? 'HEAD'
   const blocked =
     waitingFor.length > 0 ? `Waits for ${waitingFor.join(', ')} to be done` : undefined
