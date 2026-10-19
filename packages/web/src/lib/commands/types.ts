@@ -22,6 +22,7 @@ export type CommandActions = {
   toggleSidebar: () => void
   toggleDetails: () => void
   showShortcuts: () => void
+  openSettings: () => void
   focusFilter: () => void
   newWorkspace: () => void
   newTask: () => void

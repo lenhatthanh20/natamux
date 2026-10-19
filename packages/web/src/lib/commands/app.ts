@@ -25,6 +25,14 @@ export const globalCommands: Command[] = [
     run: ({ actions }) => actions.openPalette(),
   },
   {
+    id: 'app.settings',
+    title: 'Open the settings',
+    category: 'App',
+    shortcuts: ['Mod+,'],
+    group: 'Global',
+    run: ({ actions }) => actions.openSettings(),
+  },
+  {
     id: 'jump.open',
     title: 'Jump to a workspace',
     category: 'Workspace',

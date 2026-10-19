@@ -22,6 +22,7 @@ Only one copy of the app runs at a time. Opening it again focuses the existing w
 
 | Item | What it does |
 |---|---|
+| **Settings…** (`Cmd/Ctrl+,`) | Opens the [Settings](/docs/guides/dashboard/#settings) dialog of the dashboard. On the app menu on macOS, the **File** menu on Windows and Linux |
 | **File → Add Project…** (`Cmd/Ctrl+Shift+O`) | Pick a git repository and add it as a project. No restart |
 | **File → Show Daemon Log** | Opens the daemon log file |
 | **File → Keep Computer Awake While Agents Run** | On by default. While an agent runs, the computer does not go to sleep on its own. The display can still turn off, and closing a laptop lid still puts it to sleep |

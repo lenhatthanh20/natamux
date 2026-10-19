@@ -223,7 +223,8 @@ export class Updater {
     }
   }
 
-  private setAuto(on: boolean): void {
+  // The menu tick and the dashboard's settings dialog.
+  setAuto(on: boolean): void {
     this.auto = on
     this.options.saveAutoUpdate(on)
     this.log(`timed checks ${on ? 'on' : 'off'}`)

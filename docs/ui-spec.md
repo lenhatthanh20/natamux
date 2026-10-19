@@ -634,7 +634,7 @@ Shared shell:
 ### 4.28 Status bar items (`features/app/StatusBar.tsx`)
 - Item: height 24, pad 0 6, radius 6, gap 6, icon 14, text 12/16 muted; hover bg-hover + ink; clickable items are buttons with tooltips. Bar pad 0 6, gap 2.
 - Left (workspace-wide, high priority): Live dot (6px add / signal) + "Live"/"Reconnecting" (tooltip explains); "3 running" (click: filter Running); "2 need you" in signal (click: jump palette scoped to needs-you).
-- Right (lower priority, drop labels first): Projects (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, Report an issue (`Bug`, opens a new GitHub issue in the browser), separator, Sign out (confirm dialog "Sign out of Natamux?" / "This removes the daemon token from this browser. Your tasks keep running."). The desktop app has no Sign out and no separator before it: its preload puts the token back on every load. Theme and sign out are no longer two 21px icons side by side (NAV-19).
+- Right (lower priority, drop labels first): Projects (`FolderGit2`), Import issues (`Download`), Notifications (`Bell`; blocked state `BellOff` with tooltip "Notifications are blocked. Allow them in the browser's site settings."), Keyboard shortcuts (`Keyboard`, `?`), Account menu (`CircleUser`): Settings… (`Settings`, Mod+,, opens the Settings dialog), separator, Theme (System / Light / Dark), UI size (Compact / Default / Large), Keyboard shortcuts, Report an issue (`Bug`, opens a new GitHub issue in the browser), separator, Sign out (confirm dialog "Sign out of Natamux?" / "This removes the daemon token from this browser. Your tasks keep running."). The desktop app has no Sign out and no separator before it: its preload puts the token back on every load. Theme and sign out are no longer two 21px icons side by side (NAV-19).
 - No shortcut hint text in the bar.
 
 ### 4.29 View header and workspace header
@@ -691,6 +691,14 @@ Shared shell:
 - Drafts: an edit is kept per task and path while the page lives (`features/files/file-drafts.ts`), with the version it began on. `beforeunload` asks while one exists. A new text on disk goes into the editor in place when there is no draft.
 - Banner (under the header, `role="alert"`, xs): "This file changed on disk." with **Reload** (drop the draft) and **Keep mine** (the draft takes the new version; the next save replaces the file). It shows when the draft's version is not the one on disk, also after a save answered 409.
 
+### 4.34 Settings dialog (`features/app/SettingsDialog.tsx`)
+- Opened by: the OS menu item **Settings…** of the desktop app (macOS app menu, File menu on Windows and Linux, `CmdOrCtrl+,`), the Account menu, and Mod+, (`app.settings`).
+- `Dialog` size `md`, title "Settings", no footer: every change applies at once.
+- Sections (xs muted heading, rows of 28 with the label left and the control right):
+  - **Appearance**: Theme (`Segmented` System / Light / Dark), UI size (`Segmented`), **Terminal font…** (secondary button; the font dialog takes the place of this one).
+  - **Desktop app**, only when the preload gives `getDesktopSettings`: checkboxes **Keep computer awake while agents run** and **Check for updates automatically** (hidden when the app cannot update itself). A failed save puts the tick back and shows an error toast.
+  - **Projects**: one row per project with an xs ghost **Settings** button (opens 4.31). No project: "No projects yet" and **Add a project** (opens the projects panel).
+
 ---------------------------------------------------------------------
 
 ## 5. Interaction
@@ -705,6 +713,7 @@ Rules:
 | Group | Key | Action |
 |---|---|---|
 | Global | Mod+K, F1 | Command palette |
+| | Mod+, | Settings dialog. The desktop app's OS menu item has the same accelerator |
 | | Mod+J | Jump palette. Inside a terminal on Windows, Ctrl+J is the shell's and Ctrl+Shift+J opens Chrome DevTools, so use F1 there (the palette's empty state lists needs-you and recent workspaces first) |
 | | Mod+B | Toggle sidebar (drawer on small screens) |
 | | Mod+Alt+B | Toggle details |

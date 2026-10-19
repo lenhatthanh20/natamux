@@ -1,13 +1,19 @@
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, dialog, ipcMain, powerSaveBlocker } from 'electron'
+import { app, dialog, type IpcMainInvokeEvent, ipcMain, powerSaveBlocker } from 'electron'
 import { AwakeGuard, readAgentStatus } from './app/agent-status.js'
 import { readGhosttyFont } from './app/ghostty-config.js'
-import { buildMenu } from './app/menu.js'
+import { buildMenu, setKeepAwake } from './app/menu.js'
 import { isDashboardUrl } from './app/navigation.js'
 import { confirmStop } from './app/quit.js'
-import { keepAwakeOn, loadSettings, startingRepoDir } from './app/settings.js'
+import {
+  autoUpdateOn,
+  keepAwakeOn,
+  loadSettings,
+  readDesktopSettingChange,
+  startingRepoDir,
+} from './app/settings.js'
 import type { AppContext, AppState } from './app/state.js'
 import { createWindow } from './app/window.js'
 import { DAEMON_STOP_WAIT_MS, pickRepository, startDaemon } from './daemon/process.js'
@@ -83,6 +89,36 @@ ipcMain.on('natamux:status', (event, value: unknown) => {
   app.setBadgeCount(status.needsYou)
   state.runningAgents = status.running
   awake.update(state.runningAgents > 0 && state.keepAwake)
+})
+
+function fromDashboard(event: IpcMainInvokeEvent): boolean {
+  const from = event.senderFrame?.url ?? ''
+  return state.dashboardUrl !== '' && isDashboardUrl(from, new URL(state.dashboardUrl).origin)
+}
+
+// The Desktop app part of the dashboard's settings dialog. No updater (a run from the repository):
+// no autoUpdate, so the dialog hides that tick.
+ipcMain.handle('natamux:desktop-settings', (event) => {
+  if (!fromDashboard(event)) {
+    return undefined
+  }
+  if (state.updater === undefined) {
+    return { keepAwake: state.keepAwake }
+  }
+  return { keepAwake: state.keepAwake, autoUpdate: autoUpdateOn(loadSettings(settingsFile)) }
+})
+
+ipcMain.handle('natamux:set-desktop-setting', (event, value: unknown) => {
+  const change = readDesktopSettingChange(value)
+  if (change === undefined || !fromDashboard(event)) {
+    return
+  }
+  if (change.keepAwake !== undefined) {
+    setKeepAwake(ctx, change.keepAwake)
+  }
+  if (change.autoUpdate !== undefined) {
+    state.updater?.setAuto(change.autoUpdate)
+  }
 })
 
 // The terminals of the dashboard use Ghostty's font when the user has one and picked none.

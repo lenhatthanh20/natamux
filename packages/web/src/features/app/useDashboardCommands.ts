@@ -39,6 +39,7 @@ type CommandsInput = Pick<
     setNewWorkspace: (input: { repo?: string; title?: string }) => void
     setPalette: (palette: { mode: PaletteMode; scope: PaletteScope; query: string }) => void
     setShortcutsOpen: (open: boolean) => void
+    setSettingsOpen: (open: boolean) => void
     setReposOpen: (open: boolean) => void
     setImportOpen: (open: boolean) => void
   }
@@ -69,6 +70,7 @@ export function useDashboardCommands({
   setNewWorkspace,
   setPalette,
   setShortcutsOpen,
+  setSettingsOpen,
   setReposOpen,
   setImportOpen,
 }: CommandsInput) {
@@ -208,6 +210,7 @@ export function useDashboardCommands({
     toggleSidebar,
     toggleDetails,
     showShortcuts: () => setShortcutsOpen(true),
+    openSettings: () => setSettingsOpen(true),
     focusFilter,
     newWorkspace: () => openNewWorkspace({}),
     newTask: () => {

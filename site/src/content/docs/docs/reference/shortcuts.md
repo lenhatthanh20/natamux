@@ -30,6 +30,7 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 | Action | Shortcut |
 |---|---|
 | Open the command palette | `Mod+K` or `F1` |
+| Open the settings | `Mod+,` |
 | Jump to a workspace | `Mod+J` |
 | Show or hide the sidebar | `Mod+B` |
 | Show or hide the details | `Mod+Alt+B` |

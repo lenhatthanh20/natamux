@@ -8,6 +8,7 @@ import {
   isGitRepository,
   keepAwakeOn,
   loadSettings,
+  readDesktopSettingChange,
   saveSettings,
   startingRepoDir,
 } from '../settings.js'
@@ -78,6 +79,26 @@ describe('settings', () => {
     expect(startingRepoDir(loadSettings(file))).toBeUndefined()
     writeFileSync(join(dir, '.git'), 'gitdir: /elsewhere\n')
     expect(startingRepoDir({ repoDir: dir })).toBe(dir)
+  })
+})
+
+describe('a change from the settings dialog', () => {
+  it('takes known booleans only', () => {
+    expect(readDesktopSettingChange({ keepAwake: true })).toEqual({ keepAwake: true })
+    expect(readDesktopSettingChange({ autoUpdate: false })).toEqual({ autoUpdate: false })
+    expect(readDesktopSettingChange({ keepAwake: false, autoUpdate: true })).toEqual({
+      keepAwake: false,
+      autoUpdate: true,
+    })
+    expect(readDesktopSettingChange({ keepAwake: true, repoDir: '/x' })).toEqual({
+      keepAwake: true,
+    })
+  })
+
+  it('drops a value that changes nothing', () => {
+    for (const value of [null, undefined, 'x', 1, {}, { keepAwake: 'yes' }, { repoDir: '/x' }]) {
+      expect(readDesktopSettingChange(value), JSON.stringify(value)).toBeUndefined()
+    }
   })
 })
 

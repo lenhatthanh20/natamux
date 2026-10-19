@@ -120,3 +120,56 @@ describe('the File menu', () => {
     expect(menu.slice(start, start + 300)).toContain("type: 'checkbox'")
   })
 })
+
+describe('the Settings menu item', () => {
+  const menu = sourceOf('../app/menu.ts')
+
+  it('is in the app menu on macOS and in the File menu elsewhere, with Mod+,', () => {
+    expect(menu).toContain("label: 'Settings…',\n    accelerator: 'CmdOrCtrl+,'")
+    expect(menu).toContain("{ role: 'about' },\n              settings,")
+    const file = menu.indexOf("label: 'File'")
+    const quit = menu.indexOf("mac ? { role: 'close' } : { role: 'quit' }")
+    const other = menu.indexOf('...(mac ? [] : [settings])', file)
+    expect(other).toBeGreaterThan(file)
+    expect(other).toBeLessThan(quit)
+  })
+
+  it('does nothing while the daemon is not ready, and opens a window when none is open', () => {
+    const start = menu.indexOf('function openSettingsFromMenu(')
+    expect(start).toBeGreaterThan(-1)
+    const body = menu.slice(start, menu.indexOf('\n}', start))
+    expect(body).toContain('!state.daemonReady || state.daemonExited')
+    expect(body).toContain('createWindow(ctx, send)')
+    expect(body).toContain("send('natamux:open-settings')")
+  })
+
+  it('opens the dialog on the dashboard, not the loading page', () => {
+    const windowSource = sourceOf('../app/window.ts')
+    const start = windowSource.indexOf('if (onDashboardLoad !== undefined)')
+    expect(start).toBeGreaterThan(-1)
+    expect(windowSource.slice(start, start + 300)).toContain('onDashboard()')
+  })
+})
+
+describe('the desktop settings of the dialog', () => {
+  const preload = sourceOf('../preload.cts')
+  const main = mainSource()
+
+  it('gives the page the open request, a read and a change', () => {
+    expect(preload).toContain("ipcRenderer.on('natamux:open-settings'")
+    expect(preload).toContain("invoke('natamux:desktop-settings')")
+    expect(preload).toContain("invoke('natamux:set-desktop-setting', change)")
+  })
+
+  it('answers only the dashboard, and checks the change', () => {
+    for (const channel of ['natamux:desktop-settings', 'natamux:set-desktop-setting']) {
+      const start = main.indexOf(`ipcMain.handle('${channel}'`)
+      expect(start, channel).toBeGreaterThan(-1)
+      expect(main.slice(start, main.indexOf('\n})', start))).toContain('fromDashboard(event)')
+    }
+    const set = main.indexOf("ipcMain.handle('natamux:set-desktop-setting'")
+    expect(main.slice(set, main.indexOf('\n})', set))).toContain('readDesktopSettingChange(')
+    const check = main.indexOf('function fromDashboard(')
+    expect(main.slice(check, main.indexOf('\n}', check))).toContain('isDashboardUrl(')
+  })
+})
