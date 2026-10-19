@@ -30,7 +30,7 @@ The desktop app finds a new release, downloads it in the background, and install
 - When **Check for Updates Automatically** is ticked: 30 seconds after the app starts, then every 6 hours while it runs.
 - **Check for Updates…** in the menu checks now. It is on the app menu on macOS and on the **Help** menu on Linux and Windows.
 - A manual check opens a small popup over the window at once (see Popup below). Timed checks show none.
-- **Check for Updates Automatically** (a tick in the same menu) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check always works.
+- **Check for Updates Automatically** (a tick in the same menu, and in the dashboard's Settings dialog) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check always works.
 - No check when the app is not packaged (`pnpm start`) or in smoke mode (`NATAMUX_DESKTOP_SMOKE=1`).
 
 ## What counts as newer

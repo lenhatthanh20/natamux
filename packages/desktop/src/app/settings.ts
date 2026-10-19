@@ -32,6 +32,21 @@ export function saveSettings(file: string, settings: DesktopSettings): void {
   writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`)
 }
 
+export type DesktopSettingChange = Pick<DesktopSettings, 'autoUpdate' | 'keepAwake'>
+
+// A change the dashboard's settings dialog sends. Undefined: nothing to change.
+export function readDesktopSettingChange(value: unknown): DesktopSettingChange | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const { autoUpdate, keepAwake } = value as Record<string, unknown>
+  const change = {
+    ...(typeof autoUpdate === 'boolean' ? { autoUpdate } : {}),
+    ...(typeof keepAwake === 'boolean' ? { keepAwake } : {}),
+  }
+  return Object.keys(change).length > 0 ? change : undefined
+}
+
 export function autoUpdateOn(settings: DesktopSettings): boolean {
   return settings.autoUpdate === true
 }

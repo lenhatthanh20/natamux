@@ -1,4 +1,4 @@
-import { Bug, CircleUser, Keyboard, LogOut, Type } from 'lucide-react'
+import { Bug, CircleUser, Keyboard, LogOut, Settings, Type } from 'lucide-react'
 import { useState } from 'react'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { Menu } from '../../components/ui/Menu'
@@ -18,11 +18,13 @@ const ISSUES_URL = 'https://github.com/lenhatthanh20/natamux/issues/new'
 type AccountMenuProps = {
   onSignOut: () => void
   onShortcuts: () => void
+  onSettings: () => void
 }
 
-// Theme, UI size, terminal font, shortcuts, issue reporting and sign out in one menu. Signing out
-// asks first. The desktop app has no sign out: its preload puts the token back on every load.
-export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
+// Settings, theme, UI size, terminal font, shortcuts, issue reporting and sign out in one menu.
+// Signing out asks first. The desktop app has no sign out: its preload puts the token back on
+// every load.
+export function AccountMenu({ onSignOut, onShortcuts, onSettings }: AccountMenuProps) {
   const desktop = window.natamux !== undefined
   const theme = useThemeChoice()
   const size = useUiSize()
@@ -36,6 +38,13 @@ export function AccountMenu({ onSignOut, onShortcuts }: AccountMenuProps) {
         icon={CircleUser}
         tipSide="top"
         items={[
+          {
+            label: 'Settings…',
+            icon: Settings,
+            shortcut: shortcutOf('app.settings'),
+            onSelect: onSettings,
+          },
+          { type: 'separator' },
           { type: 'label', label: 'Theme' },
           ...THEMES.map(({ value, label }) => ({
             label,

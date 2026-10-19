@@ -45,6 +45,7 @@ type StatusBarProps = {
   onImport: () => void
   notifications: { permission: NotifyPermission; askPermission: () => void }
   onShortcuts: () => void
+  onSettings: () => void
   onSignOut: () => void
   // The window width, for the rules that do not depend on measuring. Null: no rule.
   width: number | null
@@ -119,6 +120,7 @@ export function StatusBar({
   onImport,
   notifications,
   onShortcuts,
+  onSettings,
   onSignOut,
   width,
 }: StatusBarProps) {
@@ -269,7 +271,7 @@ export function StatusBar({
         tipSide="top"
         onClick={onShortcuts}
       />
-      <AccountMenu onSignOut={onSignOut} onShortcuts={onShortcuts} />
+      <AccountMenu onSignOut={onSignOut} onShortcuts={onShortcuts} onSettings={onSettings} />
     </footer>
   )
 }

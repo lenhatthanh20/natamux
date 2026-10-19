@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs'
-import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, nativeTheme, shell, type WebContents } from 'electron'
 import { log } from '../daemon/process.js'
 import { checkReleaseSignature } from '../release-signature.js'
 import { runSmoke } from '../smoke.js'
@@ -7,7 +7,11 @@ import { isDashboardUrl, loadingPageUrl, opensInBrowser } from './navigation.js'
 import type { AppContext } from './state.js'
 import { windowOptions } from './window-options.js'
 
-export function createWindow(ctx: AppContext): void {
+// onDashboardLoad runs once, when the dashboard (not the loading page) has loaded.
+export function createWindow(
+  ctx: AppContext,
+  onDashboardLoad?: (contents: WebContents) => void,
+): void {
   const { state, marks } = ctx
   const dark = nativeTheme.shouldUseDarkColors
   const origin = new URL(state.dashboardUrl).origin
@@ -27,6 +31,15 @@ export function createWindow(ctx: AppContext): void {
       log(ctx, marks.line())
     }
   })
+  if (onDashboardLoad !== undefined) {
+    const loaded = () => {
+      if (onDashboard()) {
+        created.webContents.off('did-finish-load', loaded)
+        onDashboardLoad(created.webContents)
+      }
+    }
+    created.webContents.on('did-finish-load', loaded)
+  }
   created.on('closed', () => {
     state.window = undefined
   })

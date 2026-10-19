@@ -11,6 +11,7 @@ type DrawerFooterProps = {
   onRepos: () => void
   onImport: () => void
   onShortcuts: () => void
+  onSettings: () => void
   onSignOut: () => void
 }
 
@@ -22,6 +23,7 @@ export function DrawerFooter({
   onRepos,
   onImport,
   onShortcuts,
+  onSettings,
   onSignOut,
 }: DrawerFooterProps) {
   return (
@@ -44,7 +46,7 @@ export function DrawerFooter({
         <IconButton label="Import issues" icon={Download} onClick={onImport} />
         <IconButton label="Keyboard shortcuts" icon={Keyboard} onClick={onShortcuts} />
         <span className="flex-1" />
-        <AccountMenu onSignOut={onSignOut} onShortcuts={onShortcuts} />
+        <AccountMenu onSignOut={onSignOut} onShortcuts={onShortcuts} onSettings={onSettings} />
       </div>
     </div>
   )

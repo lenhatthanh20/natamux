@@ -49,6 +49,7 @@ import {
   LiveTaskTable,
 } from './LiveParts'
 import { NeedsYouAnnouncer } from './NeedsYouAnnouncer'
+import { SettingsDialog } from './SettingsDialog'
 import { ShortcutSheet } from './ShortcutSheet'
 import { StatusBar } from './StatusBar'
 import { TitleBar } from './TitleBar'
@@ -147,6 +148,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
   const [newTitle, setNewTitle] = useState('')
   const [importOpen, setImportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   // The new workspace dialog, with the repository it opens on. Null: closed.
   const [newWorkspace, setNewWorkspace] = useState<{ repo?: string; title?: string } | null>(null)
   const [palette, setPalette] = useState<{
@@ -289,6 +291,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setNewWorkspace,
     setPalette,
     setShortcutsOpen,
+    setSettingsOpen,
     setReposOpen,
     setImportOpen,
   })
@@ -340,6 +343,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     }
   }, [tasksQuery.isSuccess, tasks, changesTaskId, selectedId, closeChanges, select, deletedIds])
 
+  // The Settings item of the desktop app's OS menu.
+  useEffect(() => window.natamux?.onOpenSettings?.(() => setSettingsOpen(true)), [])
+
   const runningCount = tasks.filter((task) => task.state === 'running').length
   useDesktopStatus(waitingCount, runningCount)
   const repoNameOf = (task: Task) =>
@@ -366,6 +372,10 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setImportOpen(true)
   }
   const openShortcuts = () => actions.showShortcuts()
+  const openSettings = () => {
+    afterPick()
+    actions.openSettings()
+  }
 
   return (
     <>
@@ -401,6 +411,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               onImport={() => setImportOpen(true)}
               notifications={notifications}
               onShortcuts={openShortcuts}
+              onSettings={openSettings}
               onSignOut={onSignOut}
               width={viewportWidth}
             />
@@ -495,6 +506,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                     onRepos={openRepos}
                     onImport={openImport}
                     onShortcuts={openShortcuts}
+                    onSettings={openSettings}
                     onSignOut={signOutAndClose}
                   />
                 ) : undefined
@@ -1035,6 +1047,20 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
 
       <NeedsYouAnnouncer waiting={waiting} loaded={tasksQuery.isSuccess} />
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsDialog
+          repos={repos}
+          onProjectSettings={(repo) => {
+            setSettingsOpen(false)
+            setSettingsRepo(repo)
+          }}
+          onAddProject={() => {
+            setSettingsOpen(false)
+            setReposOpen(true)
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {palette !== null && (
         <CommandPalette
           mode={palette.mode}
