@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.38 (2026-10-19)
+
+- A subtask is part of its parent's work: it starts from the parent's branch, its pull request goes into that branch, and the parent's next stage waits for its open subtasks, then pulls their work. See [Subtasks](/docs/concepts/tasks/#subtasks).
+- Add a subtask with **Add subtask…** in the row menu, or with `natamux task create <title> --parent <id>`. See [task](/docs/reference/cli/#task).
+- A new **Settings** dialog gathers the app-wide settings. Open it with **Settings…** in the Account menu or the desktop app menu, or `Mod+,`. See [Settings](/docs/guides/dashboard/#settings).
+- The desktop app shows a spinner while it opens, instead of a blank window.
+
 ## v0.1.37 (2026-10-19)
 
 - Click a notification to open its task. The desktop app icon shows how many tasks need you, and **File → Keep Computer Awake While Agents Run** keeps the computer awake while an agent runs. See [Notifications](/docs/guides/dashboard/#notifications) and [Menu](/docs/guides/desktop-app/#menu).
