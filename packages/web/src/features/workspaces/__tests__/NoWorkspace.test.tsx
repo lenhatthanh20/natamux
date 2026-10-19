@@ -126,12 +126,12 @@ describe('NoWorkspace of a subtask', () => {
   it('starts from the branch of the parent when it is in the list', () => {
     view(subtask, { branches, parentBranch: 'natamux/t-0001' })
 
-    expect(field().value).toBe('natamux/t-0001')
+    expect(field().value).toBe('natamux/t-0001 (default)')
   })
 
   it('starts from the default branch when the parent branch is not in the list', () => {
     view(subtask, { branches, parentBranch: 'natamux/gone' })
 
-    expect(field().value).toBe('main')
+    expect(field().value).toBe('main (default)')
   })
 })

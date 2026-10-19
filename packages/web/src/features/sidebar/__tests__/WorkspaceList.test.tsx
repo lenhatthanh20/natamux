@@ -1776,14 +1776,8 @@ describe('row menu: Add subtask', () => {
 
   it('is not offered for a subtask', async () => {
     const user = userEvent.setup()
-    list({
-      tasks: [makeTask({ id: 'T-0002', title: 'Child', parentId: 'T-0001' })],
-      allTasks: [
-        makeTask({ id: 'T-0001', title: 'Parent' }),
-        makeTask({ id: 'T-0002', title: 'Child', parentId: 'T-0001' }),
-      ],
-      pinnedIds: [],
-    })
+    // The subtask row shows under its parent while the parent is open.
+    list({ tasks: [parent, child], pinnedIds: [], currentId: 'T-0001' })
 
     await user.pointer({ keys: '[MouseRight]', target: rowOf('Child') })
 

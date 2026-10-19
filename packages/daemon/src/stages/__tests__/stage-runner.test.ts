@@ -5169,9 +5169,7 @@ describe('a parent with subtasks', () => {
     await finish(child.id)
 
     expect(tasks.getTask(parent.id).state).toBe('running')
-    expect(runGit(parent.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe(
-      'merged subtask',
-    )
+    expect(runGit(parent.workspace ?? '', 'log', '-1', '--format=%s').trim()).toBe('merged subtask')
   })
 
   it('fails the stage when the pull fails', async () => {

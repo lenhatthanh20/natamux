@@ -190,13 +190,13 @@ describe('TaskDetail of a subtask and of a parent', () => {
   it('starts from the branch of the parent when it is in the list', () => {
     details({ task: subtask, more: { branches, parentBranch: 'natamux/t-0001' } })
 
-    expect((startField() as HTMLInputElement).value).toBe('natamux/t-0001')
+    expect((startField() as HTMLInputElement).value).toBe('natamux/t-0001 (default)')
   })
 
   it('starts from the default branch when the parent branch is not in the list', () => {
     details({ task: subtask, more: { branches, parentBranch: 'natamux/gone' } })
 
-    expect((startField() as HTMLInputElement).value).toBe('main')
+    expect((startField() as HTMLInputElement).value).toBe('main (default)')
   })
 
   it('says a ready parent waits for its open subtask', () => {
