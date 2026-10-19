@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.37 (2026-10-19)
+
+- Click a notification to open its task. The desktop app icon shows how many tasks need you, and **File → Keep Computer Awake While Agents Run** keeps the computer awake while an agent runs. See [Notifications](/docs/guides/dashboard/#notifications) and [Menu](/docs/guides/desktop-app/#menu).
+- In the command palette, `Tab` cycles the scope through **Needs you** and each project. See [Command palette](/docs/guides/dashboard/#command-palette).
+- After a restart, opening a task brings back every agent of the task, also one that crashed or that you started by hand. An agent you quit stays quit. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- A terminal hidden for 20 minutes is closed in the dashboard to save memory. Its shell keeps running.
+- Fix: an agent's `git add` or `git commit` could fail on `index.lock` while the dashboard was open. The dashboard now reads git status without the lock.
+- Fix: typed Vietnamese was garbled when the daemon had no locale. Task shells now get `LANG=C.UTF-8`. See [Task terminals](/docs/reference/environment-variables/#task-terminals).
+- Fix: menus in dialogs, double clicks in the task table, **Start agent** on finished tasks, subtask projects, fan out try numbers, **Save as template** with a long title, the **Find** count and the dashboard fonts.
+
 ## v0.1.36 (2026-10-18)
 
 - The desktop app no longer shows **Sign out**, because it signs in by itself. In a browser, Sign out says it removes the daemon token from this browser. See [Account menu](/docs/guides/dashboard/#account-menu).
