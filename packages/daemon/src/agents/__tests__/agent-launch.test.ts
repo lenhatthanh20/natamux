@@ -637,7 +637,8 @@ describe('the hook files of Claude Code, Gemini CLI and Codex', () => {
 
   it("leaves the user's own files alone", () => {
     const own = {
-      '.claude/settings.local.json': '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}]}}',
+      '.claude/settings.local.json':
+        '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}]}}',
       '.gemini/settings.json': '{"model":{"name":"gemini-pro"}}',
       '.codex/config.toml': 'model = "o3"\n',
     }

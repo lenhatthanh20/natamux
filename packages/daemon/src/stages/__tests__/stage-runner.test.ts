@@ -21,13 +21,13 @@ import { isTaskEnded } from '../../tasks/task-helpers.js'
 import { TaskIndex } from '../../tasks/task-index.js'
 import { TaskService } from '../../tasks/task-service.js'
 import { readEndedShells } from '../../terminals/ended-shells.js'
+import { OpenShells } from '../../terminals/open-shells.js'
 import {
   type OpenShell,
   openShellsPath,
   readOpenShells,
   saveOpenShells,
 } from '../../terminals/open-shells-file.js'
-import { OpenShells } from '../../terminals/open-shells.js'
 import { TerminalService } from '../../terminals/terminal-service.js'
 import { WorkspaceService } from '../../workspaces/workspace-service.js'
 import type { CiResult } from '../ci-check.js'
