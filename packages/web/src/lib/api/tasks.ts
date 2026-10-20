@@ -11,9 +11,10 @@ import {
   taskTemplateSchema,
 } from '@natamux/core'
 import type { Client } from './client'
-import { asRecord, isPreparingStep, readTaskActivity } from './parse'
+import { asRecord, isPreparingStep, readJobs, readTaskActivity } from './parse'
 import type {
   AgentActivity,
+  Job,
   NewWorkspaceInput,
   PreparingStep,
   RemoveWorkspaceResult,
@@ -115,6 +116,10 @@ export function tasksApi(client: Client) {
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent/message`, { text }),
       )
       return taskSchema.parse(body.task)
+    },
+
+    async listJobs(): Promise<Job[]> {
+      return readJobs(asRecord(await request('GET', '/jobs')).jobs)
     },
 
     async listActivity(): Promise<AgentActivity> {

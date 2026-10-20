@@ -17,7 +17,7 @@ type WorkspacePublishHost = {
   runAgentOnce: RunAgentOnce
   log: (message: string) => void
   workspaceOf(taskId: string): string
-  exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T>
+  exclusive<T>(taskId: string, label: string, work: () => Promise<T>): Promise<T>
   // After a commit of the workspace, so an older rollback cannot be undone over committed files.
   committed(taskId: string): void
 }
@@ -30,7 +30,7 @@ export class WorkspacePublish {
 
   // Commits every change of the workspace on the task branch.
   async commit(taskId: string, message: string): Promise<{ task: Task; hash: string }> {
-    return this.host.exclusive(taskId, async () => {
+    return this.host.exclusive(taskId, 'Committing', async () => {
       const { hash, subject } = await commitAll(this.host.workspaceOf(taskId), message)
       this.host.committed(taskId)
       const task = this.host.tasks.recordGit(taskId, 'git.committed', { hash, subject })
@@ -77,13 +77,13 @@ export class WorkspacePublish {
 
   // Pushes the task branch to `origin` and makes it the upstream of the branch.
   async push(taskId: string): Promise<Task> {
-    return this.host.exclusive(taskId, async () => this.pushNow(taskId))
+    return this.host.exclusive(taskId, 'Pushing', async () => this.pushNow(taskId))
   }
 
   // Pushes, then opens a pull request into the default branch, or into the parent's branch for a
   // subtask. A task that has one keeps it.
   async openPullRequest(taskId: string): Promise<Task> {
-    return this.host.exclusive(taskId, async () => {
+    return this.host.exclusive(taskId, 'Opening pull request', async () => {
       const task = this.host.tasks.getTask(taskId)
       if (task.pr !== null) {
         throw new WorkspaceConflictError(`${taskId} has a pull request already: ${task.pr}`)

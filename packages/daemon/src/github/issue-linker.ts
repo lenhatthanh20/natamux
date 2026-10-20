@@ -1,6 +1,7 @@
 import { type IssueLink, stagesOf, type Task } from '@natamux/core'
 import { GitHubError, type RunGh, runGh } from '../git/gh.js'
 import type { DaemonMessage, EventBus } from '../shared/event-bus.js'
+import { Jobs } from '../shared/jobs.js'
 import { readStageFile } from '../stages/stage-files.js'
 import type { TaskService } from '../tasks/task-service.js'
 
@@ -31,6 +32,7 @@ type IssueLinkerOptions = {
   dataDir: string
   repoPath: (repo: string | null) => string
   gh?: RunGh
+  jobs?: Jobs
 }
 
 // Opens a GitHub issue for a task made in the app, when its project asks for one
@@ -41,6 +43,7 @@ export class IssueLinker {
   private readonly dataDir: string
   private readonly repoPath: (repo: string | null) => string
   private readonly gh: RunGh
+  private readonly jobs: Jobs
   private readonly pending = new Set<Promise<unknown>>()
   // Issues being opened now, by task: a second request waits for the first, not a second issue.
   private readonly creating = new Map<string, Promise<Task>>()
@@ -52,6 +55,7 @@ export class IssueLinker {
     this.dataDir = options.dataDir
     this.repoPath = options.repoPath
     this.gh = options.gh ?? runGh
+    this.jobs = options.jobs ?? new Jobs(options.bus)
   }
 
   start(): void {
@@ -108,7 +112,9 @@ export class IssueLinker {
     if (running !== undefined) {
       return running
     }
-    const work = this.createNow(taskId).finally(() => this.creating.delete(taskId))
+    const work = this.jobs
+      .run({ kind: 'issue', label: 'Opening GitHub issue', taskId }, () => this.createNow(taskId))
+      .finally(() => this.creating.delete(taskId))
     this.creating.set(taskId, work)
     return work
   }

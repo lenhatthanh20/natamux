@@ -28,6 +28,7 @@ import { PullRequestWatcher } from '../../github/pull-request-watcher.js'
 import { ProjectSettingsService } from '../../projects/project-settings.js'
 import { RepoService } from '../../projects/repo-service.js'
 import { EventBus } from '../../shared/event-bus.js'
+import { Jobs } from '../../shared/jobs.js'
 import { StageRunner } from '../../stages/stage-runner.js'
 import { archiveDir } from '../../tasks/task-files.js'
 import { TaskIndex } from '../../tasks/task-index.js'
@@ -291,6 +292,33 @@ describe('authentication', () => {
     ] as const) {
       expect(await statusOf(method, path), `${method} ${path}`).toBe(401)
     }
+  })
+})
+
+describe('GET /jobs', () => {
+  it('lists the background jobs that run now', async () => {
+    const jobs = new Jobs()
+    const never = () => new Promise<never>(() => undefined)
+    void jobs.run({ kind: 'push', label: 'Pushing', taskId: 'T-0001' }, never)
+    const withJobs = await buildServer({ ...serverOptions, jobs })
+    try {
+      const response = await withJobs.inject({
+        method: 'GET',
+        url: '/jobs',
+        headers: authorization,
+      })
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toEqual({ jobs: jobs.list() })
+      expect(response.json().jobs[0]).toMatchObject({ label: 'Pushing', taskId: 'T-0001' })
+    } finally {
+      await withJobs.close()
+    }
+  })
+
+  it('needs the token', async () => {
+    expect((await app.inject({ method: 'GET', url: '/jobs' })).statusCode).toBe(401)
+    const response = await app.inject({ method: 'GET', url: '/jobs', headers: authorization })
+    expect(response.json()).toEqual({ jobs: [] })
   })
 })
 

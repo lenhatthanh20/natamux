@@ -21,7 +21,7 @@ The window has five parts.
 | Sidebar | A filter field, **All tasks**, **Agents** and **Workspaces** grouped by project |
 | Main area | The task list as a table, board or progress view, or the open workspace |
 | Details panel | The selected task, in three views: **Progress** (its stages, with Approve), **Files** (the files of its worktree) and **Details** (notes, workspace, pull request, subtasks, tries) |
-| Status bar | The connection state, running count, **Projects**, **Import issues**, **Notify me**, shortcuts and the account menu |
+| Status bar | The connection state, running count, background jobs, **Projects**, **Import issues**, **Notify me**, shortcuts and the account menu |
 
 The details panel is open by default beside a workspace, so the stages stay in sight next to the terminal. In a narrow window, where the panel would cover the terminal, and for a task with no workspace, it starts closed. Open or close it with the title bar button (**Show details** / **Hide details**) or `Mod+Alt+B`. Natamux remembers your choice for each task. The palette command **Show the task progress** opens the details on **Progress**. The old link `/w/<id>/progress` does the same.
 
@@ -170,6 +170,12 @@ A task needs you when it is in Needs input, In review, Failed or Blocked state, 
 <Figure src="/screens/v2/task-needs-you" alt="A task in Needs input. The Spec card in the details says The agent asks: Should a coupon apply before or after tax?, and offers Approve anyway, Answer in terminal, Resume, Start agent and Mark as done. The sidebar card has an Answer button." caption="A task that needs you: the card in the sidebar, and the question and actions of its stage." />
 
 A running task whose agent waits for background work, such as a test run in a background shell, is not quiet and is not listed. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work). A task whose workspace was removed no longer needs you.
+
+## Background jobs
+
+When the daemon works on something you wait for, the status bar shows a spinner with what it does, such as **Pushing · T-0003**. With more than one job it says **2 background jobs**. Jobs are a commit, push or pull request, a new or removed workspace, a rollback, the checks of a stage, a wait for CI, and opening or importing GitHub issues.
+
+Click it to see each job with its task and how long it has run. Click a job to open its task. The spinner goes away when the work ends; the result shows as a toast or in the task's progress, as before. Under 1024 px wide only the spinner shows.
 
 ## Notifications
 

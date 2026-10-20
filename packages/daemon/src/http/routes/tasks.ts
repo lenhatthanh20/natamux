@@ -43,6 +43,8 @@ export function registerTaskRoutes(app: FastifyInstance, deps: RouteDeps): void 
 
   app.get('/templates', async () => ({ templates: options.templates.list() }))
 
+  app.get('/jobs', async () => ({ jobs: options.jobs?.list() ?? [] }))
+
   app.post('/templates', async (request, reply) => {
     return reply.code(201).send({ template: options.templates.save(request.body) })
   })

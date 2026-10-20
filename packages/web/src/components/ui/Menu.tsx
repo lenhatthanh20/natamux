@@ -1,6 +1,7 @@
 import { Check, Ellipsis, type LucideIcon } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type RefObject,
   useEffect,
   useId,
@@ -16,6 +17,8 @@ import { button, ICON, type IconButtonSize } from './styles'
 
 export type MenuAction = {
   type?: 'item'
+  // Tells rows with the same label apart. Default: the label.
+  id?: string
   label: string
   icon?: LucideIcon
   onSelect: () => void
@@ -58,7 +61,9 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
     null,
   )
 
-  // Place it, and flip it above when there is no room below.
+  // Place it, and flip it above when there is no room below. A list that gets more or fewer rows
+  // while it is open is placed again.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row count changes the height.
   useLayoutEffect(() => {
     const box = list.current
     if (box === null) {
@@ -78,7 +83,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
       left: Math.max(EDGE, Math.min(wanted, window.innerWidth - size.width - EDGE)),
       flipped,
     })
-  }, [anchor])
+  }, [anchor, items.length])
 
   // Then focus the first or last item: a browser does not focus it while the list is hidden.
   const placed = position !== null
@@ -192,7 +197,7 @@ function MenuPopup({ label, items, anchor, focus, onClose, ignore }: PopupProps)
         const hint = item.hint === undefined ? undefined : `${hintId}-${index}`
         return (
           <button
-            key={item.label}
+            key={item.id ?? item.label}
             type="button"
             {...(item.checked === undefined
               ? { role: 'menuitem' }
@@ -246,8 +251,17 @@ function ShownIcon({ icon: Icon }: { icon: LucideIcon }) {
   return <Icon size={ICON.xs} aria-hidden="true" />
 }
 
+// What a trigger of its own passes on to its button.
+export type MenuTriggerProps = {
+  ref: RefObject<HTMLButtonElement | null>
+  'aria-haspopup': 'menu'
+  'aria-expanded': boolean
+  onClick: (event: { stopPropagation: () => void }) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
+}
+
 type MenuProps = {
-  // The trigger's name for screen readers, for example "Actions for T-0004".
+  // The trigger's name for screen readers, for example "Actions for T-0004". Also the list's name.
   label: string
   items: readonly MenuItem[]
   // Shown only while the row around it is hovered or focused, or the menu is open.
@@ -261,6 +275,8 @@ type MenuProps = {
   size?: IconButtonSize
   tipSide?: 'top' | 'bottom'
   className?: string
+  // Draws the trigger instead, for a look of its own. It names itself.
+  trigger?: (props: MenuTriggerProps) => ReactNode
 }
 
 // A "…" button with a list of actions.
@@ -274,6 +290,7 @@ export function Menu({
   size = 'xs',
   tipSide,
   className = '',
+  trigger: drawTrigger,
 }: MenuProps) {
   const [open, setOpen] = useState<{ anchor: Anchor; focus: 'first' | 'last' } | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -317,7 +334,15 @@ export function Menu({
 
   return (
     <>
-      {text === undefined ? (
+      {drawTrigger !== undefined ? (
+        drawTrigger({
+          ref: trigger,
+          'aria-haspopup': 'menu',
+          'aria-expanded': open !== null,
+          onClick: onTriggerClick,
+          onKeyDown: onTriggerKeyDown,
+        })
+      ) : text === undefined ? (
         <IconButton
           ref={trigger}
           label={label}

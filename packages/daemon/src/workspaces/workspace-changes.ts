@@ -28,7 +28,7 @@ type WorkspaceChangesHost = {
   workspaceOf(taskId: string): string
   repoDirOf(repo: string | null): string
   touch(taskId: string): void
-  exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T>
+  exclusive<T>(taskId: string, label: string, work: () => Promise<T>): Promise<T>
 }
 
 // What the undo of a rollback needs: the snapshot made just before it, and the paths it touched.
@@ -102,7 +102,7 @@ export class WorkspaceChanges {
   // Puts changed files back as they are in the last commit; a new file is deleted. Only files in
   // the list of changes can be named. A snapshot of the whole worktree comes first, for the undo.
   async rollback(taskId: string, paths: readonly string[]): Promise<{ files: number }> {
-    return this.host.exclusive(taskId, async () => {
+    return this.host.exclusive(taskId, 'Rolling back files', async () => {
       const workspace = this.host.workspaceOf(taskId)
       if (!(await hasCommit(workspace))) {
         throw new WorkspaceConflictError('There is no commit to roll back to.')
@@ -133,7 +133,7 @@ export class WorkspaceChanges {
 
   // Brings back the files of the last rollback as they were just before it.
   async undoRollback(taskId: string): Promise<{ files: number }> {
-    return this.host.exclusive(taskId, async () => {
+    return this.host.exclusive(taskId, 'Undoing rollback', async () => {
       const workspace = this.host.workspaceOf(taskId)
       const last = this.rollbacks.get(taskId)
       if (last === undefined) {

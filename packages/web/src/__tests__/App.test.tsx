@@ -244,6 +244,9 @@ function installDaemon(
       tasks = [...tasks, task]
       return json({ task }, 201)
     }
+    if (path === '/api/jobs' && method === 'GET') {
+      return json({ jobs: [] })
+    }
     if (path === '/api/activity' && method === 'GET') {
       const entry = { text: 'Bash: pnpm test', at: '2026-10-08T09:00:00Z' }
       return json({ activity: { 'T-0002': { '1': entry } } })

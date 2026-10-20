@@ -7,6 +7,7 @@ import type { PullRequestWatcher } from '../github/pull-request-watcher.js'
 import type { ProjectSettingsService } from '../projects/project-settings.js'
 import type { RepoService } from '../projects/repo-service.js'
 import type { EventBus } from '../shared/event-bus.js'
+import type { Jobs } from '../shared/jobs.js'
 import type { StageRunner } from '../stages/stage-runner.js'
 import type { TaskService } from '../tasks/task-service.js'
 import type { TemplateService } from '../tasks/template-service.js'
@@ -29,6 +30,8 @@ export type ServerOptions = {
   openShells?: OpenShells
   settings: ProjectSettingsService
   issueLinker: IssueLinker
+  // The background jobs that run now. None in most tests.
+  jobs?: Jobs
   // The daemon's data folder, where stage files are kept for tasks without a worktree.
   dataDir: string
   token: string

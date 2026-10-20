@@ -1,8 +1,14 @@
 import type { DiffStat, Repo, Task } from '@natamux/core'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { type Api, isUnauthorized } from '../../lib/api'
-import { ACTIVITY_KEY, applyLiveMessages, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../../lib/live'
+import { type Api, isUnauthorized, type Job } from '../../lib/api'
+import {
+  ACTIVITY_KEY,
+  applyLiveMessages,
+  DIFFSTATS_KEY,
+  FALLBACK_POLL_MS,
+  JOBS_KEY,
+} from '../../lib/live'
 import { prefetchWhenIdle } from '../../lib/prefetch'
 import { applyTaskChanges, type TaskSort } from '../../lib/tasks'
 import { toast } from '../../lib/toasts'
@@ -182,6 +188,8 @@ export function useDashboardQueries({
   }
 }
 
+const NO_JOBS: Job[] = []
+
 // The size of each task's work; the daemon says when a workspace changed (workspace.dirty). The
 // parts that show the sizes read them themselves. Here they only sort, so a change of a size
 // renders the dashboard only while the list is sorted by size.
@@ -203,5 +211,12 @@ export function useWorkQueries(api: Api, sort: TaskSort) {
     notifyOnChangeProps: [],
   })
 
-  return diffStatsQuery.data
+  // The daemon's background jobs, for the status bar; jobs.changed brings each change.
+  const jobsQuery = useQuery({
+    queryKey: JOBS_KEY,
+    queryFn: () => api.listJobs(),
+    refetchInterval: FALLBACK_POLL_MS,
+  })
+
+  return { diffStats: diffStatsQuery.data, jobs: jobsQuery.data ?? NO_JOBS }
 }

@@ -136,7 +136,10 @@ export class StageGate {
       this.addAttachmentSection(task, stage.output ?? 'context.md')
     }
     const start = this.lastStart(taskId, stageId)
-    const result = await this.runChecks(task, stage, start)
+    const result = await this.run.jobs.run(
+      { kind: 'stage-check', label: `Checking ${stageName(stage)}`, taskId },
+      () => this.runChecks(task, stage, start),
+    )
     // The stage started again while the checks ran: their result is about the round before.
     if (this.lastStart(taskId, stageId).seq !== start.seq) {
       return
@@ -210,7 +213,15 @@ export class StageGate {
       return
     }
     this.run.ciRounds.add(key)
-    const round = this.ciRound(taskId, stageId, seq, passes)
+    const task = this.run.tasks.getTask(taskId)
+    const stage = this.run.tasks
+      .stepsOf(task)
+      .flatMap(stagesOf)
+      .find((candidate) => candidate.id === stageId)
+    const round = this.run.jobs.run(
+      { kind: 'ci', label: `Waiting for CI on ${stageName(stage ?? { id: stageId })}`, taskId },
+      () => this.ciRound(taskId, stageId, seq, passes),
+    )
     this.run.background(round.finally(() => this.run.ciRounds.delete(key)))
   }
 

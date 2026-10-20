@@ -116,6 +116,9 @@ function installDaemon() {
     if (route === '/api/activity') {
       return json({ activity: { 'T-0001': { '1': { text: 'Read a.ts', at: AT } } } })
     }
+    if (route === '/api/jobs') {
+      return json({ jobs: [] })
+    }
     if (route === '/api/diffstats') {
       return json({ stats: {} })
     }

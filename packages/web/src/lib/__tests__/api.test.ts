@@ -425,6 +425,22 @@ describe('createApi', () => {
     expect(shells.restoring).toEqual({ '1': null, '6': 'copilot', '7': null })
   })
 
+  it('reads the background jobs, and refuses a job it does not understand', async () => {
+    const job = {
+      id: 'job-1',
+      kind: 'workspace',
+      label: 'Pushing',
+      taskId: 'T-0001',
+      startedAt: '2026-10-08T09:00:00.000Z',
+    }
+    const { fetchFunction, calls } = fakeFetch(() => json({ jobs: [job] }))
+    expect(await createApi('secret', fetchFunction).listJobs()).toEqual([job])
+    expect(calls[0]?.url).toBe('/api/jobs')
+
+    const bad = fakeFetch(() => json({ jobs: [{ ...job, taskId: 7 }] }))
+    await expect(createApi('secret', bad.fetchFunction).listJobs()).rejects.toThrow()
+  })
+
   it('reads what the agent of each terminal does, and the latest line of each task', async () => {
     const { fetchFunction } = fakeFetch(() =>
       json({

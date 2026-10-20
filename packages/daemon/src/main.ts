@@ -12,6 +12,7 @@ import { buildServer } from './http/server.js'
 import { ProjectSettingsService } from './projects/project-settings.js'
 import { RepoService, repoFolderOr } from './projects/repo-service.js'
 import { EventBus } from './shared/event-bus.js'
+import { Jobs } from './shared/jobs.js'
 import { StageRunner } from './stages/stage-runner.js'
 import { type Mark, startupLine } from './startup-marks.js'
 import { isTaskEnded } from './tasks/task-helpers.js'
@@ -45,6 +46,7 @@ const config = loadConfig(process.env, process.cwd())
 mkdirSync(config.dataDir, { recursive: true })
 const index = new TaskIndex(join(config.dataDir, 'index.sqlite'))
 const bus = new EventBus()
+const jobs = new Jobs(bus)
 const repos = new RepoService({
   dataDir: config.dataDir,
   ...(config.repoDir === undefined ? {} : { defaultPath: config.repoDir }),
@@ -65,6 +67,7 @@ const issueLinker = new IssueLinker({
   bus,
   dataDir: config.dataDir,
   repoPath: (repo) => repos.pathOf(repo),
+  jobs,
 })
 issueLinker.start()
 const workspaces = new WorkspaceService({
@@ -76,6 +79,7 @@ const workspaces = new WorkspaceService({
   closeTerminals: (taskId) => terminals.closeAndWait(taskId),
   programOf: (agent) => agents.programOf(agent),
   bus,
+  jobs,
   onCreated: (task) => {
     const command = task.workspace === null ? null : setupCommand(task.workspace)
     if (command !== null) {
@@ -151,6 +155,7 @@ const stages = new StageRunner({
   dataDir: config.dataDir,
   repoPath: (repo) => repos.pathOf(repo),
   openShells,
+  jobs,
 })
 // Before the listen, so no dashboard attaches to a shell before it is known to wait.
 openShells.start()
@@ -172,7 +177,7 @@ const app = await buildServer({
   terminals,
   agents,
   pullRequests,
-  issues: new IssueImporter({ tasks: service, repoPath: (repo) => repos.pathOf(repo) }),
+  issues: new IssueImporter({ tasks: service, repoPath: (repo) => repos.pathOf(repo), jobs }),
   templates: new TemplateService({ dataDir: config.dataDir, tasks: service }),
   repos,
   bus,
@@ -180,6 +185,7 @@ const app = await buildServer({
   openShells,
   settings,
   issueLinker,
+  jobs,
   dataDir: config.dataDir,
   token: config.token,
   agentToken: config.agentToken,

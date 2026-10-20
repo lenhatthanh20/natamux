@@ -21,6 +21,7 @@ import type { AgentRunner } from '../agents/agent-runner.js'
 import { deleteRemoteRef } from '../git/commit-push.js'
 import { type RunGh, runGh } from '../git/gh.js'
 import type { DaemonMessage, EventBus } from '../shared/event-bus.js'
+import { Jobs } from '../shared/jobs.js'
 import { restoreAttachments } from '../tasks/attachments.js'
 import type { ApplyEventResult } from '../tasks/task-inputs.js'
 import type { TaskService } from '../tasks/task-service.js'
@@ -65,6 +66,7 @@ type StageRunnerOptions = {
   checkCi?: (input: { worktree: string; branch: string }) => Promise<CiResult>
   // The shells that were open, to bring back after a restart.
   openShells?: OpenShells
+  jobs?: Jobs
 }
 
 // Moves tasks through their stages: starts each stage when the task reaches it, takes the report
@@ -94,6 +96,7 @@ export class StageRunner {
       platform: options.platform ?? process.platform,
       home: options.home ?? homedir(),
       openShells: options.openShells,
+      jobs: options.jobs ?? new Jobs(options.bus),
       reported: new Map(),
       waitingForWorkspace: new Set(),
       waitingForTasks: new Set(),

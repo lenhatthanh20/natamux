@@ -1,6 +1,13 @@
 import { type Task, taskSchema } from '@natamux/core'
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import { type AgentActivity, isPreparingStep, type PreparingStep, readTaskActivity } from './api'
+import {
+  type AgentActivity,
+  isPreparingStep,
+  type Job,
+  type PreparingStep,
+  readJobs,
+  readTaskActivity,
+} from './api'
 
 export function liveSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,
@@ -26,6 +33,8 @@ export type LiveMessage =
     }
   | { kind: 'shells.changed'; taskId: string }
   | { kind: 'workspace.dirty'; taskId: string }
+  // The background jobs that run now, all of them.
+  | { kind: 'jobs.changed'; jobs: Job[] }
   // The step a new workspace is at. Null: it ended, with `error` when it failed.
   | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
   // The daemon skipped this dashboard while it was behind, so anything may have changed.
@@ -47,7 +56,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
     const logged = 'kind' in message && message.kind === 'task.updated'
     return parsed.success ? { kind: 'task', task: parsed.data, logged } : undefined
   }
-  const { kind, taskId, activity, step, error } = message as Record<string, unknown>
+  const { kind, taskId, activity, jobs, step, error } = message as Record<string, unknown>
   const id = typeof taskId === 'string' ? taskId : null
   switch (kind) {
     case 'repos.changed':
@@ -60,6 +69,12 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
       return id === null ? undefined : { kind: 'shells.changed', taskId: id }
     case 'workspace.dirty':
       return id === null ? undefined : { kind: 'workspace.dirty', taskId: id }
+    case 'jobs.changed':
+      try {
+        return { kind: 'jobs.changed', jobs: readJobs(jobs) }
+      } catch {
+        return undefined
+      }
     case 'workspace.preparing':
       return id === null || !(step === null || isPreparingStep(step))
         ? undefined
@@ -86,6 +101,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
 export const FALLBACK_POLL_MS = 60_000
 
 export const ACTIVITY_KEY = ['activity']
+export const JOBS_KEY = ['jobs']
 export const DIFFSTATS_KEY = ['diffstats']
 // The workspaces being made, and the step of each (see listPreparing).
 export const PREPARING_KEY = ['workspaces', 'preparing']
@@ -153,8 +169,12 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   let preparing = client.getQueryData<Record<string, PreparingStep>>(PREPARING_KEY)
   const preparingBefore = preparing
   let sizesChanged = false
+  let jobs: Job[] | undefined
   for (const message of messages) {
-    if (message.kind === 'activity.changed' && activity !== undefined) {
+    if (message.kind === 'jobs.changed') {
+      // Each message holds the whole list, so the last one wins.
+      jobs = message.jobs
+    } else if (message.kind === 'activity.changed' && activity !== undefined) {
       activity = withTaskActivity(activity, message.taskId, message.lines, message.latest)
     } else if (message.kind === 'shells.changed') {
       add(['task-shells', message.taskId])
@@ -181,6 +201,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   // Before the first read there is nothing to change: that read brings the activity.
   if (activity !== before) {
     client.setQueryData<AgentActivity>(ACTIVITY_KEY, activity)
+  }
+  if (jobs !== undefined) {
+    client.setQueryData<Job[]>(JOBS_KEY, jobs)
   }
   if (preparing !== preparingBefore) {
     client.setQueryData(PREPARING_KEY, preparing)

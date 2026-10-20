@@ -47,6 +47,14 @@ describe('condense', () => {
     const last = condenseSteps(items).at(-1)
     expect(last).toEqual({ id: 'live', kind: 'fold' })
   })
+
+  it('takes the label of an item that never folds, but never folds it', () => {
+    const withJobs = [...items, { id: 'jobs', priority: 4, hasLabel: true, folds: false }]
+    const steps = condenseSteps(withJobs)
+    expect(steps).toContainEqual({ id: 'jobs', kind: 'label' })
+    expect(steps).not.toContainEqual({ id: 'jobs', kind: 'fold' })
+    expect(condense(withJobs, maxCondenseLevel(withJobs)).folded.has('jobs')).toBe(false)
+  })
 })
 
 describe('forcedByWidth', () => {
@@ -66,6 +74,7 @@ describe('forcedByWidth', () => {
   it('keeps only the main items under 1024', () => {
     const { iconOnly, folded } = forcedByWidth(800)
     expect(iconOnly.has('live')).toBe(true)
+    expect(iconOnly.has('jobs')).toBe(true)
     expect([...folded].sort()).toEqual(['import', 'notifications', 'repos'])
   })
 
