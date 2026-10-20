@@ -380,6 +380,10 @@ export class TaskService {
     return this.records.recordWorkspace(taskId, change)
   }
 
+  recordWorkspaceFailure(taskId: string, message: string): Task {
+    return this.records.recordWorkspaceFailure(taskId, message)
+  }
+
   stopAgents(taskId: string): Task {
     return this.records.stopAgents(taskId)
   }

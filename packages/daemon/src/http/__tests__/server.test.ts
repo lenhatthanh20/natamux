@@ -144,6 +144,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  // A new workspace is made after its request answered.
+  await serverOptions.workspaces.settle()
   await app.close()
   index.close()
   repo.cleanup()
@@ -757,7 +759,28 @@ describe('task events', () => {
     expect(long.statusCode).toBe(400)
     expect(long.json()).toMatchObject({ error: 'invalid_request', issues: [{ path: ['title'] }] })
     expect(long.json().message).toMatch(/^title: /)
-    expect((await make('a'.repeat(400))).statusCode).toBe(201)
+    expect((await make('a'.repeat(400))).statusCode).toBe(202)
+  })
+
+  it('answers a new workspace before its worktree is made, then lists none preparing', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      headers: authorization,
+      payload: { title: 'Example' },
+    })
+
+    expect(response.statusCode).toBe(202)
+    expect(response.json().task).toMatchObject({ id: 'T-0001', workspace: null })
+    await serverOptions.workspaces.settle()
+    const preparing = await app.inject({
+      method: 'GET',
+      url: '/workspaces/preparing',
+      headers: authorization,
+    })
+    expect(preparing.json()).toEqual({ preparing: {} })
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(task.json().task.workspace).not.toBeNull()
   })
 
   it('keeps the skill picked as the context of a new workspace', async () => {
@@ -768,7 +791,7 @@ describe('task events', () => {
       headers: authorization,
       payload: { title: 'Example', context },
     })
-    expect(response.statusCode).toBe(201)
+    expect(response.statusCode).toBe(202)
     const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
     expect(task.json().task.context).toEqual(context)
   })
@@ -1719,13 +1742,16 @@ describe('attachments', () => {
     data: Buffer.from(bytes).toString('base64'),
   })
 
-  const newWorkspace = (attachments: unknown[]) =>
-    app.inject({
+  const newWorkspace = async (attachments: unknown[]) => {
+    const response = await app.inject({
       method: 'POST',
       url: '/workspaces',
       headers: authorization,
       payload: { title: 'Fix the login', attachments },
     })
+    await serverOptions.workspaces.settle()
+    return response
+  }
 
   const attachment = (name: string) =>
     app.inject({
@@ -1740,7 +1766,7 @@ describe('attachments', () => {
       file('spec.docx', 'word'),
       file('spec.docx', 'word again'),
     ])
-    expect(created.statusCode).toBe(201)
+    expect(created.statusCode).toBe(202)
 
     const listed = await app.inject({
       method: 'GET',
@@ -1829,7 +1855,7 @@ describe('attachments', () => {
   it('takes a body larger than 1 MB when it brings files', async () => {
     const response = await newWorkspace([file('big.bin', Buffer.alloc(2_000_000))])
 
-    expect(response.statusCode).toBe(201)
+    expect(response.statusCode).toBe(202)
     expect((await attachment('big.bin')).rawPayload.length).toBe(2_000_000)
   })
 })
@@ -3413,6 +3439,7 @@ describe('repositories', () => {
       headers: authorization,
       payload: { title: 'In the default repository' },
     })
+    await serverOptions.workspaces.settle()
 
     const busy = await remove('default')
     expect(busy.statusCode).toBe(409)
@@ -3490,8 +3517,10 @@ describe('repositories', () => {
       headers: authorization,
       payload: { title: 'Null workspace', repo: null },
     })
-    expect(workspace.statusCode).toBe(201)
-    expect(workspace.json().task.workspace).toContain('T-0003')
+    expect(workspace.statusCode).toBe(202)
+    await serverOptions.workspaces.settle()
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0003', headers: authorization })
+    expect(task.json().task.workspace).toContain('T-0003')
   })
 
   it('tells the dashboards when a repository is added or removed', async () => {

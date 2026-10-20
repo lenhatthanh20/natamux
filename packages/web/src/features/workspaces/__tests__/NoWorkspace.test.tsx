@@ -114,6 +114,28 @@ describe('NoWorkspace of a finished task', () => {
   })
 })
 
+describe('NoWorkspace of a task whose workspace is being made', () => {
+  const ready: Task = { ...task, state: 'ready', pr: null, prStatus: null }
+
+  it('shows the step instead of the buttons', async () => {
+    view(ready, { loadPreparing: async () => ({ 'T-0058': 'checkout' }) })
+
+    expect(await screen.findByText('Preparing workspace')).toBeTruthy()
+    expect(screen.getByText('Checking out the files…')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Create workspace' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start agent' })).toBeNull()
+  })
+
+  it('offers the buttons when the daemon makes no workspace for it', async () => {
+    const loadPreparing = vi.fn(async () => ({ 'T-0001': 'fetch' as const }))
+    view(ready, { loadPreparing })
+
+    await vi.waitFor(() => expect(loadPreparing).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeTruthy()
+    expect(screen.queryByText('Preparing workspace')).toBeNull()
+  })
+})
+
 describe('NoWorkspace of a subtask', () => {
   const branches = {
     branches: ['main', 'natamux/t-0001', 'other'],

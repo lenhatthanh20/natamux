@@ -424,6 +424,34 @@ describe('ShellPanes agent state', () => {
   })
 })
 
+describe('ShellPanes Terminal 1 hint', () => {
+  // An ownShell Spec runs in Terminal 5, so Terminal 1 is a plain shell until Implement.
+  it('names the working terminal on Terminal 1 while it has no agent', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'spec', lanes: {}, agent: 'claude-code' },
+      ['1', '5'],
+      { '5': { stage: 'spec', state: 'running' } },
+    )
+    await agentShown('Terminal 5')
+    const hint = await within(header('Terminal 1')).findByText('Terminal 5 is working')
+    expect(within(header('Terminal 5')).queryByText(/is working/)).toBeNull()
+    // It does not need the user, so it is not amber.
+    expect(hint.className).not.toMatch(/text-signal/)
+    expect(amber('Terminal 1')).toEqual([])
+  })
+
+  it('shows no hint on Terminal 1 when its agent runs', async () => {
+    renderShells(
+      { id: 'T-0001', state: 'running', stage: 'implement', lanes: {}, agent: 'claude-code' },
+      ['1', '5'],
+      { '1': { stage: 'implement', state: 'running' }, '5': { ...NO_LANE } },
+    )
+    await agentShown('Terminal 1')
+    await agentShown('Terminal 5')
+    expect(within(header('Terminal 1')).queryByText(/is working/)).toBeNull()
+  })
+})
+
 describe('ShellPanes task state', () => {
   // Each terminal says why it ended from this state, so every shell needs it.
   it('gives every shell the task state, and the new one when it changes', async () => {

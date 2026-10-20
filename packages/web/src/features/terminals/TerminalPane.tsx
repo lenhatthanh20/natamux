@@ -8,6 +8,7 @@ import { Skeleton } from '../../components/ui/Skeleton'
 import { agentLabel } from '../../lib/agents'
 import { useAppEvent } from '../../lib/app-events'
 import { shortcutOf } from '../../lib/commands'
+import type { PaneHint } from '../../lib/panes'
 import type { TerminalConnectQuery } from './terminal'
 
 // xterm.js is loaded the first time a terminal is shown, or earlier when the page is idle.
@@ -26,8 +27,9 @@ type TerminalPaneProps = {
   stateText?: string
   // The agent waits for the user: the state text is amber, the one mark of the pane.
   needsInput?: boolean
-  // Another agent of the task needs the user, such as "Shell 2 needs input".
-  hint?: string
+  // Another agent of the task needs the user, such as "Terminal 2 needs input", or works while
+  // this pane has no agent, such as "Terminal 5 is working".
+  hint?: PaneHint
   connect: (query: TerminalConnectQuery) => Promise<WebSocket>
   focusToken?: number
   focusOnOpen?: boolean
@@ -110,8 +112,11 @@ export function TerminalPane({
         )}
         {stateText === undefined && <span className="flex-1" />}
         {hint !== undefined && (
-          <span data-tip-overflow className="min-w-0 truncate text-signal">
-            {hint}
+          <span
+            data-tip-overflow
+            className={`min-w-0 truncate ${hint.needsYou ? 'text-signal' : 'text-muted'}`}
+          >
+            {hint.text}
           </span>
         )}
         <IconButton

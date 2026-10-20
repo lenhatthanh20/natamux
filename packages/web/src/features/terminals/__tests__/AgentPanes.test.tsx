@@ -377,3 +377,11 @@ describe('AgentPanes in a group', () => {
     expect(stateLine()).toBe('Needs input')
   })
 })
+
+describe('AgentPanes with an ownShell stage', () => {
+  it('says that Terminal 5 works while Terminal 1 has no agent', () => {
+    const task = makeTask('T-0001', { stage: 'spec', state: 'running', lanes: {} })
+    grid([task], {}, { terminals: { 'T-0001': { '5': { stage: 'spec', state: 'running' } } } })
+    expect(within(header('T-0001')).getByText('Terminal 5 is working')).toBeTruthy()
+  })
+})

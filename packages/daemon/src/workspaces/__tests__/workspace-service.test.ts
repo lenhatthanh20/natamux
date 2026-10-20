@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import {
   addBareOrigin,
   createTestRepo,
@@ -213,6 +213,101 @@ describe('create', () => {
     await expect(workspaces.create(task.id)).rejects.toThrow(GitError)
 
     expect(tasks.getTask(task.id).workspace).toBeNull()
+  })
+
+  describe('steps', () => {
+    let steps: unknown[]
+    let log: Mock<(message: string) => void>
+    let watched: WorkspaceService
+
+    beforeEach(() => {
+      steps = []
+      log = vi.fn<(message: string) => void>()
+      const bus = new EventBus()
+      // What a dashboard would read on each message.
+      bus.subscribe((message) => {
+        if (message.kind === 'workspace.preparing') {
+          steps.push({ ...message, preparing: watched.preparing() })
+        }
+      })
+      watched = new WorkspaceService({
+        dataDir,
+        tasks,
+        repoDir: repo.dir,
+        worktreesDir: join(repo.root, 'worktrees'),
+        bus,
+        log,
+        now: () => clock,
+      })
+    })
+
+    it('tells each step of a new workspace, then that it ended, and logs the times', async () => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+
+      await watched.create(task.id)
+
+      const step = (name: string | null, preparing: Record<string, string>) => ({
+        kind: 'workspace.preparing',
+        taskId: 'T-0001',
+        step: name,
+        preparing,
+      })
+      expect(steps).toEqual([
+        step('fetch', { 'T-0001': 'fetch' }),
+        step('checkout', { 'T-0001': 'checkout' }),
+        step(null, {}),
+      ])
+      expect(log).toHaveBeenCalledWith('T-0001 workspace: fetch 0 ms, checkout 0 ms, ok')
+    })
+
+    it('tells the error when git fails', async () => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      runGit(repo.dir, 'branch', 'natamux/t-0001-fix-the-bug')
+
+      await expect(watched.create(task.id)).rejects.toThrow(GitError)
+
+      expect(steps.at(-1)).toMatchObject({
+        step: null,
+        error: expect.stringContaining('git worktree failed'),
+        preparing: {},
+      })
+      expect(log).toHaveBeenCalledWith('T-0001 workspace: fetch 0 ms, checkout 0 ms, failed')
+    })
+
+    it('is preparing before it reads the branches, and tells a failure there too', async () => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+
+      const creating = watched.create(task.id, 'no-such-branch')
+      expect(watched.preparing()).toEqual({ 'T-0001': 'fetch' })
+      await expect(creating).rejects.toThrow(WorkspaceConflictError)
+
+      expect(steps).toEqual([
+        {
+          kind: 'workspace.preparing',
+          taskId: 'T-0001',
+          step: 'fetch',
+          preparing: { 'T-0001': 'fetch' },
+        },
+        {
+          kind: 'workspace.preparing',
+          taskId: 'T-0001',
+          step: null,
+          error: 'There is no local branch named no-such-branch',
+          preparing: {},
+        },
+      ])
+      expect(log).toHaveBeenCalledWith('T-0001 workspace: failed')
+    })
+
+    it('tells nothing for a task that cannot get a workspace at all', async () => {
+      const task = tasks.createTask({ title: 'Fix the bug' })
+      tasks.applyEvent(task.id, { source: 'human', type: 'task.cancelled' })
+
+      await expect(watched.create(task.id)).rejects.toThrow(WorkspaceConflictError)
+
+      expect(steps).toEqual([])
+      expect(log).not.toHaveBeenCalled()
+    })
   })
 })
 
@@ -1433,6 +1528,8 @@ describe('draftCommitMessage', () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     const created = await workspaces.create(task.id)
     writeFileSync(join(created.workspace ?? '', 'fix.txt'), 'fixed\n')
+    // Only the drafts count here, not the times of the new workspace.
+    logged = []
     return created
   }
 

@@ -174,6 +174,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     mergeTask,
     deletedIds,
     forgetTask,
+    announceWorkspace,
     liveStatus,
     reposQuery,
     repos,
@@ -657,6 +658,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             onStartAgent={(base) => agentMutation.mutate({ task: changesTask, base })}
             onShowProgress={() => showProgress(changesTask.id)}
             loadEvents={() => api.listEvents(changesTask.id)}
+            loadPreparing={() => api.listPreparing()}
             onFollowUp={() =>
               openNewWorkspace({
                 repo: changesTask.repo ?? undefined,
@@ -1017,7 +1019,9 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             mergeTask(task)
             select(task.id)
             openChanges(task.id, 'terminal')
-            toast(`${task.id} is ready in ${task.branch ?? 'its branch'}.`)
+            // The daemon makes the worktree after it answers; another toast says when it is ready.
+            announceWorkspace(task.id)
+            toast(`${task.id} is being prepared.`)
             // The title came from the task field, so it is used up.
             if (newWorkspace.title !== undefined && newWorkspace.title === newTitle.trim()) {
               setNewTitle('')

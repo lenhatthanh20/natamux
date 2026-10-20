@@ -7,9 +7,11 @@ import { StateBadge } from '../../components/StateBadge'
 import { Button } from '../../components/ui/Button'
 import { Combobox } from '../../components/ui/Combobox'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Spinner } from '../../components/ui/Spinner'
 import { button, ICON } from '../../components/ui/styles'
-import type { BranchList, StoredEvent } from '../../lib/api'
+import type { BranchList, PreparingStep, StoredEvent } from '../../lib/api'
 import { finishedAt } from '../../lib/finished'
+import { PREPARING_KEY } from '../../lib/live'
 import { pullRequestNumber, pullRequestSummary } from '../../lib/pull-request'
 import { formatExact } from '../../lib/tasks'
 import { branchOptions, TASK_BRANCH_GROUP } from './branches'
@@ -30,6 +32,13 @@ type NoWorkspaceProps = {
   onFollowUp?: () => void
   // The events of a finished task, for the time it finished.
   loadEvents?: () => Promise<StoredEvent[]>
+  // The workspaces the daemon is making, by task id.
+  loadPreparing?: () => Promise<Record<string, PreparingStep>>
+}
+
+const STEP_TEXT: Record<PreparingStep, string> = {
+  fetch: 'Fetching the newest commits of the base branch…',
+  checkout: 'Checking out the files…',
 }
 
 // What a done or cancelled task left behind, once its workspace is gone, and where to go next.
@@ -125,8 +134,15 @@ export function NoWorkspace({
   onShowProgress,
   onFollowUp,
   loadEvents,
+  loadPreparing,
 }: NoWorkspaceProps) {
   const [base, setBase] = useState<string | undefined>(undefined)
+  const preparing = useQuery({
+    queryKey: PREPARING_KEY,
+    queryFn: () => loadPreparing?.() ?? Promise.resolve<Record<string, PreparingStep>>({}),
+    enabled: loadPreparing !== undefined,
+  })
+  const step = preparing.data?.[task.id]
   const finished = task.state === 'done' || task.state === 'cancelled'
   const start =
     parentBranch !== null && branches?.branches.includes(parentBranch)
@@ -157,6 +173,23 @@ export function NoWorkspace({
             onFollowUp={onFollowUp}
             loadEvents={loadEvents}
           />
+        </div>
+      </section>
+    )
+  }
+
+  // A big repository takes minutes. The view turns into the terminal once the worktree is there.
+  if (step !== undefined) {
+    return (
+      <section aria-label={`Workspace of ${task.id}`} className="flex min-h-0 flex-1 flex-col">
+        {header}
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-muted"
+        >
+          <Spinner size={16} />
+          <p className="font-medium text-ink">Preparing workspace</p>
+          <p>{STEP_TEXT[step]}</p>
         </div>
       </section>
     )

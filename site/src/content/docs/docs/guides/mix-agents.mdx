@@ -54,7 +54,7 @@ Each task has a few terminals. See [Terminals and agents](/docs/concepts/stages/
 
 | Terminal | What runs there |
 |---|---|
-| Terminal 1 | The task's agent, in one session for the stages in a row. It is never closed before the task ends. |
+| Terminal 1 | The task's agent, in one session for the stages in a row. The agent starts with the first stage that runs in Terminal 1. It is never closed before the task ends. |
 | Terminal 2 | **Test spec**, when it has no agent of its own. |
 | Terminal 5 | A stage with `ownShell` and no agent or `args` of its own. |
 | Terminal 6 and up | A stage with its own `agent` or `args`. The first such stage of the pipeline gets Terminal 6, the next Terminal 7. |

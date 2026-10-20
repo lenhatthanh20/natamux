@@ -11,11 +11,12 @@ import {
   taskTemplateSchema,
 } from '@natamux/core'
 import type { Client } from './client'
-import { asRecord, readJobs, readTaskActivity } from './parse'
+import { asRecord, isPreparingStep, readJobs, readTaskActivity } from './parse'
 import type {
   AgentActivity,
   Job,
   NewWorkspaceInput,
+  PreparingStep,
   RemoveWorkspaceResult,
   SendEventResult,
   StoredEvent,
@@ -39,7 +40,8 @@ export function tasksApi(client: Client) {
       return taskSchema.parse(body.task)
     },
 
-    // A task, its worktree and, when one is named, its agent, in one step.
+    // A task, its worktree and, when one is named, its agent, in one step. The answer comes before
+    // the worktree is made: see listPreparing.
     async newWorkspace(input: NewWorkspaceInput): Promise<Task> {
       const body = asRecord(await request('POST', '/workspaces', input))
       return taskSchema.parse(body.task)
@@ -129,6 +131,18 @@ export function tasksApi(client: Client) {
           result.byTask[taskId] = latest
         }
         result.byTerminal[taskId] = lines
+      }
+      return result
+    },
+
+    // The workspaces being made, by task id. A step this dashboard does not know is left out.
+    async listPreparing(): Promise<Record<string, PreparingStep>> {
+      const preparing = asRecord(asRecord(await request('GET', '/workspaces/preparing')).preparing)
+      const result: Record<string, PreparingStep> = {}
+      for (const [taskId, step] of Object.entries(preparing)) {
+        if (isPreparingStep(step)) {
+          result[taskId] = step
+        }
       }
       return result
     },

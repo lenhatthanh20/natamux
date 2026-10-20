@@ -70,9 +70,15 @@ function build(settingsOf?: SettingsOf) {
   parts = { tasks, workspaces, stages }
 }
 
+// The worktree and the first stage are made after newWorkspace answers.
+async function settle(): Promise<void> {
+  await parts.workspaces.settle()
+  await parts.stages.settle()
+}
+
 afterEach(async () => {
   // Background git work in the worktree would keep its folder busy on Windows.
-  await parts.stages.settle()
+  await settle()
   parts.stages.stop()
   index.close()
   repo.cleanup()
@@ -80,12 +86,24 @@ afterEach(async () => {
 
 describe('newWorkspace', () => {
   it('makes a task with a worktree and leaves the shell to the user', async () => {
-    const task = await newWorkspace(parts, { title: 'Fix the login page' })
+    const created = await newWorkspace(parts, { title: 'Fix the login page' })
+    await settle()
 
+    const task = tasks.getTask(created.id)
     expect(task).toMatchObject({ title: 'Fix the login page', state: 'draft' })
     expect(task.workspace).not.toBeNull()
     expect(task.branch).toBe('natamux/t-0001-fix-the-login-page')
     expect(ptys).toHaveLength(0)
+  })
+
+  it('answers before the worktree is made', async () => {
+    const task = await newWorkspace(parts, { title: 'Fix the login page' })
+
+    expect(task).toMatchObject({ id: 'T-0001', workspace: null, branch: null })
+    expect(parts.workspaces.preparing()).toEqual({ 'T-0001': 'fetch' })
+    await settle()
+    expect(parts.workspaces.preparing()).toEqual({})
+    expect(tasks.getTask(task.id).workspace).not.toBeNull()
   })
 
   it('keeps the notes of a task with no agent', async () => {
@@ -100,12 +118,16 @@ describe('newWorkspace', () => {
   })
 
   it('starts the first stage with an agent, and the prompt becomes the notes', async () => {
-    const task = await newWorkspace(parts, {
+    const created = await newWorkspace(parts, {
       title: 'Speed up search',
       agent: 'claude-code',
       prompt: 'Keep it under 100 ms',
     })
+    expect(ptys).toHaveLength(0)
+    await settle()
 
+    const task = tasks.getTask(created.id)
+    expect(task.workspace).not.toBeNull()
     expect(task.agent).toBe('claude-code')
     expect(task.description).toBe('Keep it under 100 ms')
     expect(task).toMatchObject({ stage: 'implement', state: 'running' })
@@ -117,7 +139,7 @@ describe('newWorkspace', () => {
     build(() => DEFAULT_PROJECT_SETTINGS)
 
     const task = await newWorkspace(parts, { title: 'Fix the login page' })
-    await parts.stages.settle()
+    await settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'ready' })
     expect(ptys).toHaveLength(0)
@@ -132,7 +154,7 @@ describe('newWorkspace', () => {
     parts.stages.stop()
     build(() => DEFAULT_PROJECT_SETTINGS)
     const task = await newWorkspace(parts, { title: 'Fix the login page' })
-    await parts.stages.settle()
+    await settle()
 
     parts.stages.stop()
     build(() => DEFAULT_PROJECT_SETTINGS)
@@ -156,9 +178,9 @@ describe('newWorkspace', () => {
     ])
 
     const task = await newWorkspace(parts, { title: 'Fix the login page', attachments })
-    await parts.stages.settle()
+    await settle()
 
-    const folder = join(task.workspace ?? '', '.natamux-task')
+    const folder = join(tasks.getTask(task.id).workspace ?? '', '.natamux-task')
     expect(readFileSync(join(folder, 'attachments', 'screenshot.png'), 'utf8')).toBe('image')
     expect(readFileSync(join(folder, 'context.md'), 'utf8')).toContain(
       '- `.natamux-task/attachments/screenshot.png` (5 B)',
@@ -172,10 +194,19 @@ describe('newWorkspace', () => {
     expect(tasks.listTasks()).toHaveLength(0)
   })
 
-  it('cancels the new task when the worktree cannot be made', async () => {
+  it('keeps the task and logs why when the worktree cannot be made', async () => {
     vi.spyOn(parts.workspaces, 'create').mockRejectedValue(new Error('index.lock exists'))
 
-    await expect(newWorkspace(parts, { title: 'X' })).rejects.toThrow('index.lock exists')
-    expect(tasks.listTasks().map((task) => task.state)).toEqual(['cancelled'])
+    const task = await newWorkspace(parts, { title: 'X', agent: 'claude-code' })
+    await settle()
+
+    const kept = tasks.getTask(task.id)
+    expect(kept.workspace).toBeNull()
+    expect(kept.state).not.toBe('cancelled')
+    const events = tasks.listEvents(task.id).map((entry) => entry.event)
+    expect(events.find((event) => event.type === 'workspace.failed')?.payload).toEqual({
+      message: 'index.lock exists',
+    })
+    expect(ptys).toHaveLength(0)
   })
 })
