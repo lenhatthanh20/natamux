@@ -55,7 +55,7 @@ The default pipeline runs three agents. All are the task's agent unless a stage 
 | Review | Terminal 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
 | Release | none | none |
 
-With `"ownShell": true` on Spec (or Plan), that stage runs in Terminal 5. Terminal 1 then stays a plain shell until the first stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
+With `"ownShell": true` on Spec (or Plan), the **Run in a terminal of its own** checkbox in project settings, that stage runs in Terminal 5. Terminal 1 then stays a plain shell until the first stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
 
 One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
 
@@ -75,7 +75,7 @@ A stage of your own (made with **Custom stage**) that an agent works on can chan
 
 A stage with its own agent or arguments runs in a terminal of its own: Terminal 6 plus the place of the stage among all stages of the task, counted from 0. The first stage would get Terminal 6, the fourth Terminal 9, whether or not the stages before it have an agent of their own. So no two stages share a terminal, and the numbers can have gaps. Natamux closes no agent while the task runs, unless a stage asks for it (see [End a stage's terminal](#end-a-stages-terminal)), so Terminal 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its terminal, which still has the context of the last round. All terminals of a task close when the task is done or cancelled.
 
-A stage keeps the terminal it started in until it starts again. A settings change, such as a new `agent`, `args` or `ownShell`, applies at the stage's next start, never under an agent that runs. A stage that gained or lost its own agent then moves to the terminal the settings give.
+A stage keeps the terminal it started in until it starts again. A settings change, such as a new `agent`, `args` or `ownShell`, applies at the stage's next start, never under an agent that runs. A stage that needs another kind of terminal then moves to the terminal the settings give: it gained or lost its own agent, or `ownShell` was turned on or off. A lane of a group keeps its terminal.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -263,7 +263,7 @@ For a review by a person, add **Manual review** from the catalog, for example af
 
 ### Stages in their own terminal
 
-A stage that only writes a report can run in its own terminal with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Terminal 5**, and a turn of its agent does not touch the session in Terminal 1. With its own agent or arguments, it runs in a terminal of its own instead, from Terminal 6; see [Choose a model](#choose-a-model).
+A stage that only writes a report can run in its own terminal with a new session: check **Run in a terminal of its own** in the stage settings (`"ownShell": true` in `.natamux.json`). Unchecked, the stage runs in Terminal 1 with the task's agent. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Terminal 5**, and a turn of its agent does not touch the session in Terminal 1. With its own agent or arguments, it runs in a terminal of its own instead, from Terminal 6; see [Choose a model](#choose-a-model).
 
 ### End a stage's terminal
 

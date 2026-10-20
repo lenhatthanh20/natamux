@@ -22,6 +22,8 @@ import { PromptField } from './PromptField'
 import {
   isCatalogStage,
   KIND_LABEL,
+  offersOwnShell,
+  runsInOwnShell,
   runsInShellOne,
   setSections,
   setText,
@@ -30,7 +32,7 @@ import {
   takesPrompt,
 } from './pipeline-editor'
 import { DefaultMark, Field, useLocalText } from './StageField'
-import { Approval, CiOption, EndShellOption, WorkflowOption } from './StageOptions'
+import { Approval, CiOption, EndShellOption, OwnShellOption, WorkflowOption } from './StageOptions'
 
 export type StageDetailsProps = {
   stage: Stage
@@ -138,6 +140,10 @@ export function StageDetails({
           <EndShellOption stage={stage} steps={steps} onChange={onChange} />
         ))}
 
+      {offersOwnShell(steps, stage.id) && (
+        <OwnShellOption stage={stage} steps={steps} onChange={onChange} />
+      )}
+
       {ownAgent && (
         <Field
           label="Agent"
@@ -145,7 +151,9 @@ export function StageDetails({
           help={
             runsInShellOne(steps, stage.id)
               ? "With the task's agent, this stage runs in Terminal 1. Another agent or arguments run in a terminal of its own, so Terminal 1 keeps the task's agent."
-              : 'This stage starts its own agent beside the one in Terminal 1, so it may use another.'
+              : runsInOwnShell(steps, stage.id)
+                ? "This stage runs in a terminal of its own. With the task's agent it uses Terminal 5; another agent or arguments use a terminal from Terminal 6. Uncheck Run in a terminal of its own to run it in Terminal 1."
+                : 'This stage starts its own agent beside the one in Terminal 1, so it may use another.'
           }
         >
           <Select

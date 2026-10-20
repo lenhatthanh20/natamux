@@ -389,4 +389,23 @@ describe('a terminal pinned at the start of its stage', () => {
     expect(terminalAtStart(after, 'spec', pinned)).toBe('6')
     expect(terminalAtStart(lost, 'test-spec', pinned)).toBe('5')
   })
+
+  it('moves a stage at its next start when its own shell was turned on or off', () => {
+    // T-0139: Spec ran in Shell 5, then the owner turned ownShell off.
+    expect(terminalAtStart(before, 'spec', { spec: '5' })).toBe('1')
+    const ownShell: Step[] = [{ ...(before[0] as Stage), ownShell: true }, ...before.slice(1)]
+    expect(terminalAtStart(ownShell, 'spec', { spec: '1' })).toBe('5')
+  })
+
+  it('keeps a group lane at its next start when the lane number changed', () => {
+    const lane = (id: string): Stage => ({ id, kind: 'agent', gate: 'auto', output: `${id}.md` })
+    const group: Step[] = [
+      {
+        id: 'build',
+        parallel: [{ id: 'implement', kind: 'agent', gate: 'auto' }, lane('notes'), lane('review')],
+      },
+    ]
+    expect(terminalOfStage(group, 'review')).toBe('3')
+    expect(terminalAtStart(group, 'review', { review: '2' })).toBe('2')
+  })
 })
