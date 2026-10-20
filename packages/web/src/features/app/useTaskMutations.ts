@@ -6,6 +6,7 @@ import type { Api, TaskChanges } from '../../lib/api'
 import { removedText } from '../../lib/finished'
 import { toast } from '../../lib/toasts'
 import { useViewStore } from '../../lib/view-store'
+import { deleteEach, deleteSummary } from '../tasks/delete-finished'
 import { triesToCancel } from '../tasks/tries'
 import { removeEach, removeSummary } from '../workspaces/remove-finished'
 import type { useDashboardQueries } from './useDashboardQueries'
@@ -124,6 +125,25 @@ export function useTaskMutations({
         mergeTask(task)
       }
       toast(`Deleted ${id}.`)
+    },
+    onError: (error) => toast(error.message, 'error'),
+  })
+
+  const deleteFinishedMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      deleteEach(
+        ids,
+        (id) => api.deleteTask(id),
+        ({ id, tasks: related }) => {
+          forgetTask(id)
+          for (const task of related) {
+            mergeTask(task)
+          }
+        },
+      ),
+    onSuccess: (outcomes) => {
+      const { text, tone, detail } = deleteSummary(outcomes)
+      toast(text, tone, { detail })
     },
     onError: (error) => toast(error.message, 'error'),
   })
@@ -249,6 +269,7 @@ export function useTaskMutations({
     setRemovingId,
     removeWorkspace,
     deleteMutation,
+    deleteFinishedMutation,
     removeFinishedMutation,
     templateMutation,
     subtaskMutation,

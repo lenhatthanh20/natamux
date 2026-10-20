@@ -1,9 +1,10 @@
 import { type DiffStat, needsMe, type Task, type TaskState, waitsFor } from '@natamux/core'
-import { ChevronLeft, ChevronRight, ListTodo } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListTodo, Trash2 } from 'lucide-react'
 import { memo, useState } from 'react'
 import { AgentName } from '../../components/AgentBadge'
 import { DiffSize } from '../../components/DiffSize'
 import { CountBadge } from '../../components/ui/CountBadge'
+import { ConfirmDialog } from '../../components/ui/Dialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { IconButton } from '../../components/ui/IconButton'
 import { ICON } from '../../components/ui/styles'
@@ -35,6 +36,9 @@ type TaskBoardProps = {
   showFinished: boolean
   onSelect: (id: string) => void
   onOpen: (id: string) => void
+  // Set: the done and cancelled columns can delete all their tasks.
+  onDeleteTasks?: (ids: string[]) => void
+  deletingTasks?: boolean
 }
 
 const isFinished = (state: TaskState) => state === 'done' || state === 'cancelled'
@@ -110,6 +114,8 @@ export function TaskBoard({
   showFinished,
   onSelect,
   onOpen,
+  onDeleteTasks,
+  deletingTasks = false,
 }: TaskBoardProps) {
   const phone = usePhone()
   // Columns the user folded, and empty columns the user opened. Other empty columns are folded,
@@ -117,6 +123,10 @@ export function TaskBoard({
   const [collapsed, setCollapsed] = useState<ReadonlySet<TaskState>>(new Set())
   const [expanded, setExpanded] = useState<ReadonlySet<TaskState>>(new Set())
   const [pickedState, setPickedState] = useState<TaskState | null>(null)
+  // The tasks the delete dialog asks about: the ones shown in the column when it was clicked.
+  const [deleting, setDeleting] = useState<{ state: TaskState; tasks: readonly Task[] } | null>(
+    null,
+  )
   const [scroller, edges] = useScrollEdges<HTMLDivElement>()
   const select = useStableCallback(onSelect)
   const open = useStableCallback(onOpen)
@@ -209,6 +219,8 @@ export function TaskBoard({
               </section>
             )
           }
+          const deletable =
+            onDeleteTasks !== undefined && isFinished(column.state) && column.tasks.length > 0
           return (
             <section
               key={column.state}
@@ -222,13 +234,23 @@ export function TaskBoard({
                   {STATE_LABEL[column.state]}
                 </span>
                 <CountBadge count={column.tasks.length} />
+                {deletable && (
+                  <IconButton
+                    label={`Delete all ${STATE_LABEL[column.state].toLowerCase()} tasks`}
+                    icon={Trash2}
+                    size="xs"
+                    disabled={deletingTasks}
+                    onClick={() => setDeleting(column)}
+                    className="ml-auto"
+                  />
+                )}
                 {!phone && (
                   <button
                     type="button"
                     aria-expanded={true}
                     aria-label={`Collapse ${STATE_LABEL[column.state]}`}
                     onClick={() => toggle(column.state, true)}
-                    className="ml-auto flex size-6 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-ink"
+                    className={`flex size-6 items-center justify-center rounded-md text-muted hover:bg-hover hover:text-ink ${deletable ? '' : 'ml-auto'}`}
                   >
                     <ChevronRight size={ICON.xs} aria-hidden="true" className="rotate-90" />
                   </button>
@@ -259,6 +281,24 @@ export function TaskBoard({
           </EmptyState>
         )}
       </div>
+      {deleting !== null && onDeleteTasks !== undefined && (
+        <ConfirmDialog
+          title={`Delete ${deleting.tasks.length} ${STATE_LABEL[deleting.state].toLowerCase()} ${deleting.tasks.length === 1 ? 'task' : 'tasks'}?`}
+          description="This deletes these tasks, their notes and their history. A worktree folder goes with its task. A branch stays when it has commits that are not merged. A task whose workspace has changes that are not committed is skipped. This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => onDeleteTasks(deleting.tasks.map((task) => task.id))}
+          onClose={() => setDeleting(null)}
+        >
+          <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs">
+            {deleting.tasks.map((task) => (
+              <li key={task.id} className="flex min-w-0 gap-2">
+                <span className="shrink-0 font-mono text-muted">{task.id}</span>
+                <span className="min-w-0 truncate">{task.title}</span>
+              </li>
+            ))}
+          </ul>
+        </ConfirmDialog>
+      )}
       {/* The fades lie over the columns, and the arrows say there is more to scroll to. */}
       {!phone && edges.left && (
         <div className="pointer-events-none absolute inset-y-0 left-0 flex w-12 items-center bg-linear-to-r from-canvas to-transparent pl-1">

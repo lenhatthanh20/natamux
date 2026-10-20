@@ -200,6 +200,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     setRemovingId,
     removeWorkspace,
     deleteMutation,
+    deleteFinishedMutation,
     removeFinishedMutation,
     templateMutation,
     subtaskMutation,
@@ -958,6 +959,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
                   showFinished={showFinished}
                   onSelect={chooseTask}
                   onOpen={openTask}
+                  onDeleteTasks={(ids) => deleteFinishedMutation.mutate(ids)}
+                  deletingTasks={deleteFinishedMutation.isPending}
                 />
               ) : (
                 <LiveTaskTable

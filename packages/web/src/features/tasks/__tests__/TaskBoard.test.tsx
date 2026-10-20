@@ -120,6 +120,88 @@ describe('TaskBoard', () => {
     expect(within(card).queryByText('claude-code')).toBeNull()
   })
 
+  describe('delete all finished tasks', () => {
+    const FINISHED = [
+      makeTask({ id: 'T-0003', title: 'Ship the icon', state: 'done' }),
+      makeTask({ id: 'T-0004', title: 'Old spike', state: 'done' }),
+      ...TASKS,
+    ]
+    const finishedBoard = (onDeleteTasks = vi.fn(), deletingTasks = false) => {
+      render(
+        <TaskBoard
+          tasks={FINISHED}
+          selectedId={null}
+          stateFilter={null}
+          showFinished={true}
+          onSelect={() => {}}
+          onOpen={() => {}}
+          onDeleteTasks={onDeleteTasks}
+          deletingTasks={deletingTasks}
+        />,
+      )
+      return onDeleteTasks
+    }
+
+    it('shows the button only on a finished column with tasks', () => {
+      finishedBoard()
+
+      expect(
+        within(column('Done')).getByRole('button', { name: 'Delete all done tasks' }),
+      ).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Delete all cancelled tasks' })).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Delete all (failed|ready) tasks$/ })).toBeNull()
+    })
+
+    it('has no button when the dashboard gives no handler', () => {
+      render(
+        <TaskBoard
+          tasks={FINISHED}
+          selectedId={null}
+          stateFilter={null}
+          showFinished={true}
+          onSelect={() => {}}
+          onOpen={() => {}}
+        />,
+      )
+
+      expect(screen.queryByRole('button', { name: 'Delete all done tasks' })).toBeNull()
+    })
+
+    it('lists the tasks of the column, and deletes them after the confirm', async () => {
+      const onDeleteTasks = finishedBoard()
+      const user = userEvent.setup()
+
+      await user.click(screen.getByRole('button', { name: 'Delete all done tasks' }))
+      const dialog = screen.getByRole('dialog', { name: 'Delete 2 done tasks?' })
+      expect(within(dialog).getByText('Ship the icon')).toBeTruthy()
+      expect(within(dialog).getByText('Old spike')).toBeTruthy()
+      expect(within(dialog).queryByText('Write release notes')).toBeNull()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      expect(onDeleteTasks).toHaveBeenCalledWith(['T-0003', 'T-0004'])
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('deletes nothing when the dialog is cancelled', async () => {
+      const onDeleteTasks = finishedBoard()
+      const user = userEvent.setup()
+
+      await user.click(screen.getByRole('button', { name: 'Delete all done tasks' }))
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(onDeleteTasks).not.toHaveBeenCalled()
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('turns the button off while a delete runs', () => {
+      finishedBoard(vi.fn(), true)
+
+      const button = screen.getByRole('button', { name: 'Delete all done tasks' })
+      expect((button as HTMLButtonElement).disabled).toBe(true)
+    })
+  })
+
   it('re-renders only the card of the task that changed', () => {
     // New handlers on every render, as the dashboard passes them.
     const boardOf = (tasks: readonly Task[]) => (
