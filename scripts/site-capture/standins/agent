@@ -38,7 +38,7 @@ json() {
 # Every stand-in reports in the Claude Code hook format, which the daemon knows best.
 hook() {
   printf '{"hook_event_name":%s,"cwd":%s%s}' "$(json "$1")" "$(json "$PWD")" "${2:-}" |
-    natamux hook claude-code >/dev/null 2>&1 || true
+    CLAUDECODE=1 natamux hook claude-code >/dev/null 2>&1 || true
 }
 
 pause() { sleep "$(((RANDOM % 10 + 12) * pace / 100)).$(((RANDOM % 10)))"; }

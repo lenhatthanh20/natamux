@@ -78,6 +78,8 @@ The daemon always answers `200 {}`, so a hook that matches nothing never shows a
 
 ## Turning it on
 
+In a Natamux task terminal, plain `claude` is enough: the worktree's `.claude/settings.local.json` has the `command` hooks. Adding `--settings "$(natamux hooks claude-code)"` there runs both sets, and each event reaches the daemon twice. Use the flag only where Natamux did not prepare the folder, or where that file is the user's own:
+
 ```sh
 # in a terminal that can reach the daemon
 export NATAMUX_TOKEN=<token the daemon printed>
@@ -92,10 +94,12 @@ claude --settings "$(natamux hooks claude-code)"
 **Start Claude Code** in the details of a task makes the workspace when there is none, then types this into the task's terminal:
 
 ```sh
-claude --settings '<data dir>/claude-code-settings.json' '<title> - <description>'
+claude '<title> - <description>'
 ```
 
-- The daemon writes that settings file at start. It holds the `http` hooks of `natamux hooks claude-code`, pointed at the daemon on loopback, so nothing has to be installed in `~/.claude`.
+- The hooks are in the worktree's `.claude/settings.local.json` (see `agent-adapters.md`, agents started by hand). Each runs `natamux hook claude-code`.
+- When that file has hooks of the user's own, Natamux leaves it alone and adds `--settings '<data dir>/claude-code-settings.json'`. The daemon writes that file at start. It holds the `http` hooks of `natamux hooks claude-code`, pointed at the daemon on loopback, so nothing has to be installed in `~/.claude`. Natamux never passes both: Claude Code would run each hook twice.
+- Why commands in the worktree and not `http` hooks: GitHub Copilot CLI (1.0.12 and later) reads `.claude/settings.json` and `.claude/settings.local.json` too. It refuses an `http` hook that is not `https://` and prints a warning at start. `natamux hook claude-code` does nothing without `CLAUDECODE=1`, which Claude Code sets and Copilot does not, so Copilot's events never reach the daemon as Claude Code's.
 - The shell of the terminal has `NATAMUX_TOKEN`, `NATAMUX_URL` and `NATAMUX_TASK_ID`, so the hooks name the task.
 - `NATAMUX_CLAUDE_COMMAND` replaces `claude`, for example with a full path.
 - The task gets `agent: claude-code` and an `agent.launched` line in its activity. The first prompt then moves it to running through `UserPromptSubmit`.

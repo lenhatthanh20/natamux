@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
-import { type PermissionMode, TASK_ID_HEADER } from '@natamux/core'
+import { CLAUDE_CODE_HOOK_EVENTS, type PermissionMode, TASK_ID_HEADER } from '@natamux/core'
 import { SHELLS } from '../terminals/terminal-limits.js'
 
 // Agents that Natamux can start. Each one also has an adapter that reads its hooks.
@@ -125,6 +125,16 @@ export function geminiHookSettings() {
   }
 }
 
+// Claude Code's hooks for a Claude Code started by hand. Commands, not the `http` hooks of
+// `--settings`: Copilot CLI reads this file too and refuses an `http` hook on loopback.
+// `natamux hook claude-code` does nothing when Copilot runs it.
+export function claudeCodeHookFile() {
+  const hook = { type: 'command', command: `${HOOK} claude-code`, timeout: 5 }
+  return {
+    hooks: Object.fromEntries(CLAUDE_CODE_HOOK_EVENTS.map((event) => [event, [{ hooks: [hook] }]])),
+  }
+}
+
 // Copilot CLI does not tell a hook which event it is, so each event names itself.
 const COPILOT_EVENTS = [
   'userPromptSubmitted',
@@ -172,22 +182,21 @@ export function cursorHookFile() {
 // A file an agent reads from the workspace, so an agent the user starts by hand reports too.
 export type WorkspaceFile = { path: string; content: string }
 
-// Hook settings that only the daemon knows: the text of its Claude Code settings file, which
-// names the daemon's URL.
-export type WorkspaceHooks = { claudeSettings?: string }
+// Whether to write Claude Code's file. With it in place a Claude Code that Natamux starts gets no
+// `--settings`, so only the daemon turns it on.
+export type WorkspaceHooks = { claudeCode?: boolean }
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
 
 type HookFileOf = (hooks: WorkspaceHooks) => WorkspaceFile | undefined
 
 const WORKSPACE_FILES: Record<LaunchableAgent, HookFileOf> = {
-  // The same handlers as the launch's `--settings`: Claude Code runs a handler that two settings
-  // files name once.
-  'claude-code': ({ claudeSettings }) =>
-    claudeSettings === undefined
-      ? undefined
-      : { path: '.claude/settings.local.json', content: claudeSettings },
-  // The launch leaves out its own copy when this file is in place (see launchCommand).
+  // The launch of Claude Code and of Gemini leaves out its own copy when this file is in place
+  // (see launchCommand).
+  'claude-code': ({ claudeCode }) =>
+    claudeCode === true
+      ? { path: '.claude/settings.local.json', content: json(claudeCodeHookFile()) }
+      : undefined,
   gemini: () => ({ path: '.gemini/settings.json', content: json(geminiHookSettings()) }),
   codex: () => ({ path: '.codex/config.toml', content: codexHookFile() }),
   copilot: () => ({ path: '.github/hooks/natamux.json', content: json(copilotHookFile()) }),
@@ -237,8 +246,10 @@ export function launchCommand(agent: LaunchableAgent, options: LaunchOptions): s
     case 'claude-code':
       return [
         options.program,
-        '--settings',
-        quote(options.claudeSettingsPath),
+        // Only without the workspace file: with both, Claude Code runs each hook twice.
+        ...(options.workspaceHooks === true
+          ? []
+          : ['--settings', quote(options.claudeSettingsPath)]),
         ...mode,
         ...resume([LAST_SESSION]),
         ...extra,
@@ -386,7 +397,7 @@ export function prepareWorkspace(
 ): boolean {
   const file = WORKSPACE_FILES[agent](hooks)
   if (file === undefined) {
-    return true
+    return false
   }
   const target = join(workspace, file.path)
   const text = existsSync(target) ? hookFileText(file, readFileSync(target, 'utf8')) : file.content

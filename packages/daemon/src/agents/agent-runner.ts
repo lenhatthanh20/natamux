@@ -51,7 +51,7 @@ type AgentRunnerOptions = {
   claudeSettingsPath: string
   // Gemini CLI settings with its hooks (see geminiHookSettings). Default: next to Claude's.
   geminiSettingsPath?: string
-  // What the hook files in the workspace need from the daemon (see prepareWorkspace).
+  // The hook files that only the daemon writes into the workspace (see WorkspaceHooks).
   workspaceHooks?: WorkspaceHooks
   // The command of each agent (NATAMUX_<AGENT>_COMMAND), and words to add to its command line
   // (NATAMUX_<AGENT>_ARGS), such as --model sonnet for Claude Code.

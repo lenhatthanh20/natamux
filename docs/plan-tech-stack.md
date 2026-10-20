@@ -65,7 +65,7 @@ Status: draft v0.1. Pairs with `plan-features.md`. Choices marked **Decide** are
 
 Status must come from events, not screen scraping.
 
-- **Native adapters:** each agent's hooks are turned into four signals (prompt sent, waiting for the user, turn ended, failed) by a small adapter. Claude Code's `http` hooks post straight to the daemon (`POST /hooks/claude-code`); agents that can only run a command use `natamux hook <agent>`, which forwards the hook's JSON. See `agent-adapters.md` for what each agent offers and the design, and `claude-code-adapter.md` for the Claude Code mapping.
+- **Native adapters:** each agent's hooks are turned into four signals (prompt sent, waiting for the user, turn ended, failed) by a small adapter. Every agent's hooks run `natamux hook <agent>`, which forwards the hook's JSON to `POST /hooks/<agent>`. Only a Claude Code session whose worktree file is the user's own gets `http` hooks that post straight to the daemon. See `agent-adapters.md` for what each agent offers and the design, and `claude-code-adapter.md` for the Claude Code mapping.
 - **Generic adapter:** use process exit code, output-idle time and terminal bell. Mark states as "estimated" in the UI.
 - **Git and CI:** watch the worktree for diff size; poll the GitHub API for PR and CI state.
 

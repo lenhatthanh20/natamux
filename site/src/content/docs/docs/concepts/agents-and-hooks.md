@@ -69,7 +69,7 @@ Natamux adds the hooks for one run of the agent. It does not change your own age
 
 | Agent | How the hooks are added | Where | In git? |
 |---|---|---|---|
-| Claude Code | `--settings <file>` on the command line. The hooks post to the daemon over HTTP. | `claude-code-settings.json` in the data folder | No |
+| Claude Code | A hook file in the worktree. If that file is your own: `--settings <file>` on the command line, with hooks that post to the daemon over HTTP | `.claude/settings.local.json`, or `claude-code-settings.json` in the data folder | Kept out of git |
 | Codex | `-c hooks.<Event>=...` for each hook event, and `--dangerously-bypass-hook-trust` | The command line | No |
 | Gemini CLI | The variable `GEMINI_CLI_SYSTEM_SETTINGS_PATH` points to a settings file | `gemini-settings.json` in the data folder | No |
 | Copilot CLI | A hook file in the worktree | `.github/hooks/natamux.json` | Kept out of git |
@@ -77,13 +77,14 @@ Natamux adds the hooks for one run of the agent. It does not change your own age
 
 Notes:
 
-- Claude Code reads the token and the task id from its environment when it sends a hook.
-- The other agents run `natamux hook <agent>` as a command. It reads the hook JSON from stdin and sends it to the daemon. It prints nothing, and it never makes the agent fail. If the daemon is down, it exits quietly. Outside a Natamux terminal it does nothing.
+- With `--settings`, Claude Code reads the token and the task id from its environment when it sends a hook.
+- Every other hook runs `natamux hook <agent>` as a command. It reads the hook JSON from stdin and sends it to the daemon. It prints nothing, and it never makes the agent fail. If the daemon is down, it exits quietly. Outside a Natamux terminal it does nothing.
 - Codex asks you to trust every hook it has not seen, and Natamux hooks change with the daemon. `--dangerously-bypass-hook-trust` skips that question for runs that Natamux starts.
-- For Copilot and Cursor, Natamux writes the hook file in the worktree and adds its path to the ignore list of your repository (`.git/info/exclude`). The file never reaches a commit.
+- For Claude Code, Copilot and Cursor, Natamux writes the hook file in the worktree and adds its path to the ignore list of your repository (`.git/info/exclude`). The file never reaches a commit.
 - If the worktree already has a hook file at that path with any hook of your own, Natamux leaves it alone. The agent then runs without Natamux hooks. The terminal still works. Natamux updates the file only when every hook in it runs `natamux hook`.
+- Copilot CLI also runs the hooks in `.claude/settings.local.json`. `natamux hook claude-code` does nothing unless Claude Code runs it (Claude Code sets `CLAUDECODE=1`), so a Copilot session never reports as Claude Code.
 
-`natamux hooks claude-code` prints the Claude Code settings, for use in a setup that Natamux did not start.
+`natamux hooks claude-code` prints the Claude Code settings, for use in a setup that Natamux did not prepare. Do not add them in a task terminal: the worktree already has the hooks, and Claude Code would send each event twice.
 
 ## Folder trust
 

@@ -44,9 +44,14 @@ To get the prompts back, set `"agents": { "permissionMode": "ask" }` in [`.natam
 
 ## How hooks are added
 
-The daemon writes `claude-code-settings.json` into its data folder when it starts. It holds one `http` hook for each event below. The hooks post to the daemon on loopback. Nothing changes in your own `~/.claude` files.
+Nothing changes in your own `~/.claude` files.
 
-The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from the environment of the Claude Code process. Natamux terminals set them. The token is never written into the settings file.
+- **In the task's worktree.** Each Natamux terminal writes `.claude/settings.local.json` with one hook for each event below, and adds it to the repository's `.git/info/exclude`, so git ignores it. Each hook runs `natamux hook claude-code`, which sends the event to the daemon. So `claude` started by hand in a task terminal reports too. Other keys in that file, such as the permissions Claude Code saves there, stay.
+- **With `--settings`.** If that file has hooks of your own, Natamux leaves it alone. It then starts Claude Code with `--settings <data dir>/claude-code-settings.json`, which holds one `http` hook for each event. These post to the daemon on loopback.
+
+The hooks read `NATAMUX_TOKEN`, `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL` from the environment of the Claude Code process. Natamux terminals set them. The token is never written into a settings file.
+
+GitHub Copilot CLI reads `.claude/settings.local.json` too. `natamux hook claude-code` does nothing unless Claude Code runs it (Claude Code sets `CLAUDECODE=1`), so a Copilot session never reports as Claude Code.
 
 ## Events and states
 
@@ -63,7 +68,9 @@ Other events are ignored. A stage is done only when the agent runs `natamux done
 
 ## A session you start yourself
 
-If you start `claude` by hand, give it the hooks:
+In a Natamux task terminal, plain `claude` is enough: the worktree has the hooks (see [How hooks are added](#how-hooks-are-added)). Do not add `--settings "$(natamux hooks claude-code)"` there, or Claude Code sends each event twice.
+
+Elsewhere, such as a folder that Natamux did not prepare, or a worktree whose `.claude/settings.local.json` has hooks of your own, give it the hooks:
 
 ```sh
 export NATAMUX_TOKEN=<token the daemon printed>

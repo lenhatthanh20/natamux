@@ -92,7 +92,7 @@ const genericSignals = new GenericSignals(service)
 const terminals = new TerminalService({
   // An agent the user starts by hand in the shell finds its hooks there.
   spawn: (options) => {
-    prepareAgentHooks(options.cwd, { claudeSettings })
+    prepareAgentHooks(options.cwd, { claudeCode: true })
     // The service copied the environment before the login PATH came.
     const env = loginPath === undefined ? options.env : { ...options.env, PATH: loginPath }
     return spawnShell({ ...options, env })
@@ -125,7 +125,7 @@ const agents = new AgentRunner({
   terminals,
   claudeSettingsPath,
   geminiSettingsPath,
-  workspaceHooks: { claudeSettings },
+  workspaceHooks: { claudeCode: true },
   programs: perAgent('COMMAND'),
   extraArgs: perAgent('ARGS'),
   binDir: process.env.NATAMUX_BIN_DIR,
