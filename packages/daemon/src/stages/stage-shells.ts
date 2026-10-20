@@ -17,7 +17,7 @@ import { AGENT_EXITED_TITLE } from '../agents/agent-runner.js'
 import { readEndedShells, saveEndedShells } from '../terminals/ended-shells.js'
 import { MAIN_TERMINAL, SHELLS } from '../terminals/terminal-limits.js'
 import { laneState, RESUMED_STATES, StageActionError } from './stage-actions.js'
-import type { StageRun } from './stage-run.js'
+import { pinnedTerminals, type StageRun } from './stage-run.js'
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
 export const LAUNCH_GRACE_MS = 30_000
@@ -85,13 +85,14 @@ export class StageShells {
   // Ends the agent or command of a stage set to end its shell, and closes the shell. Shell 1 keeps
   // the task's agent and is never closed.
   private closeStageShell(taskId: string, steps: readonly Step[], stage: Stage): void {
-    if (stage.endShell !== true || !canEndShell(stage) || endsShell1(steps, stage)) {
+    const pinned = pinnedTerminals(this.run.tasks, taskId)
+    if (stage.endShell !== true || !canEndShell(stage) || endsShell1(steps, stage, pinned)) {
       return
     }
     const command = stage.kind === 'testing' && stage.command !== undefined
     const terminal = command
       ? this.run.commandTerminals.get(taskId)
-      : terminalOfStage(steps, stage.id)
+      : terminalOfStage(steps, stage.id, pinned)
     if (terminal === undefined) {
       return
     }
@@ -187,14 +188,15 @@ export class StageShells {
     }
   }
 
-  // The stage that started last in each shell, from the task's events.
+  // The stage that started last in each shell, from the task's events. A start before terminals
+  // were pinned names none: the settings give it.
   private lastStages(task: Task): Map<string, string> {
     const steps = this.run.tasks.stepsOf(task)
     const stages = new Map<string, string>()
     for (const { accepted, event } of this.run.tasks.listEvents(task.id)) {
-      const stage = event.payload.stage
+      const { stage, terminal } = event.payload
       if (accepted && event.type === 'stage.started' && typeof stage === 'string') {
-        stages.set(terminalOfStage(steps, stage), stage)
+        stages.set(typeof terminal === 'string' ? terminal : terminalOfStage(steps, stage), stage)
       }
     }
     return stages
@@ -224,9 +226,10 @@ export class StageShells {
       try {
         const steps = this.run.tasks.stepsOf(task)
         const step = this.run.stepOf(task)
+        const pinned = pinnedTerminals(this.run.tasks, task.id)
         working = stagesOf(step)
           .filter(({ id }) => RESUMED_STATES.includes(laneState(task, step, id)))
-          .map(({ id }) => terminalOfStage(steps, id))
+          .map(({ id }) => terminalOfStage(steps, id, pinned))
       } catch {
         // A stage the settings no longer have: every shell waits for a dashboard.
       }

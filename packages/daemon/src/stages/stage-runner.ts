@@ -43,7 +43,7 @@ import { archiveStageFiles, excludeStageDir, restoreStageFiles, workingDir } fro
 import { StageGate } from './stage-gate.js'
 import { StageLauncher } from './stage-launcher.js'
 import { pickPath } from './stage-paths.js'
-import type { StageRun } from './stage-run.js'
+import { pinnedTerminals, type StageRun } from './stage-run.js'
 import { StageShells } from './stage-shells.js'
 
 type StageRunnerOptions = {
@@ -183,13 +183,20 @@ export class StageRunner {
   // uses, where the user started an agent by hand.
   laneFor(task: Task, terminal: string | undefined): { stage: string; state: TaskState } | null {
     const step = this.stepOf(task)
-    const stage = stageOfTerminal(this.run.tasks.stepsOf(task), step, terminal ?? MAIN_TERMINAL)
+    const pinned = pinnedTerminals(this.run.tasks, task.id)
+    const stage = stageOfTerminal(
+      this.run.tasks.stepsOf(task),
+      step,
+      terminal ?? MAIN_TERMINAL,
+      pinned,
+    )
     return stage === undefined ? null : { stage: stage.id, state: laneState(task, step, stage.id) }
   }
 
   // The stage an agent in this terminal works on, and its own state, for the dashboard.
   laneOfTerminal(task: Task, terminal: string): TerminalLane {
-    return terminalLane(task, this.run.tasks.stepsOf(task), terminal)
+    const pinned = pinnedTerminals(this.run.tasks, task.id)
+    return terminalLane(task, this.run.tasks.stepsOf(task), terminal, pinned)
   }
 
   // True once for the turn end that follows a report from this terminal.

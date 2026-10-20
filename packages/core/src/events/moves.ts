@@ -1,6 +1,6 @@
 import type { StagePosition } from '../stages/position.js'
 import { isGroup, type Step } from '../stages/schema.js'
-import { stageOfTerminal } from '../stages/terminal-lane.js'
+import { type PinnedTerminals, stageOfTerminal } from '../stages/terminal-lane.js'
 import type { TaskState } from '../tasks/task-state.js'
 import type { EventType, TaskEvent } from './schema.js'
 
@@ -80,6 +80,7 @@ export function laneOf(
   position: StagePosition,
   event: TaskEvent,
   move: Move,
+  pinned: PinnedTerminals = {},
 ): string | undefined {
   const named = payloadString(event, 'stage')
   if (!isGroup(step) || named !== undefined) {
@@ -87,7 +88,7 @@ export function laneOf(
   }
   const terminal = payloadString(event, 'terminal')
   if (terminal !== undefined) {
-    return stageOfTerminal(steps, step, terminal)?.id
+    return stageOfTerminal(steps, step, terminal, pinned)?.id
   }
   const fitting = step.parallel.filter((stage) => {
     const state = position.lanes[stage.id]

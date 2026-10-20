@@ -1032,7 +1032,7 @@ describe('a report from the shell of a stage of another step', () => {
     }
   })
 
-  // Test spec ran in Shell 2 and Implement in Shell 1; the reviewer runs in Shell 6.
+  // Test spec ran in Shell 2 and Implement in Shell 1; the reviewer runs in Shell 8.
   async function atReview(): Promise<Task> {
     const made = await created({ title: 'Export tasks', agent: 'claude-code' })
     tasks.applyEvent(made.id, {
@@ -1051,15 +1051,15 @@ describe('a report from the shell of a stage of another step', () => {
 
   it('keeps Implement running when the reviewer reports after its send back', async () => {
     const task = await atReview()
-    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement', reason: 'Fix it' })
+    await runner.act(task.id, 'reopen', { terminal: '8', to: 'implement', reason: 'Fix it' })
     await runner.settle()
     expect(tasks.getTask(task.id).lanes).toEqual({ 'test-spec': 'done', implement: 'running' })
     const reports = () =>
       tasks.listEvents(task.id).filter((entry) => entry.event.type === 'stage.reported')
     const before = reports()
 
-    await expect(runner.act(task.id, 'report', { terminal: '6' })).rejects.toThrow(
-      /agent-review stage of Terminal 6 does not run now/,
+    await expect(runner.act(task.id, 'report', { terminal: '8' })).rejects.toThrow(
+      /agent-review stage of Terminal 8 does not run now/,
     )
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'build', state: 'running' })
@@ -1103,17 +1103,17 @@ describe('a stage of your own with its own agent', () => {
   const launchesOf = (id: string, agent: string) =>
     launches(id).filter((payload) => payload.agent === agent)
 
-  it('starts its own agent in Shell 6, with its words, and keeps the task agent in Shell 1', async () => {
+  it('starts its own agent in Shell 7, with its words, and keeps the task agent in Shell 1', async () => {
     withStages({ ...docs, args: '--model gpt-5' })
     const task = await afterImplement()
 
     expect(task).toMatchObject({ stage: 'write-docs', state: 'running', agent: 'claude-code' })
     expect(ptys.some((pty) => pty.killed)).toBe(false)
     expect(launchScript(task.id)).toMatch(/^claude /)
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
-    expect(launchScript(task.id, '6')).toContain('--model gpt-5')
+    expect(launchScript(task.id, '7')).toMatch(/^codex /)
+    expect(launchScript(task.id, '7')).toContain('--model gpt-5')
     expect(launches(task.id).at(-1)).toMatchObject({ agent: 'codex', stage: 'write-docs' })
-    expect(runner.laneFor(task, '6')).toEqual({ stage: 'write-docs', state: 'running' })
+    expect(runner.laneFor(task, '7')).toEqual({ stage: 'write-docs', state: 'running' })
     expect(runner.laneFor(task, '1')).toBeNull()
   })
 
@@ -1121,7 +1121,7 @@ describe('a stage of your own with its own agent', () => {
     withStages(docs)
     const task = await afterImplement()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
@@ -1134,7 +1134,7 @@ describe('a stage of your own with its own agent', () => {
     withStages(docs)
     const task = await afterImplement()
     const shell = ptys.at(-1)
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     await runner.act(task.id, 'reopen', { to: 'write-docs' })
@@ -1150,14 +1150,14 @@ describe('a stage of your own with its own agent', () => {
     withStages(docs, { id: 'check-docs', kind: 'agent', gate: 'auto', agent: 'cursor' })
     const task = await afterImplement()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'check-docs', state: 'running' })
     expect(ptys.some((pty) => pty.killed)).toBe(false)
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+    expect(launchScript(task.id, '7')).toMatch(/^codex /)
     expect(launches(task.id).at(-1)).toMatchObject({ agent: 'cursor', stage: 'check-docs' })
-    expect(runner.laneFor(tasks.getTask(task.id), '7')).toEqual({
+    expect(runner.laneFor(tasks.getTask(task.id), '8')).toEqual({
       stage: 'check-docs',
       state: 'running',
     })
@@ -1174,7 +1174,7 @@ describe('a stage of your own with its own agent', () => {
     const codex = launchesOf(task.id, 'codex')
     expect(codex).toHaveLength(2)
     expect(codex.at(-1)).toMatchObject({ stage: 'write-docs' })
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+    expect(launchScript(task.id, '7')).toMatch(/^codex /)
     expect(tasks.getTask(task.id).state).toBe('running')
   })
 
@@ -1217,8 +1217,8 @@ describe('a stage of your own with its own agent', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
 
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
-    expect(launchScript(task.id, '6')).not.toContain(WORKFLOW_LINE)
+    expect(launchScript(task.id, '7')).toMatch(/^codex /)
+    expect(launchScript(task.id, '7')).not.toContain(WORKFLOW_LINE)
   })
 })
 
@@ -1271,7 +1271,7 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     const task = await implementing('spec')
     await report(task, '1')
     writeWorking(task, 'test-spec.md', '# Cases\nx\n')
-    return report(task, '6')
+    return report(task, '7')
   }
 
   async function atReview(): Promise<Task> {
@@ -1280,33 +1280,33 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     return task
   }
 
-  it('runs Spec and Implement in Shell 1, the others in Shells 6 to 9, and closes no agent', async () => {
+  it('runs Spec and Implement in Shell 1, the others in Shells 7 to 11, and closes no agent', async () => {
     const task = await implementing('spec')
     expect(launchScript(task.id)).toMatch(/^claude /)
 
     let current = await report(task, '1')
     expect(current).toMatchObject({ stage: 'test-spec', state: 'running' })
-    expect(launchScript(task.id, '6')).toMatch(/^copilot /)
+    expect(launchScript(task.id, '7')).toMatch(/^copilot /)
     writeWorking(task, 'test-spec.md', '# Cases\nx\n')
 
-    current = await report(task, '6')
+    current = await report(task, '7')
     expect(current).toMatchObject({ stage: 'implement', state: 'running' })
     await expectSubmitted(ptys[0], 'Task: Export')
 
     current = await report(task, '1')
     expect(current).toMatchObject({ stage: 'agent-review', state: 'running' })
     expect(launchesOf(task.id, 'cursor').at(-1)).toMatchObject({ stage: 'agent-review' })
-    expect(runner.laneFor(current, '7')).toEqual({ stage: 'agent-review', state: 'running' })
+    expect(runner.laneFor(current, '9')).toEqual({ stage: 'agent-review', state: 'running' })
     writeWorking(task, 'review.md', '# Findings\nNone\n')
 
-    current = await report(task, '7')
+    current = await report(task, '9')
     expect(current).toMatchObject({ stage: 'ci-watch', state: 'running' })
-    expect(launchScript(task.id, '8')).toMatch(/^copilot /)
+    expect(launchScript(task.id, '10')).toMatch(/^copilot /)
 
-    current = await report(task, '8')
+    current = await report(task, '10')
     expect(current).toMatchObject({ stage: 'merge-pr', state: 'running' })
-    expect(launchScript(task.id, '9')).toMatch(/^copilot /)
-    expect(runner.laneFor(current, '9')).toEqual({ stage: 'merge-pr', state: 'running' })
+    expect(launchScript(task.id, '11')).toMatch(/^copilot /)
+    expect(runner.laneFor(current, '11')).toEqual({ stage: 'merge-pr', state: 'running' })
 
     expect(ptys.some((pty) => pty.killed)).toBe(false)
     expect(launchesOf(task.id, 'claude-code')).toHaveLength(1)
@@ -1321,7 +1321,7 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     const task = await atReview()
     const review = ptys.at(-1)
 
-    await runner.act(task.id, 'reopen', { terminal: '7', reason: 'Fix the dates' })
+    await runner.act(task.id, 'reopen', { terminal: '9', reason: 'Fix the dates' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
     await expectWritten(ptys[0], 'What to change: Fix the dates')
@@ -1335,20 +1335,20 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
   })
 
   it('gives a send back from CI/CD watch to Claude Code, then CI/CD watch to its own agent', async () => {
-    const task = await report(await atReview(), '7')
+    const task = await report(await atReview(), '9')
     expect(task.stage).toBe('ci-watch')
     const watch = ptys.at(-1)
 
     // Without `to` a send back goes to the step before, which is Review here.
-    await runner.act(task.id, 'reopen', { terminal: '8', to: 'implement', reason: 'CI failed' })
+    await runner.act(task.id, 'reopen', { terminal: '10', to: 'implement', reason: 'CI failed' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
     await expectWritten(ptys[0], 'What to change: CI failed')
 
-    // Review runs again in between; its agent in Shell 7 gets the prompt.
+    // Review runs again in between; its agent in Shell 9 gets the prompt.
     await report(task, '1')
     writeWorking(task, 'review.md', '# Findings\nNone\n')
-    await report(task, '7')
+    await report(task, '9')
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'ci-watch', state: 'running' })
     await expectSubmitted(watch, 'Task: Export')
     expect(launchesOf(task.id, 'claude-code')).toHaveLength(1)
@@ -1386,8 +1386,113 @@ describe('the pipeline of the issue: the task agent in Shell 1, other agents bes
     const next = await report(task, '5')
     expect(next).toMatchObject({ stage: 'agent-review', state: 'running' })
     expect(launchesOf(task.id, 'cursor').at(-1)).toMatchObject({ stage: 'agent-review' })
-    expect(runner.laneFor(next, '7')).toEqual({ stage: 'agent-review', state: 'running' })
+    expect(runner.laneFor(next, '10')).toEqual({ stage: 'agent-review', state: 'running' })
     expect(ptys.some((pty) => pty.killed)).toBe(false)
+  })
+
+  // The settings of a stage, changed while the task runs.
+  function changeStage(id: string, change: Partial<Stage>): void {
+    settings = {
+      ...settings,
+      stages: settings.stages.map((step) =>
+        step.id === id ? { ...(step as Stage), ...change } : step,
+      ),
+    }
+  }
+
+  async function testSpecRunning(): Promise<Task> {
+    const task = await report(await implementing('spec'), '1')
+    expect(task).toMatchObject({ stage: 'test-spec', state: 'running' })
+    return task
+  }
+
+  // T-0136: Test spec runs; the settings then give Spec its own agent and take Test spec's away.
+  it('keeps the stage of a running agent when the settings change', async () => {
+    const task = await testSpecRunning()
+    const started = tasks
+      .listEvents(task.id)
+      .filter((entry) => entry.event.type === 'stage.started')
+    expect(started.at(-1)?.event.payload).toMatchObject({ stage: 'test-spec', terminal: '7' })
+    changeStage('spec', { output: 'spec.md', ownShell: true, agent: 'codex' })
+    changeStage('test-spec', { agent: undefined, endShell: true })
+
+    expect(runner.laneFor(task, '7')).toEqual({ stage: 'test-spec', state: 'running' })
+    expect(runner.laneOfTerminal(task, '7')).toMatchObject({ stage: 'test-spec', state: 'running' })
+    expect(runner.laneFor(task, '5')).toBeNull()
+    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
+
+    const next = await report(task, '7')
+
+    expect(next).toMatchObject({ stage: 'implement', state: 'running' })
+    // Its endShell closes the shell it ran in.
+    expect(terminals.list(task.id)).toEqual(['1'])
+  })
+
+  it('sends failed checks to the agent of the pinned shell after the settings change', async () => {
+    const task = await testSpecRunning()
+    const shell = ptys.at(-1)
+    changeStage('test-spec', { agent: undefined })
+
+    await report(task, '7')
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'test-spec', state: 'running' })
+    await expectSubmitted(shell, 'The checks of this stage failed')
+  })
+
+  it('starts the agent of the pinned shell again when the daemon starts', async () => {
+    const task = await testSpecRunning()
+    changeStage('test-spec', { agent: undefined })
+    terminals.close(task.id)
+
+    runner.resumeAgents()
+    await runner.settle()
+
+    expect(terminals.list(task.id)).toContain('7')
+    expect(terminals.list(task.id)).not.toContain('5')
+  })
+
+  it('runs a stage that lost its own agent in Shell 5 at its next start', async () => {
+    const task = await testSpecRunning()
+    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
+    await report(task, '7')
+    changeStage('test-spec', { agent: undefined })
+
+    await runner.act(task.id, 'reopen', { to: 'test-spec', reason: 'More cases' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'test-spec', state: 'running' })
+    expect(launchScript(task.id, '5')).toMatch(/^claude /)
+    expect(runner.laneFor(tasks.getTask(task.id), '5')).toEqual({
+      stage: 'test-spec',
+      state: 'running',
+    })
+    expect(runner.laneFor(tasks.getTask(task.id), '7')).toBeNull()
+  })
+
+  it('starts a stage that gained its own agent in a shell of its own at its next start', async () => {
+    const task = await testSpecRunning()
+    const copilotShell = ptys.at(-1)
+    changeStage('spec', { output: 'spec.md', ownShell: true, agent: 'codex' })
+
+    await runner.act(task.id, 'reopen', { to: 'spec', reason: 'Name the edge cases' })
+    await runner.settle()
+
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
+    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+    expect(runner.laneFor(tasks.getTask(task.id), '6')).toEqual({ stage: 'spec', state: 'running' })
+    expect(copilotShell?.written.join('')).not.toContain('Name the edge cases')
+    expect(ptys.some((pty) => pty.killed)).toBe(false)
+  })
+
+  it('refuses a report from the pinned shell of a stage that does not run now', async () => {
+    const task = await testSpecRunning()
+    writeWorking(task, 'test-spec.md', '# Cases\nx\n')
+    await report(task, '7')
+    changeStage('test-spec', { agent: undefined })
+
+    await expect(runner.act(task.id, 'report', { terminal: '7' })).rejects.toThrow(
+      /test-spec stage of Terminal 7 does not run now/,
+    )
   })
 })
 
@@ -1822,9 +1927,9 @@ describe('a group', () => {
     const task = await atBuild()
 
     expect(launchScript(task.id)).toMatch(/^claude /)
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
-    expect(launchScript(task.id, '6')).toContain('--model gpt-5')
-    expect(runner.laneFor(task, '6')).toEqual({ stage: 'test-spec', state: 'running' })
+    expect(launchScript(task.id, '9')).toMatch(/^codex /)
+    expect(launchScript(task.id, '9')).toContain('--model gpt-5')
+    expect(runner.laneFor(task, '9')).toEqual({ stage: 'test-spec', state: 'running' })
     expect(tasks.getTask(task.id).agent).toBe('claude-code')
     const launches = tasks
       .listEvents(task.id)
@@ -1853,7 +1958,7 @@ describe('a group', () => {
 })
 
 describe('a stage that ends its shell', () => {
-  // Implement runs in Shell 1 with the task's agent; Write docs runs in Shell 6 with its own.
+  // Implement runs in Shell 1 with the task's agent; Write docs runs in Shell 7 with its own.
   function withStages(docs: Partial<Stage>, after: Stage[] = [], implement: Partial<Stage> = {}) {
     settings = {
       ...DEFAULT_PROJECT_SETTINGS,
@@ -1885,7 +1990,7 @@ describe('a stage that ends its shell', () => {
     withStages({ endShell: true })
     const task = await writingDocs()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
@@ -1901,17 +2006,17 @@ describe('a stage that ends its shell', () => {
     withStages({ endShell: true })
     const task = await writingDocs()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
-    expect(runner.takeReport(task.id, '6')).toBe(false)
+    expect(runner.takeReport(task.id, '7')).toBe(false)
   })
 
   it('starts a new agent in a new shell with the send-back prompt, and closes it again', async () => {
     withStages({ endShell: true }, [{ id: 'qa', kind: 'manual', gate: 'manual' }])
     const task = await writingDocs()
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'qa', state: 'review' })
     expect(terminals.list(task.id)).toEqual(['1'])
@@ -1923,9 +2028,9 @@ describe('a stage that ends its shell', () => {
     expect(ptys).toHaveLength(3)
     expect(ptys[2]?.killed).toBe(false)
     expect(launchesOf(task.id, 'codex')).toHaveLength(2)
-    expect(launchScript(task.id, '6')).toContain('What to change: Fix the dates')
+    expect(launchScript(task.id, '7')).toContain('What to change: Fix the dates')
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
     expect(tasks.getTask(task.id).stage).toBe('qa')
     expect(ptys[2]?.killed).toBe(true)
@@ -1936,7 +2041,7 @@ describe('a stage that ends its shell', () => {
     withStages({})
     const task = await writingDocs()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
@@ -1948,7 +2053,7 @@ describe('a stage that ends its shell', () => {
     withStages({ endShell: true })
     const task = await writingDocs()
 
-    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement', reason: 'Fix the dates' })
+    await runner.act(task.id, 'reopen', { terminal: '7', to: 'implement', reason: 'Fix the dates' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
@@ -1956,7 +2061,7 @@ describe('a stage that ends its shell', () => {
     expect(ptys[0]?.killed).toBe(false)
     expect(terminals.list(task.id)).toEqual(['1'])
     // The killed agent never ends its turn, so nothing waits for it.
-    expect(runner.takeReport(task.id, '6')).toBe(false)
+    expect(runner.takeReport(task.id, '7')).toBe(false)
     await expectWritten(ptys[0], 'What to change: Fix the dates')
 
     await runner.act(task.id, 'report', { terminal: '1' })
@@ -1966,7 +2071,7 @@ describe('a stage that ends its shell', () => {
     expect(ptys).toHaveLength(3)
     expect(ptys[2]?.killed).toBe(false)
     expect(launchesOf(task.id, 'codex')).toHaveLength(2)
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+    expect(launchScript(task.id, '7')).toMatch(/^codex /)
   })
 
   it('closes its shell when a person sends the task back', async () => {
@@ -1985,20 +2090,20 @@ describe('a stage that ends its shell', () => {
     withStages({ endShell: true })
     const task = await writingDocs()
     for (let round = 0; round < MAX_AGENT_SEND_BACKS; round += 1) {
-      await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })
+      await runner.act(task.id, 'reopen', { terminal: '7', to: 'implement' })
       await runner.settle()
       await runner.act(task.id, 'report', { terminal: '1' })
       await runner.settle()
     }
     const shell = ptys.at(-1)
 
-    await expect(runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })).rejects.toThrow(
+    await expect(runner.act(task.id, 'reopen', { terminal: '7', to: 'implement' })).rejects.toThrow(
       /waits for the user/,
     )
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'needs-input' })
     expect(shell?.killed).toBe(false)
-    expect(terminals.list(task.id)).toEqual(['1', '6'])
+    expect(terminals.list(task.id)).toEqual(['1', '7'])
   })
 
   it('keeps its shell when the task goes back to the same stage', async () => {
@@ -2018,10 +2123,10 @@ describe('a stage that ends its shell', () => {
     const task = await writingDocs()
     const shell = ptys[1]
 
-    await runner.act(task.id, 'reopen', { terminal: '6', to: 'implement' })
+    await runner.act(task.id, 'reopen', { terminal: '7', to: 'implement' })
     await runner.settle()
     expect(shell?.killed).toBe(false)
-    expect(terminals.list(task.id)).toEqual(['1', '6'])
+    expect(terminals.list(task.id)).toEqual(['1', '7'])
 
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
@@ -2035,7 +2140,7 @@ describe('a stage that ends its shell', () => {
   it('never closes Shell 1 on a send back', async () => {
     withStages({}, [{ id: 'polish', kind: 'agent', gate: 'auto', endShell: true }])
     const task = await writingDocs()
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
     expect(tasks.getTask(task.id).stage).toBe('polish')
 
@@ -2051,7 +2156,7 @@ describe('a stage that ends its shell', () => {
     withStages({ gate: 'manual', endShell: true })
     const task = await writingDocs()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'write-docs', state: 'review' })
     expect(ptys[1]?.killed).toBe(false)
@@ -2115,7 +2220,7 @@ describe('a stage that ends its shell', () => {
     withStages({}, [], { endShell: true })
     const task = await writingDocs()
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     await runner.settle()
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'finish', state: 'running' })
@@ -2238,7 +2343,7 @@ describe('a stage that ends its shell', () => {
       .filter((entry) => entry.event.type === type)
       .at(-1)?.event
 
-  // A testing stage of your own with its own agent in Shell 6 fails on CI, so the task goes back
+  // A testing stage of your own with its own agent in Shell 7 fails on CI, so the task goes back
   // to Implement.
   async function failedOnCi(endShell: boolean): Promise<Task> {
     settings = {
@@ -2254,9 +2359,9 @@ describe('a stage that ends its shell', () => {
     await runner.act(task.id, 'report', { terminal: '1' })
     await runner.settle()
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'smoke', state: 'running' })
-    expect(terminals.list(task.id)).toEqual(['1', '6'])
+    expect(terminals.list(task.id)).toEqual(['1', '7'])
 
-    await runner.act(task.id, 'report', { terminal: '6' })
+    await runner.act(task.id, 'report', { terminal: '7' })
     finishCi({ passed: false, reasons: ['CI E2E failure: u'], passes: [], final: false })
     await runner.settle()
     expect(lastEvent(task.id, 'stage.reopened')?.payload).toMatchObject({ from: 'smoke', ci: true })
@@ -2276,7 +2381,7 @@ describe('a stage that ends its shell', () => {
     const task = await failedOnCi(false)
 
     expect(ptys.some((pty) => pty.killed)).toBe(false)
-    expect(terminals.list(task.id)).toEqual(['1', '6'])
+    expect(terminals.list(task.id)).toEqual(['1', '7'])
   })
 
   it('leaves the last stage to the finish of the task, which keeps the screens', async () => {
@@ -3436,7 +3541,7 @@ describe('a resume after a restart', () => {
     withOwnAgent()
     const task = await buildAfterRestart()
     await resume(task.id, { stage: 'test-spec' })
-    expect(launchScript(task.id, '6')).toMatch(/^codex /)
+    expect(launchScript(task.id, '9')).toMatch(/^codex /)
     terminals.close(task.id)
 
     await resume(task.id, { stage: 'implement' })

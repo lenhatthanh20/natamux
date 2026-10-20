@@ -8,6 +8,7 @@ import {
   endsShell1,
   stageAgent,
   stageOfTerminal,
+  terminalAtStart,
   terminalLane,
   terminalOfStage,
 } from '../terminal-lane.js'
@@ -43,27 +44,27 @@ describe('a stage with its own agent', () => {
     own('merge-pr'),
   ]
 
-  it('gets a shell of its own from Shell 6, in pipeline order, and Shell 1 keeps the rest', () => {
+  it('gets Shell 6 plus its index among all stages, and Shell 1 keeps the rest', () => {
     const shells = steps.map((step) => terminalOfStage(steps, step.id))
-    expect(shells).toEqual(['1', '6', '1', '7', '8', '9'])
-    expect(stageOfTerminal(steps, steps[4] as Step, '8')?.id).toBe('ci-watch')
+    expect(shells).toEqual(['1', '7', '1', '9', '10', '11'])
+    expect(stageOfTerminal(steps, steps[4] as Step, '10')?.id).toBe('ci-watch')
     expect(stageOfTerminal(steps, steps[4] as Step, '1')).toBeUndefined()
     const position = { stage: 'ci-watch', state: 'running' as const, lanes: {} }
-    expect(terminalLane(position, steps, '8')).toEqual({ stage: 'ci-watch', state: 'running' })
+    expect(terminalLane(position, steps, '10')).toEqual({ stage: 'ci-watch', state: 'running' })
     // Shell 1 served Spec and Implement; the last of them names it.
     expect(terminalLane(position, steps, '1')).toEqual({ stage: 'implement', state: 'done' })
   })
 
   it('keeps the stage of a shell after its step is over', () => {
     const atImplement = { stage: 'implement', state: 'running' as const, lanes: {} }
-    expect(terminalLane(atImplement, steps, '6')).toEqual({ stage: 'test-spec', state: 'done' })
+    expect(terminalLane(atImplement, steps, '7')).toEqual({ stage: 'test-spec', state: 'done' })
     // A stage that has not run yet does not name a shell.
-    expect(terminalLane(atImplement, steps, '7')).toEqual({ stage: null, state: null })
+    expect(terminalLane(atImplement, steps, '9')).toEqual({ stage: null, state: null })
     expect(terminalLane(atImplement, steps, '2')).toEqual({ stage: null, state: null })
     const atSpec = { stage: 'spec', state: 'running' as const, lanes: {} }
-    expect(terminalLane(atSpec, steps, '6')).toEqual({ stage: null, state: null })
+    expect(terminalLane(atSpec, steps, '7')).toEqual({ stage: null, state: null })
     const finished = { stage: 'merge-pr', state: 'done' as const, lanes: {} }
-    expect(terminalLane(finished, steps, '6')).toEqual({ stage: 'test-spec', state: 'done' })
+    expect(terminalLane(finished, steps, '7')).toEqual({ stage: 'test-spec', state: 'done' })
   })
 
   it('gets one for arguments alone, and keeps Shell 1 or 5 without either', () => {
@@ -88,8 +89,21 @@ describe('a stage with its own agent', () => {
       },
     ]
     const ids = ['implement', 'test-spec', 'notes', 'lint-notes']
-    expect(ids.map((id) => terminalOfStage(group, id))).toEqual(['1', '6', '3', '7'])
-    expect(stageOfTerminal(group, group[0] as Step, '7')?.id).toBe('lint-notes')
+    expect(ids.map((id) => terminalOfStage(group, id))).toEqual(['1', '7', '3', '9'])
+    expect(stageOfTerminal(group, group[0] as Step, '9')?.id).toBe('lint-notes')
+  })
+
+  it('never gives two stages the same shell, whatever the settings say', () => {
+    const all: Step[] = [
+      own('spec', { output: 'spec.md', ownShell: true }),
+      own('test-spec', { output: 'test-spec.md', ownShell: true }),
+      { id: 'build', parallel: [own('implement'), own('notes', { output: 'notes.md' })] },
+    ]
+    const shells = all.flatMap(stagesOf).map((stage) => terminalOfStage(all, stage.id))
+    expect(shells).toEqual(['6', '7', '1', '9'])
+    // A stage turned off in the settings still counts, so the numbers after it stay.
+    const off: Step[] = [{ ...(all[0] as Stage), enabled: false }, ...all.slice(1)]
+    expect(terminalOfStage(off, 'test-spec')).toBe('7')
   })
 
   it('gives no shell to an agent the stage may not have', () => {
@@ -295,7 +309,7 @@ describe('a branch', () => {
       },
     ]
     const ids = ['plan', 'implement', 'agent-review', 'write-docs', 'notes']
-    expect(ids.map((id) => terminalOfStage(shells, id))).toEqual(['1', '1', '5', '6', '7'])
+    expect(ids.map((id) => terminalOfStage(shells, id))).toEqual(['1', '1', '5', '9', '10'])
     expect(pipelineSchema.safeParse(shells).success).toBe(true)
 
     const atReview = {
@@ -312,9 +326,67 @@ describe('a branch', () => {
       lanes: {},
       paths: { 'after-plan': 'b' },
     }
-    expect(terminalLane(atNotes, shells, '7')).toEqual({ stage: 'notes', state: 'running' })
+    expect(terminalLane(atNotes, shells, '10')).toEqual({ stage: 'notes', state: 'running' })
     // Implement is on the path the task did not take.
     expect(terminalLane(atNotes, shells, '1')).toEqual({ stage: 'plan', state: 'done' })
-    expect(terminalLane(atNotes, shells, '6')).toEqual({ stage: 'write-docs', state: 'done' })
+    expect(terminalLane(atNotes, shells, '9')).toEqual({ stage: 'write-docs', state: 'done' })
+  })
+})
+
+describe('a terminal pinned at the start of its stage', () => {
+  // T-0136: Test spec runs in its own shell. Then the settings give Spec its own agent.
+  const testSpec: Stage = {
+    id: 'test-spec',
+    kind: 'agent',
+    gate: 'manual',
+    output: 'test-spec.md',
+    ownShell: true,
+    agent: 'copilot',
+  }
+  const before: Step[] = [
+    { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md' },
+    testSpec,
+    { id: 'implement', kind: 'agent', gate: 'auto' },
+  ]
+  const after: Step[] = [
+    {
+      id: 'spec',
+      kind: 'agent',
+      gate: 'manual',
+      output: 'spec.md',
+      ownShell: true,
+      agent: 'codex',
+    },
+    ...before.slice(1),
+  ]
+  const lost: Step[] = [before[0] as Step, { ...testSpec, agent: undefined }, before[2] as Step]
+  const pinned = { spec: '1', 'test-spec': terminalOfStage(before, 'test-spec') }
+
+  it('keeps the stage of a running agent when the settings change', () => {
+    expect(terminalOfStage(after, 'test-spec', pinned)).toBe(pinned['test-spec'])
+    expect(stageOfTerminal(after, testSpec, pinned['test-spec'], pinned)?.id).toBe('test-spec')
+    const position = { stage: 'test-spec', state: 'running' as const, lanes: {} }
+    expect(terminalLane(position, after, pinned['test-spec'], pinned)).toEqual({
+      stage: 'test-spec',
+      state: 'running',
+    })
+    // Spec ran in Shell 1, so Shell 1 still names it.
+    expect(terminalLane(position, after, '1', pinned)).toEqual({ stage: 'spec', state: 'done' })
+  })
+
+  it('keeps it when the stage loses its own agent while it runs', () => {
+    expect(terminalOfStage(lost, 'test-spec')).toBe('5')
+    expect(terminalOfStage(lost, 'test-spec', pinned)).toBe('7')
+  })
+
+  it('keeps it at the next start while the stage needs the same kind of shell', () => {
+    expect(terminalAtStart(after, 'test-spec', pinned)).toBe('7')
+    expect(terminalAtStart(after, 'implement', pinned)).toBe('1')
+  })
+
+  it('takes the shell of the settings at the next start when the stage gained or lost its agent', () => {
+    // Spec gained its own agent: it gets its own shell, never one another agent holds.
+    expect(terminalAtStart(after, 'spec', pinned)).toBe('6')
+    expect(terminalAtStart(lost, 'test-spec', pinned)).toBe('5')
   })
 })

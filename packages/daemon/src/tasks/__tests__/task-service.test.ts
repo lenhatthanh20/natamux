@@ -471,6 +471,56 @@ describe('applyEvent inside a group', () => {
     expect(staged.listEvents(id).at(-1)?.event.payload).toMatchObject({ stage: 'test-spec' })
   })
 
+  // The settings then made Test spec the stage that changes code, so they would give it Shell 1.
+  it('takes the stage pinned to the terminal of a bell after a settings change', () => {
+    let settings = DEFAULT_PROJECT_SETTINGS
+    const service = new TaskService({
+      dataDir,
+      index,
+      bus: new EventBus(),
+      settingsOf: () => settings,
+    })
+    const id = service.createTask({ title: 'Export' }).id
+    service.applyEvent(id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    for (const [stage, terminal] of [
+      ['implement', '1'],
+      ['test-spec', '2'],
+    ]) {
+      service.applyEvent(id, {
+        source: 'system',
+        type: 'stage.started',
+        payload: { stage, terminal },
+      })
+    }
+    expect(service.getTask(id).lanes).toEqual({ 'test-spec': 'running', implement: 'running' })
+    settings = {
+      ...settings,
+      stages: settings.stages.map((step) =>
+        'parallel' in step
+          ? {
+              ...step,
+              parallel: step.parallel.map((stage) =>
+                stage.id === 'implement' ? { ...stage, output: 'impl.md' } : stage,
+              ),
+            }
+          : step,
+      ),
+    }
+
+    const bell = service.applyEvent(id, {
+      source: 'agent',
+      type: 'agent.asked',
+      payload: { reason: 'terminal bell', terminal: '1' },
+    })
+
+    expect(bell.task.lanes).toEqual({ 'test-spec': 'running', implement: 'needs-input' })
+    expect(service.listEvents(id).at(-1)?.event.payload).toMatchObject({ stage: 'implement' })
+  })
+
   it('stops every stage whose agent runs or waits, and leaves the others', () => {
     const id = atBuild()
     staged.applyEvent(id, {

@@ -1,4 +1,11 @@
-import type { Stage, Step, Task, TaskEvent, TaskState } from '@natamux/core'
+import {
+  pinnedTerminalsOf,
+  type Stage,
+  type Step,
+  type Task,
+  type TaskEvent,
+  type TaskState,
+} from '@natamux/core'
 import type { AgentRunner } from '../agents/agent-runner.js'
 import type { SkillContext } from '../agents/agent-skills.js'
 import type { RunGh } from '../git/gh.js'
@@ -11,6 +18,12 @@ import type { EventInput, StageAction, StageActionInput } from './stage-actions.
 import type { RunCommand } from './stage-checks.js'
 
 export type PromptFor = (agent: string) => { text: string; missing: string[]; workflow?: boolean }
+
+// Lookups use the pinned terminals, not the settings, so a settings change never moves an agent
+// that runs.
+export function pinnedTerminals(tasks: TaskService, taskId: string): Record<string, string> {
+  return pinnedTerminalsOf(tasks.listEvents(taskId))
+}
 
 // What the parts call on each other, written out here so this file imports none of them.
 type ShellsPart = {

@@ -14,7 +14,7 @@ import { type CiResult, ciBranchOf } from './ci-check.js'
 import { MAX_AGENT_SEND_BACKS, StageActionError } from './stage-actions.js'
 import { runStageChecks } from './stage-checks.js'
 import { readStageFile, workingDir, writeStageFile } from './stage-files.js'
-import type { StageRun } from './stage-run.js'
+import { pinnedTerminals, type StageRun } from './stage-run.js'
 
 // The stages whose CI check started and has no result yet.
 export function stagesWaitingForCi(events: readonly { event: TaskEvent }[]): string[] {
@@ -315,7 +315,8 @@ export class StageGate {
       return
     }
     const start = this.lastStart(taskId, stageId)
-    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stageId)
+    const pinned = pinnedTerminals(this.run.tasks, taskId)
+    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stageId, pinned)
     const agentStage =
       stage.kind === 'agent' || stage.kind === 'testing' || this.run.context.isAgentContext(task)
     const agentWorks = agentStage && this.run.shells.agentRuns(taskId, terminal)

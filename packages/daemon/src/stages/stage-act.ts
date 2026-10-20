@@ -21,7 +21,7 @@ import {
   type StageActionInput,
   StageInputError,
 } from './stage-actions.js'
-import type { StageRun } from './stage-run.js'
+import { pinnedTerminals, type StageRun } from './stage-run.js'
 
 // The actions that move a stage on by a plan of their own.
 type Move = Exclude<StageAction, 'start' | 'report' | 'reopen'>
@@ -147,13 +147,14 @@ export class StageAct {
     }
     if (input.terminal !== undefined) {
       const steps = this.run.tasks.stepsOf(task)
-      const fromTerminal = stageOfTerminal(steps, step, input.terminal)
+      const pinned = pinnedTerminals(this.run.tasks, task.id)
+      const fromTerminal = stageOfTerminal(steps, step, input.terminal, pinned)
       if (fromTerminal !== undefined) {
         return fromTerminal
       }
       const others = steps
         .flatMap(stagesOf)
-        .filter((stage) => terminalOfStage(steps, stage.id) === input.terminal)
+        .filter((stage) => terminalOfStage(steps, stage.id, pinned) === input.terminal)
       if (others.length > 0) {
         const what =
           others.length === 1
@@ -194,7 +195,9 @@ export class StageAct {
   // An agent that reviews sends the task back by itself, at most MAX_AGENT_SEND_BACKS times from
   // its stage; then the stage waits for you, so two agents that disagree do not loop forever.
   private agentSendsBack(task: Task, step: Step, terminal: string): string {
-    const from = stageOfTerminal(this.run.tasks.stepsOf(task), step, terminal)?.id ?? task.stage
+    const pinned = pinnedTerminals(this.run.tasks, task.id)
+    const from =
+      stageOfTerminal(this.run.tasks.stepsOf(task), step, terminal, pinned)?.id ?? task.stage
     const before = this.sendBacksFrom(task.id, from)
     if (before >= MAX_AGENT_SEND_BACKS) {
       const name = stageName({ id: from })

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { TaskEvent } from '../events/schema.js'
 import { taskStateSchema } from '../tasks/task-state.js'
 import { stagesBefore } from './capabilities.js'
 import { codeStage, type StagePosition, stepToRun } from './position.js'
@@ -18,14 +19,64 @@ import { catalogEntry } from './stage-catalog.js'
 // a group, so it does not take over the agent of one.
 export const OWN_SHELL = '5'
 
-// Each stage that starts its own agent or arguments gets a shell of its own, from Shell 6 in
-// pipeline order. No shell ever holds two agents, so none is closed while the task runs.
+// Each stage that starts its own agent or arguments gets a shell of its own: Shell 6 plus its
+// index among all stages of the task. So no two stages share one, whatever the settings say, and
+// no shell ever holds two agents.
 const FIRST_STAGE_SHELL = 6
 
-export function terminalOfStage(steps: readonly Step[], stageId: string): string {
-  const own = steps.flatMap((step) => stagesOf(step).filter((stage) => runsOwnAgent(step, stage)))
-  const index = own.findIndex((stage) => stage.id === stageId)
-  if (index !== -1) {
+// The terminal each stage got at its last start, by stage id (see terminalAtStart).
+export type PinnedTerminals = Readonly<Record<string, string>>
+
+// The terminal each stage got at its last start, from a task's accepted stage.started events.
+export function pinnedTerminalsOf(
+  events: Iterable<{ accepted: boolean; event: Pick<TaskEvent, 'type' | 'payload'> }>,
+): Record<string, string> {
+  const pinned: Record<string, string> = {}
+  for (const { accepted, event } of events) {
+    const { stage, terminal } = event.payload
+    if (
+      accepted &&
+      event.type === 'stage.started' &&
+      typeof stage === 'string' &&
+      typeof terminal === 'string'
+    ) {
+      pinned[stage] = terminal
+    }
+  }
+  return pinned
+}
+
+// A stage keeps its pinned terminal until it starts again, so a settings change never moves an
+// agent that runs. A stage that never started gets the terminal the settings give.
+export function terminalOfStage(
+  steps: readonly Step[],
+  stageId: string,
+  pinned: PinnedTerminals = {},
+): string {
+  return pinned[stageId] ?? settingsTerminal(steps, stageId)
+}
+
+// At a new start a stage keeps its pinned terminal, unless it gained or lost its own agent: then
+// it takes the terminal the settings give now.
+export function terminalAtStart(
+  steps: readonly Step[],
+  stageId: string,
+  pinned: PinnedTerminals,
+): string {
+  const now = settingsTerminal(steps, stageId)
+  const pin = pinned[stageId]
+  return pin !== undefined && isOwnAgentShell(pin) === isOwnAgentShell(now) ? pin : now
+}
+
+function isOwnAgentShell(terminal: string): boolean {
+  return Number(terminal) >= FIRST_STAGE_SHELL
+}
+
+function settingsTerminal(steps: readonly Step[], stageId: string): string {
+  const all = steps.flatMap((step) => stagesOf(step).map((stage) => ({ step, stage })))
+  const index = all.findIndex(({ stage }) => stage.id === stageId)
+  const found = all[index]
+  if (found !== undefined && runsOwnAgent(found.step, found.stage)) {
     return String(FIRST_STAGE_SHELL + index)
   }
   const step = stepToRun(steps, stageId)
@@ -89,8 +140,9 @@ export function stageOfTerminal(
   steps: readonly Step[],
   step: Step,
   terminal: string,
+  pinned: PinnedTerminals = {},
 ): Stage | undefined {
-  return stagesOf(step).find((stage) => terminalOfStage(steps, stage.id) === terminal)
+  return stagesOf(step).find((stage) => terminalOfStage(steps, stage.id, pinned) === terminal)
 }
 
 // The stage an agent terminal works or worked on, and the state of that stage. Both are null for a
@@ -112,22 +164,23 @@ export function terminalLane(
   position: StagePosition,
   steps: readonly Step[],
   terminal: string,
+  pinned: PinnedTerminals = {},
 ): TerminalLane {
   const step = stepToRun(steps, position.stage)
   if (step === undefined) {
     return terminal === '1' ? { stage: position.stage, state: position.state } : NO_LANE
   }
   if (isStage(step)) {
-    if (terminal === terminalOfStage(steps, step.id)) {
+    if (terminal === terminalOfStage(steps, step.id, pinned)) {
       return { stage: step.id, state: position.state }
     }
   } else if (isGroup(step)) {
-    const stage = stageOfTerminal(steps, step, terminal)
+    const stage = stageOfTerminal(steps, step, terminal, pinned)
     if (stage !== undefined) {
       return { stage: stage.id, state: position.lanes[stage.id] ?? 'done' }
     }
   }
-  return earlierLane(steps, step, terminal, position.paths)
+  return earlierLane(steps, step, terminal, position.paths, pinned)
 }
 
 // A stage's shell stays open after its step, so it keeps the name of that stage. Shell 1 serves
@@ -137,9 +190,10 @@ function earlierLane(
   current: Step,
   terminal: string,
   paths: Readonly<Record<string, string>> | undefined,
+  pinned: PinnedTerminals,
 ): TerminalLane {
   const stage = stagesBefore(steps, current.id, paths)
-    .filter((each) => terminalOfStage(steps, each.id) === terminal)
+    .filter((each) => terminalOfStage(steps, each.id, pinned) === terminal)
     .at(-1)
   return stage === undefined ? NO_LANE : { stage: stage.id, state: 'done' }
 }
@@ -149,11 +203,12 @@ function earlierLane(
 export function endsShell1(
   steps: readonly Step[],
   stage: Pick<Stage, 'id' | 'kind' | 'command'>,
+  pinned: PinnedTerminals = {},
 ): boolean {
   if (stage.kind === 'testing' && stage.command !== undefined) {
     return false
   }
-  return terminalOfStage(steps, stage.id) === '1'
+  return terminalOfStage(steps, stage.id, pinned) === '1'
 }
 
 export const lanesSchema = z.record(stageIdSchema, taskStateSchema)

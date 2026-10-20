@@ -70,7 +70,8 @@ Details:
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
 - `agent` and `args` are for an `agent` stage that starts its own agent: a stage in a group that does not keep Terminal 1, or a stage with `"ownShell": true`, such as Review. In a group, that is every agent stage but the one that changes code (the first agent stage without an `output`). Such a stage starts its own agent in its own terminal, so it can use another agent or model without touching the session in Terminal 1. A launch for such a stage does not change the task's agent.
 - An `agent` or `testing` stage of your own (an id that is not in the [catalog](#stage-catalog)) can have `agent` and `args` too, also where it would run in Terminal 1.
-- A stage with its own `agent` or `args` runs in a terminal of its own: Terminal 6 for the first such stage of the pipeline, Terminal 7 for the next, and so on. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- A stage with its own `agent` or `args` runs in a terminal of its own: Terminal 6 plus the place of the stage among all stages of the task, counted from 0, so no two stages share one. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`.
+- A stage keeps the terminal it started in until it starts again. A change to these settings applies at the stage's next start, never under an agent that runs. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
