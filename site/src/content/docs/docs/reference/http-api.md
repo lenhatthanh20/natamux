@@ -90,6 +90,8 @@ Files, git, GitHub, terminals and templates.
 | `PUT /tasks/:id/file?path=<file>` | Save a file that exists `{ text }`, with the `version` you read in `If-Match`. Answers 409 when the file changed since |
 | `POST /tasks/:id/agent/message` | Paste a comment into the agent's terminal `{ text }`. Answers 400 when no agent runs there |
 | `POST /tasks/:id/commit` | Commit all changes `{ message }` |
+| `POST /tasks/:id/rollback` | Put changed files back as they are in the last commit `{ paths }` (1 to 5000): `{ files }`. A new file is deleted. Answers 404 for a path that is not changed, and 409 for a conflict; then nothing changes |
+| `POST /tasks/:id/rollback/undo` | Bring back the files of the last rollback as they were before it: `{ files }`. Answers 409 when there is nothing to undo |
 | `POST /tasks/:id/push` | Push the task branch |
 | `POST /tasks/:id/pull-request` | Open the pull request: `{ task }` |
 | `POST /tasks/:id/pull-request/refresh` | Ask GitHub now for the state of the pull request, instead of waiting for the next check |
@@ -116,7 +118,7 @@ A browser cannot set headers on a WebSocket, so:
   - `repos.changed` when a project is added or removed, so a dashboard can read `GET /repos` again.
   - `activity.changed` with `{ taskId, activity }` when what an agent does changes. `activity` is the task's whole activity by terminal, as `GET /activity` gives it; `{}` means none.
   - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends, when the program in front of a terminal changes (checked when its output goes quiet), when an agent that comes back after a restart starts or is up, or when a hook changes the state of an agent that works on no stage, unless the last `GET /tasks/<id>/terminals` found no agent in that terminal.
-  - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook for a tool that ran or for the end of a turn, when its terminals go quiet, after a commit, or after a save in the editor. Each comes 750 ms after a change. Up to 3 in a row come that soon; while changes go on after that, at most one per task every 10 s, and one more after the last change.
+  - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook for a tool that ran or for the end of a turn, when its terminals go quiet, after a commit or a rollback, or after a save in the editor. Each comes 750 ms after a change. Up to 3 in a row come that soon; while changes go on after that, at most one per task every 10 s, and one more after the last change.
   - `resync` to one socket that missed messages because it read too slowly. The dashboard loads everything again.
 - Terminals open with a one-time ticket. Call `POST /tasks/:id/terminal/ticket` to get `{ ticket }`, then open `GET /tasks/:id/terminal?ticket=...` (WebSocket) within 30 seconds.
 

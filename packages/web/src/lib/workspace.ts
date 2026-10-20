@@ -99,10 +99,13 @@ export function pullRequestButton(
   return { label }
 }
 
+// The git actions of a task's workspace. Only one runs at a time.
+export type GitStep = 'commit' | 'push' | 'pull-request' | 'rollback' | 'undo-rollback'
+
 // The git step to offer after one ends: a commit is pushed next, and a push opens the pull request
 // unless the task has one.
 export function nextGitStep(
-  done: 'commit' | 'push' | 'pull-request',
+  done: GitStep,
   hasPullRequest: boolean,
 ): 'push' | 'pull-request' | null {
   if (done === 'commit') {

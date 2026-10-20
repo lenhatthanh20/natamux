@@ -88,6 +88,7 @@ export class WorkspaceService {
       workspaceOf,
       repoDirOf,
       touch: (taskId) => this.touch(taskId),
+      exclusive: (taskId, work) => this.exclusive(taskId, work),
     })
     this.dirty = new DirtyTracker(this.tasks, options.bus)
     this.publishing = new WorkspacePublish({
@@ -101,6 +102,7 @@ export class WorkspaceService {
       log: options.log ?? ((message) => console.warn(message)),
       workspaceOf,
       exclusive: (taskId, work) => this.exclusive(taskId, work),
+      committed: (taskId) => this.reads.dropRollback(taskId),
     })
   }
 
@@ -232,6 +234,7 @@ export class WorkspaceService {
         options.deleteBranch && task.branch !== null
           ? await deleteFinishedBranch(repoDir, task.branch, task.prStatus)
           : false
+      this.reads.dropRollback(taskId)
       this.tasks.recordWorkspace(taskId, {
         workspace: null,
         branch: branchDeleted ? null : task.branch,
@@ -274,6 +277,14 @@ export class WorkspaceService {
     version: string,
   ): Promise<{ path: string; version: string }> {
     return this.reads.writeFile(taskId, path, text, version)
+  }
+
+  rollback(taskId: string, paths: readonly string[]): Promise<{ files: number }> {
+    return this.reads.rollback(taskId, paths)
+  }
+
+  undoRollback(taskId: string): Promise<{ files: number }> {
+    return this.reads.undoRollback(taskId)
   }
 
   graph(taskId: string, fresh = false): Promise<GitGraph> {

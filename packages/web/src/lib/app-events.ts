@@ -9,6 +9,7 @@ export type AppEventName =
   | 'diff-change-step'
   | 'refresh-changes'
   | 'diff-comment'
+  | 'rollback-file'
   | 'commit-draft'
   | 'terminal-find'
   | 'pane-maximize'

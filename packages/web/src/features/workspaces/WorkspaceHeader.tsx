@@ -16,7 +16,7 @@ import { usePhone } from '../../hooks/useLayoutMode'
 import { copyText } from '../../lib/clipboard'
 import { isFinishedState } from '../../lib/finished'
 import { laneSummary, STATE_LABEL } from '../../lib/tasks'
-import { needsCommit, pullRequestButton, pushButton } from '../../lib/workspace'
+import { type GitStep, needsCommit, pullRequestButton, pushButton } from '../../lib/workspace'
 
 // Under this width of the main area, the branch chip hides and the pull request link gets its
 // short label.
@@ -31,7 +31,7 @@ type WorkspaceHeaderProps = {
   push: PushStatus | null
   // Files that differ from the last commit. Null while unknown.
   uncommitted: number | null
-  pending: 'commit' | 'push' | 'pull-request' | null
+  pending: GitStep | null
   onPush: () => void
   onPullRequest: () => void
   // Opens the commit box in the Changes tab.

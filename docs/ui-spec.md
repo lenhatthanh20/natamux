@@ -571,10 +571,11 @@ Shared shell:
 
 ### 4.24 Diff view chrome (`features/git/ChangesPanel.tsx`, `ChangedFiles.tsx`, `DiffToolbar.tsx`, `MonacoDiff.tsx`, `ImageDiff.tsx`)
 - Layout (main >= 720): left file panel resizable (default 260, min 200, max 420) | right diff column. Below 720: file picker (Select) above the diff, full width, in the order of the file panel.
-- File panel (`ChangedFiles`): header 32 ("4 changed files" 12/500 muted, then `+340 −88` mono 12 summed over the files with counts; right: in tree view "Collapse all folders" / "Expand all folders", the "View as tree" toggle (aria-pressed, remembered in `natamux.changes-view`), Refresh). Below it, one `role="tree"` with rows of `--row-h`.
+- File panel (`ChangedFiles`): header 32 ("4 changed files" 12/500 muted, then `+340 −88` mono 12 summed over the files with counts; right: in tree view "Collapse all folders" / "Expand all folders", the "View as tree" toggle (aria-pressed, remembered in `natamux.changes-view`), "Rollback…" (Undo2), Refresh). Below it, one `role="tree"` with rows of `--row-h`.
   - List view: status colour on the file name, folder 12 muted truncated at the start, `+12 −3` when the panel is at least 15rem wide, status letter in a 16px mono box with tooltip.
   - Tree view: folders first, natural sort, single-child folders compacted ("web/src"), 12px indent a level, indent guides on hover or focus, chevrons on folders. A collapsed folder shows its summed counts. Collapsed folders are kept per task while the page is open. Arrow keys, Home, End and type-ahead work as in VS Code.
   - Per-file counts come from `git diff --numstat`, and a line count for untracked text files. Binary files, files that are too big, and untracked files after the first 300 have no counts.
+  - Rollback: the row menu (right click, Shift+F10, ContextMenu key) has "Rollback…" for a file, or for every file under a folder; disabled with the hint "Resolve the conflict first" when only conflicts are left. `RollbackDialog` (md): title "Roll back changes", an "All files" checkbox (indeterminate when some), one row per file (checkbox named "<path>, <status label>", file icon, path, status letter), conflicts unchecked and disabled. Danger text "N new files will be deleted." for A, U and R files. Footer: ghost Cancel (focused) and danger "Roll back N files", off with "Check a file first" or "Another git action is running". The success toast has Undo.
   - Commit box docked at the bottom of the panel: textarea (3 rows, placeholder "Commit message"), then a row: ghost `Generate` (Sparkles icon, tooltip "Draft a message with the task's agent", `Mod+Shift+G`) and primary `Commit all` filling the rest with `Mod Enter` kbd. While `Generate` runs it is busy and `Commit all` is off with the reason "Drafting the message…". The draft replaces the text only when the user did not type meanwhile. `Commit…` in the header drafts when the box is empty.
 - Diff toolbar (`DiffToolbar`, min 36, wraps):
   - Left: the path (mono 12, folder muted / name ink; a rename shows `old → new`, tooltip "Renamed from x to y"), Copy path, badge "New file · N lines" / "Deleted · N lines".
@@ -749,6 +750,7 @@ Rules:
 | | Alt+F5 / Shift+Alt+F5 | Next / previous change in the file |
 | | F7 / Shift+F7 (Monaco built-in) | Accessible diff view |
 | | Mod+Shift+A | Comment on the current line for the agent |
+| | Mod+Alt+Z | Roll back the shown file |
 | Palette | Up/Down, Enter, Shift+Enter, Alt+1..9, Tab, Esc | see 4.17 |
 
 `b`, `g`, `p`, `x` are left free on purpose for later (board drag, go-to sequences, pin).

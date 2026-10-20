@@ -143,6 +143,15 @@ export const diffCommands: Command[] = [
     run: () => fireAppEvent('diff-comment'),
   },
   {
+    id: 'changes.rollback',
+    title: 'Roll back the shown file',
+    category: 'Workspace',
+    shortcuts: ['Mod+Alt+Z'],
+    group: 'Diff',
+    when: inWorkspace,
+    run: () => fireAppEvent('rollback-file'),
+  },
+  {
     id: 'diff.draftCommit',
     title: 'Draft the commit message with the agent',
     category: 'Workspace',

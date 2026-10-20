@@ -26,7 +26,7 @@ import { FALLBACK_POLL_MS } from '../../lib/live'
 import { finishedText } from '../../lib/notify'
 import { type ToastAction, toast } from '../../lib/toasts'
 import type { WorkspaceTab } from '../../lib/view-store/helpers'
-import { nextGitStep, pushButton, waitReason } from '../../lib/workspace'
+import { type GitStep, nextGitStep, pushButton, waitReason } from '../../lib/workspace'
 import { FileEditor } from '../files/FileEditor'
 import { ChangesPanel } from '../git/ChangesPanel'
 import { GitGraph } from '../git/GitGraph'
@@ -61,6 +61,10 @@ type ChangesViewProps = {
   loadShells?: (taskId: string) => Promise<TaskShells>
   closeTerminal: (terminal: string) => Promise<string[]>
   commit: (message: string) => Promise<Task>
+  // Puts changed files back as they are in the last commit, and undoes the last such rollback.
+  // Both answer the number of files.
+  rollback?: (paths: string[]) => Promise<number>
+  undoRollback?: () => Promise<number>
   generateCommitMessage?: () => Promise<CommitMessageDraft>
   push: () => Promise<Task>
   openPullRequest: () => Promise<Task>
@@ -92,15 +96,22 @@ type ChangesViewProps = {
 }
 
 type GitAction = {
-  action: 'commit' | 'push' | 'pull-request'
+  action: GitStep
   message?: string
   fileCount?: number
+  paths?: string[]
 }
 
 const FAILED: Record<GitAction['action'], string> = {
   commit: 'Could not commit.',
   push: 'Could not push.',
   'pull-request': 'Could not open the pull request.',
+  rollback: 'Could not roll back.',
+  'undo-rollback': 'Could not undo the rollback.',
+}
+
+function filesText(count: number): string {
+  return count === 1 ? '1 file' : `${count} files`
 }
 
 export function ChangesView({
@@ -120,6 +131,8 @@ export function ChangesView({
   loadShells,
   closeTerminal,
   commit,
+  rollback,
+  undoRollback,
   generateCommitMessage,
   push,
   openPullRequest,
@@ -271,10 +284,19 @@ export function ChangesView({
     }
   }
   const gitAction = useMutation({
-    mutationFn: async ({ action, message = '', fileCount = 0 }: GitAction) => {
+    mutationFn: async ({ action, message = '', fileCount = 0, paths = [] }: GitAction) => {
       if (action === 'commit') {
         await commit(message)
-        return { text: `Committed ${fileCount === 1 ? '1 file' : `${fileCount} files`}.` }
+        return { text: `Committed ${filesText(fileCount)}.` }
+      }
+      // The panel offers these only when the functions are there.
+      if (action === 'rollback') {
+        const files = (await rollback?.(paths)) ?? 0
+        return { text: `Rolled back ${filesText(files)}.`, undo: undoRollback !== undefined }
+      }
+      if (action === 'undo-rollback') {
+        await undoRollback?.()
+        return { text: 'Rollback undone.' }
       }
       if (action === 'push') {
         const pushed = await push()
@@ -283,13 +305,15 @@ export function ChangesView({
       const opened = await openPullRequest()
       return { text: 'Pull request opened.', url: opened.pr }
     },
-    onSuccess: ({ text, url }, { action }) => {
+    onSuccess: ({ text, url, undo }, { action }) => {
       const link = url
       // Each step offers the next one, so commit, push and pull request need no trip across the
       // screen.
       const next = nextGitStep(action, task.pr !== null)
       const actions: ToastAction[] = []
-      if (link !== undefined && link !== null) {
+      if (undo === true) {
+        actions.push({ label: 'Undo', run: () => gitAction.mutate({ action: 'undo-rollback' }) })
+      } else if (link !== undefined && link !== null) {
         actions.push({
           label: 'Open',
           run: () => window.open(link, '_blank', 'noopener,noreferrer'),
@@ -546,6 +570,11 @@ export function ChangesView({
             onCommit={commitFiles}
             committing={pending === 'commit'}
             gitBusy={pending !== null}
+            onRollback={
+              rollback === undefined
+                ? undefined
+                : (paths) => gitAction.mutate({ action: 'rollback', paths })
+            }
             onDraft={generateCommitMessage === undefined ? undefined : draftMessage}
             draftAgent={agentLabel(isAgentId(task.agent) ? task.agent : DEFAULT_AGENT)}
             autoDraft={autoDraft}

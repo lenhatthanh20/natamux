@@ -10,7 +10,7 @@ import { useRovingFocus } from '../../hooks/useRovingFocus'
 import { CHANGE_LABEL } from '../../lib/changes'
 import { FALLBACK_POLL_MS } from '../../lib/live'
 import { firstChildKey, parentKey } from '../../lib/roving'
-import { STATUS_TONE } from '../git/ChangedFiles'
+import { STATUS_TONE } from '../git/ChangedRow'
 import { changeMarks, type ExplorerRow, explorerRows, pathDragType } from './explorer-tree'
 import { draftKey, useFileDrafts } from './file-drafts'
 

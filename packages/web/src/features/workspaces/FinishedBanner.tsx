@@ -12,6 +12,7 @@ import { Banner } from '../../components/Banner'
 import { Button } from '../../components/ui/Button'
 import { button, ICON } from '../../components/ui/styles'
 import { type FinishedAction, finishedBanner, type GitFacts } from '../../lib/finished'
+import type { GitStep } from '../../lib/workspace'
 
 type FinishedBannerProps = {
   task: Pick<Task, 'state' | 'pr' | 'prStatus' | 'branch'>
@@ -20,7 +21,7 @@ type FinishedBannerProps = {
   // nothing now.
   pushLabel: string
   pushReason?: string
-  pending: 'commit' | 'push' | 'pull-request' | null
+  pending: GitStep | null
   onCommit: () => void
   onPush: () => void
   onCreatePullRequest: () => void

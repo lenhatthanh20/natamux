@@ -240,6 +240,11 @@ export function allFolderKeys(nodes: readonly TreeNode[]): string[] {
   return keys
 }
 
+// The changed files a row stands for: its file, or every file under its folder.
+export function entriesUnder(node: TreeNode): ChangeEntry[] {
+  return node.kind === 'file' ? [node.entry] : node.children.flatMap(entriesUnder)
+}
+
 function filePaths(nodes: readonly TreeNode[], into: string[]): string[] {
   for (const node of nodes) {
     if (node.kind === 'folder') {

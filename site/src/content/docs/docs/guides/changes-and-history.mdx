@@ -130,6 +130,27 @@ The commit box is under the file list.
 - **Commit…** in the header drafts a message too, when the box is empty.
 - When the agent is missing, fails, or takes more than 60 seconds, the box gets a simple message from the task title and the file names, and a toast says why.
 
+### Roll back changes
+
+Rollback throws away changes that are not committed: the files go back to how they are in the last commit.
+
+- Click **Rollback…** in the header of the file list to roll back any of the changed files.
+- Right-click a file, or press `Shift+F10` on it, and pick **Rollback…** to roll back that file. On a folder of the tree, it offers every file under the folder.
+- Press `Mod+Alt+Z` to roll back the file that shows in the diff.
+
+A dialog lists the files, all checked. Clear the ones to keep, then click **Roll back N files**. Each file goes back as follows:
+
+| Status | After the rollback |
+|---|---|
+| M, D | The file as it is in the last commit |
+| A, U | The file is deleted |
+| R | The old name comes back; the new name is deleted |
+| C | Cannot be rolled back; resolve the conflict first |
+
+The dialog says how many new files will be deleted. Ignored files are never touched.
+
+A toast says **Rolled back N files.** and has an **Undo** action. **Undo** brings back those files as they were just before the rollback, new files too. Only the last rollback of a task can be undone, until the daemon restarts. An added file comes back as a new file (U); the commit takes it either way.
+
 ### Push and open a pull request
 
 The header of the workspace has two buttons.

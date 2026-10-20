@@ -2617,6 +2617,73 @@ describe('commit and push', () => {
   })
 })
 
+describe('rollback', () => {
+  async function taskWithChange(): Promise<string> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    const created = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/workspace',
+      headers: authorization,
+    })
+    const workspace: string = created.json().task.workspace
+    writeFileSync(join(workspace, 'fix.txt'), 'fixed\n')
+    return workspace
+  }
+
+  it('rolls back changed files, and undoes it once', async () => {
+    const workspace = await taskWithChange()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tasks/T-0001/rollback',
+      headers: authorization,
+      payload: { paths: ['fix.txt'] },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ files: 1 })
+    expect(existsSync(join(workspace, 'fix.txt'))).toBe(false)
+
+    const undo = () =>
+      app.inject({ method: 'POST', url: '/tasks/T-0001/rollback/undo', headers: authorization })
+    const undone = await undo()
+    expect(undone.statusCode).toBe(200)
+    expect(undone.json()).toEqual({ files: 1 })
+    expect(readFileSync(join(workspace, 'fix.txt'), 'utf8')).toBe('fixed\n')
+    expect((await undo()).statusCode).toBe(409)
+  })
+
+  it('answers 400 for a bad list, and 404 for a file that did not change', async () => {
+    await taskWithChange()
+    const rollback = (payload: object) =>
+      app.inject({ method: 'POST', url: '/tasks/T-0001/rollback', headers: authorization, payload })
+
+    for (const payload of [
+      {},
+      { paths: [] },
+      { paths: [''] },
+      { paths: ['x'.repeat(1025)] },
+      { paths: Array.from({ length: 5001 }, () => 'fix.txt') },
+    ]) {
+      expect((await rollback(payload)).statusCode).toBe(400)
+    }
+    const missing = await rollback({ paths: ['fix.txt', 'other.txt'] })
+    expect(missing.statusCode).toBe(404)
+    expect(missing.json().error).toBe('not_found')
+  })
+
+  it('needs the token', async () => {
+    for (const url of ['/tasks/T-0001/rollback', '/tasks/T-0001/rollback/undo']) {
+      const response = await app.inject({ method: 'POST', url })
+      expect(response.statusCode).toBe(401)
+    }
+  })
+})
+
 describe('start an agent', () => {
   it('types the agent command into the task terminal', async () => {
     await app.inject({

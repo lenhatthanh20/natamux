@@ -1,6 +1,6 @@
 import { type ChangeEntry, type FileDiff, type ImageSide, imageTypeOf } from '@natamux/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileDiff as FileDiffIcon, RefreshCw, Sparkles } from 'lucide-react'
+import { FileDiff as FileDiffIcon, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -20,6 +20,7 @@ import { ChangedFiles } from './ChangedFiles'
 import { fileOrder } from './change-tree'
 import { DiffToolbar } from './DiffToolbar'
 import { type ChangeInfo, FileBody, type LineStats } from './FileBody'
+import { RollbackDialog } from './RollbackDialog'
 import { useFileViewMode } from './useFileViewMode'
 
 // The daemon says when the workspace changed (workspace.dirty); this poll only catches what the
@@ -43,8 +44,11 @@ type ChangesPanelProps = {
   // Commits and says so. Resolves true when it worked, so the box can empty itself.
   onCommit: (message: string, fileCount: number) => Promise<boolean>
   committing: boolean
-  // Another git action is running: commit waits.
+  // Another git action is running: commit and rollback wait.
   gitBusy: boolean
+  // Puts these changed files back as they are in the last commit. Without it, there is no
+  // rollback.
+  onRollback?: (paths: string[]) => void
   // Asks the agent for a commit message. Null when it failed; the caller says why.
   onDraft: (() => Promise<string | null>) | undefined
   // The name of the agent that drafts, as the user knows it.
@@ -67,6 +71,7 @@ export function ChangesPanel({
   onCommit,
   committing,
   gitBusy,
+  onRollback,
   onDraft,
   draftAgent = 'the task agent',
   autoDraft = false,
@@ -97,6 +102,8 @@ export function ChangesPanel({
   const [quote, setQuote] = useState<CodeSelection | null>(null)
   const [stats, setStats] = useState<({ path: string } & LineStats) | null>(null)
   const [changeInfo, setChangeInfo] = useState<({ path: string } & ChangeInfo) | null>(null)
+  // The files the rollback dialog offers, while it is open.
+  const [rollbackOffer, setRollbackOffer] = useState<ReadonlySet<string> | null>(null)
   const [viewMode, setViewMode] = useFileViewMode()
   const [rootRef, rootWidth] = useElementWidth<HTMLDivElement>()
   const files = useStoredWidth('natamux.files-width', 260, 200, 420)
@@ -173,6 +180,13 @@ export function ChangesPanel({
   useAppEvent<number>('diff-step', (by) => step(by < 0 ? -1 : 1))
   useAppEvent('refresh-changes', refresh)
   useAppEvent('diff-comment', () => document.getElementById('agent-comment')?.focus())
+  const offerRollback = (entries: readonly ChangeEntry[]) =>
+    setRollbackOffer(new Set(entries.map((entry) => entry.path)))
+  useAppEvent('rollback-file', () => {
+    if (current !== null) {
+      offerRollback([current])
+    }
+  })
   const ask = (selection: CodeSelection) => {
     setQuote(selection)
     document.getElementById('agent-comment')?.focus()
@@ -362,6 +376,16 @@ export function ChangesPanel({
     </div>
   )
 
+  // A file that is no longer changed leaves the dialog.
+  const rollbackDialog = rollbackOffer !== null && onRollback !== undefined && (
+    <RollbackDialog
+      files={list.filter((entry) => rollbackOffer.has(entry.path))}
+      gitBusy={gitBusy}
+      onConfirm={onRollback}
+      onClose={() => setRollbackOffer(null)}
+    />
+  )
+
   if (changes.data && list.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -390,6 +414,7 @@ export function ChangesPanel({
             selectedPath={current?.path ?? null}
             onSelect={choose}
             onRefresh={refresh}
+            onRollback={onRollback === undefined ? undefined : offerRollback}
             status={
               <>
                 {changes.isError && (
@@ -419,6 +444,9 @@ export function ChangesPanel({
               </option>
             ))}
           </Select>
+          {onRollback !== undefined && (
+            <IconButton label="Rollback…" icon={Undo2} onClick={() => offerRollback(list)} />
+          )}
           <IconButton label="Refresh" icon={RefreshCw} onClick={refresh} />
         </div>
       )}
@@ -435,6 +463,7 @@ export function ChangesPanel({
       )}
       {diff}
       {!wide && commitBox}
+      {rollbackDialog}
     </div>
   )
 }
