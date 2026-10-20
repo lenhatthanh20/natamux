@@ -91,6 +91,36 @@ const rowOf = (title: string) =>
   screen.getByRole('button', { name: new RegExp(title) }).closest('tr') as HTMLElement
 
 describe('TaskTable', () => {
+  it('shows the estimated cost of each task, with the tokens in its tip', () => {
+    const usage = {
+      'T-0001': { tokens: 2_400_000, costUsd: 1.84, unpricedModels: [], stages: [] },
+      'T-0002': { tokens: 900, costUsd: null, unpricedModels: ['mystery'], stages: [] },
+    }
+    render(
+      <TaskTable
+        tasks={TASKS}
+        mainWidth={null}
+        usage={usage}
+        selectedId={null}
+        sort={null}
+        onSort={() => {}}
+        onSelect={() => {}}
+        onOpen={() => {}}
+        onToggleDetails={() => {}}
+      />,
+    )
+
+    expect(screen.getByRole('columnheader', { name: 'Cost' })).toBeTruthy()
+    const cost = within(rowOf('Fix flaky login test')).getByText('$1.84')
+    expect(cost.dataset.tip).toBe('2.4M tokens, estimated at API list prices')
+    expect(within(rowOf('Write release notes')).getByText('—')).toBeTruthy()
+  })
+
+  it('has no cost column when no task has usage', () => {
+    table()
+    expect(screen.queryByRole('columnheader', { name: 'Cost' })).toBeNull()
+  })
+
   // The first click can open the details panel; the page then moves, and the second click of the
   // double click lands on the row next to it.
   it('opens the row of the first click of a double click', () => {

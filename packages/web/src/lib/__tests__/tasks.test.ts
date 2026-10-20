@@ -435,6 +435,23 @@ describe('sortTasks', () => {
     ])
   })
 
+  it('sorts by cost and puts tasks with no price last', () => {
+    const usage = (costUsd: number | null) => ({
+      tokens: 10,
+      costUsd,
+      unpricedModels: [],
+      stages: [],
+    })
+    const costs = { 'T-0001': usage(0.5), 'T-0002': usage(2), 'T-0003': usage(null) }
+    const byCost = (direction: 'asc' | 'desc') =>
+      sortTasks(tasks, { key: 'cost', direction }, {}, costs).map((task) => task.id)
+    expect(byCost('desc').slice(0, 2)).toEqual(['T-0002', 'T-0001'])
+    expect(byCost('asc').slice(0, 2)).toEqual(['T-0001', 'T-0002'])
+    expect(byCost('asc').slice(2)).toEqual(
+      ids(null).filter((id) => !['T-0001', 'T-0002'].includes(id)),
+    )
+  })
+
   it('sorts a task with a chosen id by the number at the end of its id', () => {
     const mixed = ['T-0010', 'TASK-0005', 'T-0003'].map((id) => makeTask({ id }))
     expect(sortTasks(mixed, { key: 'id', direction: 'asc' }).map((task) => task.id)).toEqual([

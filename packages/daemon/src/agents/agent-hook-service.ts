@@ -61,6 +61,9 @@ function changesFiles(hook: NormalizedHook): boolean {
   return hook.signal === 'turn-ended' || hook.signal === 'turn-paused' || hook.signal === 'failed'
 }
 
+// The signals after which the session's file holds the usage of a whole model call.
+const USAGE_SIGNALS: readonly AgentSignal[] = ['turn-ended', 'turn-paused', 'failed', 'asking']
+
 type HookServiceOptions = {
   // Dashboards hear of each change of the activity, and of the state of an agent in a shell.
   bus?: EventBus
@@ -68,6 +71,8 @@ type HookServiceOptions = {
   workspaceChanged?: (taskId: string) => void
   // Called with each session a hook names from a Natamux shell, so the shell can come back on it.
   sessionSeen?: (taskId: string, terminal: string, agent: string, session: string) => void
+  // Called after a turn with the session's usage file and the stage it counts for (null: none).
+  usageSeen?: (taskId: string, stage: string | null, agent: string, transcript: string) => void
 }
 
 export class AgentHookService {
@@ -86,6 +91,9 @@ export class AgentHookService {
   private readonly bus: EventBus | undefined
   private readonly workspaceChanged: (taskId: string) => void
   private readonly sessionSeen: NonNullable<HookServiceOptions['sessionSeen']>
+  private readonly usageSeen: NonNullable<HookServiceOptions['usageSeen']>
+  // The stage of the last hook from each "<task>/<terminal>", or null for none.
+  private readonly lastStages = new Map<string, string | null>()
 
   constructor(
     tasks: TaskService,
@@ -97,6 +105,7 @@ export class AgentHookService {
     this.bus = options.bus
     this.workspaceChanged = options.workspaceChanged ?? (() => undefined)
     this.sessionSeen = options.sessionSeen ?? (() => undefined)
+    this.usageSeen = options.usageSeen ?? (() => undefined)
   }
 
   // The task comes from the header when it names one, otherwise from the workspace that holds `cwd`.
@@ -171,6 +180,7 @@ export class AgentHookService {
     const reportedTurn =
       (hook.signal === 'turn-ended' || hook.signal === 'turn-paused') &&
       this.stages.takeReport(task.id, terminal ?? MAIN_TERMINAL)
+    this.noteUsage(task.id, terminal ?? MAIN_TERMINAL, adapter.id, hook, lane, reportedTurn)
     if (reportedTurn) {
       this.forgetActivity(task.id, terminal ?? MAIN_TERMINAL)
       return { taskId: task.id, applied: [] }
@@ -208,6 +218,27 @@ export class AgentHookService {
       this.tasks.recordActivity(task.id)
     }
     return { taskId: task.id, applied }
+  }
+
+  // The report moved the task on before its turn ended, so that turn counts for the stage of the
+  // hooks before it.
+  private noteUsage(
+    taskId: string,
+    terminal: string,
+    agent: string,
+    hook: NormalizedHook,
+    lane: { stage: string } | null,
+    reportedTurn: boolean,
+  ): void {
+    const key = `${taskId}/${terminal}`
+    const before = this.lastStages.get(key)
+    const stage = reportedTurn && before !== undefined ? before : (lane?.stage ?? null)
+    if (!reportedTurn) {
+      this.lastStages.set(key, lane?.stage ?? null)
+    }
+    if (hook.transcript !== undefined && USAGE_SIGNALS.includes(hook.signal)) {
+      this.usageSeen(taskId, stage, agent, hook.transcript)
+    }
   }
 
   shellState(taskId: string, terminal: string): TaskState | undefined {

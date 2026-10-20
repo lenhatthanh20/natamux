@@ -1,4 +1,4 @@
-import type { Task, TaskEvent } from '@natamux/core'
+import type { Task, TaskEvent, TaskUsage } from '@natamux/core'
 
 export type AgentActivity = { text: string; at: string }
 
@@ -36,6 +36,8 @@ export type DaemonMessage =
   | { kind: 'jobs.changed'; jobs: Job[] }
   // The step a new workspace is at. Null: it ended, with `error` when it failed.
   | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
+  // The task's whole usage after a read of a session file added to it, as in GET /usage.
+  | { kind: 'usage.changed'; taskId: string; usage: TaskUsage }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

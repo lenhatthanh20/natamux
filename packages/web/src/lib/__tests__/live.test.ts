@@ -21,6 +21,7 @@ import {
   liveSocketUrl,
   PREPARING_KEY,
   parseLiveMessage,
+  USAGE_KEY,
 } from '../live'
 import { SHELLS_EVERY_MS } from '../task-shells'
 import taskShells from '../task-shells.ts?raw'
@@ -118,6 +119,17 @@ describe('parseLiveMessage', () => {
       lines: {},
       latest: null,
     })
+  })
+
+  it('reads the usage of a task, and drops one it cannot read', () => {
+    const usage = { tokens: 10, costUsd: 0.01, unpricedModels: [], stages: [] }
+    expect(parse({ kind: 'usage.changed', taskId: 'T-0001', usage })).toEqual({
+      kind: 'usage.changed',
+      taskId: 'T-0001',
+      usage,
+    })
+    const broken = { kind: 'usage.changed', taskId: 'T-0001', usage: { tokens: -1 } }
+    expect(parse(broken)).toBeUndefined()
   })
 
   it('reads the list of background jobs', () => {
@@ -218,6 +230,28 @@ describe('applyLiveMessages', () => {
     applyLiveMessages(queryClient, [changed('T-0001', { '1': 'Grep' }, 'Grep')])
 
     expect(queryClient.getQueryData(ACTIVITY_KEY)).toBeUndefined()
+  })
+
+  it('writes the usage of a task and keeps the other tasks as they were', () => {
+    const queryClient = client()
+    const usage = (tokens: number) => ({ tokens, costUsd: null, unpricedModels: [], stages: [] })
+    const before = { 'T-0001': usage(1), 'T-0002': usage(2) }
+    queryClient.setQueryData(USAGE_KEY, before)
+
+    applyLiveMessages(queryClient, [{ kind: 'usage.changed', taskId: 'T-0001', usage: usage(5) }])
+
+    const next = queryClient.getQueryData<typeof before>(USAGE_KEY)
+    expect(next?.['T-0001']?.tokens).toBe(5)
+    expect(next?.['T-0002']).toBe(before['T-0002'])
+  })
+
+  it('leaves the usage to its first read when it was not read yet', () => {
+    const queryClient = client()
+    const usage = { tokens: 5, costUsd: null, unpricedModels: [], stages: [] }
+
+    applyLiveMessages(queryClient, [{ kind: 'usage.changed', taskId: 'T-0001', usage }])
+
+    expect(queryClient.getQueryData(USAGE_KEY)).toBeUndefined()
   })
 
   it('reads the shells of that task again, once however many messages came', () => {

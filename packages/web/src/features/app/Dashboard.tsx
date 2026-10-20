@@ -224,7 +224,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     templatesQuery,
     templateId,
   })
-  const { diffStats, jobs } = useWorkQueries(api, sort)
+  const { diffStats, usage, jobs } = useWorkQueries(api, sort)
   const {
     searchedTasks,
     visibleTasks,
@@ -253,6 +253,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     api,
     tasks,
     diffStats,
+    usage,
     stateFilter,
     search,
     selectedId,

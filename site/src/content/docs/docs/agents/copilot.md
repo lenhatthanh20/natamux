@@ -69,6 +69,10 @@ Source: [Add skills to Copilot CLI](https://docs.github.com/en/copilot/how-tos/c
 
 For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
 
+## Usage
+
+Supported. After a turn ends, Natamux reads the tokens from `~/.copilot/session-state/<session>/events.jsonl`. See [Usage](/docs/guides/dashboard/#usage).
+
 ## Tested
 
 A real Copilot CLI 1.0.94 session.

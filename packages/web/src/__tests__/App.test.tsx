@@ -282,6 +282,9 @@ function installDaemon(
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }
+    if (path === '/api/usage' && method === 'GET') {
+      return json({ usage: {} })
+    }
     if (/^\/api\/tasks\/T-\d+\/terminals$/.test(path) && method === 'GET') {
       const task = tasks.find((item) => path === `/api/tasks/${item.id}/terminals`)
       const terminals = ['1', ...extraShells]

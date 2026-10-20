@@ -92,13 +92,24 @@ Pick a view with the **Layout** switch above the list.
 
 <Figure src="/screens/v2/progress" alt="The Progress view of a project: one row per task and one column per stage from Context to Release, with the Reproduce the bug and Plan columns of a branch. Each stage has a marker for its state, and the last column has the next action, Review, Answer or Open." caption="The Progress view: every task against its stages, with the next action on the right." />
 
-The table columns are Id, Task, State, Agent, Branch, Changes, PR and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value.
+The table columns are Id, Task, State, Agent, Branch, Changes, PR, Cost and Last activity. A narrow window shows fewer columns. Below 560 px wide each task is a card. Changes and PR appear only when some task has a value. **Cost** shows only in a wide window, and only when some task has usage. It is the estimated cost of the task; hover it for the tokens. Click the header to sort; tasks with no price come last.
 
 The default order puts what needs you first: Needs input, In review, Failed, Blocked, Running, Ready, Draft, Done, Cancelled.
 
 Click a row to select it and open its details. Double-click, or press `Enter`, to open its workspace. The workspace opens on the terminal while an agent works, and otherwise on the tab you used last.
 
 Right-click a row, or press `Shift+F10`, for **Open workspace**, **Show details**, **Add subtask…**, the actions for its state (such as **Retry**, **Approve** or **Start agent**), the copy items, **Cancel task** and **Delete task**. **Add subtask…** asks for a title and adds a draft subtask; a subtask has no such item. Both ask first. **Cancel task** marks the task cancelled and keeps it in the list. **Delete task** removes the task, its notes and its history.
+
+## Usage
+
+The **Details** tab of a task has a **Usage** section after **Pull request**. It shows what the agents used on the task.
+
+- The head line is the estimated cost and the tokens, such as `$1.84 est. · 2.4M tokens`. A model with no known price has tokens only.
+- The table has one row for each stage and agent or model: **Input**, **Cache** (read and write), **Output** and **Cost**. Work done on no stage is "No stage". A cost of `<$0.01` is under one cent; `—` means no price for that model.
+- The **Progress** tab shows the same for one stage, under its card: `$0.42 est. · 610K tokens`.
+- Claude Code, Codex, Gemini CLI and Copilot CLI report usage. Cursor does not: the section says "Cursor does not report usage."
+
+The cost is an estimate at API list prices. A subscription, such as Claude Max, ChatGPT or a Copilot plan, is billed by its plan, so it does not pay this amount. See [agents](/docs/agents/claude-code/) for how each agent reports.
 
 ## Add a task
 

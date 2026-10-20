@@ -1,4 +1,4 @@
-import type { DiffStat, Repo, Task } from '@natamux/core'
+import type { DiffStat, Repo, Task, TaskUsage } from '@natamux/core'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Api, isUnauthorized, type Job } from '../../lib/api'
@@ -8,6 +8,7 @@ import {
   DIFFSTATS_KEY,
   FALLBACK_POLL_MS,
   JOBS_KEY,
+  USAGE_KEY,
 } from '../../lib/live'
 import { prefetchWhenIdle } from '../../lib/prefetch'
 import { applyTaskChanges, type TaskSort } from '../../lib/tasks'
@@ -218,5 +219,15 @@ export function useWorkQueries(api: Api, sort: TaskSort) {
     refetchInterval: FALLBACK_POLL_MS,
   })
 
-  return { diffStats: diffStatsQuery.data, jobs: jobsQuery.data ?? NO_JOBS }
+  // The tokens and cost of each task; usage.changed brings each change. Here only to sort, as the
+  // sizes.
+  const sortsByCost = sort?.key === 'cost'
+  const usageQuery = useQuery({
+    queryKey: USAGE_KEY,
+    queryFn: () => api.listUsage(),
+    refetchInterval: FALLBACK_POLL_MS,
+    select: (usage: Record<string, TaskUsage>) => (sortsByCost ? usage : undefined),
+  })
+
+  return { diffStats: diffStatsQuery.data, usage: usageQuery.data, jobs: jobsQuery.data ?? NO_JOBS }
 }

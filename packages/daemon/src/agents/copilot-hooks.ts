@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { type AgentAdapter, type AgentSignal, toolSummary } from './agent-signals.js'
 
@@ -73,6 +75,13 @@ function toolArgs(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
 
+// Copilot sends no transcript path; its session's events, with the usage, are kept here.
+function copilotEventsFile(sessionId: string | undefined): string | undefined {
+  return sessionId !== undefined && /^[\w-]+$/.test(sessionId)
+    ? join(homedir(), '.copilot', 'session-state', sessionId, 'events.jsonl')
+    : undefined
+}
+
 export const copilotAdapter: AgentAdapter = {
   id: 'copilot',
   normalize(raw) {
@@ -103,6 +112,7 @@ export const copilotAdapter: AgentAdapter = {
         ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
       },
       summary,
+      transcript: copilotEventsFile(input.sessionId),
     }
   },
 }

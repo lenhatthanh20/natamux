@@ -63,6 +63,10 @@ Source: [Codex skills](https://learn.chatgpt.com/docs/build-skills), checked 202
 
 For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
 
+## Usage
+
+Supported. After a turn ends, Natamux reads the `token_count` lines of the session file. See [Usage](/docs/guides/dashboard/#usage).
+
 ## Tested
 
 Not run against a real Codex session. The hooks follow Codex's source code and are tested with made-up input.

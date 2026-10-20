@@ -946,6 +946,39 @@ describe('AgentHookService, pushed to the dashboards', () => {
     ])
   })
 
+  it('names the usage file after a turn, with the stage the turn counts for', () => {
+    const seen: (string | null)[][] = []
+    let stage = 'implement'
+    let reported = false
+    const service = new AgentHookService(
+      tasks,
+      { laneFor: (current) => ({ stage, state: current.state }), takeReport: () => reported },
+      { bus, usageSeen: (...args) => seen.push(args) },
+    )
+    const task = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(task.id, { workspace: '/work/T-0001', branch: 'b' })
+    const file = '/home/me/.claude/projects/w/s-1.jsonl'
+    const stop = { hook_event_name: 'Stop', transcript_path: file }
+
+    // A tool that is about to run: the file has no finished model call to read yet.
+    service.handle('claude-code', { ...edit('a.ts'), transcript_path: file }, task.id, '1')
+    service.handle('claude-code', stop, task.id, '1')
+    // The report moved the task on before its turn ended, so the turn counts for the stage before.
+    stage = 'review'
+    reported = true
+    service.handle('claude-code', stop, task.id, '1')
+    reported = false
+    service.handle('claude-code', stop, task.id, '1')
+    // Cursor names no usage file.
+    service.handle('cursor', { hook_event_name: 'stop' }, task.id, '2')
+
+    expect(seen).toEqual([
+      [task.id, 'implement', 'claude-code', file],
+      [task.id, 'implement', 'claude-code', file],
+      [task.id, 'review', 'claude-code', file],
+    ])
+  })
+
   it.each([
     ['cursor', { hook_event_name: 'afterFileEdit' }],
     ['cursor', { hook_event_name: 'afterShellExecution' }],

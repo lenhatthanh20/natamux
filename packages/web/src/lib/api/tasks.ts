@@ -6,9 +6,11 @@ import {
   endedShellSchema,
   type Task,
   type TaskTemplate,
+  type TaskUsage,
   taskEventSchema,
   taskSchema,
   taskTemplateSchema,
+  taskUsageSchema,
 } from '@natamux/core'
 import type { Client } from './client'
 import { asRecord, isPreparingStep, readJobs, readTaskActivity } from './parse'
@@ -133,6 +135,14 @@ export function tasksApi(client: Client) {
         result.byTerminal[taskId] = lines
       }
       return result
+    },
+
+    // The tokens and estimated cost of every task that has usage, by task id.
+    async listUsage(): Promise<Record<string, TaskUsage>> {
+      const usage = asRecord(asRecord(await request('GET', '/usage')).usage)
+      return Object.fromEntries(
+        Object.entries(usage).map(([taskId, item]) => [taskId, taskUsageSchema.parse(item)]),
+      )
     },
 
     // The workspaces being made, by task id. A step this dashboard does not know is left out.

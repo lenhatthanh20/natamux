@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify'
 import type { AgentHookService } from '../agents/agent-hook-service.js'
 import type { AgentRunner } from '../agents/agent-runner.js'
+import type { UsageService } from '../agents/usage-service.js'
 import type { IssueImporter } from '../github/issue-importer.js'
 import type { IssueLinker } from '../github/issue-linker.js'
 import type { PullRequestWatcher } from '../github/pull-request-watcher.js'
@@ -32,6 +33,8 @@ export type ServerOptions = {
   issueLinker: IssueLinker
   // The background jobs that run now. None in most tests.
   jobs?: Jobs
+  // The token usage of tasks. None in most tests.
+  usage?: UsageService
   // The daemon's data folder, where stage files are kept for tasks without a worktree.
   dataDir: string
   token: string

@@ -21,6 +21,7 @@ import {
 } from '../../__tests__/git-repo.fixture.js'
 import { type FakePty, fakeSpawner } from '../../__tests__/terminal-fake.fixture.js'
 import { AgentRunner } from '../../agents/agent-runner.js'
+import { UsageService } from '../../agents/usage-service.js'
 import { worktreeState } from '../../git/worktrees.js'
 import { IssueImporter } from '../../github/issue-importer.js'
 import { IssueLinker } from '../../github/issue-linker.js'
@@ -319,6 +320,62 @@ describe('GET /jobs', () => {
     expect((await app.inject({ method: 'GET', url: '/jobs' })).statusCode).toBe(401)
     const response = await app.inject({ method: 'GET', url: '/jobs', headers: authorization })
     expect(response.json()).toEqual({ jobs: [] })
+  })
+})
+
+describe('GET /usage', () => {
+  it('answers the tokens and cost of each task, read after a turn of its agent', async () => {
+    const home = join(repo.root, 'home')
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    const transcript = join(home, '.claude', 'session.jsonl')
+    const line = (id: string, model: string, input: number, output: number) => {
+      const counts = { input_tokens: input, output_tokens: output }
+      return `${JSON.stringify({ message: { id, model, usage: counts } })}\n`
+    }
+    writeFileSync(
+      transcript,
+      line('m1', 'claude-opus-5-5', 1000, 1000) + line('m2', 'mystery-model', 10, 5),
+    )
+    const usage = new UsageService({ dataDir: serverOptions.dataDir, bus, home })
+    const withUsage = await buildServer({ ...serverOptions, usage })
+    try {
+      await withUsage.inject({
+        method: 'POST',
+        url: '/tasks',
+        headers: authorization,
+        payload: { title: 'Fix the bug' },
+      })
+      await withUsage.inject({
+        method: 'POST',
+        url: '/hooks/claude-code',
+        headers: { ...authorization, 'x-natamux-task': 'T-0001' },
+        payload: { hook_event_name: 'Stop', transcript_path: transcript },
+      })
+      await usage.settle()
+
+      const response = await withUsage.inject({
+        method: 'GET',
+        url: '/usage',
+        headers: authorization,
+      })
+
+      expect(response.statusCode).toBe(200)
+      const task = response.json().usage['T-0001']
+      expect(task).toMatchObject({ tokens: 2015, unpricedModels: ['mystery-model'] })
+      expect(task.costUsd).toBeCloseTo(0.024)
+      expect(task.stages).toEqual([
+        expect.objectContaining({ model: 'claude-opus-5-5', input: 1000, output: 1000 }),
+        expect.objectContaining({ model: 'mystery-model', input: 10, output: 5, costUsd: null }),
+      ])
+    } finally {
+      await withUsage.close()
+    }
+  })
+
+  it('needs the token, and answers {} without usage', async () => {
+    expect((await app.inject({ method: 'GET', url: '/usage' })).statusCode).toBe(401)
+    const response = await app.inject({ method: 'GET', url: '/usage', headers: authorization })
+    expect(response.json()).toEqual({ usage: {} })
   })
 })
 

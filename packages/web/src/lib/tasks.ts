@@ -7,6 +7,7 @@ import {
   type Task,
   type TaskContext,
   type TaskState,
+  type TaskUsage,
 } from '@natamux/core'
 
 export const STATE_LABEL: Record<TaskState, string> = {
@@ -196,7 +197,16 @@ export const STATE_ORDER: readonly TaskState[] = [
   'cancelled',
 ]
 
-export type SortKey = 'id' | 'task' | 'state' | 'agent' | 'branch' | 'changes' | 'pr' | 'activity'
+export type SortKey =
+  | 'id'
+  | 'task'
+  | 'state'
+  | 'agent'
+  | 'branch'
+  | 'changes'
+  | 'pr'
+  | 'cost'
+  | 'activity'
 export type SortDirection = 'asc' | 'desc'
 // Null is the default order: state group, then id descending.
 export type TaskSort = { key: SortKey; direction: SortDirection } | null
@@ -221,6 +231,7 @@ function sortValue(
   task: Task,
   key: SortKey,
   diffStats: Readonly<Record<string, DiffStat>>,
+  usage: Readonly<Record<string, TaskUsage>>,
 ): string | number | null {
   switch (key) {
     case 'id':
@@ -239,6 +250,8 @@ function sortValue(
     }
     case 'pr':
       return pullRequestOrder(task)
+    case 'cost':
+      return usage[task.id]?.costUsd ?? null
     case 'activity':
       return task.updatedAt
   }
@@ -250,6 +263,7 @@ export function sortTasks(
   tasks: readonly Task[],
   sort: TaskSort,
   diffStats: Readonly<Record<string, DiffStat>> = {},
+  usage: Readonly<Record<string, TaskUsage>> = {},
 ): Task[] {
   const byDefault = (a: Task, b: Task) =>
     STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || byId(a, b)
@@ -258,8 +272,8 @@ export function sortTasks(
   }
   const sign = sort.direction === 'asc' ? 1 : -1
   return [...tasks].sort((a, b) => {
-    const left = sortValue(a, sort.key, diffStats)
-    const right = sortValue(b, sort.key, diffStats)
+    const left = sortValue(a, sort.key, diffStats, usage)
+    const right = sortValue(b, sort.key, diffStats, usage)
     if (left === null || right === null) {
       return left === right ? byDefault(a, b) : left === null ? 1 : -1
     }

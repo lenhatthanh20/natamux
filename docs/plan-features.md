@@ -150,7 +150,8 @@ Goals:
 | Agent Client Protocol (ACP) client | Later |
 | Natamux CLI that agents can call: create task, update state, ask a question, report done. Done: `task create`, `event`, `ask`, `done`, plus `task edit` and `agent start` | MVP |
 | Natamux plugin for Claude Code (skills that use the CLI). Done: `plugins/natamux`, with a `natamux-task` skill, installable from this repository as a marketplace | v1 |
-| Account and usage display per agent | Later |
+| Tokens and estimated cost (USD, API list prices) per task and per stage, for each agent that writes its usage to disk. Done: Claude Code, Codex, Gemini CLI, Copilot CLI (Cursor writes none); a **Usage** section in the details, a line on each stage card, a **Cost** column in the table | v1 |
+| Account limits and plan meters per agent | Later |
 
 ### 5.6 Extensibility and sharing
 

@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { findAdapter, knownAgentIds } from '../agent-adapters.js'
 import { COPILOT_EVENT_FIELD } from '../copilot-hooks.js'
@@ -7,6 +9,32 @@ const normalize = (agent: string, raw: unknown) => findAdapter(agent)?.normalize
 describe('the adapters', () => {
   it('cover every agent Natamux starts', () => {
     expect(knownAgentIds()).toEqual(['claude-code', 'codex', 'gemini', 'copilot', 'cursor'])
+  })
+})
+
+describe('the usage file of a session', () => {
+  it.each([
+    ['claude-code', 'Stop'],
+    ['codex', 'Stop'],
+    ['gemini', 'AfterAgent'],
+  ])('is the transcript path that %s sends', (agent, event) => {
+    const hook = normalize(agent, { hook_event_name: event, transcript_path: '/home/me/s.jsonl' })
+    expect(hook?.transcript).toBe('/home/me/s.jsonl')
+    // Not in the details, so the path never goes into the event log.
+    expect(JSON.stringify(hook?.details)).not.toContain('s.jsonl')
+  })
+
+  it("is Copilot's events file of the session", () => {
+    const stop = { [COPILOT_EVENT_FIELD]: 'agentStop' }
+    expect(normalize('copilot', { ...stop, sessionId: 'c-1' })?.transcript).toBe(
+      join(homedir(), '.copilot', 'session-state', 'c-1', 'events.jsonl'),
+    )
+    expect(normalize('copilot', { ...stop, sessionId: '../c-1' })?.transcript).toBeUndefined()
+    expect(normalize('copilot', stop)?.transcript).toBeUndefined()
+  })
+
+  it('is none for Cursor', () => {
+    expect(normalize('cursor', { hook_event_name: 'stop' })?.transcript).toBeUndefined()
   })
 })
 

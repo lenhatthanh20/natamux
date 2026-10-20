@@ -1,4 +1,4 @@
-import type { Stage, StageProgress } from '@natamux/core'
+import type { Stage, StageProgress, TaskUsage } from '@natamux/core'
 import { ChevronRight, CircleAlert, CircleCheck, ExternalLink, FileText, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { STATE_TONE } from '../../components/Banner'
@@ -20,6 +20,7 @@ import {
   type WorkflowChoice,
 } from './StageChoices'
 import { StageMarker } from './StageMarker'
+import { StageUsage } from './StageUsage'
 import { finishedWhen, stageTime } from './stage-view'
 
 export const CARD = 'rounded-xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06)]'
@@ -363,8 +364,11 @@ export function StageCard({
   ci,
   ciBranch,
   skip,
+  usage,
 }: {
   activity?: string
+  // The task's usage; the card shows its stage's part.
+  usage?: TaskUsage
   // The last start of the stage asked the agent for a workflow.
   ranWorkflow: boolean
   // The workflow choice of a stage the settings offer it on.
@@ -459,8 +463,13 @@ export function StageCard({
   const workflowBox = workflow !== undefined && !finished && canAct && (
     <WorkflowBox choice={workflow} started={started} />
   )
-  const factLine = facts.length > 0 && (
-    <span className="block text-xs text-muted tabular-nums">{facts.join(' · ')}</span>
+  const factLine = (
+    <>
+      {facts.length > 0 && (
+        <span className="block text-xs text-muted tabular-nums">{facts.join(' · ')}</span>
+      )}
+      <StageUsage usage={usage} stage={stage.id} />
+    </>
   )
 
   return (
