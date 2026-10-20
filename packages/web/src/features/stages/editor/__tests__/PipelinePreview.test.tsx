@@ -330,3 +330,56 @@ describe('PipelinePreview with a branch', () => {
     expect(within(chart).queryAllByRole('list')).toHaveLength(0)
   })
 })
+
+describe('PipelinePreview with stages on their own agent', () => {
+  const OWN: Step[] = [
+    { id: 'plan', kind: 'agent', gate: 'manual' },
+    {
+      id: 'second-opinion',
+      kind: 'agent',
+      gate: 'auto',
+      agent: 'codex',
+      args: '--model gpt-5-codex',
+      output: 'opinion.md',
+    },
+    { id: 'polish', kind: 'agent', gate: 'auto', agent: 'cursor' },
+    { id: 'notes', kind: 'agent', gate: 'auto', args: '--verbose' },
+  ]
+  const agentLine = (node: HTMLElement) => node.querySelector('.pipeline-agent')
+
+  it('shows the model, or else the agent, under the name', () => {
+    const { chart } = preview(OWN)
+    const opinion = within(chart).getByRole('button', { name: /^Second opinion/ })
+    expect(agentLine(opinion)?.textContent).toBe('gpt-5-codex')
+    expect(agentLine(opinion)?.querySelector('img')).toBeTruthy()
+    const polish = within(chart).getByRole('button', { name: /^Polish/ })
+    expect(agentLine(polish)?.textContent).toBe('Cursor')
+    const notes = within(chart).getByRole('button', { name: /^Notes/ })
+    expect(agentLine(notes)?.textContent).toBe("Task's agent")
+    const plan = within(chart).getByRole('button', { name: /^Plan/ })
+    expect(agentLine(plan)).toBeNull()
+    expect(chart.hasAttribute('data-agents')).toBe(true)
+  })
+
+  it('tells the agent and model in the tooltip and to a screen reader', () => {
+    const { chart } = preview(OWN)
+    const opinion = within(chart).getByRole('button', { name: /^Second opinion/ })
+    expect(opinion.getAttribute('data-tip')).toBe(
+      'Agent · Moves on by itself · Agent: Codex · Model: gpt-5-codex · Output: opinion.md',
+    )
+    expect(opinion.getAttribute('aria-label')).toBe('Second opinion, runs Codex, model gpt-5-codex')
+    const notes = within(chart).getByRole('button', { name: /^Notes/ })
+    expect(notes.getAttribute('data-tip')).toBe("Agent · Moves on by itself · Agent: task's agent")
+    expect(notes.getAttribute('aria-label')).toBe("Notes, runs the task's agent")
+  })
+
+  it('shows no agent line for a stage whose agent is not used, nor in the default pipeline', () => {
+    const { chart } = preview([{ id: 'implement', kind: 'agent', gate: 'auto', agent: 'codex' }])
+    expect(chart.querySelector('.pipeline-agent')).toBeNull()
+    expect(chart.hasAttribute('data-agents')).toBe(false)
+    cleanup()
+    const fresh = preview(DEFAULT_PIPELINE).chart
+    expect(fresh.querySelector('.pipeline-agent')).toBeNull()
+    expect(fresh.hasAttribute('data-agents')).toBe(false)
+  })
+})

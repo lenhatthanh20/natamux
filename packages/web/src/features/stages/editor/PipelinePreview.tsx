@@ -10,6 +10,7 @@ import {
   type StageKind,
   type Step,
   stageName,
+  stagesOf,
 } from '@natamux/core'
 import {
   BookOpen,
@@ -23,6 +24,8 @@ import {
   UserRound,
 } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
+import { AgentIcon } from '../../../components/AgentBadge'
+import { agentLabel } from '../../../lib/agents'
 import {
   alwaysWaits,
   approvalLabel,
@@ -33,6 +36,8 @@ import {
   KIND_LABEL,
   pathName,
   pipelineLabel,
+  type StageRunner,
+  stageRunner,
   stepName,
 } from './pipeline-editor'
 
@@ -60,10 +65,16 @@ export function stageLabel(stage: Stage): string {
   ].join(', ')
 }
 
-function tipOf(stage: Stage): string {
+function runnerName(runner: StageRunner): string {
+  return runner.agent === null ? "task's agent" : agentLabel(runner.agent)
+}
+
+function tipOf(stage: Stage, runner: StageRunner | undefined): string {
   return [
     KIND_LABEL[stage.kind],
     approvalLabel(stage),
+    ...(runner === undefined ? [] : [`Agent: ${runnerName(runner)}`]),
+    ...(runner?.model === undefined ? [] : [`Model: ${runner.model}`]),
     ...(stage.output === undefined ? [] : [`Output: ${stage.output}`]),
     ...(stage.command === undefined ? [] : [`Command: ${stage.command}`]),
   ].join(' · ')
@@ -99,6 +110,7 @@ export function PipelinePreview({ steps, issues, selected, onSelect }: PipelineP
   const node = (stage: Stage, edge?: Edge) => (
     <PreviewNode
       stage={stage}
+      runner={stageRunner(steps, stage)}
       edge={edge}
       selected={stage.id === selected}
       error={wrong.has(stage.id)}
@@ -106,6 +118,7 @@ export function PipelinePreview({ steps, issues, selected, onSelect }: PipelineP
     />
   )
   const branches = shown.filter(isBranch)
+  const agents = shown.flatMap(stagesOf).some((stage) => stageRunner(steps, stage) !== undefined)
   return (
     <div className="shrink-0 rounded-lg border border-line bg-raised">
       {shown.length === 0 ? (
@@ -116,6 +129,7 @@ export function PipelinePreview({ steps, issues, selected, onSelect }: PipelineP
             aria-label={pipelineLabel(steps)}
             className="pipeline"
             data-branch={branches.length > 0 ? '' : undefined}
+            data-agents={agents ? '' : undefined}
           >
             {shown.map((step, index) => (
               <li
@@ -294,14 +308,36 @@ function BranchNotes({ branch, next }: { branch: StageBranch; next: Step | undef
   )
 }
 
+// The agent and model of a stage on its own agent, under its name: the model says more than the
+// agent, and the icon shows the agent.
+function AgentLine({ runner }: { runner: StageRunner }) {
+  const text = runner.model ?? (runner.agent === null ? "Task's agent" : agentLabel(runner.agent))
+  return (
+    <span className="pipeline-agent">
+      <AgentIcon agent={runner.agent} />
+      <span className="pipeline-agent-text">{text}</span>
+    </span>
+  )
+}
+
+function runnerLabel(runner: StageRunner | undefined): string[] {
+  if (runner === undefined) {
+    return []
+  }
+  const agent = runner.agent === null ? "the task's agent" : agentLabel(runner.agent)
+  return [`runs ${agent}`, ...(runner.model === undefined ? [] : [`model ${runner.model}`])]
+}
+
 function PreviewNode({
   stage,
+  runner,
   edge,
   selected,
   error,
   onSelect,
 }: {
   stage: Stage
+  runner: StageRunner | undefined
   edge: Edge | undefined
   selected: boolean
   error: boolean
@@ -311,9 +347,9 @@ function PreviewNode({
   return (
     <button
       type="button"
-      aria-label={stageLabel(stage)}
+      aria-label={[stageLabel(stage), ...runnerLabel(runner)].join(', ')}
       aria-pressed={selected}
-      data-tip={tipOf(stage)}
+      data-tip={tipOf(stage, runner)}
       data-error={error ? '' : undefined}
       data-edge={edge}
       onClick={() => onSelect(stage.id)}
@@ -345,6 +381,7 @@ function PreviewNode({
         )}
       </span>
       <span className="pipeline-name">{stageName(stage)}</span>
+      {runner !== undefined && <AgentLine runner={runner} />}
     </button>
   )
 }

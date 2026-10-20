@@ -1163,6 +1163,33 @@
   font-size: var(--text-xs);
   line-height: var(--text-xs--line-height);
 }
+/* The agent and model of a stage on its own agent, under its name. Every node then takes the
+   height of one with this line, so the lanes of groups and branches stay in step. */
+.pipeline[data-agents] {
+  --lane: calc(var(--dot) + 18px + var(--text-xs--line-height) + var(--text-2xs--line-height));
+}
+.pipeline[data-agents] .pipeline-node {
+  min-height: var(--lane);
+}
+.pipeline-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  line-height: var(--text-2xs--line-height);
+}
+.pipeline-node:hover .pipeline-agent,
+.pipeline-node[aria-pressed="true"] .pipeline-agent {
+  color: var(--ink-2);
+}
+.pipeline-agent-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pipeline-mark {
   position: absolute;
   right: -9px;
@@ -1237,6 +1264,12 @@
     width: auto;
     max-width: 100%;
     padding: 4px 8px 4px 4px;
+  }
+  .pipeline[data-agents] .pipeline-node {
+    min-height: 0;
+  }
+  .pipeline-agent {
+    min-width: 0;
   }
   .pipeline-node::before,
   .pipeline-node::after {
