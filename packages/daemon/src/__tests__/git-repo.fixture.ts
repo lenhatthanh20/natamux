@@ -33,6 +33,8 @@ export function createTestRepo(): TestRepo {
   runGit(dir, 'config', 'user.name', 'Test')
   runGit(dir, 'config', 'user.email', 'test@example.com')
   runGit(dir, 'config', 'commit.gpgsign', 'false')
+  // Git for Windows turns LF into CRLF on checkout, and tests compare the bytes of files.
+  runGit(dir, 'config', 'core.autocrlf', 'false')
   runGit(dir, 'commit', '--allow-empty', '-m', 'init')
   return {
     root,
