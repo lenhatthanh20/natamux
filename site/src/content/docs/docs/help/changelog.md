@@ -7,6 +7,14 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.40 (2026-10-20)
+
+- **Reopen agent** in the wrap-up of a done or cancelled task starts the agent of Terminal 1 again on its last conversation. The task keeps its state. See [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
+- The Done and Cancelled columns of the board have a trash button that deletes every task in the column. Natamux asks first and skips a task with changes that are not committed. See [Task views](/docs/guides/dashboard/#task-views).
+- The Overview card of the Progress view is one row of short figures, with the full meaning in a tooltip.
+- On macOS 26, the desktop app's menu items have icons, so their titles line up with the system items. See [Menu](/docs/guides/desktop-app/#menu).
+- Fix: Copilot CLI printed a warning at start and skipped Claude Code's hook file in the worktree. Now Copilot shows no warning and reports each event once. See [Copilot](/docs/agents/copilot/#how-hooks-are-added).
+
 ## v0.1.39 (2026-10-20)
 
 - **Rollback…** in the Changes tab puts files that are not committed back as they are in the last commit. It is also on a file or folder row, and `Mod+Alt+Z` rolls back the file in the diff. The toast has **Undo**. See [Roll back changes](/docs/guides/changes-and-history/#roll-back-changes).
