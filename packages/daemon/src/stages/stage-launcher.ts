@@ -11,6 +11,7 @@ import {
   stagesOf,
   type Task,
   type TaskEvent,
+  terminalAtStart,
   terminalOfStage,
   waitingOn,
 } from '@natamux/core'
@@ -30,7 +31,7 @@ import { currentHead } from './stage-checks.js'
 import { excludeStageDir } from './stage-files.js'
 import { stagesWaitingForCi } from './stage-gate.js'
 import { stagePrompt } from './stage-prompts.js'
-import type { PromptFor, StageRun } from './stage-run.js'
+import { type PromptFor, pinnedTerminals, type StageRun } from './stage-run.js'
 
 // What Resume types to an agent that still runs and ended its turn.
 export const GO_ON_PROMPT = 'Go on with the stage you are working on.'
@@ -42,19 +43,37 @@ export const GO_ON_PROMPT = 'Go on with the stage you are working on.'
 export class StageLauncher {
   constructor(private readonly run: StageRun) {}
 
+  // The stage's terminal is pinned in the event: lookups use it until the stage starts again.
   markStarted(task: Task, stage: Stage, payload: Record<string, unknown>): boolean {
+    const terminal = this.startTerminal(task, stage.id)
     const started = this.run.tasks.applyEvent(task.id, {
       source: 'system',
       type: 'stage.started',
-      payload: { stage: stage.id, ...payload },
+      payload: { stage: stage.id, terminal, ...payload },
     }).accepted
     // The turn end of an earlier report of this stage never came; it must not swallow one of
     // this round.
-    const key = `${task.id}/${terminalOfStage(this.run.tasks.stepsOf(task), stage.id)}`
+    const key = `${task.id}/${terminal}`
     if (started && this.run.reported.get(key) === stage.id) {
       this.run.reported.delete(key)
     }
     return started
+  }
+
+  private startTerminal(task: Task, stageId: string): string {
+    return terminalAtStart(
+      this.run.tasks.stepsOf(task),
+      stageId,
+      pinnedTerminals(this.run.tasks, task.id),
+    )
+  }
+
+  private terminalOf(task: Task, stageId: string): string {
+    return terminalOfStage(
+      this.run.tasks.stepsOf(task),
+      stageId,
+      pinnedTerminals(this.run.tasks, task.id),
+    )
   }
 
   skillContext(task: Task, agent: string): SkillContext {
@@ -108,7 +127,7 @@ export class StageLauncher {
     const head = await currentHead(task.workspace)
     const own = stageAgent(step, stage)
     const agent = own.agent ?? this.run.chosenAgents.get(task.id) ?? task.agent ?? 'claude-code'
-    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stage.id)
+    const terminal = this.startTerminal(task, stage.id)
     // A prompt typed to the agent took the stage up again: the agent has its prompt. With no
     // agent left (the app restarted), Claude Code goes on with its last session of the stage.
     const running = resumed && this.run.shells.agentRuns(task.id, terminal)
@@ -157,7 +176,7 @@ export class StageLauncher {
     if (stage === undefined) {
       return
     }
-    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stage.id)
+    const terminal = this.terminalOf(task, stage.id)
     if (!this.run.shells.agentRuns(task.id, terminal)) {
       this.relaunch(task, step, stage)
     } else if (this.endedTurn(task.id, stage.id)) {
@@ -224,7 +243,7 @@ export class StageLauncher {
     // in the shell.
     const agent = task.withoutAgent === true ? null : (stageAgent(step, stage).agent ?? task.agent)
     // An agent the person quit before the app closed stays quit; the stage can be resumed.
-    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stage.id)
+    const terminal = this.terminalOf(task, stage.id)
     const quit = this.run.openShells?.wasRunning(task.id, terminal) === false
     if (working && agent !== null && isLaunchable(agent) && !quit) {
       // In a group, the newest session of the folder may be the other stage's.
@@ -259,7 +278,7 @@ export class StageLauncher {
     if (!runByAgent(stage) || task.workspace === null) {
       return
     }
-    const terminal = terminalOfStage(this.run.tasks.stepsOf(task), stage.id)
+    const terminal = this.terminalOf(task, stage.id)
     if (this.run.shells.agentRuns(task.id, terminal)) {
       return
     }
@@ -282,8 +301,9 @@ export class StageLauncher {
       return undefined
     }
     const steps = this.run.tasks.stepsOf(task)
+    const pinned = pinnedTerminals(this.run.tasks, task.id)
     const shellOf = (id: string) => {
-      return findStep(steps, id) === undefined ? undefined : terminalOfStage(steps, id)
+      return findStep(steps, id) === undefined ? undefined : terminalOfStage(steps, id, pinned)
     }
     for (const { event } of [...this.run.tasks.listEvents(task.id)].reverse()) {
       // A session from before another agent was started in this shell is not this agent's. The

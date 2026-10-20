@@ -57,9 +57,11 @@ Each task has a few terminals. See [Terminals and agents](/docs/concepts/stages/
 | Terminal 1 | The task's agent, in one session for the stages in a row. It is never closed before the task ends. |
 | Terminal 2 | **Test spec**, when it has no agent of its own. |
 | Terminal 5 | A stage with `ownShell` and no agent or `args` of its own. |
-| Terminal 6 and up | A stage with its own `agent` or `args`. The first such stage of the pipeline gets Terminal 6, the next Terminal 7. |
+| Terminal 6 and up | A stage with its own `agent` or `args`: Terminal 6 plus the place of the stage among all stages of the task, counted from 0. No two stages share one. |
 
 A stage that runs again, for example after a send back, gets its prompt in the agent of its terminal. That agent still knows the last round. To start fresh each time, set `"endShell": true`.
+
+A stage keeps its terminal until it starts again. If you change its `agent` or `args` while the task runs, the change applies at the stage's next start.
 
 ### End a stage's terminal
 

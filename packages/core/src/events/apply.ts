@@ -8,6 +8,7 @@ import {
   stepToRun,
 } from '../stages/position.js'
 import { isBranch, isGroup, type Stage, type Step, stagesOf } from '../stages/schema.js'
+import type { PinnedTerminals } from '../stages/terminal-lane.js'
 import { isTerminalState, type TaskState, taskStateSchema } from '../tasks/task-state.js'
 import { laneOf, moveOf, payloadString, withPaths } from './moves.js'
 import { reopen, reopenTarget, sendsBack } from './reopen.js'
@@ -22,11 +23,13 @@ export type AppliedEvent = {
 
 // The event as it is logged: the stage it is about, and for a send back the stage it goes back
 // to, filled in when the sender left them out (a button, `natamux ask`, a terminal bell). The
-// progress views read both from the log.
+// progress views read both from the log. `pinned`: the task's pinned terminals, which name the stage
+// of an event that names its terminal only, such as a terminal bell.
 export function completeEvent(
   position: StagePosition,
   event: TaskEvent,
   steps: readonly Step[],
+  pinned: PinnedTerminals = {},
 ): TaskEvent {
   const index = stepIndex(steps, position.stage)
   const step = stepToRun(steps, position.stage)
@@ -46,7 +49,7 @@ export function completeEvent(
   if (move === undefined || payloadString(event, 'stage') !== undefined) {
     return event
   }
-  const lane = laneOf(steps, step, position, event, move)
+  const lane = laneOf(steps, step, position, event, move, pinned)
   return lane === undefined ? event : { ...event, payload: { ...event.payload, stage: lane } }
 }
 

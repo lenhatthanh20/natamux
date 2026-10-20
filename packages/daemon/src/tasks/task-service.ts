@@ -8,6 +8,7 @@ import {
   firstPosition,
   makesCycle,
   type PullRequestStatus,
+  pinnedTerminalsOf,
   resolveSteps,
   type Step,
   splitTaskId,
@@ -354,11 +355,18 @@ export class TaskService {
     const task = this.getTask(taskId)
     const input = applyEventInputSchema.parse(rawInput)
     const steps = this.stepsOf(task)
+    // Read only when needed: an event that names its terminal and no stage, such as a bell.
+    const { stage, terminal } = input.payload
+    const pinned =
+      typeof terminal === 'string' && stage === undefined
+        ? pinnedTerminalsOf(this.listEvents(taskId))
+        : {}
     // A button or `natamux ask` may leave out the stage; the log keeps the one it was about.
     const event: TaskEvent = completeEvent(
       positionOf(task),
       taskEventSchema.parse({ ...input, taskId, at: this.timestamp() }),
       steps,
+      pinned,
     )
 
     const { position, accepted, moved } = applyTaskEvent(positionOf(task), event, steps)

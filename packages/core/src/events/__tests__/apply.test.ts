@@ -221,7 +221,7 @@ describe('completeEvent', () => {
 })
 
 describe('events from the shell of a stage with its own agent', () => {
-  // Test spec and Notes start their own agents, so they run in Shells 6 and 7.
+  // Test spec and Notes start their own agents, so they run in Shells 7 and 8.
   const steps: Step[] = [
     {
       id: 'build',
@@ -248,22 +248,41 @@ describe('events from the shell of a stage with its own agent', () => {
 
   it('names the stage of the shell the event came from', () => {
     expect(from('1')).toBe('implement')
-    expect(from('6')).toBe('test-spec')
-    expect(from('7')).toBe('notes')
+    expect(from('7')).toBe('test-spec')
+    expect(from('8')).toBe('notes')
   })
 
   it('names no stage for a shell no stage uses', () => {
     expect(from('2')).toBeUndefined()
-    expect(from('9')).toBeUndefined()
+    expect(from('6')).toBeUndefined()
   })
 
   it('moves only the lane of that shell', () => {
-    const asked = applyTaskEvent(group, event('agent.asked', { terminal: '7' }), steps)
+    const asked = applyTaskEvent(group, event('agent.asked', { terminal: '8' }), steps)
     expect(asked.position.lanes).toEqual({
       implement: 'running',
       'test-spec': 'running',
       notes: 'needs-input',
     })
+  })
+
+  // The settings then made Notes the stage that changes code, so they would give it Shell 1. The
+  // terminals pinned at the start of the lanes still tell which stage rang the bell.
+  it('names the stage pinned to the shell after a settings change', () => {
+    const changed: Step[] = [
+      {
+        id: 'build',
+        parallel: [
+          { id: 'implement', kind: 'agent', gate: 'auto', output: 'impl.md' },
+          { id: 'test-spec', kind: 'agent', gate: 'manual', output: 'test-spec.md' },
+          { id: 'notes', kind: 'agent', gate: 'auto' },
+        ],
+      },
+    ]
+    const bell = event('agent.asked', { reason: 'terminal bell', terminal: '1' })
+    expect(completeEvent(group, bell, changed).payload.stage).toBe('notes')
+    const pinned = { implement: '1', 'test-spec': '7', notes: '8' }
+    expect(completeEvent(group, bell, changed, pinned).payload.stage).toBe('implement')
   })
 })
 
