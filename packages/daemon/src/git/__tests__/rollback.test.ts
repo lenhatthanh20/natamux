@@ -153,28 +153,32 @@ describe('restoreFromSnapshot', () => {
     ])
   })
 
-  it('brings back a file whose name looks like a pattern, and only that file', async () => {
-    write(':(top)x', 'top\n')
-    write('x', 'x\n')
-    runGit(dir, 'add', '--all')
-    runGit(dir, 'commit', '-m', 'magic names')
-    write(':(top)x', 'top2\n')
-    write('[ab].txt', 'ab2\n')
-    const entries = (await listChanges(dir)).filter(
-      (entry) => entry.path === ':(top)x' || entry.path === '[ab].txt',
-    )
-    expect(entries).toHaveLength(2)
-    const snapshot = await snapshotCommit(dir, 'Natamux rollback')
-    await rollbackFiles(dir, entries)
-    expect(read(':(top)x')).toBe('top\n')
+  // Windows does not allow `:` in a file name.
+  it.skipIf(process.platform === 'win32')(
+    'brings back a file whose name looks like a pattern, and only that file',
+    async () => {
+      write(':(top)x', 'top\n')
+      write('x', 'x\n')
+      runGit(dir, 'add', '--all')
+      runGit(dir, 'commit', '-m', 'magic names')
+      write(':(top)x', 'top2\n')
+      write('[ab].txt', 'ab2\n')
+      const entries = (await listChanges(dir)).filter(
+        (entry) => entry.path === ':(top)x' || entry.path === '[ab].txt',
+      )
+      expect(entries).toHaveLength(2)
+      const snapshot = await snapshotCommit(dir, 'Natamux rollback')
+      await rollbackFiles(dir, entries)
+      expect(read(':(top)x')).toBe('top\n')
 
-    await restoreFromSnapshot(dir, snapshot, rollbackPaths(entries))
+      await restoreFromSnapshot(dir, snapshot, rollbackPaths(entries))
 
-    expect(read(':(top)x')).toBe('top2\n')
-    expect(read('[ab].txt')).toBe('ab2\n')
-    expect(read('x')).toBe('x\n')
-    expect(read('a.txt')).toBe('a\n')
-  })
+      expect(read(':(top)x')).toBe('top2\n')
+      expect(read('[ab].txt')).toBe('ab2\n')
+      expect(read('x')).toBe('x\n')
+      expect(read('a.txt')).toBe('a\n')
+    },
+  )
 
   it('leaves the other files alone', async () => {
     write('mod.txt', 'm2\n')
