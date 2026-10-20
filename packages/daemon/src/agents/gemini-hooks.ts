@@ -7,6 +7,7 @@ export const geminiInputSchema = z.object({
   hook_event_name: z.string().min(1),
   cwd: z.string().optional(),
   session_id: z.string().optional(),
+  transcript_path: z.string().optional(),
   notification_type: z.string().optional(),
   message: z.string().optional(),
   tool_name: z.string().optional(),
@@ -56,6 +57,7 @@ export const geminiAdapter: AgentAdapter = {
         ...(input.message === undefined ? {} : { message: input.message.slice(0, 500) }),
       },
       summary,
+      transcript: input.transcript_path,
     }
   },
 }

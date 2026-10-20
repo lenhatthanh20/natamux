@@ -24,6 +24,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: RouteDeps): void
   // What the agent of each task does now, from its last hook.
   app.get('/activity', async () => ({ activity: hooks.activity() }))
 
+  // The tokens and estimated cost of each task that has usage.
+  app.get('/usage', async () => ({ usage: options.usage?.all() ?? {} }))
+
   // An agent posts its hook here, with its name in the path. Always answer 200 with an empty object,
   // so a hook that matches no task or changes nothing never shows up as an error in the agent.
   app.post('/hooks/:agent', async (request) => {

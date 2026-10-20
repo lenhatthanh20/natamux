@@ -1,4 +1,4 @@
-import type { DiffStat, Task } from '@natamux/core'
+import type { DiffStat, Task, TaskUsage } from '@natamux/core'
 import { useQueries } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useStoredWidth } from '../../components/ui/ResizeHandle'
@@ -31,6 +31,7 @@ type LayoutInput = Pick<
   api: Api
   tasks: Task[]
   diffStats: Record<string, DiffStat> | undefined
+  usage: Record<string, TaskUsage> | undefined
 }
 
 // What the dashboard shows and where: the rows in their order, the open task, and the widths of
@@ -39,6 +40,7 @@ export function useDashboardLayout({
   api,
   tasks,
   diffStats,
+  usage,
   stateFilter,
   search,
   selectedId,
@@ -57,8 +59,8 @@ export function useDashboardLayout({
   )
   // One stable order, which holds still under the pointer and right after a key moved the selection.
   const sortedTasks = useMemo(
-    () => sortTasks(visibleTasks, sort, diffStats),
-    [visibleTasks, sort, diffStats],
+    () => sortTasks(visibleTasks, sort, diffStats, usage),
+    [visibleTasks, sort, diffStats, usage],
   )
   const frozen = useFrozenOrder(
     sortedTasks,

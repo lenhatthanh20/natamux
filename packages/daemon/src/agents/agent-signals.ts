@@ -21,6 +21,8 @@ export type NormalizedHook = {
   details: Record<string, unknown>
   // One line on what the agent does now, such as "Edit src/a.ts". Shown on the dashboard.
   summary?: string
+  // The session's file that holds its token usage. Not in `details`, so it stays out of the log.
+  transcript?: string
 }
 
 // One adapter per agent. `normalize` throws a ZodError for input that is not a hook of this agent,

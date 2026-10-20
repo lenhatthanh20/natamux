@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { type ColumnKey, tableLayout } from '../table-columns'
 
-const both = { changes: true, pr: true }
+const every = { changes: true, pr: true, cost: true }
 
-function columns(width: number | null, has = both): ColumnKey[] | 'cards' {
+function columns(width: number | null, has = every): ColumnKey[] | 'cards' {
   const layout = tableLayout(width, has)
   return layout.kind === 'cards' ? 'cards' : layout.columns
 }
 
 describe('tableLayout', () => {
-  it('has every column from 1072', () => {
-    expect(columns(1072)).toEqual([
+  it('has every column from 1160', () => {
+    expect(columns(1160)).toEqual([
       'id',
       'task',
       'state',
@@ -18,13 +18,14 @@ describe('tableLayout', () => {
       'branch',
       'changes',
       'pr',
+      'cost',
       'activity',
     ])
-    expect(columns(1920)).toHaveLength(8)
+    expect(columns(1920)).toHaveLength(9)
   })
 
-  it('drops agent, branch and pull request from 760 to 1071', () => {
-    expect(columns(1071)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
+  it('drops agent, branch, pull request and cost from 760 to 1159', () => {
+    expect(columns(1159)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
     expect(columns(760)).toEqual(['id', 'task', 'state', 'changes', 'activity'])
   })
 
@@ -38,30 +39,37 @@ describe('tableLayout', () => {
     expect(columns(390)).toBe('cards')
   })
 
-  it('hides changes and pull request when no row has a value', () => {
-    expect(columns(1200, { changes: false, pr: true })).not.toContain('changes')
-    expect(columns(1200, { changes: true, pr: false })).not.toContain('pr')
-    expect(columns(900, { changes: false, pr: false })).toEqual(['id', 'task', 'state', 'activity'])
+  it('hides changes, pull request and cost when no row has a value', () => {
+    expect(columns(1200, { ...every, changes: false })).not.toContain('changes')
+    expect(columns(1200, { ...every, pr: false })).not.toContain('pr')
+    expect(columns(1200, { ...every, cost: false })).not.toContain('cost')
+    expect(columns(900, { changes: false, pr: false, cost: false })).toEqual([
+      'id',
+      'task',
+      'state',
+      'activity',
+    ])
   })
 
   it('uses the widest set when the width is unknown', () => {
-    expect(columns(null)).toHaveLength(8)
+    expect(columns(null)).toHaveLength(9)
   })
 
   it('gives the task column no width of its own, and a minimum for the whole table', () => {
-    const layout = tableLayout(1200, both)
+    const layout = tableLayout(1200, every)
     if (layout.kind !== 'table') {
       throw new Error('expected a table')
     }
     expect(layout.widths.task).toBeNull()
     expect(layout.widths.id).toBe(72)
     expect(layout.widths.state).toBe(128)
-    expect(layout.minWidth).toBe(72 + 128 + 120 + 200 + 88 + 120 + 104 + 240)
+    expect(layout.widths.cost).toBe(88)
+    expect(layout.minWidth).toBe(72 + 128 + 120 + 200 + 88 + 120 + 88 + 104 + 240)
   })
 
   it('has a smaller minimum with fewer columns', () => {
-    const wide = tableLayout(1200, both)
-    const narrow = tableLayout(700, both)
+    const wide = tableLayout(1200, every)
+    const narrow = tableLayout(700, every)
     expect(
       wide.kind === 'table' && narrow.kind === 'table' && narrow.minWidth < wide.minWidth,
     ).toBe(true)

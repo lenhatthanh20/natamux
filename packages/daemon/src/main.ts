@@ -4,6 +4,7 @@ import { claudeCodeHookSettings } from '@natamux/core'
 import { geminiHookSettings, LAUNCHABLE_AGENTS, prepareAgentHooks } from './agents/agent-launch.js'
 import { AgentRunner } from './agents/agent-runner.js'
 import { GenericSignals } from './agents/generic-signals.js'
+import { UsageService } from './agents/usage-service.js'
 import { loadConfig, shellEnv } from './config.js'
 import { IssueImporter } from './github/issue-importer.js'
 import { IssueLinker } from './github/issue-linker.js'
@@ -186,6 +187,7 @@ const app = await buildServer({
   settings,
   issueLinker,
   jobs,
+  usage: new UsageService({ dataDir: config.dataDir, bus }),
   dataDir: config.dataDir,
   token: config.token,
   agentToken: config.agentToken,

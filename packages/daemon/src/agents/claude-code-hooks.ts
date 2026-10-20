@@ -7,6 +7,7 @@ export const claudeCodeInputSchema = z.object({
   hook_event_name: z.string().min(1),
   cwd: z.string().optional(),
   session_id: z.string().optional(),
+  transcript_path: z.string().optional(),
   notification_type: z.string().optional(),
   message: z.string().optional(),
   tool_name: z.string().optional(),
@@ -135,6 +136,12 @@ export const claudeCodeAdapter: AgentAdapter = {
           : waitingFor.length > 0
             ? waitingSummary(waitingFor)
             : undefined
-    return { signal, cwd: input.cwd, details: details(input, waitingFor), summary }
+    return {
+      signal,
+      cwd: input.cwd,
+      details: details(input, waitingFor),
+      summary,
+      transcript: input.transcript_path,
+    }
   },
 }

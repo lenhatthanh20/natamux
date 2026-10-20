@@ -59,6 +59,10 @@ Source: [Gemini CLI skills](https://geminicli.com/docs/cli/skills/), checked 202
 
 For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
 
+## Usage
+
+Supported. After a turn ends, Natamux reads the tokens from the session chat file. Not run against a real session yet. See [Usage](/docs/guides/dashboard/#usage).
+
 ## Tested
 
 Not run against a real Gemini CLI session. The hooks follow its documentation and are tested with made-up input.

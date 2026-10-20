@@ -139,6 +139,26 @@ Sources:
 - Copilot CLI: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
 - Cursor: https://cursor.com/docs/context/skills
 
+## Usage
+
+Tokens and cost per task, read from the files the agents write. Checked on 2026-10-21 against real session files (Claude Code, Codex, Copilot CLI, Cursor) and the vendor docs (Gemini CLI). Code: `packages/daemon/src/agents/` (`usage-service.ts`, `model-prices.ts`).
+
+| Agent | Where the usage is | Fields | Model | Support |
+|---|---|---|---|---|
+| Claude Code | `transcript_path` of the hook, plus `<session>/subagents/*.jsonl` next to it | `message.usage`: `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`. Several lines share one `message.id`: each id counts once | `message.model` | Full (real file) |
+| Codex | `transcript_path` of the hook (rollout file) | `token_count` lines, `info.total_token_usage`: `input_tokens` (includes the cached part), `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens` (includes reasoning) | `turn_context.payload.model` | Full (real file) |
+| Gemini CLI | `transcript_path` of the hook (chat JSON) | `messages[].tokens`: `input` (includes `cached`), `cached`, `output`, `thoughts` | `messages[].model` | Full by the docs; not checked on a real session |
+| Copilot CLI | `~/.copilot/session-state/<sessionId>/events.jsonl` | `session.usage_record`: `inputTokens` (includes cache), `cacheReadTokens`, `cacheWriteTokens`, `outputTokens`, `reasoningTokens`. Its `cost` is premium requests, not USD | `data.usage.model` | Tokens full; USD is an estimate (real file) |
+| Cursor CLI | none: its transcript has no token counts | | | Not supported. The dashboard says "Cursor does not report usage." |
+| Agents without hooks | none (no session, no file) | | | Not supported |
+
+- **One shape.** Per model: `input` (fresh, no cache), `cacheRead`, `cacheWrite`, `output` (includes reasoning or thinking). Each reader converts its own fields.
+- **When.** After a hook with signal `turn-ended`, `turn-paused`, `failed` or `asking`. The read is async and never delays the hook answer.
+- **Path check.** The path must be absolute, inside the user's home folder (after links are resolved), end in `.jsonl` or `.json`, be a regular file, and be at most 200 MB. Otherwise no usage is read and the hook works as before. A bad line is skipped.
+- **Per stage.** The daemon keeps the last totals of each file. A read adds only what is new to the stage of the hook's terminal, so a resumed session, or one that goes on into the next stage, is not counted twice. No stage is `""`, shown as "No stage". A turn that ends right after `natamux done` counts for the stage before the report.
+- **Stored** in `<data dir>/tasks/<id>.usage.json`. Deleting the task deletes it; removing the workspace keeps it.
+- **USD** is an estimate at API list prices, from a built-in table (`model-prices.ts`, read 2026-10-21; Claude, OpenAI and Gemini models). A model id is matched in lower case, `.` as `-`, without a date suffix. A model with no price shows tokens, no cost, and is listed in `unpricedModels`. The cost is computed when sent, never stored. A subscription (Claude Max, ChatGPT, Copilot plan) does not pay this.
+
 ## Order of work
 
 1. (Done) Move the mapping out of the Claude Code adapter into the shared adapter interface. Add `natamux hook <agent>` (guarded: it does nothing without `NATAMUX_TOKEN`, always exits 0 and prints nothing) and `POST /hooks/:agent`. Claude Code keeps working.

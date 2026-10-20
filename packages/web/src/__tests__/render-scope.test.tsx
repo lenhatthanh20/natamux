@@ -122,6 +122,9 @@ function installDaemon() {
     if (route === '/api/diffstats') {
       return json({ stats: {} })
     }
+    if (route === '/api/usage') {
+      return json({ usage: {} })
+    }
     if (route === '/api/templates') {
       return json({ templates: [] })
     }

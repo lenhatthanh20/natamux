@@ -11,6 +11,7 @@ import {
   stageProgress,
   stagesOf,
   type Task,
+  type TaskUsage,
 } from '@natamux/core'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
@@ -57,6 +58,8 @@ type ProgressTabProps = {
   onOpenFile: (name: string) => void
   // What the agent in the first terminal does now, such as "Edit src/a.ts".
   activity?: string
+  // The tokens and estimated cost of the task, shown by stage.
+  usage?: TaskUsage
   // Starts an agent for the stage, for one that failed to start or stopped.
   startAgent?: (agent: AgentId) => Promise<Task>
   // Resumes the agent of a task that waits, and whether that is on its way.
@@ -308,6 +311,7 @@ export function ProgressTab({
   createIssue,
   onOpenFile,
   activity,
+  usage,
   startAgent,
   resume,
   resuming = false,
@@ -496,6 +500,7 @@ export function ProgressTab({
             ? activity
             : undefined
         }
+        usage={usage}
       />
     )
   }

@@ -598,11 +598,12 @@ Shared shell:
 
 | Main width | Columns |
 |---|---|
-| >= 1000 | Id 72 (mono 12 muted) · Task (flex, min 240) · State 128 · Agent 120 · Branch 200 (mono 12) · Changes 88 (right) · PR 120 · Last activity 104 (right) |
-| 760-999 | Id · Task · State · Changes · Last activity |
+| >= 1160 | Id 72 (mono 12 muted) · Task (flex, min 240) · State 128 · Agent 120 · Branch 200 (mono 12) · Changes 88 (right) · PR 120 · Cost 88 (right, only when some task has usage) · Last activity 104 (right) |
+| 760-1159 | Id · Task · State · Changes · Last activity |
 | 560-759 | Id · Task · State · Last activity |
 | < 560 | card list: 56px rows: glyph + title (13/500) / id mono · state text · age (12 muted) |
 
+- Cost column: sortable, tasks without a price last. Only in the full set (main width >= 1160), and hidden when no task has usage. Text 13: `$0.84`, `<$0.01`, or `-` for a task without usage. Tooltip: "<tokens> tokens, estimated at API list prices".
 - Age column removed; created time goes in the Last activity tooltip (NAV-08). Changes and PR columns are hidden when no visible row has a value (NAV-08). Last activity cell is `white-space: nowrap`, min 72 (NAV-07).
 - Task cell: title 13/500 truncate + label chips after it (relation "part of T-0014" / "waits for T-0009", repo when several repos), never wrapping. Running activity shows in the Agent column as 12 muted text instead of a second line.
 - Whole row is the click target (stretched button over the row, `cursor: pointer`), hover bg-hover, selected bg-selected (bg-selection-active when the table has focus) (RA-26, RA-28).
@@ -623,11 +624,12 @@ Shared shell:
 - View tabs under the header (36): **Progress** and **Details**. Progress is the task progress of `design-task-stages.md` 7.5, in one column, so the user can watch the terminal and approve a stage without a tab change. The view the user picks is remembered for all tasks (`natamux.details-view`). Until then, the details beside an open workspace show Progress, and beside the list show Details. Edit always shows Details. The palette command "Show the task progress" and Send back open Progress. Opening Progress scrolls the current stage to the middle.
 - Progress, a branch: a path not taken is one folded row (chevron, name, condition, **Not taken**, stage count). Its button has `aria-expanded` and `aria-controls`; it opens to the stage cards (`design-task-stages.md` 7.5).
 - Progress, the current stage card while the stage needs the user (T-0115): needs-input or failed, and no check or agent reason in the reasons box: a box with the reason (amber `bg-signal-soft` for needs-input, red state tone for failed; "The agent asks: <question>", "The agent is waiting for your answer in its terminal.", "The agent ended its turn. Reply in the terminal, or resume it.", or the failure reason, else "The agent failed."). Actions: wide primary [Approve] (tooltip with the `a` key) or [Approve anyway] first, then a row: [Answer in terminal] (secondary xs; needs-input with a question, and only for the task of the open workspace: shows its Terminal tab and focuses the waiting terminal; a sheet over the workspace closes first), [Resume] (ghost xs, busy while it runs), Start agent (needs-input and failed), [Mark as done], [Skip], [Send back]. Not on a phone this is the one place with the reason and these actions; the details are their own column, so a state change never resizes the terminals.
+- Progress, a stage card with usage: under the card, a 12px muted line `$0.42 est. · 610K tokens` (tokens alone when no price).
 - Progress, a stage card not reached yet: a ghost `xs` button **Skip** under its finish rule marks it to skip (`design-task-stages.md` 3.9). A marked card says **Will be skipped** in its chip, has a muted title, and the button reads **Don't skip**. No button on a task that is done or cancelled, or on the context stage.
 - Title block pad 16: title 16/600 (wraps), chips row (state, priority, labels) gap 6.
 - Action row: primary state action (`button primary`), secondary actions, agent action (Start agent / Restart agent / hidden while running, WS-17). Label above in caps "Actions" only in the narrow page mode.
 - Banners (when relevant), pad 10 12, radius 6: quiet ("No sign of life for 12m. The agent may be stuck.") and waiting ("Waits for T-0009 to be done"), bg signal-soft, 1px signal-line.
-- Sections, each a disclosure with a 28px header button (chevron 12, caps label, optional count badge, optional right action); open state remembered in localStorage per section: Notes (description; empty state "No notes. Add some with Edit.", NAV-11), Workspace (Branch with copy, Folder with copy, "Dev ports 20190-20199 (first is $PORT)", [View changes] [Remove workspace]) , Pull request, Subtasks, Tries (only when > 1), Details (repo, depends on, created, updated), Activity.
+- Sections, each a disclosure with a 28px header button (chevron 12, caps label, optional count badge, optional right action); open state remembered in localStorage per section: Notes (description; empty state "No notes. Add some with Edit.", NAV-11), Workspace (Branch with copy, Folder with copy, "Dev ports 20190-20199 (first is $PORT)", [View changes] [Remove workspace]) , Pull request, Usage (T-0141: hidden when the task never had an agent; head line `$1.84 est. · 2.4M tokens`, tokens alone when no model has a price; table Stage · Agent / model · Input · Cache (read + write) · Output · Cost, cost `$0.84`, `<$0.01`, or `—` with the tooltip "No price for <model>"; foot note "Estimated at API list prices. A subscription is billed by its plan." and "Cursor does not report usage." when the task's agent is Cursor; "No usage yet." when empty), Subtasks, Tries (only when > 1), Details (repo, depends on, created, updated), Activity.
 - Field rows: grid `96px 1fr`, gap 8, row min 24, label 12 muted, value 13; copy icon button 24 appears on row hover/focus.
 - Edit mode: the title block and Notes become the form (no duplicate title, NAV-09); focus moves to the Title field; sticky footer 52 with [Cancel] [Save `Mod Enter`].
 - "..." menu: Save as template / separator / Cancel task (danger, confirm) / Delete task (danger, confirm).
@@ -854,7 +856,7 @@ One helper in `lib/tasks.ts`: `formatAge(date, now, 'short' | 'long')`. Short (r
 | Floating surfaces | one recipe, three elevation levels | 2.6 |
 | Settings | theme, UI size, density later | 4.28 account menu; full settings page later |
 
-Not matched on purpose (for now): embedded browser, several editor tabs, image diff, SSH, plugins, usage meters (no data source yet). The files explorer opens one file at a time (4.33).
+Not matched on purpose (for now): embedded browser, several editor tabs, image diff, SSH, plugins. Usage per task is built (4.25, 4.27); account limits and plan meters are not. The files explorer opens one file at a time (4.33).
 
 ---------------------------------------------------------------------
 

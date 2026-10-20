@@ -1,4 +1,4 @@
-import { type DiffStat, portRange, type Task } from '@natamux/core'
+import { type DiffStat, portRange, type Task, type TaskUsage } from '@natamux/core'
 import {
   ArrowLeft,
   Ban,
@@ -50,6 +50,7 @@ import { Subtasks } from './Subtasks'
 import { LABEL_CHIP } from './TaskChips'
 import { TaskEditForm } from './TaskEditForm'
 import { Timeline } from './Timeline'
+import { UsageSection } from './UsageSection'
 
 type TaskDetailProps = {
   task: Task
@@ -78,6 +79,8 @@ type TaskDetailProps = {
   // The task and its tries from a fan-out, when it has some.
   tries?: readonly Task[]
   diffStats?: Readonly<Record<string, DiffStat>>
+  // The tokens and estimated cost of the task. Undefined: none yet.
+  usage?: TaskUsage
   onKeepTry?: (task: Task) => void
   onDelete?: () => void
   onClose: () => void
@@ -118,6 +121,7 @@ export function TaskDetail({
   onFanOut,
   tries = [],
   diffStats,
+  usage,
   onKeepTry,
   onDelete,
   onClose,
@@ -450,6 +454,8 @@ export function TaskDetail({
               </div>
             </DetailSection>
           )}
+
+          <UsageSection task={task} usage={usage} />
 
           {task.parentId === null && onAddSubtask !== undefined && (
             <Subtasks

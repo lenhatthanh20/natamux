@@ -62,6 +62,10 @@ Source: [Cursor skills](https://cursor.com/docs/context/skills), checked 2026-10
 
 For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
 
+## Usage
+
+Not supported. The Cursor CLI writes no token counts, so the dashboard says "Cursor does not report usage."
+
 ## Tested
 
 Not run against a real Cursor CLI session. The hooks follow its documentation and are tested with made-up input. The Cursor CLI may not send every event the editor sends.

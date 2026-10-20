@@ -264,7 +264,7 @@ describe('claudeCodeInputSchema', () => {
   it('needs an event name and drops the fields it does not read', () => {
     expect(claudeCodeInputSchema.safeParse({}).success).toBe(false)
     expect(
-      claudeCodeInputSchema.parse({ hook_event_name: 'Stop', transcript_path: '/t.jsonl' }),
+      claudeCodeInputSchema.parse({ hook_event_name: 'Stop', permission_mode: 'default' }),
     ).toEqual({ hook_event_name: 'Stop' })
   })
 })

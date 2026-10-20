@@ -7,6 +7,7 @@ export const codexInputSchema = z.object({
   hook_event_name: z.string().min(1),
   cwd: z.string().optional(),
   session_id: z.string().optional(),
+  transcript_path: z.string().optional(),
   turn_id: z.string().optional(),
   tool_name: z.string().optional(),
   tool_input: z.unknown().optional(),
@@ -79,6 +80,7 @@ export const codexAdapter: AgentAdapter = {
         ...(input.session_id === undefined ? {} : { sessionId: input.session_id }),
       },
       summary,
+      transcript: input.transcript_path,
     }
   },
 }

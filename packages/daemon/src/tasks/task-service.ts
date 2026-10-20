@@ -19,6 +19,7 @@ import {
   taskEventSchema,
   taskSchema,
 } from '@natamux/core'
+import { deleteUsage } from '../agents/usage-service.js'
 import type { EventBus } from '../shared/event-bus.js'
 import { deleteEndedShells } from '../terminals/ended-shells.js'
 import { deleteOpenShells } from '../terminals/open-shells-file.js'
@@ -294,6 +295,7 @@ export class TaskService {
     rmSync(archiveDir(this.dataDir, taskId), { recursive: true, force: true })
     deleteEndedShells(this.dataDir, taskId)
     deleteOpenShells(this.dataDir, taskId)
+    deleteUsage(this.dataDir, taskId)
     this.removeLaunchScripts(taskId)
     this.index.deleteTask(taskId)
     this.sync.forget(taskId)

@@ -28,6 +28,7 @@ export const NO_PROGRAM_ROUTES = new Set([
   '/tasks/:id/attachments/:name',
   '/templates',
   '/activity',
+  '/usage',
   '/repos',
   '/repos/:id/settings',
   '/repos/:id/skills',
@@ -44,6 +45,8 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     workspaceChanged: (taskId) => options.workspaces.touch(taskId),
     sessionSeen: (taskId, terminal, agent, session) =>
       options.openShells?.noteSession(taskId, terminal, agent, session),
+    usageSeen: (taskId, stage, agent, transcript) =>
+      options.usage?.seen(taskId, stage, agent, transcript),
   })
   await app.register(websocket)
   const servesPage =

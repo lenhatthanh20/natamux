@@ -1,4 +1,4 @@
-import { type Task, taskSchema } from '@natamux/core'
+import { type Task, type TaskUsage, taskSchema, taskUsageSchema } from '@natamux/core'
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import {
   type AgentActivity,
@@ -37,6 +37,8 @@ export type LiveMessage =
   | { kind: 'jobs.changed'; jobs: Job[] }
   // The step a new workspace is at. Null: it ended, with `error` when it failed.
   | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
+  // The task's whole usage after it changed.
+  | { kind: 'usage.changed'; taskId: string; usage: TaskUsage }
   // The daemon skipped this dashboard while it was behind, so anything may have changed.
   | { kind: 'resync' }
 
@@ -56,7 +58,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
     const logged = 'kind' in message && message.kind === 'task.updated'
     return parsed.success ? { kind: 'task', task: parsed.data, logged } : undefined
   }
-  const { kind, taskId, activity, jobs, step, error } = message as Record<string, unknown>
+  const { kind, taskId, activity, jobs, step, error, usage } = message as Record<string, unknown>
   const id = typeof taskId === 'string' ? taskId : null
   switch (kind) {
     case 'repos.changed':
@@ -84,6 +86,12 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
             step,
             ...(typeof error === 'string' ? { error } : {}),
           }
+    case 'usage.changed': {
+      const parsed = taskUsageSchema.safeParse(usage)
+      return id === null || !parsed.success
+        ? undefined
+        : { kind: 'usage.changed', taskId: id, usage: parsed.data }
+    }
     case 'activity.changed':
       try {
         return id === null
@@ -103,6 +111,8 @@ export const FALLBACK_POLL_MS = 60_000
 export const ACTIVITY_KEY = ['activity']
 export const JOBS_KEY = ['jobs']
 export const DIFFSTATS_KEY = ['diffstats']
+// The usage of every task that has some, by task id (GET /usage).
+export const USAGE_KEY = ['usage']
 // The workspaces being made, and the step of each (see listPreparing).
 export const PREPARING_KEY = ['workspaces', 'preparing']
 // The sizes of all tasks come in one read, and the daemon runs git for each workspace that changed.
@@ -170,6 +180,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   const preparingBefore = preparing
   let sizesChanged = false
   let jobs: Job[] | undefined
+  let usage = client.getQueryData<Record<string, TaskUsage>>(USAGE_KEY)
+  const usageBefore = usage
   for (const message of messages) {
     if (message.kind === 'jobs.changed') {
       // Each message holds the whole list, so the last one wins.
@@ -192,6 +204,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
     } else if (message.kind === 'workspace.preparing' && preparing !== undefined) {
       const { [message.taskId]: _step, ...others } = preparing
       preparing = message.step === null ? others : { ...others, [message.taskId]: message.step }
+    } else if (message.kind === 'usage.changed' && usage !== undefined) {
+      usage = { ...usage, [message.taskId]: message.usage }
     } else if (message.kind === 'task' && message.logged) {
       for (const key of LOG_KEYS) {
         add([key, message.task.id])
@@ -207,6 +221,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   }
   if (preparing !== preparingBefore) {
     client.setQueryData(PREPARING_KEY, preparing)
+  }
+  if (usage !== usageBefore) {
+    client.setQueryData(USAGE_KEY, usage)
   }
   for (const queryKey of stale.values()) {
     void client.invalidateQueries({ queryKey })

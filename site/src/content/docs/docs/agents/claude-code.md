@@ -119,6 +119,10 @@ Sources: [skills](https://code.claude.com/docs/en/skills) and [plugins reference
 
 For the rules in general, see [Skills in a prompt](/docs/concepts/stages/#skills-in-a-prompt). Agents change quickly: check the vendor docs if a skill is not found.
 
+## Usage
+
+Supported. After a turn ends, Natamux reads the tokens from the session transcript and its sub-agent files. See [Usage](/docs/guides/dashboard/#usage).
+
 ## Tested
 
 Real Claude Code sessions. The permission path (`PermissionRequest` and the permission `Notification`) was tested with made-up input only.

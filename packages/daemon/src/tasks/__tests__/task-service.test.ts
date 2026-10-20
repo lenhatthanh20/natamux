@@ -19,6 +19,7 @@ import {
   type TaskState,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { usagePath } from '../../agents/usage-service.js'
 import { type DaemonMessage, EventBus } from '../../shared/event-bus.js'
 import { endedShellsPath, saveEndedShells } from '../../terminals/ended-shells.js'
 import { openShellsPath, saveOpenShells } from '../../terminals/open-shells-file.js'
@@ -1575,6 +1576,7 @@ describe('event log files', () => {
       },
     ])
     saveOpenShells(dataDir, task.id, [{ name: '6', agent: 'copilot', session: 'c-1' }])
+    writeFileSync(usagePath(dataDir, task.id), '{"files":{},"stages":{}}')
 
     expect(service.deleteTask(task.id)).toEqual([])
 
@@ -1585,6 +1587,7 @@ describe('event log files', () => {
     expect(existsSync(join(dataDir, `agent-launch-${task.id}-2.sh`))).toBe(false)
     expect(existsSync(endedShellsPath(dataDir, task.id))).toBe(false)
     expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
+    expect(existsSync(usagePath(dataDir, task.id))).toBe(false)
     expect(readFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'utf8')).toBe('keep\n')
     expect(service.listTasks()).toEqual([])
     expect(messages.at(-1)).toEqual({ kind: 'task.deleted', taskId: task.id })

@@ -1,0 +1,5 @@
+{"type":"session.start","data":{"sessionId":"c-1"}}
+{"type":"session.usage_record","data":{"usage":{"model":"claude-sonnet-5.5","inputTokens":32996,"outputTokens":190,"cacheReadTokens":20908,"cacheWriteTokens":12084,"reasoningTokens":63,"cost":1}}}
+{"type":"session.usage_record","data":{"usage":{"model":"claude-sonnet-5.5","inputTokens":33196,"outputTokens":176,"cacheReadTokens":32992,"cacheWriteTokens":202,"reasoningTokens":0,"cost":1}}}
+{"type":"session.usage_record","data":
+{"type":"session.usage_record","data":{"usage":{"model":"gpt-6.1-sol","inputTokens":100,"outputTokens":10,"cacheReadTokens":0,"cacheWriteTokens":0,"cost":1}}}

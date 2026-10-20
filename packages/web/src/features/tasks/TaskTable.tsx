@@ -1,4 +1,4 @@
-import { type DiffStat, type EventType, type Task, waitsFor } from '@natamux/core'
+import { type DiffStat, type EventType, type Task, type TaskUsage, waitsFor } from '@natamux/core'
 import {
   ArrowDown,
   ArrowUp,
@@ -50,6 +50,7 @@ import {
 import { shortBranch } from '../../lib/workspace-groups'
 import { TaskChips } from './TaskChips'
 import { COLUMN_LABEL, type ColumnKey, tableLayout } from './table-columns'
+import { formatTokens, formatUsd } from './usage-format'
 
 type TaskTableProps = {
   // In the order to show. The parent sorts them and keeps them still under the pointer.
@@ -58,6 +59,8 @@ type TaskTableProps = {
   mainWidth: number | null
   selectedId: string | null
   diffStats?: Readonly<Record<string, DiffStat>>
+  // The tokens and estimated cost of each task that has usage.
+  usage?: Readonly<Record<string, TaskUsage>>
   // Every task, to tell whether a task still waits for others. The rows can be filtered.
   allTasks?: readonly Task[]
   // What the agent of each task does now.
@@ -81,7 +84,7 @@ type TaskTableProps = {
   onDelete?: (task: Task) => void
 }
 
-const RIGHT: readonly ColumnKey[] = ['changes', 'activity']
+const RIGHT: readonly ColumnKey[] = ['changes', 'cost', 'activity']
 
 const ACTION_ICON: Partial<Record<EventType, LucideIcon>> = {
   'task.readied': Check,
@@ -191,6 +194,7 @@ const TableRow = memo(function TableRow({
   tabStop,
   activate,
   stat,
+  usage,
   note,
   waits,
   showRepo,
@@ -200,6 +204,7 @@ const TableRow = memo(function TableRow({
 }: RowProps & {
   columns: readonly ColumnKey[]
   stat: DiffStat | undefined
+  usage: TaskUsage | undefined
   // What the agent does now, while it runs.
   note: string | undefined
   waits: string
@@ -278,6 +283,17 @@ const TableRow = memo(function TableRow({
             )}
           </span>
         )
+      case 'cost':
+        return usage === undefined ? (
+          <span className="text-muted">-</span>
+        ) : (
+          <span
+            data-tip={`${formatTokens(usage.tokens)} tokens, estimated at API list prices`}
+            className={`tabular-nums ${usage.costUsd === null ? 'text-muted' : ''}`}
+          >
+            {formatUsd(usage.costUsd)}
+          </span>
+        )
       case 'activity':
         return (
           <span
@@ -314,6 +330,7 @@ export function TaskTable({
   mainWidth,
   selectedId,
   diffStats = {},
+  usage = {},
   allTasks = tasks,
   activity = {},
   showRepo = false,
@@ -462,9 +479,10 @@ export function TaskTable({
 
   const hasChanges = tasks.some((task) => diffStats[task.id]?.files)
   const hasPr = tasks.some((task) => task.pr !== null)
+  const hasCost = tasks.some((task) => usage[task.id] !== undefined)
   const layout = useMemo(
-    () => tableLayout(mainWidth, { changes: hasChanges, pr: hasPr }),
-    [mainWidth, hasChanges, hasPr],
+    () => tableLayout(mainWidth, { changes: hasChanges, pr: hasPr, cost: hasCost }),
+    [mainWidth, hasChanges, hasPr, hasCost],
   )
 
   // The first click can open the details panel, and the page moves under the pointer, so the
@@ -542,6 +560,7 @@ export function TaskTable({
               {...rowProps(task)}
               columns={columns}
               stat={diffStats[task.id]}
+              usage={usage[task.id]}
               note={task.state === 'running' ? activity[task.id] : undefined}
               waits={waitsFor(task, allTasks).join(', ')}
               showRepo={showRepo}

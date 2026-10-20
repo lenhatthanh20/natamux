@@ -1,8 +1,8 @@
-import type { DiffStat } from '@natamux/core'
+import type { DiffStat, TaskUsage } from '@natamux/core'
 import { hashKey, type QueryKey, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useSyncExternalStore } from 'react'
 import type { AgentActivity } from '../lib/api'
-import { ACTIVITY_KEY, DIFFSTATS_KEY } from '../lib/live'
+import { ACTIVITY_KEY, DIFFSTATS_KEY, USAGE_KEY } from '../lib/live'
 
 // Readers of data the dashboard loads and the live feed keeps current. Each reader takes only its
 // part, so a change renders only the parts it changes. They read the cache with no query observer
@@ -36,4 +36,14 @@ const whole = (stats: Record<string, DiffStat>) => stats
 
 export function useDiffStats(): Record<string, DiffStat> | undefined {
   return useCached(DIFFSTATS_KEY, whole)
+}
+
+const allUsage = (usage: Record<string, TaskUsage>) => usage
+
+export function useUsage(): Record<string, TaskUsage> | undefined {
+  return useCached(USAGE_KEY, allUsage)
+}
+
+export function useTaskUsage(taskId: string): TaskUsage | undefined {
+  return useCached(USAGE_KEY, (usage: Record<string, TaskUsage>) => usage[taskId])
 }
