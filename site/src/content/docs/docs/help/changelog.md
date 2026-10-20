@@ -7,6 +7,10 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.41 (2026-10-20)
+
+- In **Project settings → Stages**, a stage that starts its own agent shows that agent's icon and its model (or the agent's name) under its name in the flow chart. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab).
+
 ## v0.1.40 (2026-10-20)
 
 - **Reopen agent** in the wrap-up of a done or cancelled task starts the agent of Terminal 1 again on its last conversation. The task keeps its state. See [When a task is finished](/docs/guides/dashboard/#when-a-task-is-finished).
