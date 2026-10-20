@@ -7,12 +7,14 @@ import type {
   WorkspaceFile,
 } from '@natamux/core'
 import { listChanges } from '../git/changes.js'
+import { snapshotCommit } from '../git/commit-push.js'
 import { currentBranch } from '../git/exec.js'
 import { readFileDiff, readFileImage } from '../git/file-diff.js'
 import { readGitGraph } from '../git/graph.js'
+import { hasCommit, restoreFromSnapshot, rollbackFiles, rollbackPaths } from '../git/rollback.js'
 import { TtlCache } from '../shared/ttl-cache.js'
 import type { TaskService } from '../tasks/task-service.js'
-import { FileNotChangedError } from './workspace-errors.js'
+import { FileNotChangedError, WorkspaceConflictError } from './workspace-errors.js'
 import { listFolder, readWorkspaceFile, writeWorkspaceFile } from './workspace-files.js'
 
 // Dashboards ask for the changes, the graph and the diff stats on timers. Within this time they
@@ -26,12 +28,18 @@ type WorkspaceChangesHost = {
   workspaceOf(taskId: string): string
   repoDirOf(repo: string | null): string
   touch(taskId: string): void
+  exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T>
 }
+
+// What the undo of a rollback needs: the snapshot made just before it, and the paths it touched.
+type LastRollback = { snapshot: string; paths: string[]; files: number }
 
 // The files of a workspace: its changes, their diffs, its graph and the files explorer.
 export class WorkspaceChanges {
   private readonly changesReads: TtlCache<ChangeEntry[]>
   private readonly graphReads: TtlCache<GitGraph>
+  // Only the last rollback of each task can be undone. A daemon restart forgets it.
+  private readonly rollbacks = new Map<string, LastRollback>()
 
   constructor(private readonly host: WorkspaceChangesHost) {
     this.changesReads = new TtlCache(GIT_READ_MS, host.now)
@@ -89,6 +97,60 @@ export class WorkspaceChanges {
     const saved = await writeWorkspaceFile(this.host.workspaceOf(taskId), path, text, version)
     this.host.touch(taskId)
     return saved
+  }
+
+  // Puts changed files back as they are in the last commit; a new file is deleted. Only files in
+  // the list of changes can be named. A snapshot of the whole worktree comes first, for the undo.
+  async rollback(taskId: string, paths: readonly string[]): Promise<{ files: number }> {
+    return this.host.exclusive(taskId, async () => {
+      const workspace = this.host.workspaceOf(taskId)
+      if (!(await hasCommit(workspace))) {
+        throw new WorkspaceConflictError('There is no commit to roll back to.')
+      }
+      const changes = await this.changes(taskId, true)
+      const byPath = new Map(changes.map((entry) => [entry.path, entry]))
+      const entries = [...new Set(paths)].map((path) => {
+        const entry = byPath.get(path)
+        if (entry === undefined) {
+          throw new FileNotChangedError(path)
+        }
+        if (entry.status === 'C') {
+          throw new WorkspaceConflictError(`${path} has a conflict. Resolve it first`)
+        }
+        return entry
+      })
+      const snapshot = await snapshotCommit(workspace, 'Natamux rollback')
+      // Kept before the files change, so a rollback that stops halfway can be undone too.
+      this.rollbacks.set(taskId, { snapshot, paths: rollbackPaths(entries), files: entries.length })
+      try {
+        await rollbackFiles(workspace, entries)
+      } finally {
+        this.host.touch(taskId)
+      }
+      return { files: entries.length }
+    })
+  }
+
+  // Brings back the files of the last rollback as they were just before it.
+  async undoRollback(taskId: string): Promise<{ files: number }> {
+    return this.host.exclusive(taskId, async () => {
+      const workspace = this.host.workspaceOf(taskId)
+      const last = this.rollbacks.get(taskId)
+      if (last === undefined) {
+        throw new WorkspaceConflictError('Nothing to undo.')
+      }
+      this.rollbacks.delete(taskId)
+      try {
+        await restoreFromSnapshot(workspace, last.snapshot, last.paths)
+      } finally {
+        this.host.touch(taskId)
+      }
+      return { files: last.files }
+    })
+  }
+
+  dropRollback(taskId: string): void {
+    this.rollbacks.delete(taskId)
   }
 
   // The kept list first: the dashboard asks for the changes and a diff at the same moment. A file

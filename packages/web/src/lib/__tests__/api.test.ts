@@ -240,6 +240,18 @@ describe('createApi', () => {
     ])
   })
 
+  it('rolls back changed files of a task, and undoes it', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ files: 2 }))
+    const api = createApi('secret', fetchFunction)
+
+    expect(await api.rollbackFiles('T-0001', ['a.txt', 'b.txt'])).toBe(2)
+    expect(await api.undoRollback('T-0001')).toBe(2)
+    expect(calls.map((call) => [call.method, call.url, call.body])).toEqual([
+      ['POST', '/api/tasks/T-0001/rollback', { paths: ['a.txt', 'b.txt'] }],
+      ['POST', '/api/tasks/T-0001/rollback/undo', undefined],
+    ])
+  })
+
   it('asks for a commit message draft', async () => {
     const draft = { message: 'Fix it', source: 'draft', agent: 'codex', reason: 'codex timed out' }
     const { calls, fetchFunction } = fakeFetch(() => json(draft))

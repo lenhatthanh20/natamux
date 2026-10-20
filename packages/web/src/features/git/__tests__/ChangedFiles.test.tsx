@@ -2,6 +2,7 @@ import type { ChangeEntry, ChangeStatus, GitGraph as GitGraphData } from '@natam
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ContextMenuHost } from '../../../components/ui/Menu'
 import css from '../../../styles.css?raw'
 import { ChangedFiles, type ChangedFilesProps } from '../ChangedFiles'
 import { GitGraph } from '../GitGraph'
@@ -170,6 +171,64 @@ describe('ChangedFiles', () => {
     expect(screen.getByText('+17')).toBeTruthy()
     expect(screen.getByText('−3', { selector: '[data-tip] > span' })).toBeTruthy()
     expect(screen.getByText('3 changed files')).toBeTruthy()
+  })
+})
+
+describe('rollback', () => {
+  function withRollback(props: Partial<ChangedFilesProps> = {}) {
+    const onRollback = vi.fn()
+    files({ onRollback, ...props })
+    render(<ContextMenuHost />)
+    return onRollback
+  }
+
+  it('offers every file from the header', async () => {
+    const onRollback = withRollback()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Rollback…' }))
+    expect(onRollback).toHaveBeenCalledWith(LIST)
+  })
+
+  it('offers a file, or every file under a folder, from the row menu', async () => {
+    const onRollback = withRollback()
+    const user = userEvent.setup()
+
+    await user.pointer({ keys: '[MouseRight]', target: item(/^app\.ts/) })
+    await user.click(screen.getByRole('menuitem', { name: /^Rollback…/ }))
+    expect(onRollback).toHaveBeenLastCalledWith([LIST[1]])
+
+    await user.pointer({ keys: '[MouseRight]', target: item(/^src, /) })
+    await user.click(screen.getByRole('menuitem', { name: /^Rollback…/ }))
+    const under = onRollback.mock.lastCall?.[0]
+    expect(under).toHaveLength(2)
+    expect(under).toEqual(expect.arrayContaining([LIST[0], LIST[1]]))
+  })
+
+  it('opens the row menu from the keyboard', async () => {
+    const onRollback = withRollback()
+    const user = userEvent.setup()
+    act(() => item(/^README\.md/).focus())
+
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    await user.click(screen.getByRole('menuitem', { name: /^Rollback…/ }))
+    expect(onRollback).toHaveBeenCalledWith([LIST[2]])
+  })
+
+  it('cannot roll back a conflict from the row menu', async () => {
+    withRollback({ list: [entry('a.ts', 'C')] })
+
+    await userEvent.setup().pointer({ keys: '[MouseRight]', target: item(/^a\.ts/) })
+    const rollback = screen.getByRole('menuitem', { name: /^Rollback…/ })
+    expect(rollback.hasAttribute('disabled')).toBe(true)
+    expect(rollback.getAttribute('aria-describedby')).not.toBeNull()
+    expect(screen.getByText('Resolve the conflict first')).toBeTruthy()
+  })
+
+  it('offers no rollback without a handler', async () => {
+    files()
+    render(<ContextMenuHost />)
+    expect(screen.queryByRole('button', { name: 'Rollback…' })).toBeNull()
+    await userEvent.setup().pointer({ keys: '[MouseRight]', target: item(/^app\.ts/) })
+    expect(screen.queryByRole('menuitem')).toBeNull()
   })
 })
 

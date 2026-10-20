@@ -34,6 +34,11 @@ export const fileDiffSchema = z.object({
 
 export type FileDiff = z.infer<typeof fileDiffSchema>
 
+// What a rollback of changed files, or its undo, did: the number of files it put back.
+export const rollbackResultSchema = z.object({ files: z.number().int().nonnegative() })
+
+export type RollbackResult = z.infer<typeof rollbackResultSchema>
+
 // The images the dashboard can show for a changed file, by file extension.
 export const IMAGE_TYPES = {
   png: 'image/png',

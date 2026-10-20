@@ -91,6 +91,8 @@ type Options = {
   tab?: 'history' | 'changes' | 'terminal'
   generate?: () => Promise<CommitMessageDraft>
   commit?: (message: string) => Promise<Task>
+  rollback?: (paths: string[]) => Promise<number>
+  undoRollback?: () => Promise<number>
   onRemoveWorkspace?: () => void
 }
 
@@ -105,6 +107,8 @@ function view({
   tab = 'history',
   generate,
   commit = async () => task,
+  rollback,
+  undoRollback,
   onRemoveWorkspace,
 }: Options = {}) {
   let graph = firstGraph
@@ -134,6 +138,8 @@ function view({
         loadTerminals={async () => []}
         closeTerminal={async () => []}
         commit={commit}
+        rollback={rollback}
+        undoRollback={undoRollback}
         generateCommitMessage={generate}
         push={push}
         openPullRequest={openPullRequest}
@@ -247,6 +253,69 @@ describe('ChangesView', () => {
     const tab = screen.getByRole('tab', { name: 'Changes' })
     expect(tab.textContent).toBe('Changes')
     expect(tab.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  describe('rollback', () => {
+    const TWO = [CHANGE, { ...CHANGE, path: 'src/b.ts' }]
+
+    it('rolls back the files checked in the dialog, and undoes it from the toast', async () => {
+      const rollback = vi.fn(async (paths: string[]) => paths.length)
+      const undoRollback = vi.fn(async () => 1)
+      const { loadChanges } = view({ tab: 'changes', changes: TWO, rollback, undoRollback })
+      const user = userEvent.setup()
+
+      const [open] = await screen.findAllByRole('button', { name: 'Rollback…' })
+      await user.click(open as HTMLElement)
+      await user.click(screen.getByRole('checkbox', { name: 'src/b.ts, Modified' }))
+      loadChanges.mockClear()
+      await user.click(screen.getByRole('button', { name: 'Roll back 1 file' }))
+
+      await waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1))
+      expect(rollback).toHaveBeenCalledWith(['src/a.ts'])
+      const [done] = useToasts.getState().toasts
+      expect(done?.text).toBe('Rolled back 1 file.')
+      expect(done?.actions?.map((action) => action.label)).toEqual(['Undo'])
+      await waitFor(() => expect(loadChanges).toHaveBeenCalled())
+
+      act(() => done?.actions?.[0]?.run())
+      await waitFor(() => expect(undoRollback).toHaveBeenCalledTimes(1))
+      const last = () => useToasts.getState().toasts.at(-1)?.text
+      await waitFor(() => expect(last()).toBe('Rollback undone.'))
+    })
+
+    it('opens the dialog for the shown file on its command', async () => {
+      view({ tab: 'changes', changes: TWO, rollback: async () => 1 })
+      await screen.findAllByRole('button', { name: 'Rollback…' })
+
+      act(() => fireAppEvent('rollback-file'))
+
+      expect(screen.getByRole('checkbox', { name: 'src/a.ts, Modified' })).toBeTruthy()
+      expect(screen.queryByRole('checkbox', { name: 'src/b.ts, Modified' })).toBeNull()
+    })
+
+    it('says why a rollback failed', async () => {
+      const rollback = vi.fn(async () => {
+        throw new Error('src/a.ts has a conflict. Resolve it first')
+      })
+      view({ tab: 'changes', changes: [CHANGE], rollback })
+      const user = userEvent.setup()
+
+      const [open] = await screen.findAllByRole('button', { name: 'Rollback…' })
+      await user.click(open as HTMLElement)
+      await user.click(screen.getByRole('button', { name: 'Roll back 1 file' }))
+
+      await waitFor(() => expect(useToasts.getState().toasts[0]?.tone).toBe('error'))
+      expect(useToasts.getState().toasts[0]).toMatchObject({
+        text: 'Could not roll back.',
+        detail: 'src/a.ts has a conflict. Resolve it first',
+      })
+    })
+
+    it('offers no rollback without a way to roll back', async () => {
+      view({ tab: 'changes', changes: [CHANGE] })
+      await screen.findAllByRole('button', { name: 'Refresh' })
+      expect(screen.queryByRole('button', { name: 'Rollback…' })).toBeNull()
+    })
   })
 
   describe('the commit message draft', () => {

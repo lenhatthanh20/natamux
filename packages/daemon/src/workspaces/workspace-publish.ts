@@ -18,6 +18,8 @@ type WorkspacePublishHost = {
   log: (message: string) => void
   workspaceOf(taskId: string): string
   exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T>
+  // After a commit of the workspace, so an older rollback cannot be undone over committed files.
+  committed(taskId: string): void
 }
 
 // Takes the work of a workspace out: its commits, the pushes of its branch, its pull request.
@@ -30,6 +32,7 @@ export class WorkspacePublish {
   async commit(taskId: string, message: string): Promise<{ task: Task; hash: string }> {
     return this.host.exclusive(taskId, async () => {
       const { hash, subject } = await commitAll(this.host.workspaceOf(taskId), message)
+      this.host.committed(taskId)
       const task = this.host.tasks.recordGit(taskId, 'git.committed', { hash, subject })
       return { task, hash }
     })

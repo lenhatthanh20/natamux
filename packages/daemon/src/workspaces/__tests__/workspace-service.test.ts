@@ -1140,6 +1140,101 @@ describe('changes and fileDiff', () => {
   })
 })
 
+describe('rollback and undoRollback', () => {
+  async function taskWithChanges() {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+    const workspace = (await workspaces.create(task.id)).workspace ?? ''
+    writeFileSync(join(workspace, 'notes.txt'), 'hello\n')
+    writeFileSync(join(workspace, 'keep.txt'), 'keep\n')
+    return { task, workspace }
+  }
+
+  const paths = async (taskId: string) =>
+    (await workspaces.changes(taskId)).map((entry) => entry.path)
+
+  it('rolls back the named files, then undoes it once', async () => {
+    const { task, workspace } = await taskWithChanges()
+    // Kept from before the rollback, which must not show up afterwards.
+    expect(await paths(task.id)).toEqual(['keep.txt', 'notes.txt'])
+    const touch = vi.spyOn(workspaces, 'touch')
+
+    expect(await workspaces.rollback(task.id, ['notes.txt', 'notes.txt'])).toEqual({ files: 1 })
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(false)
+    expect(await paths(task.id)).toEqual(['keep.txt'])
+    expect(touch).toHaveBeenCalledWith(task.id)
+
+    expect(await workspaces.undoRollback(task.id)).toEqual({ files: 1 })
+    expect(readFileSync(join(workspace, 'notes.txt'), 'utf8')).toBe('hello\n')
+    expect(await paths(task.id)).toEqual(['keep.txt', 'notes.txt'])
+    await expect(workspaces.undoRollback(task.id)).rejects.toThrow('Nothing to undo.')
+  })
+
+  it('forgets the rollback after a commit, so Undo cannot replace committed files', async () => {
+    const { task } = await taskWithChanges()
+    await workspaces.rollback(task.id, ['notes.txt'])
+    await workspaces.commit(task.id, 'Keep the rest')
+
+    await expect(workspaces.undoRollback(task.id)).rejects.toThrow('Nothing to undo.')
+  })
+
+  it('refuses a workspace without a commit, and changes nothing', async () => {
+    const { task, workspace } = await taskWithChanges()
+    runGit(workspace, 'checkout', '-q', '--orphan', 'empty')
+
+    const refusal = workspaces.rollback(task.id, ['notes.txt'])
+    await expect(refusal).rejects.toThrow(WorkspaceConflictError)
+    await expect(refusal).rejects.toThrow('There is no commit to roll back to.')
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+  })
+
+  it('refuses a file that is not changed, and changes nothing', async () => {
+    const { task, workspace } = await taskWithChanges()
+
+    await expect(workspaces.rollback(task.id, ['notes.txt', 'other.txt'])).rejects.toThrow(
+      FileNotChangedError,
+    )
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+    await expect(workspaces.undoRollback(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+
+  it('refuses a file with a conflict, and changes nothing', async () => {
+    const { task, workspace } = await taskWithChanges()
+    runGit(workspace, 'checkout', '-q', '-b', 'side')
+    writeFileSync(join(workspace, 'both.txt'), 'side\n')
+    runGit(workspace, 'add', 'both.txt')
+    runGit(workspace, 'commit', '-q', '-m', 'side')
+    runGit(workspace, 'checkout', '-q', '-')
+    writeFileSync(join(workspace, 'both.txt'), 'task\n')
+    runGit(workspace, 'add', 'both.txt')
+    runGit(workspace, 'commit', '-q', '-m', 'task')
+    expect(() => runGit(workspace, 'merge', '-q', 'side')).toThrow()
+
+    const changes = await workspaces.changes(task.id, true)
+    expect(changes.find((entry) => entry.path === 'both.txt')?.status).toBe('C')
+    await expect(workspaces.rollback(task.id, ['both.txt', 'notes.txt'])).rejects.toThrow(
+      'both.txt has a conflict',
+    )
+    expect(existsSync(join(workspace, 'notes.txt'))).toBe(true)
+  })
+
+  it('refuses while another git action of the task runs', async () => {
+    const { task } = await taskWithChanges()
+
+    const commit = workspaces.commit(task.id, 'Fix the bug')
+    await expect(workspaces.rollback(task.id, ['notes.txt'])).rejects.toThrow(
+      WorkspaceConflictError,
+    )
+    await commit
+  })
+
+  it('refuses a task that has no workspace', async () => {
+    const task = tasks.createTask({ title: 'Fix the bug' })
+
+    await expect(workspaces.rollback(task.id, ['a.txt'])).rejects.toThrow(WorkspaceConflictError)
+    await expect(workspaces.undoRollback(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+})
+
 describe('commit, push and pull request', () => {
   const PR_URL = 'https://github.com/owner/repo/pull/7'
   let ghCalls: (readonly string[])[]

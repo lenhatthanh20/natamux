@@ -44,6 +44,9 @@ const createWorkspaceBodySchema = z
   .object({ base: z.string().min(1).max(255).optional() })
   .optional()
 const commitBodySchema = z.object({ message: z.string().trim().min(1).max(10_000) })
+const rollbackBodySchema = z.object({
+  paths: z.array(changedFileQuerySchema.shape.path).min(1).max(5000),
+})
 
 export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const { options } = deps
@@ -152,6 +155,18 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     const { id } = taskParamsSchema.parse(request.params)
     const { message } = commitBodySchema.parse(request.body)
     return options.workspaces.commit(id, message)
+  })
+
+  // Changed files back as they are in the last commit. Only the last one can be undone.
+  app.post('/tasks/:id/rollback', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    const { paths } = rollbackBodySchema.parse(request.body)
+    return options.workspaces.rollback(id, paths)
+  })
+
+  app.post('/tasks/:id/rollback/undo', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return options.workspaces.undoRollback(id)
   })
 
   // A draft of the commit message, for the user to read before the commit.

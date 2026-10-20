@@ -116,6 +116,7 @@ These work when a workspace is open.
 | Next change in the file | `Alt+F5` |
 | Previous change in the file | `Shift+Alt+F5` |
 | Comment on the file or the selection for the agent | `Mod+Shift+A` |
+| Roll back the shown file | `Mod+Alt+Z` |
 | Draft the commit message with the agent | `Mod+Shift+G` |
 | Accessible diff view | `F7` or `Shift+F7` |
 

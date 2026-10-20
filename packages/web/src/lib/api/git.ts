@@ -8,6 +8,7 @@ import {
   type GitGraph,
   gitGraphSchema,
   type ImageSide,
+  rollbackResultSchema,
   type Task,
   taskSchema,
 } from '@natamux/core'
@@ -54,6 +55,18 @@ export function gitApi(client: Client) {
         await request('POST', `/tasks/${encodeURIComponent(taskId)}/commit`, { message }),
       )
       return taskSchema.parse(body.task)
+    },
+
+    // Puts changed files back as they are in the last commit. Answers how many.
+    async rollbackFiles(taskId: string, paths: string[]): Promise<number> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/rollback`
+      return rollbackResultSchema.parse(await request('POST', path, { paths })).files
+    },
+
+    // Brings back the files of the last rollback of the task, as they were before it.
+    async undoRollback(taskId: string): Promise<number> {
+      const path = `/tasks/${encodeURIComponent(taskId)}/rollback/undo`
+      return rollbackResultSchema.parse(await request('POST', path)).files
     },
 
     // A commit message drafted by the task's agent, or a simple one when the agent failed.

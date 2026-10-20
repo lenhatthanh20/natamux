@@ -96,6 +96,13 @@ describe('the command registry', () => {
     }
   })
 
+  it('rolls back the shown file with Mod+Alt+Z, in a workspace only', () => {
+    expect(shortcutOf('changes.rollback')).toBe('Mod+Alt+Z')
+    const command = commandById('changes.rollback')
+    expect(command && runnable(command, context().context)).toBe(false)
+    expect(command && runnable(command, context({ workspaceOpen: true }).context)).toBe(true)
+  })
+
   it('drafts the commit message with Mod+Shift+G only from the commit box', () => {
     document.body.innerHTML = '<textarea id="commit-message"></textarea><input id="other" />'
     const draft = commandById('diff.draftCommit')
