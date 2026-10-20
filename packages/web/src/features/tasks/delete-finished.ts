@@ -12,7 +12,8 @@ export async function deleteEach<R>(
   const outcomes: DeleteOutcome[] = []
   for (const id of ids) {
     try {
-      onDeleted?.(await remove(id))
+      const result = await remove(id)
+      onDeleted?.(result)
       outcomes.push({ id, ok: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '')
