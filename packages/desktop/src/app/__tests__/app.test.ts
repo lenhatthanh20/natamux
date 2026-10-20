@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { menuIconsOn } from '../menu-icons.js'
 import { isDashboardUrl, isLoadingPage, loadingPageUrl, opensInBrowser } from '../navigation.js'
 import {
   autoUpdateOn,
@@ -190,5 +191,15 @@ describe('the dashboard address', () => {
     expect(isDashboardUrl(`${origin}/?a=1#b`, origin)).toBe(true)
     expect(isDashboardUrl(`${loadingPageUrl(true)}#x`, origin)).toBe(false)
     expect(isDashboardUrl(`${loadingPageUrl(false)}?x=1`, origin)).toBe(false)
+  })
+})
+
+describe('menu icons', () => {
+  it('shows only on macOS 26 and newer, where the system items have icons', () => {
+    expect(menuIconsOn('darwin', '26.0.1')).toBe(true)
+    expect(menuIconsOn('darwin', '27.1')).toBe(true)
+    expect(menuIconsOn('darwin', '15.7.2')).toBe(false)
+    expect(menuIconsOn('win32', '10.0.26100')).toBe(false)
+    expect(menuIconsOn('linux', '6.8.0')).toBe(false)
   })
 })
