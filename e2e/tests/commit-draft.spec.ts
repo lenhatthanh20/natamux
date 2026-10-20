@@ -42,6 +42,24 @@ test('drafts the commit message with the agent, and commits it', async ({ page, 
   await expect(page.getByText('Committed 1 file.')).toBeVisible()
 })
 
+test('keeps the commit buttons inside the narrowest file list', async ({ page, request }) => {
+  // Read when the Changes tab mounts, so the list opens at its minimum width.
+  await page.evaluate(() => localStorage.setItem('natamux.files-width', '200'))
+  await taskWithFile(page, request, `Draft e2e narrow ${Date.now()}`)
+
+  const files = page.getByRole('complementary', { name: 'Files', exact: true })
+  const frame = await files.boundingBox()
+  expect(frame).not.toBeNull()
+  for (const name of [/^Generate/, /^Commit all/]) {
+    const button = await files.getByRole('button', { name }).boundingBox()
+    expect(button).not.toBeNull()
+    if (button !== null && frame !== null) {
+      expect(button.x).toBeGreaterThanOrEqual(frame.x)
+      expect(button.x + button.width).toBeLessThanOrEqual(frame.x + frame.width)
+    }
+  }
+})
+
 test('gives a simple draft and says why when the agent fails', async ({ page, request }) => {
   const { box } = await taskWithFile(page, request, `Draft e2e [no-draft] ${Date.now()}`)
 
