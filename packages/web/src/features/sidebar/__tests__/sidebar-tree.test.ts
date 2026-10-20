@@ -230,16 +230,16 @@ describe('shellRows', () => {
     )
     expect(rows.map((row) => [row.label, row.agent, row.state])).toEqual([
       ['Spec', 'claude-code', 'running'],
-      ['Shell 2', 'cursor', null],
-      ['Shell 3', 'cursor', 'needs-input'],
+      ['Terminal 2', 'cursor', null],
+      ['Terminal 3', 'cursor', 'needs-input'],
     ])
   })
 
-  it('names a plain shell after its program, else "Shell"', () => {
+  it('names a plain terminal after its program, else "Terminal"', () => {
     const rows = shellRows(makeTask({}), shells({}, { '1': 'bash', '2': null }))
     expect(rows.map((row) => [row.label, row.plain, row.shell])).toEqual([
       ['bash', true, '1'],
-      ['Shell', true, '2'],
+      ['Terminal', true, '2'],
     ])
   })
 
@@ -247,8 +247,8 @@ describe('shellRows', () => {
     const waiting = shells({}, {}, ['2', '3'])
     const rows = shellRows(makeTask({}), { ...waiting, restoring: { '2': 'codex', '3': null } })
     expect(rows.map((row) => [row.label, row.agent, row.plain, row.state])).toEqual([
-      ['Shell 2', 'codex', false, null],
-      ['Shell', null, true, null],
+      ['Terminal 2', 'codex', false, null],
+      ['Terminal', null, true, null],
     ])
   })
 
@@ -270,21 +270,23 @@ describe('shellRowName', () => {
   })
 
   it('says the stage, the agent, the shell and the state', () => {
-    expect(shellRowName(row({}))).toBe('Implement, Claude Code, Shell 1, Running')
-    const byHand = row({ label: 'Shell 2', shell: '2', agent: 'cursor', state: null })
-    expect(shellRowName(byHand)).toBe('Shell 2, Cursor, State not known')
+    expect(shellRowName(row({}))).toBe('Implement, Claude Code, Terminal 1, Running')
+    const byHand = row({ label: 'Terminal 2', shell: '2', agent: 'cursor', state: null })
+    expect(shellRowName(byHand)).toBe('Terminal 2, Cursor, State not known')
     // Test spec C16: a known state is said as before, with no "State not known".
-    expect(shellRowName({ ...byHand, state: 'needs-input' })).toBe('Shell 2, Cursor, Needs input')
-    expect(shellRowName({ ...byHand, state: 'failed' })).toBe('Shell 2, Cursor, Failed')
+    expect(shellRowName({ ...byHand, state: 'needs-input' })).toBe(
+      'Terminal 2, Cursor, Needs input',
+    )
+    expect(shellRowName({ ...byHand, state: 'failed' })).toBe('Terminal 2, Cursor, Failed')
     const plain = row({ label: 'zsh', shell: '2', agent: null, state: null, plain: true })
-    expect(shellRowName(plain)).toBe('Shell 2, zsh')
+    expect(shellRowName(plain)).toBe('Terminal 2, zsh')
     expect(shellRowName(row({ label: 'Beta', shell: null, agent: null }))).toBe('Beta, Running')
   })
 
   it('tags a shell only where the name does not say it', () => {
-    expect(shellTag(row({}))).toBe('S1')
-    expect(shellTag(row({ label: 'Shell 2', shell: '2' }))).toBeNull()
-    expect(shellTag(row({ label: 'zsh', shell: '2', plain: true }))).toBe('S2')
+    expect(shellTag(row({}))).toBe('T1')
+    expect(shellTag(row({ label: 'Terminal 2', shell: '2' }))).toBeNull()
+    expect(shellTag(row({ label: 'zsh', shell: '2', plain: true }))).toBe('T2')
     expect(shellTag(row({ shell: null }))).toBeNull()
   })
 })

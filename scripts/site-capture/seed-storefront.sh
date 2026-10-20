@@ -27,7 +27,7 @@ start "$feat" claude-code; wait_for "$feat" "review spec"; approve "$feat"
 ask=$(new '{"title":"Show stock levels on product pages","description":"Show In stock, Low stock or Sold out next to the price.","labels":["ui"],"repo":"storefront"}')
 asks "$ask"
 start "$ask" claude-code
-# 4. Running, slow: Codex in Shell 1, approve Spec and Plan so it sits in the side by side group.
+# 4. Running, slow: Codex in Terminal 1, approve Spec and Plan so it sits in the side by side group.
 slow=$(new '{"title":"Speed up the catalog search","description":"Search over 10,000 products answers in under 50 ms.","priority":"high","labels":["perf"],"repo":"storefront"}')
 pace "$slow" 60
 start "$slow" codex; wait_for "$slow" "review spec"; approve "$slow"; wait_for "$slow" "review plan"; approve "$slow"

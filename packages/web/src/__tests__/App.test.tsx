@@ -778,9 +778,9 @@ describe('App', () => {
     await user.click(within(view).getByRole('tab', { name: 'Terminal' }))
     expect(await within(view).findByText('Terminal stand-in')).toBeTruthy()
     expect(within(view).queryByRole('button', { name: 'Refresh' })).toBeNull()
-    await user.click(within(view).getByRole('button', { name: 'New shell' }))
-    const agentShell = within(view).getByRole('region', { name: 'Shell 1' })
-    const plainShell = within(view).getByRole('region', { name: 'Shell 2' })
+    await user.click(within(view).getByRole('button', { name: 'New terminal' }))
+    const agentShell = within(view).getByRole('region', { name: 'Terminal 1' })
+    const plainShell = within(view).getByRole('region', { name: 'Terminal 2' })
     expect(await within(agentShell).findByText('Codex')).toBeTruthy()
     expect(within(plainShell).queryByText('Codex')).toBeNull()
     expect(within(plainShell).queryByText('Agent')).toBeNull()
@@ -872,7 +872,7 @@ describe('App', () => {
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     const details = screen.getByRole('complementary', { name: 'Details of T-0001' })
     const tokenOfShell = async () => {
-      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      const pane = await within(view).findByRole('region', { name: 'Terminal 1' })
       return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
     }
 
@@ -1795,7 +1795,7 @@ describe('App', () => {
     // Click the rows of the workspace list.
     const list = within(sidebar).getByRole('region', { name: 'Workspaces' })
     const tokenIn = async (view: HTMLElement) => {
-      const pane = await within(view).findByRole('region', { name: 'Shell 1' })
+      const pane = await within(view).findByRole('region', { name: 'Terminal 1' })
       return (await within(pane).findByText('Terminal stand-in')).getAttribute('data-focus-token')
     }
 
@@ -2566,7 +2566,7 @@ describe('App', () => {
 
     await user.keyboard('{Control>}j{/Control}')
     const jump = screen.getByRole('dialog', { name: 'Jump to a workspace' })
-    await user.click(await within(jump).findByRole('option', { name: /Shell 2/ }))
+    await user.click(await within(jump).findByRole('option', { name: /Terminal 2/ }))
 
     const view = await screen.findByRole('region', { name: 'Changes of T-0001' })
     expect(within(view).getByRole('tab', { name: 'Terminal' }).getAttribute('aria-selected')).toBe(

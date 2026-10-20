@@ -99,7 +99,7 @@ async function heldWebglCanvases(page: Page): Promise<number> {
 }
 
 function shellPanes(page: Page): Locator {
-  return page.getByRole('region', { name: /^Shell \d+$/ })
+  return page.getByRole('region', { name: /^Terminal \d+$/ })
 }
 
 // Opens the task's Terminal tab with `count` shells, each with lines of text from its own name.
@@ -107,11 +107,11 @@ async function openShells(page: Page, title: string, count: number): Promise<voi
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   for (let index = 2; index <= count; index++) {
-    await page.getByRole('button', { name: 'New shell' }).click()
+    await page.getByRole('button', { name: 'New terminal' }).click()
     await expect(shellPanes(page)).toHaveCount(index)
   }
   for (let index = 1; index <= count; index++) {
-    const shell = pane(page, `Shell ${index}`)
+    const shell = pane(page, `Terminal ${index}`)
     // Keys typed before the prompt would be lost.
     await expectDrawn(page, shell, PROMPT_PIXELS)
     await runIn(page, shell, `clear; seq -f 'gpu shell ${index} line %g' 1 20`)
@@ -122,7 +122,7 @@ async function openShells(page: Page, title: string, count: number): Promise<voi
 async function expectAllDrawn(page: Page): Promise<void> {
   const count = await shellPanes(page).count()
   for (let index = 1; index <= count; index++) {
-    await expectDrawn(page, pane(page, `Shell ${index}`))
+    await expectDrawn(page, pane(page, `Terminal ${index}`))
   }
 }
 
@@ -159,7 +159,7 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   // A full grid of shells.
   await openShells(page, taskA.title, MAX_PANES)
   for (let index = 1; index <= MAX_PANES; index++) {
-    expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+    expect(await rendererOf(pane(page, `Terminal ${index}`))).toBe('webgl')
   }
 
   // The rest of the budget, and one more terminal, which takes the renderer of a hidden one in
@@ -168,7 +168,7 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   await goToAllTasks(page)
   await openShells(page, taskB.title, shellsOfB)
   for (let index = 1; index <= shellsOfB; index++) {
-    expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+    expect(await rendererOf(pane(page, `Terminal ${index}`))).toBe('webgl')
   }
 
   // Back and forth: each switch makes a hidden terminal give its renderer back.
@@ -198,12 +198,12 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   await openTask(page, taskA.title)
   await expect(shellPanes(page)).toHaveCount(MAX_PANES)
   for (let index = 1; index <= MAX_PANES; index++) {
-    expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+    expect(await rendererOf(pane(page, `Terminal ${index}`))).toBe('webgl')
   }
   await expectAllDrawn(page)
 
   // Two lost contexts turn WebGL off for the page; those panes go on with the DOM renderer.
-  for (const name of ['Shell 1', 'Shell 2']) {
+  for (const name of ['Terminal 1', 'Terminal 2']) {
     const shell = pane(page, name)
     expect(await rendererOf(shell)).toBe('webgl')
     await loseContext(shell)
@@ -217,7 +217,7 @@ test('gives GPU renderers back and changes renderers while hidden, with no blank
   await goToAllTasks(page)
   await openTask(page, taskA.title)
   await expectAllDrawn(page)
-  expect(await rendererOf(pane(page, 'Shell 1'))).toBe('dom')
+  expect(await rendererOf(pane(page, 'Terminal 1'))).toBe('dom')
 
   expect(errors).toEqual([])
 })
@@ -274,7 +274,7 @@ test('keeps the renderers of two tasks of 4 shells, and frees a context given ba
     await sidebar.getByRole('button', { name: taskNamed(title) }).click()
     await expect(shellPanes(page)).toHaveCount(4)
     for (let index = 1; index <= 4; index++) {
-      expect(await rendererOf(pane(page, `Shell ${index}`))).toBe('webgl')
+      expect(await rendererOf(pane(page, `Terminal ${index}`))).toBe('webgl')
     }
   }
   // The first visit of each: task A may have been hidden past the give-back delay meanwhile.

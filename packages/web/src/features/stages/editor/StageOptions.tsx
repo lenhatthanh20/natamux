@@ -163,7 +163,7 @@ export function EndShellOption({
             onChange={(event) => onChange(setEndShell(steps, stage.id, event.target.checked))}
             className="size-3.5 accent-accent"
           />
-          <span id={labelId}>End the agent and close its shell when the stage is done</span>
+          <span id={labelId}>End the agent and close its terminal when the stage is done</span>
         </label>
         <DefaultMark
           isDefault={!on}
@@ -171,7 +171,7 @@ export function EndShellOption({
         />
       </div>
       <p id={noteId} className="m-0 text-xs text-muted">
-        Frees the memory of the stage. A next stage in the same shell starts a new agent session.
+        Frees the memory of the stage. A next stage in the same terminal starts a new agent session.
         The last stage is left to the end of the task, which keeps its screen.
       </p>
     </fieldset>

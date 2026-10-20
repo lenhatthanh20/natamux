@@ -9,7 +9,7 @@ Natamux starts the Cursor CLI agent with a hook file in the task's worktree.
 
 ## Before you start
 
-Install the Cursor CLI and log in. Follow the [Cursor documentation](https://cursor.com/docs). Check that `cursor-agent` runs in your terminal. Natamux also knows the agent as `agent`, the name the Cursor installer adds, when you start it yourself in a shell.
+Install the Cursor CLI and log in. Follow the [Cursor documentation](https://cursor.com/docs). Check that `cursor-agent` runs in your terminal. Natamux also knows the agent as `agent`, the name the Cursor installer adds, when you start it yourself in a terminal.
 
 ## What Natamux runs
 
@@ -30,7 +30,7 @@ natamux agent start T-42 --agent cursor
 
 ## How hooks are added
 
-Natamux writes `.cursor/hooks.json` in the task's worktree each time a shell opens, and adds it to `.git/info/exclude`. So Cursor started by hand in any shell reports too. Each hook runs `natamux hook cursor`. It prints `{}` because Cursor blocks a shell command when a hook's answer is not JSON.
+Natamux writes `.cursor/hooks.json` in the task's worktree each time a terminal opens, and adds it to `.git/info/exclude`. So Cursor started by hand in any terminal reports too. Each hook runs `natamux hook cursor`. It prints `{}` because Cursor blocks a shell command when a hook's answer is not JSON.
 
 If a file of your own with that name exists, Natamux leaves it alone, and the dashboard follows the terminal only.
 
@@ -47,7 +47,7 @@ Natamux also writes the Cursor CLI's trust file for the worktree, so `cursor-age
 
 The Cursor CLI has no hook for waiting on your approval. The terminal bell moves a running task to needs input instead.
 
-Cursor started by hand in an extra shell gets these states for its shell only. The task keeps its own. The bell does not count there.
+Cursor started by hand in an extra terminal gets these states for its terminal only. The task keeps its own. The bell does not count there.
 
 ## Skills
 

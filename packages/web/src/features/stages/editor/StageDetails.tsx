@@ -131,8 +131,8 @@ export function StageDetails({
       {canEndShell(stage) &&
         (endsShell1(steps, stage) ? (
           <p className="m-0 text-xs text-muted">
-            This stage runs in Shell 1, which cannot be closed. Shell 1 keeps the task's agent and
-            its session.
+            This stage runs in Terminal 1, which cannot be closed. Terminal 1 keeps the task's agent
+            and its session.
           </p>
         ) : (
           <EndShellOption stage={stage} steps={steps} onChange={onChange} />
@@ -144,8 +144,8 @@ export function StageDetails({
           htmlFor={`${id}-agent`}
           help={
             runsInShellOne(steps, stage.id)
-              ? "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent."
-              : 'This stage starts its own agent beside the one in Shell 1, so it may use another.'
+              ? "With the task's agent, this stage runs in Terminal 1. Another agent or arguments run in a terminal of its own, so Terminal 1 keeps the task's agent."
+              : 'This stage starts its own agent beside the one in Terminal 1, so it may use another.'
           }
         >
           <Select

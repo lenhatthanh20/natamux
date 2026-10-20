@@ -169,7 +169,7 @@ async function removeAgentTasks(request: APIRequestContext, ids: string[]): Prom
     })
   }
   for (const id of ids) {
-    // A note written while the shell ended can come after a commit, so both go again.
+    // A note written while the terminal ended can come after a commit, so both go again.
     const removed = async () => {
       const message = 'Notes of the fake agent'
       await request.post(`/api/tasks/${id}/commit`, { headers, data: { message } })
@@ -195,7 +195,7 @@ test('asks the daemon 80% less than the old polls, with 10 running tasks', async
   const tabs = await openTask(page, `Dashboard e2e agent 1 ${stamp}`)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
   // A line of the fake agent: it works in the open terminal.
-  await expect(rows(pane(page, 'Shell 1'))).toContainText('●', { timeout: 30_000 })
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText('●', { timeout: 30_000 })
   await page.waitForTimeout(SETTLE_MS)
 
   const calls = new Map<string, number>()

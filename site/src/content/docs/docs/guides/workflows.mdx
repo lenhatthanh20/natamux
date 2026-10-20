@@ -26,8 +26,8 @@ This page shows how the parts fit together with two full examples. For every fie
 | Group | 2 to 4 stages that run side by side. | [Stages that run side by side](/docs/concepts/stages/#stages-that-run-side-by-side) |
 | Branch | Paths with a condition. The task takes the first path that holds. | [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) |
 | Send back | An agent, CI or a person starts an earlier stage again. | [Send a stage back](/docs/concepts/stages/#send-a-stage-back) |
-| Own shell | A report stage runs in its own shell with a new session. | [Stages in their own shell](/docs/concepts/stages/#stages-in-their-own-shell) |
-| End shell | A done stage closes its shell to free memory. | [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell) |
+| Own terminal | A report stage runs in its own terminal with a new session. | [Stages in their own terminal](/docs/concepts/stages/#stages-in-their-own-terminal) |
+| End terminal | A done stage closes its terminal to free memory. | [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal) |
 | Check on CI | A stage waits for the CI runs of its work. | [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci) |
 | Run as a workflow | Claude Code uses sub-agents on one stage. | [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow) |
 
@@ -46,7 +46,7 @@ The **JSON** tab shows the same file as text.
 
 ## Patterns
 
-**Review loop.** An agent in its own shell reviews the work and sends the task back with the findings. See [The review loop](/docs/concepts/review-loop/).
+**Review loop.** An agent in its own terminal reviews the work and sends the task back with the findings. See [The review loop](/docs/concepts/review-loop/).
 
 **CI watcher.** A stage after the pull request watches the CI jobs and sends the task back to the stage that changes code when a job fails. The solo example does this with `gh` in the prompt. Or tick **Check on CI** on a stage: Natamux pushes a snapshot, waits for the runs and sends the failed logs back itself.
 
@@ -73,14 +73,14 @@ One person, one repository. The person approves the context and the spec. After 
 ```text
 Context → Spec → [ Test spec ‖ Implement ] → Review → Watch CI and merge
  manual   manual   Copilot       Claude Code   Cursor    Copilot
-                                  (workflow)    own shell
+                                  (workflow)    own terminal
                                       ▲            │ findings
                                       └────────────┤
                                       ▲            │ conflict or failed CI
                                       └────────────┘ (from Watch CI and merge)
 ```
 
-The task's agent is Claude Code, so Context, Spec and Implement run in Shell 1. The other three stages name their own agent.
+The task's agent is Claude Code, so Context, Spec and Implement run in Terminal 1. The other three stages name their own agent.
 
 <Figure src="/media/v2/clip-send-back" video alt="Screen recording of the Progress tab: the Review card fails, Sent back appears, and Implement runs again with x2." caption="The send back loop of the solo workflow." />
 
@@ -152,12 +152,12 @@ The owner's file also has `review`, `testing`, `merge-prs` and `release` stages 
 
 ### Solo: who runs where
 
-| Stage | Agent | Shell |
+| Stage | Agent | Terminal |
 |---|---|---|
-| Context, Spec, Implement | Claude Code (the task's agent) | Shell 1 |
-| Test spec | Copilot | Its own shell, closed when done |
-| Review | Cursor | Its own shell, closed when done |
-| Watch CI and merge | Copilot | Its own shell |
+| Context, Spec, Implement | Claude Code (the task's agent) | Terminal 1 |
+| Test spec | Copilot | Its own terminal, closed when done |
+| Review | Cursor | Its own terminal, closed when done |
+| Watch CI and merge | Copilot | Its own terminal |
 
 See [Mix agents in one task](/docs/guides/mix-agents/) for why.
 
@@ -165,7 +165,7 @@ See [Mix agents in one task](/docs/guides/mix-agents/) for why.
 
 | From | To | When | What happens |
 |---|---|---|---|
-| Review | Implement | The review has findings | Implement starts again with "What to change: …". Review runs again after it, in a new session because Review ends its shell. |
+| Review | Implement | The review has findings | Implement starts again with "What to change: …". Review runs again after it, in a new session because Review ends its terminal. |
 | Watch CI and merge | Implement | A conflict in the pull request | Implement fixes it. Review and Watch CI and merge run again. |
 | Watch CI and merge | Implement | A CI job fails | Same, with the failed jobs as the reason. |
 
@@ -187,11 +187,11 @@ Context → Triage → ◇ Where is the task ───────────�
                      ├─ If status.md "Stage" has [review-pr]: Review a teammate's PR
                      │    Review PR → Follow PR CI → Wait for the author's fix → QA build
                      │    Claude Code   (auto)        (auto)                     (auto)
-                     │    own shell
+                     │    own terminal
                      │
                      └─ Otherwise: Develop
                           Spec → Plan → Implement → Review implementation → Commit and open PR
-                          manual                      Claude Code, own shell
+                          manual                      Claude Code, own terminal
                           → Follow CI → Verify impact list → Definition of done and review request
                             Cursor       Claude Code          Copilot
                                                                                    │
@@ -341,16 +341,16 @@ The branch rules from [Paths with a condition](/docs/concepts/stages/#paths-with
 
 ### Team: who runs where
 
-| Stage | Agent | Shell |
+| Stage | Agent | Terminal |
 |---|---|---|
 | Context | none | none |
-| Triage, Spec, Plan, Implement, Commit and open PR | The task's agent | Shell 1 |
-| Review PR | Claude Code | Its own shell, closed when done |
-| Review implementation | Claude Code | Its own shell, closed when done |
-| Follow CI | Cursor | Its own shell, closed when done |
-| Verify impact list | Claude Code | Its own shell, closed when done |
-| Definition of done and review request | Copilot | Its own shell, closed when done |
-| Follow PR CI, Wait for the author's fix, QA build | The task's agent | Shell 1 |
+| Triage, Spec, Plan, Implement, Commit and open PR | The task's agent | Terminal 1 |
+| Review PR | Claude Code | Its own terminal, closed when done |
+| Review implementation | Claude Code | Its own terminal, closed when done |
+| Follow CI | Cursor | Its own terminal, closed when done |
+| Verify impact list | Claude Code | Its own terminal, closed when done |
+| Definition of done and review request | Copilot | Its own terminal, closed when done |
+| Follow PR CI, Wait for the author's fix, QA build | The task's agent | Terminal 1 |
 
 ### Team: send back points
 

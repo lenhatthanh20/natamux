@@ -83,7 +83,7 @@ describe('AgentPanes agent badge', () => {
     expect(within(header('T-0001')).queryByText('Agent')).toBeNull()
   })
 
-  it('shows the agent that runs in Shell 1, not the agent of the task', () => {
+  it('shows the agent that runs in Terminal 1, not the agent of the task', () => {
     grid(
       [makeTask('T-0001')],
       {},
@@ -95,7 +95,7 @@ describe('AgentPanes agent badge', () => {
     expect(within(header('T-0001')).queryByText('Claude Code')).toBeNull()
   })
 
-  it('shows no badge when Shell 1 runs a program that is no agent', () => {
+  it('shows no badge when Terminal 1 runs a program that is no agent', () => {
     grid(
       [makeTask('T-0001')],
       {},
@@ -334,7 +334,7 @@ describe('AgentPanes keys', () => {
 })
 
 describe('AgentPanes cache keys', () => {
-  it('gives each pane the key of Shell 1 of its task, as the task view does', async () => {
+  it('gives each pane the key of Terminal 1 of its task, as the task view does', async () => {
     grid([makeTask('T-0001'), makeTask('T-0002')])
     for (const id of ['T-0001', 'T-0002']) {
       const pane = screen.getByRole('region', { name: `Agent of ${id}` })
@@ -355,21 +355,21 @@ describe('AgentPanes in a group', () => {
   }
   const stateLine = () => header('T-0001').querySelector('[data-tip-overflow]')?.textContent
 
-  it('shows the state of Shell 1, and says that Shell 2 waits for the user', () => {
+  it('shows the state of Terminal 1, and says that Terminal 2 waits for the user', () => {
     const task = build({ implement: 'running', 'test-spec': 'needs-input' }, 'needs-input')
     grid([task], {}, { terminals, activity: { 'T-0001': { '1': 'Edit src/a.ts' } } })
     expect(stateLine()).toBe('Running · Edit src/a.ts')
     const glyph = header('T-0001').querySelector('[data-state]')
     expect(glyph?.getAttribute('data-state')).toBe('running')
-    expect(within(header('T-0001')).getByText('Shell 2 needs input')).toBeTruthy()
+    expect(within(header('T-0001')).getByText('Terminal 2 needs input')).toBeTruthy()
     expect(header('T-0001').className).not.toMatch(/bg-signal-soft/)
   })
 
-  it('does not take the activity of Shell 2 for Shell 1', () => {
+  it('does not take the activity of Terminal 2 for Terminal 1', () => {
     const task = build({ implement: 'running', 'test-spec': 'running' }, 'running')
     grid([task], {}, { terminals, activity: { 'T-0001': { '2': 'Edit test-spec.md' } } })
     expect(stateLine()).toBe('Running')
-    expect(within(header('T-0001')).queryByText(/Shell 2/)).toBeNull()
+    expect(within(header('T-0001')).queryByText(/Terminal 2/)).toBeNull()
   })
 
   it('shows the task state when the terminals are not known yet', () => {

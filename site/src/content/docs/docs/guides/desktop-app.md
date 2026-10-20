@@ -90,7 +90,7 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 
 ## Quit and close
 
-- **Quit** stops the daemon, and with it every agent and shell. If agents are working, the app asks first ("An agent is still working" or "N agents are still working"). Tasks, worktrees and their changes stay. When you open the app again, the agents of running, waiting and in-review tasks start again, and the other shells come back when you open their task. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- **Quit** stops the daemon, and with it every agent and terminal. If agents are working, the app asks first ("An agent is still working" or "N agents are still working"). Tasks, worktrees and their changes stay. When you open the app again, the agents of running, waiting and in-review tasks start again, and the other terminals come back when you open their task. See [A terminal after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart).
 - **On macOS, closing the window** keeps the app, the daemon and the agents running. Click the Dock icon to open the window again. Quit from the app menu to stop everything.
 - **On Windows and Linux, closing the window** quits the app, with the same question when agents work.
 
@@ -98,7 +98,7 @@ Choose **File → Show Daemon Log**, or open `logs/daemon.log` yourself. Each st
 
 | Variable | Use |
 |---|---|
-| `NATAMUX_DESKTOP_SMOKE=1` | Loads the dashboard, makes a task with a worktree, runs a command in its shell, and quits. Exit code 0 means all of it worked. The task, its worktree and its branch stay in the project. For checks, not daily use |
+| `NATAMUX_DESKTOP_SMOKE=1` | Loads the dashboard, makes a task with a worktree, runs a command in its terminal, and quits. Exit code 0 means all of it worked. The task, its worktree and its branch stay in the project. For checks, not daily use |
 | `NATAMUX_DESKTOP_SMOKE_SHOT=<file.png>` | With the smoke check, also saves a picture of the window |
 | `NATAMUX_<AGENT>_COMMAND` | The program that starts an agent, for example `NATAMUX_CLAUDE_COMMAND`. Set it in the environment the app starts from. See [Environment variables](/docs/reference/environment-variables/) |
 

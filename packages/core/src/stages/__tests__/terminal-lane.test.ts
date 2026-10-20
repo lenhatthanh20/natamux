@@ -122,7 +122,7 @@ describe('a stage in its own shell', () => {
 
   it('is only for an agent stage that writes a report', () => {
     const message = (id: string) =>
-      `Only an agent stage with an output file can run in its own shell, and "${id}" cannot`
+      `Only an agent stage with an output file can run in its own terminal, and "${id}" cannot`
     const issues = (stage: object) =>
       pipelineSchema.safeParse([{ id: 'x', gate: 'auto', ownShell: true, ...stage }]).error?.issues
     expect(issues({ kind: 'agent', output: 'x.md' })).toBeUndefined()

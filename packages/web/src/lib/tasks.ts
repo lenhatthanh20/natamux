@@ -79,7 +79,7 @@ export function cancelTaskDescription(task: Pick<Task, 'workspace'>): string {
   if (task.workspace === null) {
     return final
   }
-  const stops = 'The agent and its shells stop now.'
+  const stops = 'The agent and its terminals stop now.'
   const stays = 'The commits, the branch and the workspace stay.'
   return `${stops} ${stays} ${final}`
 }

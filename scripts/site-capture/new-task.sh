@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # new-task.sh <bug|ask|slow|gate> ["title"]: makes a fresh storefront task for a live clip and
-# prints its id. AGENT=<claude-code|codex|gemini|copilot|cursor> picks Shell 1, PACE the speed,
+# prints its id. AGENT=<claude-code|codex|gemini|copilot|cursor> picks Terminal 1, PACE the speed,
 # FINDING what Review sends back once (a default per mode fits the title).
 #   bug  : Spec done, waits at "Ready for review: Spec". Approve it (on camera or `approve <id>`):
 #          Took Bug fix -> Reproduce -> side by side -> Review sends back once -> Manual review, ~90 s.

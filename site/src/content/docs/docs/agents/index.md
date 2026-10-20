@@ -29,8 +29,8 @@ Natamux does not rank agents. Pick by what the stage needs:
 
 | Stage | What helps |
 |---|---|
-| Implement | The agent you trust to change code. It runs in Shell 1. |
-| Review, Security review | A different agent than the one that wrote the code, so the review has fresh eyes. These stages run in their own shell. |
+| Implement | The agent you trust to change code. It runs in Terminal 1. |
+| Review, Security review | A different agent than the one that wrote the code, so the review has fresh eyes. These stages run in their own terminal. |
 | Test spec | An agent that does not read the code. It runs beside Implement. |
 | A CI stage of your own | Any agent that can read a failed log. |
 

@@ -82,14 +82,14 @@ Under every diff there is a box to comment on the file. It says **Comment on thi
 2. Write what should change and why.
 3. Click **Send to agent**, or press `Mod+Enter`.
 
-Natamux pastes this text into Shell 1 as the agent's next prompt:
+Natamux pastes this text into Terminal 1 as the agent's next prompt:
 
 ```text
 Review comment on src/app.ts, line 12:
 Handle the empty list here.
 ```
 
-The box then says **Sent to the agent.** This needs an agent that runs in Shell 1. Without one you get an error and the comment is not sent. See [Terminal](/docs/guides/terminal/).
+The box then says **Sent to the agent.** This needs an agent that runs in Terminal 1. Without one you get an error and the comment is not sent. See [Terminal](/docs/guides/terminal/).
 
 #### Ask about selected lines
 
@@ -123,7 +123,7 @@ The commit box is under the file list.
 
 **Commit all** stages every change in the workspace, new files too, and commits them. You cannot pick single files. A toast says **Committed N files.** and has a **Push** action. The button is off until you write a message.
 
-**Generate** asks the task's agent to write a message from the changes. It runs the agent once in the background, not in Shell 1, and puts the answer in the box. Read and change it before you commit; nothing is committed for you.
+**Generate** asks the task's agent to write a message from the changes. It runs the agent once in the background, not in Terminal 1, and puts the answer in the box. Read and change it before you commit; nothing is committed for you.
 
 - The agent is the one the task runs. A task without one uses Claude Code.
 - While the agent writes, **Commit all** is off with the reason **Drafting the message…**. Text you type in that time stays, and the draft is dropped.

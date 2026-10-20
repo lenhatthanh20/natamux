@@ -53,11 +53,11 @@ test('shows a shell that ends, within 2 s', async ({ page, request }) => {
   await signIn(page)
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await page.getByRole('button', { name: 'New shell' }).click()
-  await expect(rows(pane(page, 'Shell 2'))).toContainText('$', { timeout: 30_000 })
-  // The pane of a shell added on this page stays, with "The shell ended.", so the sidebar row of
+  await page.getByRole('button', { name: 'New terminal' }).click()
+  await expect(rows(pane(page, 'Terminal 2'))).toContainText('$', { timeout: 30_000 })
+  // The pane of a shell added on this page stays, with "The terminal ended.", so the sidebar row of
   // the shell is what the live feed changes.
-  const shellRow = page.getByRole('button', { name: /^Shell 2, / })
+  const shellRow = page.getByRole('button', { name: /^Terminal 2, / })
   await expect(shellRow).toBeVisible()
 
   await request.delete(`/api/tasks/${id}/terminals/2`, { headers })
@@ -69,7 +69,7 @@ test('shows a file that a shell wrote in the changes, within 3 s', async ({ page
   await signIn(page)
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
 
   const changes = await request.get(`/api/tasks/${id}/changes?fresh=1`, { headers })

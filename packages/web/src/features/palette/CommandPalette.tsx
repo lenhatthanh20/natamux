@@ -115,7 +115,7 @@ function RowBody({ row, now }: { row: PaletteRow; now: Date }) {
             <SquareTerminal size={ICON.sm} aria-hidden="true" />
           </RowIcon>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-ink">Shell {row.name}</span>
+            <span className="truncate text-ink">Terminal {row.name}</span>
             <span className="flex min-w-0 items-center gap-2 text-xs text-muted">
               <span className="shrink-0 font-mono">{row.task.id}</span>
               <span className="truncate">{row.task.title}</span>

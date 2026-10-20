@@ -68,7 +68,7 @@ export const paneCommands: Command[] = [
   },
   {
     id: 'shell.new',
-    title: 'New shell',
+    title: 'New terminal',
     category: 'Workspace',
     shortcuts: ['Ctrl+Shift+`'],
     group: 'Panes',

@@ -360,7 +360,7 @@ describe('the jump palette', () => {
 
   it('lists the other shells of a workspace and opens that shell', async () => {
     const { on } = palette({ mode: 'jump', loadTerminals: async () => ['1', '2'] })
-    const [row] = await screen.findAllByText('Shell 2')
+    const [row] = await screen.findAllByText('Terminal 2')
     const user = userEvent.setup()
     await user.click(row as HTMLElement)
     // The first workspace of the list is the one that asks a question.

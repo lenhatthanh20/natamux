@@ -20,7 +20,7 @@ async function taskWithFile(page: Page, request: APIRequestContext, title: strin
   made.push(task.id)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   await runIn(page, shell, 'echo draft > draft-e2e.txt')
   await tabs.getByRole('tab', { name: 'Changes' }).click()

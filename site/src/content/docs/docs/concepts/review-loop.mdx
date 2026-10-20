@@ -12,7 +12,7 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 import StageFlow from '../../../../components/StageFlow.astro'
 import Figure from '../../../../components/Figure.astro'
 
-The default pipeline is built so that agents check each other. After you approve the plan, two agents work at the same time: one writes the test cases from the spec, the other writes the code. When both are done, the tests run. Then a third agent, in a shell and session of its own, reviews the changes. If it finds problems, it sends the task back to Implement by itself, with the reasons, and the loop runs again until the review passes.
+The default pipeline is built so that agents check each other. After you approve the plan, two agents work at the same time: one writes the test cases from the spec, the other writes the code. When both are done, the tests run. Then a third agent, in a terminal and session of its own, reviews the changes. If it finds problems, it sends the task back to Implement by itself, with the reasons, and the loop runs again until the review passes.
 
 <StageFlow />
 
@@ -20,15 +20,15 @@ You approve three things: the spec, the plan and the test spec. Everything after
 
 ## Step by step
 
-| # | Stage | Who works | Shell | You |
+| # | Stage | Who works | Terminal | You |
 |---|---|---|---|---|
-| 1 | **Context** | Natamux, or the task's agent for a skill or MCP source | none, or Shell 1 | Nothing for notes you typed: it passes by itself |
-| 2 | **Spec** | The task's agent (agent A) writes `spec.md` | Shell 1 | **Approve** or **Send back** |
-| 3 | **Plan** | Agent A writes `plan.md`, in the same session | Shell 1 | **Approve** or **Send back** |
-| 4 | **Test spec** | Agent B writes `test-spec.md` from the spec, without reading the code | Shell 2 | **Approve** or **Send back** |
-| 4 | **Implement** | Agent A writes the tests first, then the code | Shell 1 | Nothing |
-| 5 | **Automated tests** | Agent A adds a test for each case of the test spec, then runs all tests and fixes failures | Shell 1 | Nothing |
-| 6 | **Review** | Agent C reads the changes against the spec and writes `review.md` | Shell 5 | Nothing |
+| 1 | **Context** | Natamux, or the task's agent for a skill or MCP source | none, or Terminal 1 | Nothing for notes you typed: it passes by itself |
+| 2 | **Spec** | The task's agent (agent A) writes `spec.md` | Terminal 1 | **Approve** or **Send back** |
+| 3 | **Plan** | Agent A writes `plan.md`, in the same session | Terminal 1 | **Approve** or **Send back** |
+| 4 | **Test spec** | Agent B writes `test-spec.md` from the spec, without reading the code | Terminal 2 | **Approve** or **Send back** |
+| 4 | **Implement** | Agent A writes the tests first, then the code | Terminal 1 | Nothing |
+| 5 | **Automated tests** | Agent A adds a test for each case of the test spec, then runs all tests and fixes failures | Terminal 1 | Nothing |
+| 6 | **Review** | Agent C reads the changes against the spec and writes `review.md` | Terminal 5 | Nothing |
 | 7 | **Release** | Your git host | none | Open the pull request and merge it |
 
 The two stages of step 4 run side by side as one group, **Test spec and Implement**. The group ends when both stages are done, so **Automated tests** starts only after you approve the test spec and Implement has finished.
@@ -39,9 +39,9 @@ If you turn **Plan** off in [project settings](/docs/guides/project-settings/), 
 
 When the task reaches the group, Natamux starts both stages at the same moment.
 
-- **Implement** stays in **Shell 1**. Its prompt goes into the session that wrote the spec and the plan, so the agent keeps what it already read, and its prompt cache.
-- **Test spec** gets **Shell 2** and a new session. Its prompt tells it not to read the code. The test cases come from the spec alone, so they test what was asked, not what was built.
-- Each shell shows the state of its own stage in its pane header. The sidebar shows both stages under the task while it is open.
+- **Implement** stays in **Terminal 1**. Its prompt goes into the session that wrote the spec and the plan, so the agent keeps what it already read, and its prompt cache.
+- **Test spec** gets **Terminal 2** and a new session. Its prompt tells it not to read the code. The test cases come from the spec alone, so they test what was asked, not what was built.
+- Each terminal shows the state of its own stage in its pane header. The sidebar shows both stages under the task while it is open.
 
 <Figure src="/screens/v2/task-side-by-side" alt="An open task with two agent terminals side by side. Shell 1 runs Claude Code on Implement and Shell 7 runs Gemini CLI on Test spec, and both say Running. The Progress tab shows the Test spec and Implement group with both stages Running." caption="Both stages of the group run at once, each agent in its own shell. Here each stage has its own agent, so Test spec is in Shell 7. The group ends when both are done." />
 
@@ -49,7 +49,7 @@ Test spec waits for your approval because the test cases decide what **Automated
 
 ## The review agent
 
-**Review** is an `agent` stage with its own shell (`"ownShell": true`). It runs in **Shell 5**, apart from the agent that wrote the code.
+**Review** is an `agent` stage with its own terminal (`"ownShell": true`). It runs in **Terminal 5**, apart from the agent that wrote the code.
 
 - It reads `spec.md` and `test-spec.md`, then the changes: what is not committed (`git status`, `git diff`) and the commits of the branch that are not on the default branch.
 - It does not change code.
@@ -103,8 +103,8 @@ natamux stage back $NATAMUX_TASK_ID --reason "<the problems, one per line>"
 and stops, without `natamux done`. Then:
 
 1. The task goes back to **Implement**, the last agent stage before Review. **Test spec** is done and does not run again.
-2. Agent A gets the Implement prompt again, with `What to change: <the reasons>` added at the end. It goes into the same session in Shell 1.
-3. **Automated tests** and **Review** run again after it. The review agent gets its prompt in the same Shell 5 session, so it knows what it asked for.
+2. Agent A gets the Implement prompt again, with `What to change: <the reasons>` added at the end. It goes into the same session in Terminal 1.
+3. **Automated tests** and **Review** run again after it. The review agent gets its prompt in the same Terminal 5 session, so it knows what it asked for.
 4. The Implement card in **Progress** shows **Sent back 1×**, and the panel counts the times the task was sent back.
 
 <Figure src="/screens/v2/task-sent-back" alt="An open task after the review agent sent it back. Shell 8 shows a review with 1 problem to fix, the natamux stage back command, and the line Sent back to Implement with 1 finding. In Progress, the Implement card is Running with x2 and Sent back 1x." caption="Implement runs a second time (x2) with the review's reasons in its prompt." />
@@ -139,7 +139,7 @@ Everything here is the default pipeline. In [project settings](/docs/guides/proj
 
 - turn **Test spec** or **Review** off, or turn **Wait for my approval** on for Review;
 - add **Manual review** after Review, so a person reads the diff before release;
-- add more report stages, such as **Security review**. All stages with their own shell share **Shell 5**: when the Review agent still runs there, a later report stage gets its prompt in that same session, not a new agent;
+- add more report stages, such as **Security review**. All stages with their own terminal share **Terminal 5**: when the Review agent still runs there, a later report stage gets its prompt in that same session, not a new agent;
 - add a CI watcher stage that sends the task back when a check fails (see the examples in [Build a workflow](/docs/guides/workflows/));
 - run a hard stage, such as Implement, as a [workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow) with Claude Code.
 

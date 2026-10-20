@@ -50,7 +50,7 @@ function Row({
 
 function shellCount(count: number, other: boolean): string {
   const word = other ? ' other' : ''
-  return count === 1 ? `1${word} shell` : `${count}${word} shells`
+  return count === 1 ? `1${word} terminal` : `${count}${word} terminals`
 }
 
 // Asks before the worktree of a task is deleted. It says what goes and what stays, refuses a
@@ -180,7 +180,7 @@ export function RemoveWorkspaceDialog({
         )}
         {busy.map(({ name, program }) => (
           <Row key={name} icon={TriangleAlert} tone="warn">
-            Stops {program} in Shell {name}
+            Stops {program} in Terminal {name}
           </Row>
         ))}
         {plain > 0 && (

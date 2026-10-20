@@ -92,8 +92,8 @@ export function otherTerminalHint(
     .map(([name, lane]) => ({ name, state: terminalState(task, lane) }))
   const waiting = states.find((entry) => entry.state === 'needs-input')
   if (waiting !== undefined) {
-    return `Shell ${waiting.name} needs input`
+    return `Terminal ${waiting.name} needs input`
   }
   const failed = states.find((entry) => entry.state === 'failed')
-  return failed === undefined ? undefined : `Shell ${failed.name} failed`
+  return failed === undefined ? undefined : `Terminal ${failed.name} failed`
 }

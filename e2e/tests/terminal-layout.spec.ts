@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Page, test } from '@playwright/tes
 import { headers, openTask, signIn } from './helpers'
 import { makeShellTask, pane, removeTasks, rows, runIn } from './terminal-helpers'
 
-// T-0089. A pane that changes size (New shell, Close shell) hides its screen until the shell drew
+// T-0089. A pane that changes size (New terminal, Close terminal) hides its screen until the shell drew
 // for the new size, then fades it in. No frame shows the screen at a size between the old and the
 // final one. T-0113: a state change does not change the size at all, so nothing hides. T-0115:
 // what the task waits for is in the stage card of the details, a column of its own.
@@ -43,7 +43,7 @@ function watchSizes(page: Page): string[] {
 
 type Frame = { at: number; visible: boolean; size: string; fade: boolean }
 
-// Notes Shell 1's screen on every animation frame for a while: drawn or not, its rows and width.
+// Notes Terminal 1's screen on every animation frame for a while: drawn or not, its rows and width.
 async function sampleShell1(page: Page): Promise<void> {
   await page.evaluate(() => {
     const frames: Frame[] = []
@@ -51,7 +51,7 @@ async function sampleShell1(page: Page): Promise<void> {
     const start = performance.now()
     const tick = () => {
       const screen = document.querySelector(
-        'section[aria-label="Shell 1"] section[aria-label="Terminal screen"]',
+        'section[aria-label="Terminal 1"] section[aria-label="Terminal screen"]',
       )
       const rowsElement = screen?.querySelector('.xterm-rows')
       const drawn = screen?.querySelector('.xterm-screen')
@@ -118,14 +118,14 @@ async function openShells(page: Page, request: APIRequestContext, purpose: strin
   await signIn(page)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await expect(rows(shell)).toContainText('$')
   await runIn(page, shell, 'seq 1 100')
   await expect(rows(shell)).toContainText('100')
   return { task, shell }
 }
 
-test('shows Shell 1 at its final size only, after New shell and Close shell', async ({
+test('shows Terminal 1 at its final size only, after New terminal and Close terminal', async ({
   page,
   request,
 }) => {
@@ -134,20 +134,20 @@ test('shows Shell 1 at its final size only, after New shell and Close shell', as
 
   let before = sizes.length
   await sampleShell1(page)
-  await page.getByRole('button', { name: 'New shell' }).click()
-  await expect(rows(pane(page, 'Shell 2'))).toContainText('$', { timeout: 30_000 })
+  await page.getByRole('button', { name: 'New terminal' }).click()
+  await expect(rows(pane(page, 'Terminal 2'))).toContainText('$', { timeout: 30_000 })
   expectCalm(await shell1Frames(page))
-  // One new size for Shell 1. Shell 2 starts at its final size, also after "Connecting." goes.
+  // One new size for Terminal 1. Terminal 2 starts at its final size, also after "Connecting." goes.
   expect(sizes.slice(before)).toEqual([expect.stringMatching(/^1: /)])
 
   before = sizes.length
   await sampleShell1(page)
-  await pane(page, 'Shell 2').getByRole('button', { name: 'Close Shell 2' }).click()
+  await pane(page, 'Terminal 2').getByRole('button', { name: 'Close Terminal 2' }).click()
   expectCalm(await shell1Frames(page))
   expect(sizes.slice(before)).toEqual([expect.stringMatching(/^1: /)])
 })
 
-test('keeps Shell 1 as it is while the task enters and leaves review and needs-input', async ({
+test('keeps Terminal 1 as it is while the task enters and leaves review and needs-input', async ({
   page,
   request,
 }) => {

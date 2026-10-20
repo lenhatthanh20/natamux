@@ -18,7 +18,7 @@
     const b = await el.boundingBox(), s = await page.locator(panel).boundingBox();
     await smooth(panel, b.y - (s.y + s.height * at), ms);
   };
-  const shells = async () => page.locator('main').getByText(/^Shell \d+$/).evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, r.x + r.width / 2, r.y + r.height / 2]; }));
+  const shells = async () => page.locator('main').getByText(/^Terminal \d+$/).evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [e.textContent, r.x + r.width / 2, r.y + r.height / 2]; }));
   await page.mouse.move(700, 560); pos = [700, 560];
   await sleep(1500);
   await rec();
@@ -41,7 +41,7 @@
   await show(/^Test spec and Implement$/, 0.15, 900);
   await sleep(300);
   let sh = await shells();
-  const s1 = sh.find((s) => s[0] === 'Shell 1');
+  const s1 = sh.find((s) => s[0] === 'Terminal 1');
   const last = sh[sh.length - 1];
   await cap('Two agents work side by side');
   if (last) await glide(last[1] + 60, last[2] + 140, 1100);

@@ -63,7 +63,7 @@ const STATUS_TEXT: Record<TerminalStatus, string> = {
   open: 'Connected.',
   // The socket dropped while the shell runs. The screen stays; the missed output follows.
   reconnecting: 'Reconnecting.',
-  ended: 'The shell ended.',
+  ended: 'The terminal ended.',
   error: 'The terminal could not start.',
 }
 
@@ -298,7 +298,7 @@ export default function TerminalView({
             </p>
             {status === 'error' && (
               <Button variant="link" onClick={startNewShell}>
-                Start a new shell
+                Start a new terminal
               </Button>
             )}
           </div>
@@ -326,10 +326,10 @@ export default function TerminalView({
           </p>
           <Button
             variant="link"
-            data-tip="Starts a plain shell in the task's workspace. It does not start the agent."
+            data-tip="Starts a plain terminal in the task's workspace. It does not start the agent."
             onClick={startNewShell}
           >
-            Open a new shell
+            Open a new terminal
           </Button>
         </div>
       )}

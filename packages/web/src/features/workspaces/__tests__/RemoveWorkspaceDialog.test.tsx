@@ -100,7 +100,7 @@ describe('RemoveWorkspaceDialog', () => {
     const user = userEvent.setup()
 
     expect(screen.getByRole('dialog', { name: 'Remove the workspace of T-0058?' })).toBeTruthy()
-    expect(await screen.findByText('Ends 2 shells. Nothing runs in them.')).toBeTruthy()
+    expect(await screen.findByText('Ends 2 terminals. Nothing runs in them.')).toBeTruthy()
     expect(screen.getByText('Keeps the task, its notes, docs and history.')).toBeTruthy()
     const box = screen.getByRole('checkbox', { name: /Also delete the branch/ })
     await waitFor(() => expect((box as HTMLInputElement).checked).toBe(true))
@@ -137,8 +137,8 @@ describe('RemoveWorkspaceDialog', () => {
     const shells = { terminals: ['1', '7'], lanes: {}, programs: { '1': 'zsh', '7': 'node' } }
     const { remove } = dialog({ shells })
 
-    expect(await screen.findByText('Stops node in Shell 7')).toBeTruthy()
-    expect(screen.getByText('Ends 1 other shell.')).toBeTruthy()
+    expect(await screen.findByText('Stops node in Terminal 7')).toBeTruthy()
+    expect(screen.getByText('Ends 1 other terminal.')).toBeTruthy()
     const stop = screen.getByRole('button', { name: 'Stop it and remove' })
     await waitFor(() => expect(stop.getAttribute('aria-disabled')).toBeNull())
     await userEvent.setup().click(stop)

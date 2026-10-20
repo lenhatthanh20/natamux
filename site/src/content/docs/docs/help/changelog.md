@@ -18,7 +18,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 - Click a notification to open its task. The desktop app icon shows how many tasks need you, and **File → Keep Computer Awake While Agents Run** keeps the computer awake while an agent runs. See [Notifications](/docs/guides/dashboard/#notifications) and [Menu](/docs/guides/desktop-app/#menu).
 - In the command palette, `Tab` cycles the scope through **Needs you** and each project. See [Command palette](/docs/guides/dashboard/#command-palette).
-- After a restart, opening a task brings back every agent of the task, also one that crashed or that you started by hand. An agent you quit stays quit. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- After a restart, opening a task brings back every agent of the task, also one that crashed or that you started by hand. An agent you quit stays quit. See [A shell after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart).
 - A terminal hidden for 20 minutes is closed in the dashboard to save memory. Its shell keeps running.
 - Fix: an agent's `git add` or `git commit` could fail on `index.lock` while the dashboard was open. The dashboard now reads git status without the lock.
 - Fix: typed Vietnamese was garbled when the daemon had no locale. Task shells now get `LANG=C.UTF-8`. See [Task terminals](/docs/reference/environment-variables/#task-terminals).
@@ -56,7 +56,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.31 (2026-10-16)
 
-- A stage in Shell 1 no longer closes it with **End the agent and close its shell when the stage is done**. Shell 1 keeps the task's agent and its session; the stage settings say so. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
+- A stage in Shell 1 no longer closes it with **End the agent and close its shell when the stage is done**. Shell 1 keeps the task's agent and its session; the stage settings say so. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-terminal).
 - The button that opens a new pull request says **Create PR** at every width. See [Push and open a pull request](/docs/guides/changes-and-history/#push-and-open-a-pull-request).
 - A task title may have up to 400 characters. See [Task fields](/docs/concepts/tasks/#task-fields).
 - Fix: a refused field gave only "The daemon answered with status 400." The message now names the field and the reason.
@@ -75,7 +75,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.28 (2026-10-15)
 
-- A task's shells come back after a restart, with the same names. An agent goes on with its last conversation. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- A task's shells come back after a restart, with the same names. An agent goes on with its last conversation. See [A shell after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart).
 - Fix: a shell that a stage closed came back as a new plain shell. Its pane now leaves the **Terminal** tab.
 - Fix: after an API error, a Claude Code stage stayed failed when you typed to the agent or clicked **Start agent**. Now the stage runs again. See [Events and states](/docs/agents/claude-code/#events-and-states).
 
@@ -85,7 +85,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.26 (2026-10-15)
 
-- A context, agent or testing stage can end its agent and close its shell when it is done (`"endShell": true`). A next stage in that shell starts a new agent session. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
+- A context, agent or testing stage can end its agent and close its shell when it is done (`"endShell": true`). A next stage in that shell starts a new agent session. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-terminal).
 - Fix: a testing stage whose command was running when the daemon stopped stayed running. The daemon now runs the command again when it starts.
 - Codex and Gemini run inline, so their output goes into the terminal history. See [Codex](/docs/agents/codex/#what-natamux-runs) and [Gemini CLI](/docs/agents/gemini/#what-natamux-runs).
 - The waiting state is now called **Needs input**, so its chip fits the Table view. See [Status icons](/docs/guides/status-icons/).
@@ -168,7 +168,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - The second line of a task row shows its agent's icon. Each project has a header band with its name and the number of workspaces.
 - **Generate** in the commit box (`Mod+Shift+G`) asks the task's agent for a commit message. **Commit…** drafts one too when the box is empty. See [Commit](/docs/guides/changes-and-history/#commit).
 - Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask. Cursor CLI and Copilot CLI get a file written outside the worktree. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
-- When Natamux starts again, the agents of running and waiting tasks start again on their own. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart).
+- When Natamux starts again, the agents of running and waiting tasks start again on their own. See [A shell after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart).
 - A failed CI check shows one short line per failed run in the stage card. When CI fails on a testing stage, the task goes back to the code stage before it, such as Implement, at most twice. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
 
 ## v0.1.13 (2026-10-13)
@@ -183,7 +183,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - A stage beside Shell 1 or in its own shell can use another agent and arguments, such as a cheaper model. The Spec stage writes a **Code map**. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - A new workspace starts from the branch of your main checkout as its remote has it now. See [Base branch](/docs/concepts/workspaces/#base-branch).
 - The sidebar shows one row per shell under each task, a comet for the progress of the task, and a task icon that spins while any of its agents works. The diff size is no longer on the second line. See [Sidebar](/docs/guides/dashboard/#sidebar).
-- An agent you start yourself in a shell shows in the pane header with its own name and, when its hooks reach Natamux, its own state. Natamux runs at most 30 shells in all. See [Shells](/docs/guides/terminal/#shells).
+- An agent you start yourself in a shell shows in the pane header with its own name and, when its hooks reach Natamux, its own state. Natamux runs at most 30 shells in all. See [Shells](/docs/guides/terminal/#terminals).
 - Fix: a shell where you started Cursor with `agent` showed nothing in its header or in the sidebar. Now it shows Cursor and its state.
 
 ## v0.1.11 (2026-10-13)
@@ -194,7 +194,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 
 ## v0.1.10 (2026-10-12)
 
-- When a task is done or cancelled, each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.**, and **Open a new shell** opens a plain shell in the workspace without the agent. After a daemon restart, the pane shows **The shell ended.** with the same link. See [Shells](/docs/guides/terminal/#shells).
+- When a task is done or cancelled, each pane keeps its last screen, dimmed, with no cursor, and takes no keys. You can still scroll, select, copy and find in it. A bar at the bottom says **Task done.** or **Task cancelled.**, and **Open a new shell** opens a plain shell in the workspace without the agent. After a daemon restart, the pane shows **The shell ended.** with the same link. See [Shells](/docs/guides/terminal/#terminals).
 - When you switch to another task's workspace, the keyboard goes to its first agent shell, so you can type to the agent at once. See [Open the terminal](/docs/guides/terminal/#open-the-terminal).
 - The sidebar and the details panel start at the same width, 320 px. A width you set by dragging stays.
 - Fix: after you quit and opened the app again, **Resume** on a task that waits for you moved it to running, but no agent ran in its terminal. Now **Resume** starts the agent again. Claude Code goes on with the same conversation; other agents start again with the stage prompt. See [Type to the agent](/docs/guides/terminal/#type-to-the-agent).
@@ -205,7 +205,7 @@ All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/r
 - The terminal looks like a native terminal: **JetBrains Mono** at 13px with rows as tall as the font and bold at 700, bundled Nerd Font icons, the **Night** palette, dimmed panes without the focus, an outline cursor and a dimmer selection when a terminal has no focus, and `Alt` + wheel to scroll 5 times faster. See [Font and drawing](/docs/guides/terminal/#font-and-drawing).
 - The diff in **Changes** and the file editor use JetBrains Mono, the font of the terminal, so code looks the same in a diff and in a shell.
 - The text of the dashboard is in **Inter** at 13px, the UI font of JetBrains IDEs. Small labels such as ids and branches stay in Geist Mono.
-- Faster terminals: up to 8 hidden terminals stay open, so going back to a terminal or a task shows it at once. A shell that prints a lot no longer slows down the page or the other shells, and `Ctrl+C` shows the prompt quickly. A dropped connection shows **Reconnecting.** and resumes the same shell, with the output you missed. After a daemon restart the pane shows **The shell ended.** with **Start a new shell**. See [Shells](/docs/guides/terminal/#shells).
+- Faster terminals: up to 8 hidden terminals stay open, so going back to a terminal or a task shows it at once. A shell that prints a lot no longer slows down the page or the other shells, and `Ctrl+C` shows the prompt quickly. A dropped connection shows **Reconnecting.** and resumes the same shell, with the output you missed. After a daemon restart the pane shows **The shell ended.** with **Start a new shell**. See [Shells](/docs/guides/terminal/#terminals).
 - Fix: an agent typed into a new shell, such as `codex`, showed the agent of the task ("Claude Code") in the pane header. Shell panes and the **Agents** grid now show the agent that runs in each shell, and no agent for another program. Codex has its own icon.
 
 ## v0.1.8 (2026-10-11)

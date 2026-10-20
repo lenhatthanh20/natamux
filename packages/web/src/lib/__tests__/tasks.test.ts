@@ -514,7 +514,7 @@ describe('contextText', () => {
 describe('cancelTaskDescription', () => {
   it('says what stops and what stays', () => {
     expect(cancelTaskDescription({ workspace: '/work/T-0001' })).toBe(
-      'The agent and its shells stop now. The commits, the branch and the workspace stay. ' +
+      'The agent and its terminals stop now. The commits, the branch and the workspace stay. ' +
         'A cancelled task cannot be started again.',
     )
     expect(cancelTaskDescription({ workspace: null })).toBe(

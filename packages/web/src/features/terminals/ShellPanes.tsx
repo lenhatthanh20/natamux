@@ -201,7 +201,7 @@ export function ShellPanes({
       await closeTerminal(name)
       await open.refetch()
     } catch (error) {
-      toast(`Could not close Shell ${name}.`, 'error', {
+      toast(`Could not close Terminal ${name}.`, 'error', {
         detail: error instanceof Error ? error.message : String(error),
       })
     } finally {
@@ -268,7 +268,7 @@ export function ShellPanes({
           // On a phone the label would take the room of a tab, so the button is an icon.
           phone ? (
             <IconButton
-              label="New shell"
+              label="New terminal"
               icon={SquareSplitHorizontal}
               onClick={addShell}
               disabled={full}
@@ -278,17 +278,17 @@ export function ShellPanes({
               variant="ghost"
               icon={SquareSplitHorizontal}
               onClick={addShell}
-              disabledReason={full ? `At most ${MAX_PANES} shells` : undefined}
-              data-tip={`New shell (Ctrl+Shift+\`)${agent === null ? '' : '. Shell 1 runs the agent.'}`}
+              disabledReason={full ? `At most ${MAX_PANES} terminals` : undefined}
+              data-tip={`New terminal (Ctrl+Shift+\`)${agent === null ? '' : '. Terminal 1 runs the agent.'}`}
             >
-              New shell
+              New terminal
             </Button>
           ),
           actionsSlot,
         )}
       {phone && names.length > 1 && (
         <fieldset className="flex min-w-0 gap-1.5 overflow-x-auto">
-          <legend className="sr-only">Shells</legend>
+          <legend className="sr-only">Terminals</legend>
           {names.map((name) => (
             <button
               key={name}
@@ -297,7 +297,7 @@ export function ShellPanes({
               onClick={() => setShown(name)}
               className="h-(--control-h) shrink-0 rounded-full border border-line px-3 text-xs font-medium text-muted aria-pressed:border-line-strong aria-pressed:bg-selected aria-pressed:text-ink"
             >
-              Shell {name}
+              Terminal {name}
             </button>
           ))}
         </fieldset>
@@ -328,9 +328,9 @@ export function ShellPanes({
                     ? undefined
                     : { gridColumn: `span ${paneSpan(index, visible.length, columns)}` }
                 }
-                label={`Shell ${name}`}
+                label={`Terminal ${name}`}
                 icon={glyph ?? <SquareTerminal size={14} aria-hidden />}
-                title={`Shell ${name}`}
+                title={`Terminal ${name}`}
                 agent={isAgent ? shellAgent : undefined}
                 stateText={
                   own !== null && knowsAgent && (own !== 'needs-input' || markWaiting)
@@ -349,7 +349,7 @@ export function ShellPanes({
                 maximized={focused === name}
                 onToggleMaximize={() => setMaximized(focused === name ? null : name)}
                 onClose={name === '1' ? undefined : () => void closeShell(name)}
-                closeTip="Close shell (ends the process)"
+                closeTip="Close terminal (ends the process)"
               />
             )
           })}

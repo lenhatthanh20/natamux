@@ -112,7 +112,7 @@ Fix the problem, then start the agent again.
 You can use any command line agent in a task terminal. Without hooks, Natamux has less to go on. Two fallbacks help:
 
 - **The terminal bell.** Many tools ring the bell when they wait for you. A `running` task whose agent has no hooks that report waiting becomes `needs-input` when the bell rings. This applies to Copilot CLI, Cursor CLI and unknown agents. Natamux ignores a bell in the first 15 seconds after the launch, because some agents ring it at start. Agents with hooks (Claude Code, Codex, Gemini CLI) do not use the bell.
-- **Commands the agent can run.** Tell the agent to run these in its shell:
+- **Commands the agent can run.** Tell the agent to run these in its terminal:
 
 | Command | Effect |
 |---|---|

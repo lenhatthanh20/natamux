@@ -53,10 +53,10 @@ An array of **steps**. A step is a stage, a group of stages that run side by sid
 | `doneWhen` | string | no | A sentence made from the checks | Text shown in the progress view before the stage starts. |
 | `enabled` | boolean | no | `true` | `false` turns the stage off: it stays in the file, but new tasks do not get it. |
 | `workflow` | boolean | no | `true` for `plan` and `implement` of the catalog, else `false` | Tasks get a **Run with a workflow** checkbox on this stage. Only for `agent` stages. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
-| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that starts its own agent: one that runs beside the stage in Shell 1, such as Test spec, one with `"ownShell": true`, such as Review, or an `agent` or `testing` stage of your own. |
+| `agent` | string | no | The task's agent | The agent this stage starts: `claude-code`, `codex`, `gemini`, `copilot` or `cursor`. Only on a stage that starts its own agent: one that runs beside the stage in Terminal 1, such as Test spec, one with `"ownShell": true`, such as Review, or an `agent` or `testing` stage of your own. |
 | `ci` | boolean | no | `true` for `implement` and `testing` of the catalog, else `false` | Tasks get a **Check on CI** checkbox on this stage. Only for a testing stage or an agent stage without an `output`. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
-| `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own shell (Shell 5) with a new session, or in a shell of its own from Shell 6 when it has its own `agent` or `args`. Only for an `agent` stage with an `output`. |
-| `endShell` | boolean | no | `false` | When the stage is done or sends the task back, end its agent or command and close its shell. Without it, the shell stays open until the task ends or you close it. Only for `context`, `agent` and `testing` stages. Ignored on a stage in Shell 1, which is never closed. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell). |
+| `ownShell` | boolean | no | `true` for the catalog's report stages (Review, Test spec, Security review, Performance check, Accessibility check) | The stage runs in its own terminal (Terminal 5) with a new session, or in a terminal of its own from Terminal 6 when it has its own `agent` or `args`. Only for an `agent` stage with an `output`. |
+| `endShell` | boolean | no | `false` | When the stage is done or sends the task back, end its agent or command and close its terminal. Without it, the terminal stays open until the task ends or you close it. Only for `context`, `agent` and `testing` stages. Ignored on a stage in Terminal 1, which is never closed. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
 | `args` | string | no | none | Words added to the command line of this stage's agent, after `NATAMUX_<AGENT>_ARGS`, such as `--model sonnet`. Same rule as `agent`. |
 
 Details:
@@ -68,9 +68,9 @@ Details:
 - A stage with `"enabled": false` keeps its settings in the file. The pipeline rules below count only stages that are on.
 - `check` runs in the root of the worktree. It gets 10 minutes. It runs with `sh -c`, or `cmd.exe` on Windows.
 - `command` only has an effect on a `testing` stage. Without it, an agent does the testing.
-- `agent` and `args` are for an `agent` stage that starts its own agent: a stage in a group that does not keep Shell 1, or a stage with `"ownShell": true`, such as Review. In a group, that is every agent stage but the one that changes code (the first agent stage without an `output`). Such a stage starts its own agent in its own shell, so it can use another agent or model without touching the session in Shell 1. A launch for such a stage does not change the task's agent.
-- An `agent` or `testing` stage of your own (an id that is not in the [catalog](#stage-catalog)) can have `agent` and `args` too, also where it would run in Shell 1.
-- A stage with its own `agent` or `args` runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+- `agent` and `args` are for an `agent` stage that starts its own agent: a stage in a group that does not keep Terminal 1, or a stage with `"ownShell": true`, such as Review. In a group, that is every agent stage but the one that changes code (the first agent stage without an `output`). Such a stage starts its own agent in its own terminal, so it can use another agent or model without touching the session in Terminal 1. A launch for such a stage does not change the task's agent.
+- An `agent` or `testing` stage of your own (an id that is not in the [catalog](#stage-catalog)) can have `agent` and `args` too, also where it would run in Terminal 1.
+- A stage with its own `agent` or `args` runs in a terminal of its own: Terminal 6 for the first such stage of the pipeline, Terminal 7 for the next, and so on. Natamux closes no agent while the task runs, unless its stage has `"endShell": true`. See [Choose a model](/docs/concepts/stages/#choose-a-model).
 - `workflow` only offers the choice. Each task turns it on for itself; it is off by default. A stage of your own does not take the default, so write `"workflow": true` on it to offer the choice.
 
 ### Group
@@ -157,10 +157,10 @@ The `type` of `when` picks the fields.
 - These rules count only stages that are on. A group needs 2 stages that are on. At least one stage must be on.
 - When a task starts, a group with one stage on runs that stage on its own, and a group with none is left out.
 - `"workflow": true` is only allowed on an `agent` stage.
-- `agent` and `args` are only allowed on an `agent` stage in a group that does not keep Shell 1, on one with `"ownShell": true`, or on an `agent` or `testing` stage of your own.
+- `agent` and `args` are only allowed on an `agent` stage in a group that does not keep Terminal 1, on one with `"ownShell": true`, or on an `agent` or `testing` stage of your own.
 - `"ownShell": true` is only allowed on an `agent` stage with an `output`.
 - `"ci": true` is only allowed on a `testing` stage or an `agent` stage without an `output`.
-- `"endShell": true` is only allowed on a `context`, `agent` or `testing` stage. On a stage in Shell 1 it is ignored.
+- `"endShell": true` is only allowed on a `context`, `agent` or `testing` stage. On a stage in Terminal 1 it is ignored.
 
 ### Skill placeholder
 
@@ -199,7 +199,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Check | `security` | Security review | `agent` | manual | `security.md` | Checks the diff for security problems. |
 | Check | `performance` | Performance check | `agent` | manual | `performance.md` | Looks for slow paths in the diff. |
 | Check | `accessibility` | Accessibility check | `agent` | manual | `accessibility.md` | Checks UI changes for keyboard, screen reader and contrast problems. |
-| Check | `agent-review` | Review | `agent` | auto | `review.md` | Default. An agent reviews the changes against the spec in its own shell, and sends the task back to Implement when they need fixes. |
+| Check | `agent-review` | Review | `agent` | auto | `review.md` | Default. An agent reviews the changes against the spec in its own terminal, and sends the task back to Implement when they need fixes. |
 | Check | `review` | Manual review | `review` | manual | none | A person reads the diff and approves it or sends it back. |
 | Check | `testing` | Automated tests | `testing` | auto | none | Default. An agent adds a test for each case of the test spec and runs all tests, or a `command` runs them. |
 | Check | `e2e` | End-to-end tests | `testing` | auto | none | Adds end-to-end tests, then runs them. Needs a `command`. |
@@ -277,7 +277,7 @@ The stage starts in every case. Each agent page says where it finds skills, for 
 | Wait for a CI run to start | 3 minutes. |
 | Wait for a CI run to finish | 30 minutes. |
 | A `check` command, and a `command` of a condition | 10 minutes each. |
-| Shells per task | 6. Natamux runs 30 shells in all. |
+| Terminals per task | 6. Natamux runs 30 terminals in all. |
 | Shell for commands | `sh -c`, or `cmd.exe` on Windows. |
 | Attachments per task | 20 files, 20 MB each, 50 MB in all. |
 
@@ -413,7 +413,7 @@ Make a stage fail until a command passes. Here the `implement` stage needs a com
 
 ### Run stages side by side
 
-Write the docs while the agent writes the code. Both stages start together, each in its own shell:
+Write the docs while the agent writes the code. Both stages start together, each in its own terminal:
 
 ```json
 {

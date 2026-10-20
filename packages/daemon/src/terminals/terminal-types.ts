@@ -44,7 +44,7 @@ export class NoTerminalError extends Error {
 // A resume names a shell by its id. Thrown when no shell of that name runs, or another one does.
 export class ShellGoneError extends Error {
   constructor(taskId: string, terminal: string) {
-    super(`Shell ${terminal} of ${taskId} has ended`)
+    super(`Terminal ${terminal} of ${taskId} has ended`)
     this.name = 'ShellGoneError'
   }
 }

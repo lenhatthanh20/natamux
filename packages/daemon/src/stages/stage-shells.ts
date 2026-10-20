@@ -255,7 +255,7 @@ export class StageShells {
       open.markStarting(taskId, terminal, shell.agent)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      console.warn(`Shell ${terminal} of ${taskId} comes back without its agent: ${reason}`)
+      console.warn(`Terminal ${terminal} of ${taskId} comes back without its agent: ${reason}`)
       if (!attached) {
         open.putBack(taskId, terminal)
       }

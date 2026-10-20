@@ -11,9 +11,9 @@ Every task state has its own shape, so you can tell states apart without color. 
 
 ## Task states
 
-The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px next to each task, and at 8 px next to each shell under the open task.
+The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px next to each task, and at 8 px next to each terminal under the open task.
 
-| Icon | Sidebar shell | State | Shape | What it means | What you do | Needs you |
+| Icon | Sidebar terminal | State | Shape | What it means | What you do | Needs you |
 |---|---|---|---|---|---|---|
 | <StatusIcon kind="draft" /> | <StatusIcon kind="draft" size={8} /> | Draft | Dashed ring | Created, not started. | Mark it ready, or start it. | No |
 | <StatusIcon kind="ready" /> | <StatusIcon kind="ready" size={8} /> | Ready | Ring | The stage waits to start: for its agent, a workspace, or the tasks it depends on. | Nothing. It starts when it can. | No |
@@ -25,7 +25,7 @@ The table shows the icon at 10 px in a 16 px box. The sidebar shows it at 10 px 
 | <StatusIcon kind="failed" /> | <StatusIcon kind="failed" size={8} /> | Failed | Triangle | The agent or a stage command failed. | Read the reason, fix it, then **Retry**. | Yes |
 | <StatusIcon kind="done" /> | <StatusIcon kind="done" size={8} /> | Done | Check | The task is finished. | Nothing. | No |
 | <StatusIcon kind="cancelled" /> | <StatusIcon kind="cancelled" size={8} /> | Cancelled | Dash | You stopped the task. | Nothing. | No |
-| — | <StatusIcon kind="unknown" size={8} /> | State not known yet | Grey ring with a dot | A shell runs an agent, but Natamux has no state for it yet: an agent you started by hand that has had no prompt yet, or one that ran when the daemon restarted. | Nothing. It changes at the agent's next event. | No |
+| — | <StatusIcon kind="unknown" size={8} /> | State not known yet | Grey ring with a dot | A terminal runs an agent, but Natamux has no state for it yet: an agent you started by hand that has had no prompt yet, or one that ran when the daemon restarted. | Nothing. It changes at the agent's next event. | No |
 
 Hollow shapes have not started, a full disk is alive, and a half disk is alive but silent. A task with stages shows the state of its current stage. When stages run side by side, the task shows running while any of them runs.
 
