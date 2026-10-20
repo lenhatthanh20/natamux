@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.39 (2026-10-20)
+
+- **Rollback…** in the Changes tab puts files that are not committed back as they are in the last commit. It is also on a file or folder row, and `Mod+Alt+Z` rolls back the file in the diff. The toast has **Undo**. See [Roll back changes](/docs/guides/changes-and-history/#roll-back-changes).
+- The panes of a task are called terminals: **Terminal 1**, **New terminal**, and the sidebar tag T1. See [Terminals](/docs/guides/terminal/#terminals).
+- Fix: when the file list of the Changes tab was narrow, **Commit all** covered the diff. Now it moves to its own line.
+
 ## v0.1.38 (2026-10-19)
 
 - A subtask is part of its parent's work: it starts from the parent's branch, its pull request goes into that branch, and the parent's next stage waits for its open subtasks, then pulls their work. See [Subtasks](/docs/concepts/tasks/#subtasks).
