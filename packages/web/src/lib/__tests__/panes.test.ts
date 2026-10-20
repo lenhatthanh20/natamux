@@ -395,7 +395,7 @@ describe('otherTerminalHint', () => {
       '1': { stage: 'implement', state: 'running' as const },
       '2': { stage: 'test-spec', state: 'running' as const },
     }
-    expect(otherTerminalHint(task, lanes)).toBe('Shell 2 needs input')
+    expect(otherTerminalHint(task, lanes)).toBe('Terminal 2 needs input')
   })
 
   it('names a failed terminal, after one that waits', () => {
@@ -408,7 +408,7 @@ describe('otherTerminalHint', () => {
       '1': { stage: 'implement', state: 'running' as const },
       '2': { stage: 'test-spec', state: 'failed' as const },
     }
-    expect(otherTerminalHint(failed, lanes)).toBe('Shell 2 failed')
+    expect(otherTerminalHint(failed, lanes)).toBe('Terminal 2 failed')
   })
 
   it('says nothing about the shown terminal, or when the others are fine', () => {

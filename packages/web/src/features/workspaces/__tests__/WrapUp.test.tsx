@@ -112,9 +112,9 @@ describe('WrapUp', () => {
     wrapUp()
     const user = userEvent.setup()
 
-    expect(await screen.findByText('Shell 1')).toBeTruthy()
+    expect(await screen.findByText('Terminal 1')).toBeTruthy()
     expect(screen.getByText(/^Claude Code · Implement · ended/)).toBeTruthy()
-    expect(screen.getByText(/^Plain shell · ended/)).toBeTruthy()
+    expect(screen.getByText(/^Plain terminal · ended/)).toBeTruthy()
     expect(screen.queryByText('All checks pass.')).toBeNull()
 
     const show = screen.getAllByRole('button', { name: 'Show last screen' })[0] as HTMLElement
@@ -128,7 +128,7 @@ describe('WrapUp', () => {
   it('says when no screen was kept', async () => {
     wrapUp({ ended: [] })
 
-    expect(await screen.findByText('No shell screens were kept for this task.')).toBeTruthy()
+    expect(await screen.findByText('No terminal screens were kept for this task.')).toBeTruthy()
   })
 
   it('lists a shell that still runs, and stops it after asking', async () => {
@@ -136,12 +136,12 @@ describe('WrapUp', () => {
     const { closeTerminal, onOpenShells } = wrapUp({ shells })
     const user = userEvent.setup()
 
-    expect(await screen.findByText('Shell 7')).toBeTruthy()
+    expect(await screen.findByText('Terminal 7')).toBeTruthy()
     expect(screen.getByText('node · running')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Open Shell 7' }))
+    await user.click(screen.getByRole('button', { name: 'Open Terminal 7' }))
     expect(onOpenShells).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole('button', { name: 'Stop Shell 7' }))
+    await user.click(screen.getByRole('button', { name: 'Stop Terminal 7' }))
     await user.click(screen.getByRole('button', { name: 'Stop' }))
     await waitFor(() => expect(closeTerminal).toHaveBeenCalledWith('7'))
   })
@@ -149,7 +149,7 @@ describe('WrapUp', () => {
   it('opens a new shell', async () => {
     const { onOpenShells } = wrapUp()
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open a new shell' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open a new terminal' }))
     expect(onOpenShells).toHaveBeenCalledTimes(1)
   })
 })

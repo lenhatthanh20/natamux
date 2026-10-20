@@ -122,7 +122,7 @@ export function withParents(shown: readonly Task[], all: readonly Task[]): Task[
 // A row under a task: one of its shells, or a parallel stage that has no shell yet.
 export type ShellRow = {
   key: string
-  // The stage the agent works on, "Shell 2" for an agent on no stage, or the program of a shell
+  // The stage the agent works on, "Terminal 2" for an agent on no stage, or the program of a shell
   // with no agent.
   label: string
   agent: string | null
@@ -151,7 +151,7 @@ export function shellRows(
     if (lane === undefined && typeof restoring === 'string') {
       return {
         key: `shell:${name}`,
-        label: `Shell ${name}`,
+        label: `Terminal ${name}`,
         agent: restoring,
         state: null,
         shell: name,
@@ -162,7 +162,7 @@ export function shellRows(
       const program = shells?.programs[name] ?? null
       return {
         key: `shell:${name}`,
-        label: program ?? 'Shell',
+        label: program ?? 'Terminal',
         agent: null,
         state: null,
         shell: name,
@@ -171,7 +171,7 @@ export function shellRows(
     }
     return {
       key: `shell:${name}`,
-      label: lane.stage === null ? `Shell ${name}` : stageName({ id: lane.stage }),
+      label: lane.stage === null ? `Terminal ${name}` : stageName({ id: lane.stage }),
       agent: lane.agent ?? null,
       state: terminalState(task, lane),
       shell: name,
@@ -192,21 +192,21 @@ export function shellRows(
   return [...rows, ...lanes]
 }
 
-// "Implement, Claude Code, Shell 1, Running"; "Shell 2, zsh" for a shell with no agent.
+// "Implement, Claude Code, Terminal 1, Running"; "Terminal 2, zsh" for a terminal with no agent.
 export function shellRowName(row: ShellRow): string {
   if (row.plain) {
-    return `Shell ${row.shell}, ${row.label}`
+    return `Terminal ${row.shell}, ${row.label}`
   }
-  const named = row.shell === null || row.label === `Shell ${row.shell}`
-  const shell = named ? null : `Shell ${row.shell}`
+  const named = row.shell === null || row.label === `Terminal ${row.shell}`
+  const shell = named ? null : `Terminal ${row.shell}`
   const agent = row.agent === null ? null : agentLabel(row.agent)
   const state = row.state === null ? 'State not known' : STATE_LABEL[row.state]
   return [row.label, agent, shell, state].filter((part) => part !== null).join(', ')
 }
 
-// "S1" at the right of a row, where its name does not already say the shell.
+// "T1" at the right of a row, where its name does not already say the terminal.
 export function shellTag(row: ShellRow): string | null {
-  return row.shell === null || row.label === `Shell ${row.shell}` ? null : `S${row.shell}`
+  return row.shell === null || row.label === `Terminal ${row.shell}` ? null : `T${row.shell}`
 }
 
 // The task glyph spins while any of its agents works, also when the task waits on another one.

@@ -40,7 +40,7 @@ For this guide, use **Start a task**.
 
 1. Enter a **Title**, for example `Fix the login redirect`.
 2. Pick the **Project** to work in.
-3. Pick an **Agent**, or "No agent, a plain shell".
+3. Pick an **Agent**, or "No agent, a plain terminal".
 4. Click **Start task**. Natamux makes a task, a git worktree and a branch, and starts the agent in the task's terminal.
 
 </Steps>
@@ -61,11 +61,11 @@ The dialog has two groups. **Context** is what the agent reads as the task's con
 | Attachments | Optional. Screenshots, logs or specs. Click **Add files**, drop them, or paste a screenshot |
 | Project | The project to work in |
 | Branch from | The branch to start from. It defaults to the default branch, such as `main`. Natamux fetches it first, so the task starts from its newest commit |
-| Agent | Pick an agent, or "No agent, a plain shell" |
+| Agent | Pick an agent, or "No agent, a plain terminal" |
 
 </details>
 
-If you added a task to the backlog first, open it and click **Start agent** (or **Start task** with no agent if you only want a shell).
+If you added a task to the backlog first, open it and click **Start agent** (or **Start task** with no agent if you only want a terminal).
 
 ## Watch the agent work
 
@@ -105,8 +105,8 @@ When a stage waits for you, the task is in review. Read what the agent produced,
 
 With the default pipeline you approve three times: the spec, the plan and the test spec.
 
-- After you approve the plan, two agents work at once: the task's agent implements in Shell 1, and a second agent writes the test spec in Shell 2.
-- When both are done, the tests run, then a review agent reads the changes in Shell 5.
+- After you approve the plan, two agents work at once: the task's agent implements in Terminal 1, and a second agent writes the test spec in Terminal 2.
+- When both are done, the tests run, then a review agent reads the changes in Terminal 5.
 - If the review finds problems, it sends the task back to Implement by itself, at most two times.
 
 See [The review loop](/docs/concepts/review-loop/) and [Stages](/docs/concepts/stages/).
@@ -143,7 +143,7 @@ One task went from a title to a pull request, with an agent and your approvals. 
 
 <CardGrid>
   <LinkCard title="Build a workflow" description="Paths, send back and CI for your team." href="/docs/guides/workflows/" />
-  <LinkCard title="Tasks and workspaces" description="How a task, its worktree and its shells fit together." href="/docs/concepts/tasks/" />
+  <LinkCard title="Tasks and workspaces" description="How a task, its worktree and its terminals fit together." href="/docs/concepts/tasks/" />
   <LinkCard title="Desktop app" description="Updates, menus and the command line." href="/docs/guides/desktop-app/" />
 </CardGrid>
 

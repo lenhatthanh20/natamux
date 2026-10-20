@@ -407,7 +407,7 @@ export function NewWorkspaceDialog({
                   {choice.label}
                 </option>
               ))}
-              <option value="">No agent, a plain shell</option>
+              <option value="">No agent, a plain terminal</option>
             </Select>
           </div>
         </fieldset>

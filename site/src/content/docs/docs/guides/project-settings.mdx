@@ -27,8 +27,8 @@ Open them from the sidebar: click the gear next to the project. Or right-click t
 | **Wait for my approval** | Every stage | Shows **Default** or **Changed**. **Use default** goes back. A `review` or `manual` stage is always checked, with "This stage is a check by a person." For `release` the label is **Open the pull request when I click**. |
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
-| **End the agent and close its shell when the stage is done** | Context, agent and testing stages outside Shell 1 | Off by default. When the stage is done, Natamux ends its agent or command and closes its shell. A stage in Shell 1 shows "This stage runs in Shell 1, which cannot be closed." instead. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell). |
-| **Agent** | Stages that start their own agent: agent stages beside the stage in Shell 1, such as Test spec, stages in their own shell, such as Review, and agent or testing stages of your own | The agent this stage starts. **Task's agent** keeps the task's own. A stage with its own agent or arguments runs in a shell of its own, from Shell 6, and Shell 1 keeps the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model). |
+| **End the agent and close its terminal when the stage is done** | Context, agent and testing stages outside Terminal 1 | Off by default. When the stage is done, Natamux ends its agent or command and closes its terminal. A stage in Terminal 1 shows "This stage runs in Terminal 1, which cannot be closed." instead. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |
+| **Agent** | Stages that start their own agent: agent stages beside the stage in Terminal 1, such as Test spec, stages in their own terminal, such as Review, and agent or testing stages of your own | The agent this stage starts. **Task's agent** keeps the task's own. A stage with its own agent or arguments runs in a terminal of its own, from Terminal 6, and Terminal 1 keeps the task's agent. See [Choose a model](/docs/concepts/stages/#choose-a-model). |
 | **Arguments** | The same stages, and any stage whose file sets `args` | Words added to that agent's command line, such as `--model sonnet`. On a stage that does not use them, the field says so; clear it to remove it. |
 | **Prompt** | Agent and testing stages | The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders. **Insert skill** opens a picker with the groups **Project**, **Plugins** and **Only on this machine**, and inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits. |
 | **Command** | Testing stages, and any stage whose file sets `command` | The command to run. **Lint and types** and **End-to-end tests** need one. On another kind of stage it does not run; clear it to remove it. |
@@ -92,7 +92,7 @@ To use an exported file in another project, import it there, or copy it into the
 
 <Figure src="/screens/v2/stage-agent-picker" alt="Project settings of storefront, Stages tab, with the Review stage selected. The Agent field is set to Codex, and the Arguments field below it holds --model gpt-5-codex." caption="Review selected, with its Agent and Arguments." />
 
-Review runs in its own shell, Shell 5, so it can use another agent than the task's without touching the session in Shell 1. **Test spec** works the same way, in Shell 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
+Review runs in its own terminal, Terminal 5, so it can use another agent than the task's without touching the session in Terminal 1. **Test spec** works the same way, in Terminal 2. See [The review loop](/docs/concepts/review-loop/#choose-the-review-agent).
 
 ### Split the pipeline by a condition
 
@@ -110,7 +110,7 @@ See [Paths with a condition](/docs/concepts/stages/#paths-with-a-condition) and 
 
 ### Give a stage another agent
 
-Click the stage and set **Agent** and **Arguments**. The stage then runs in its own shell. See [Mix agents in one task](/docs/guides/mix-agents/).
+Click the stage and set **Agent** and **Arguments**. The stage then runs in its own terminal. See [Mix agents in one task](/docs/guides/mix-agents/).
 
 ### Have a person read the diff
 
@@ -122,11 +122,11 @@ Turn off **Plan** with its checkbox. After you approve the spec, Test spec and I
 
 ### Add a check stage
 
-Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one writes a report with a **Findings** section and waits for your approval. Like Review, it runs in **Shell 5**, the one shell that all such stages share. When an agent still runs there, for example the Review agent, the stage gets its prompt in that session. With its own **Agent** or **Arguments**, it runs in a shell of its own instead, from Shell 6.
+Pick **Security review**, **Performance check** or **Accessibility check** from the catalog. Each one writes a report with a **Findings** section and waits for your approval. Like Review, it runs in **Terminal 5**, the one terminal that all such stages share. When an agent still runs there, for example the Review agent, the stage gets its prompt in that session. With its own **Agent** or **Arguments**, it runs in a terminal of its own instead, from Terminal 6.
 
 ### Run your own test command
 
-Click **Automated tests** and enter a **Command**, such as `pnpm test`. A shell runs it instead of an agent. Exit code 0 passes the stage.
+Click **Automated tests** and enter a **Command**, such as `pnpm test`. A terminal runs it instead of an agent. Exit code 0 passes the stage.
 
 ### Let agents ask before they act
 

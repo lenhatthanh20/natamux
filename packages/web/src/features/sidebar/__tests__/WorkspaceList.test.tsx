@@ -639,7 +639,7 @@ describe('the agents of a task', () => {
       loadTerminals,
     })
 
-    const shell = await screen.findByRole('button', { name: 'Beta, Shell 2, Needs input' })
+    const shell = await screen.findByRole('button', { name: 'Beta, Terminal 2, Needs input' })
     expect(screen.queryByRole('button', { name: 'Beta, Needs input' })).toBeNull()
     await user.click(shell)
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', '2')
@@ -666,7 +666,7 @@ describe('the agents of a task', () => {
     const taskGlyph = () =>
       screen.getByRole('button', { name: /^Checks,/ }).querySelector('[data-state]')
 
-    await screen.findByRole('button', { name: 'Beta, Claude Code, Shell 2, Running' })
+    await screen.findByRole('button', { name: 'Beta, Claude Code, Terminal 2, Running' })
     expect(taskGlyph()?.getAttribute('data-state')).toBe('running')
 
     rerender({
@@ -708,8 +708,10 @@ describe('one row per shell', () => {
     const loadTerminals = vi.fn(async () => shells({ '1': claude }))
     list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
-    const shell = await screen.findByRole('button', { name: 'Spec, Claude Code, Shell 1, Running' })
-    expect(shell.textContent).toContain('S1')
+    const shell = await screen.findByRole('button', {
+      name: 'Spec, Claude Code, Terminal 1, Running',
+    })
+    expect(shell.textContent).toContain('T1')
     expect(rowOf('Plain').getAttribute('aria-expanded')).toBe('true')
   })
 
@@ -724,15 +726,15 @@ describe('one row per shell', () => {
       loadTerminals,
     })
 
-    const zsh = await screen.findByRole('button', { name: 'Shell 2, zsh' })
-    expect(zsh.textContent).toContain('S2')
+    const zsh = await screen.findByRole('button', { name: 'Terminal 2, zsh' })
+    expect(zsh.textContent).toContain('T2')
     expect(zsh.querySelector('.lucide-square-terminal')).toBeTruthy()
     await user.click(zsh)
     expect(onOpenShell).toHaveBeenCalledWith('T-0001', '2')
 
     lanes = { ...lanes, '2': { stage: null, state: 'needs-input', agent: 'cursor' } }
     await act(() => queryClient.refetchQueries())
-    const cursor = await screen.findByRole('button', { name: 'Shell 2, Cursor, Needs input' })
+    const cursor = await screen.findByRole('button', { name: 'Terminal 2, Cursor, Needs input' })
     expect(cursor.querySelector('[data-tip="Cursor"]')).toBeTruthy()
   })
 
@@ -745,20 +747,20 @@ describe('one row per shell', () => {
     list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
     const unknown = await screen.findByRole('button', {
-      name: 'Shell 2, Claude Code, State not known',
+      name: 'Terminal 2, Claude Code, State not known',
     })
     expect(unknown.querySelector('[data-tip="State not known yet"] svg')).toBeTruthy()
 
     // Test spec C15: a new hook gives the state, and the ring goes.
     state = 'running'
     await act(() => queryClient.refetchQueries())
-    const running = await screen.findByRole('button', { name: 'Shell 2, Claude Code, Running' })
+    const running = await screen.findByRole('button', { name: 'Terminal 2, Claude Code, Running' })
     expect(running.querySelector('[data-tip="State not known yet"]')).toBeNull()
     expect(running.querySelector('[data-state="running"]')).toBeTruthy()
   })
 
-  // Test spec C16 and C17: a known state keeps its glyph; a plain shell keeps its terminal icon.
-  it('shows the glyph of each known state, and no ring on a plain shell', async () => {
+  // Test spec C16 and C17: a known state keeps its glyph; a plain terminal keeps its terminal icon.
+  it('shows the glyph of each known state, and no ring on a plain terminal', async () => {
     const loadTerminals = vi.fn(async () =>
       shells(
         {
@@ -772,16 +774,16 @@ describe('one row per shell', () => {
     list({ tasks: [plain], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
     const rows = [
-      ['Spec, Claude Code, Shell 1, Running', 'running'],
-      ['Shell 2, Claude Code, Needs input', 'needs-input'],
-      ['Shell 3, Codex, Failed', 'failed'],
+      ['Spec, Claude Code, Terminal 1, Running', 'running'],
+      ['Terminal 2, Claude Code, Needs input', 'needs-input'],
+      ['Terminal 3, Codex, Failed', 'failed'],
     ]
     for (const [name, glyph] of rows) {
       const shell = await screen.findByRole('button', { name })
       expect(shell.querySelector(`[data-state="${glyph}"]`)).toBeTruthy()
       expect(shell.querySelector('[data-tip="State not known yet"]')).toBeNull()
     }
-    const zsh = screen.getByRole('button', { name: 'Shell 4, zsh' })
+    const zsh = screen.getByRole('button', { name: 'Terminal 4, zsh' })
     expect(zsh.querySelector('.lucide-square-terminal')).toBeTruthy()
     expect(zsh.querySelector('[data-tip="State not known yet"]')).toBeNull()
   })
@@ -791,7 +793,7 @@ describe('one row per shell', () => {
     const loadTerminals = vi.fn(async () => shells({}, { '1': 'bash' }))
     list({ tasks: [resting], pinnedIds: [], currentId: 'T-0001', loadTerminals })
 
-    expect(await screen.findByRole('button', { name: 'Shell 1, bash' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Terminal 1, bash' })).toBeTruthy()
     expect(rowOf('Plain').getAttribute('aria-expanded')).toBe('true')
   })
 })
@@ -1313,7 +1315,7 @@ describe('a task row', () => {
       loadTerminals,
     })
 
-    await screen.findByRole('button', { name: 'Implement, Codex, Shell 1, Running' })
+    await screen.findByRole('button', { name: 'Implement, Codex, Terminal 1, Running' })
     const row = rowOf('Parent')
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(row.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
@@ -1376,7 +1378,7 @@ describe('a task row', () => {
 
     rerender({ tasks: [task], pinnedIds: [], currentId: 'T-0001', loadTerminals })
     const shell = await screen.findByRole('button', {
-      name: 'Implement, Claude Code, Shell 1, Running',
+      name: 'Implement, Claude Code, Terminal 1, Running',
     })
     expect(shell.querySelector('[data-tip="Claude Code"]')).toBeTruthy()
     expect(icon()).toBeTruthy()
@@ -1617,9 +1619,9 @@ describe('test spec cases', () => {
       ),
     )
 
-    const first = await screen.findByRole('button', { name: 'Alpha, Shell 1, Running' })
+    const first = await screen.findByRole('button', { name: 'Alpha, Terminal 1, Running' })
     expect(within(first).getByText('Edit src/app.ts')).toBeTruthy()
-    const second = screen.getByRole('button', { name: 'Beta, Shell 2, Running' })
+    const second = screen.getByRole('button', { name: 'Beta, Terminal 2, Running' })
     expect(second.textContent).not.toContain('Edit')
     act(() => second.focus())
     await user.keyboard('{Enter}')

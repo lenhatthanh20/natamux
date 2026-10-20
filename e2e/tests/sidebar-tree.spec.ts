@@ -74,8 +74,8 @@ test('shows a subtask and the agents under their task', async ({ page, request }
   await expect(page.getByRole('region', { name: `Changes of ${parentId}` })).toBeVisible()
   await expect(parentRow).toHaveAttribute('aria-expanded', 'true')
   await expect(childRow).toBeVisible()
-  // The shell row names its stage first, then its agent and shell: "Spec, …, Shell 1, Running".
-  const shell = parentItem.getByRole('button', { name: /^Spec, (.+, )?Shell 1,/ })
+  // The shell row names its stage first, then its agent and shell: "Spec, …, Terminal 1, Running".
+  const shell = parentItem.getByRole('button', { name: /^Spec, (.+, )?Terminal 1,/ })
   await expect(shell).toBeVisible()
   await expect(tree(page).getByRole('button', { name: /^Work under/ })).toHaveCount(0)
 

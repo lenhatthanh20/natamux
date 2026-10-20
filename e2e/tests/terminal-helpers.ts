@@ -109,13 +109,13 @@ export async function preparePrompt(page: Page, target: Locator): Promise<void> 
 
 // Adds `count` shells to the open task, and waits for the prompt of every shell.
 export async function addShells(page: Page, count: number): Promise<void> {
-  const before = await page.getByRole('region', { name: /^Shell \d+$/ }).count()
+  const before = await page.getByRole('region', { name: /^Terminal \d+$/ }).count()
   for (let added = 1; added <= count; added++) {
-    await page.getByRole('button', { name: 'New shell' }).click()
-    await expect(page.getByRole('region', { name: /^Shell \d+$/ })).toHaveCount(before + added)
+    await page.getByRole('button', { name: 'New terminal' }).click()
+    await expect(page.getByRole('region', { name: /^Terminal \d+$/ })).toHaveCount(before + added)
   }
   for (let index = 1; index <= before + count; index++) {
-    await expect(rows(pane(page, `Shell ${index}`))).toContainText('$', { timeout: 30_000 })
+    await expect(rows(pane(page, `Terminal ${index}`))).toContainText('$', { timeout: 30_000 })
   }
 }
 

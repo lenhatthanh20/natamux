@@ -19,7 +19,7 @@ test('asks the agent about selected lines', async ({ page, request }) => {
   made.push(task.id)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   await runIn(page, shell, "printf 'one\\ntwo\\nthree\\n' > ask-e2e.txt")
   await tabs.getByRole('tab', { name: 'Changes' }).click()

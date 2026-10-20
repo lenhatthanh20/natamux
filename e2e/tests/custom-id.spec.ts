@@ -71,7 +71,7 @@ test('a chosen id names the branch, and its terminal works', async ({ page, requ
 
   await signIn(page)
   await page.goto(`/w/${task.id}/terminal`)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
   await runIn(page, shell, 'echo custom-$((6*7))')
   await expect(rows(shell)).toContainText('custom-42')

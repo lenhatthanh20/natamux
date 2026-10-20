@@ -936,7 +936,7 @@ describe('an agent review', () => {
     await runner.settle()
 
     await expect(runner.act(task.id, 'report', { terminal: '5' })).rejects.toThrow(
-      /agent-review stage of Shell 5 does not run now/,
+      /agent-review stage of Terminal 5 does not run now/,
     )
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
     expect(reportsOf(task.id, 'implement')).toHaveLength(1)
@@ -951,7 +951,7 @@ describe('an agent review', () => {
     const task = await atReview()
 
     await expect(runner.act(task.id, 'report', { terminal: '1' })).rejects.toThrow(
-      /No stage of Shell 1 runs now/,
+      /No stage of Terminal 1 runs now/,
     )
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'agent-review', state: 'running' })
     expect(reportsOf(task.id, 'agent-review')).toHaveLength(0)
@@ -975,7 +975,7 @@ describe('an agent review', () => {
 
     for (const action of ['approve', 'skip', 'pass', 'fail'] as const) {
       await expect(runner.act(task.id, action, { terminal: '5' })).rejects.toThrow(
-        /agent-review stage of Shell 5 does not run now/,
+        /agent-review stage of Terminal 5 does not run now/,
       )
     }
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'implement', state: 'running' })
@@ -1059,7 +1059,7 @@ describe('a report from the shell of a stage of another step', () => {
     const before = reports()
 
     await expect(runner.act(task.id, 'report', { terminal: '6' })).rejects.toThrow(
-      /agent-review stage of Shell 6 does not run now/,
+      /agent-review stage of Terminal 6 does not run now/,
     )
 
     expect(tasks.getTask(task.id)).toMatchObject({ stage: 'build', state: 'running' })

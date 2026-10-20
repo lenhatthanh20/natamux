@@ -36,8 +36,8 @@ test('wraps up a cancelled task: last screen, a new shell, then the workspace go
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
 
-  const pane = page.getByRole('region', { name: 'Shell 1' })
-  // Shell 1 may run the fake agent or a plain shell; either one draws something.
+  const pane = page.getByRole('region', { name: 'Terminal 1' })
+  // Terminal 1 may run the fake agent or a plain terminal; either one draws something.
   await expect(pane.locator('.xterm-rows')).toContainText(/\S/, { timeout: 30_000 })
 
   await request.post(`/api/tasks/${task.id}/events`, {
@@ -49,17 +49,17 @@ test('wraps up a cancelled task: last screen, a new shell, then the workspace go
   const banner = page.getByRole('status').filter({ hasText: 'Task cancelled.' })
   await expect(banner).toBeVisible({ timeout: 10_000 })
   await expect(page.getByRole('list', { name: 'Wrap-up', exact: true })).toBeVisible()
-  await expect(page.getByText(/shells were closed/)).toHaveCount(0)
+  await expect(page.getByText(/terminals were closed/)).toHaveCount(0)
 
   // The daemon kept the last screen of the shell it ended.
-  const shells = page.getByRole('list', { name: 'Shells', exact: true })
+  const shells = page.getByRole('list', { name: 'Terminals', exact: true })
   const show = shells.getByRole('button', { name: 'Show last screen' }).first()
   await show.click({ timeout: 10_000 })
   await expect(shells.locator('pre')).toContainText(/\S/)
 
-  // A plain shell still opens in the workspace, and the wrap-up is one click away.
-  await page.getByRole('button', { name: 'Open a new shell' }).click()
-  const shell = page.getByRole('region', { name: 'Shell 1' })
+  // A plain terminal still opens in the workspace, and the wrap-up is one click away.
+  await page.getByRole('button', { name: 'Open a new terminal' }).click()
+  const shell = page.getByRole('region', { name: 'Terminal 1' })
   const screen = shell.getByRole('region', { name: 'Terminal screen' })
   const rows = screen.locator('.xterm-rows')
   await expect(rows).toContainText('$', { timeout: 30_000 })

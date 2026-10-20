@@ -135,7 +135,7 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    // Name, approval, workflow, and the prompt. Spec runs in Shell 1, so it cannot end its shell.
+    // Name, approval, workflow, and the prompt. Spec runs in Terminal 1, so it cannot end its shell.
     expect(within(spec).getAllByText('Default')).toHaveLength(4)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
@@ -1363,7 +1363,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
   const agentSelect = (name: string) =>
     within(details(name)).queryByRole('combobox', { name: 'Agent' })
 
-  it('offers an agent and words only on a stage beside the stage in Shell 1, and saves them', async () => {
+  it('offers an agent and words only on a stage beside the stage in Terminal 1, and saves them', async () => {
     const { save, user } = open()
 
     await user.click(await row('Implement'))
@@ -1405,7 +1405,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     expect(agentSelect('Review')).not.toBeNull()
   })
 
-  it('offers an agent on a stage of your own in Shell 1, and saves it', async () => {
+  it('offers an agent on a stage of your own in Terminal 1, and saves it', async () => {
     const file = {
       stages: [
         { id: 'implement', kind: 'agent', gate: 'auto' },
@@ -1425,7 +1425,7 @@ describe('ProjectSettingsDialog, agent of a stage', () => {
     await user.click(await row('Write docs'))
     expect(
       within(details('Write docs')).getByText(
-        "With the task's agent, this stage runs in Shell 1. Another agent or arguments run in a shell of its own, so Shell 1 keeps the task's agent.",
+        "With the task's agent, this stage runs in Terminal 1. Another agent or arguments run in a terminal of its own, so Terminal 1 keeps the task's agent.",
       ),
     ).toBeTruthy()
     await user.selectOptions(agentSelect('Write docs') as HTMLElement, 'codex')
@@ -1495,7 +1495,7 @@ describe('ProjectSettingsDialog, shell commands of a stage', () => {
       ),
     ).toHaveLength(2)
 
-    // Arguments on a stage in Shell 1 break a pipeline rule, so Save waits until they are gone.
+    // Arguments on a stage in Terminal 1 break a pipeline rule, so Save waits until they are gone.
     await user.clear(textbox('Spec', 'Command') as HTMLElement)
     expect(saveButton().getAttribute('aria-disabled')).toBe('true')
     await user.clear(textbox('Spec', 'Arguments') as HTMLElement)
@@ -1623,14 +1623,14 @@ describe('ProjectSettingsDialog, workflow', () => {
 })
 
 describe('ProjectSettingsDialog, end the shell', () => {
-  const LABEL = 'End the agent and close its shell when the stage is done'
+  const LABEL = 'End the agent and close its terminal when the stage is done'
   const endBox = (name: string) => within(details(name)).queryByRole('checkbox', { name: LABEL })
 
   const NOTE =
-    "This stage runs in Shell 1, which cannot be closed. Shell 1 keeps the task's agent and its session."
+    "This stage runs in Terminal 1, which cannot be closed. Terminal 1 keeps the task's agent and its session."
   const note = (name: string) => within(details(name)).queryByText(NOTE)
 
-  it('offers it, off, only on stages that start an agent or a command outside Shell 1', async () => {
+  it('offers it, off, only on stages that start an agent or a command outside Terminal 1', async () => {
     const { user } = open()
 
     for (const name of ['Test spec', 'Review']) {
@@ -1648,7 +1648,7 @@ describe('ProjectSettingsDialog, end the shell', () => {
     expect(note('Release')).toBeNull()
   })
 
-  it('offers it when a stage of your own leaves Shell 1 for its own agent', async () => {
+  it('offers it when a stage of your own leaves Terminal 1 for its own agent', async () => {
     const file = {
       stages: [
         { id: 'implement', kind: 'agent', gate: 'auto' },
@@ -1686,7 +1686,7 @@ describe('ProjectSettingsDialog, end the shell', () => {
     expect(endBox('Write docs')).toBeNull()
     expect(note('Write docs')).toBeTruthy()
 
-    // Implement keeps Shell 1 as the code stage of the group; Write docs gets Shell 2.
+    // Implement keeps Terminal 1 as the code stage of the group; Write docs gets Terminal 2.
     await actions()
     await user.click(screen.getByRole('menuitem', { name: 'Run alongside the stage above' }))
     await user.click(await row('Write docs'))
@@ -1700,7 +1700,7 @@ describe('ProjectSettingsDialog, end the shell', () => {
     expect(note('Write docs')).toBeTruthy()
   })
 
-  it('offers it on a testing stage with a command, which runs in a shell of its own', async () => {
+  it('offers it on a testing stage with a command, which runs in a terminal of its own', async () => {
     const file = {
       stages: [
         { id: 'implement', kind: 'agent', gate: 'auto' },
@@ -1734,7 +1734,7 @@ describe('ProjectSettingsDialog, end the shell', () => {
     expect(stageIn(steps, 'agent-review')).not.toHaveProperty('endShell')
   })
 
-  it('loads and saves a file that sets it on a stage in Shell 1, which keeps the shell', async () => {
+  it('loads and saves a file that sets it on a stage in Terminal 1, which keeps the shell', async () => {
     const file = {
       stages: [
         { id: 'implement', kind: 'agent', gate: 'auto', endShell: true },
@@ -1771,7 +1771,7 @@ describe('ProjectSettingsDialog, end the shell', () => {
 
     expect(
       within(await stageList()).getByText(
-        'Only a stage that starts an agent or a command can end its shell, and "review" is a review stage',
+        'Only a stage that starts an agent or a command can end its terminal, and "review" is a review stage',
       ),
     ).toBeTruthy()
     await user.click(saveButton())

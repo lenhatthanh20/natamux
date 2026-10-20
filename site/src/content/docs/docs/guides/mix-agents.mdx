@@ -1,6 +1,6 @@
 ---
 title: Mix agents in one task
-description: Give each stage of a task its own agent and model, and see which shell each one runs in.
+description: Give each stage of a task its own agent and model, and see which terminal each one runs in.
 sidebar:
   order: 5.2
 ---
@@ -42,26 +42,26 @@ In the file, the same stage looks like this:
 
 - `agent` is `claude-code`, `codex`, `gemini`, `copilot` or `cursor`.
 - `args` adds words to the command line of that agent, such as a model flag. See [Choose a model](/docs/concepts/stages/#choose-a-model).
-- A catalog stage in Shell 1, such as Spec or Implement, cannot change them: that would end the session of the stages before it.
-- A stage of your own (made with **Custom stage**) can. It then runs in a shell of its own, from Shell 6, as Follow CI does in the Team example.
+- A catalog stage in Terminal 1, such as Spec or Implement, cannot change them: that would end the session of the stages before it.
+- A stage of your own (made with **Custom stage**) can. It then runs in a terminal of its own, from Terminal 6, as Follow CI does in the Team example.
 - The [configuration reference](/docs/reference/configuration/) lists where `agent` and `args` are allowed.
 
-## Shells
+## Terminals
 
-Each task has a few shells. See [Shells and agents](/docs/concepts/stages/#shells-and-agents) for the full table.
+Each task has a few terminals. See [Terminals and agents](/docs/concepts/stages/#terminals-and-agents) for the full table.
 
-| Shell | What runs there |
+| Terminal | What runs there |
 |---|---|
-| Shell 1 | The task's agent, in one session for the stages in a row. It is never closed before the task ends. |
-| Shell 2 | **Test spec**, when it has no agent of its own. |
-| Shell 5 | A stage with `ownShell` and no agent or `args` of its own. |
-| Shell 6 and up | A stage with its own `agent` or `args`. The first such stage of the pipeline gets Shell 6, the next Shell 7. |
+| Terminal 1 | The task's agent, in one session for the stages in a row. It is never closed before the task ends. |
+| Terminal 2 | **Test spec**, when it has no agent of its own. |
+| Terminal 5 | A stage with `ownShell` and no agent or `args` of its own. |
+| Terminal 6 and up | A stage with its own `agent` or `args`. The first such stage of the pipeline gets Terminal 6, the next Terminal 7. |
 
-A stage that runs again, for example after a send back, gets its prompt in the agent of its shell. That agent still knows the last round. To start fresh each time, set `"endShell": true`.
+A stage that runs again, for example after a send back, gets its prompt in the agent of its terminal. That agent still knows the last round. To start fresh each time, set `"endShell": true`.
 
-### End a stage's shell
+### End a stage's terminal
 
-`"endShell": true` closes the shell when the stage is done. This frees memory, and the next run starts a new session. It never closes Shell 1. See [End a stage's shell](/docs/concepts/stages/#end-a-stages-shell).
+`"endShell": true` closes the terminal when the stage is done. This frees memory, and the next run starts a new session. It never closes Terminal 1. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal).
 
 ## Run with a workflow
 
@@ -69,12 +69,12 @@ A stage that runs again, for example after a send back, gets its prompt in the a
 
 ## Why each stage uses its own agent
 
-The two examples in [Build a workflow](/docs/guides/workflows/) list which agent and shell each stage uses. The reasons:
+The two examples in [Build a workflow](/docs/guides/workflows/) list which agent and terminal each stage uses. The reasons:
 
 | Stage | Why |
 |---|---|
-| Spec, Plan, Implement | One session in Shell 1 keeps the context of the spec for the code. Implement can add sub-agents with a workflow. |
-| Test spec | It writes cases without reading the code. Its shell frees its memory when done. |
+| Spec, Plan, Implement | One session in Terminal 1 keeps the context of the spec for the code. Implement can add sub-agents with a workflow. |
+| Test spec | It writes cases without reading the code. Its terminal frees its memory when done. |
 | Review | An agent that did not write the code reads it. A new session per round. |
 | Review PR | It reads a teammate's work with a new session. |
 | Watch CI and merge, Follow CI | It moves CI and merge work off the main session. A failed job sends the task back. |
@@ -105,5 +105,5 @@ Task terminals get an agent token, not the daemon's token. An agent cannot appro
 ## Related
 
 - [Build a workflow](/docs/guides/workflows/): the two example files
-- [Stages](/docs/concepts/stages/): shells, models and workflows
+- [Stages](/docs/concepts/stages/): terminals, models and workflows
 - [Agents and hooks](/docs/concepts/agents-and-hooks/): how each agent reports

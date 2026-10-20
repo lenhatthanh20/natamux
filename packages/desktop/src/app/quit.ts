@@ -26,7 +26,7 @@ export async function confirmStop(state: AppState, action: string): Promise<bool
   const answer = await dialog.showMessageBox({
     type: 'warning',
     message: `${running === 1 ? 'An agent is' : `${running} agents are`} still working`,
-    detail: `${action} stops the daemon, and with it every agent and shell. Tasks, worktrees and their changes stay, and the agents start again when Natamux does.`,
+    detail: `${action} stops the daemon, and with it every agent and terminal. Tasks, worktrees and their changes stay, and the agents start again when Natamux does.`,
     buttons: [action, 'Cancel'],
     defaultId: 1,
     cancelId: 1,

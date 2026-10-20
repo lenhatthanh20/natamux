@@ -98,7 +98,7 @@ The row menu has the same moves as **Move up** and **Move down**. See [Project s
 | Action | Shortcut |
 |---|---|
 | Maximize or restore the focused pane | `Mod+Shift+Enter` |
-| New shell | ``Ctrl+Shift+` `` |
+| New terminal | ``Ctrl+Shift+` `` |
 | Find in the terminal | `Mod+F` or `Mod+Shift+F` |
 
 `Mod+F` and `Mod+Shift+F` work when the focus is in a terminal. In the find bar, `Enter` goes to the next match, `Shift+Enter` to the previous one and `Esc` closes the bar. On Windows and Linux use `Ctrl+Shift+F` in a terminal.

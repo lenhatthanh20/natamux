@@ -82,7 +82,7 @@ Files, git, GitHub, terminals and templates.
 | `PUT /tasks/:id/files/:name` | Replace a stage file `{ text }`, for example to fix the spec before you approve it |
 | `GET /tasks/:id/attachments` | The files attached to a task: `{ attachments }` |
 | `GET /tasks/:id/attachments/:name` | One attachment. Images come with their type, any other file downloads |
-| `GET /tasks/:id/ended-shells` | The last screens of the shells of a done or cancelled task: `{ shells }` |
+| `GET /tasks/:id/ended-shells` | The last screens of the terminals of a done or cancelled task: `{ shells }` |
 | `GET /tasks/:id/changes/file?path=<file>` | The diff of one changed file |
 | `GET /tasks/:id/changes/image?path=<file>&side=original\|modified` | One side of a changed image |
 | `GET /tasks/:id/tree?path=<folder>` | One folder of the worktree: `{ entries }`. No `path` is the root. `.git` is never listed |
@@ -96,8 +96,8 @@ Files, git, GitHub, terminals and templates.
 | `POST /tasks/:id/issue` | Open a GitHub issue for the task now |
 | `PUT /tasks/:id/issue` | Link an issue that exists `{ provider, key, url }` |
 | `POST /tasks/:id/fan-out` | Run more tries of a task `{ count, start? }`. `count` is 1 to 5 |
-| `GET /tasks/:id/terminals` | The open shells of a task: `{ terminals, agents, lanes, programs, restoring }` |
-| `DELETE /tasks/:id/terminals/:terminal` | Close one shell. `:terminal` is its number |
+| `GET /tasks/:id/terminals` | The open terminals of a task: `{ terminals, agents, lanes, programs, restoring }` |
+| `DELETE /tasks/:id/terminals/:terminal` | Close one terminal. `:terminal` is its number |
 | `POST /tasks/:id/terminal/ticket` | A one-time ticket for the terminal WebSocket |
 | `GET /templates` | The saved task templates: `{ templates }` |
 | `POST /templates` | Save a template |

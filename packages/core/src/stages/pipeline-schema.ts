@@ -64,7 +64,7 @@ function checkStageRules(step: Step, index: number, unique: Unique, context: z.R
     if (stage.ownShell === true && (stage.kind !== 'agent' || stage.output === undefined)) {
       fail(
         context,
-        `Only an agent stage with an output file can run in its own shell, and "${stage.id}" cannot`,
+        `Only an agent stage with an output file can run in its own terminal, and "${stage.id}" cannot`,
         at,
       )
     }
@@ -72,7 +72,7 @@ function checkStageRules(step: Step, index: number, unique: Unique, context: z.R
     if (ownAgent && !canHaveOwnAgent(step, stage)) {
       fail(
         context,
-        `Only a stage outside Shell 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${stage.id}" cannot`,
+        `Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${stage.id}" cannot`,
         at,
       )
     }
@@ -86,7 +86,7 @@ function checkStageRules(step: Step, index: number, unique: Unique, context: z.R
     if (stage.endShell === true && !canEndShell(stage)) {
       fail(
         context,
-        `Only a stage that starts an agent or a command can end its shell, and "${stage.id}" is a ${stage.kind} stage`,
+        `Only a stage that starts an agent or a command can end its terminal, and "${stage.id}" is a ${stage.kind} stage`,
         named,
       )
     }

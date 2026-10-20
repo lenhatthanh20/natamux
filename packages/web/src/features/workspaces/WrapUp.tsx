@@ -129,33 +129,33 @@ export function WrapUp({
 
       <section className="rounded-lg border border-line bg-surface">
         <header className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3.5 py-3">
-          <h3 className="text-md font-semibold tracking-tight">Shells</h3>
+          <h3 className="text-md font-semibold tracking-tight">Terminals</h3>
           <p className="min-w-0 flex-1 text-xs text-muted">
             {saved.length > 0
               ? 'They ended when the task finished. Their last screens are kept.'
-              : 'No shell screens were kept for this task.'}
+              : 'No terminal screens were kept for this task.'}
           </p>
           <Button size="xs" onClick={onOpenShells}>
-            Open a new shell
+            Open a new terminal
           </Button>
         </header>
-        <ul aria-label="Shells">
+        <ul aria-label="Terminals">
           {running.map((name) => {
-            const program = shells.data?.programs[name] ?? 'shell'
+            const program = shells.data?.programs[name] ?? 'terminal'
             return (
               <li
                 key={`open-${name}`}
                 className="flex min-h-10 items-center gap-2.5 border-t border-line px-3.5 py-1"
               >
                 <SquareTerminal size={ICON.sm} aria-hidden="true" className="shrink-0 text-add" />
-                <span className="font-medium">Shell {name}</span>
+                <span className="font-medium">Terminal {name}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-muted">
                   {program} · running
                 </span>
                 <Button
                   size="xs"
                   variant="ghost"
-                  aria-label={`Open Shell ${name}`}
+                  aria-label={`Open Terminal ${name}`}
                   onClick={onOpenShells}
                 >
                   Open
@@ -163,7 +163,7 @@ export function WrapUp({
                 <Button
                   size="xs"
                   variant="ghost"
-                  aria-label={`Stop Shell ${name}`}
+                  aria-label={`Stop Terminal ${name}`}
                   onClick={() => setStopping({ name, program })}
                 >
                   Stop
@@ -173,7 +173,7 @@ export function WrapUp({
           })}
           {saved.map((shell) => {
             const open = shown === shell.name
-            const who = shell.agent === null ? 'Plain shell' : agentLabel(shell.agent)
+            const who = shell.agent === null ? 'Plain terminal' : agentLabel(shell.agent)
             const stage = shell.stage === null ? [] : [stageName({ id: shell.stage })]
             const meta = [who, ...stage, `ended ${endedAt(shell.endedAt)}`].join(' · ')
             return (
@@ -184,7 +184,7 @@ export function WrapUp({
                     aria-hidden="true"
                     className="shrink-0 text-muted"
                   />
-                  <span className="font-medium">Shell {shell.name}</span>
+                  <span className="font-medium">Terminal {shell.name}</span>
                   <span className="min-w-0 flex-1 truncate text-xs text-muted">{meta}</span>
                   <Button
                     size="xs"
@@ -208,14 +208,14 @@ export function WrapUp({
 
       {stopping !== null && (
         <ConfirmDialog
-          title={`Stop ${stopping.program} in Shell ${stopping.name}?`}
-          description="The shell ends with it."
+          title={`Stop ${stopping.program} in Terminal ${stopping.name}?`}
+          description="The terminal ends with it."
           confirmLabel="Stop"
           onConfirm={() => {
             closeTerminal(stopping.name)
               .then(() => shells.refetch())
               .catch((error: unknown) =>
-                toast(`Could not stop Shell ${stopping.name}.`, 'error', {
+                toast(`Could not stop Terminal ${stopping.name}.`, 'error', {
                   detail: error instanceof Error ? error.message : String(error),
                 }),
               )

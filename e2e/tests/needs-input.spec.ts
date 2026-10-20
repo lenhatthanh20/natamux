@@ -87,7 +87,7 @@ test('says once per area that the agent waits', async ({ page, request }, testIn
   // The header has the state chip, a way to the progress; the only agent shell has no mark.
   await expect(view.locator('header .state-chip')).toHaveText('Needs input')
   await expect(view.getByRole('button', { name: /show in progress/i })).toBeVisible()
-  const shell = view.getByRole('region', { name: 'Shell 1' })
+  const shell = view.getByRole('region', { name: 'Terminal 1' })
   await expect(shell.locator('header [data-tip-overflow]')).toHaveCount(0)
   await expect(shell.locator('.bg-signal, .bg-signal-soft, .text-signal')).toHaveCount(0)
   // Only the glyph's screen reader text says the state.

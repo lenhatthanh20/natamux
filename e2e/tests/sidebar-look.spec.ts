@@ -151,15 +151,15 @@ test('shows the agent icon and the project band', async ({ page, request }, test
   await expect(agent.locator('img')).toBeVisible()
 })
 
-// C13, C15, C16: an agent started by hand in Shell 2 has no state until its first hook. The row
+// C13, C15, C16: an agent started by hand in Terminal 2 has no state until its first hook. The row
 // shows a ring, then the state the hooks give, and the daemon keeps it while no restart comes.
 test('shows a ring, then the state the hooks give', async ({ page, request }, testInfo) => {
   const title = `Shell ring ${Date.now()}`
   const id = await heldTask(request, title)
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await page.getByRole('button', { name: 'New shell' }).click()
-  const shell = pane(page, 'Shell 2')
+  await page.getByRole('button', { name: 'New terminal' }).click()
+  const shell = pane(page, 'Terminal 2')
   await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
   // Any program that is no shell counts as an agent there.
   await runIn(page, shell, 'sleep 300')
@@ -172,7 +172,7 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
 
   const row = tree(page).getByRole('button', { name: taskNamed(title) })
   const item = row.locator('xpath=ancestor::li[1]')
-  const unknown = page.getByRole('button', { name: 'Shell 2, State not known', exact: true })
+  const unknown = page.getByRole('button', { name: 'Terminal 2, State not known', exact: true })
   // Once the shell's output goes quiet, the daemon sees the new program and sends shells.changed.
   await expect(unknown).toBeVisible({ timeout: 15_000 })
   await expect(unknown.locator('[data-tip="State not known yet"] svg')).toBeVisible()
@@ -181,7 +181,7 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
     contentType: 'image/png',
   })
 
-  // A hook from Shell 2, as Claude Code sends it: the prompt, then the end of the turn.
+  // A hook from Terminal 2, as Claude Code sends it: the prompt, then the end of the turn.
   const hook = (name: string) =>
     request.post('/api/hooks/claude-code', {
       headers: { ...headers, 'X-Natamux-Task': id, 'X-Natamux-Terminal': '2' },
@@ -192,11 +192,11 @@ test('shows a ring, then the state the hooks give', async ({ page, request }, te
   await hook('Stop')
   await expect.poll(async () => (await lane()).state, { timeout: 10_000 }).toBe('needs-input')
 
-  const waiting = page.getByRole('button', { name: 'Shell 2, Needs input', exact: true })
+  const waiting = page.getByRole('button', { name: 'Terminal 2, Needs input', exact: true })
   await expect(waiting).toBeVisible({ timeout: 15_000 })
   await expect(waiting.locator('[data-state="needs-input"]')).toBeVisible()
   await expect(waiting.locator('[data-tip="State not known yet"]')).toHaveCount(0)
-  // The hooks of Shell 2 leave the task alone.
+  // The hooks of Terminal 2 leave the task alone.
   const task = (await (await request.get(`/api/tasks/${id}`, { headers })).json()).task
   expect(task.state).toBe('review')
 })

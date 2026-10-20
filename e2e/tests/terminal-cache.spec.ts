@@ -50,7 +50,7 @@ async function newTask(request: APIRequestContext, purpose: string) {
 async function openTerminal(page: Page, title: string): Promise<Locator> {
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await expect(rows(pane(page, 'Shell 1'))).toContainText('$')
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText('$')
   return tabs
 }
 
@@ -94,7 +94,7 @@ test('shows the terminal again at once after Changes, with the same screen', asy
   const sockets = watchTerminalSockets(page)
   await signIn(page)
   const tabs = await openTerminal(page, task.title)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await runIn(page, shell, "seq -f 'row %g' 1 200")
   await expect(rows(shell)).toContainText('row 200')
 
@@ -110,7 +110,7 @@ test('shows the terminal again at once after Changes, with the same screen', asy
     await tabs.getByRole('tab', { name: 'Changes' }).click()
     await expect(tabs.getByRole('tab', { name: 'Changes', selected: true })).toBeVisible()
     times.push(
-      await timeToShow(page, { label: 'Shell 1', text: lastRow }, () =>
+      await timeToShow(page, { label: 'Terminal 1', text: lastRow }, () =>
         tabs.getByRole('tab', { name: 'Terminal' }).click(),
       ),
     )
@@ -163,7 +163,7 @@ test('shows task A again at once after task B, without a new socket', async ({ p
 
   const idA = Date.now()
   await openTerminal(page, taskA.title)
-  const shellA = pane(page, 'Shell 1')
+  const shellA = pane(page, 'Terminal 1')
   await runIn(page, shellA, "seq -f 'row %g' 1 200")
   await expect(rows(shellA)).toContainText('row 200')
   await say(page, shellA, 'ALPHA', idA)
@@ -175,7 +175,7 @@ test('shows task A again at once after task B, without a new socket', async ({ p
   expect(textA).toMatch(/^row \d+$/)
   await goToAllTasks(page)
   await openTerminal(page, taskB.title)
-  const textB = await say(page, pane(page, 'Shell 1'), 'BRAVO', idA + 1)
+  const textB = await say(page, pane(page, 'Terminal 1'), 'BRAVO', idA + 1)
   await goToAllTasks(page)
   expect(sockets.opened).toHaveLength(2)
 
@@ -186,10 +186,10 @@ test('shows task A again at once after task B, without a new socket', async ({ p
       [taskB, textB],
     ] as const) {
       times.push(
-        await timeToShow(page, { label: 'Shell 1', text }, () => openTask(page, task.title)),
+        await timeToShow(page, { label: 'Terminal 1', text }, () => openTask(page, task.title)),
       )
       if (task === taskA) {
-        expect(await rows(pane(page, 'Shell 1')).textContent()).toBe(savedA)
+        expect(await rows(pane(page, 'Terminal 1')).textContent()).toBe(savedA)
         await expect(jump).toBeVisible()
       }
       await goToAllTasks(page)
@@ -243,7 +243,8 @@ function watchSizeChanges(page: Page): SizeChanges {
 // second. The panes of both tasks have the same names and boxes, so the mark tells them apart.
 async function samplePaneBoxes(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const panes = 'section[aria-label^="Shell "]:not([hidden])'
+    const panes =
+      'section[aria-label^="Terminal "]:not([aria-label="Terminal screen"]):not([hidden])'
     for (const old of document.querySelectorAll(panes)) {
       old.setAttribute('data-e2e-old', '')
     }
@@ -283,8 +284,8 @@ async function showDetails(page: Page, open: boolean): Promise<void> {
 }
 
 // T-0066. A wide window with the details closed has 4 columns, where the grid guessed 2 × 2 before
-// it was measured. With the details open, 2 columns, the same as the guess. Shells 2-4 come from
-// "New shell", which the cached shell list missed, and every shell prints, as agents do.
+// it was measured. With the details open, 2 columns, the same as the guess. Terminals 2-4 come from
+// "New terminal", which the cached shell list missed, and every shell prints, as agents do.
 const SWITCH_LAYOUTS = [
   { name: 'wide', width: 1920, height: 1080, details: false, columns: 4 },
   { name: 'details', width: 1440, height: 900, details: true, columns: 2 },
@@ -310,7 +311,7 @@ for (const layout of SWITCH_LAYOUTS) {
       for (let index = 1; index <= 4; index++) {
         await runIn(
           page,
-          pane(page, `Shell ${index}`),
+          pane(page, `Terminal ${index}`),
           'while :; do echo "tick $RANDOM"; sleep 0.2; done',
         )
       }
@@ -327,7 +328,7 @@ for (const layout of SWITCH_LAYOUTS) {
         const last = frames.at(-1) ?? ''
         const boxes = last.split(' | ')
         expect(boxes).toHaveLength(4)
-        // "Shell 1 x y w h": as many columns as different x.
+        // "Terminal 1 x y w h": as many columns as different x.
         expect(new Set(boxes.map((box) => box.split(' ')[2])).size).toBe(layout.columns)
         // Every frame with a new pane already has the final layout.
         jumps.push(frames.filter((frame) => frame !== last).length)
@@ -352,7 +353,7 @@ test('fades in the shells of a task, shorter with reduced motion', async ({ page
   const task = await newTask(request, 'fade')
   await signIn(page)
   await openTerminal(page, task.title)
-  const grid = pane(page, 'Shell 1').locator('xpath=..')
+  const grid = pane(page, 'Terminal 1').locator('xpath=..')
   const look = () =>
     grid.evaluate((element) => {
       const style = getComputedStyle(element)
@@ -384,7 +385,7 @@ test('a hidden terminal keeps receiving a stream of output', async ({ page, requ
   const sockets = watchTerminalSockets(page)
   await signIn(page)
   const tabs = await openTerminal(page, task.title)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   const socketCount = sockets.opened.length
 
   // About 1.2 MB at about 200 KB/s, while the terminal is hidden.
@@ -398,7 +399,7 @@ test('a hidden terminal keeps receiving a stream of output', async ({ page, requ
     await tabs.getByRole('tab', { name: 'Changes' }).click()
     await page.waitForTimeout(10_000)
     times.push(
-      await timeToShow(page, { label: 'Shell 1', text: `DONE-${id}` }, () =>
+      await timeToShow(page, { label: 'Terminal 1', text: `DONE-${id}` }, () =>
         tabs.getByRole('tab', { name: 'Terminal' }).click(),
       ),
     )
@@ -444,7 +445,7 @@ test('closes the oldest hidden terminal when more than the limit are hidden', as
   // Task A is open again: only the closed terminal needs a new socket.
   const before = sockets.opened.length
   await openTask(page, taskA.title)
-  await expect(page.getByRole('region', { name: /^Shell \d+$/ })).toHaveCount(6)
+  await expect(page.getByRole('region', { name: /^Terminal \d+$/ })).toHaveCount(6)
   await expect.poll(() => sockets.opened.length).toBe(before + 1)
   await page.waitForTimeout(1_000)
   expect(sockets.opened).toHaveLength(before + 1)
@@ -454,7 +455,7 @@ type HeapRun = {
   // Added to the measure names, empty for the plain run.
   tag: string
   viewport?: { width: number; height: number }
-  // Shells of the two tasks that are hidden next to the one shell of the first task.
+  // Terminals of the two tasks that are hidden next to the one shell of the first task.
   shellsPerTask: number
 }
 
@@ -490,7 +491,7 @@ async function measureHeap(page: Page, request: APIRequestContext, run: HeapRun)
     await addShells(page, shells - 1)
     const found: string[] = []
     for (let index = 1; index <= shells; index++) {
-      const shell = pane(page, `Shell ${index}`)
+      const shell = pane(page, `Terminal ${index}`)
       await preparePrompt(page, shell)
       if (task === taskC) {
         cols = await readCols(page, shell)
@@ -503,7 +504,7 @@ async function measureHeap(page: Page, request: APIRequestContext, run: HeapRun)
   async function showAll(task: { id: string; title: string }): Promise<void> {
     await openTask(page, task.title)
     for (const [index, marker] of (markers.get(task.id) ?? []).entries()) {
-      await expect(rows(pane(page, `Shell ${index + 1}`))).toContainText(marker, {
+      await expect(rows(pane(page, `Terminal ${index + 1}`))).toContainText(marker, {
         timeout: 60_000,
       })
     }
@@ -614,19 +615,19 @@ test('keeps the echo in task Y while the hidden shells of task X flood', async (
   await signIn(page)
 
   await openTerminal(page, taskY.title)
-  await preparePrompt(page, pane(page, 'Shell 1'))
+  await preparePrompt(page, pane(page, 'Terminal 1'))
   await goToAllTasks(page)
 
   await openTerminal(page, taskX.title)
   await addShells(page, 3)
   const pageStart = await pageNow(page)
   for (let index = 1; index <= 4; index++) {
-    await runIn(page, pane(page, `Shell ${index}`), 'sleep 3; seq 1 1000000')
+    await runIn(page, pane(page, `Terminal ${index}`), 'sleep 3; seq 1 1000000')
   }
   await goToAllTasks(page)
 
   await openTask(page, taskY.title)
-  const echoes = await typeAndMeasure(page, pane(page, 'Shell 1'), KEY_SAMPLES, 30_000)
+  const echoes = await typeAndMeasure(page, pane(page, 'Terminal 1'), KEY_SAMPLES, 30_000)
   const longTasks = await longTasksSince(page, pageStart)
 
   expect(echoes).toHaveLength(KEY_SAMPLES)
@@ -640,7 +641,7 @@ test('keeps the echo in task Y while the hidden shells of task X flood', async (
     .poll(
       async () => {
         for (let index = 1; index <= 4; index++) {
-          const done = await rows(pane(page, `Shell ${index}`)).evaluate((element) =>
+          const done = await rows(pane(page, `Terminal ${index}`)).evaluate((element) =>
             Array.from(element.children).some(
               (row) => (row.textContent ?? '').trim() === '1000000',
             ),

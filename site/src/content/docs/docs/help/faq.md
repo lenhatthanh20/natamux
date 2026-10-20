@@ -31,7 +31,7 @@ No. You log in to your agents (and `gh`) as you do today. The dashboard uses a l
 
 ## Can two agents work on one task?
 
-Yes. A task has one worktree, and its agent runs in Shell 1. In the default pipeline, **Test spec** starts a second agent in Shell 2 while Implement runs, and **Review** starts a third one in Shell 5 that can send the work back. Each of them can be another agent or model. See [The review loop](/docs/concepts/review-loop/).
+Yes. A task has one worktree, and its agent runs in Terminal 1. In the default pipeline, **Test spec** starts a second agent in Terminal 2 while Implement runs, and **Review** starts a third one in Terminal 5 that can send the work back. Each of them can be another agent or model. See [The review loop](/docs/concepts/review-loop/).
 
 To compare several approaches to the same job, use **fan out**: it copies a task up to five times, each copy with its own worktree, so you can keep the best try. See [Fan out](/docs/guides/fan-out/).
 
@@ -77,7 +77,7 @@ No. Each task works in its own git worktree and branch. Natamux never pushes, me
 
 ## What happens when I quit the app?
 
-Quitting stops the daemon and every agent and shell. The app asks first when agents are working. Tasks, worktrees and changes stay, and the agents of running, waiting and in-review tasks start again when you open the app. The other shells of a task come back when you open the task, and each agent in them goes on with its last conversation. See [A shell after a daemon restart](/docs/guides/terminal/#a-shell-after-a-daemon-restart). On macOS, closing the window keeps everything running. See [Desktop app](/docs/guides/desktop-app/).
+Quitting stops the daemon and every agent and terminal. The app asks first when agents are working. Tasks, worktrees and changes stay, and the agents of running, waiting and in-review tasks start again when you open the app. The other terminals of a task come back when you open the task, and each agent in them goes on with its last conversation. See [A terminal after a daemon restart](/docs/guides/terminal/#a-terminal-after-a-daemon-restart). On macOS, closing the window keeps everything running. See [Desktop app](/docs/guides/desktop-app/).
 
 ## Can I use it in a browser instead of the desktop app?
 

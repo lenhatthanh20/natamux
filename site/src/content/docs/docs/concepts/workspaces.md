@@ -1,6 +1,6 @@
 ---
 title: Workspaces
-description: How Natamux gives each task its own git worktree, branch, ports and shells.
+description: How Natamux gives each task its own git worktree, branch, ports and terminals.
 sidebar:
   order: 2
 ---
@@ -12,7 +12,7 @@ A workspace has four parts:
 - a **worktree**: a folder with its own checkout of your repository
 - a **branch** for the task
 - a block of **ports** for dev servers
-- one or more **shells**, where agents and your commands run
+- one or more **terminals**, where agents and your commands run
 
 ## Create a workspace
 
@@ -85,8 +85,8 @@ Rules:
 
 - Commit the file at the root of the repository, so every new worktree has it.
 - The script runs once, right after the workspace is created.
-- It runs in the first shell of the task, in the worktree. You can read its output there.
-- If the script fails, the workspace stays. The error shows in the shell.
+- It runs in the first terminal of the task, in the worktree. You can read its output there.
+- If the script fails, the workspace stays. The error shows in the terminal.
 - Without a script file, nothing runs.
 
 ## Ports
@@ -95,17 +95,17 @@ Each task gets its own block of 10 ports, so dev servers of tasks that run at th
 
 The block comes from the number at the end of the task id. Task `T-0001` gets ports 20010 to 20019. `T-0002` gets 20020 to 20029. The numbers wrap after 1000 tasks. A task with your own id, such as `ABC-1`, shares the block of `T-0001`.
 
-Natamux sets these variables in every shell of the task:
+Natamux sets these variables in every terminal of the task:
 
 | Variable | Value |
 |---|---|
 | `PORT` | The first port of the block, such as `20010`. Many dev servers read it. |
 | `NATAMUX_PORT` | The same value. |
 | `NATAMUX_TASK_ID` | The task id, such as `T-0001`. |
-| `NATAMUX_TERMINAL` | The name of the shell, such as `1`. |
+| `NATAMUX_TERMINAL` | The name of the terminal, such as `1`. |
 
 :::note
-Inside a task shell, `NATAMUX_PORT` is the port block of the task. It is not the port of the daemon. To pass the daemon port, use `NATAMUX_URL`.
+Inside a task terminal, `NATAMUX_PORT` is the port block of the task. It is not the port of the daemon. To pass the daemon port, use `NATAMUX_URL`.
 :::
 
 Use `PORT` in your scripts:
@@ -114,14 +114,14 @@ Use `PORT` in your scripts:
 pnpm dev --port "$PORT"
 ```
 
-## Shells
+## Terminals
 
-Each task has its own shells, started in the worktree. The first shell is called `1`. Natamux starts the agent there.
+Each task has its own terminals, started in the worktree. The first terminal is called `1`. Natamux starts the agent there.
 
-- A shell keeps running when you close the dashboard.
-- Stages that run side by side use more shells, one each. A testing stage with a command runs it in a shell of its own.
-- Natamux allows at most 30 shells at once, across all tasks.
-- When a task is `done` or `cancelled`, Natamux closes its shells.
+- A terminal keeps running when you close the dashboard.
+- Stages that run side by side use more terminals, one each. A testing stage with a command runs it in a terminal of its own.
+- Natamux allows at most 30 terminals at once, across all tasks.
+- When a task is `done` or `cancelled`, Natamux closes its terminals.
 
 See [Terminal](/docs/guides/terminal/).
 
@@ -144,7 +144,7 @@ Rules:
 
 - `--yes` is required. It confirms that the folder is deleted.
 - Natamux refuses when the worktree has changes that are not committed. Commit or discard them first.
-- Natamux closes the shells of the task, then removes the worktree.
+- Natamux closes the terminals of the task, then removes the worktree.
 - With `--delete-branch`, Natamux deletes the branch only when it is fully merged. Otherwise the branch stays, and the task keeps its branch name. The command output says whether the branch was deleted.
 
 :::caution

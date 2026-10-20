@@ -26,7 +26,7 @@ test.afterEach(async ({ request }) => {
 async function openTerminal(page: Page, title: string, text: string): Promise<void> {
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await expect(rows(pane(page, 'Shell 1'))).toContainText(text)
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText(text)
 }
 
 // AC 9, C10
@@ -36,12 +36,12 @@ test('shows no history scrolling by while a snapshot is replayed', async ({ page
   made.push(task.id)
   await signIn(page)
   await openTerminal(page, task.title, '$')
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   const marker = await fillHistory(page, shell, { lines: 10_000, sgr: false, id: 7 })
 
   // A fresh page attaches again and gets a snapshot of the full history.
-  await installScreenSampler(page, { label: 'Shell 1', marker })
+  await installScreenSampler(page, { label: 'Terminal 1', marker })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
   await openTerminal(page, task.title, marker)
@@ -72,7 +72,7 @@ test('sends keys typed while a snapshot is held once, after it, in order', async
   made.push(task.id)
   await signIn(page)
   await openTerminal(page, task.title, '$')
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   // Raw mode with no echo: cat -v shows each byte it gets, so the screen shows what arrived.
   await runIn(page, shell, 'stty raw -echo; echo READY-$((1+1)); exec cat -v')
@@ -116,7 +116,7 @@ test('reconnects a lost socket and resumes the same shell in place', async ({ pa
   const control = await controlTerminalSockets(page)
   await signIn(page)
   await openTerminal(page, task.title, '$')
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   const pid = await shellPid(page, shell, 'PIDA')
   await runIn(page, shell, 'for i in $(seq 1 600); do echo TICK-$i; sleep 0.1; done')
@@ -155,20 +155,23 @@ test('reconnects a lost socket and resumes the same shell in place', async ({ pa
 })
 
 // AC 30, C32
-test('shows "The shell ended." after exit, and opens no new socket', async ({ page, request }) => {
+test('shows "The terminal ended." after exit, and opens no new socket', async ({
+  page,
+  request,
+}) => {
   test.setTimeout(90_000)
   const task = await makeShellTask(request, `Terminal e2e exit ${Date.now()}`)
   made.push(task.id)
   const control = await controlTerminalSockets(page)
   await signIn(page)
   await openTerminal(page, task.title, '$')
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   const count = control.sockets.length
 
   await runIn(page, shell, 'exit')
-  await expect(shell.getByText('The shell ended.')).toBeVisible()
-  await expect(shell.getByRole('button', { name: 'Open a new shell' })).toBeVisible()
+  await expect(shell.getByText('The terminal ended.')).toBeVisible()
+  await expect(shell.getByRole('button', { name: 'Open a new terminal' })).toBeVisible()
   // Longer than the first retry delays would be.
   await page.waitForTimeout(3_000)
   expect(control.sockets.length).toBe(count)
@@ -187,7 +190,7 @@ test('drops replies to queries replayed by a resume, and keeps a real Shift+F3',
   const control = await controlTerminalSockets(page)
   await signIn(page)
   await openTerminal(page, task.title, '$')
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   // A job prints a DA1 and a CPR query in 5 s, while the socket is closed. Raw mode with no echo:
   // cat -v shows each byte it gets, so the screen shows what the page sent.

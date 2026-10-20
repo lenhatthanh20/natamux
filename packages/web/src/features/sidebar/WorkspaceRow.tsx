@@ -563,7 +563,7 @@ export const AgentRow = memo(function AgentRow({
         {tag !== null && (
           <span
             data-private
-            data-tip={`Shell ${row.shell}`}
+            data-tip={`Terminal ${row.shell}`}
             className="shrink-0 font-mono text-2xs text-muted"
           >
             {tag}

@@ -212,7 +212,7 @@ Add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash):
 export PATH="$HOME/Library/Application Support/Natamux/bin:$PATH"
 ```
 
-Open a new shell. The command also needs the daemon's token and address:
+Open a new terminal. The command also needs the daemon's token and address:
 
 ```sh frame="terminal"
 export NATAMUX_TOKEN="$(cat "$HOME/Library/Application Support/Natamux/daemon-token")"
@@ -229,7 +229,7 @@ In PowerShell, for your user, once:
 [Environment]::SetEnvironmentVariable('Path', "$env:APPDATA\Natamux\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
 ```
 
-Open a new shell. The command also needs the daemon's token and address:
+Open a new terminal. The command also needs the daemon's token and address:
 
 ```powershell
 $env:NATAMUX_TOKEN = Get-Content "$env:APPDATA\Natamux\daemon-token"
@@ -246,7 +246,7 @@ Add one line to `~/.zshrc` (zsh) or `~/.bashrc` (bash):
 export PATH="$HOME/.config/Natamux/bin:$PATH"
 ```
 
-Open a new shell. The command also needs the daemon's token and address:
+Open a new terminal. The command also needs the daemon's token and address:
 
 ```sh frame="terminal"
 export NATAMUX_TOKEN="$(cat "$HOME/.config/Natamux/daemon-token")"

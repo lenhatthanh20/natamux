@@ -29,7 +29,7 @@ Context → Spec → Plan → [ Test spec ‖ Implement ] → Automated tests �
 | Plan | `agent` | manual | The agent writes `plan.md`. It does not change code. |
 | Test spec and Implement | group | | Two stages run side by side, see below. |
 | Automated tests | `testing` | auto | The agent adds a test for each case of the test spec, runs all tests and fixes failures. It does not commit. |
-| Review | `agent` | auto | An agent in its own shell reviews the changes against the spec and writes `review.md`. When something must be fixed, it sends the task back to Implement by itself. See [Review by an agent](#review-by-an-agent). |
+| Review | `agent` | auto | An agent in its own terminal reviews the changes against the spec and writes `review.md`. When something must be fixed, it sends the task back to Implement by itself. See [Review by an agent](#review-by-an-agent). |
 | Release | `release` | manual | The task finishes when its pull request is merged. |
 
 The group in the middle holds two stages:
@@ -41,18 +41,18 @@ The group in the middle holds two stages:
 
 To change the pipeline, use [Project settings](/docs/guides/project-settings/) or see the [configuration reference](/docs/reference/configuration/). The catalog also has **Manual review**, where you read the diff and approve it, and **Manual testing**, where a person tries the change. They are not in the default pipeline, so no person has to act between Plan and Release.
 
-### Shells and agents
+### Terminals and agents
 
 The default pipeline runs three agents. All are the task's agent unless a stage names its own.
 
-| Stage | Shell | Agent |
+| Stage | Terminal | Agent |
 |---|---|---|
-| Context | none, or Shell 1 for a `skill` or `mcp` source | none, or agent A |
-| Spec, Plan | Shell 1 | Agent A. Each stage's prompt goes into the same session. |
-| Implement | Shell 1 | Agent A, same session |
-| Test spec | Shell 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model); then it gets a shell of its own. |
-| Automated tests | Shell 1 | Agent A, same session. With a `command`: a new shell and no agent. |
-| Review | Shell 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a shell of its own. A later round goes into the same session. |
+| Context | none, or Terminal 1 for a `skill` or `mcp` source | none, or agent A |
+| Spec, Plan | Terminal 1 | Agent A. Each stage's prompt goes into the same session. |
+| Implement | Terminal 1 | Agent A, same session |
+| Test spec | Terminal 2 | Agent B, a new session. It can be another agent, see [Choose a model](#choose-a-model); then it gets a terminal of its own. |
+| Automated tests | Terminal 1 | Agent A, same session. With a `command`: a new terminal and no agent. |
+| Review | Terminal 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
 | Release | none | none |
 
 One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
@@ -65,13 +65,13 @@ Natamux uses the model each agent picks. Set it in one of these places:
 |---|---|---|
 | The agent's own settings | Every session of that agent | Claude Code: `"model": "opus"` in `~/.claude/settings.json`. Codex: `model = "…"` in `~/.codex/config.toml`. |
 | `NATAMUX_<AGENT>_ARGS` | Every agent Natamux starts | `NATAMUX_CLAUDE_ARGS="--model opus"`. See [Environment variables](/docs/reference/environment-variables/). |
-| The stage's `args` | One stage that runs beside the stage in Shell 1, or one stage of your own | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
+| The stage's `args` | One stage that runs beside the stage in Terminal 1, or one stage of your own | `{ "id": "test-spec", …, "agent": "codex", "args": "--model gpt-5" }`, or **Agent** and **Arguments** in the stage settings |
 
-A catalog stage in Shell 1 cannot change the model: that would need a new session and lose the context of the stages before it.
+A catalog stage in Terminal 1 cannot change the model: that would need a new session and lose the context of the stages before it.
 
-A stage of your own (made with **Custom stage**) that an agent works on can change it too, also where it would run in Shell 1.
+A stage of your own (made with **Custom stage**) that an agent works on can change it too, also where it would run in Terminal 1.
 
-A stage with its own agent or arguments runs in a shell of its own: Shell 6 for the first such stage of the pipeline, Shell 7 for the next, and so on. Natamux closes no agent while the task runs, unless a stage asks for it (see [End a stage's shell](#end-a-stages-shell)), so Shell 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its shell, which still has the context of the last round. All shells of a task close when the task is done or cancelled.
+A stage with its own agent or arguments runs in a terminal of its own: Terminal 6 for the first such stage of the pipeline, Terminal 7 for the next, and so on. Natamux closes no agent while the task runs, unless a stage asks for it (see [End a stage's terminal](#end-a-stages-terminal)), so Terminal 1 keeps the task's agent and its session. When such a stage runs again, for example after a send back, its prompt goes into the agent in its terminal, which still has the context of the last round. All terminals of a task close when the task is done or cancelled.
 
 A task keeps the list of stage ids it had when it was created. A later change to `.natamux.json` changes the settings of those stages (name, gate, prompt, checks), not the list of stages of existing tasks.
 
@@ -83,7 +83,7 @@ Open the menu of a project and click **Settings**. The **Stages** tab edits the 
 - **Order and switch.** Drag a stage, or use **Move up** and **Move down**. The checkbox of a stage turns it on or off. A stage that is off stays in the file with its prompt and approval, but new tasks do not get it.
 - **Run side by side.** **Run alongside the stage above** puts an `agent` or `manual` stage in a group with the stage above it. **Run on its own** takes it out.
 - **Approval.** **Wait for my approval** sets the gate. Every stage has a default. The screen says **Default** or **Changed**, and **Use default** goes back. A `review` or `manual` stage is always a check by a person, so its box is checked and locked. On the `release` stage the box reads **Open the pull request when I click**.
-- **Agent.** A stage that runs beside the stage in Shell 1, such as Test spec, or a stage of your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
+- **Agent.** A stage that runs beside the stage in Terminal 1, such as Test spec, or a stage of your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
 - **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
 - **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
@@ -105,7 +105,7 @@ Each form reads well in a sentence such as "Use `{skill:review-pr}` on the diff"
 | Kind | Who works | When the stage finishes |
 |---|---|---|
 | `context` | Natamux, or an agent for a skill or MCP source | The context file is written. |
-| `agent` | An agent in the task shell | The agent runs `natamux done` and the checks pass. |
+| `agent` | An agent in the task terminal | The agent runs `natamux done` and the checks pass. |
 | `review` | You | You approve. |
 | `testing` | An agent, or a command if the stage has one | With a command: the command exits with 0. Without: the agent runs `natamux done` and the checks pass. |
 | `release` | Your git host | The pull request is merged. |
@@ -169,11 +169,11 @@ If a stage cannot start, for example when the issue for a GitHub context cannot 
 
 ## What `natamux done` does
 
-An agent runs `natamux done` in the task shell when its stage is finished. The command:
+An agent runs `natamux done` in the task terminal when its stage is finished. The command:
 
-- reports that the stage of this shell is done
+- reports that the stage of this terminal is done
 - makes the daemon run the checks of the stage
-- uses `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL`, which Natamux sets in task shells
+- uses `NATAMUX_TASK_ID` and `NATAMUX_TERMINAL`, which Natamux sets in task terminals
 
 ```bash
 natamux done
@@ -182,7 +182,7 @@ natamux done --task T-0001 --stage implement
 
 Use `--stage` only when two stages run side by side and Natamux cannot tell which one you mean.
 
-`natamux done` in the shell of a stage that does not run now is refused, for example from Review after it sent the task back. Implement stays running until its own agent reports. Every stage prompt ends with the line `When you are done, run natamux done, unless the steps above say not to.`
+`natamux done` in the terminal of a stage that does not run now is refused, for example from Review after it sent the task back. Implement stays running until its own agent reports. Every stage prompt ends with the line `When you are done, run natamux done, unless the steps above say not to.`
 
 The turn end that follows `natamux done` does not count as "stopped early".
 
@@ -224,7 +224,7 @@ You can also skip a stage before the task gets there. In **Progress**, a stage t
 
 ### Pass and fail
 
-`natamux stage pass` and `natamux stage fail` set the result of a stage by hand. Natamux uses them itself for a testing stage with a command: when the command ends, the shell reports the result.
+`natamux stage pass` and `natamux stage fail` set the result of a stage by hand. Natamux uses them itself for a testing stage with a command: when the command ends, the terminal reports the result.
 
 ## Run a stage as a workflow
 
@@ -246,7 +246,7 @@ natamux stage workflow T-0001 on --stage implement
 
 ## Review by an agent
 
-The **Review** stage is an agent stage that runs in its own shell (`"ownShell": true`), apart from the agent that wrote the code.
+The **Review** stage is an agent stage that runs in its own terminal (`"ownShell": true`), apart from the agent that wrote the code.
 
 - It reads `spec.md` and `test-spec.md`, then the changes (`git status`, `git diff` and the changed files). It does not change code.
 - It writes `review.md` with a **Findings** section.
@@ -257,21 +257,21 @@ The **Review** stage is an agent stage that runs in its own shell (`"ownShell": 
 
 For a review by a person, add **Manual review** from the catalog, for example after Review. The whole loop, with screenshots and the limits, is on [The review loop](/docs/concepts/review-loop/).
 
-### Stages in their own shell
+### Stages in their own terminal
 
-A stage that only writes a report can run in its own shell with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Shell 5**, and a turn of its agent does not touch the session in Shell 1. With its own agent or arguments, it runs in a shell of its own instead, from Shell 6; see [Choose a model](#choose-a-model).
+A stage that only writes a report can run in its own terminal with a new session: `"ownShell": true` in `.natamux.json`. The catalog sets it on Review, Test spec, Security review, Performance check and Accessibility check. Such a stage runs in **Terminal 5**, and a turn of its agent does not touch the session in Terminal 1. With its own agent or arguments, it runs in a terminal of its own instead, from Terminal 6; see [Choose a model](#choose-a-model).
 
-### End a stage's shell
+### End a stage's terminal
 
-Check **End the agent and close its shell when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Shell 1.
+Check **End the agent and close its terminal when the stage is done** in the stage settings (`"endShell": true`) to free the memory of a stage once it is done. It is off by default, and only for context, agent and testing stages outside Terminal 1.
 
-- Done means the stage passed, was approved or was skipped, or sent the task back to an earlier stage. A stage that waits for your approval keeps its shell until you approve.
-- Without the setting, Natamux does not close the stage's shell while the task runs.
-- Natamux ends the agent or command in the stage's shell and closes the shell. Other shells go on.
-- Shell 1 is never closed, because it keeps the task's agent and its session. A stage there shows "This stage runs in Shell 1, which cannot be closed." in place of the checkbox, and `"endShell": true` on it is ignored.
-- A next stage in the same shell starts a new agent with a new session and the full stage prompt.
-- A send back to the stage starts a new agent in its shell.
-- The last stage is left to the end of the task, which keeps the last screen of each shell. A shell closed earlier keeps no screen.
+- Done means the stage passed, was approved or was skipped, or sent the task back to an earlier stage. A stage that waits for your approval keeps its terminal until you approve.
+- Without the setting, Natamux does not close the stage's terminal while the task runs.
+- Natamux ends the agent or command in the stage's terminal and closes the terminal. Other terminals go on.
+- Terminal 1 is never closed, because it keeps the task's agent and its session. A stage there shows "This stage runs in Terminal 1, which cannot be closed." in place of the checkbox, and `"endShell": true` on it is ignored.
+- A next stage in the same terminal starts a new agent with a new session and the full stage prompt.
+- A send back to the stage starts a new agent in its terminal.
+- The last stage is left to the end of the task, which keeps the last screen of each terminal. A terminal closed earlier keeps no screen.
 
 ## Check a stage on CI
 
@@ -310,8 +310,8 @@ natamux stage ci T-0001 on --stage implement
 A group holds 2 to 4 stages that are on and work at the same time. Only `agent` and `manual` stages can be in a group.
 
 - The group finishes when every stage in it is done.
-- Each stage works in its own shell. The stage that changes code (an agent stage without an output file) keeps the first shell.
-- A stage in another shell can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file).
+- Each stage works in its own terminal. The stage that changes code (an agent stage without an output file) keeps the first terminal.
+- A stage in another terminal can start another agent, with words of its own: set **Agent** and **Arguments** in its settings (`agent` and `args` in the file).
 - The state of the group is the most urgent state of its stages: `needs-input`, `failed`, `blocked`, `review`, `running`, `ready`, `draft`, in that order.
 
 ## Paths with a condition
@@ -405,7 +405,7 @@ A task keeps the paths it was made with. If you change the branch later, a path 
 
 ## Testing with a command
 
-A `testing` stage with a `command` runs it in a shell. Without a command, an agent does the testing.
+A `testing` stage with a `command` runs it in a terminal. Without a command, an agent does the testing.
 
 ```json
 { "id": "testing", "kind": "testing", "gate": "auto", "command": "pnpm test" }
@@ -440,7 +440,7 @@ Use a skill when the context lives in another application, for example a record 
 1. In **Start a task**, set **Context from** to **An agent skill**. It shows when an agent has at least one skill.
 2. Click **Pick a skill** and choose the skill.
 3. Enter the key or address of the record in **Reference**.
-4. Choose an agent. **No agent, a plain shell** cannot run a skill.
+4. Choose an agent. **No agent, a plain terminal** cannot run a skill.
 
 <Figure src="/screens/v2/start-task-skill" alt="The Start a task dialog with Context from set to An agent skill. The Skill is read-ticket, the Reference is SHOP-142, and the Title is Add a gift message to orders." caption="Context from a skill: pick the skill, then enter the record to read." />
 

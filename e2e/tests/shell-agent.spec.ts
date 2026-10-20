@@ -19,8 +19,8 @@ test('shows no agent on a new shell that runs another program', async ({ page, r
   made.push(task.id)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await page.getByRole('button', { name: 'New shell' }).click()
-  const shell = pane(page, 'Shell 2')
+  await page.getByRole('button', { name: 'New terminal' }).click()
+  const shell = pane(page, 'Terminal 2')
   await expect(rows(shell)).toContainText('$', { timeout: 30_000 })
 
   await runIn(page, shell, 'sleep 120')

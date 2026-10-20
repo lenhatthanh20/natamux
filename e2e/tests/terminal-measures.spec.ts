@@ -56,7 +56,7 @@ test.afterAll(() => {
 async function openTerminal(page: Page, title: string): Promise<void> {
   const tabs = await openTask(page, title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await expect(rows(pane(page, 'Shell 1'))).toContainText('$')
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText('$')
 }
 
 test('records the time to show a terminal with a long history', async ({ page, request }) => {
@@ -75,7 +75,7 @@ test('records the time to show a terminal with a long history', async ({ page, r
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
     await openTerminal(page, task.title)
-    const shell = pane(page, 'Shell 1')
+    const shell = pane(page, 'Terminal 1')
     await preparePrompt(page, shell)
     const cols = await readCols(page, shell)
     const marker = await fillHistory(page, shell, { lines: 10_000, sgr: kind.sgr, id: kind.id })
@@ -98,10 +98,10 @@ test('records the time to show a terminal with a long history', async ({ page, r
       )
       chunkLoaded += loaded ? 1 : 0
       const start = await pageNow(page)
-      const ms = await timeToShow(page, { label: 'Shell 1', text: task.marker }, () =>
+      const ms = await timeToShow(page, { label: 'Terminal 1', text: task.marker }, () =>
         openTask(page, task.title),
       )
-      await expect(rows(pane(page, 'Shell 1'))).toContainText(PROMPT.trim())
+      await expect(rows(pane(page, 'Terminal 1'))).toContainText(PROMPT.trim())
       times.push(ms)
       longest.push(Math.max(0, ...(await longTasksSince(page, start))))
     }
@@ -144,7 +144,7 @@ test('shows the alternate screen again after a reload, and the shell after it en
   made.push(task.id)
   await signIn(page)
   await openTerminal(page, task.title)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   const marker = await fillHistory(page, shell, { lines: 200, sgr: false, id: 5 })
 
@@ -180,12 +180,12 @@ test('records the terminal sockets of Terminal, Changes, Terminal', async ({ pag
   await signIn(page)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  await expect(rows(pane(page, 'Shell 1'))).toContainText('$')
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText('$')
 
   for (let round = 0; round < 3; round++) {
     await tabs.getByRole('tab', { name: 'Changes' }).click()
     await tabs.getByRole('tab', { name: 'Terminal' }).click()
-    await expect(rows(pane(page, 'Shell 1'))).toContainText('$')
+    await expect(rows(pane(page, 'Terminal 1'))).toContainText('$')
   }
 
   expect(sockets.opened.length).toBeGreaterThan(0)
@@ -205,7 +205,7 @@ test('records the JS heap with one terminal at full history', async ({ page, req
   made.push(task.id)
   await signIn(page)
   await openTerminal(page, task.title)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   const marker = await fillHistory(page, shell, { lines: 10_000, sgr: false, id: 3 })
 
@@ -213,7 +213,7 @@ test('records the JS heap with one terminal at full history', async ({ page, req
   await expect(page.getByRole('heading', { name: 'All tasks' })).toBeVisible()
   const before = await heapMb(page)
   await openTask(page, task.title)
-  await expect(rows(pane(page, 'Shell 1'))).toContainText(marker)
+  await expect(rows(pane(page, 'Terminal 1'))).toContainText(marker)
   const after = await heapMb(page)
 
   expect(after).toBeGreaterThan(0)
@@ -235,7 +235,7 @@ test('records the keypress to paint time in an idle shell', async ({ page, reque
   made.push(task.id)
   await signIn(page)
   await openTerminal(page, task.title)
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
 
   const latencies = await typeAndMeasure(page, shell)
@@ -270,8 +270,8 @@ test('keeps the echo, the Ctrl+C time and the daemon memory in check in a flood'
   await signIn(page)
   await openTerminal(page, task.title)
   await addShells(page, 1)
-  const flooded = pane(page, 'Shell 1')
-  const quiet = pane(page, 'Shell 2')
+  const flooded = pane(page, 'Terminal 1')
+  const quiet = pane(page, 'Terminal 2')
   await preparePrompt(page, flooded)
   await preparePrompt(page, quiet)
 
@@ -350,7 +350,7 @@ test('keeps the echo, the Ctrl+C time and the daemon memory in check in a flood'
     times.push(
       await timeToShow(
         page,
-        { label: 'Shell 1', text: PROMPT.trim() },
+        { label: 'Terminal 1', text: PROMPT.trim() },
         () => page.keyboard.press('Control+C'),
         FLOOD_WAIT_MS,
       ),

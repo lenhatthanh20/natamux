@@ -240,7 +240,7 @@ describe('TerminalView in the cache', () => {
     // Another parent, as when the grid closes and the task view opens with the same shell.
     view.rerender(
       <main>
-        <section aria-label="Shells">
+        <section aria-label="Terminals">
           <TerminalView connect={connect} cacheKey={KEY} />
         </section>
       </main>,
@@ -250,7 +250,7 @@ describe('TerminalView in the cache', () => {
     expect(connect).toHaveBeenCalledTimes(1)
     expect(fakes.terminals).toHaveLength(1)
     expect(made[0]?.closed).toBe(false)
-    const shells = screen.getByRole('region', { name: 'Shells' })
+    const shells = screen.getByRole('region', { name: 'Terminals' })
     expect(shells.contains(terminal.element ?? null)).toBe(true)
     expect(cachedTerminalCount()).toEqual({ mounted: 1, hidden: 0 })
   })
@@ -296,7 +296,7 @@ describe('TerminalView in the cache', () => {
     expect(terminal.options.fontSize).toBe(16)
   })
 
-  it('starts a fresh terminal on "Open a new shell" and disposes the old one (AC 5)', async () => {
+  it('starts a fresh terminal on "Open a new terminal" and disposes the old one (AC 5)', async () => {
     const { made, connect } = sockets(2)
     render(<TerminalView connect={connect} cacheKey={KEY} />)
     await flush()
@@ -304,8 +304,8 @@ describe('TerminalView in the cache', () => {
     const old = lastTerminal()
 
     act(() => made[0]?.message({ type: 'exit', code: 0 }))
-    expect(status()).toContain('The shell ended.')
-    fireEvent.click(screen.getByRole('button', { name: 'Open a new shell' }))
+    expect(status()).toContain('The terminal ended.')
+    fireEvent.click(screen.getByRole('button', { name: 'Open a new terminal' }))
     await flush()
 
     expect(made[0]?.closed).toBe(true)
@@ -319,7 +319,7 @@ describe('TerminalView in the cache', () => {
     expect(cachedTerminalCount()).toEqual({ mounted: 1, hidden: 0 })
   })
 
-  it('starts one new shell when "Open a new shell" is clicked twice at once (C6)', async () => {
+  it('starts one new shell when "Open a new terminal" is clicked twice at once (C6)', async () => {
     const { made, connect } = sockets(3)
     render(<TerminalView connect={connect} cacheKey={KEY} />)
     await flush()
@@ -329,7 +329,7 @@ describe('TerminalView in the cache', () => {
     act(() => made[0]?.message({ type: 'exit', code: 0 }))
     const errors = vi.spyOn(console, 'error')
 
-    const button = screen.getByRole('button', { name: 'Open a new shell' })
+    const button = screen.getByRole('button', { name: 'Open a new terminal' })
     act(() => {
       fireEvent.click(button)
       fireEvent.click(button)
@@ -370,7 +370,7 @@ describe('TerminalView in the cache', () => {
   it('disposes a terminal whose shell ended when it leaves the screen', async () => {
     const { socket, terminal, view } = await openTerminal(KEY)
     act(() => socket.drop(CLOSE_GONE))
-    expect(status()).toContain('The shell ended.')
+    expect(status()).toContain('The terminal ended.')
 
     view.unmount()
     expect(cachedTerminalCount()).toEqual({ mounted: 0, hidden: 0 })
@@ -388,7 +388,7 @@ describe('TerminalView in the cache', () => {
 
     act(() => made[0]?.drop())
     expect(status()).toBe('Reconnecting.')
-    expect(screen.queryByRole('button', { name: 'Open a new shell' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open a new terminal' })).toBeNull()
     act(() => vi.advanceTimersByTime(600))
     await flush()
     expect(connect).toHaveBeenCalledTimes(2)
@@ -398,7 +398,7 @@ describe('TerminalView in the cache', () => {
   })
 
   // AC 29: a resume that finds the shell gone.
-  it('shows "The shell ended." and "Open a new shell" when the shell is gone', async () => {
+  it('shows "The terminal ended." and "Open a new terminal" when the shell is gone', async () => {
     const { made, connect } = sockets(2)
     const view = render(<TerminalView connect={connect} cacheKey={KEY} />)
     await flush()
@@ -410,8 +410,8 @@ describe('TerminalView in the cache', () => {
 
     act(() => made[1]?.open())
     act(() => made[1]?.drop(CLOSE_GONE))
-    expect(status()).toContain('The shell ended.')
-    expect(screen.getByRole('button', { name: 'Open a new shell' })).toBeTruthy()
+    expect(status()).toContain('The terminal ended.')
+    expect(screen.getByRole('button', { name: 'Open a new terminal' })).toBeTruthy()
     act(() => vi.advanceTimersByTime(60_000))
     expect(connect).toHaveBeenCalledTimes(2)
     // The cache drops it once it leaves the screen.
@@ -442,7 +442,7 @@ describe('TerminalView in the cache', () => {
 
 const exit = (socket: FakeSocket | undefined, code: number | null = 0) =>
   act(() => socket?.message({ type: 'exit', code }))
-const newShell = () => screen.queryByRole('button', { name: 'Open a new shell' })
+const newShell = () => screen.queryByRole('button', { name: 'Open a new terminal' })
 const dimmed = () =>
   screen.getByRole('region', { name: 'Terminal screen' }).classList.contains('opacity-60')
 const inputs = (socket: FakeSocket | undefined) =>
@@ -463,7 +463,7 @@ async function openNewShell(made: FakeSocket[]) {
   act(() => made[1]?.open())
 }
 
-const ENDED = 'The shell ended.'
+const ENDED = 'The terminal ended.'
 const FINISHED = ['done', 'cancelled'] as const
 
 describe('TerminalView after the task ends', () => {
@@ -489,7 +489,7 @@ describe('TerminalView after the task ends', () => {
   it('drops the exit code once the task state says the task finished', async () => {
     const { made, connect, view } = await taskTerminal('running')
     exit(made[0], 1)
-    expect(status()).toBe('The shell ended. Exit code 1.')
+    expect(status()).toBe('The terminal ended. Exit code 1.')
 
     view.rerender(<TerminalView connect={connect} cacheKey={KEY} taskState="done" />)
     expect(status()).toBe(ENDED)
@@ -513,12 +513,12 @@ describe('TerminalView exit report', () => {
 
 describe('TerminalView after the shell ends by itself', () => {
   it.each([
-    [0, 'The shell ended.'],
-    [null, 'The shell ended.'],
-    [1, 'The shell ended. Exit code 1.'],
-    [2, 'The shell ended. Exit code 2.'],
-    [130, 'The shell ended. Exit code 130.'],
-    [-1, 'The shell ended. Exit code -1.'],
+    [0, 'The terminal ended.'],
+    [null, 'The terminal ended.'],
+    [1, 'The terminal ended. Exit code 1.'],
+    [2, 'The terminal ended. Exit code 2.'],
+    [130, 'The terminal ended. Exit code 130.'],
+    [-1, 'The terminal ended. Exit code -1.'],
   ])('shows exit code %s as "%s"', async (code, text) => {
     const { made } = await taskTerminal('running')
     exit(made[0], code)
@@ -528,7 +528,7 @@ describe('TerminalView after the shell ends by itself', () => {
   it('says the shell ended when it is gone with no exit frame and no task state', async () => {
     const { made } = await taskTerminal()
     act(() => made[0]?.drop(CLOSE_GONE))
-    expect(status()).toBe('The shell ended.')
+    expect(status()).toBe('The terminal ended.')
     expect(newShell()).not.toBeNull()
   })
 
@@ -536,7 +536,7 @@ describe('TerminalView after the shell ends by itself', () => {
     const { made, connect, view } = await taskTerminal('running')
     exit(made[0], 3)
     view.rerender(<TerminalView connect={connect} cacheKey={KEY} taskState="review" />)
-    expect(status()).toBe('The shell ended. Exit code 3.')
+    expect(status()).toBe('The terminal ended. Exit code 3.')
   })
 })
 
@@ -575,9 +575,9 @@ describe('TerminalView open a new shell', () => {
     const button = newShell()
     expect(button?.tagName).toBe('BUTTON')
     expect(button?.getAttribute('data-tip')).toBe(
-      "Starts a plain shell in the task's workspace. It does not start the agent.",
+      "Starts a plain terminal in the task's workspace. It does not start the agent.",
     )
-    expect(screen.queryByRole('button', { name: 'Start a new shell' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start a new terminal' })).toBeNull()
     expect(screen.getByRole('status').tagName).toBe('P')
   })
 
@@ -604,7 +604,7 @@ describe('TerminalView open a new shell', () => {
     await openNewShell(made)
 
     exit(made[1], 0)
-    expect(status()).toBe('The shell ended.')
+    expect(status()).toBe('The terminal ended.')
   })
 
   it('says the new shell ended when it ends while the task is done', async () => {
@@ -625,7 +625,7 @@ describe('TerminalView open a new shell', () => {
     await flush()
 
     expect(status()).toBe('The terminal could not start. No socket left.')
-    expect(screen.getByRole('button', { name: 'Start a new shell' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Start a new terminal' })).not.toBeNull()
     expect(newShell()).toBeNull()
     expect(dimmed()).toBe(false)
   })
@@ -663,7 +663,7 @@ describe('TerminalView before the shell opens', () => {
     act(() => made[0]?.drop())
 
     expect(status()).toBe('The terminal could not start. Could not connect to the terminal.')
-    expect(screen.getByRole('button', { name: 'Start a new shell' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Start a new terminal' })).not.toBeNull()
     expect(newShell()).toBeNull()
     expect(dimmed()).toBe(false)
   })
@@ -720,7 +720,7 @@ describe('TerminalView of a shell that comes back after a restart', () => {
     act(() => vi.advanceTimersByTime(RESTORE_FADE_MS))
 
     expect(cover()).toBeNull()
-    expect(screen.getByRole('button', { name: 'Start a new shell' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start a new terminal' })).toBeTruthy()
   })
 
   it('shows the spinner of a connect late, so a quick connect does not flash it', async () => {

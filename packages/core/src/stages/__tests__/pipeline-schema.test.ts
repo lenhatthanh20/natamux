@@ -123,7 +123,7 @@ describe('pipelineSchema', () => {
       const result = pipelineSchema.safeParse([{ id: 'x', kind, gate: 'manual', endShell: true }])
       expect(result.success).toBe(false)
       expect(result.error?.issues[0]?.message).toBe(
-        `Only a stage that starts an agent or a command can end its shell, and "x" is a ${kind} stage`,
+        `Only a stage that starts an agent or a command can end its terminal, and "x" is a ${kind} stage`,
       )
       expect(canEndShell({ kind: kind as Stage['kind'] })).toBe(false)
     }
@@ -172,7 +172,7 @@ describe('pipelineSchema', () => {
       ],
     })
     const message = (id: string) =>
-      `Only a stage outside Shell 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${id}" cannot`
+      `Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "${id}" cannot`
 
     it('takes them on a stage that runs beside the stage in Shell 1', () => {
       const parsed = pipelineSchema.parse([build(own)])

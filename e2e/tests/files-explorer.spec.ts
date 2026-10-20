@@ -17,7 +17,7 @@ test('drags a file onto the terminal, then edits and saves it', async ({ page, r
   made.push(task.id)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   await runIn(page, shell, "printf 'hello\\n' > explorer-e2e.txt; clear")
   await expect(rows(shell)).not.toContainText('explorer-e2e.txt')

@@ -150,7 +150,7 @@ export function TerminalPane({
           restoring={
             restoring === undefined
               ? undefined
-              : `Restoring ${restoring === null ? 'shell' : agentLabel(restoring)}…`
+              : `Restoring ${restoring === null ? 'terminal' : agentLabel(restoring)}…`
           }
           onExit={onExit}
           dropTaskId={dropTaskId}

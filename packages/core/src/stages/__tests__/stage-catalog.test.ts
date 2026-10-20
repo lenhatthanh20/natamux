@@ -127,7 +127,7 @@ describe('pipelineIssues', () => {
       {
         stage: 'implement',
         message:
-          'Only a stage outside Shell 1, or a custom stage that an agent works on, can have its own agent or arguments, and "implement" cannot',
+          'Only a stage outside Terminal 1, or a custom stage that an agent works on, can have its own agent or arguments, and "implement" cannot',
         level: 'error',
       },
     ])

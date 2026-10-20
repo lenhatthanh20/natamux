@@ -157,8 +157,8 @@ export class StageAct {
       if (others.length > 0) {
         const what =
           others.length === 1
-            ? `The ${others[0]?.id} stage of Shell ${input.terminal} does not run now`
-            : `No stage of Shell ${input.terminal} runs now`
+            ? `The ${others[0]?.id} stage of Terminal ${input.terminal} does not run now`
+            : `No stage of Terminal ${input.terminal} runs now`
         throw new StageActionError(`${what}: ${task.id} is at ${task.stage}. Stop here.`)
       }
     }
