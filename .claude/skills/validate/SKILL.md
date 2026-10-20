@@ -49,13 +49,15 @@ Jobs:
 
 | Workflow | Job | Checks |
 |---|---|---|
-| CI | `build` | build, `pnpm lint` (biome on `packages` and `e2e`, typecheck), `pnpm test`, fake agent |
-| CI | `coverage` | tests with coverage |
-| CI | `docker` | both compose setups start and answer |
+| CI | `build` | build, `pnpm lint` (biome on `packages` and `e2e`, typecheck), `scripts/*.test.sh` |
+| CI | `test (1..3)` | unit tests, split by file (`vitest --shard=<n>/3`), with `NATAMUX_BENCH=1` |
+| CI | `docker` | both compose files are valid; development starts and answers |
 | CI | `audit` | `pnpm audit --audit-level=high` |
-| CI | `os`, `node-24` | macOS, Windows, Node 24. Only on pushes to main |
-| E2E | `e2e` | production images and Playwright, see the `e2e` skill |
+| CI | `os (<os>, 1..3, desktop)`, `node-24` | macOS and Windows tests in 3 parts plus the desktop start, Node 24. Only on pushes to `main`, not `natamux-ci/*` |
+| E2E | `build`, `test (<group>)`, `publish` | production images and Playwright, see the `e2e` skill |
 | Site | `build` | only when `site/**` changes |
+
+- A test that fails in one shard: the log names the file. `--shard` splits files the same way each run, so a rerun hits the same shard.
 
 ## Fixing without running anything
 

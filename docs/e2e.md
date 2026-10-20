@@ -21,13 +21,13 @@ The dashboard is on http://localhost:8080 with the token `e2e-token`. Set `NATAM
 
 ## In CI
 
-Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report-<group>` artifact. Every run keeps the terminal numbers as the `e2e-measures` artifact (see [Terminal measures](#terminal-measures)). In CI a failed test is tried once more; if it fails again, its group stops there and the other groups are cancelled. Each test job stops after 20 minutes.
+Every pull request and every push to `main` runs the workflow. It builds the images from the branch, so the tests check the code of the pull request. When a test fails, the run keeps the Playwright report, with pictures, videos and traces, as the `e2e-report-<group>` artifact. Every run keeps the terminal numbers as one `e2e-measures-<group>` artifact per group that records them (see [Terminal measures](#terminal-measures)), and the images as the `images` artifact for 7 days. In CI a failed test is tried once more; if it fails again, its group stops there and the other groups are cancelled. Each test job stops after 20 minutes.
 
 The workflow has three jobs:
 
 | Job | Does | Can write packages |
 |---|---|---|
-| `build` | `scripts/e2e.sh build`, then saves the images as an artifact and their ids as outputs | no |
+| `build` | `scripts/e2e.sh build`, then saves the images (`images.tar.zst`) as an artifact and their ids as outputs | no |
 | `test` | one job per group: loads the images, `E2E_LOCAL=1 scripts/e2e.sh up`, installs Playwright, runs the tests of its group | no |
 | `publish` | on `main` only: checks the image ids against `build`, pushes the images, attests their build provenance | yes |
 
@@ -35,11 +35,12 @@ The tests share one daemon, so in one job they run one at a time. To save time, 
 
 | Group | Spec files |
 |---|---|
-| `timing` | `dashboard-measures.spec.ts`, `terminal-cache.spec.ts`, `terminal-measures.spec.ts`: all write the measures, so `e2e-measures` stays one file |
+| `timing` | `dashboard-measures.spec.ts`, `terminal-measures.spec.ts` |
+| `cache` | `terminal-cache.spec.ts` |
 | `terminal` | `terminal-gpu.spec.ts`, `terminal-layout.spec.ts`, `terminal-look.spec.ts`, `terminal-protocol.spec.ts` |
 | `rest` | every other spec file, so a new file runs with no change to the workflow |
 
-Without `E2E_GROUP`, `pnpm e2e` runs every spec file. `E2E_GROUP=<group> pnpm e2e` runs one group, as its CI job does. An unknown group stops the run with an error. `groups.spec.ts` checks that each test of a full run is in exactly one group, and that the workflow runs every group.
+Without `E2E_GROUP`, `pnpm e2e` runs every spec file. `E2E_GROUP=<group> pnpm e2e` runs one group, as its CI job does. An unknown group stops the run with an error. `groups.spec.ts` checks that each test of a full run is in exactly one group, that the workflow runs every group, and that every spec file that records measures is in a named group. A slow new file goes in a named group, so the groups take about the same time.
 
 Only `publish` can push images, and it installs no packages. A bad package in the Playwright install of `test` cannot push an image, and it cannot swap the artifact either, because `publish` checks the ids.
 
@@ -58,6 +59,20 @@ scripts/e2e.sh down    # stop, and remove the demo data and the repository
 ```
 
 Nothing is installed on your machine. `scripts/e2e.sh build` and `E2E_BUILD=1`, which build the images and so install packages, work only in CI or a codespace. The script refuses them elsewhere. The Playwright tests in `e2e/` run in CI only.
+
+### A branch before it merges
+
+`E2E_RUN=<run-id> scripts/e2e.sh up` starts the images that an E2E run built, for example the run of a pull request or of a `natamux-ci/` branch. It needs the GitHub CLI and Docker only.
+
+```sh
+gh run list -w e2e.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
+E2E_RUN=<run-id> scripts/e2e.sh up
+```
+
+- It reads the run first and refuses it unless it is a run of `.github/workflows/e2e.yml` in `lenhatthanh20/natamux` itself, not of another workflow or a fork. These images have no attestation; this check takes its place.
+- It downloads the `images` artifact, loads `natamux-daemon:local` and `natamux-web:local`, and starts them as `E2E_LOCAL=1` does.
+- The artifact is there once the run's `build` job ends, and for 7 days.
+- `scripts/e2e.test.sh` checks the run check with stubs for `gh` and `docker`.
 
 `E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag picks a known build. Images published before the workflow attested its builds fail the check. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
 
@@ -96,7 +111,7 @@ These spec files time the terminal and the dashboard, so a change can show its e
 - Limits are checked on the median of 5 runs, not on one sample.
 - Each test deletes its tasks, so their shells end.
 - The flood tests wait at most 30 s for a prompt or an echo: with flow control these are quick, so a long wait is a failure.
-- To compare two branches, download `e2e-measures` from both runs: `gh run download <run-id> -n e2e-measures`.
+- To compare two branches, download the measures from both runs: `gh run download <run-id> -p 'e2e-measures-*'`. Older runs have one `e2e-measures` artifact instead.
 
 ## Site captures
 

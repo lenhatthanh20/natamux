@@ -68,13 +68,19 @@ export async function pullFastForward(worktreePath: string): Promise<boolean> {
 }
 
 // A commit of the worktree as it is now, with the files that are not committed, made without
-// touching its branch, its index or its files. Ignored files stay out.
+// touching its branch, its index or its files. Ignored files stay out. With no change it is HEAD
+// itself, so a CI check finds the runs that HEAD has already, for example as a PR's head.
 export async function snapshotCommit(worktreePath: string, message: string): Promise<string> {
   const env = { GIT_INDEX_FILE: join(tmpdir(), `natamux-index-${randomUUID()}`) }
   try {
     await git(worktreePath, ['read-tree', 'HEAD'], { env })
     await git(worktreePath, ['add', '--all'], { env })
     const tree = (await git(worktreePath, ['write-tree'], { env })).trim()
+    const heads = await git(worktreePath, ['rev-parse', 'HEAD', 'HEAD^{tree}'])
+    const [head, headTree] = heads.trim().split('\n')
+    if (tree === headTree && head !== undefined) {
+      return head
+    }
     // A throwaway commit, so it needs no identity of the user's.
     const identity = ['-c', 'user.name=Natamux', '-c', 'user.email=natamux@localhost']
     const commit = [...identity, 'commit-tree', tree, '-p', 'HEAD', '-m', message]

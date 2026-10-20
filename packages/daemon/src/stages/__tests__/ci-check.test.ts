@@ -21,10 +21,15 @@ const run = (fields: Partial<Run>): Run => ({
 
 type Fakes = CiDeps & { pushed: string[]; calls: string[][] }
 
-// A clock that the waits move, and gh answers in the order given; the last one repeats.
-function fakes(answers: (Run[] | Error)[], logs = 'Error: 2 tests failed\n'): Fakes {
+// A clock that the waits move, and gh answers in the order given; the last one repeats. `before`
+// answers the first read, made before the push.
+function fakes(
+  answers: (Run[] | Error)[],
+  logs = 'Error: 2 tests failed\n',
+  before: Run[] | Error = [],
+): Fakes {
   let clock = 0
-  let poll = 0
+  let poll = -1
   const pushed: string[] = []
   const calls: string[][] = []
   return {
@@ -39,7 +44,7 @@ function fakes(answers: (Run[] | Error)[], logs = 'Error: 2 tests failed\n'): Fa
       if (args[0] === 'run' && args[1] === 'view') {
         return logs
       }
-      const answer = answers[Math.min(poll, answers.length - 1)]
+      const answer = poll < 0 ? before : answers[Math.min(poll, answers.length - 1)]
       poll += 1
       if (answer instanceof Error) {
         throw answer
@@ -78,6 +83,40 @@ describe('checkOnCi', () => {
       passes: ['CI passed: CI https://github.com/o/r/actions/runs/7'],
       final: false,
     })
+  })
+
+  it('pushes nothing for a commit that has runs already, and waits on those', async () => {
+    // A clean worktree on the head of an open PR: the snapshot is that head, which has runs.
+    const open = run({ databaseId: 5, workflowName: 'E2E', status: 'in_progress', conclusion: '' })
+    const deps = fakes([[open], [run({ databaseId: 5, workflowName: 'E2E' })]], '', [open])
+
+    const result = await checkOnCi(input, deps)
+
+    expect(deps.pushed).toEqual([])
+    expect(deps.snapshot).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({
+      passed: true,
+      passes: ['CI passed: E2E https://github.com/o/r/actions/runs/7'],
+    })
+  })
+
+  it('stops for the user when gh cannot read the runs before the push', async () => {
+    const deps = fakes([[run({})]], '', new GitHubError('gh auth login: not logged in'))
+
+    const result = await checkOnCi(input, deps)
+
+    expect(result).toMatchObject({ passed: false, final: true })
+    expect(result.reasons[0]).toMatch(/^Could not read the CI runs: /)
+    expect(deps.pushed).toEqual([])
+  })
+
+  it('pushes when the first read fails with an error that can pass', async () => {
+    const deps = fakes([[run({})]], '', new GitHubError('HTTP 502'))
+
+    const result = await checkOnCi(input, deps)
+
+    expect(deps.pushed).toEqual(['abc123 natamux-ci/natamux/t-0001-fix'])
+    expect(result.passed).toBe(true)
   })
 
   it('names each failed run in one line, and keeps the end of its log for the agent', async () => {

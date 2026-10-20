@@ -24,6 +24,9 @@ Usage: scripts/e2e.sh <command>
   up     Pull and check the images built on main, start them, then add demo data.
          E2E_BUILD=1 builds them first (CI and codespaces only). E2E_LOCAL=1 starts the
          natamux-daemon:local and natamux-web:local images that are there already.
+         E2E_RUN=<run-id> loads the images that an E2E run built (any branch, kept 7 days)
+         and starts them. The run of a branch:
+           gh run list -w e2e.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
   build  Build the images (CI and codespaces only)
   seed   Add the demo data, unless it is there
   logs   Show the logs
@@ -63,14 +66,45 @@ pull_checked() {
   echo "$digest"
 }
 
+# Loads the images that an E2E run of SOURCE built, so a branch can be tried before it merges.
+# They have no attestation, so the run must be of the E2E workflow and of SOURCE itself, not a fork.
+load_run() {
+  local found dir
+  found="$(gh api "repos/$SOURCE/actions/runs/$1" --jq '.path + " " + .head_repository.full_name')"
+  if [ "$found" != ".github/workflows/e2e.yml $SOURCE" ]; then
+    echo "Run $1 is not an E2E run of $SOURCE ($found). Not loading its images." >&2
+    exit 1
+  fi
+  dir="$(mktemp -d)"
+  if ! gh run download "$1" --repo "$SOURCE" -n images -D "$dir"; then
+    rm -rf "$dir"
+    echo "Run $1 has no images artifact. Its build job makes it, and it is kept 7 days." >&2
+    exit 1
+  fi
+  if ! docker load -i "$dir/images.tar.zst"; then
+    rm -rf "$dir"
+    echo "Docker could not load the images of run $1." >&2
+    exit 1
+  fi
+  rm -rf "$dir"
+}
+
+need_gh() {
+  if ! command -v gh >/dev/null; then
+    echo "Checking the images needs the GitHub CLI (gh), signed in." >&2
+    exit 1
+  fi
+}
+
 up() {
   if [ "${E2E_BUILD:-}" = 1 ]; then
     build
+  elif [ -n "${E2E_RUN:-}" ]; then
+    need_gh
+    load_run "$E2E_RUN"
+    export DOCKER_DEFAULT_PLATFORM=linux/amd64
   elif [ "${E2E_LOCAL:-}" != 1 ]; then
-    if ! command -v gh >/dev/null; then
-      echo "Checking the images needs the GitHub CLI (gh), signed in." >&2
-      exit 1
-    fi
+    need_gh
     # The images are built for Linux on x86. A Mac with Apple silicon runs them with Rosetta.
     export DOCKER_DEFAULT_PLATFORM=linux/amd64
     NATAMUX_DAEMON_IMAGE="$(pull_checked daemon)"
@@ -173,6 +207,11 @@ seed() {
 
   echo "Demo data added: $demo has a workspace with changes, $agent has a fake agent at work."
 }
+
+# scripts/e2e.test.sh sources this file and calls the functions itself.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+  return 0
+fi
 
 case "${1:-}" in
 up) up ;;
