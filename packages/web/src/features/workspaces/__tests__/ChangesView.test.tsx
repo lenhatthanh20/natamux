@@ -264,8 +264,8 @@ describe('ChangesView', () => {
       const { loadChanges } = view({ tab: 'changes', changes: TWO, rollback, undoRollback })
       const user = userEvent.setup()
 
-      const [open] = await screen.findAllByRole('button', { name: 'Rollback…' })
-      await user.click(open as HTMLElement)
+      await screen.findByRole('treeitem', { name: /^a\.ts/ })
+      await user.click(screen.getByRole('button', { name: 'Rollback…' }))
       await user.click(screen.getByRole('checkbox', { name: 'src/b.ts, Modified' }))
       loadChanges.mockClear()
       await user.click(screen.getByRole('button', { name: 'Roll back 1 file' }))
@@ -285,7 +285,8 @@ describe('ChangesView', () => {
 
     it('opens the dialog for the shown file on its command', async () => {
       view({ tab: 'changes', changes: TWO, rollback: async () => 1 })
-      await screen.findAllByRole('button', { name: 'Rollback…' })
+      // The command waits for the list: before it, no file shows.
+      await screen.findByRole('treeitem', { name: /^a\.ts/ })
 
       act(() => fireAppEvent('rollback-file'))
 
@@ -300,8 +301,8 @@ describe('ChangesView', () => {
       view({ tab: 'changes', changes: [CHANGE], rollback })
       const user = userEvent.setup()
 
-      const [open] = await screen.findAllByRole('button', { name: 'Rollback…' })
-      await user.click(open as HTMLElement)
+      await screen.findByRole('treeitem', { name: /^a\.ts/ })
+      await user.click(screen.getByRole('button', { name: 'Rollback…' }))
       await user.click(screen.getByRole('button', { name: 'Roll back 1 file' }))
 
       await waitFor(() => expect(useToasts.getState().toasts[0]?.tone).toBe('error'))

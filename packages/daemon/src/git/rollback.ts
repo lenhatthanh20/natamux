@@ -70,7 +70,11 @@ export async function rollbackFiles(
     ['restore', '--source=HEAD', '--staged', '--worktree'],
     rollbackPaths(tracked),
   )
-  await eachBatch(worktreePath, ['clean', '-f', '-q'], untracked.map((entry) => entry.path))
+  await eachBatch(
+    worktreePath,
+    ['clean', '-f', '-q'],
+    untracked.map((entry) => entry.path),
+  )
 }
 
 // Undoes a rollback: each path gets its file from the snapshot made before it. A path that the

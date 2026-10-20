@@ -20,7 +20,7 @@ test('rolls back a new file from its row menu, and brings it back with Undo', as
   made.push(task.id)
   const tabs = await openTask(page, task.title)
   await tabs.getByRole('tab', { name: 'Terminal' }).click()
-  const shell = pane(page, 'Shell 1')
+  const shell = pane(page, 'Terminal 1')
   await preparePrompt(page, shell)
   await runIn(page, shell, 'echo rollback > rollback-e2e.txt')
   await tabs.getByRole('tab', { name: 'Changes' }).click()
