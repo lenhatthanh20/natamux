@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import {
   addBareOrigin,
   createTestRepo,
@@ -216,12 +216,12 @@ describe('create', () => {
 
   describe('steps', () => {
     let steps: unknown[]
-    let log: ReturnType<typeof vi.fn>
+    let log: Mock<(message: string) => void>
     let watched: WorkspaceService
 
     beforeEach(() => {
       steps = []
-      log = vi.fn()
+      log = vi.fn<(message: string) => void>()
       const bus = new EventBus()
       // What a dashboard would read on each message.
       bus.subscribe((message) => {
