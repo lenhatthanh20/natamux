@@ -256,7 +256,7 @@ export function ChangesPanel({
         placeholder="Commit message"
         className={`${textarea} resize-none`}
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {onDraft !== undefined && (
           <Button
             variant="ghost"
