@@ -11,7 +11,7 @@ import {
   type Step,
   stageName,
 } from '@natamux/core'
-import { alwaysWaits } from './stage-fields'
+import { alwaysWaits, takesOwnAgent } from './stage-fields'
 
 export const KIND_LABEL: Record<StageKind, string> = {
   context: 'Context',
@@ -32,6 +32,33 @@ export function approvalLabel(stage: Pick<Stage, 'kind' | 'gate'>): string {
       : 'Opens the pull request by itself'
   }
   return stage.gate === 'manual' ? 'Waits for your approval' : 'Moves on by itself'
+}
+
+// The model in the words of an agent's command line: `--model x`, `--model=x` or `-m x`.
+export function modelOf(args: string | undefined): string | undefined {
+  const words = args?.trim().split(/\s+/) ?? []
+  for (const [index, word] of words.entries()) {
+    if (word.startsWith('--model=')) {
+      return word.slice('--model='.length) || undefined
+    }
+    if (word === '--model' || word === '-m') {
+      const next = words[index + 1]
+      return next === undefined || next.startsWith('-') ? undefined : next
+    }
+  }
+  return undefined
+}
+
+// The agent and model of a stage that starts its own agent. A null agent is the task's. Nothing
+// for a stage that uses the task's agent, or whose agent and args are not used.
+export type StageRunner = { agent: string | null; model?: string }
+
+export function stageRunner(steps: readonly Step[], stage: Stage): StageRunner | undefined {
+  if ((stage.agent === undefined && stage.args === undefined) || !takesOwnAgent(steps, stage.id)) {
+    return undefined
+  }
+  const model = modelOf(stage.args)
+  return { agent: stage.agent ?? null, ...(model === undefined ? {} : { model }) }
 }
 
 // "A, B and C"

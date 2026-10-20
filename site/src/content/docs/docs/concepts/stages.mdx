@@ -86,7 +86,7 @@ Open the menu of a project and click **Settings**. The **Stages** tab edits the 
 - **Agent.** A stage that runs beside the stage in Terminal 1, such as Test spec, or a stage of your own, can start another agent: pick it in **Agent**, and add words such as `--model sonnet` in **Arguments**. See [Choose a model](#choose-a-model).
 - **Workflow.** On an `agent` stage, **Tasks can run it as a workflow** gives each task a checkbox to run the stage as a workflow. See [Run a stage as a workflow](#run-a-stage-as-a-workflow).
 - **Prompt.** An agent or testing stage shows its default prompt. Edit it to make a prompt of your own. The chips `{title}`, `{description}`, `{dir}` and `{ref}` insert placeholders, and **Insert skill** inserts `{skill:<name>}`. A prompt of your own gets no commit rule: say whether the agent commits.
-- **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. Click a node to select its stage.
+- **Preview.** A flow chart on top shows the pipeline as you edit it. A person icon marks a stage that waits for approval. A pencil marks a prompt of your own. A stage on its own agent shows that agent's icon and its model (or the agent's name) under its name. Click a node to select its stage.
 
 New tasks use the new pipeline. Tasks on their way keep their stages, but use the new prompts and approvals.
 

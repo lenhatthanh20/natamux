@@ -36,9 +36,12 @@ export {
   groupName,
   joinNames,
   KIND_LABEL,
+  modelOf,
   pathLabel,
   pathName,
   pipelineLabel,
+  type StageRunner,
+  stageRunner,
   stepName,
 } from './labels'
 export {
