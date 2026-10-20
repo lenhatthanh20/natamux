@@ -527,7 +527,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 
 **Task progress page** (the Progress view of the details panel, beside the workspace). It shows what each stage did and the evidence that it is finished. The panel is narrow (320-560), so everything is one column.
 
-- **Overview:** stages done out of all, time since the task started, time it waited for you, and times sent back when it is above 0. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
+- **Overview:** one row of figures split by thin lines, each a short label over its value, with the full meaning in a tooltip: `Stages` (done out of all, as `1/6`), `Total` (time since the task started; `Start to finish` once it is done or cancelled), `This stage` (time in the current stage, while the task is open), and `Sent back` (only when above 0). Each figure is as wide as its content, so the labels stay on one line at 320 px. No bar of stages: it redrew every second and its stripes kept the CPU busy, and the stage timeline below already shows each stage.
 - **Stage timeline:** one card per stage, top to bottom, on a rail of markers.
   - Done stage: time, who approved and when, and evidence chips. **Show evidence** opens the passed checks and, for a stage that ran twice, each round with the comment that sent it back.
   - Current stage: everything the checks of 3.5 will look at, live. A parallel step shows its stages side by side, each in its own card.
@@ -545,7 +545,7 @@ Two places show how far tasks are: a strip in each task, and a view across all t
 | `testing` | The command, passed and failed counts, the log of a failed run |
 | `release` | The pull request, its checks, the merge, the issue it closes |
 
-- **One column:** the overview figures in a 2 × 2 grid and the time bar, then the stages. A done or skipped stage is one line until it is opened; the current stage is always open and scrolls into view; a parallel group stacks its cards. Approve is the first button of the current stage and spans the card.
+- **One column:** the overview figures in one row and the time bar, then the stages. A done or skipped stage is one line until it is opened; the current stage is always open and scrolls into view; a parallel group stacks its cards. Approve is the first button of the current stage and spans the card.
 - **Below the stages:** "Context and issue" (open), "Time per stage" and "Latest events" (closed), as sections that fold.
 - **Stage files** open in the Docs tab of the workspace; the panel stays open.
 - **Data:** the evidence of each stage entry (`checks`, `files`, `commits`, `rounds`) is built in the web app from the task's events and stage files (`GET /tasks/:id/events`, `GET /tasks/:id/files`).

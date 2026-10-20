@@ -2,7 +2,7 @@ import { expect, type Page, test } from '@playwright/test'
 import { AGENT_TITLE, signIn, taskNamed, taskTable } from './helpers'
 
 const DONE_TITLE = 'Show the diff of a workspace'
-const TIME_LABEL = /^(since the task started|from start to finish)$/
+const TIME_LABEL = /^(Total|Start to finish)$/
 
 test.beforeEach(async ({ page }) => {
   await signIn(page)
@@ -17,7 +17,7 @@ async function overviewOf(page: Page, title: string) {
   // The panel opens on the view picked last, which may be Details.
   await details.getByRole('tab', { name: 'Progress' }).click()
   const overview = details.getByRole('region', { name: 'Overview' })
-  await expect(overview.getByText('stages done')).toBeVisible()
+  await expect(overview.getByText('Stages', { exact: true })).toBeVisible()
   return overview
 }
 
@@ -32,7 +32,7 @@ test('shows the figures of the Overview with no bar of stages', async ({ page },
     await expect(card.getByText(TIME_LABEL)).toBeVisible()
     if (task === title) {
       // A new task was never sent back, so the figure is left out.
-      await expect(card.getByText(/sent back/)).toHaveCount(0)
+      await expect(card.getByText(/Sent back/)).toHaveCount(0)
     }
     await expect(card.locator('[data-state]')).toHaveCount(0)
     await expect(card.locator('.stage-stripes')).toHaveCount(0)
@@ -44,7 +44,7 @@ test('shows the figures of the Overview with no bar of stages', async ({ page },
     await page.getByRole('button', { name: 'Account' }).click()
     await page.getByRole('menuitemcheckbox', { name: theme }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.toLowerCase())
-    await expect(overview.getByText('stages done')).toBeVisible()
+    await expect(overview.getByText('Stages', { exact: true })).toBeVisible()
     await testInfo.attach(`progress-overview-${theme.toLowerCase()}.png`, {
       body: await overview.screenshot(),
       contentType: 'image/png',
