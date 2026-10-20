@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.42 (2026-10-21)
+
+- A new task answers at once. Natamux makes the worktree and starts the first agent in the background, and the task shows **Preparing workspace** with the current step. A toast says when the workspace is ready or failed. A failure keeps the task, so **Create workspace** can try again. See [Start a task](/docs/getting-started/quick-start/#start-a-task).
+- The status bar shows background jobs, with a menu of each job, its task and how long it has run. `GET /jobs` and `jobs.changed` give the same list. See [Background jobs](/docs/guides/dashboard/#background-jobs).
+- When Spec or Plan runs in its own terminal, an empty Terminal 1 names the terminal that works now, such as **Terminal 5 is working**. See [Terminals and agents](/docs/concepts/stages/#terminals-and-agents).
+- Fix: a settings change could move a running stage to another terminal, so `natamux done`, turn ends and send backs reached the wrong stage. Now a stage keeps the terminal it started in until it starts again. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+
 ## v0.1.41 (2026-10-20)
 
 - In **Project settings → Stages**, a stage that starts its own agent shows that agent's icon and its model (or the agent's name) under its name in the flow chart. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab).
