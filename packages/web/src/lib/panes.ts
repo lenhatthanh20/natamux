@@ -82,18 +82,33 @@ export function terminalState(
   return task.lanes[lane.stage] ?? (lane.stage === task.stage ? task.state : lane.state)
 }
 
-// The agents grid shows only Shell 1. This names another agent terminal that needs the user.
+// A line in a pane header about another terminal. Only one that needs the user is amber.
+export type PaneHint = { text: string; needsYou: boolean }
+
+// A pane shows only Terminal 1 of a task. This names another agent terminal that needs the user
+// or, while Terminal 1 has no agent (an ownShell stage runs in Terminal 5), the one that works.
 export function otherTerminalHint(
   task: Pick<Task, 'stage' | 'state' | 'lanes'>,
   lanes: Readonly<Record<string, TerminalLane>> | undefined,
-): string | undefined {
+): PaneHint | undefined {
+  // By terminal number: object key order must not pick the terminal.
   const states = Object.entries(lanes ?? {})
     .filter(([name]) => name !== '1')
+    .sort(([a], [b]) => Number(a) - Number(b))
     .map(([name, lane]) => ({ name, state: terminalState(task, lane) }))
   const waiting = states.find((entry) => entry.state === 'needs-input')
   if (waiting !== undefined) {
-    return `Terminal ${waiting.name} needs input`
+    return { text: `Terminal ${waiting.name} needs input`, needsYou: true }
   }
   const failed = states.find((entry) => entry.state === 'failed')
-  return failed === undefined ? undefined : `Terminal ${failed.name} failed`
+  if (failed !== undefined) {
+    return { text: `Terminal ${failed.name} failed`, needsYou: true }
+  }
+  if (lanes?.['1'] !== undefined) {
+    return undefined
+  }
+  const working = states.find((entry) => entry.state === 'running')
+  return working === undefined
+    ? undefined
+    : { text: `Terminal ${working.name} is working`, needsYou: false }
 }

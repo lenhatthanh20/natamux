@@ -10,7 +10,14 @@ import { useElementWidth } from '../../hooks/useElementWidth'
 import { usePhone } from '../../hooks/useLayoutMode'
 import type { TaskShells } from '../../lib/api'
 import { useAppEvent } from '../../lib/app-events'
-import { columnsFor, MAX_PANES, paneSpan, paneStateText, terminalState } from '../../lib/panes'
+import {
+  columnsFor,
+  MAX_PANES,
+  otherTerminalHint,
+  paneSpan,
+  paneStateText,
+  terminalState,
+} from '../../lib/panes'
 import { agentLanes, NO_SHELLS, restoringShells, taskShellsQuery } from '../../lib/task-shells'
 import { toast } from '../../lib/toasts'
 import { useViewStore } from '../../lib/view-store'
@@ -338,6 +345,11 @@ export function ShellPanes({
                     : undefined
                 }
                 needsInput={own === 'needs-input' && markWaiting}
+                hint={
+                  name === '1' && !isAgent && loadShells !== undefined
+                    ? otherTerminalHint(task, agentShells.data)
+                    : undefined
+                }
                 connect={(size) => connect(size, name)}
                 cacheKey={terminalKey(taskId, name)}
                 dropTaskId={taskId}
