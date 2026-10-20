@@ -32,6 +32,26 @@ export function readEndedShells(dataDir: string, taskId: string): EndedShell[] {
   }
 }
 
+// A reopened agent reported a newer session, so the next reopen goes on with it. Only a file that
+// exists is written: a deleted task must not get one back.
+export function noteEndedSession(
+  dataDir: string,
+  taskId: string,
+  terminal: string,
+  { agent, session }: { agent: string | null; session: string | null },
+): void {
+  if (agent === null || session === null) {
+    return
+  }
+  const shells = readEndedShells(dataDir, taskId)
+  const shell = shells.find((each) => each.name === terminal)
+  if (shell === undefined || shell.agent !== agent || shell.session === session) {
+    return
+  }
+  shell.session = session
+  saveEndedShells(dataDir, taskId, shells)
+}
+
 export function deleteEndedShells(dataDir: string, taskId: string): void {
   rmSync(endedShellsPath(dataDir, taskId), { force: true })
 }

@@ -21,11 +21,13 @@ type ShellsPart = {
   finish(taskId: string, options: { keepScreens: boolean }): void
   loadOpenShells(): void
   onOutput(taskId: string, terminal: string, data: Buffer): void
+  reopenAgent(taskId: string): Task
   restoreTask(taskId: string, attached: string): void
 }
 
 type LauncherPart = {
   failStage(taskId: string, stage: string, reason: string): void
+  lastSession(task: Task, stageId: string, agent: string, terminal: string): string | undefined
   markStarted(task: Task, stage: Stage, payload: Record<string, unknown>): boolean
   promptOf(task: Task, stage: Stage, cause?: TaskEvent): PromptFor
   resumeAgents(): void

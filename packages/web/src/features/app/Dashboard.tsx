@@ -741,6 +741,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
             }}
             onShowProgress={() => showProgress(changesTask.id)}
             loadEndedShells={() => api.listEndedShells(changesTask.id)}
+            reopenAgent={() => api.reopenAgent(changesTask.id)}
             onRemoveWorkspace={() => setRemovingId(changesTask.id)}
             editorFile={editorFileByTask[changesTask.id] ?? null}
             readWorkspaceFile={(path) => api.readWorkspaceFile(changesTask.id, path)}

@@ -16,7 +16,7 @@ import { agentOfCommand, LAST_SESSION, type LaunchableAgent } from '../agents/ag
 import { AGENT_EXITED_TITLE } from '../agents/agent-runner.js'
 import { readEndedShells, saveEndedShells } from '../terminals/ended-shells.js'
 import { MAIN_TERMINAL, SHELLS } from '../terminals/terminal-limits.js'
-import { laneState, RESUMED_STATES } from './stage-actions.js'
+import { laneState, RESUMED_STATES, StageActionError } from './stage-actions.js'
 import type { StageRun } from './stage-run.js'
 
 // After the launch line is typed, the shell stays in the foreground until the agent is up.
@@ -110,11 +110,13 @@ export class StageShells {
   // A task that is done or cancelled needs its agent and its shells no more. A deleted task keeps
   // nothing; a finished one keeps the last screens of its shells for the wrap-up.
   finish(taskId: string, options: { keepScreens: boolean }): void {
-    const agents = new Map<string, string>()
+    const agents = new Map<string, { agent: string; session: string | null }>()
     for (const terminal of this.run.terminals.list(taskId)) {
       const launched = this.run.launched.get(`${taskId}/${terminal}`)
       if (launched !== undefined) {
-        agents.set(terminal, launched.agent)
+        // Read now: the list of open shells forgets the task below.
+        const session = this.run.openShells?.sessionOf(taskId, terminal, launched.agent) ?? null
+        agents.set(terminal, { agent: launched.agent, session })
       }
     }
     if (options.keepScreens) {
@@ -138,7 +140,10 @@ export class StageShells {
   // Keeps the last screen of each shell, then ends it. A shell where a program that is no agent
   // runs, such as a dev server, stays until it is idle. Without a list of processes nothing tells
   // an agent from a dev server, so such a shell ends, as all of them did before.
-  private async endShells(taskId: string, launched: ReadonlyMap<string, string>): Promise<void> {
+  private async endShells(
+    taskId: string,
+    launched: ReadonlyMap<string, { agent: string; session: string | null }>,
+  ): Promise<void> {
     const endedAt = new Date(this.run.now()).toISOString()
     const finishing = this.run.tasks.listTasks().find((each) => each.id === taskId)
     const stages = finishing === undefined ? new Map<string, string>() : this.lastStages(finishing)
@@ -152,8 +157,10 @@ export class StageShells {
         // Closed meanwhile.
         continue
       }
-      const agent = launched.get(terminal) ?? this.agentOfCommands(commands)
-      shells.push({ name: terminal, agent, stage: stages.get(terminal) ?? null, endedAt, text })
+      const agent = launched.get(terminal)?.agent ?? this.agentOfCommands(commands)
+      const session = launched.get(terminal)?.session ?? null
+      const stage = stages.get(terminal) ?? null
+      shells.push({ name: terminal, agent, stage, session, endedAt, text })
       const program = this.run.terminals.foreground(taskId, terminal)
       const busy = program !== undefined && !SHELLS.includes(basename(program))
       if (busy && agent === null && commands !== undefined) {
@@ -235,6 +242,42 @@ export class StageShells {
     for (const terminal of [attached, ...waiting.filter((name) => name !== attached)]) {
       this.restoreShell(taskId, terminal, terminal === attached)
     }
+  }
+
+  // A person reopens the agent of Terminal 1 of a done or cancelled task, to ask it something. It
+  // goes on with its last session and gets no prompt. The task keeps its state and its agent.
+  reopenAgent(taskId: string): Task {
+    const task = this.run.tasks.getTask(taskId)
+    if (task.state !== 'done' && task.state !== 'cancelled') {
+      throw new StageActionError(`${taskId} is not done or cancelled`)
+    }
+    if (task.workspace === null) {
+      throw new StageActionError(`${taskId} has no workspace`)
+    }
+    if (this.agentRuns(taskId, MAIN_TERMINAL)) {
+      throw new StageActionError(`An agent runs in Terminal 1 of ${taskId} already`)
+    }
+    const ended = readEndedShells(this.run.dataDir, taskId).find(
+      (shell) => shell.name === MAIN_TERMINAL && shell.agent !== null,
+    )
+    const agent = ended?.agent ?? task.agent
+    if (agent === null) {
+      throw new StageActionError(`No agent ran in Terminal 1 of ${taskId}`)
+    }
+    // The session it reported, else Claude Code's last one of the stage that ran there last, else
+    // the newest of the folder.
+    const stage = ended?.stage ?? this.lastStages(task).get(MAIN_TERMINAL)
+    const ofStage =
+      stage === undefined
+        ? undefined
+        : this.run.launcher.lastSession(task, stage, agent, MAIN_TERMINAL)
+    const session = ended?.session ?? ofStage ?? LAST_SESSION
+    const started = this.run.agents.start(taskId, agent, undefined, MAIN_TERMINAL, session, {
+      restored: true,
+    })
+    this.run.launched.set(`${taskId}/${MAIN_TERMINAL}`, { agent, at: this.run.now() })
+    this.run.openShells?.markStarting(taskId, MAIN_TERMINAL, agent)
+    return started
   }
 
   // An agent that cannot start: the attached shell starts plain and keeps its agent in the list for

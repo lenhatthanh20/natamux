@@ -1500,7 +1500,14 @@ describe('event log files', () => {
     writeFileSync(join(dataDir, `agent-launch-${task.id}-2.sh`), 'echo hi\n')
     writeFileSync(join(dataDir, 'agent-launch-T-0099.sh'), 'keep\n')
     saveEndedShells(dataDir, task.id, [
-      { name: '1', agent: null, stage: null, endedAt: '2026-10-15T00:07:00.000Z', text: 'done' },
+      {
+        name: '1',
+        agent: null,
+        stage: null,
+        session: null,
+        endedAt: '2026-10-15T00:07:00.000Z',
+        text: 'done',
+      },
     ])
     saveOpenShells(dataDir, task.id, [{ name: '6', agent: 'copilot', session: 'c-1' }])
 

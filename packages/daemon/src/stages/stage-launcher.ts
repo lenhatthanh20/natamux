@@ -277,12 +277,7 @@ export class StageLauncher {
   }
 
   // The last session that Claude Code reported from this stage. Other agents start new ones.
-  private lastSession(
-    task: Task,
-    stageId: string,
-    agent: string,
-    terminal: string,
-  ): string | undefined {
+  lastSession(task: Task, stageId: string, agent: string, terminal: string): string | undefined {
     if (agent !== 'claude-code') {
       return undefined
     }

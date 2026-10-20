@@ -665,6 +665,28 @@ describe('AgentHookService, a failed stage of a group', () => {
     expect(tasks.listEvents(id)).toHaveLength(events)
     expect(tasks.getTask(id).lanes).toEqual({ 'test-spec': 'done', implement: 'failed' })
   })
+
+  it('leaves a task cancelled in the group alone when an agent reopened in it works', () => {
+    const { id } = tasks.createTask({ title: 'Fix it' })
+    tasks.recordWorkspace(id, { workspace: `/work/${id}`, branch: 'b' })
+    tasks.applyEvent(id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'ready', stage: 'build' },
+    })
+    send(id, 'UserPromptSubmit', '1')
+    tasks.applyEvent(id, { source: 'human', type: 'task.cancelled' })
+    const events = tasks.listEvents(id).length
+
+    for (const name of ['UserPromptSubmit', 'Stop', 'UserPromptSubmit', 'StopFailure']) {
+      expect(send(id, name, '1').applied).toEqual([])
+    }
+
+    expect(tasks.getTask(id).state).toBe('cancelled')
+    const logged = tasks.listEvents(id).slice(events)
+    expect(logged.filter(({ event }) => event.type !== 'agent.active')).toEqual([])
+    expect(service.shellState(id, '1')).toBe('failed')
+  })
 })
 
 describe('AgentHookService, sign of life', () => {

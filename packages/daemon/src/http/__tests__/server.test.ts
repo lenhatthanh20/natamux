@@ -1673,6 +1673,7 @@ describe('ended shells', () => {
       name: '1',
       agent: null,
       stage: null,
+      session: null,
       endedAt: '2026-10-15T00:07:00.000Z',
       text: 'Done.',
     }
@@ -2732,6 +2733,84 @@ describe('start an agent', () => {
     expect(started.statusCode).toBe(200)
     expect(started.json().task.workspace).not.toBeNull()
     expect(ptys[0]?.written.join('')).toContain('agent-launch-')
+  })
+})
+
+describe('reopen the agent of a finished task', () => {
+  const reopen = (id: string) =>
+    app.inject({ method: 'POST', url: `/tasks/${id}/agent/reopen`, headers: authorization })
+
+  // T-0001 is done; Claude Code ended in Terminal 1 on session s-1.
+  async function doneTask(): Promise<void> {
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix the bug' },
+    })
+    await app.inject({ method: 'POST', url: '/tasks/T-0001/workspace', headers: authorization })
+    serverOptions.service.applyEvent('T-0001', {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'done' },
+    })
+    saveEndedShells(join(repo.root, 'data'), 'T-0001', [
+      {
+        name: '1',
+        agent: 'claude-code',
+        stage: null,
+        session: 's-1',
+        endedAt: '2026-10-20T00:00:00.000Z',
+        text: 'Done.',
+      },
+    ])
+  }
+
+  it('starts the agent in Terminal 1 on its session, and its hooks leave the task done', async () => {
+    await doneTask()
+
+    const response = await reopen('T-0001')
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json().task).toMatchObject({ id: 'T-0001', state: 'done' })
+    expect(ptys.at(-1)?.written.join('')).toContain('agent-launch-T-0001.sh')
+    const script = readFileSync(join(repo.root, 'data', 'agent-launch-T-0001.sh'), 'utf8')
+    expect(script).toContain("--resume 's-1'")
+
+    const header = { ...authorization, 'x-natamux-task': 'T-0001', 'x-natamux-terminal': '1' }
+    for (const hook of ['UserPromptSubmit', 'PreToolUse', 'Stop']) {
+      const answer = await app.inject({
+        method: 'POST',
+        url: '/hooks/claude-code',
+        headers: header,
+        payload: { hook_event_name: hook, session_id: 's-2' },
+      })
+      expect(answer.statusCode).toBe(200)
+    }
+    const task = await app.inject({ method: 'GET', url: '/tasks/T-0001', headers: authorization })
+    expect(task.json().task.state).toBe('done')
+  })
+
+  it('answers 409 while the agent runs, or for a task that is not finished', async () => {
+    await doneTask()
+    await reopen('T-0001')
+    const typed = ptys.at(-1)?.written.length
+
+    expect((await reopen('T-0001')).statusCode).toBe(409)
+    expect(ptys.at(-1)?.written).toHaveLength(typed ?? 0)
+
+    await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: authorization,
+      payload: { title: 'Fix another bug' },
+    })
+    expect((await reopen('T-0002')).statusCode).toBe(409)
+  })
+
+  it('answers 404 for a task that is gone', async () => {
+    expect((await reopen('T-0042')).statusCode).toBe(404)
+    expect(ptys).toHaveLength(0)
   })
 })
 

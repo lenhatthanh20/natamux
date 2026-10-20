@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Task, TaskEvent } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DaemonMessage, EventBus } from '../../shared/event-bus.js'
+import { readEndedShells, saveEndedShells } from '../ended-shells.js'
 import { EXIT_CONFIRM_MS, OpenShells, RESTORE_POLL_MS, RESTORE_SPINNER_MS } from '../open-shells.js'
 import {
   deleteOpenShells,
@@ -289,6 +290,27 @@ describe('OpenShells', () => {
     expect(existsSync(openShellsPath(dataDir, 'T-0076'))).toBe(false)
     expect(existsSync(openShellsPath(dataDir, 'T-0077'))).toBe(false)
     expect(shells.restoring('T-0076')).toEqual({})
+  })
+
+  it('keeps the session of an agent reopened in a finished task with its ended shell', () => {
+    const { terminals, shells } = setup(['T-0076'])
+    const ended = {
+      name: '1',
+      agent: 'claude-code',
+      stage: 'spec',
+      session: 's-1',
+      endedAt: '2026-10-20T00:00:00.000Z',
+      text: 'Done.',
+    }
+    saveEndedShells(dataDir, 'T-0076', [ended])
+    terminals.startShell('T-0076', '1')
+
+    shells.noteLaunch('T-0076', '1', 'claude-code', 's-1')
+    shells.noteSession('T-0076', '1', 'claude-code', 's-2')
+
+    expect(readEndedShells(dataDir, 'T-0076')).toEqual([{ ...ended, session: 's-2' }])
+    expect(existsSync(openShellsPath(dataDir, 'T-0076'))).toBe(false)
+    expect(shells.sessionOf('T-0076', '1', 'claude-code')).toBeUndefined()
   })
 
   it('forgets the shells of a task whose workspace was removed', () => {

@@ -292,6 +292,13 @@ describe('createApi', () => {
     })
   })
 
+  it('reopens the agent of a finished task', async () => {
+    const { calls, fetchFunction } = fakeFetch(() => json({ task }))
+
+    expect(await createApi('secret', fetchFunction).reopenAgent('T-0001')).toEqual(task)
+    expect(calls[0]).toMatchObject({ url: '/api/tasks/T-0001/agent/reopen', method: 'POST' })
+  })
+
   it('asks for a terminal ticket with the token', async () => {
     const { calls, fetchFunction } = fakeFetch(() => json({ ticket: 'abc' }))
 
@@ -476,7 +483,14 @@ describe('getFileImage', () => {
 describe('ended shells', () => {
   it('lists the last screens of the shells of a finished task', async () => {
     const shells = [
-      { name: '1', agent: null, stage: null, endedAt: '2026-10-15T00:07:00.000Z', text: 'Done.' },
+      {
+        name: '1',
+        agent: null,
+        stage: null,
+        session: null,
+        endedAt: '2026-10-15T00:07:00.000Z',
+        text: 'Done.',
+      },
     ]
     const { calls, fetchFunction } = fakeFetch(() => json({ shells }))
 

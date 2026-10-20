@@ -86,6 +86,7 @@ type ChangesViewProps = {
   // For a done or cancelled task: the last screens of its shells, and the dialog that removes its
   // workspace.
   loadEndedShells?: () => Promise<EndedShell[]>
+  reopenAgent?: () => Promise<Task>
   onRemoveWorkspace?: () => void
   // The file of the worktree open in the editor tab. The tab shows only while one is open.
   editorFile?: string | null
@@ -144,6 +145,7 @@ export function ChangesView({
   onSendBack,
   onShowProgress,
   loadEndedShells,
+  reopenAgent,
   onRemoveWorkspace,
   loadStageFiles,
   readStageFile,
@@ -489,6 +491,7 @@ export function ChangesView({
                 }
               }}
               onOpenShells={() => setShellsWanted(true)}
+              reopenAgent={reopenAgent}
             />
           ) : (
             <ShellPanes

@@ -414,6 +414,10 @@ export class StageRunner {
     this.run.shells.restoreTask(taskId, attached)
   }
 
+  reopenAgent(taskId: string): Task {
+    return this.run.shells.reopenAgent(taskId)
+  }
+
   startByHand(
     taskId: string,
     agent: string,

@@ -57,6 +57,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `POST /tasks/:id/workspace` | Create the worktree and branch. Body `{ base? }` |
 | `DELETE /tasks/:id/workspace?deleteBranch=true` | Remove the worktree |
 | `POST /tasks/:id/agent` | Start an agent `{ agent, prompt?, base? }` |
+| `POST /tasks/:id/agent/reopen` | Start the agent of Terminal 1 of a done or cancelled task again, on its last session: `{ task }`. The task keeps its state. Answers 409 when the task is not finished, has no workspace or no agent, or an agent runs in Terminal 1 |
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
@@ -82,7 +83,7 @@ Files, git, GitHub, terminals and templates.
 | `PUT /tasks/:id/files/:name` | Replace a stage file `{ text }`, for example to fix the spec before you approve it |
 | `GET /tasks/:id/attachments` | The files attached to a task: `{ attachments }` |
 | `GET /tasks/:id/attachments/:name` | One attachment. Images come with their type, any other file downloads |
-| `GET /tasks/:id/ended-shells` | The last screens of the terminals of a done or cancelled task: `{ shells }` |
+| `GET /tasks/:id/ended-shells` | The last screens of the terminals of a done or cancelled task: `{ shells }`. Each has `name`, `agent`, `stage`, `session` (the agent's last session, or null), `endedAt` and `text` |
 | `GET /tasks/:id/changes/file?path=<file>` | The diff of one changed file |
 | `GET /tasks/:id/changes/image?path=<file>&side=original\|modified` | One side of a changed image |
 | `GET /tasks/:id/tree?path=<folder>` | One folder of the worktree: `{ entries }`. No `path` is the root. `.git` is never listed |
