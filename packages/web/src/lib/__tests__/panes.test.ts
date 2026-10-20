@@ -395,7 +395,10 @@ describe('otherTerminalHint', () => {
       '1': { stage: 'implement', state: 'running' as const },
       '2': { stage: 'test-spec', state: 'running' as const },
     }
-    expect(otherTerminalHint(task, lanes)).toBe('Terminal 2 needs input')
+    expect(otherTerminalHint(task, lanes)).toEqual({
+      text: 'Terminal 2 needs input',
+      needsYou: true,
+    })
   })
 
   it('names a failed terminal, after one that waits', () => {
@@ -408,7 +411,7 @@ describe('otherTerminalHint', () => {
       '1': { stage: 'implement', state: 'running' as const },
       '2': { stage: 'test-spec', state: 'failed' as const },
     }
-    expect(otherTerminalHint(failed, lanes)).toBe('Terminal 2 failed')
+    expect(otherTerminalHint(failed, lanes)).toEqual({ text: 'Terminal 2 failed', needsYou: true })
   })
 
   it('says nothing about the shown terminal, or when the others are fine', () => {
@@ -423,5 +426,45 @@ describe('otherTerminalHint', () => {
     }
     expect(otherTerminalHint(own, lanes)).toBeUndefined()
     expect(otherTerminalHint(task, undefined)).toBeUndefined()
+  })
+
+  // An ownShell Spec runs in Terminal 5 and leaves Terminal 1 a plain shell.
+  const spec = makeTask({ stage: 'spec', state: 'running', lanes: {} })
+
+  it('names the working terminal while Terminal 1 has no agent', () => {
+    expect(otherTerminalHint(spec, { '5': { stage: 'spec', state: 'running' } })).toEqual({
+      text: 'Terminal 5 is working',
+      needsYou: false,
+    })
+  })
+
+  it('says nothing of a working terminal when Terminal 1 has an agent', () => {
+    const lanes = {
+      '1': { stage: null, state: null },
+      '5': { stage: 'spec', state: 'running' as const },
+    }
+    expect(otherTerminalHint(spec, lanes)).toBeUndefined()
+  })
+
+  it('names a terminal that waits or failed before one that works', () => {
+    const running = { stage: null, state: 'running' as const }
+    const waiting = { '5': { stage: null, state: 'needs-input' as const }, '6': running }
+    const failed = { '5': { stage: null, state: 'failed' as const }, '6': running }
+    expect(otherTerminalHint(spec, waiting)).toEqual({
+      text: 'Terminal 5 needs input',
+      needsYou: true,
+    })
+    expect(otherTerminalHint(spec, failed)).toEqual({ text: 'Terminal 5 failed', needsYou: true })
+  })
+
+  it('names the lowest working terminal, whatever the key order', () => {
+    const lanes = {
+      '6': { stage: null, state: 'running' as const },
+      '5': { stage: null, state: 'running' as const },
+    }
+    expect(otherTerminalHint(spec, lanes)).toEqual({
+      text: 'Terminal 5 is working',
+      needsYou: false,
+    })
   })
 })

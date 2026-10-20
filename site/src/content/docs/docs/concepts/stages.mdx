@@ -55,6 +55,8 @@ The default pipeline runs three agents. All are the task's agent unless a stage 
 | Review | Terminal 5 | Agent C, a new session, so it reads the work with fresh eyes. It can be another agent; then it gets a terminal of its own. A later round goes into the same session. |
 | Release | none | none |
 
+With `"ownShell": true` on Spec (or Plan), that stage runs in Terminal 5. Terminal 1 then stays a plain shell until the first stage that runs there, such as Implement, starts the task's agent. While it waits, its pane names the terminal that works, such as **Terminal 5 is working**.
+
 One session for the stages in a row keeps the agent's context and its prompt cache, so it does not read the code again. **Run with a workflow** on Implement adds sub-agents inside Claude Code.
 
 ### Choose a model
