@@ -3,11 +3,13 @@ import {
   dialog,
   Menu,
   type MenuItemConstructorOptions,
+  nativeImage,
   shell,
   type WebContents,
 } from 'electron'
 import { addProject } from '../daemon/daemon-access.js'
 import { pickRepository } from '../daemon/process.js'
+import { menuIconsOn } from './menu-icons.js'
 import { loadSettings, saveSettings } from './settings.js'
 import type { AppContext } from './state.js'
 import { createWindow } from './window.js'
@@ -62,12 +64,23 @@ export function setKeepAwake(ctx: AppContext, on: boolean): void {
   buildMenu(ctx)
 }
 
+// An SF Symbol, or none where the system items have no icons.
+function menuIcon(symbol: string) {
+  return menuIconsOn(process.platform, process.getSystemVersion())
+    ? nativeImage.createMenuSymbol(symbol)
+    : undefined
+}
+
 export function buildMenu(ctx: AppContext): void {
   const { state, logFile } = ctx
   const mac = process.platform === 'darwin'
-  const updates = state.updater?.menuItems() ?? []
+  // Checkboxes get no icon, as in Apple's apps: the tick takes that place.
+  const updates = (state.updater?.menuItems() ?? []).map((item) =>
+    item.type === 'checkbox' ? item : { ...item, icon: menuIcon('arrow.down.circle') },
+  )
   const settings: MenuItemConstructorOptions = {
     label: 'Settings…',
+    icon: menuIcon('gearshape'),
     accelerator: 'CmdOrCtrl+,',
     click: () => openSettingsFromMenu(ctx),
   }
@@ -98,16 +111,21 @@ export function buildMenu(ctx: AppContext): void {
         {
           label: 'Add Project…',
           accelerator: 'CmdOrCtrl+Shift+O',
+          icon: menuIcon('folder.badge.plus'),
           click: () => addProjectFromMenu(ctx),
         },
-        { label: 'Show Daemon Log', click: () => void shell.openPath(logFile) },
+        {
+          label: 'Show Daemon Log',
+          icon: menuIcon('doc.text'),
+          click: () => void shell.openPath(logFile),
+        },
         {
           label: 'Keep Computer Awake While Agents Run',
           type: 'checkbox',
           checked: state.keepAwake,
           click: (item) => setKeepAwake(ctx, item.checked),
         },
-        ...(mac ? [] : [settings]),
+        ...(mac ? [] : [{ type: 'separator' as const }, settings]),
         { type: 'separator' },
         mac ? { role: 'close' } : { role: 'quit' },
       ],

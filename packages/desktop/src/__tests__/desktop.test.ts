@@ -125,11 +125,13 @@ describe('the Settings menu item', () => {
   const menu = sourceOf('../app/menu.ts')
 
   it('is in the app menu on macOS and in the File menu elsewhere, with Mod+,', () => {
-    expect(menu).toContain("label: 'Settings…',\n    accelerator: 'CmdOrCtrl+,'")
+    expect(menu).toContain(
+      "label: 'Settings…',\n    icon: menuIcon('gearshape'),\n    accelerator: 'CmdOrCtrl+,'",
+    )
     expect(menu).toContain("{ role: 'about' },\n              settings,")
     const file = menu.indexOf("label: 'File'")
     const quit = menu.indexOf("mac ? { role: 'close' } : { role: 'quit' }")
-    const other = menu.indexOf('...(mac ? [] : [settings])', file)
+    const other = menu.indexOf("...(mac ? [] : [{ type: 'separator' as const }, settings])", file)
     expect(other).toBeGreaterThan(file)
     expect(other).toBeLessThan(quit)
   })
