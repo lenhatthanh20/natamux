@@ -781,7 +781,8 @@ Rules:
 | Double-click a row / Enter | Opens the workspace; for a task without one, the No-workspace view in main with [Create workspace] and [Start agent] (WS-23). |
 | Shift+Enter in palette, "Add to Agents" in row menu | Adds the task's Terminal 1 to the Agents grid. |
 | Agents pane title | Opens that workspace (Terminal tab). |
-| Start a task (dialog) or Create workspace (details) | Closes the dialog, opens the new workspace on Terminal, toast "T-0021 is ready in natamux/t-0021-..." with [Open] when the user has moved on (WS-23). |
+| Start a task (dialog) | Closes the dialog as soon as the task is made, opens it on Terminal and toasts "T-0021 is being prepared." While the daemon makes the worktree, the main area shows a 16px spinner, "Preparing workspace" and the step ("Fetching the newest commits of the base branch…" / "Checking out the files…"), with no buttons. Then the terminal opens and a toast says "T-0021 is ready in natamux/t-0021-...". A failure toasts "T-0021: workspace failed. <git error>", the log shows "Workspace failed", and the No-workspace view offers [Create workspace] again (WS-23). |
+| Create workspace (details) | Opens the new workspace on Terminal once the daemon made it (WS-23). |
 | PR link | New browser tab (`ExternalLink` icon 12 after the text). |
 | System notification click | Focuses the window and opens that workspace. |
 | Destructive actions (remove workspace, remove finished workspaces, cancel task, delete task, close a busy terminal, keep one try, sign out) | Confirm dialog that says what is deleted and what is kept; Cancel focused. |

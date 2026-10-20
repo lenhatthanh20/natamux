@@ -5,6 +5,7 @@ import { type Api, isUnauthorized } from '../../lib/api'
 import { ACTIVITY_KEY, applyLiveMessages, DIFFSTATS_KEY, FALLBACK_POLL_MS } from '../../lib/live'
 import { prefetchWhenIdle } from '../../lib/prefetch'
 import { applyTaskChanges, type TaskSort } from '../../lib/tasks'
+import { toast } from '../../lib/toasts'
 import { useViewStore } from '../../lib/view-store'
 import { loadTerminalView } from '../terminals/TerminalPane'
 import { syncTaskTerminals } from '../terminals/terminal-cache'
@@ -77,11 +78,29 @@ export function useDashboardQueries({
     batch.flush()
   }
 
+  // The tasks of the new workspace dialog: a toast says when the daemon has made their workspace.
+  const announced = useRef(new Set<string>())
+  const announceWorkspace = (id: string) => announced.current.add(id)
+  const onPrepared = (id: string, error?: string) => {
+    if (!announced.current.delete(id)) {
+      return
+    }
+    if (error !== undefined) {
+      toast(`${id}: workspace failed. ${error}`, 'error')
+      return
+    }
+    // The task with its new branch came just before this message.
+    batch.flush()
+    const task = queryClient.getQueryData<Task[]>(TASKS_KEY)?.find((item) => item.id === id)
+    toast(`${id} is ready in ${task?.branch ?? 'its branch'}.`)
+  }
+
   const liveStatus = useLiveTasks(
     token,
     batch.push,
     () => queryClient.invalidateQueries({ queryKey: ['repos'] }),
     forgetTask,
+    onPrepared,
   )
 
   useEffect(() => {
@@ -144,6 +163,7 @@ export function useDashboardQueries({
     mergeTask,
     deletedIds,
     forgetTask,
+    announceWorkspace,
     liveStatus,
     reposQuery,
     repos,

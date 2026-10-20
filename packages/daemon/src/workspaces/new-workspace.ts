@@ -28,7 +28,8 @@ export type NewWorkspaceInput = {
 }
 
 // The quick way to start work: a task, its worktree, and its first stage started when an agent is
-// chosen. The base branch is checked first, so a typo leaves no task behind.
+// chosen. The base branch is checked first, so a typo leaves no task behind. The answer comes once
+// the task is made: the worktree of a big repository can take minutes, so it is made after.
 export async function newWorkspace(
   parts: NewWorkspaceParts,
   input: NewWorkspaceInput,
@@ -55,16 +56,26 @@ export async function newWorkspace(
     // stage's agent in the new workspace.
     parts.stages.leaveToPerson(created.id)
   }
-  let task: Task
+  parts.workspaces.background(prepare(parts, created.id, input))
+  return parts.tasks.getTask(created.id)
+}
+
+// A failure stays on the task, so the person can try again from it: the dialog is gone by now.
+async function prepare(
+  parts: NewWorkspaceParts,
+  taskId: string,
+  input: NewWorkspaceInput,
+): Promise<void> {
   try {
-    task = await parts.workspaces.create(created.id, input.base)
+    await parts.workspaces.create(taskId, input.base)
   } catch (error) {
-    // The request fails, so it must not leave a task behind: each try would add one more.
-    parts.tasks.applyEvent(created.id, { source: 'system', type: 'task.cancelled' })
-    throw error
+    const message = error instanceof Error ? error.message : String(error)
+    parts.tasks.recordWorkspaceFailure(taskId, message)
+    return
   }
-  if (input.agent === undefined) {
-    return task
+  if (input.agent !== undefined) {
+    await parts.stages.act(taskId, 'start').catch((error: unknown) => {
+      console.warn(`${taskId}: the first stage did not start: ${String(error)}`)
+    })
   }
-  return parts.stages.act(task.id, 'start')
 }

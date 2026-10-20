@@ -1283,6 +1283,21 @@ describe('outside edits without a watch event', () => {
   })
 })
 
+describe('recordWorkspaceFailure', () => {
+  it('logs the reason without changing the state', () => {
+    const task = service.createTask({ title: 'Fix it' })
+
+    const updated = service.recordWorkspaceFailure(task.id, 'git worktree failed: index.lock')
+
+    expect(updated).toMatchObject({ state: 'draft', workspace: null })
+    expect(service.listEvents(task.id).at(-1)?.event).toMatchObject({
+      type: 'workspace.failed',
+      source: 'system',
+      payload: { message: 'git worktree failed: index.lock' },
+    })
+  })
+})
+
 describe('recordGit', () => {
   it('logs a commit and a push without changing the state or the pull request', () => {
     const task = service.createTask({ title: 'Fix it' })

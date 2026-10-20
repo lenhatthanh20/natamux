@@ -2,6 +2,8 @@ import type { Task, TaskEvent } from '@natamux/core'
 
 export type AgentActivity = { text: string; at: string }
 
+export type PreparingStep = 'fetch' | 'checkout'
+
 export type DaemonMessage =
   | { kind: 'task.created'; task: Task }
   // `moved`: the task entered another step.
@@ -20,6 +22,8 @@ export type DaemonMessage =
   // Files in the task's workspace may have changed. A few soon, then at most one per task in
   // DIRTY_MIN_INTERVAL_MS while changes go on (see WorkspaceService.touch).
   | { kind: 'workspace.dirty'; taskId: string }
+  // The step a new workspace is at. Null: it ended, with `error` when it failed.
+  | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

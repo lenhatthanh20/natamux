@@ -1,6 +1,6 @@
 import { type Task, taskSchema } from '@natamux/core'
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import { type AgentActivity, readTaskActivity } from './api'
+import { type AgentActivity, isPreparingStep, type PreparingStep, readTaskActivity } from './api'
 
 export function liveSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,
@@ -26,6 +26,8 @@ export type LiveMessage =
     }
   | { kind: 'shells.changed'; taskId: string }
   | { kind: 'workspace.dirty'; taskId: string }
+  // The step a new workspace is at. Null: it ended, with `error` when it failed.
+  | { kind: 'workspace.preparing'; taskId: string; step: PreparingStep | null; error?: string }
   // The daemon skipped this dashboard while it was behind, so anything may have changed.
   | { kind: 'resync' }
 
@@ -45,7 +47,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
     const logged = 'kind' in message && message.kind === 'task.updated'
     return parsed.success ? { kind: 'task', task: parsed.data, logged } : undefined
   }
-  const { kind, taskId, activity } = message as Record<string, unknown>
+  const { kind, taskId, activity, step, error } = message as Record<string, unknown>
   const id = typeof taskId === 'string' ? taskId : null
   switch (kind) {
     case 'repos.changed':
@@ -58,6 +60,15 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
       return id === null ? undefined : { kind: 'shells.changed', taskId: id }
     case 'workspace.dirty':
       return id === null ? undefined : { kind: 'workspace.dirty', taskId: id }
+    case 'workspace.preparing':
+      return id === null || !(step === null || isPreparingStep(step))
+        ? undefined
+        : {
+            kind: 'workspace.preparing',
+            taskId: id,
+            step,
+            ...(typeof error === 'string' ? { error } : {}),
+          }
     case 'activity.changed':
       try {
         return id === null
@@ -76,6 +87,8 @@ export const FALLBACK_POLL_MS = 60_000
 
 export const ACTIVITY_KEY = ['activity']
 export const DIFFSTATS_KEY = ['diffstats']
+// The workspaces being made, and the step of each (see listPreparing).
+export const PREPARING_KEY = ['workspaces', 'preparing']
 // The sizes of all tasks come in one read, and the daemon runs git for each workspace that changed.
 // With busy agents some workspace always changes, so the sizes are read at most once per this time.
 export const DIFFSTATS_EVERY_MS = 15_000
@@ -137,6 +150,8 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   const add = (key: QueryKey) => stale.set(JSON.stringify(key), key)
   let activity = client.getQueryData<AgentActivity>(ACTIVITY_KEY)
   const before = activity
+  let preparing = client.getQueryData<Record<string, PreparingStep>>(PREPARING_KEY)
+  const preparingBefore = preparing
   let sizesChanged = false
   for (const message of messages) {
     if (message.kind === 'activity.changed' && activity !== undefined) {
@@ -154,6 +169,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
         add([key, message.taskId])
       }
       sizesChanged = true
+    } else if (message.kind === 'workspace.preparing' && preparing !== undefined) {
+      const { [message.taskId]: _step, ...others } = preparing
+      preparing = message.step === null ? others : { ...others, [message.taskId]: message.step }
     } else if (message.kind === 'task' && message.logged) {
       for (const key of LOG_KEYS) {
         add([key, message.task.id])
@@ -163,6 +181,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   // Before the first read there is nothing to change: that read brings the activity.
   if (activity !== before) {
     client.setQueryData<AgentActivity>(ACTIVITY_KEY, activity)
+  }
+  if (preparing !== preparingBefore) {
+    client.setQueryData(PREPARING_KEY, preparing)
   }
   for (const queryKey of stale.values()) {
     void client.invalidateQueries({ queryKey })

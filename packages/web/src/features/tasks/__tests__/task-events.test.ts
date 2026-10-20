@@ -128,6 +128,13 @@ describe('groupEvents', () => {
     ])
   })
 
+  it('says why a workspace could not be made', () => {
+    const base = stored(1, 'workspace.failed', 'system')
+    const failed = { ...base, event: { ...base.event, payload: { message: 'index.lock exists' } } }
+
+    expect(groupEvents([failed])[0]?.detail).toBe('index.lock exists')
+  })
+
   it('has no lines without events', () => {
     expect(groupEvents([])).toEqual([])
   })

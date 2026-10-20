@@ -1,5 +1,5 @@
 import type { SkillInfo, SkillOrigin } from '@natamux/core'
-import type { TaskActivity } from './types'
+import type { PreparingStep, TaskActivity } from './types'
 
 const SKILL_ORIGINS: readonly SkillOrigin[] = ['project', 'plugin', 'user']
 
@@ -23,6 +23,10 @@ export function stringList(value: unknown): string[] {
     throw new Error('The daemon sent an answer this dashboard does not understand.')
   }
   return value
+}
+
+export function isPreparingStep(value: unknown): value is PreparingStep {
+  return value === 'fetch' || value === 'checkout'
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

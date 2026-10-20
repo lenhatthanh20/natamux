@@ -61,7 +61,8 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `GET /tasks/:id/changes` | Files changed in the workspace. The answer is kept for 5 seconds; `?fresh=1` reads git now |
 | `GET /tasks/:id/graph` | The history of the task branch next to the base branch. Kept and `?fresh=1` as for changes |
 | `POST /tasks/:id/commit-message` | A commit message for the changes, by the task's agent: `{ message, source, agent, reason? }`. `source` is `draft` when the agent failed and the message is a simple one; `reason` says why. Answers 409 when nothing changed |
-| `POST /workspaces` | Make a task with a worktree and optionally start an agent |
+| `POST /workspaces` | Make a task with a worktree and optionally start an agent. Answers 202 with the task as soon as it is made; the worktree and the agent come after (see `workspace.preparing`) |
+| `GET /workspaces/preparing` | The workspaces being made, and the step of each: `{ preparing: { "T-0001": "checkout" } }` |
 | `POST /hooks/:agent` | Where an agent's hook posts. Always answers `200 {}` for a known agent |
 | `GET /repos` | Projects Natamux manages, and the daemon's worktree folder: `{ repos, worktreesDir }`. A project with its own worktree folder has `worktreesDir` |
 | `POST /repos` | Add a project `{ path, name?, worktreesDir? }`. `worktreesDir` is an absolute folder for the project's worktrees; it is made when missing. Answers 400 when it is not absolute or cannot be made |
@@ -120,6 +121,7 @@ A browser cannot set headers on a WebSocket, so:
   - `activity.changed` with `{ taskId, activity }` when what an agent does changes. `activity` is the task's whole activity by terminal, as `GET /activity` gives it; `{}` means none.
   - `shells.changed` with `{ taskId }` when a terminal of the task starts or ends, when the program in front of a terminal changes (checked when its output goes quiet), when an agent that comes back after a restart starts or is up, or when a hook changes the state of an agent that works on no stage, unless the last `GET /tasks/<id>/terminals` found no agent in that terminal.
   - `workspace.dirty` with `{ taskId }` when files in the task's workspace may have changed: after an agent hook for a tool that ran or for the end of a turn, when its terminals go quiet, after a commit or a rollback, or after a save in the editor. Each comes 750 ms after a change. Up to 3 in a row come that soon; while changes go on after that, at most one per task every 10 s, and one more after the last change.
+  - `workspace.preparing` with `{ taskId, step }` while a new workspace is made: `step` is `fetch` or `checkout`, then `null` when it ended. A failure also has `error`.
   - `resync` to one socket that missed messages because it read too slowly. The dashboard loads everything again.
 - Terminals open with a one-time ticket. Call `POST /tasks/:id/terminal/ticket` to get `{ ticket }`, then open `GET /tasks/:id/terminal?ticket=...` (WebSocket) within 30 seconds.
 

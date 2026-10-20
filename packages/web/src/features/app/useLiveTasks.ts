@@ -15,24 +15,28 @@ export type LiveStatus = 'connecting' | 'live' | 'reconnecting'
 const MAX_RETRY_DELAY_MS = 15_000
 
 // Keeps one WebSocket open to the daemon and calls onTask for every changed task, onDeleted
-// when a task is removed, and onRepos when a project was added or removed. Activity, shells and
-// workspace changes go straight into the query cache, once per frame.
+// when a task is removed, onRepos when a project was added or removed, and onPrepared when the
+// daemon ended making a workspace. Activity, shells and workspace changes go straight into the
+// query cache, once per frame.
 export function useLiveTasks(
   token: string,
   onTask: (task: Task) => void,
   onRepos?: () => void,
   onDeleted?: (taskId: string) => void,
+  onPrepared?: (taskId: string, error?: string) => void,
 ): LiveStatus {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState<LiveStatus>('connecting')
   const onTaskRef = useRef(onTask)
   const onReposRef = useRef(onRepos)
   const onDeletedRef = useRef(onDeleted)
+  const onPreparedRef = useRef(onPrepared)
 
   useEffect(() => {
     onTaskRef.current = onTask
     onReposRef.current = onRepos
     onDeletedRef.current = onDeleted
+    onPreparedRef.current = onPrepared
   })
 
   useEffect(() => {
@@ -75,6 +79,11 @@ export function useLiveTasks(
           onDeletedRef.current?.(message.taskId)
         } else if (message.kind === 'repos.changed') {
           onReposRef.current?.()
+        } else if (message.kind === 'workspace.preparing') {
+          batch.push(message)
+          if (message.step === null) {
+            onPreparedRef.current?.(message.taskId, message.error)
+          }
         } else {
           batch.push(message)
         }

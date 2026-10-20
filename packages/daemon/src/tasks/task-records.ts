@@ -114,6 +114,23 @@ export class TaskRecords {
     return updated
   }
 
+  // Writes down why a workspace that was made after its request answered could not be made.
+  recordWorkspaceFailure(taskId: string, message: string): Task {
+    const task = this.host.getTask(taskId)
+    const event: TaskEvent = {
+      taskId,
+      source: 'system',
+      type: 'workspace.failed',
+      at: this.host.timestamp(),
+      payload: { message },
+    }
+    const updated: Task = { ...task, updatedAt: event.at }
+
+    this.host.sync.store(updated, [{ event, accepted: true }])
+    this.host.bus.publish({ kind: 'task.updated', task: updated, event, accepted: true })
+    return updated
+  }
+
   // Natamux ended the agents of the task, for example with its workspace. A stage whose agent ran
   // or waited for you would stay so with no agent, and would show up in Needs you later.
   stopAgents(taskId: string): Task {
