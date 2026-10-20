@@ -64,15 +64,16 @@ test('runs a spec file in no named group in rest', () => {
 
 test('matches a group by the whole file name', () => {
   const specs = [...SPECS, 'terminal-cache-extra.spec.ts', 'x-terminal-look.spec.ts']
-  expect(runIn('timing', specs)).not.toContain('terminal-cache-extra.spec.ts')
+  expect(runIn('cache', specs)).not.toContain('terminal-cache-extra.spec.ts')
   expect(runIn('terminal', specs)).not.toContain('x-terminal-look.spec.ts')
   expect(runIn('rest', specs)).toEqual(
     expect.arrayContaining(['terminal-cache-extra.spec.ts', 'x-terminal-look.spec.ts']),
   )
 })
 
-// Each job uploads its own terminal-measures.json, and only the timing job uploads it.
-test('keeps every writer of terminal-measures.json in the timing group', () => {
+// Each job uploads its own terminal-measures.json. Measures are slow, and the slow files go in a
+// named group, so 'rest' stays quick.
+test('keeps every writer of terminal-measures.json in a named group', () => {
   // This file names recordMeasure too, but only to look for it.
   const writers = SPECS.filter(
     (file) =>
@@ -80,11 +81,13 @@ test('keeps every writer of terminal-measures.json in the timing group', () => {
       readFileSync(new URL(file, import.meta.url), 'utf8').includes('recordMeasure'),
   )
   expect(writers.length).toBeGreaterThan(0)
-  expect(runIn('timing')).toEqual(expect.arrayContaining(writers))
+  expect(Object.values(GROUPS).flat()).toEqual(expect.arrayContaining(writers))
 })
 
 test('stops on a group it does not know', () => {
-  expect(() => skippedIn('timeing', SPECS)).toThrow(/Unknown E2E_GROUP.*rest, timing, terminal/)
+  expect(() => skippedIn('timeing', SPECS)).toThrow(
+    /Unknown E2E_GROUP.*rest, timing, cache, terminal/,
+  )
   expect(() => skippedIn('Timing', SPECS)).toThrow(/Unknown E2E_GROUP/)
 })
 
@@ -113,5 +116,5 @@ test('runs each group in its own CI job', () => {
   expect(workflow).not.toMatch(/fail-fast: false/)
   expect(workflow).toMatch(/E2E_GROUP: \$\{\{ matrix\.group \}\}/)
   expect(workflow).toMatch(/name: e2e-report-\$\{\{ matrix\.group \}\}/)
-  expect(workflow).toMatch(/if: always\(\) && matrix\.group == 'timing'/)
+  expect(workflow).toMatch(/name: e2e-measures-\$\{\{ matrix\.group \}\}/)
 })

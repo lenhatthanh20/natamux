@@ -95,7 +95,7 @@ Things to know:
 
 ## Checks
 
-CI runs a `docker` job on every pull request: it checks both compose files, builds and starts production and asks it for `/api/health`, the task list and the dashboard page, then does the same for development. The setups were written without running Docker on the author's machine, so this job is the first real test of a change.
+CI runs a `docker` job on every pull request: it checks both compose files, then starts development and asks it for `/health`, the dashboard page and the demo task's changes and graph. The production setup is built once per change, by the E2E workflow, which starts it from `compose.prod.yaml` and runs the browser tests against it (see [e2e.md](e2e.md)).
 
 The E2E workflow starts the production images with demo data and tests the dashboard in a browser. See [e2e.md](e2e.md).
 

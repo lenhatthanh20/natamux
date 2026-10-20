@@ -30,15 +30,32 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm lint
-      - run: pnpm test
-        env:
-          NATAMUX_BENCH: "1"
+      - run: scripts/e2e.test.sh
       - run: scripts/fake-agent.test.sh
       - run: scripts/release.test.sh
       - run: scripts/sign-release.test.sh
       - run: scripts/icons.test.sh
       - run: scripts/agents.test.sh
       - run: scripts/site-deploy.test.sh
+
+  # The unit tests, split by file over three runners: one runner is CPU bound on them.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm -r --if-present run test --shard=${{ matrix.shard }}/3 --passWithNoTests
+        env:
+          NATAMUX_BENCH: "1"
 
   # Apps trust updates signed by RELEASE_SIGNER only. Fails when it is not a minisign public key
   # (a placeholder) or is a test key, or when the docs do not show it.
@@ -61,9 +78,9 @@ jobs:
           exit "$fails"
 
   # Node 24 is the next LTS line. Node 22 stays the one that the product targets.
-  # Runs on main only, to save Actions minutes.
+  # Runs on main only: a natamux-ci/* push of the same work would run it twice.
   node-24:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,17 +93,19 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
-  # The product ships to macOS and Windows. Runs on main only: macOS minutes cost 10x.
+  # The product ships to macOS and Windows. Runs on main only, like node-24. Each system runs the
+  # unit tests in three parts and starts the desktop app in a fourth, side by side.
   os:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        part: ['1', '2', '3', desktop]
     runs-on: ${{ matrix.os }}
     env:
-      # The desktop app runs here, so its runtime is downloaded.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: ""
+      # Only the desktop part runs the app, so only it downloads the Electron runtime.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ${{ matrix.part != 'desktop' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -96,9 +115,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm test
-      # Last: node-pty is built for Electron from here on, not for Node.js.
+      - if: matrix.part != 'desktop'
+        run: pnpm -r --if-present run test --shard=${{ matrix.part }}/3 --passWithNoTests
+      # node-pty is built for Electron from here on, not for Node.js.
       - name: Desktop app, start and load the dashboard
+        if: matrix.part == 'desktop'
         shell: bash
         env:
           NATAMUX_DESKTOP_SMOKE: "1"
@@ -110,7 +131,7 @@ jobs:
           cd packages/desktop
           pnpm exec electron . --user-data-dir="$RUNNER_TEMP/desktop-user"
       - name: Desktop app, picture and log
-        if: always()
+        if: always() && matrix.part == 'desktop'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-${{ matrix.os }}
@@ -119,25 +140,6 @@ jobs:
             ${{ runner.temp }}/desktop-user/logs
           retention-days: 7
           if-no-files-found: ignore
-
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test:coverage
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage
-          path: packages/*/coverage
-          retention-days: 7
-          if-no-files-found: error
 
   # No install here, so there is no pnpm store to cache.
   audit:
@@ -150,7 +152,8 @@ jobs:
           node-version: 22
       - run: pnpm audit --audit-level=high
 
-  # Builds and starts both compose setups, and checks that they answer.
+  # Starts the development setup and checks that it answers. The E2E workflow builds, starts and
+  # tests the production images, so they are not built here too.
   docker:
     runs-on: ubuntu-latest
     env:
@@ -162,21 +165,6 @@ jobs:
         run: |
           docker compose -f compose.yaml config --quiet
           docker compose -f compose.prod.yaml config --quiet
-
-      - name: Production, build and start
-        run: docker compose -f compose.prod.yaml up -d --build --wait --wait-timeout 180
-      - name: Production, smoke test
-        run: |
-          curl -fsS http://127.0.0.1:8080/api/health
-          curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:8080/api/tasks
-          curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/tasks)" = 401
-      - name: Production, logs on failure
-        if: failure()
-        run: docker compose -f compose.prod.yaml logs
-      - name: Production, stop
-        if: always()
-        run: docker compose -f compose.prod.yaml down -v
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

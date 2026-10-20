@@ -216,7 +216,7 @@ The [documentation site](https://natamux.github.io/docs/) covers tasks, stages, 
 Natamux is young and moves fast. Issues and pull requests are welcome.
 
 - Set up with the [contributor setup](docs/dev-setup.md). Development runs in a GitHub codespace.
-- Every pull request runs the build and tests, coverage, a dependency audit, a desktop start test on macOS and Windows, Docker smoke tests, and Playwright end-to-end tests against the production images.
+- Every pull request runs the build, lint and tests, a dependency audit, a Docker smoke test, and Playwright end-to-end tests against the production images. Each push to `main` also runs the tests on Node 24, macOS and Windows, and starts the desktop app on macOS and Windows.
 - Report a vulnerability privately, as [Security](SECURITY.md) describes. Do not open a public issue for it.
 
 ## License

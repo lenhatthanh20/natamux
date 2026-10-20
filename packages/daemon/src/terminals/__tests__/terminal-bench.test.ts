@@ -9,7 +9,7 @@ import type { TerminalFrame } from '../terminal-types.js'
 
 // Numbers for the terminal path of the daemon, recorded so each PR can show its effect on the same
 // cases. Only the event loop delay of a snapshot is a limit. It runs only with NATAMUX_BENCH=1,
-// which the CI build job sets: every other test run, the coverage run too, stays fast.
+// which the CI test jobs set: every other test run stays fast.
 const BENCH_TEST_MS = 120_000
 const HISTORY_LINES = 10_000
 const SCREEN_ROWS = 40

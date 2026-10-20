@@ -1,8 +1,9 @@
 // CI runs the spec files in groups, one job and one daemon each, so the slow terminal files run
-// side by side. A spec file in no group here runs in 'rest'. Both writers of
-// terminal-measures.json stay in 'timing', so the e2e-measures artifact stays one file.
+// side by side. A spec file in no group here runs in 'rest'. Each job uploads the
+// terminal-measures.json of its own spec files as e2e-measures-<group>.
 export const GROUPS: Record<string, string[]> = {
-  timing: ['dashboard-measures.spec.ts', 'terminal-cache.spec.ts', 'terminal-measures.spec.ts'],
+  timing: ['dashboard-measures.spec.ts', 'terminal-measures.spec.ts'],
+  cache: ['terminal-cache.spec.ts'],
   terminal: [
     'terminal-gpu.spec.ts',
     'terminal-layout.spec.ts',

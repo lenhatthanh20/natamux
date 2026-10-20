@@ -23,8 +23,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // The longest App tests walk through a whole view. With coverage on in CI they took over the
-    // 5 s default now and then.
+    // The longest App tests walk through a whole view and take over the 5 s default now and then
+    // on slow runners (macOS, Windows). Coverage no longer runs in CI, but they still need this.
     testTimeout: 20_000,
     // Vitest turns CSS into an empty string; a test reads the motion rules of this file.
     css: { include: [/src\/styles\.css/] },

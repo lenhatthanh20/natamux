@@ -137,6 +137,17 @@ describe('the CI snapshot', () => {
     expect(runGit(worktreePath, 'status', '--porcelain')).toBe(status)
   })
 
+  it('gives HEAD itself when the worktree has no change, ignored files aside', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+    writeFileSync(join(worktreePath, '.gitignore'), 'secret.txt\n')
+    runGit(worktreePath, 'add', '.gitignore')
+    runGit(worktreePath, 'commit', '-m', 'ignore')
+    writeFileSync(join(worktreePath, 'secret.txt'), 'no\n')
+    const head = runGit(worktreePath, 'rev-parse', 'HEAD').trim()
+
+    expect(await snapshotCommit(worktreePath, 'Natamux CI check')).toBe(head)
+  })
+
   it('pushes it to a branch of origin, replaces it, and deletes it', async () => {
     const remote = addBareOrigin(repo)
     await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
