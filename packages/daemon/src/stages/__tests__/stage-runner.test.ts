@@ -6,8 +6,8 @@ import {
   type ProjectSettings,
   type Stage,
   type StageBranch,
-  stageName,
   type Step,
+  stageName,
   type Task,
 } from '@natamux/core'
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
@@ -847,16 +847,21 @@ describe('agent stages', () => {
       ...DEFAULT_PROJECT_SETTINGS,
       stages: [{ id: 'implement', name: 'Build', kind: 'agent', gate: 'manual', check: 'x' }],
     }
+    const calls: string[] = []
     let finish: () => void = () => undefined
-    runCommand = () =>
-      new Promise((resolve) => {
+    runCommand = (command) => {
+      calls.push(command)
+      return new Promise((resolve) => {
         finish = () => resolve({ code: 0, output: '' })
       })
+    }
     const task = await implementing()
     const lists = jobLists()
 
     const report = runner.act(task.id, 'report', { terminal: '1' })
-    await vi.waitFor(() => expect(lists).toHaveLength(1))
+    // The job shows before the output and git checks end, so wait for the command itself.
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+    expect(lists).toHaveLength(1)
     expect(lists[0]).toEqual([
       expect.objectContaining({ kind: 'stage-check', label: 'Checking Build', taskId: task.id }),
     ])
