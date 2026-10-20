@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v0.1.43 (2026-10-21)
+
+- The stage settings in **Project settings → Stages** have a **Run in a terminal of its own** checkbox (`ownShell`). Checked, the stage runs in Terminal 5 with a new session. Unchecked, it runs in Terminal 1 with the task's agent. Unchecking also clears the stage's **Agent** and **Arguments** when it can no longer have them. See [The Stages tab](/docs/guides/project-settings/#the-stages-tab) and [Stages in their own terminal](/docs/concepts/stages/#stages-in-their-own-terminal).
+- Fix: a stage that started in Terminal 5 kept it after `ownShell` was turned off. Now an `ownShell` change moves the stage to the terminal the settings give at its next start. A lane of a group keeps its terminal. See [Choose a model](/docs/concepts/stages/#choose-a-model).
+
 ## v0.1.42 (2026-10-21)
 
 - A new task answers at once. Natamux makes the worktree and starts the first agent in the background, and the task shows **Preparing workspace** with the current step. A toast says when the workspace is ready or failed. A failure keeps the task, so **Create workspace** can try again. See [Start a task](/docs/getting-started/quick-start/#start-a-task).
