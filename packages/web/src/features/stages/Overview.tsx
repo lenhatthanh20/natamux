@@ -15,32 +15,39 @@ export function Overview({
   const now = useNow()
   const finished = task.state === 'done' || task.state === 'cancelled'
   return (
-    <section aria-label="Overview" className={`${CARD} p-3`}>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <Figure value={`${count.done} of ${count.total}`} label="stages done" />
+    <section aria-label="Overview" className={`${CARD} px-3 py-2.5`}>
+      <dl className="m-0 flex divide-x divide-line">
         <Figure
+          label="Stages"
+          value={`${count.done}/${count.total}`}
+          tip="Stages done out of all"
+        />
+        <Figure
+          label={finished ? 'Start to finish' : 'Total'}
           value={formatDuration(task.createdAt, finished ? task.updatedAt : now)}
-          label={finished ? 'from start to finish' : 'since the task started'}
+          tip={finished ? 'Time from start to finish' : 'Time since the task started'}
         />
         {task.stageSince !== null && !finished && (
-          <Figure value={formatDuration(task.stageSince, now)} label="in this stage" />
-        )}
-        {sentBack > 0 && (
           <Figure
-            value={String(sentBack)}
-            label={sentBack === 1 ? 'time sent back' : 'times sent back'}
+            label="This stage"
+            value={formatDuration(task.stageSince, now)}
+            tip="Time in this stage"
           />
         )}
-      </div>
+        {sentBack > 0 && (
+          <Figure label="Sent back" value={String(sentBack)} tip="Times the task was sent back" />
+        )}
+      </dl>
     </section>
   )
 }
 
-function Figure({ value, label }: { value: string; label: string }) {
+// Each figure is as wide as its content, so the labels stay on one line at the narrowest panel.
+function Figure({ label, value, tip }: { label: string; value: string; tip: string }) {
   return (
-    <div className="min-w-0">
-      <div className="text-lg font-semibold tracking-tight tabular-nums">{value}</div>
-      <div className="text-xs text-muted">{label}</div>
+    <div className="min-w-0 flex-auto px-3 first:pl-0 last:pr-0" data-tip={tip}>
+      <dt className="truncate text-xs text-muted">{label}</dt>
+      <dd className="m-0 truncate text-base font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   )
 }

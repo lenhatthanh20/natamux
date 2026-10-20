@@ -283,15 +283,23 @@ describe('ProgressTab', () => {
 })
 
 describe('the overview of the progress', () => {
-  it('shows the figures in a grid of two columns and no step names', async () => {
+  it('shows the figures in one row split by lines, with a tip each and no step names', async () => {
     progress({ task: FULL_TASK, events: FULL_EVENTS })
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).getByText('2 of 6')).toBeTruthy()
-    expect(within(overview).getByText('stages done').closest('.grid-cols-2')).toBeTruthy()
-    expect(within(overview).getByText('since the task started')).toBeTruthy()
-    expect(within(overview).getByText('in this stage')).toBeTruthy()
-    expect(within(overview).getByText('time sent back')).toBeTruthy()
+    const row = overview.querySelector('dl')
+    expect(row?.className).toContain('divide-x')
+    const figures = [...(row?.children ?? [])].map((figure) => ({
+      label: figure.querySelector('dt')?.textContent,
+      value: figure.querySelector('dd')?.textContent,
+      tip: figure.getAttribute('data-tip'),
+    }))
+    expect(figures).toEqual([
+      { label: 'Stages', value: '2/6', tip: 'Stages done out of all' },
+      { label: 'Total', value: expect.any(String), tip: 'Time since the task started' },
+      { label: 'This stage', value: expect.any(String), tip: 'Time in this stage' },
+      { label: 'Sent back', value: '1', tip: 'Times the task was sent back' },
+    ])
     expect(within(overview).queryByText('Test spec and Implement')).toBeNull()
     expect(within(overview).queryByText('Context')).toBeNull()
   })
@@ -300,37 +308,38 @@ describe('the overview of the progress', () => {
     progress({ task: { ...TASK, state: 'done' } })
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).getByText('from start to finish')).toBeTruthy()
-    expect(within(overview).queryByText('in this stage')).toBeNull()
+    const finish = within(overview).getByText('Start to finish')
+    expect(finish.parentElement?.dataset.tip).toBe('Time from start to finish')
+    expect(within(overview).queryByText('This stage')).toBeNull()
     expect(overview.textContent).not.toContain('NaN')
   })
 
   it.each<[string, Options, string]>([
-    ['a side-by-side step', { task: FULL_TASK, events: FULL_EVENTS }, '2 of 6'],
+    ['a side-by-side step', { task: FULL_TASK, events: FULL_EVENTS }, '2/6'],
     [
       'a running stage',
       {
         task: { ...TASK, stage: 'spec', state: 'running' },
         events: EVENTS,
       },
-      '1 of 3',
+      '1/3',
     ],
     [
       'no stage started yet',
       { task: { ...TASK, stage: 'context', state: 'ready', stageSince: null }, events: [] },
-      '0 of 3',
+      '0/3',
     ],
-    ['all stages done', { task: { ...TASK, state: 'done' } }, '3 of 3'],
-    ['a cancelled task', { task: { ...TASK, state: 'cancelled' } }, '1 of 3'],
+    ['all stages done', { task: { ...TASK, state: 'done' } }, '3/3'],
+    ['a cancelled task', { task: { ...TASK, state: 'cancelled' } }, '1/3'],
     [
       'only one stage',
       {
         task: { ...TASK, stage: 'implement', state: 'running', stages: ['implement'] },
         events: [stored(1, 'stage.started', '2026-10-10T08:00:00.000Z', { stage: 'implement' })],
       },
-      '0 of 1',
+      '0/1',
     ],
-    ['no stages', { task: { ...TASK, stages: [] }, events: [] }, '0 of 0'],
+    ['no stages', { task: { ...TASK, stages: [] }, events: [] }, '0/0'],
   ])('shows no stage bar for a task with %s', async (_, options, done) => {
     progress(options)
 
@@ -339,7 +348,7 @@ describe('the overview of the progress', () => {
     expect(overview.querySelector('.stage-stripes')).toBeNull()
     expect(overview.querySelector('[aria-hidden="true"]')).toBeNull()
     expect(within(overview).getByText(done)).toBeTruthy()
-    expect(within(overview).getByText('stages done')).toBeTruthy()
+    expect(within(overview).getByText('Stages')).toBeTruthy()
   })
 
   it('moves the open figures with the clock, and adds nothing else to the card', async () => {
@@ -358,7 +367,7 @@ describe('the overview of the progress', () => {
 
     expect(within(overview).getByText('1h')).toBeTruthy()
     expect(within(overview).getByText('49m')).toBeTruthy()
-    expect(within(overview).getByText('since the task started')).toBeTruthy()
+    expect(within(overview).getByText('Total')).toBeTruthy()
     expect(overview.querySelectorAll('*').length).toBe(children)
   })
 
@@ -371,14 +380,14 @@ describe('the overview of the progress', () => {
 
       const overview = await screen.findByRole('region', { name: 'Overview' })
       expect(within(overview).getByText('20m')).toBeTruthy()
-      expect(within(overview).getByText('from start to finish')).toBeTruthy()
+      expect(within(overview).getByText('Start to finish')).toBeTruthy()
 
       actOn(() => {
         vi.advanceTimersByTime(30 * 60_000)
       })
 
       expect(within(overview).getByText('20m')).toBeTruthy()
-      expect(within(overview).queryByText('in this stage')).toBeNull()
+      expect(within(overview).queryByText('This stage')).toBeNull()
     },
   )
 
@@ -386,8 +395,8 @@ describe('the overview of the progress', () => {
     progress({ task: { ...TASK, stage: 'context', state: 'ready', stageSince: null }, events: [] })
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).queryByText('in this stage')).toBeNull()
-    expect(within(overview).getByText('since the task started')).toBeTruthy()
+    expect(within(overview).queryByText('This stage')).toBeNull()
+    expect(within(overview).getByText('Total')).toBeTruthy()
   })
 
   it('counts every time the task was sent back', async () => {
@@ -400,16 +409,15 @@ describe('the overview of the progress', () => {
     })
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).getByText('2')).toBeTruthy()
-    expect(within(overview).getByText('times sent back')).toBeTruthy()
+    expect(within(overview).getByText('Sent back').nextElementSibling?.textContent).toBe('2')
   })
 
   it('leaves out the sent back figure while the task was never sent back', async () => {
     progress()
 
     const overview = await screen.findByRole('region', { name: 'Overview' })
-    expect(within(overview).getByText('stages done')).toBeTruthy()
-    expect(within(overview).queryByText(/sent back/)).toBeNull()
+    expect(within(overview).getByText('Stages')).toBeTruthy()
+    expect(within(overview).queryByText(/Sent back/)).toBeNull()
   })
 })
 
@@ -1661,7 +1669,7 @@ describe('a branch in the stages', () => {
     await user.click(button)
     expect(within(other).queryByRole('article')).toBeNull()
     // Plan is done; Plan, Implement and Release count.
-    expect(screen.getByText('1 of 3')).toBeTruthy()
+    expect(screen.getByText('1/3')).toBeTruthy()
   })
 
   it('draws a lane per path, the taken one marked Taken in words and open', async () => {
