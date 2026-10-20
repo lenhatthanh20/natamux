@@ -53,6 +53,12 @@ export function registerAgentRoutes(app: FastifyInstance, deps: RouteDeps): void
     return { task: await options.stages.startByHand(id, agent, prompt, makeWorkspace) }
   })
 
+  // The agent of Terminal 1 of a done or cancelled task, on its last session.
+  app.post('/tasks/:id/agent/reopen', async (request) => {
+    const { id } = taskParamsSchema.parse(request.params)
+    return { task: options.stages.reopenAgent(id) }
+  })
+
   // A review comment for the agent: pasted into its terminal as the next prompt.
   app.post('/tasks/:id/agent/message', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)

@@ -162,7 +162,10 @@ export class AgentHookService {
       this.workspaceChanged(task.id)
     }
 
-    const lane = this.stages.laneFor(task, terminal)
+    // A finished task stays as it is, even with lanes left running: an agent reopened in it has a
+    // state of its own, as one on no stage.
+    const ended = task.state === 'done' || task.state === 'cancelled'
+    const lane = ended ? null : this.stages.laneFor(task, terminal)
     // The turn in which the agent ran `natamux done`, or sent the task back, ends as planned, not
     // "stopped early", even when background work is still running.
     const reportedTurn =

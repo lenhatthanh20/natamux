@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   deleteEndedShells,
   endedShellsPath,
+  noteEndedSession,
   readEndedShells,
   saveEndedShells,
 } from '../ended-shells.js'
@@ -24,6 +25,7 @@ const shell = {
   name: '1',
   agent: 'claude-code',
   stage: 'implement',
+  session: 's-1',
   endedAt: '2026-10-15T00:07:00.000Z',
   text: 'All checks passed.',
 }
@@ -63,6 +65,39 @@ describe('ended shells', () => {
     writeFileSync(endedShellsPath(dataDir, 'T-0058'), JSON.stringify([old]))
 
     expect(readEndedShells(dataDir, 'T-0058')).toEqual([{ ...shell, stage: null }])
+  })
+
+  it('reads a file from before sessions were kept', () => {
+    const { session: _, ...old } = shell
+    saveEndedShells(dataDir, 'T-0058', [shell])
+    writeFileSync(endedShellsPath(dataDir, 'T-0058'), JSON.stringify([old]))
+
+    expect(readEndedShells(dataDir, 'T-0058')).toEqual([{ ...shell, session: null }])
+  })
+
+  it('keeps the newer session of a reopened agent', () => {
+    saveEndedShells(dataDir, 'T-0058', [shell, { ...shell, name: '2', agent: null, session: null }])
+
+    noteEndedSession(dataDir, 'T-0058', '1', { agent: 'claude-code', session: 's-2' })
+
+    expect(readEndedShells(dataDir, 'T-0058').map((each) => each.session)).toEqual(['s-2', null])
+  })
+
+  it('keeps the session when another agent, a plain shell or no session reports', () => {
+    saveEndedShells(dataDir, 'T-0058', [shell, { ...shell, name: '2', agent: null, session: null }])
+
+    noteEndedSession(dataDir, 'T-0058', '1', { agent: 'codex', session: 'x-1' })
+    noteEndedSession(dataDir, 'T-0058', '1', { agent: 'claude-code', session: null })
+    noteEndedSession(dataDir, 'T-0058', '2', { agent: 'claude-code', session: 's-3' })
+    noteEndedSession(dataDir, 'T-0058', '3', { agent: 'claude-code', session: 's-3' })
+
+    expect(readEndedShells(dataDir, 'T-0058').map((each) => each.session)).toEqual(['s-1', null])
+  })
+
+  it('writes no file for a task that has none, such as a deleted one', () => {
+    noteEndedSession(dataDir, 'T-0058', '1', { agent: 'claude-code', session: 's-2' })
+
+    expect(existsSync(endedShellsPath(dataDir, 'T-0058'))).toBe(false)
   })
 
   it('deletes the file, and a missing file is no error', () => {

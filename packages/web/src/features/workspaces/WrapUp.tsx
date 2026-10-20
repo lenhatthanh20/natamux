@@ -1,5 +1,5 @@
 import { type EndedShell, stageName, type Task } from '@natamux/core'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Check, CircleDot, Minus, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
@@ -12,7 +12,7 @@ import { taskShellsQuery } from '../../lib/task-shells'
 import { toast } from '../../lib/toasts'
 
 type WrapUpProps = {
-  task: Pick<Task, 'id' | 'state' | 'pr' | 'prStatus' | 'branch'>
+  task: Pick<Task, 'id' | 'state' | 'pr' | 'prStatus' | 'branch' | 'agent'>
   facts: GitFacts
   // The changed files, for the first row.
   paths: readonly string[]
@@ -25,6 +25,8 @@ type WrapUpProps = {
   onAction: (action: NonNullable<WrapUpRow['action']>) => void
   // Shows the shell panes, which open a shell when none runs.
   onOpenShells: () => void
+  // Starts the agent of Terminal 1 again, on its last session.
+  reopenAgent?: () => Promise<unknown>
 }
 
 const MARK = {
@@ -56,6 +58,7 @@ export function WrapUp({
   closeTerminal,
   onAction,
   onOpenShells,
+  reopenAgent,
 }: WrapUpProps) {
   const ended = useQuery({ queryKey: ['ended-shells', task.id], queryFn: loadEndedShells })
   const shells = useQuery(taskShellsQuery(task.id, loadShells))
@@ -65,6 +68,24 @@ export function WrapUp({
   const settled = rows.every((row) => row.tone === 'ok')
   const running = shells.data?.terminals ?? []
   const saved = ended.data ?? []
+  // The agent the daemon reopens: the one that ended in Terminal 1, else the task's. Not while an
+  // agent runs there.
+  const reopened =
+    saved.find((shell) => shell.name === '1' && shell.agent !== null)?.agent ?? task.agent
+  const canReopen =
+    reopenAgent !== undefined &&
+    reopened !== null &&
+    shells.data !== undefined &&
+    shells.data.lanes['1'] === undefined
+  const stays = task.state === 'cancelled' ? 'cancelled' : 'done'
+  const reopening = useMutation({
+    mutationFn: async () => reopenAgent?.(),
+    onSuccess: onOpenShells,
+    onError: (error) =>
+      toast('Could not reopen the agent.', 'error', {
+        detail: error instanceof Error ? error.message : String(error),
+      }),
+  })
 
   const action = (row: WrapUpRow) => {
     if (row.action === undefined) {
@@ -135,6 +156,16 @@ export function WrapUp({
               ? 'They ended when the task finished. Their last screens are kept.'
               : 'No terminal screens were kept for this task.'}
           </p>
+          {canReopen && (
+            <Button
+              size="xs"
+              busy={reopening.isPending}
+              data-tip={`Starts ${agentLabel(reopened)} again in Terminal 1, on its last conversation. The task stays ${stays}.`}
+              onClick={() => reopening.mutate()}
+            >
+              Reopen agent
+            </Button>
+          )}
           <Button size="xs" onClick={onOpenShells}>
             Open a new terminal
           </Button>

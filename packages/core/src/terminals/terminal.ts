@@ -102,7 +102,8 @@ export type TerminalServerMessage = z.infer<typeof terminalServerMessageSchema>
 
 // The last screen of a shell, kept as plain text when its task was done or cancelled, so the
 // wrap-up can show it after the shell is gone. `agent` is null for a plain shell, `stage` for a
-// shell that no stage used (and in files from before stages were kept).
+// shell that no stage used (and in files from before stages were kept). `session` is the agent's
+// last session, so the agent can be reopened on it; null when none is known.
 export const ENDED_SHELL_LINES = 200
 export const ENDED_SHELL_MAX_CHARS = 64 * 1024
 
@@ -110,6 +111,7 @@ export const endedShellSchema = z.object({
   name: z.string().min(1).max(16),
   agent: z.string().min(1).nullable(),
   stage: z.string().min(1).nullable().default(null),
+  session: z.string().min(1).nullable().default(null),
   endedAt: z.string().min(1),
   text: z.string().max(ENDED_SHELL_MAX_CHARS),
 })

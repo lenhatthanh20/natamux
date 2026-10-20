@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { isLaunchable } from '../agents/agent-launch.js'
 import type { EventBus } from '../shared/event-bus.js'
+import { noteEndedSession } from './ended-shells.js'
 import {
   deleteOpenShells,
   type OpenShell,
@@ -278,6 +279,11 @@ export class OpenShells {
 
   private note(taskId: string, terminal: string, entry: Entry): void {
     if (this.stopped || !this.terminals.isOpen(taskId, terminal)) {
+      return
+    }
+    // A finished task keeps no open shells. The session of an agent reopened in it is kept.
+    if (this.isEnded(taskId)) {
+      noteEndedSession(this.dataDir, taskId, terminal, entry)
       return
     }
     this.active.add(keyOf(taskId, terminal))

@@ -6,17 +6,22 @@ import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TaskShells } from '../../../lib/api'
 import type { GitFacts } from '../../../lib/finished'
+import { useToasts } from '../../../lib/toasts'
 import { WrapUp } from '../WrapUp'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  useToasts.setState({ toasts: [] })
+})
 
 const PR = 'https://github.com/o/r/pull/310'
-const task: Pick<Task, 'id' | 'state' | 'pr' | 'prStatus' | 'branch'> = {
+const task: Pick<Task, 'id' | 'state' | 'pr' | 'prStatus' | 'branch' | 'agent'> = {
   id: 'T-0058',
   state: 'done',
   pr: PR,
   prStatus: { state: 'merged', checks: 'passing' },
   branch: 'natamux/t-0058-icons',
+  agent: 'claude-code',
 }
 const clean: GitFacts = {
   uncommitted: 0,
@@ -27,6 +32,7 @@ const saved: EndedShell[] = [
     name: '1',
     agent: 'claude-code',
     stage: 'implement',
+    session: 's-1',
     endedAt: '2026-10-14T17:07:00.000Z',
     text: 'All checks pass.',
   },
@@ -34,6 +40,7 @@ const saved: EndedShell[] = [
     name: '6',
     agent: null,
     stage: null,
+    session: null,
     endedAt: '2026-10-14T17:07:00.000Z',
     text: 'error: bad flag',
   },
@@ -144,6 +151,59 @@ describe('WrapUp', () => {
     await user.click(screen.getByRole('button', { name: 'Stop Terminal 7' }))
     await user.click(screen.getByRole('button', { name: 'Stop' }))
     await waitFor(() => expect(closeTerminal).toHaveBeenCalledWith('7'))
+  })
+
+  it('reopens the agent of Terminal 1, then shows the terminals', async () => {
+    const reopenAgent = vi.fn(async () => undefined)
+    const { onOpenShells } = wrapUp({ reopenAgent })
+
+    const reopen = await screen.findByRole('button', { name: 'Reopen agent' })
+    expect(reopen.getAttribute('data-tip')).toBe(
+      'Starts Claude Code again in Terminal 1, on its last conversation. The task stays done.',
+    )
+    await userEvent.setup().click(reopen)
+
+    expect(reopenAgent).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onOpenShells).toHaveBeenCalledTimes(1))
+  })
+
+  it('offers to reopen the task agent when no screen was kept', async () => {
+    wrapUp({ reopenAgent: vi.fn(), ended: [], task: { ...task, state: 'cancelled' } })
+
+    const reopen = await screen.findByRole('button', { name: 'Reopen agent' })
+    expect(reopen.getAttribute('data-tip')).toContain('The task stays cancelled.')
+  })
+
+  it('offers no reopen while an agent runs in Terminal 1, or with no agent', async () => {
+    const shells: TaskShells = {
+      terminals: ['1'],
+      lanes: { '1': { stage: 'implement', state: 'done', agent: 'claude-code' } },
+      programs: { '1': 'claude' },
+    }
+    wrapUp({ reopenAgent: vi.fn(), shells })
+    expect(await screen.findByText('claude · running')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reopen agent' })).toBeNull()
+    cleanup()
+
+    wrapUp({ reopenAgent: vi.fn(), ended: [], task: { ...task, agent: null } })
+    expect(await screen.findByText('No terminal screens were kept for this task.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reopen agent' })).toBeNull()
+  })
+
+  it('stays on the wrap-up and says why when the agent cannot be reopened', async () => {
+    const reopenAgent = vi.fn(async () => {
+      throw new Error('An agent runs in Terminal 1 of T-0058 already')
+    })
+    const { onOpenShells } = wrapUp({ reopenAgent })
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Reopen agent' }))
+
+    await waitFor(() =>
+      expect(useToasts.getState().toasts.map((toast) => toast.text)).toContain(
+        'Could not reopen the agent.',
+      ),
+    )
+    expect(onOpenShells).not.toHaveBeenCalled()
   })
 
   it('opens a new shell', async () => {

@@ -3355,8 +3355,8 @@ describe('a prompt for a running agent', () => {
     const at = '2026-10-09T09:00:00.000Z'
     // Shell 1 ran the spec stage last; no stage used shell 2.
     expect(shells.map(({ text: _, ...shell }) => shell)).toEqual([
-      { name: '1', agent: null, stage: 'spec', endedAt: at },
-      { name: '2', agent: null, stage: null, endedAt: at },
+      { name: '1', agent: null, stage: 'spec', session: null, endedAt: at },
+      { name: '2', agent: null, stage: null, session: null, endedAt: at },
     ])
     expect(shells[0]?.text.endsWith('last line of shell 1')).toBe(true)
     expect(shells[1]?.text).toContain('ls')
@@ -4764,6 +4764,196 @@ describe('shells that come back after a restart', () => {
 
     expect(open.waiting(task.id).sort()).toEqual(['1', '6', '7'])
     expect(readOpenShells(dataDir, task.id)).toContainEqual(shellsOfT0075[0])
+  })
+})
+
+describe('the agent of a finished task, reopened', () => {
+  let shells: OpenShells
+
+  beforeEach(() => {
+    runner.stop()
+    shells = new OpenShells({ dataDir, terminals, bus, isEnded: (id) => isTaskEnded(tasks, id) })
+    shells.start()
+    runner = makeRunner(agents, shells)
+    runner.start()
+  })
+
+  afterEach(() => {
+    shells.stop()
+  })
+
+  // The spec agent works in Terminal 1.
+  async function specRunning(): Promise<Task> {
+    const task = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await withWorkspace(task.id)
+    expect(tasks.getTask(task.id)).toMatchObject({ stage: 'spec', state: 'running' })
+    return tasks.getTask(task.id)
+  }
+
+  async function end(taskId: string, how: 'done' | 'cancelled' = 'cancelled'): Promise<Task> {
+    tasks.applyEvent(
+      taskId,
+      how === 'done'
+        ? { source: 'human', type: 'state.overridden', payload: { to: 'done' } }
+        : { source: 'human', type: 'task.cancelled' },
+    )
+    await runner.settle()
+    return tasks.getTask(taskId)
+  }
+
+  // The spec agent reported `session` in Terminal 1, then the task ended.
+  async function endedWith(session: string, how?: 'done' | 'cancelled'): Promise<Task> {
+    const task = await specRunning()
+    shells.noteSession(task.id, '1', 'claude-code', session)
+    return end(task.id, how)
+  }
+
+  const lastLaunch = (taskId: string) =>
+    tasks
+      .listEvents(taskId)
+      .map(({ event }) => event)
+      .filter((event) => event.type === 'agent.launched')
+      .at(-1)
+
+  it('keeps the session of the agent in Terminal 1 when the task ends', async () => {
+    const task = await endedWith('s-9')
+
+    expect(readEndedShells(dataDir, task.id)[0]).toMatchObject({
+      name: '1',
+      agent: 'claude-code',
+      stage: 'spec',
+      session: 's-9',
+    })
+  })
+
+  it('starts the agent again in Terminal 1 on its session, and the task stays cancelled', async () => {
+    const task = await endedWith('s-9')
+    expect(terminals.list(task.id)).toEqual([])
+    const before = ptys.length
+
+    const reopened = runner.reopenAgent(task.id)
+    await runner.settle()
+
+    expect(reopened).toMatchObject({ state: 'cancelled', agent: 'claude-code' })
+    expect(tasks.getTask(task.id)).toMatchObject({ state: 'cancelled', agent: 'claude-code' })
+    expect(ptys).toHaveLength(before + 1)
+    expect(terminals.list(task.id)).toEqual(['1'])
+    expect(launchScript(task.id)).toContain("--resume 's-9'")
+    expect(launchScript(task.id)).not.toContain('Export tasks')
+    expect(lastLaunch(task.id)?.payload).toMatchObject({
+      agent: 'claude-code',
+      terminal: '1',
+      restored: true,
+    })
+    expect(shells.restoring(task.id)).toEqual({ '1': 'claude-code' })
+    expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
+  })
+
+  it('keeps a done task done', async () => {
+    const task = await endedWith('s-9', 'done')
+    expect(task.state).toBe('done')
+
+    expect(runner.reopenAgent(task.id).state).toBe('done')
+    expect(launchScript(task.id)).toContain("--resume 's-9'")
+  })
+
+  it('goes on with the newest session of the folder when none is known', async () => {
+    const task = await end((await specRunning()).id)
+    expect(readEndedShells(dataDir, task.id)[0]?.session).toBeNull()
+
+    runner.reopenAgent(task.id)
+
+    expect(launchScript(task.id)).toContain('--continue')
+    expect(launchScript(task.id)).not.toContain('Export tasks')
+  })
+
+  it('reopens the task agent on its last session of the stage when no screen was kept', async () => {
+    const running = await specRunning()
+    tasks.applyEvent(running.id, {
+      source: 'agent',
+      type: 'agent.finished',
+      payload: { stage: 'spec', sessionId: 's-4' },
+    })
+    // As after a restart: no shell was open when the task was cancelled.
+    terminals.close(running.id)
+    const task = await end(running.id)
+    expect(readEndedShells(dataDir, task.id)).toEqual([])
+
+    runner.reopenAgent(task.id)
+
+    expect(launchScript(task.id)).toContain("--resume 's-4'")
+  })
+
+  it('keeps the newer session of the reopened agent for the next reopen', async () => {
+    const task = await endedWith('s-9')
+    runner.reopenAgent(task.id)
+
+    shells.noteSession(task.id, '1', 'claude-code', 's-10')
+    expect(readEndedShells(dataDir, task.id)[0]?.session).toBe('s-10')
+    expect(existsSync(openShellsPath(dataDir, task.id))).toBe(false)
+
+    // The agent quit and its terminal closed.
+    terminals.close(task.id)
+    runner.reopenAgent(task.id)
+    expect(launchScript(task.id)).toContain("--resume 's-10'")
+  })
+
+  it('types the agent into a plain Terminal 1 that is open already', async () => {
+    const task = await endedWith('s-9')
+    // Open a new terminal: the dashboard attached a plain Terminal 1.
+    terminals.run(task.id, 'ls')
+    const plain = ptys.at(-1) as FakePty
+    const before = ptys.length
+
+    runner.reopenAgent(task.id)
+
+    expect(ptys).toHaveLength(before)
+    expect(terminals.list(task.id)).toEqual(['1'])
+    expect(plain.written.join('')).toContain(`agent-launch-${task.id}.sh`)
+  })
+
+  it('refuses a task that is not finished, and Terminal 1 where an agent runs', async () => {
+    const running = await specRunning()
+    expect(() => runner.reopenAgent(running.id)).toThrow(StageActionError)
+
+    const task = await end(running.id)
+    runner.reopenAgent(task.id)
+    const before = ptys.length
+    const written = ptys.at(-1)?.written.length
+
+    expect(() => runner.reopenAgent(task.id)).toThrow(StageActionError)
+    expect(ptys).toHaveLength(before)
+    expect(ptys.at(-1)?.written).toHaveLength(written ?? 0)
+  })
+
+  it('refuses a task with no workspace or no agent', async () => {
+    const bare = await created({ title: 'Export tasks', agent: 'claude-code' })
+    await end(bare.id)
+    expect(() => runner.reopenAgent(bare.id)).toThrow(StageActionError)
+
+    // Held at the context gate, so no agent ever started.
+    const task = await created({ title: 'Import tasks' })
+    tasks.applyEvent(task.id, {
+      source: 'human',
+      type: 'state.overridden',
+      payload: { to: 'review', stage: 'context' },
+    })
+    await withWorkspace(task.id)
+    expect((await end(task.id)).agent).toBeNull()
+    const before = ptys.length
+
+    expect(() => runner.reopenAgent(task.id)).toThrow(StageActionError)
+    expect(ptys).toHaveLength(before)
+  })
+
+  it('refuses a task that was deleted, and keeps no file of it', async () => {
+    const task = await endedWith('s-9')
+    await workspaces.remove(task.id, { deleteBranch: false })
+    tasks.deleteTask(task.id)
+    await runner.settle()
+
+    expect(() => runner.reopenAgent(task.id)).toThrow()
+    expect(existsSync(join(dataDir, 'tasks', `${task.id}.shells.json`))).toBe(false)
   })
 })
 

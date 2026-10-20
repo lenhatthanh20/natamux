@@ -99,6 +99,14 @@ export function tasksApi(client: Client) {
       return taskSchema.parse(body.task)
     },
 
+    // Starts the agent of Terminal 1 of a done or cancelled task again, on its last session.
+    async reopenAgent(taskId: string): Promise<Task> {
+      const body = asRecord(
+        await request('POST', `/tasks/${encodeURIComponent(taskId)}/agent/reopen`),
+      )
+      return taskSchema.parse(body.task)
+    },
+
     // Pastes text into the agent's terminal as its next prompt.
     async sendToAgent(taskId: string, text: string): Promise<Task> {
       const body = asRecord(
