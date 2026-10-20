@@ -12,7 +12,7 @@ import {
   stagesOf,
   terminalOfStage,
 } from '@natamux/core'
-import { stepOfStage } from './find'
+import { findStage, groupOf, stepOfStage } from './find'
 
 function updateStage(steps: readonly Step[], id: string, change: (stage: Stage) => Stage): Step[] {
   return steps.map((step) => {
@@ -70,6 +70,39 @@ export function setCi(steps: readonly Step[], id: string, on: boolean): Step[] {
 // Off leaves the field out, so a stage of the catalog stays as the catalog has it.
 export function setEndShell(steps: readonly Step[], id: string, on: boolean): Step[] {
   return updateStage(steps, id, (stage) => withField(stage, 'endShell', on ? true : undefined))
+}
+
+// Off also drops the stage's own agent when the stage can no longer have one, so the pipeline
+// stays valid and nothing hidden is left in the file.
+export function setOwnShell(steps: readonly Step[], id: string, on: boolean): Step[] {
+  const next = updateStage(steps, id, (stage) =>
+    withField(stage, 'ownShell', on ? true : undefined),
+  )
+  return on || takesOwnAgent(next, id)
+    ? next
+    : updateStage(next, id, (stage) =>
+        withField(withField(stage, 'agent', undefined), 'args', undefined),
+      )
+}
+
+// The catalog runs its checks (Test spec, Review and the like) in a terminal of their own.
+export function defaultOwnShell(stage: Pick<Stage, 'id'>): boolean {
+  return catalogEntry(stage.id)?.stage.ownShell === true
+}
+
+// Only an agent stage with an output may run in its own terminal; a group ignores it. A stage
+// that has it anyway shows it, so it can be cleared.
+export function offersOwnShell(steps: readonly Step[], id: string): boolean {
+  const stage = findStage(steps, id)
+  if (stage === undefined) {
+    return false
+  }
+  const fits = stage.kind === 'agent' && stage.output !== undefined
+  return stage.ownShell === true || (fits && groupOf(steps, id) === undefined)
+}
+
+export function runsInOwnShell(steps: readonly Step[], id: string): boolean {
+  return findStage(steps, id)?.ownShell === true && groupOf(steps, id) === undefined
 }
 
 // The catalog offers CI on Implement and Automated tests; a stage of your own does not.

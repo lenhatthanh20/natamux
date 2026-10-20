@@ -4,11 +4,13 @@ import {
   alwaysWaits,
   defaultCi,
   defaultGate,
+  defaultOwnShell,
   defaultWorkflow,
   isDefaultGate,
   setCi,
   setEndShell,
   setGate,
+  setOwnShell,
   setWorkflow,
 } from './pipeline-editor'
 import { DefaultMark } from './StageField'
@@ -173,6 +175,44 @@ export function EndShellOption({
       <p id={noteId} className="m-0 text-xs text-muted">
         Frees the memory of the stage. A next stage in the same terminal starts a new agent session.
         The last stage is left to the end of the task, which keeps its screen.
+      </p>
+    </fieldset>
+  )
+}
+
+export function OwnShellOption({
+  stage,
+  steps,
+  onChange,
+}: {
+  stage: Stage
+  steps: readonly Step[]
+  onChange: (steps: Step[]) => void
+}) {
+  const labelId = useId()
+  const noteId = useId()
+  const on = stage.ownShell === true
+  return (
+    <fieldset aria-labelledby={labelId} className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-7 flex-wrap items-center gap-2">
+        <label className="flex h-7 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={on}
+            aria-describedby={noteId}
+            onChange={(event) => onChange(setOwnShell(steps, stage.id, event.target.checked))}
+            className="size-3.5 accent-accent"
+          />
+          <span id={labelId}>Run in a terminal of its own</span>
+        </label>
+        <DefaultMark
+          isDefault={on === defaultOwnShell(stage)}
+          onReset={() => onChange(setOwnShell(steps, stage.id, defaultOwnShell(stage)))}
+        />
+      </div>
+      <p id={noteId} className="m-0 text-xs text-muted">
+        Runs in Terminal 5 with a new session, apart from the task's agent in Terminal 1. Off: runs
+        in Terminal 1 with the task's agent and its session.
       </p>
     </fieldset>
   )

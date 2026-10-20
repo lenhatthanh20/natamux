@@ -56,8 +56,9 @@ export function terminalOfStage(
   return pinned[stageId] ?? settingsTerminal(steps, stageId)
 }
 
-// At a new start a stage keeps its pinned terminal, unless it gained or lost its own agent: then
-// it takes the terminal the settings give now.
+// At a new start a stage keeps its pinned terminal while the settings give the same kind of
+// terminal. When the kind changed (own shell or own agent turned on or off), it takes the terminal
+// the settings give now.
 export function terminalAtStart(
   steps: readonly Step[],
   stageId: string,
@@ -65,11 +66,18 @@ export function terminalAtStart(
 ): string {
   const now = settingsTerminal(steps, stageId)
   const pin = pinned[stageId]
-  return pin !== undefined && isOwnAgentShell(pin) === isOwnAgentShell(now) ? pin : now
+  return pin !== undefined && terminalKind(pin) === terminalKind(now) ? pin : now
 }
 
-function isOwnAgentShell(terminal: string): boolean {
-  return Number(terminal) >= FIRST_STAGE_SHELL
+function terminalKind(terminal: string): '1' | 'own-shell' | 'lane' | 'own-agent' {
+  const number = Number(terminal)
+  if (number >= FIRST_STAGE_SHELL) {
+    return 'own-agent'
+  }
+  if (terminal === OWN_SHELL) {
+    return 'own-shell'
+  }
+  return number === 1 ? '1' : 'lane'
 }
 
 function settingsTerminal(steps: readonly Step[], stageId: string): string {

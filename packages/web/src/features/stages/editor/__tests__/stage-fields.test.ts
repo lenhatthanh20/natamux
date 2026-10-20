@@ -1,4 +1,4 @@
-import { DEFAULT_PIPELINE, defaultPrompt, type Step } from '@natamux/core'
+import { DEFAULT_PIPELINE, defaultPrompt, pipelineIssues, type Step } from '@natamux/core'
 import { describe, expect, it } from 'vitest'
 import { setPathCondition } from '../pipeline-editor/branches'
 import { addCustomStage } from '../pipeline-editor/catalog'
@@ -6,12 +6,16 @@ import { findStage } from '../pipeline-editor/find'
 import { approvalLabel, pipelineLabel } from '../pipeline-editor/labels'
 import {
   defaultGate,
+  defaultOwnShell,
   defaultWorkflow,
   isDefaultGate,
+  offersOwnShell,
+  runsInOwnShell,
   runsInShellOne,
   setEnabled,
   setEndShell,
   setGate,
+  setOwnShell,
   setSections,
   setText,
   setWorkflow,
@@ -138,6 +142,64 @@ describe('own agent', () => {
     expect(runsInShellOne(steps, 'test-spec')).toBe(false)
     expect(takesOwnAgent(steps, 'agent-review')).toBe(true)
     expect(runsInShellOne(steps, 'agent-review')).toBe(false)
+  })
+})
+
+describe('own shell', () => {
+  it('is offered on an agent stage with an output outside a group', () => {
+    expect(offersOwnShell(DEFAULT_PIPELINE, 'spec')).toBe(true)
+    expect(offersOwnShell(DEFAULT_PIPELINE, 'agent-review')).toBe(true)
+    // Implement has no output; Testing is not an agent stage; a group ignores it.
+    expect(offersOwnShell(DEFAULT_PIPELINE, 'implement')).toBe(false)
+    expect(offersOwnShell(DEFAULT_PIPELINE, 'testing')).toBe(false)
+    const inGroup = setOwnShell(DEFAULT_PIPELINE, 'test-spec', false)
+    expect(offersOwnShell(inGroup, 'test-spec')).toBe(false)
+  })
+  it('is shown on any stage that has it, so it can be cleared', () => {
+    // Test spec in the default group has it from the catalog.
+    expect(offersOwnShell(DEFAULT_PIPELINE, 'test-spec')).toBe(true)
+    const wrong = setOwnShell(setOwnShell(DEFAULT_PIPELINE, 'testing', true), 'implement', true)
+    expect(offersOwnShell(wrong, 'testing')).toBe(true)
+    expect(offersOwnShell(wrong, 'implement')).toBe(true)
+    const cleared = setOwnShell(wrong, 'testing', false)
+    expect(findStage(cleared, 'testing')).not.toHaveProperty('ownShell')
+  })
+  it('writes true, and off leaves the field out so Spec runs in Terminal 1', () => {
+    const on = setOwnShell(DEFAULT_PIPELINE, 'spec', true)
+    expect(findStage(on, 'spec')?.ownShell).toBe(true)
+    expect(runsInShellOne(on, 'spec')).toBe(false)
+    expect(runsInOwnShell(on, 'spec')).toBe(true)
+    const off = setOwnShell(on, 'spec', false)
+    expect(findStage(off, 'spec')).toEqual(findStage(DEFAULT_PIPELINE, 'spec'))
+    expect(runsInShellOne(off, 'spec')).toBe(true)
+    expect(runsInOwnShell(off, 'spec')).toBe(false)
+  })
+  it('drops the own agent when the stage can no longer have one', () => {
+    let steps = setText(DEFAULT_PIPELINE, 'agent-review', 'agent', 'cursor')
+    steps = setText(steps, 'agent-review', 'args', '--model x')
+    const off = setOwnShell(steps, 'agent-review', false)
+    const review = findStage(off, 'agent-review')
+    expect(review).not.toHaveProperty('ownShell')
+    expect(review).not.toHaveProperty('agent')
+    expect(review).not.toHaveProperty('args')
+    expect(pipelineIssues(off).filter((issue) => issue.stage === 'agent-review')).toEqual([])
+  })
+  it('keeps the agent of a stage of your own', () => {
+    let steps = addCustomStage(DEFAULT_PIPELINE, {
+      name: 'Write docs',
+      id: 'write-docs',
+      kind: 'agent',
+      output: 'docs.md',
+    })
+    steps = setOwnShell(setText(steps, 'write-docs', 'agent', 'codex'), 'write-docs', true)
+    const off = setOwnShell(steps, 'write-docs', false)
+    expect(findStage(off, 'write-docs')?.agent).toBe('codex')
+  })
+  it('takes the catalog as the default, and off for a stage of your own', () => {
+    expect(defaultOwnShell({ id: 'agent-review' })).toBe(true)
+    expect(defaultOwnShell({ id: 'test-spec' })).toBe(true)
+    expect(defaultOwnShell({ id: 'spec' })).toBe(false)
+    expect(defaultOwnShell({ id: 'write-docs' })).toBe(false)
   })
 })
 

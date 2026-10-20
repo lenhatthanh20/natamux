@@ -135,8 +135,9 @@ describe('ProjectSettingsDialog', () => {
 
     await userEvent.setup().click(await row('Spec'))
     const spec = details('Spec')
-    // Name, approval, workflow, and the prompt. Spec runs in Terminal 1, so it cannot end its shell.
-    expect(within(spec).getAllByText('Default')).toHaveLength(4)
+    // Name, approval, workflow, own terminal and the prompt. Spec runs in Terminal 1, so it cannot
+    // end its shell.
+    expect(within(spec).getAllByText('Default')).toHaveLength(5)
     expect(within(spec).queryByText('Changed')).toBeNull()
     expect(screen.getByText(/^New tasks use this pipeline\./)).toBeTruthy()
   })
@@ -1776,6 +1777,115 @@ describe('ProjectSettingsDialog, end the shell', () => {
     ).toBeTruthy()
     await user.click(saveButton())
     expect(save).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProjectSettingsDialog, own terminal', () => {
+  const LABEL = 'Run in a terminal of its own'
+  const box = (name: string) => within(details(name)).queryByRole('checkbox', { name: LABEL })
+  const field = (name: string) =>
+    within(details(name)).getByRole('checkbox', { name: LABEL }).closest('fieldset') as HTMLElement
+  const agentSelect = (name: string) =>
+    within(details(name)).queryByRole('combobox', { name: 'Agent' })
+  const OWN_HELP =
+    "This stage runs in a terminal of its own. With the task's agent it uses Terminal 5; another agent or arguments use a terminal from Terminal 6. Uncheck Run in a terminal of its own to run it in Terminal 1."
+  const json = () =>
+    (screen.getByRole('textbox', { name: '.natamux.json' }) as HTMLTextAreaElement).value
+
+  it('offers it on agent stages with an output outside a group', async () => {
+    const { user } = open()
+
+    await user.click(await row('Spec'))
+    expect(box('Spec')).toHaveProperty('checked', false)
+    await user.click(await row('Review'))
+    expect(box('Review')).toHaveProperty('checked', true)
+    expect(within(field('Review')).getByText('Default')).toBeTruthy()
+    for (const name of ['Context', 'Implement', 'Automated tests', 'Release']) {
+      await user.click(await row(name))
+      expect(box(name)).toBeNull()
+    }
+  })
+
+  it('shows it on a group stage that has it, and hides it there once cleared', async () => {
+    const { user } = open()
+
+    // Test spec runs in the default group with ownShell from the catalog.
+    await user.click(await row('Test spec'))
+    expect(box('Test spec')).toHaveProperty('checked', true)
+    await user.click(box('Test spec') as HTMLElement)
+    expect(box('Test spec')).toBeNull()
+    await user.click(screen.getByRole('tab', { name: 'JSON' }))
+    expect(json()).not.toMatch(/"id": "test-spec",[^}]*"ownShell"/)
+  })
+
+  it('shows it, checked, on a stage that breaks the rule with it', async () => {
+    const { user } = open(
+      withStages([
+        { id: 'implement', kind: 'agent', gate: 'auto', ownShell: true },
+        { id: 'testing', kind: 'testing', gate: 'auto', ownShell: true },
+      ]),
+    )
+
+    for (const name of ['Implement', 'Automated tests']) {
+      await user.click(await row(name))
+      expect(box(name)).toHaveProperty('checked', true)
+    }
+  })
+
+  it('moves Spec out of Terminal 1 and back, and the JSON tab follows', async () => {
+    const { user } = open()
+
+    await user.click(await row('Spec'))
+    expect(agentSelect('Spec')).toBeNull()
+    await user.click(box('Spec') as HTMLElement)
+    expect(within(field('Spec')).getByText('Changed')).toBeTruthy()
+    expect(within(details('Spec')).getByText(OWN_HELP)).toBeTruthy()
+    await user.click(screen.getByRole('tab', { name: 'JSON' }))
+    expect(json()).toContain('"ownShell": true')
+
+    await user.click(screen.getByRole('tab', { name: 'Stages' }))
+    await user.click(box('Spec') as HTMLElement)
+    expect(agentSelect('Spec')).toBeNull()
+    expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('shows a file that sets it on Spec, and Use default clears it', async () => {
+    const { save, user } = open(
+      withStages([
+        { id: 'spec', kind: 'agent', gate: 'manual', output: 'spec.md', ownShell: true },
+        { id: 'implement', kind: 'agent', gate: 'auto' },
+      ]),
+    )
+
+    await user.click(await row('Spec'))
+    expect(box('Spec')).toHaveProperty('checked', true)
+    expect(within(details('Spec')).getByText(OWN_HELP)).toBeTruthy()
+    await user.click(within(field('Spec')).getByRole('button', { name: 'Use default' }))
+    expect(box('Spec')).toHaveProperty('checked', false)
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(stageIn(savedStages(save), 'spec')).not.toHaveProperty('ownShell')
+  })
+
+  it('drops the agent of Review with it, so the pipeline stays valid', async () => {
+    const { save, user } = open()
+
+    await user.click(await row('Review'))
+    await user.selectOptions(agentSelect('Review') as HTMLElement, 'cursor')
+    await user.type(
+      within(details('Review')).getByRole('textbox', { name: 'Arguments' }),
+      '--model x',
+    )
+    await user.click(box('Review') as HTMLElement)
+    expect(agentSelect('Review')).toBeNull()
+    await user.click(saveButton())
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    const review = stageIn(savedStages(save), 'agent-review')
+    expect(review).not.toHaveProperty('ownShell')
+    expect(review).not.toHaveProperty('agent')
+    expect(review).not.toHaveProperty('args')
   })
 })
 
