@@ -175,12 +175,27 @@ describe('natamux hook', () => {
   }
 
   it('forwards the hook, exits 0 and prints nothing', async () => {
-    const result = await runHook(['hook', 'claude-code'], { NATAMUX_TOKEN: 'secret' })
+    const result = await runHook(['hook', 'claude-code'], {
+      NATAMUX_TOKEN: 'secret',
+      CLAUDECODE: '1',
+    })
 
     expect(result.code).toBe(EXIT_OK)
     expect(result.stdout).toBe('')
     expect(result.stderr).toBe('')
     expect(result.calls).toEqual(['http://127.0.0.1:4317/hooks/claude-code'])
+  })
+
+  it("sends nothing when another agent runs Claude Code's hooks", async () => {
+    // Copilot CLI reads `.claude/settings.local.json` too, and does not set CLAUDECODE.
+    for (const CLAUDECODE of [undefined, '', '0']) {
+      const result = await runHook(['hook', 'claude-code'], { NATAMUX_TOKEN: 'secret', CLAUDECODE })
+
+      expect(result.code).toBe(EXIT_OK)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toBe('')
+      expect(result.calls).toEqual([])
+    }
   })
 
   it('names the event of a Copilot hook in the address', async () => {
@@ -206,7 +221,7 @@ describe('natamux hook', () => {
       let stdout = ''
       let stderr = ''
       const code = await runHookCommand(['claude-code'], {
-        env: { NATAMUX_TOKEN: 'secret' },
+        env: { NATAMUX_TOKEN: 'secret', CLAUDECODE: '1' },
         stdout: (text) => {
           stdout += text
         },

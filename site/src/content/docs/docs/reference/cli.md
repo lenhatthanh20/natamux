@@ -169,7 +169,7 @@ natamux hook codex
 natamux hook copilot agentStop
 ```
 
-- `hooks claude-code` prints settings JSON. It needs no token and does not call the daemon.
+- `hooks claude-code` prints settings JSON. It needs no token and does not call the daemon. Use it only outside a task terminal, or when the worktree's `.claude/settings.local.json` is your own: a task terminal already has the hooks, and both would send each event twice.
 - `hook <agent> [event]` is for an agent's own hook. It reads JSON on stdin and posts it to the daemon. It prints nothing (`{}` for `cursor` and `gemini`), always exits 0, and does nothing without `NATAMUX_TOKEN`. Even a usage mistake exits 0, because agents treat exit code 2 as "block this action". See [Other agents](/docs/agents/other-agents/).
 
 ## JSON output

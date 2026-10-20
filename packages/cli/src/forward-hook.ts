@@ -103,6 +103,11 @@ export async function runHookCommand(
     return 0
   }
 
+  // Copilot CLI also runs the hooks in `.claude/settings.local.json`; only Claude Code sets
+  // CLAUDECODE, so Copilot's events never reach the daemon as Claude Code's.
+  if (agent === 'claude-code' && options.env.CLAUDECODE !== '1') {
+    return 0
+  }
   if (JSON_ANSWER_AGENTS.includes(agent)) {
     options.stdout('{}\n')
   }

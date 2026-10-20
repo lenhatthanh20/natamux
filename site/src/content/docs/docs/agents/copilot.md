@@ -39,6 +39,8 @@ Natamux writes `.github/hooks/natamux.json` in the task's worktree and adds it t
 
 If a file of your own with that name exists, Natamux leaves it alone. The agent then runs without Natamux's hooks, and the dashboard follows its terminal only.
 
+Copilot also runs the hooks in Claude Code's `.claude/settings.local.json`, which Natamux writes in the same worktree (see [Claude Code](/docs/agents/claude-code/#how-hooks-are-added)). They do nothing outside Claude Code, so each Copilot event is reported once. Copilot allows an `http` hook only on `https://`: if your own `.claude` settings have an `http` hook on `http://127.0.0.1`, Copilot skips that file and prints a warning at start.
+
 Natamux also adds the worktree to `trustedFolders` in `~/.copilot/config.json`, so Copilot does not ask whether you trust it. See [Folder trust](/docs/concepts/agents-and-hooks/#folder-trust).
 
 ## Events and states

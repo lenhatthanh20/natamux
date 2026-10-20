@@ -58,9 +58,10 @@ json() {
   printf '"%s"' "${text//\"/\\\"}"
 }
 
+# Claude Code sets CLAUDECODE; `natamux hook claude-code` drops a hook without it.
 hook() {
   printf '{"hook_event_name":%s,"cwd":%s%s}' "$(json "$1")" "$(json "$PWD")" "${2:-}" |
-    natamux hook claude-code >/dev/null 2>&1 || true
+    CLAUDECODE=1 natamux hook claude-code >/dev/null 2>&1 || true
 }
 
 tool() {
