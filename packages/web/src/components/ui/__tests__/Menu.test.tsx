@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import css from '../../../styles.css?raw'
@@ -43,5 +43,34 @@ describe('Menu', () => {
 
     expect(shown).toEqual(['Light'])
     expect(document.activeElement?.textContent).toBe('Light')
+  })
+
+  it('keeps an open list in step with its items, rows with the same label too', async () => {
+    const row = (id: string) => ({ id, label: 'Pushing', onSelect: () => undefined })
+    const { rerender } = render(<Menu label="Jobs" items={[row('a')]} />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Jobs' }))
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
+
+    act(() => rerender(<Menu label="Jobs" items={[row('a'), row('b')]} />))
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2)
+  })
+
+  it('draws a trigger of its own', async () => {
+    render(
+      <Menu
+        label="Jobs"
+        items={[{ label: 'Pushing', onSelect: () => undefined }]}
+        trigger={(props) => (
+          <button type="button" {...props}>
+            1 job
+          </button>
+        )}
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: '1 job' })
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    await userEvent.setup().click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('menu', { name: 'Jobs' })).not.toBeNull()
   })
 })

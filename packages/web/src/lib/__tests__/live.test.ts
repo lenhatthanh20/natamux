@@ -10,13 +10,14 @@ import taskMutations from '../../features/app/useTaskMutations.ts?raw'
 import changesPanel from '../../features/git/ChangesPanel.tsx?raw'
 import changesView from '../../features/workspaces/ChangesView.tsx?raw'
 import docsTab from '../../features/workspaces/DocsTab.tsx?raw'
-import type { AgentActivity } from '../api'
+import type { AgentActivity, Job } from '../api'
 import {
   ACTIVITY_KEY,
   applyLiveMessages,
   closeSocket,
   DIFFSTATS_EVERY_MS,
   FALLBACK_POLL_MS,
+  JOBS_KEY,
   liveSocketUrl,
   parseLiveMessage,
 } from '../live'
@@ -116,6 +117,27 @@ describe('parseLiveMessage', () => {
     })
   })
 
+  it('reads the list of background jobs', () => {
+    const jobs: Job[] = [
+      {
+        id: 'job-1',
+        kind: 'workspace',
+        label: 'Pushing',
+        taskId: 'T-0001',
+        startedAt: '2026-10-21T09:00:00.000Z',
+      },
+      {
+        id: 'job-2',
+        kind: 'issue-import',
+        label: 'Importing issues',
+        taskId: null,
+        startedAt: '2026-10-21T09:00:01.000Z',
+      },
+    ]
+    expect(parse({ kind: 'jobs.changed', jobs })).toEqual({ kind: 'jobs.changed', jobs })
+    expect(parse({ kind: 'jobs.changed', jobs: [] })).toEqual({ kind: 'jobs.changed', jobs: [] })
+  })
+
   it('parses the text once', () => {
     const json = vi.spyOn(JSON, 'parse')
     parseLiveMessage('{"kind":"shells.changed","taskId":"T-0001"}')
@@ -134,6 +156,8 @@ describe('parseLiveMessage', () => {
     ['a delete message without an id', '{"kind":"task.deleted"}'],
     ['a shells message with an id that is not text', '{"kind":"shells.changed","taskId":3}'],
     ['an activity message without an activity', '{"kind":"activity.changed","taskId":"T-0001"}'],
+    ['a jobs message without jobs', '{"kind":"jobs.changed"}'],
+    ['a jobs message with a job that has no label', '{"kind":"jobs.changed","jobs":[{"id":"a"}]}'],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
   })
@@ -283,6 +307,28 @@ describe('applyLiveMessages', () => {
 
     applyLiveMessages(queryClient, [{ kind: 'task', task, logged: false }])
 
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the last list of background jobs of the batch', () => {
+    const queryClient = client()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const job: Job = {
+      id: 'job-1',
+      kind: 'workspace',
+      label: 'Pushing',
+      taskId: 'T-0001',
+      startedAt: '2026-10-21T09:00:00.000Z',
+    }
+
+    applyLiveMessages(queryClient, [{ kind: 'jobs.changed', jobs: [job] }])
+    expect(queryClient.getQueryData(JOBS_KEY)).toEqual([job])
+
+    applyLiveMessages(queryClient, [
+      { kind: 'jobs.changed', jobs: [job] },
+      { kind: 'jobs.changed', jobs: [] },
+    ])
+    expect(queryClient.getQueryData(JOBS_KEY)).toEqual([])
     expect(invalidate).not.toHaveBeenCalled()
   })
 

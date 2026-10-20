@@ -7,12 +7,16 @@ import {
   Keyboard,
   type LucideIcon,
 } from 'lucide-react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '../../components/ui/IconButton'
 import { Menu, type MenuItem } from '../../components/ui/Menu'
+import { Spinner } from '../../components/ui/Spinner'
 import { ICON } from '../../components/ui/styles'
+import { useNow } from '../../hooks/useNow'
+import type { Job } from '../../lib/api'
 import { shortcutOf } from '../../lib/commands'
 import { AccountMenu } from './AccountMenu'
+import { jobRows, jobsLabel } from './background-jobs'
 import {
   condense,
   forcedByWidth,
@@ -39,6 +43,9 @@ type StatusBarProps = {
   liveStatus: LiveStatus
   running: number
   needsYou: number
+  // The daemon's background jobs that run now, oldest first.
+  jobs: readonly Job[]
+  onOpenTask: (taskId: string) => void
   onFilterRunning: () => void
   onNeedsYou: () => void
   onRepos: () => void
@@ -59,11 +66,83 @@ type Entry = {
   tip: string
   icon?: LucideIcon
   dot?: 'live' | 'wait'
+  // A spinner in place of the icon.
+  busy?: boolean
   tone?: 'signal'
   onSelect?: () => void
+  // A list that opens from the item, by the time it is now.
+  menu?: (now: Date) => MenuItem[]
 }
 
-function BarItem({ entry, iconOnly }: { entry: Entry; iconOnly: boolean }) {
+const LEFT = ['live', 'running', 'needs', 'jobs']
+
+// A status item that opens a list. Its own part, so the clock re-renders only it.
+function BarMenu({
+  entry,
+  menu,
+  content,
+  className,
+  iconOnly,
+}: {
+  entry: Entry
+  menu: (now: Date) => MenuItem[]
+  content: ReactNode
+  className: string
+  iconOnly: boolean
+}) {
+  const now = useNow()
+  return (
+    <Menu
+      label={entry.label}
+      items={menu(now)}
+      trigger={(props) => (
+        <button
+          type="button"
+          {...props}
+          aria-label={iconOnly ? entry.label : undefined}
+          data-item={entry.id}
+          data-tip={entry.tip}
+          data-tip-side="top"
+          className={`${className} hover:bg-hover hover:text-ink focus-visible:outline-2`}
+        >
+          {content}
+        </button>
+      )}
+    />
+  )
+}
+
+// An item that goes away while it, or its open menu, has focus, such as the jobs item with its last
+// job, would leave focus on the page. Focus moves to the bar's first other control, as F6 does.
+// The cleanup runs before React removes the item, so the focus is still there to see.
+function useFocusOnRemove(bar: RefObject<HTMLElement | null>, id: string) {
+  useLayoutEffect(() => {
+    return () => {
+      const own = bar.current?.querySelector(`[data-item="${id}"]`)
+      const active = document.activeElement
+      if (!own || !active) {
+        return
+      }
+      const inOpenMenu =
+        own.getAttribute('aria-expanded') === 'true' && active.closest('[role="menu"]') !== null
+      if (own.contains(active) || inOpenMenu) {
+        const others = [...(bar.current?.querySelectorAll<HTMLElement>('button') ?? [])]
+        others.find((button) => !own.contains(button))?.focus()
+      }
+    }
+  }, [bar, id])
+}
+
+function BarItem({
+  entry,
+  iconOnly,
+  bar,
+}: {
+  entry: Entry
+  iconOnly: boolean
+  bar: RefObject<HTMLElement | null>
+}) {
+  useFocusOnRemove(bar, entry.id)
   const Icon = entry.icon
   const content = (
     <>
@@ -73,6 +152,7 @@ function BarItem({ entry, iconOnly }: { entry: Entry; iconOnly: boolean }) {
           className={`size-1.5 shrink-0 rounded-full ${entry.dot === 'live' ? 'bg-add' : 'bg-signal'}`}
         />
       )}
+      {entry.busy === true && <Spinner size={ICON.sm} />}
       {Icon !== undefined && <Icon size={ICON.sm} aria-hidden="true" className="shrink-0" />}
       {!iconOnly && <span>{entry.label}</span>}
     </>
@@ -80,12 +160,24 @@ function BarItem({ entry, iconOnly }: { entry: Entry; iconOnly: boolean }) {
   const className = `flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs whitespace-nowrap ${
     entry.tone === 'signal' ? 'text-signal' : 'text-muted'
   }`
+  if (entry.menu !== undefined) {
+    return (
+      <BarMenu
+        entry={entry}
+        menu={entry.menu}
+        content={content}
+        className={className}
+        iconOnly={iconOnly}
+      />
+    )
+  }
   if (entry.onSelect === undefined) {
     // A status, not a control.
     return (
       <span
         role="status"
         aria-label={iconOnly ? entry.label : undefined}
+        data-item={entry.id}
         data-tip={entry.tip}
         data-tip-side="top"
         className={className}
@@ -98,6 +190,7 @@ function BarItem({ entry, iconOnly }: { entry: Entry; iconOnly: boolean }) {
     <button
       type="button"
       aria-label={iconOnly ? entry.label : undefined}
+      data-item={entry.id}
       data-tip={entry.tip}
       data-tip-side="top"
       onClick={entry.onSelect}
@@ -114,6 +207,8 @@ export function StatusBar({
   liveStatus,
   running,
   needsYou,
+  jobs,
+  onOpenTask,
   onFilterRunning,
   onNeedsYou,
   onRepos,
@@ -128,6 +223,7 @@ export function StatusBar({
   const [level, setLevel] = useState(0)
   const [barWidth, setBarWidth] = useState(0)
   const lastKey = useRef('')
+  const jobsText = jobsLabel(jobs)
 
   const entries: Entry[] = [
     {
@@ -156,6 +252,18 @@ export function StatusBar({
           },
         ]
       : []),
+    ...(jobsText === null
+      ? []
+      : [
+          {
+            id: 'jobs',
+            priority: 4,
+            label: jobsText,
+            tip: 'Show background jobs',
+            busy: true,
+            menu: (now: Date) => jobRows(jobs, now, onOpenTask),
+          },
+        ]),
     {
       id: 'repos',
       priority: 6,
@@ -200,6 +308,8 @@ export function StatusBar({
     id: entry.id,
     priority: entry.priority,
     hasLabel: true,
+    // The jobs show that something runs, so they never hide in the menu.
+    folds: entry.id !== 'jobs',
   }))
   const maxLevel = maxCondenseLevel(statusItems)
   const { iconOnly, folded } = mergeCondensed(forcedByWidth(width), condense(statusItems, level))
@@ -233,8 +343,8 @@ export function StatusBar({
     return () => observer.disconnect()
   }, [])
 
-  const left = entries.filter((entry) => ['live', 'running', 'needs'].includes(entry.id))
-  const right = entries.filter((entry) => !['live', 'running', 'needs'].includes(entry.id))
+  const left = entries.filter((entry) => LEFT.includes(entry.id))
+  const right = entries.filter((entry) => !LEFT.includes(entry.id))
   const overflow: MenuItem[] = entries
     .filter((entry) => folded.has(entry.id))
     .map((entry) => ({
@@ -252,13 +362,13 @@ export function StatusBar({
       {left
         .filter((entry) => !folded.has(entry.id))
         .map((entry) => (
-          <BarItem key={entry.id} entry={entry} iconOnly={iconOnly.has(entry.id)} />
+          <BarItem key={entry.id} entry={entry} iconOnly={iconOnly.has(entry.id)} bar={bar} />
         ))}
       <span className="flex-1" />
       {right
         .filter((entry) => !folded.has(entry.id))
         .map((entry) => (
-          <BarItem key={entry.id} entry={entry} iconOnly={iconOnly.has(entry.id)} />
+          <BarItem key={entry.id} entry={entry} iconOnly={iconOnly.has(entry.id)} bar={bar} />
         ))}
       {overflow.length > 0 && (
         <Menu label="More status items" items={overflow} icon={Ellipsis} tipSide="top" />

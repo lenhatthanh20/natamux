@@ -86,6 +86,16 @@ export type RemoveWorkspaceResult = {
   branchDeleted: boolean
 }
 
+// Work the daemon does in the background that a person waits on, such as a push. Oldest first in
+// GET /jobs and in the live feed. `taskId` null: the job is about no one task.
+export type Job = {
+  id: string
+  kind: string
+  label: string
+  taskId: string | null
+  startedAt: string
+}
+
 // One task's part of GET /activity, which the live feed sends too: the line of each terminal, and
 // the newest of them. Null: no line.
 export type TaskActivity = { lines: Record<string, string>; latest: string | null }

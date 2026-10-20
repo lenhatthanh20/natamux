@@ -1,6 +1,6 @@
 import { type Task, taskSchema } from '@natamux/core'
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
-import { type AgentActivity, readTaskActivity } from './api'
+import { type AgentActivity, type Job, readJobs, readTaskActivity } from './api'
 
 export function liveSocketUrl(
   location: Pick<Location, 'protocol' | 'host'>,
@@ -26,6 +26,8 @@ export type LiveMessage =
     }
   | { kind: 'shells.changed'; taskId: string }
   | { kind: 'workspace.dirty'; taskId: string }
+  // The background jobs that run now, all of them.
+  | { kind: 'jobs.changed'; jobs: Job[] }
   // The daemon skipped this dashboard while it was behind, so anything may have changed.
   | { kind: 'resync' }
 
@@ -45,7 +47,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
     const logged = 'kind' in message && message.kind === 'task.updated'
     return parsed.success ? { kind: 'task', task: parsed.data, logged } : undefined
   }
-  const { kind, taskId, activity } = message as Record<string, unknown>
+  const { kind, taskId, activity, jobs } = message as Record<string, unknown>
   const id = typeof taskId === 'string' ? taskId : null
   switch (kind) {
     case 'repos.changed':
@@ -58,6 +60,12 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
       return id === null ? undefined : { kind: 'shells.changed', taskId: id }
     case 'workspace.dirty':
       return id === null ? undefined : { kind: 'workspace.dirty', taskId: id }
+    case 'jobs.changed':
+      try {
+        return { kind: 'jobs.changed', jobs: readJobs(jobs) }
+      } catch {
+        return undefined
+      }
     case 'activity.changed':
       try {
         return id === null
@@ -75,6 +83,7 @@ export function parseLiveMessage(text: string): LiveMessage | undefined {
 export const FALLBACK_POLL_MS = 60_000
 
 export const ACTIVITY_KEY = ['activity']
+export const JOBS_KEY = ['jobs']
 export const DIFFSTATS_KEY = ['diffstats']
 // The sizes of all tasks come in one read, and the daemon runs git for each workspace that changed.
 // With busy agents some workspace always changes, so the sizes are read at most once per this time.
@@ -138,8 +147,12 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   let activity = client.getQueryData<AgentActivity>(ACTIVITY_KEY)
   const before = activity
   let sizesChanged = false
+  let jobs: Job[] | undefined
   for (const message of messages) {
-    if (message.kind === 'activity.changed' && activity !== undefined) {
+    if (message.kind === 'jobs.changed') {
+      // Each message holds the whole list, so the last one wins.
+      jobs = message.jobs
+    } else if (message.kind === 'activity.changed' && activity !== undefined) {
       activity = withTaskActivity(activity, message.taskId, message.lines, message.latest)
     } else if (message.kind === 'shells.changed') {
       add(['task-shells', message.taskId])
@@ -163,6 +176,9 @@ export function applyLiveMessages(client: QueryClient, messages: readonly LiveMe
   // Before the first read there is nothing to change: that read brings the activity.
   if (activity !== before) {
     client.setQueryData<AgentActivity>(ACTIVITY_KEY, activity)
+  }
+  if (jobs !== undefined) {
+    client.setQueryData<Job[]>(JOBS_KEY, jobs)
   }
   for (const queryKey of stale.values()) {
     void client.invalidateQueries({ queryKey })

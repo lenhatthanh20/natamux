@@ -1,5 +1,5 @@
 import type { SkillInfo, SkillOrigin } from '@natamux/core'
-import type { TaskActivity } from './types'
+import type { Job, TaskActivity } from './types'
 
 const SKILL_ORIGINS: readonly SkillOrigin[] = ['project', 'plugin', 'user']
 
@@ -30,6 +30,26 @@ export function asRecord(value: unknown): Record<string, unknown> {
     throw new Error('The daemon sent an answer this dashboard does not understand.')
   }
   return Object.fromEntries(Object.entries(value))
+}
+
+// The jobs of GET /jobs and of a jobs.changed message.
+export function readJobs(value: unknown): Job[] {
+  if (!Array.isArray(value)) {
+    throw new Error('The daemon sent an answer this dashboard does not understand.')
+  }
+  return value.map((item) => {
+    const { id, kind, label, taskId, startedAt } = asRecord(item)
+    if (
+      typeof id !== 'string' ||
+      typeof kind !== 'string' ||
+      typeof label !== 'string' ||
+      (typeof taskId !== 'string' && taskId !== null) ||
+      typeof startedAt !== 'string'
+    ) {
+      throw new Error('The daemon sent an answer this dashboard does not understand.')
+    }
+    return { id, kind, label, taskId, startedAt }
+  })
 }
 
 export function readTaskActivity(terminals: unknown): TaskActivity {

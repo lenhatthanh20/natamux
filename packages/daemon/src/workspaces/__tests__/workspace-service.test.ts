@@ -22,6 +22,7 @@ import type { RunGh } from '../../git/gh.js'
 import { worktreeState } from '../../git/worktrees.js'
 import { RepoService } from '../../projects/repo-service.js'
 import { type DaemonMessage, EventBus } from '../../shared/event-bus.js'
+import { Jobs } from '../../shared/jobs.js'
 import { excludeStageDir } from '../../stages/stage-files.js'
 import { archiveDir, STAGE_DIR } from '../../tasks/task-files.js'
 import { TaskIndex } from '../../tasks/task-index.js'
@@ -1372,6 +1373,36 @@ describe('commit, push and pull request', () => {
     const task = tasks.createTask({ title: 'Fix the bug' })
     await expect(workspaces.commit(task.id, 'x')).rejects.toThrow(WorkspaceConflictError)
     await expect(workspaces.push(task.id)).rejects.toThrow(WorkspaceConflictError)
+  })
+})
+
+describe('background jobs', () => {
+  it('shows a push as a job while it runs, and drops it after, also on failure', async () => {
+    const bus = new EventBus()
+    const sent: DaemonMessage[] = []
+    bus.subscribe((message) => sent.push(message))
+    const jobs = new Jobs(bus)
+    workspaces = new WorkspaceService({
+      dataDir,
+      tasks,
+      repoDir: repo.dir,
+      worktreesDir: join(repo.root, 'worktrees'),
+      jobs,
+    })
+    const task = await workspaces.create(tasks.createTask({ title: 'Fix the bug' }).id)
+    sent.length = 0
+
+    // No origin, so the push fails.
+    const pushing = workspaces.push(task.id)
+    expect(jobs.list()).toEqual([expect.objectContaining({ label: 'Pushing', taskId: task.id })])
+    // A second change is refused while the first runs, and makes no job.
+    await expect(workspaces.commit(task.id, 'x')).rejects.toThrow(WorkspaceConflictError)
+    expect(jobs.list()).toHaveLength(1)
+    await expect(pushing).rejects.toThrow()
+
+    expect(jobs.list()).toEqual([])
+    const changes = sent.filter((message) => message.kind === 'jobs.changed')
+    expect(changes.map((message) => message.jobs.length)).toEqual([1, 0])
   })
 })
 

@@ -2,6 +2,16 @@ import type { Task, TaskEvent } from '@natamux/core'
 
 export type AgentActivity = { text: string; at: string }
 
+// Work the daemon does in the background that a person waits on, such as a push or a CI round.
+// Here and not in jobs.ts, so the two files do not import each other.
+export type Job = {
+  id: string
+  kind: string
+  label: string
+  taskId: string | null
+  startedAt: string
+}
+
 export type DaemonMessage =
   | { kind: 'task.created'; task: Task }
   // `moved`: the task entered another step.
@@ -20,6 +30,8 @@ export type DaemonMessage =
   // Files in the task's workspace may have changed. A few soon, then at most one per task in
   // DIRTY_MIN_INTERVAL_MS while changes go on (see WorkspaceService.touch).
   | { kind: 'workspace.dirty'; taskId: string }
+  // The background jobs that run now, after a job started or ended (see Jobs).
+  | { kind: 'jobs.changed'; jobs: Job[] }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

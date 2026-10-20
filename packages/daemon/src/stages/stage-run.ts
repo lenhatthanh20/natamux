@@ -2,6 +2,7 @@ import type { Stage, Step, Task, TaskEvent, TaskState } from '@natamux/core'
 import type { AgentRunner } from '../agents/agent-runner.js'
 import type { SkillContext } from '../agents/agent-skills.js'
 import type { RunGh } from '../git/gh.js'
+import type { Jobs } from '../shared/jobs.js'
 import type { ApplyEventResult } from '../tasks/task-inputs.js'
 import type { TaskService } from '../tasks/task-service.js'
 import type { OpenShells } from '../terminals/open-shells.js'
@@ -84,6 +85,8 @@ export type StageRun = {
   readonly home: string
   readonly checkCi: (input: { worktree: string; branch: string }) => Promise<CiResult>
   readonly openShells: OpenShells | undefined
+  // The local checks and CI rounds show as background jobs.
+  readonly jobs: Jobs
   // Terminals whose agent reported a stage done, with that stage: the turn end that follows the
   // report is not a "stopped early". Kept by terminal, since the task may be at the next stage
   // when the turn ends.

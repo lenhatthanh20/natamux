@@ -223,7 +223,7 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
     templatesQuery,
     templateId,
   })
-  const diffStats = useWorkQueries(api, sort)
+  const { diffStats, jobs } = useWorkQueries(api, sort)
   const {
     searchedTasks,
     visibleTasks,
@@ -414,6 +414,8 @@ export function Dashboard({ token, onSignOut, onUnauthorized }: DashboardProps) 
               liveStatus={liveStatus}
               running={runningCount}
               needsYou={waitingCount}
+              jobs={jobs}
+              onOpenTask={openTask}
               onFilterRunning={() => showState('running')}
               onNeedsYou={() => actions.openJump('needs-you')}
               onRepos={() => setReposOpen(true)}

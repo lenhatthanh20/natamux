@@ -19,6 +19,7 @@ import { fetchUpstream, startRef } from '../git/graph.js'
 import { addWorktree, hasSubmodules, removeWorktree, worktreeState } from '../git/worktrees.js'
 import type { RepoService } from '../projects/repo-service.js'
 import type { EventBus } from '../shared/event-bus.js'
+import { Jobs } from '../shared/jobs.js'
 import { archiveStageFiles } from '../stages/stage-files.js'
 import type { TaskService } from '../tasks/task-service.js'
 import { branchNameFor, deleteFinishedBranch } from './branch-name.js'
@@ -53,6 +54,8 @@ type WorkspaceServiceOptions = {
   now?: () => number
   // Dashboards hear when the files of a workspace may have changed.
   bus?: EventBus
+  // Each change of a workspace shows as a background job.
+  jobs?: Jobs
 }
 
 export class WorkspaceService {
@@ -64,6 +67,7 @@ export class WorkspaceService {
   private readonly onCreated: (task: Task) => void
   private readonly closeTerminals: (taskId: string) => unknown
   private readonly busy = new Set<string>()
+  private readonly jobs: Jobs
   private readonly stats: DiffStats
   private readonly reads: WorkspaceChanges
   private readonly dirty: DirtyTracker
@@ -77,6 +81,7 @@ export class WorkspaceService {
     this.worktreesDir = options.worktreesDir
     this.onCreated = options.onCreated ?? (() => undefined)
     this.closeTerminals = options.closeTerminals ?? (() => undefined)
+    this.jobs = options.jobs ?? new Jobs()
     const now = options.now ?? Date.now
     // The parts call back through the service, so a spy on touch sees their calls too.
     const workspaceOf = (taskId: string) => this.workspaceOf(taskId)
@@ -88,7 +93,7 @@ export class WorkspaceService {
       workspaceOf,
       repoDirOf,
       touch: (taskId) => this.touch(taskId),
-      exclusive: (taskId, work) => this.exclusive(taskId, work),
+      exclusive: (taskId, label, work) => this.exclusive(taskId, label, work),
     })
     this.dirty = new DirtyTracker(this.tasks, options.bus)
     this.publishing = new WorkspacePublish({
@@ -101,7 +106,7 @@ export class WorkspaceService {
       runAgentOnce: options.runAgentOnce ?? runAgentOnce,
       log: options.log ?? ((message) => console.warn(message)),
       workspaceOf,
-      exclusive: (taskId, work) => this.exclusive(taskId, work),
+      exclusive: (taskId, label, work) => this.exclusive(taskId, label, work),
       committed: (taskId) => this.reads.dropRollback(taskId),
     })
   }
@@ -132,7 +137,7 @@ export class WorkspaceService {
   // as its remote has it now. The local branch when it has commits that are not pushed, or has no
   // remote. HEAD when the repository has no branch to start from.
   async create(taskId: string, base?: string): Promise<Task> {
-    return this.exclusive(taskId, async () => {
+    return this.exclusive(taskId, 'Creating worktree', async () => {
       const task = this.tasks.getTask(taskId)
       if (task.workspace !== null) {
         throw new WorkspaceConflictError(`${taskId} already has a workspace at ${task.workspace}`)
@@ -184,7 +189,7 @@ export class WorkspaceService {
   // Removes the worktree folder. The branch goes too when it is fully merged, otherwise it stays.
   // A folder that was already deleted outside Natamux is only cleared from git and the task.
   async remove(taskId: string, options: { deleteBranch: boolean }): Promise<RemoveWorkspaceResult> {
-    return this.exclusive(taskId, async () => {
+    return this.exclusive(taskId, 'Removing worktree', async () => {
       const task = this.tasks.getTask(taskId)
       if (task.workspace === null) {
         throw new WorkspaceConflictError(`${taskId} has no workspace`)
@@ -330,13 +335,13 @@ export class WorkspaceService {
     return task.workspace
   }
 
-  private async exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T> {
+  private async exclusive<T>(taskId: string, label: string, work: () => Promise<T>): Promise<T> {
     if (this.busy.has(taskId)) {
       throw new WorkspaceConflictError(`Another workspace change for ${taskId} is still running`)
     }
     this.busy.add(taskId)
     try {
-      return await work()
+      return await this.jobs.run({ kind: 'workspace', label, taskId }, work)
     } finally {
       this.busy.delete(taskId)
       // Every change of a workspace runs here, so the next read sees it, even after a failure.

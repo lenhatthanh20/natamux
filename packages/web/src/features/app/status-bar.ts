@@ -4,6 +4,8 @@ export type StatusItem = {
   priority: number
   // False for items that are only an icon or a dot already.
   hasLabel: boolean
+  // False for items that never move into the "..." menu.
+  folds?: boolean
 }
 
 export type Condensed = {
@@ -23,7 +25,9 @@ export function condenseSteps(
     ...lowFirst
       .filter((item) => item.hasLabel)
       .map((item) => ({ id: item.id, kind: 'label' as const })),
-    ...lowFirst.map((item) => ({ id: item.id, kind: 'fold' as const })),
+    ...lowFirst
+      .filter((item) => item.folds !== false)
+      .map((item) => ({ id: item.id, kind: 'fold' as const })),
   ]
 }
 
@@ -56,6 +60,7 @@ export function forcedByWidth(width: number | null): Condensed {
   }
   if (width !== null && width < 1024) {
     iconOnly.add('live')
+    iconOnly.add('jobs')
     folded.add('repos')
     folded.add('import')
     folded.add('notifications')

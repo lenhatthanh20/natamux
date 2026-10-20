@@ -6,6 +6,7 @@ import {
   type ProjectSettings,
   type Stage,
   type StageBranch,
+  stageName,
   type Step,
   type Task,
 } from '@natamux/core'
@@ -19,7 +20,7 @@ import {
 import { type FakePty, fakeSpawner } from '../../__tests__/terminal-fake.fixture.js'
 import { trustPaths } from '../../agents/agent-launch.js'
 import { AgentRunner } from '../../agents/agent-runner.js'
-import { EventBus } from '../../shared/event-bus.js'
+import { EventBus, type Job } from '../../shared/event-bus.js'
 import { decodeAttachments } from '../../tasks/attachments.js'
 import { archiveDir, STAGE_DIR } from '../../tasks/task-files.js'
 import { isTaskEnded } from '../../tasks/task-helpers.js'
@@ -176,6 +177,17 @@ async function expectWritten(pty: FakePty | undefined, text: string): Promise<vo
 }
 
 // A task of a pipeline that starts with Implement, ready and in its workspace, so Implement runs.
+// The job lists of the jobs.changed messages from now on.
+function jobLists(): Job[][] {
+  const lists: Job[][] = []
+  bus.subscribe((message) => {
+    if (message.kind === 'jobs.changed') {
+      lists.push(message.jobs)
+    }
+  })
+  return lists
+}
+
 async function implementing(stage = 'implement'): Promise<Task> {
   const task = await created({ title: 'Export', agent: 'claude-code' })
   tasks.applyEvent(task.id, {
@@ -830,6 +842,29 @@ describe('agent stages', () => {
     expect(tasks.getTask(task.id).state).toBe('needs-input')
   })
 
+  it('shows the local checks as a background job while they run', async () => {
+    settings = {
+      ...DEFAULT_PROJECT_SETTINGS,
+      stages: [{ id: 'implement', name: 'Build', kind: 'agent', gate: 'manual', check: 'x' }],
+    }
+    let finish: () => void = () => undefined
+    runCommand = () =>
+      new Promise((resolve) => {
+        finish = () => resolve({ code: 0, output: '' })
+      })
+    const task = await implementing()
+    const lists = jobLists()
+
+    const report = runner.act(task.id, 'report', { terminal: '1' })
+    await vi.waitFor(() => expect(lists).toHaveLength(1))
+    expect(lists[0]).toEqual([
+      expect.objectContaining({ kind: 'stage-check', label: 'Checking Build', taskId: task.id }),
+    ])
+    finish()
+    await report
+    expect(lists.at(-1)).toEqual([])
+  })
+
   it('waits for approval when the output has its sections, and drops the turn end after', async () => {
     const task = await withWorkspace((await atSpec()).id)
     writeWorking(
@@ -1429,6 +1464,20 @@ describe('a check on CI', () => {
 
     expect(tasks.getTask(task.id).state).toBe('review')
     expect(lastOf(task.id, 'stage.checked')?.payload.passes).toContain('CI passed: CI u')
+  })
+
+  it('shows the CI round as a background job until CI answers', async () => {
+    const lists = jobLists()
+    const task = await reported(true)
+
+    const ciJob = (list: Job[] | undefined) => list?.find((job) => job.kind === 'ci')
+    expect(ciJob(lists.at(-1))).toMatchObject({
+      label: `Waiting for CI on ${stageName({ id: 'implement' })}`,
+      taskId: task.id,
+    })
+    finishCi({ passed: true, reasons: [], passes: [], final: false })
+    await runner.settle()
+    expect(lists.at(-1)).toEqual([])
   })
 
   const failure: CiResult = {

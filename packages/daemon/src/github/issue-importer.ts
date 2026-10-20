@@ -1,5 +1,6 @@
 import { type GitHubIssue, importedFromLine, type Task } from '@natamux/core'
 import { GitHubError, type RunGh, runGh } from '../git/gh.js'
+import { Jobs } from '../shared/jobs.js'
 import type { TaskService } from '../tasks/task-service.js'
 
 export const MAX_ISSUES = 100
@@ -41,6 +42,7 @@ type IssueImporterOptions = {
   // The folder of a repository (null: the default one), so gh knows which repository to ask.
   repoPath: (repo: string | null) => string
   gh?: RunGh
+  jobs?: Jobs
 }
 
 // Turns open GitHub issues into draft tasks. An issue becomes a task once.
@@ -48,11 +50,13 @@ export class IssueImporter {
   private readonly tasks: TaskService
   private readonly repoPath: (repo: string | null) => string
   private readonly gh: RunGh
+  private readonly jobs: Jobs
 
   constructor(options: IssueImporterOptions) {
     this.tasks = options.tasks
     this.repoPath = options.repoPath
     this.gh = options.gh ?? runGh
+    this.jobs = options.jobs ?? new Jobs()
   }
 
   async list(repo: string | null = null): Promise<GitHubIssue[]> {
@@ -75,6 +79,12 @@ export class IssueImporter {
 
   // Makes a task for each issue number that is open and not imported yet.
   async import(numbers: readonly number[], repo: string | null = null): Promise<Task[]> {
+    return this.jobs.run({ kind: 'issue-import', label: 'Importing issues', taskId: null }, () =>
+      this.importNow(numbers, repo),
+    )
+  }
+
+  private async importNow(numbers: readonly number[], repo: string | null): Promise<Task[]> {
     const wanted = new Set(numbers)
     const issues = (await this.list(repo)).filter(
       (issue) => wanted.has(issue.number) && issue.taskId === null,
