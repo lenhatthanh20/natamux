@@ -135,7 +135,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     return reply.code(201).send({ tasks: await fanOut(parts, id, { count, start }) })
   })
 
-  // A task, its worktree and its agent in one step.
+  // A task, its worktree and its agent in one step. The answer comes before the worktree is made.
   app.post('/workspaces', { bodyLimit: NEW_TASK_BODY_LIMIT }, async (request, reply) => {
     const { attachments, ...input } = newWorkspaceBodySchema.parse(request.body)
     // Before the task is made, so a missing repository or a file over a limit leaves no task.
@@ -148,8 +148,10 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       stages: options.stages,
     }
     const task = await newWorkspace(parts, { ...input, attachments: files })
-    return reply.code(201).send({ task })
+    return reply.code(202).send({ task })
   })
+
+  app.get('/workspaces/preparing', async () => ({ preparing: options.workspaces.preparing() }))
 
   app.post('/tasks/:id/commit', async (request) => {
     const { id } = taskParamsSchema.parse(request.params)

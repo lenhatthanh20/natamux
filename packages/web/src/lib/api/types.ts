@@ -71,6 +71,9 @@ export type AgentActivity = {
   byTerminal: Record<string, Record<string, string>>
 }
 
+// The step a new workspace is at, while the daemon makes it.
+export type PreparingStep = 'fetch' | 'checkout'
+
 // The open shells of a task: the lane of each one where an agent runs, and the program in front
 // of each one, or null where the platform does not tell. `restoring`: the shells that come back
 // after a restart, with the agent each one comes back with (null: a plain shell).

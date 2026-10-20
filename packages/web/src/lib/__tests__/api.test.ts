@@ -448,6 +448,20 @@ describe('createApi', () => {
   })
 })
 
+describe('listPreparing', () => {
+  it('reads the step of each workspace being made, and drops a step it does not know', async () => {
+    const { calls, fetchFunction } = fakeFetch(() =>
+      json({ preparing: { 'T-0001': 'fetch', 'T-0002': 'checkout', 'T-0003': 'later' } }),
+    )
+
+    expect(await createApi('secret', fetchFunction).listPreparing()).toEqual({
+      'T-0001': 'fetch',
+      'T-0002': 'checkout',
+    })
+    expect(calls[0]?.url).toBe('/api/workspaces/preparing')
+  })
+})
+
 describe('getFileImage', () => {
   it('sends the token and the encoded path and side, and gives the bytes', async () => {
     const headers = { 'content-type': 'image/png' }
@@ -518,7 +532,7 @@ describe('attachments', () => {
   })
 
   it('sends the attachments of a new workspace in its JSON', async () => {
-    const { calls, fetchFunction } = fakeFetch(() => json({ task }, 201))
+    const { calls, fetchFunction } = fakeFetch(() => json({ task }, 202))
     const api = createApi('secret', fetchFunction)
     const attachments = [{ name: 'a.png', data: 'AA==' }]
 

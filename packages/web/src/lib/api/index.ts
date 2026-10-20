@@ -8,13 +8,14 @@ import { terminalsApi } from './terminals'
 import type { FetchFunction } from './types'
 
 export { ApiError, isConflict, isUnauthorized } from './errors'
-export { readTaskActivity } from './parse'
+export { isPreparingStep, readTaskActivity } from './parse'
 export type {
   AgentActivity,
   BranchList,
   FetchFunction,
   LoadedSettings,
   NewWorkspaceInput,
+  PreparingStep,
   RemoveWorkspaceResult,
   SavedSettings,
   SendEventResult,

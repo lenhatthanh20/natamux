@@ -273,6 +273,9 @@ function installDaemon(
       repos = repos.filter((repo) => repo.id !== id)
       return new Response(null, { status: 204 })
     }
+    if (path === '/api/workspaces/preparing' && method === 'GET') {
+      return json({ preparing: {} })
+    }
     if (path === '/api/diffstats' && method === 'GET') {
       return json({ stats: { 'T-0001': { files: 2, added: 12, removed: 3 } } })
     }

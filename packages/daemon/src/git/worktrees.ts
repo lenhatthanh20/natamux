@@ -1,8 +1,11 @@
 import { existsSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { git } from './exec.js'
+import { git, withGitConfig } from './exec.js'
 import { lines } from './graph.js'
+
+// One checkout worker per CPU: a big repository checks out much faster. Git before 2.32 ignores it.
+const PARALLEL_CHECKOUT: [string, string][] = [['checkout.workers', '0']]
 
 // Makes a new branch for the worktree, from `baseRef` or HEAD. With `existing`, checks out the
 // branch that is there instead, with the work it has. A new branch follows no branch: started
@@ -20,6 +23,7 @@ export async function addWorktree(
     existing
       ? ['worktree', 'add', worktreePath, branch]
       : ['worktree', 'add', '--no-track', '-b', branch, worktreePath, ...base],
+    { env: withGitConfig(process.env, PARALLEL_CHECKOUT) },
   )
 }
 

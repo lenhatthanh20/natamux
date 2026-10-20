@@ -50,6 +50,7 @@ const EVENT_SENTENCE: Record<EventType, string> = {
   'stage.ci-set': 'CI check choice changed',
   'stage.ci-started': 'CI check started',
   'stage.skip-set': 'Skip choice changed',
+  'workspace.failed': 'Workspace failed',
 }
 
 // A CI send back can go to the stage it came from, so "an earlier stage" would be wrong for it.
@@ -99,11 +100,16 @@ export type ActivityLine = {
   count: number
   // The newest event of the run: its time is the time of the line.
   at: string
-  // More about the newest event, such as the background work an agent waits for.
+  // More about the newest event, such as the background work an agent waits for, or why a
+  // workspace could not be made.
   detail?: string
 }
 
 function detailOf(event: TaskEvent): string | undefined {
+  const message = event.payload.message
+  if (event.type === 'workspace.failed') {
+    return typeof message === 'string' && message !== '' ? message : undefined
+  }
   const waitingFor = event.payload.waitingFor
   if (event.type !== 'agent.waiting' || !Array.isArray(waitingFor)) {
     return undefined

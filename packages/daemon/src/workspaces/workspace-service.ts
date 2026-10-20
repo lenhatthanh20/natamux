@@ -14,11 +14,12 @@ import { DEFAULT_PROGRAMS, type LaunchableAgent } from '../agents/agent-launch.j
 import { type BranchList, listBranches } from '../git/branches.js'
 import { listChanges } from '../git/changes.js'
 import { type RunAgentOnce, runAgentOnce } from '../git/commit-drafter.js'
+import { errorText } from '../git/exec.js'
 import { type RunGh, runGh } from '../git/gh.js'
 import { fetchUpstream, startRef } from '../git/graph.js'
 import { addWorktree, hasSubmodules, removeWorktree, worktreeState } from '../git/worktrees.js'
 import type { RepoService } from '../projects/repo-service.js'
-import type { EventBus } from '../shared/event-bus.js'
+import type { EventBus, PreparingStep } from '../shared/event-bus.js'
 import { archiveStageFiles } from '../stages/stage-files.js'
 import type { TaskService } from '../tasks/task-service.js'
 import { branchNameFor, deleteFinishedBranch } from './branch-name.js'
@@ -27,6 +28,9 @@ import { DirtyTracker } from './dirty-tracker.js'
 import { WorkspaceChanges } from './workspace-changes.js'
 import { type RemoveWorkspaceResult, WorkspaceConflictError } from './workspace-errors.js'
 import { WorkspacePublish } from './workspace-publish.js'
+
+// How long each step of a new workspace took, in ms.
+type StepTimes = Partial<Record<PreparingStep, number>>
 
 type WorkspaceServiceOptions = {
   // Where the stage files of a task are archived.
@@ -48,7 +52,7 @@ type WorkspaceServiceOptions = {
   // The command of each agent, for the run that drafts a commit message. Default: its usual name.
   programOf?: (agent: LaunchableAgent) => string
   runAgentOnce?: RunAgentOnce
-  // Where a failed draft is written down. Default: console.warn.
+  // Where a failed draft and the times of a new workspace are written down. Default: console.warn.
   log?: (message: string) => void
   now?: () => number
   // Dashboards hear when the files of a workspace may have changed.
@@ -64,6 +68,12 @@ export class WorkspaceService {
   private readonly onCreated: (task: Task) => void
   private readonly closeTerminals: (taskId: string) => unknown
   private readonly busy = new Set<string>()
+  // The tasks whose workspace is being made, and the step each one is at.
+  private readonly steps = new Map<string, PreparingStep>()
+  private readonly pending = new Set<Promise<unknown>>()
+  private readonly bus: EventBus | undefined
+  private readonly log: (message: string) => void
+  private readonly now: () => number
   private readonly stats: DiffStats
   private readonly reads: WorkspaceChanges
   private readonly dirty: DirtyTracker
@@ -78,6 +88,9 @@ export class WorkspaceService {
     this.onCreated = options.onCreated ?? (() => undefined)
     this.closeTerminals = options.closeTerminals ?? (() => undefined)
     const now = options.now ?? Date.now
+    this.now = now
+    this.bus = options.bus
+    this.log = options.log ?? ((message) => console.warn(message))
     // The parts call back through the service, so a spy on touch sees their calls too.
     const workspaceOf = (taskId: string) => this.workspaceOf(taskId)
     const repoDirOf = (repo: string | null) => this.repoDirOf(repo)
@@ -99,7 +112,7 @@ export class WorkspaceService {
         (async (task) => task.description.trim() || `Task ${task.id} in Natamux.`),
       programOf: options.programOf ?? ((agent) => DEFAULT_PROGRAMS[agent]),
       runAgentOnce: options.runAgentOnce ?? runAgentOnce,
-      log: options.log ?? ((message) => console.warn(message)),
+      log: this.log,
       workspaceOf,
       exclusive: (taskId, work) => this.exclusive(taskId, work),
       committed: (taskId) => this.reads.dropRollback(taskId),
@@ -141,36 +154,27 @@ export class WorkspaceService {
         throw new WorkspaceConflictError(`${taskId} is ${task.state}, so it gets no workspace`)
       }
 
-      const repoDir = this.repoDirOf(task.repo)
-      const { branches, defaultBranch } = await listBranches(repoDir)
-      if (base !== undefined && !branches.includes(base)) {
-        throw new WorkspaceConflictError(`There is no local branch named ${base}`)
+      // Told at once, so a dashboard that opens the task right after the answer sees it.
+      this.setStep(taskId, 'fetch')
+      const times: StepTimes = {}
+      let made: { repoDir: string; worktreePath: string; branch: string }
+      try {
+        made = await this.addTaskWorktree(task, base, times)
+      } catch (error) {
+        this.endSteps(taskId, times, error)
+        throw error
       }
-      // A workspace removed with its branch kept leaves the task's work there: go on with it.
-      const kept = task.branch !== null && branches.includes(task.branch) ? task.branch : null
-      const worktreePath = this.worktreePathFor(task)
-      const branch = kept ?? branchNameFor(task)
-      if (kept === null) {
-        // A subtask's work is merged into its parent's branch, so it starts there.
-        const parent = task.parentId === null ? null : this.tasks.getTask(task.parentId).branch
-        const from = base ?? (parent !== null && branches.includes(parent) ? parent : defaultBranch)
-        if (from === null) {
-          await addWorktree(repoDir, worktreePath, branch)
-        } else {
-          await fetchUpstream(repoDir, from)
-          await addWorktree(repoDir, worktreePath, branch, (await startRef(repoDir, from)) ?? from)
-        }
-      } else {
-        await addWorktree(repoDir, worktreePath, branch, undefined, true)
-      }
+      const { repoDir, worktreePath, branch } = made
 
       let created: Task
       try {
         created = this.tasks.recordWorkspace(taskId, { workspace: worktreePath, branch })
       } catch (error) {
         await removeWorktree(repoDir, worktreePath).catch(() => undefined)
+        this.endSteps(taskId, times, error)
         throw error
       }
+      this.endSteps(taskId, times)
       // The workspace is made either way; a failing setup shows up in its terminal.
       try {
         this.onCreated(created)
@@ -179,6 +183,65 @@ export class WorkspaceService {
       }
       return created
     })
+  }
+
+  // The git part of create. `times` gets how long each step took.
+  private async addTaskWorktree(
+    task: Task,
+    base: string | undefined,
+    times: StepTimes,
+  ): Promise<{ repoDir: string; worktreePath: string; branch: string }> {
+    const repoDir = this.repoDirOf(task.repo)
+    const { branches, defaultBranch } = await listBranches(repoDir)
+    if (base !== undefined && !branches.includes(base)) {
+      throw new WorkspaceConflictError(`There is no local branch named ${base}`)
+    }
+    // A workspace removed with its branch kept leaves the task's work there: go on with it.
+    const kept = task.branch !== null && branches.includes(task.branch) ? task.branch : null
+    const worktreePath = this.worktreePathFor(task)
+    const branch = kept ?? branchNameFor(task)
+    const step = async (name: PreparingStep, work: () => Promise<unknown>) => {
+      this.setStep(task.id, name)
+      const started = this.now()
+      try {
+        await work()
+      } finally {
+        times[name] = this.now() - started
+      }
+    }
+    if (kept !== null) {
+      await step('checkout', () => addWorktree(repoDir, worktreePath, branch, undefined, true))
+      return { repoDir, worktreePath, branch }
+    }
+    // A subtask's work is merged into its parent's branch, so it starts there.
+    const parent = task.parentId === null ? null : this.tasks.getTask(task.parentId).branch
+    const from = base ?? (parent !== null && branches.includes(parent) ? parent : defaultBranch)
+    if (from === null) {
+      await step('checkout', () => addWorktree(repoDir, worktreePath, branch))
+    } else {
+      await step('fetch', () => fetchUpstream(repoDir, from))
+      const start = (await startRef(repoDir, from)) ?? from
+      await step('checkout', () => addWorktree(repoDir, worktreePath, branch, start))
+    }
+    return { repoDir, worktreePath, branch }
+  }
+
+  // The tasks whose workspace is being made, and the step each one is at.
+  preparing(): Record<string, PreparingStep> {
+    return Object.fromEntries(this.steps)
+  }
+
+  // Work that goes on after its request answered, such as a new workspace (see newWorkspace).
+  background(work: Promise<unknown>): void {
+    const tracked = work.catch(() => undefined).finally(() => this.pending.delete(tracked))
+    this.pending.add(tracked)
+  }
+
+  // For tests: waits until the work in the background is done.
+  async settle(): Promise<void> {
+    while (this.pending.size > 0) {
+      await Promise.allSettled([...this.pending])
+    }
   }
 
   // Removes the worktree folder. The branch goes too when it is fully merged, otherwise it stays.
@@ -328,6 +391,26 @@ export class WorkspaceService {
       throw new WorkspaceConflictError(`${taskId} has no workspace`)
     }
     return task.workspace
+  }
+
+  private setStep(taskId: string, step: PreparingStep): void {
+    // create tells `fetch` before it reads the branches, and again when the fetch starts.
+    if (this.steps.get(taskId) === step) {
+      return
+    }
+    this.steps.set(taskId, step)
+    this.bus?.publish({ kind: 'workspace.preparing', taskId, step })
+  }
+
+  // Tells that the steps of a new workspace ended, and writes down how long each one took.
+  private endSteps(taskId: string, times: StepTimes, error?: unknown): void {
+    if (!this.steps.delete(taskId)) {
+      return
+    }
+    const failed = error === undefined ? {} : { error: errorText(error) }
+    this.bus?.publish({ kind: 'workspace.preparing', taskId, step: null, ...failed })
+    const took = Object.entries(times).map(([name, ms]) => `${name} ${ms} ms`)
+    this.log(`${taskId} workspace: ${[...took, error === undefined ? 'ok' : 'failed'].join(', ')}`)
   }
 
   private async exclusive<T>(taskId: string, work: () => Promise<T>): Promise<T> {

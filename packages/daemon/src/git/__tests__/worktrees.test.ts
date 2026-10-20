@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestRepo, runGit, type TestRepo } from '../../__tests__/git-repo.fixture.js'
-import { GitError } from '../exec.js'
+import { GitError, git } from '../exec.js'
 import {
   addWorktree,
   listWorktreePaths,
@@ -10,6 +10,12 @@ import {
   removeWorktree,
   worktreeState,
 } from '../worktrees.js'
+
+// The real git, watched, to read the settings a call gets.
+vi.mock('../exec.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../exec.js')>()
+  return { ...actual, git: vi.fn(actual.git) }
+})
 
 let repo: TestRepo
 let worktreePath: string
@@ -46,6 +52,14 @@ describe('addWorktree', () => {
     await expect(
       addWorktree(repo.dir, join(repo.root, 'worktrees', 'T-0002'), 'natamux/t-0001-example'),
     ).rejects.toThrow(GitError)
+  })
+
+  it('checks out with one worker per CPU', async () => {
+    await addWorktree(repo.dir, worktreePath, 'natamux/t-0001-example')
+
+    const env = vi.mocked(git).mock.calls.at(-1)?.[2]?.env ?? {}
+    const key = Object.keys(env).find((name) => env[name] === 'checkout.workers')
+    expect(key && env[key.replace('KEY', 'VALUE')]).toBe('0')
   })
 
   it('fails with a GitError when the folder is not a repository', async () => {

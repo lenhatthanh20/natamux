@@ -18,6 +18,7 @@ import {
   DIFFSTATS_EVERY_MS,
   FALLBACK_POLL_MS,
   liveSocketUrl,
+  PREPARING_KEY,
   parseLiveMessage,
 } from '../live'
 import { SHELLS_EVERY_MS } from '../task-shells'
@@ -90,6 +91,8 @@ describe('parseLiveMessage', () => {
     { kind: 'resync' },
     { kind: 'shells.changed', taskId: 'T-0001' },
     { kind: 'workspace.dirty', taskId: 'T-0001' },
+    { kind: 'workspace.preparing', taskId: 'T-0001', step: 'checkout' },
+    { kind: 'workspace.preparing', taskId: 'T-0001', step: null, error: 'git worktree failed' },
   ])('reads $kind', (message) => {
     expect(parse(message)).toEqual(message)
   })
@@ -134,6 +137,10 @@ describe('parseLiveMessage', () => {
     ['a delete message without an id', '{"kind":"task.deleted"}'],
     ['a shells message with an id that is not text', '{"kind":"shells.changed","taskId":3}'],
     ['an activity message without an activity', '{"kind":"activity.changed","taskId":"T-0001"}'],
+    [
+      'a step this dashboard does not know',
+      '{"kind":"workspace.preparing","taskId":"T-0001","step":"later"}',
+    ],
   ])('ignores %s', (_name, text) => {
     expect(parseLiveMessage(text)).toBeUndefined()
   })
@@ -203,6 +210,32 @@ describe('applyLiveMessages', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['ended-shells', 'T-0001'] })
     // The open shells, which the Terminal tab and the palette show.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['terminals', 'T-0001'] })
+  })
+
+  it('writes the step of each workspace being made, and drops one that ended', () => {
+    const queryClient = client()
+    queryClient.setQueryData(PREPARING_KEY, { 'T-0001': 'fetch', 'T-0002': 'checkout' })
+
+    applyLiveMessages(queryClient, [
+      { kind: 'workspace.preparing', taskId: 'T-0001', step: 'checkout' },
+      { kind: 'workspace.preparing', taskId: 'T-0002', step: null },
+      { kind: 'workspace.preparing', taskId: 'T-0003', step: 'fetch' },
+    ])
+
+    expect(queryClient.getQueryData(PREPARING_KEY)).toEqual({
+      'T-0001': 'checkout',
+      'T-0003': 'fetch',
+    })
+  })
+
+  it('leaves the steps alone before they were first read', () => {
+    const queryClient = client()
+
+    applyLiveMessages(queryClient, [
+      { kind: 'workspace.preparing', taskId: 'T-0001', step: 'fetch' },
+    ])
+
+    expect(queryClient.getQueryData(PREPARING_KEY)).toBeUndefined()
   })
 
   it('reads the files and the sizes of a changed workspace again, not its shells', () => {
