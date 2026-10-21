@@ -145,6 +145,12 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 
 Each phase ends with a release, and the gate must pass before the next phase starts. Electron keeps shipping until phase 5; during the move it gets only bug fixes.
 
+Branches (owner, 2026-10-22):
+- `dev` holds the Rust work. Every Rust PR targets `dev`. It was made from `main` at e93dba6.
+- `main` stays the Electron app and keeps its releases from `scripts/release.sh`.
+- Merge `main` into `dev` after each Electron release, so fixes reach both.
+- `dev` merges into `main` only at the phase 5 cut over.
+
 ### Phase 0: decide and prepare (1 week)
 
 - Owner approves this plan and the GPL-3.0 switch.
