@@ -59,7 +59,7 @@ Do not copy these:
 
 ## Target numbers
 
-Measure the Electron app first (phase 0) with `e2e/terminal-measures`, `e2e/dashboard-measures` and the daemon bench tests. Then every phase must meet these on a 14" MacBook Pro (ProMotion):
+The targets are absolute; the Electron app is not measured (owner, 2026-10-22). Every phase must meet them on a 14" MacBook Pro (ProMotion):
 
 | Measure | Target |
 |---|---|
@@ -68,7 +68,6 @@ Measure the Electron app first (phase 0) with `e2e/terminal-measures`, `e2e/dash
 | Heavy output: 10 terminals at 1 MB/s each | UI frames stay in the first row |
 | Cold start to the first frame | ≤ 300 ms |
 | Cold start to the dashboard with data | ≤ 1 s |
-| Idle memory, app and daemon, 10 shells with 10,000 lines each | at most half of the Electron baseline |
 | Download size (macOS dmg) | ≤ 60 MB |
 | Vietnamese input (Telex and VNI with the macOS input sources, plus EVKey/OpenKey if installed) | 100% of a fixed word list typed right, in a terminal and in every text box |
 
@@ -131,7 +130,8 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 
 ### Beautiful by construction
 
-- **Start from Zed's `ui` kit and theme system.** Write Natamux's brand into a Zed-format theme family, with light and dark:
+- **Design system: Zed's `ui` kit and `theme` crate** (owner decision, 2026-10-22). Do not mix in another kit such as gpui-component: two styles would show. A missing component is built in `natamux-app` from `ui` parts, in Zed's style.
+- Write Natamux's brand into a Zed-format theme family, with light and dark:
   - navy `#1B2A4A` → `#0D1526`;
   - amber `#F2B544` for "Needs you";
   - mint `#58D3A6` and sky `#7FA8FF`.
@@ -150,7 +150,7 @@ Each phase ends with a release, and the gate must pass before the next phase sta
 - Owner approves this plan and the GPL-3.0 switch.
   - Update `LICENSE`, README, site, `plan-tech-stack.md` and `research-native-app.md`.
   - `scripts/readme.test.py` checks for "MIT License" and must change with it.
-- Measure the Electron baseline for every row of "Target numbers".
+- Shoot the UI reference: every screen and state of today's app, light and dark, in `docs/ui-reference/`. Each shot links to its `ui-spec.md` section and its React component. The native screens copy layout and behaviour from it; the looks come from Zed.
 - Set up Rust safely (see "Safe local setup"):
   - `rust-toolchain.toml` pinned;
   - `cargo deny`, `cargo audit` and `cargo vet` in CI;
@@ -187,7 +187,7 @@ Each phase ends with a release, and the gate must pass before the next phase sta
   5. Stages: overview, progress, pipeline editor.
   6. Files and Docs.
   7. Settings, project settings, command palette, sign in.
-- Gate per screen: target numbers met, screenshot baselines in both themes, owner sign-off, and the same behaviour as the React screen (same commands, same API calls).
+- Gate per screen: target numbers met, screenshot baselines in both themes, owner sign-off, and every state in `docs/ui-reference/` covered with the same behaviour as the React screen (same commands, same API calls).
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
