@@ -16,7 +16,7 @@ use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::TaskState;
 use ui::prelude::*;
 
-use crate::app::dashboard::Dashboard;
+use crate::app::dashboard::{Dashboard, TerminalReader};
 use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
@@ -206,8 +206,17 @@ impl WorkspaceTree {
         if let Some(id) = key.strip_prefix("task:") {
             self.run_entry(EntryAction::OpenTask(id.to_owned()), cx);
         } else if let Some(rest) = key.strip_prefix("agent:") {
-            let task_id = rest.split_once(':').map_or(rest, |(id, _)| id);
-            self.run_entry(EntryAction::OpenTask(task_id.to_owned()), cx);
+            let task_id = rest.split_once(':').map_or(rest, |(id, _)| id).to_owned();
+            let shell = self.model.as_ref().and_then(|model| {
+                let row = model
+                    .rows_of(&task_id)
+                    .iter()
+                    .find(|row| format!("agent:{task_id}:{}", row.key) == key)?;
+                row.shell.clone()
+            });
+            self.dashboard.update(cx, |dashboard, cx| {
+                dashboard.open_shell(&task_id, shell, cx)
+            });
         } else {
             let toggle = self.model.as_ref().and_then(|model| {
                 let entry = model.entries.iter().find(|entry| entry.key == key)?;
@@ -217,6 +226,20 @@ impl WorkspaceTree {
                 self.run_entry(toggle, cx);
             }
         }
+    }
+
+    /// The Answer button: the workspace on the terminal whose agent asked, else the first agent
+    /// terminal.
+    pub(super) fn answer(&mut self, task_id: &str, cx: &mut Context<Self>) {
+        let shell = self.model.as_ref().and_then(|model| {
+            let rows = model.rows_of(task_id);
+            let asking = rows
+                .iter()
+                .find(|row| row.state == Some(TaskState::NeedsInput))?;
+            asking.shell.clone()
+        });
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.open_shell(task_id, shell, cx));
     }
 
     fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<Self>) {
@@ -377,7 +400,7 @@ impl WorkspaceTree {
             folds: &view.folds,
             terminals: &data.terminals,
         });
-        dashboard.show_terminals(model.reads_terminals.clone());
+        dashboard.show_terminals(TerminalReader::Sidebar, model.reads_terminals.clone());
         let mut snapshot = Snapshot {
             current,
             blurred: view.blurred.clone(),

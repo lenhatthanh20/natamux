@@ -43,7 +43,13 @@ actions!(
         StartBench,
         StopBench,
         CheckIme,
-        CloseTool
+        CloseTool,
+        ShowAgents,
+        MaximizePane,
+        NewTerminal,
+        FindInTerminal,
+        FindNext,
+        FindPrevious
     ]
 );
 
@@ -101,6 +107,12 @@ command_actions! {
     "tools.ime-check" => CheckIme,
     "tools.close" => CloseTool,
     "tools.ime-submit" => SubmitWord,
+    "view.agents" => ShowAgents,
+    "pane.maximize" => MaximizePane,
+    "shell.new" => NewTerminal,
+    "terminal.find" => FindInTerminal,
+    "find.next" => FindNext,
+    "find.previous" => FindPrevious,
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {

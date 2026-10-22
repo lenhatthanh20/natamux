@@ -3,7 +3,8 @@
 //! actions; each action makes the daemon call of the React screen (`useTaskMutations`) and
 //! toasts the result.
 
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,11 +17,12 @@ use ui::prelude::*;
 
 use super::dashboard_data::{BulkRuns, DashboardData, Link};
 use super::source::{Feed, Rows, Source};
-use super::view_rules::{seen_after_list, toggle_pin, with_seen};
+use super::view_rules::{ShellRequest, request_on_open, seen_after_list, toggle_pin, with_seen};
 use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
 use crate::sidebar::sidebar_tree::with_fold;
 use crate::tasks::task_sort::{SortKey, TaskSort, next_sort};
+use crate::terminals::pane_rules::PaneLayout;
 
 /// What views and Root follow besides `cx.notify()`.
 #[derive(Clone, Debug)]
@@ -31,6 +33,20 @@ pub enum DashboardChange {
     Opened(Box<Task>),
     /// Main shows All tasks again.
     BackToList,
+    /// Main shows the Agents grid.
+    AgentsOpened,
+    /// The files or the git state of a task's workspace changed (`workspace.dirty`).
+    WorkspaceChanged(String),
+    /// A task's terminals started or ended (`shells.changed`).
+    ShellsChanged(String),
+}
+
+/// The parts of the app that show terminals of tasks; the feed reads the union.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TerminalReader {
+    Sidebar,
+    Workspace,
+    Agents,
 }
 
 /// The view file is written at most this often, off the main thread.
@@ -49,6 +65,11 @@ pub struct Dashboard {
     pub toasts: Toasts,
     pub selected: Option<String>,
     pub open_task: Option<String>,
+    /// Main shows the Agents grid (then no task is open).
+    pub agents_open: bool,
+    /// The terminal the open workspace shows and focuses once its terminals are read.
+    pub shell_request: Option<ShellRequest>,
+    terminal_readers: RefCell<BTreeMap<TerminalReader, BTreeSet<String>>>,
     /// The sidebar filter text.
     pub filter: String,
     pub state_filter: Option<TaskState>,
@@ -91,6 +112,9 @@ impl Dashboard {
             toasts: Toasts::default(),
             selected: None,
             open_task: None,
+            agents_open: false,
+            shell_request: None,
+            terminal_readers: RefCell::new(BTreeMap::new()),
             filter: String::new(),
             state_filter: None,
             needs_you: false,
@@ -137,6 +161,15 @@ impl Dashboard {
 
     fn apply(&mut self, event: DashboardEvent, cx: &mut Context<Self>) {
         let tasks_changed = matches!(event, DashboardEvent::Tasks(_));
+        match &event {
+            DashboardEvent::WorkspaceChanged { task_id } => {
+                cx.emit(DashboardChange::WorkspaceChanged(task_id.clone()))
+            }
+            DashboardEvent::ShellsChanged { task_id } => {
+                cx.emit(DashboardChange::ShellsChanged(task_id.clone()))
+            }
+            _ => {}
+        }
         if let Some(notice) = self.data.apply(event) {
             self.toast(&notice.text, notice.tone, None, cx);
         }
@@ -191,10 +224,20 @@ impl Dashboard {
         }
     }
 
-    /// The tasks whose terminal rows the sidebar shows (`GET /tasks/:id/terminals`).
-    pub fn show_terminals(&self, task_ids: impl IntoIterator<Item = String>) {
+    /// The tasks whose terminals one part of the app shows (`GET /tasks/:id/terminals`). The
+    /// feed reads those of every part; it reads nothing again while the union stays the same.
+    pub fn show_terminals(
+        &self,
+        reader: TerminalReader,
+        task_ids: impl IntoIterator<Item = String>,
+    ) {
+        let union: BTreeSet<String> = {
+            let mut readers = self.terminal_readers.borrow_mut();
+            readers.insert(reader, task_ids.into_iter().collect());
+            readers.values().flatten().cloned().collect()
+        };
         if let Some(rows) = &self.rows {
-            rows.show(task_ids);
+            rows.show(union);
         }
     }
 
@@ -239,6 +282,12 @@ impl Dashboard {
             return;
         };
         self.selected = Some(task.id.clone());
+        self.shell_request = request_on_open(
+            self.open_task.as_deref(),
+            self.shell_request.as_ref(),
+            &task.id,
+        );
+        self.agents_open = false;
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
         self.save_view(cx);
@@ -246,8 +295,45 @@ impl Dashboard {
         cx.notify();
     }
 
+    /// Opens the task's workspace on one terminal: a sidebar terminal row and the Answer button
+    /// (`requestShell`). `name` None: the first agent terminal.
+    pub fn open_shell(&mut self, id: &str, name: Option<String>, cx: &mut Context<Self>) {
+        self.open(id, cx);
+        if name.is_some() && self.open_task.as_deref() == Some(id) {
+            self.shell_request = Some(ShellRequest {
+                task_id: id.to_owned(),
+                name,
+            });
+        }
+    }
+
+    /// The open workspace takes the request meant for it, once.
+    pub fn take_shell_request(&mut self, task_id: &str) -> Option<ShellRequest> {
+        let ours = self
+            .shell_request
+            .as_ref()
+            .is_some_and(|request| request.task_id == task_id);
+        if ours {
+            self.shell_request.take()
+        } else {
+            None
+        }
+    }
+
+    pub fn open_agents(&mut self, cx: &mut Context<Self>) {
+        self.open_task = None;
+        self.shell_request = None;
+        if !self.agents_open {
+            self.agents_open = true;
+            cx.emit(DashboardChange::AgentsOpened);
+        }
+        cx.notify();
+    }
+
     pub fn back(&mut self, cx: &mut Context<Self>) {
-        if self.open_task.take().is_some() {
+        let agents = std::mem::take(&mut self.agents_open);
+        if self.open_task.take().is_some() || agents {
+            self.shell_request = None;
             cx.emit(DashboardChange::BackToList);
             cx.notify();
         }
@@ -317,6 +403,15 @@ impl Dashboard {
         self.update_view(cx, |view| view.toggle_blurred(repo));
     }
 
+    /// The user's list of the Agents grid; None goes back to the default list.
+    pub fn set_agent_panes(&mut self, ids: Option<Vec<String>>, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.agent_panes = ids);
+    }
+
+    pub fn set_pane_layout(&mut self, layout: PaneLayout, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.pane_layout = layout);
+    }
+
     fn update_view(&mut self, cx: &mut Context<Self>, change: impl FnOnce(&mut ViewState)) {
         change(&mut self.view);
         self.save_view(cx);
@@ -355,3 +450,6 @@ impl Dashboard {
 
 #[path = "dashboard_writes.rs"]
 mod writes;
+
+#[path = "workspace_writes.rs"]
+mod workspace_writes;

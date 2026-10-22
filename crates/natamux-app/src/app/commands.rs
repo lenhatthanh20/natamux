@@ -15,6 +15,9 @@ pub const LIST: &str = "NatamuxList && not_editing";
 pub const TREE: &str = "WorkspaceTree && not_editing";
 pub const DIALOG: &str = "Dialog";
 pub const IME_CHECK: &str = "ImeCheck";
+/// Zed's terminal view, and the find bar of a pane (`terminals/terminal_find.rs`).
+pub const TERMINAL: &str = "Terminal";
+pub const TERMINAL_FIND: &str = "TerminalFind";
 /// Where single keys work: outside text boxes and terminals.
 const SINGLE: &[&str] = &[BODY, LIST];
 
@@ -168,6 +171,7 @@ pub const COMMANDS: &[Command] = &[
         MenuName::View,
         0,
     ),
+    menu(command("view.agents", "Agents", View), MenuName::View, 0),
     menu(
         command("view.table", "Show tasks as a table", View),
         MenuName::View,
@@ -286,6 +290,38 @@ pub const COMMANDS: &[Command] = &[
     ),
     task_action("task.task.unblocked", "Unblock", "task.unblocked"),
     task_action("task.task.retried", "Retry", "task.retried"),
+    // Screen 2: the panes of a workspace and the Agents grid (`paneCommands`).
+    keys(
+        command(
+            "pane.maximize",
+            "Maximize or restore the focused pane",
+            View,
+        ),
+        &["Mod+Shift+Enter"],
+        &[],
+    ),
+    keys(
+        command("shell.new", "New terminal", Task),
+        &["Ctrl+Shift+`"],
+        &[],
+    ),
+    // Inside a terminal only, so the shell keeps Ctrl+F elsewhere.
+    keys(
+        command("terminal.find", "Find in the terminal", View),
+        &["Mod+F", "Mod+Shift+F"],
+        &[TERMINAL],
+    ),
+    // Esc in the find bar is the global `escape`: the bar takes it before the shell.
+    keys(
+        command("find.next", "Next match", View),
+        &["Enter"],
+        &[TERMINAL_FIND],
+    ),
+    keys(
+        command("find.previous", "Previous match", View),
+        &["Shift+Enter"],
+        &[TERMINAL_FIND],
+    ),
     menu(
         keys(
             command("tools.perf-overlay", "Toggle Perf Overlay", Tools),
@@ -371,115 +407,10 @@ pub fn menu_items(name: MenuName) -> impl Iterator<Item = (&'static Command, u8)
         })
 }
 
-struct Parsed<'a> {
-    modifiers: Vec<&'a str>,
-    key: &'a str,
-}
-
-fn parse(shortcut: &str) -> Parsed<'_> {
-    // In `Mod++` the key is the plus sign.
-    let (head, key) = match shortcut.strip_suffix("++") {
-        Some(head) => (head, "+"),
-        None => shortcut.rsplit_once('+').unwrap_or(("", shortcut)),
-    };
-    Parsed {
-        modifiers: head.split('+').filter(|part| !part.is_empty()).collect(),
-        key,
-    }
-}
-
-/// `Mod+Shift+Enter` as gpui writes a keystroke: `cmd-shift-enter` on macOS.
-pub fn keystroke(shortcut: &str, mac: bool) -> String {
-    let parsed = parse(shortcut);
-    let mut out: Vec<String> = parsed
-        .modifiers
-        .iter()
-        .map(|modifier| match *modifier {
-            "Mod" if mac => "cmd".to_string(),
-            "Mod" => "ctrl".to_string(),
-            other => other.to_lowercase(),
-        })
-        .collect();
-    let key = match parsed.key {
-        "ArrowUp" => "up".to_string(),
-        "ArrowDown" => "down".to_string(),
-        "ArrowLeft" => "left".to_string(),
-        "ArrowRight" => "right".to_string(),
-        // The Menu key of Windows keyboards (VK_APPS).
-        "ContextMenu" => "menu".to_string(),
-        other => other.to_lowercase(),
-    };
-    out.push(key);
-    out.join("-")
-}
-
-// Kbd and tooltips draw keys with `components::input_rules::kbd_text`.
-#[cfg_attr(not(test), allow(dead_code))]
-/// The key as people read it: `⇧⌘↵` on macOS, `Ctrl+Shift+Enter` elsewhere.
-pub fn key_text(shortcut: &str, mac: bool) -> String {
-    let parsed = parse(shortcut);
-    let arrow = match parsed.key {
-        "ArrowUp" => Some("↑"),
-        "ArrowDown" => Some("↓"),
-        "ArrowLeft" => Some("←"),
-        "ArrowRight" => Some("→"),
-        _ => None,
-    };
-    let key = match (parsed.key, arrow) {
-        (_, Some(arrow)) => arrow.to_string(),
-        ("Enter", None) if mac => "↵".to_string(),
-        ("Escape", None) => "Esc".to_string(),
-        (key, None) if key.chars().count() == 1 => key.to_uppercase(),
-        (key, None) => key.to_string(),
-    };
-    if !mac {
-        let mut parts: Vec<&str> = parsed
-            .modifiers
-            .iter()
-            .map(|modifier| if *modifier == "Mod" { "Ctrl" } else { modifier })
-            .collect();
-        parts.push(&key);
-        return parts.join("+");
-    }
-    // Apple's order of the modifier signs.
-    let signs = [("Ctrl", "⌃"), ("Alt", "⌥"), ("Shift", "⇧"), ("Mod", "⌘")];
-    let mut text: String = signs
-        .iter()
-        .filter(|(name, _)| parsed.modifiers.contains(name))
-        .map(|(_, sign)| *sign)
-        .collect();
-    text.push_str(&key);
-    text
-}
-
-/// A key with no modifier but Shift: it types a character (`isSingleKey`).
-pub fn is_single_key(shortcut: &str) -> bool {
-    let parsed = parse(shortcut);
-    let function_key = is_function_key(parsed.key);
-    !function_key && parsed.modifiers.iter().all(|modifier| *modifier == "Shift")
-}
-
-fn is_function_key(key: &str) -> bool {
-    key.len() >= 2
-        && key.len() <= 3
-        && key.starts_with('F')
-        && key[1..].bytes().all(|byte| byte.is_ascii_digit())
-}
-
-/// Inside a terminal the shell owns the keys. On a Mac Cmd chords never reach the shell, so they
-/// are the app's. Elsewhere only function keys and Ctrl+Shift chords are
-/// (`reachesAppFromTerminal`).
-pub fn reaches_app_from_terminal(shortcut: &str, mac: bool) -> bool {
-    let parsed = parse(shortcut);
-    if is_function_key(parsed.key) {
-        return true;
-    }
-    let has = |name: &str| parsed.modifiers.contains(&name);
-    if mac && has("Mod") {
-        return true;
-    }
-    (has("Mod") || has("Ctrl")) && has("Shift")
-}
+// How shortcuts are written and read: `app/shortcut_text.rs`.
+#[cfg(test)]
+pub use super::shortcut_text::key_text;
+pub use super::shortcut_text::{is_single_key, keystroke, reaches_app_from_terminal};
 
 #[cfg(test)]
 #[path = "commands_tests.rs"]

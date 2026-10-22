@@ -30,7 +30,7 @@ pub struct BranchChoice {
     pub note: String,
 }
 
-fn commits_are(count: u64) -> String {
+pub(crate) fn commits_are(count: u64) -> String {
     if count == 1 {
         "1 commit is".into()
     } else {
@@ -39,7 +39,7 @@ fn commits_are(count: u64) -> String {
 }
 
 // "Pull request #310", or "The pull request" for an address with no number.
-fn pull_request_name(url: &str) -> String {
+pub(crate) fn pull_request_name(url: &str) -> String {
     let digits = url.split_once("/pull/").map(|(_, rest)| {
         rest.chars()
             .take_while(char::is_ascii_digit)
@@ -51,7 +51,7 @@ fn pull_request_name(url: &str) -> String {
     }
 }
 
-fn is_open_pull_request(task: &FinishedTask) -> bool {
+pub(crate) fn is_open_pull_request(task: &FinishedTask) -> bool {
     if task.pr.is_none() {
         return false;
     }
@@ -62,7 +62,7 @@ fn is_open_pull_request(task: &FinishedTask) -> bool {
     }
 }
 
-fn unpushed(graph: &GitGraph) -> u64 {
+pub(crate) fn unpushed(graph: &GitGraph) -> u64 {
     match graph.push {
         Some(PushStatus::New { unpushed } | PushStatus::Tracked { unpushed, .. }) => unpushed,
         _ => 0,
@@ -70,7 +70,7 @@ fn unpushed(graph: &GitGraph) -> u64 {
 }
 
 // True when `git branch -d` takes the branch, or its merged pull request lets the daemon take it.
-fn branch_merged(task: &FinishedTask, graph: &GitGraph) -> bool {
+pub(crate) fn branch_merged(task: &FinishedTask, graph: &GitGraph) -> bool {
     if graph.ahead == Some(0) {
         return true;
     }

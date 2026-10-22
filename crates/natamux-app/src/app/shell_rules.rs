@@ -87,9 +87,9 @@ pub fn is_wide(width: f32) -> bool {
     width >= BREAKPOINT_LG
 }
 
-pub fn crumb(open: Option<&Task>, repos: &[Repo], width: f32) -> Crumb {
+pub fn crumb(open: Option<&Task>, agents: bool, repos: &[Repo], width: f32) -> Crumb {
     let Some(task) = open else {
-        return Crumb::View("All tasks");
+        return Crumb::View(if agents { "Agents" } else { "All tasks" });
     };
     if !is_wide(width) {
         return Crumb::Task {
@@ -199,7 +199,8 @@ mod tests {
 
     #[test]
     fn the_crumb_is_the_view_name_without_an_open_task() {
-        assert_eq!(crumb(None, &[], 1280.0), Crumb::View("All tasks"));
+        assert_eq!(crumb(None, false, &[], 1280.0), Crumb::View("All tasks"));
+        assert_eq!(crumb(None, true, &[], 1280.0), Crumb::View("Agents"));
     }
 
     #[test]
@@ -208,7 +209,7 @@ mod tests {
         open.repo = Some("r1".into());
         let repos = [repo("r1", "natamux")];
         assert_eq!(
-            crumb(Some(&open), &repos, 1280.0),
+            crumb(Some(&open), false, &repos, 1280.0),
             Crumb::Task {
                 repo: Some("natamux".into()),
                 id: "T-0018".into(),
@@ -218,13 +219,13 @@ mod tests {
         // An unknown project shows its id; a task with none belongs to the default project.
         open.repo = Some("gone".into());
         assert!(matches!(
-            crumb(Some(&open), &repos, 1280.0),
+            crumb(Some(&open), false, &repos, 1280.0),
             Crumb::Task { repo: Some(name), .. } if name == "gone"
         ));
         open.repo = None;
         let repos = [repo("default", "main project")];
         assert!(matches!(
-            crumb(Some(&open), &repos, 1280.0),
+            crumb(Some(&open), false, &repos, 1280.0),
             Crumb::Task { repo: Some(name), .. } if name == "main project"
         ));
     }
@@ -233,7 +234,7 @@ mod tests {
     fn the_crumb_of_a_task_is_its_id_under_1024() {
         let open = task("T-0018", TaskState::Running, "2026-10-22T09:29:00.000Z");
         assert_eq!(
-            crumb(Some(&open), &[], 1000.0),
+            crumb(Some(&open), false, &[], 1000.0),
             Crumb::Task {
                 repo: None,
                 id: "T-0018".into(),

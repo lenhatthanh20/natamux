@@ -242,3 +242,60 @@ fn runs_the_reads_and_writes_of_screen_1() {
         assert!(!tasks.iter().any(|listed| listed.id == task.id));
     });
 }
+
+/// Reads the terminal list of a task until `done` holds or WAIT passes.
+async fn wait_for_terminals(client: &Client, task: &str, done: impl Fn(&[String]) -> bool) {
+    let deadline = tokio::time::Instant::now() + WAIT;
+    loop {
+        let list = client.list_terminals(task).await.unwrap();
+        if done(&list.terminals) {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out, terminals: {:?}",
+            list.terminals
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+#[test]
+#[ignore = "needs a daemon: NATAMUX_URL, NATAMUX_TOKEN"]
+fn runs_the_reads_and_writes_of_screen_2() {
+    let config = Config::from_env().expect("NATAMUX_URL and NATAMUX_TOKEN");
+    let client = Client::new(config).unwrap();
+    runtime().block_on(async {
+        let repos = client.list_repos().await.unwrap();
+        let repo = repos.repos.first().map(|repo| repo.id.clone());
+        let task = client
+            .create_task(NewTaskInput {
+                title: "Rust screen 2 test".into(),
+                parent_id: None,
+                repo,
+            })
+            .await
+            .unwrap();
+        let made = client.create_workspace(&task.id, None).await.unwrap();
+        assert!(made.workspace.is_some());
+
+        // Terminal 2 exists as long as a socket to it is open.
+        let _handle = client.open_terminal(SessionOptions::new(&task.id, "2", 100, 30, true));
+        wait_for_terminals(&client, &task.id, |names| names.iter().any(|n| n == "2")).await;
+        client.close_terminal(&task.id, "2").await.unwrap();
+        wait_for_terminals(&client, &task.id, |names| !names.iter().any(|n| n == "2")).await;
+
+        client.ended_shells(&task.id).await.unwrap();
+
+        // The test repo has no origin, so the push is refused with the daemon's message.
+        let refused = client.push(&task.id).await.unwrap_err();
+        assert!(
+            matches!(refused, natamux_client::ClientError::Status { .. }),
+            "{refused:?}"
+        );
+
+        client.remove_workspace(&task.id, true).await.unwrap();
+        let deleted = client.delete_task(&task.id).await.unwrap();
+        assert_eq!(deleted.id, task.id);
+    });
+}

@@ -136,6 +136,30 @@ pub fn seen_after_list(
     }
 }
 
+/// The terminal a workspace should show and focus once its terminals are read (`shellRequest`).
+/// `name` None: the first agent terminal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellRequest {
+    pub task_id: String,
+    pub name: Option<String>,
+}
+
+/// `openChanges(taskId, 'terminal')`: another task asks for its first agent terminal; the same
+/// task keeps the request it has, so a terminal row's ask is not lost.
+pub fn request_on_open(
+    open: Option<&str>,
+    pending: Option<&ShellRequest>,
+    task_id: &str,
+) -> Option<ShellRequest> {
+    if open == Some(task_id) {
+        return pending.cloned();
+    }
+    Some(ShellRequest {
+        task_id: task_id.to_owned(),
+        name: None,
+    })
+}
+
 /// Pins the task, or unpins it when it is pinned.
 pub fn toggle_pin(pinned: &[String], id: &str) -> Vec<String> {
     if pinned.iter().any(|item| item == id) {
@@ -355,6 +379,39 @@ mod tests {
         assert_eq!(recent.len(), 20);
         assert_eq!(recent[0], "T-24");
         assert!(!recent.contains(&"T-0".to_owned()));
+    }
+
+    #[test]
+    fn opening_another_task_asks_for_its_first_agent_terminal() {
+        let pending = ShellRequest {
+            task_id: "T-1".into(),
+            name: Some("5".into()),
+        };
+        let other = request_on_open(Some("T-1"), Some(&pending), "T-2");
+        assert_eq!(
+            other,
+            Some(ShellRequest {
+                task_id: "T-2".into(),
+                name: None
+            })
+        );
+        assert_eq!(
+            request_on_open(None, None, "T-2").map(|request| request.name),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn opening_the_same_task_again_keeps_its_request() {
+        let pending = ShellRequest {
+            task_id: "T-1".into(),
+            name: Some("5".into()),
+        };
+        assert_eq!(
+            request_on_open(Some("T-1"), Some(&pending), "T-1"),
+            Some(pending)
+        );
+        assert_eq!(request_on_open(Some("T-1"), None, "T-1"), None);
     }
 
     #[test]

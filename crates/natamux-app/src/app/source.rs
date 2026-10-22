@@ -15,6 +15,7 @@ use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
 use natamux_proto::projects::repo::{BranchList, LoadedSettings, SkillList};
 use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
 use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
     ChangeEntry, GitGraph, NewWorkspaceInput, RemoveWorkspaceAnswer,
@@ -88,7 +89,9 @@ impl Source {
     pub fn open_terminal(&self, options: SessionOptions) -> TerminalHandle {
         match self {
             Source::Daemon(client) => client.open_terminal(options),
-            Source::FakeDaemon => TerminalHandle::detached(fake_daemon::terminal()),
+            Source::FakeDaemon => TerminalHandle::detached(
+                fake_daemon::shared().terminal(&options.task_id, &options.terminal),
+            ),
         }
     }
 
@@ -202,6 +205,33 @@ impl Source {
             Source::Daemon(client) => client.start_agent(task_id, input),
             Source::FakeDaemon => ready(fake_daemon::shared().start_agent(task_id, input)),
         }
+    }
+
+    pub fn create_workspace(&self, task_id: &str, base: Option<&str>) -> Answer<Task> {
+        self.ask(
+            |c| c.create_workspace(task_id, base),
+            |f| f.create_workspace(task_id, base),
+        )
+    }
+
+    pub fn push(&self, task_id: &str) -> Answer<Task> {
+        self.ask(|c| c.push(task_id), |f| f.push(task_id))
+    }
+
+    pub fn open_pull_request(&self, task_id: &str) -> Answer<Task> {
+        self.ask(
+            |c| c.open_pull_request(task_id),
+            |f| f.open_pull_request(task_id),
+        )
+    }
+
+    pub fn reopen_agent(&self, task_id: &str) -> Answer<Task> {
+        self.ask(|c| c.reopen_agent(task_id), |f| f.reopen_agent(task_id))
+    }
+
+    /// The last screens of the terminals a finished task ended.
+    pub fn ended_shells(&self, task_id: &str) -> Answer<Vec<EndedShell>> {
+        self.ask(|c| c.ended_shells(task_id), |f| f.ended_shells(task_id))
     }
 
     /// Ends a terminal of a task and its shell.

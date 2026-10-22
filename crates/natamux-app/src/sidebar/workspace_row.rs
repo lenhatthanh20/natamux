@@ -220,7 +220,7 @@ impl WorkspaceTree {
                 .label_size(LabelSize::XSmall)
                 .style(ButtonStyle::Tinted(ui::TintColor::Warning))
                 .on_click(cx.listener(move |tree, _: &ClickEvent, _, cx| {
-                    tree.activate(&format!("task:{id}"), cx);
+                    tree.answer(&id, cx);
                     cx.stop_propagation();
                 }))
         });

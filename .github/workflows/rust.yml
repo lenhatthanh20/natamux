@@ -86,15 +86,21 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
-      # Screen 1 of phase 3: every state in both themes at two sizes (docs/rust-phase3.md). The
-      # shot is the app's window itself, found by its process id: macOS moves a window that asks
-      # for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
-      - name: Screen 1 shots
+      # Screens 1 and 2 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
+      # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768 (docs/rust-phase3.md).
+      # The shot is the app's window itself, found by its process id: macOS moves a window that
+      # asks for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
+      - name: Screen shots
         env:
           STATES: >-
             tasks-table tasks-board board-hover-card add-task-typed start-task remove-workspace
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
-            no-projects load-error drawer
+            no-projects load-error drawer workspace-terminal-running terminal-find
+            workspace-terminal-needs-input workspace-terminal-review no-workspace
+            workspace-preparing finished-wrap-up agents-grid
+          DOCKED: >-
+            tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
+            workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
         run: |
           mkdir -p shots
           window_of() {
@@ -104,7 +110,9 @@ jobs:
               own.length ? String(own[0].kCGWindowNumber) : ''"
           }
           for state in $STATES; do
-            for size in 1000x680 800x560; do
+            sizes="1000x680 800x560"
+            case " $DOCKED " in *" $state "*) sizes="$sizes 1024x720" ;; esac
+            for size in $sizes; do
               for theme in light dark; do
                 name="$state-$theme-$size"
                 target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 &

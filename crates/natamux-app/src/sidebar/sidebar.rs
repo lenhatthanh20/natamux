@@ -16,10 +16,12 @@ use crate::app::commands::shortcut_of;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Link;
 use crate::app::shortcuts::Back;
+use crate::components::agent_badge::AgentIcon;
 use crate::components::chips::{Kbd, tip_with_keys};
 use crate::components::colors::state_colors;
 use crate::components::skeleton::{Loading, SkeletonList};
 use crate::sidebar::sidebar_text::{pull_request_number, pull_request_summary};
+use crate::terminals::pane_rules::agent_pane_tasks;
 use crate::workspaces::new_workspace_dialog;
 
 pub struct Sidebar {
@@ -116,35 +118,29 @@ impl Sidebar {
     fn all_tasks_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let dashboard = self.dashboard.read(cx);
         let count = dashboard.data.tasks.len();
-        let active = dashboard.open_task.is_none();
-        let colors = cx.theme().colors();
-        h_flex()
-            .id("nav-all-tasks")
-            .h(px(28.))
-            .px_2()
-            .gap(px(6.))
-            .rounded(px(6.))
-            .cursor_pointer()
-            .hover(|style| style.bg(colors.element_hover))
-            .when(active, |row| row.bg(colors.element_selected))
-            .child(
-                lucide("list-todo")
-                    .size(IconSize::Small)
-                    .color(Color::Muted),
-            )
-            .child(
-                div().flex_1().child(
-                    Label::new("All tasks")
-                        .size(LabelSize::Custom(rems_from_px(13_f32)))
-                        .color(Color::Muted),
-                ),
-            )
-            .child(small(count.to_string()))
-            .on_click(cx.listener(|sidebar, _: &ClickEvent, _, cx| {
+        let active = dashboard.open_task.is_none() && !dashboard.agents_open;
+        nav_row("nav-all-tasks", "list-todo", "All tasks", count, active, cx).on_click(cx.listener(
+            |sidebar, _: &ClickEvent, _, cx| {
                 sidebar
                     .dashboard
                     .update(cx, |dashboard, cx| dashboard.back(cx));
-            }))
+            },
+        ))
+    }
+
+    /// The Agents grid (4.23): the panes of the tasks whose agents work or wait.
+    fn agents_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let dashboard = self.dashboard.read(cx);
+        let view = dashboard.view();
+        let count = agent_pane_tasks(view.agent_panes.as_deref(), &dashboard.data.tasks).len();
+        let active = dashboard.agents_open;
+        nav_row("nav-agents", "layout-grid", "Agents", count, active, cx).on_click(cx.listener(
+            |sidebar, _: &ClickEvent, _, cx| {
+                sidebar
+                    .dashboard
+                    .update(cx, |dashboard, cx| dashboard.open_agents(cx));
+            },
+        ))
     }
 
     fn workspaces_header(&self) -> impl IntoElement {
@@ -195,11 +191,11 @@ impl Render for Sidebar {
             .gap_2()
             .pt_2()
             .child(
-                v_flex()
-                    .gap_2()
-                    .px_2()
-                    .child(self.filter_field(cx))
-                    .child(self.all_tasks_row(cx)),
+                v_flex().gap_2().px_2().child(self.filter_field(cx)).child(
+                    v_flex()
+                        .child(self.all_tasks_row(cx))
+                        .child(self.agents_row(cx)),
+                ),
             )
             .child(
                 v_flex()
@@ -210,6 +206,36 @@ impl Render for Sidebar {
                     .children(none),
             )
     }
+}
+
+/// A 28 px nav row of the sidebar: All tasks and Agents, with their counts.
+fn nav_row(
+    id: &'static str,
+    icon: &str,
+    label: &'static str,
+    count: usize,
+    active: bool,
+    cx: &App,
+) -> Stateful<Div> {
+    let colors = cx.theme().colors();
+    h_flex()
+        .id(id)
+        .h(px(28.))
+        .px_2()
+        .gap(px(6.))
+        .rounded(px(6.))
+        .cursor_pointer()
+        .hover(|style| style.bg(colors.element_hover))
+        .when(active, |row| row.bg(colors.element_selected))
+        .child(lucide(icon).size(IconSize::Small).color(Color::Muted))
+        .child(
+            div().flex_1().child(
+                Label::new(label)
+                    .size(LabelSize::Custom(rems_from_px(13_f32)))
+                    .color(Color::Muted),
+            ),
+        )
+        .child(small(count.to_string()))
 }
 
 // Text and icons the sidebar's rows share.
@@ -251,7 +277,7 @@ pub(super) fn agent_mark(id: ElementId, agent: &str) -> impl IntoElement {
     div()
         .id(id)
         .flex_none()
-        .child(lucide("bot").color(Color::Muted))
+        .child(AgentIcon::new(Some(agent.to_owned())))
         .tooltip(Tooltip::text(agent_label(Some(agent))))
 }
 

@@ -1,19 +1,22 @@
-//! `--shot STATE`: opens the window in one screen-1 state of the fake daemon, for the CI
+//! `--shot STATE`: opens the window in one screen-1 or screen-2 state of the fake daemon, for the CI
 //! screenshots (docs/rust-phase3.md). The clock stops at the fake's time and the view state is
 //! fixed and never saved, so a shot is the same on every run.
 
 use std::time::Duration;
 
 use gpui::{App, AsyncApp, Focusable, Window, WindowHandle};
+use natamux_proto::workspaces::workspace::PreparingStep;
 
 use super::clock;
+use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
-use super::shortcuts::OpenRowMenu;
+use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
 use crate::tasks::add_subtask_dialog;
 use crate::tasks::task_time::parse_iso_ms;
+use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
 use crate::workspaces::{new_workspace_dialog, remove_finished, remove_workspace_dialog};
 
 /// The feed and the first frames come well within this.
@@ -27,6 +30,17 @@ const READY: &str = "T-0144";
 /// A task with a live terminal and no files to commit, for Remove workspace.
 const REMOVED: &str = "T-0139";
 const TYPED: &str = "Show the PR checks on the board cards";
+/// Screen 2: a side by side group at work, an agent that asks, a task after review, a task with
+/// no workspace, and a done one.
+const RUNNING: &str = "T-0146";
+const ASKING: &str = "T-0141";
+const REVIEWED: &str = "T-0143";
+const NO_WORKSPACE: &str = "T-0135";
+const FINISHED: &str = "T-0139";
+/// The find shot's term: Terminal 1 of the reviewed task shows it five times.
+const FOUND: &str = "src";
+/// The terminals draw their first screen within this.
+const PANES_DRAWN: Duration = Duration::from_millis(1200);
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -41,6 +55,9 @@ pub fn prepare(shot: Shot) {
         _ => (FakeLink::Live, true, true),
     };
     fake_daemon::shared().set_up(link, tasks, repos);
+    if shot == Shot::WorkspacePreparing {
+        fake_daemon::shared().set_preparing(NO_WORKSPACE, PreparingStep::Fetch);
+    }
 }
 
 pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
@@ -60,15 +77,23 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
         if shot == Shot::Toast {
             keep_toast(handle, cx).await;
         }
+        if shot == Shot::TerminalFind {
+            cx.background_executor().timer(PANES_DRAWN).await;
+            handle
+                .update(cx, |_, window, cx| find_in_pane(REVIEWED, window, cx))
+                .ok();
+        }
     })
     .detach();
 }
 
 fn view_of(shot: Shot) -> ViewState {
     let board = matches!(shot, Shot::TasksBoard | Shot::BoardHoverCard);
+    let agents = (shot == Shot::AgentsGrid).then(|| vec![ASKING.to_string(), RUNNING.to_string()]);
     ViewState {
         pinned: PINNED.iter().map(|id| id.to_string()).collect(),
         layout: if board { Layout::Board } else { Layout::Table },
+        agent_panes: agents,
         ..ViewState::default()
     }
 }
@@ -131,8 +156,36 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
             filter.update(cx, |editor, cx| editor.set_text("zebra", window, cx));
         }
         Shot::Drawer => root.set_drawer(true, window, cx),
+        Shot::WorkspaceTerminalRunning => open(&dashboard, RUNNING, cx),
+        Shot::TerminalFind | Shot::WorkspaceTerminalReview => open(&dashboard, REVIEWED, cx),
+        Shot::WorkspaceTerminalNeedsInput => open(&dashboard, ASKING, cx),
+        Shot::NoWorkspace | Shot::WorkspacePreparing => open(&dashboard, NO_WORKSPACE, cx),
+        Shot::FinishedWrapUp => open(&dashboard, FINISHED, cx),
+        Shot::AgentsGrid => dashboard.update(cx, |dashboard, cx| dashboard.open_agents(cx)),
         Shot::Toast | Shot::Skeleton | Shot::Empty | Shot::NoProjects | Shot::LoadError => {}
     }
+}
+
+fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+    dashboard.update(cx, |dashboard, cx| dashboard.open(id, cx));
+}
+
+/// Mod+F in Terminal 1 of the task, and the term typed.
+fn find_in_pane(task_id: &str, window: &mut Window, cx: &mut App) {
+    let key = terminal_key(task_id, "1");
+    let Some(terminal) = TerminalCache::cached(&key, cx) else {
+        eprintln!("shot: Terminal 1 of {task_id} is not on screen");
+        return;
+    };
+    let focus = terminal.read(cx).view.focus_handle(cx);
+    window.focus(&focus, cx);
+    window.dispatch_action(Box::new(FindInTerminal), cx);
+    let term = FOUND.to_string();
+    window.on_next_frame(move |window, cx| {
+        if let Some(find) = TerminalCache::find(&key, cx) {
+            find.update(cx, |find, cx| find.set_term(&term, window, cx));
+        }
+    });
 }
 
 /// Selects the task in the table and gives the table the focus, as a click does.
@@ -183,6 +236,15 @@ mod tests {
             assert!(fake.list_events(id).is_ok());
             assert!(fake.graph(id).is_ok());
         }
+        for id in [RUNNING, ASKING, REVIEWED] {
+            assert!(fake.list_terminals(id).is_ok(), "{id}");
+            assert!(fake.graph(id).is_ok(), "{id}");
+        }
+        let tasks = fake.tasks();
+        let task = |id: &str| tasks.iter().find(|task| task.id == id).cloned().unwrap();
+        assert!(task(NO_WORKSPACE).workspace.is_none());
+        assert!(task(FINISHED).workspace.is_some());
+        assert_eq!(fake.ended_shells(FINISHED).unwrap().len(), 5);
         assert!(fake.list_terminals(REMOVED).is_ok());
         assert!(fake.list_changes(REMOVED).unwrap().is_empty());
     }

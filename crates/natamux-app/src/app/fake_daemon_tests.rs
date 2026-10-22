@@ -1,3 +1,6 @@
+use natamux_client::TerminalEvent;
+use natamux_proto::workspaces::workspace::PushStatus;
+
 use super::*;
 
 fn drain(receiver: &mut UnboundedReceiver<DashboardEvent>) -> Vec<DashboardEvent> {
@@ -29,13 +32,14 @@ fn every_part_of_the_seed_reads() {
     assert_eq!(data.activity.len(), 3);
     assert_eq!(data.usage.len(), 3);
     assert_eq!(data.diff_stats.len(), 5);
-    assert_eq!(data.terminals.len(), 3);
+    assert_eq!(data.terminals.len(), 4);
     assert_eq!(data.events.len(), 2);
     assert_eq!(data.templates.len(), 2);
     assert_eq!(data.branches.default_branch.as_deref(), Some("main"));
     assert_eq!(data.skills.skills.len(), 1);
     assert_eq!(data.changes.len(), 1);
-    assert_eq!(data.graphs.len(), 2);
+    assert_eq!(data.graphs.len(), 5);
+    assert_eq!(data.ended["T-0139"].len(), 5);
 }
 
 #[test]
@@ -182,7 +186,76 @@ fn sends_terminal_rows_only_for_tasks_that_have_them() {
     let Some(DashboardEvent::Terminals { terminals, .. }) = drain(&mut receiver).pop() else {
         panic!("no terminal rows");
     };
-    assert_eq!(terminals.terminals, ["1", "5"]);
+    assert_eq!(terminals.terminals, ["1", "10", "12"]);
+}
+
+#[test]
+fn makes_a_workspace_for_a_task_that_has_none() {
+    let fake = FakeDaemon::default();
+    let (mut receiver, _) = fake.watch();
+    drain(&mut receiver);
+    let task = fake.create_workspace("T-0135", Some("dev")).unwrap();
+    assert_eq!(
+        task.workspace.as_deref(),
+        Some("/work/.natamux/worktrees/T-0135")
+    );
+    assert_eq!(task.branch.as_deref(), Some("natamux/t-0135"));
+    let events = drain(&mut receiver);
+    assert!(tasks_of(&events).is_some());
+    assert!(events.iter().any(|event| matches!(
+        event,
+        DashboardEvent::WorkspaceStep(message) if message.step.is_none()
+    )));
+    assert!(fake.create_workspace("T-9999", None).is_err());
+}
+
+#[test]
+fn a_push_leaves_nothing_to_push_and_a_pull_request_gets_its_link() {
+    let fake = FakeDaemon::default();
+    fake.push("T-0146").unwrap();
+    let pushed = fake.graph("T-0146").unwrap();
+    assert_eq!(
+        pushed.push,
+        Some(PushStatus::Tracked {
+            unpushed: 0,
+            unpulled: 0
+        })
+    );
+    assert!(fake.push("T-0131").is_err());
+    let task = fake.open_pull_request("T-0146").unwrap();
+    assert_eq!(
+        task.pr.as_deref(),
+        Some("https://github.com/lenhatthanh20/natamux/pull/146")
+    );
+}
+
+#[test]
+fn a_reopened_agent_comes_back_restoring_in_terminal_1() {
+    let fake = FakeDaemon::default();
+    fake.reopen_agent("T-0139").unwrap();
+    let list = fake.list_terminals("T-0139").unwrap();
+    assert_eq!(list.agents.first().map(String::as_str), Some("1"));
+    assert_eq!(list.restoring["1"].as_deref(), Some("claude-code"));
+    assert_eq!(fake.ended_shells("T-0139").unwrap().len(), 5);
+    assert!(fake.ended_shells("T-0146").unwrap().is_empty());
+}
+
+#[test]
+fn each_terminal_opens_with_its_own_screen() {
+    let fake = FakeDaemon::default();
+    let text = |task: &str, terminal: &str| {
+        let mut events = fake.terminal(task, terminal);
+        let mut bytes = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let TerminalEvent::Output { bytes: more, .. } = event {
+                bytes.extend(more);
+            }
+        }
+        String::from_utf8(bytes).unwrap()
+    };
+    assert!(text("T-0141", "1").contains("Show the cost in USD"));
+    assert_eq!(text("T-0143", "1").matches("src").count(), 5);
+    assert_ne!(text("T-0146", "1"), text("T-0146", "12"));
 }
 
 #[test]

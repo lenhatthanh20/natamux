@@ -6,9 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-use natamux_client::{
-    ClientError, DashboardEvent, LinkStatus, SendEventAnswer, TerminalEvent, TerminalStatus,
-};
+use natamux_client::{ClientError, DashboardEvent, LinkStatus, SendEventAnswer};
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
 use natamux_proto::agents::start::StartAgentInput;
 use natamux_proto::events::kind::PreparingMessage;
@@ -19,6 +17,7 @@ use natamux_proto::tasks::task::{
     DeleteTaskAnswer, NewTaskInput, Task, TaskState, TemplateTaskInput,
 };
 use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
     ChangeEntry, DiffStat, GitGraph, NewWorkspaceInput, PreparingStep, RemoveWorkspaceAnswer,
@@ -48,6 +47,7 @@ struct Data {
     changes: BTreeMap<String, Vec<ChangeEntry>>,
     graphs: BTreeMap<String, GitGraph>,
     preparing: BTreeMap<String, PreparingStep>,
+    ended: BTreeMap<String, Vec<EndedShell>>,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -91,6 +91,7 @@ impl Data {
             changes: part!(seed, "changes"),
             graphs: part!(seed, "graphs"),
             preparing: BTreeMap::new(),
+            ended: part!(seed, "endedShells"),
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
@@ -445,31 +446,7 @@ impl FakeDaemon {
     }
 }
 
-/// An agent's screen, with colours, wide lines and Vietnamese text.
-const SCREEN: &str = concat!(
-    "\x1b[1;38;5;75m● Natamux agent\x1b[0m \x1b[2m· claude-code · implement\x1b[0m\r\n\r\n",
-    "\x1b[38;5;245m> Read crates/natamux-client/src/terminals/session.rs\x1b[0m\r\n",
-    "\x1b[38;5;245m> Read crates/natamux-client/src/terminals/protocol.rs\x1b[0m\r\n\r\n",
-    "The terminal socket resumes from the last offset the screen parsed. A snapshot\r\n",
-    "comes only when the ring no longer has that offset.\r\n\r\n",
-    "\x1b[32m✓\x1b[0m cargo test -p natamux-client   \x1b[32m44 passed\x1b[0m\r\n",
-    "\x1b[33m!\x1b[0m cargo deny check               \x1b[33m15 advisories ignored, with reasons\x1b[0m\r\n",
-    "\x1b[31m✗\x1b[0m live-daemon                    \x1b[31mwaiting for the image of main\x1b[0m\r\n\r\n",
-    "Đã sửa xong lỗi kết nối lại; gõ tiếng Việt: người, được, khuỷu, thuở.\r\n\r\n",
-    "\x1b[1m❯\x1b[0m ",
-);
-
-pub fn terminal() -> UnboundedReceiver<TerminalEvent> {
-    events([
-        TerminalEvent::Status(TerminalStatus::Open),
-        TerminalEvent::Output {
-            bytes: SCREEN.as_bytes().to_vec(),
-            end: Some(SCREEN.len() as u64),
-        },
-    ])
-}
-
-fn events<T>(items: impl IntoIterator<Item = T>) -> UnboundedReceiver<T> {
+pub(super) fn events<T>(items: impl IntoIterator<Item = T>) -> UnboundedReceiver<T> {
     let (sender, receiver) = unbounded();
     for item in items {
         // The receiver is right here: a send cannot fail.
@@ -477,6 +454,9 @@ fn events<T>(items: impl IntoIterator<Item = T>) -> UnboundedReceiver<T> {
     }
     receiver
 }
+
+#[path = "fake_terminals.rs"]
+mod screens;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

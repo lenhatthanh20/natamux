@@ -49,6 +49,8 @@ pub struct RemoteTerminal {
     last_key: Option<Instant>,
     /// The parser thread's work, once connected.
     jobs: Option<UnboundedSender<Job>>,
+    /// A snapshot is being written: the pane shows its skeleton, not the history scrolling by.
+    replaying: bool,
     _tasks: Vec<Task<()>>,
 }
 
@@ -113,12 +115,34 @@ impl RemoteTerminal {
             visible: true,
             last_key: None,
             jobs: None,
+            replaying: false,
             _tasks: vec![watch],
         }
     }
 
     pub fn status(&self) -> &TerminalStatus {
         &self.status
+    }
+
+    /// Zed's terminal, for the find bar.
+    pub fn terminal(&self) -> &Entity<Terminal> {
+        &self.terminal
+    }
+
+    pub fn replaying(&self) -> bool {
+        self.replaying
+    }
+
+    /// The user scrolled up into the history: "Jump to latest" shows.
+    pub fn scrolled_up(&self, cx: &App) -> bool {
+        self.terminal.read(cx).last_content().display_offset > 0
+    }
+
+    pub fn jump_to_latest(&self, cx: &mut App) {
+        self.terminal.update(cx, |terminal, cx| {
+            terminal.scroll_to_bottom();
+            cx.notify();
+        });
     }
 
     /// The pane came on screen or left it, such as when a tool covers it.
@@ -249,6 +273,8 @@ impl RemoteTerminal {
                     Job::Write { bytes, ack: end }
                 }
                 TerminalEvent::Reset { .. } => {
+                    self.replaying = true;
+                    cx.notify();
                     // A snapshot draws the whole screen again on a clean one. It keeps the pane's
                     // size: the daemon replays at the shell's size, which this pane claimed.
                     let writer = self.terminal.update(cx, |terminal, cx| {
@@ -264,7 +290,11 @@ impl RemoteTerminal {
                         }
                     }
                 }
-                TerminalEvent::CaughtUp { offset } => Job::CaughtUp(offset),
+                TerminalEvent::CaughtUp { offset } => {
+                    self.replaying = false;
+                    cx.notify();
+                    Job::CaughtUp(offset)
+                }
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {

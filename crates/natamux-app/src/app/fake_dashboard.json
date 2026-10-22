@@ -7,6 +7,7 @@
   "tasks": [
     {
       "id": "T-0146", "title": "Rust migration phase 3", "state": "running", "stage": "implement",
+      "lanes": { "implement": "running", "test-spec": "done", "docs": "running" },
       "repo": "natamux", "agent": "claude-code", "branch": "natamux/t-0146-rust-migration-phase-3",
       "workspace": "/work/.natamux/worktrees/T-0146",
       "stages": ["spec", "plan", "implement", "agent-review", "review"],
@@ -113,17 +114,30 @@
   },
   "terminals": {
     "T-0146": {
-      "terminals": ["1", "2", "5"], "agents": ["1", "5"],
+      "terminals": ["1", "2", "10", "12"], "agents": ["1", "10", "12"],
       "lanes": {
-        "1": { "stage": "implement", "state": "running" },
-        "5": { "stage": "agent-review", "state": "ready", "agent": "codex" }
+        "1": { "stage": "implement", "state": "running", "agent": "claude-code" },
+        "10": { "stage": "test-spec", "state": "done", "agent": "gemini" },
+        "12": { "stage": "docs", "state": "running", "agent": "codex" }
       },
-      "programs": { "1": "claude", "2": "cargo", "5": null },
+      "programs": { "1": "claude", "2": "cargo", "10": "gemini", "12": "codex" },
+      "restoring": {}
+    },
+    "T-0143": {
+      "terminals": ["1", "8", "10", "12", "13"], "agents": ["1", "8", "10", "12", "13"],
+      "lanes": {
+        "1": { "stage": "review", "state": "review", "agent": "claude-code" },
+        "8": { "stage": "reproduce", "state": "done", "agent": "cursor" },
+        "10": { "stage": "test-spec", "state": "done", "agent": "gemini" },
+        "12": { "stage": "agent-review", "state": "done", "agent": "codex" },
+        "13": { "stage": "security-review", "state": "done", "agent": "copilot" }
+      },
+      "programs": { "1": "claude", "8": "cursor-agent", "10": "gemini", "12": "codex", "13": "copilot" },
       "restoring": {}
     },
     "T-0141": {
       "terminals": ["1"], "agents": ["1"],
-      "lanes": { "1": { "stage": "implement", "state": "needs-input" } },
+      "lanes": { "1": { "stage": "implement", "state": "needs-input", "agent": "claude-code" } },
       "programs": { "1": "claude" }, "restoring": {}
     },
     "T-0139": {
@@ -142,7 +156,10 @@
     }
   ],
   "activity": {
-    "T-0146": { "1": { "text": "Writing crates/natamux-app/src/app/dashboard.rs", "at": "2026-10-22T09:30:00.000Z" } },
+    "T-0146": {
+      "1": { "text": "Writing crates/natamux-app/src/app/dashboard.rs", "at": "2026-10-22T09:30:00.000Z" },
+      "12": { "text": "Editing docs/rust-phase3.md", "at": "2026-10-22T09:30:00.000Z" }
+    },
     "T-0147": { "1": { "text": "Running cargo test -p natamux-app", "at": "2026-10-22T09:28:00.000Z" } },
     "T-0144": { "1": { "text": "Reading site/src/content/docs", "at": "2026-10-22T09:15:00.000Z" } }
   },
@@ -196,6 +213,44 @@
       "branch": "natamux/t-0139-own-terminal-toggle", "head": "9a0b1c2", "base": "main",
       "ahead": 0, "behind": 2, "push": { "remote": "tracked", "unpushed": 0, "unpulled": 0 },
       "truncated": false
+    },
+    "T-0146": {
+      "branch": "natamux/t-0146-rust-migration-phase-3", "head": "c0ffee1", "base": "dev",
+      "ahead": 4, "behind": 0, "push": { "remote": "new", "unpushed": 4 }, "truncated": false
+    },
+    "T-0143": {
+      "branch": "natamux/t-0143-rust-migration-phase-1", "head": "5e1f2a3", "base": "dev",
+      "ahead": 6, "behind": 0, "push": { "remote": "tracked", "unpushed": 2, "unpulled": 0 },
+      "truncated": false
+    },
+    "T-0141": {
+      "branch": "natamux/t-0141-task-usage", "head": "77aa001", "base": "main",
+      "ahead": 0, "behind": 0, "push": { "remote": "none" }, "truncated": false
     }
+  },
+  "endedShells": {
+    "T-0139": [
+      {
+        "name": "1", "agent": "claude-code", "stage": "implement", "session": "s-1",
+        "endedAt": "2026-10-21T11:00:00.000Z",
+        "text": "• Bash pnpm test\n  ✓ 55 passed\n• Bash git commit -m \"Own terminal toggle\"\nDone with this stage.\n• Bash natamux done"
+      },
+      {
+        "name": "8", "agent": "cursor", "stage": "reproduce", "session": "s-8",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/repro.md\nDone with this stage."
+      },
+      {
+        "name": "10", "agent": "gemini", "stage": "test-spec", "session": "s-10",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/test-spec.md\nDone with this stage."
+      },
+      {
+        "name": "12", "agent": "codex", "stage": "agent-review", "session": "s-12",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/review.md\n  ✓ No problems found"
+      },
+      {
+        "name": "13", "agent": "copilot", "stage": "security-review", "session": "s-13",
+        "endedAt": "2026-10-21T11:00:00.000Z", "text": "• Write .natamux-task/security.md\n  ✓ No problems found"
+      }
+    ]
   }
 }

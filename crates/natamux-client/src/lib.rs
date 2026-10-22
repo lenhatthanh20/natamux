@@ -41,6 +41,7 @@ use natamux_proto::projects::repo::{BranchList, LoadedSettings, RepoList, SkillL
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
 use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{
     ChangeEntry, DiffStat, GitGraph, NewWorkspaceInput, PreparingStep, RemoveWorkspaceAnswer,
@@ -115,6 +116,13 @@ impl Client {
         let task_id = task_id.to_string();
         self.with_config(move |config| async move {
             terminals::api::list_terminals(&config, &task_id).await
+        })
+    }
+
+    pub fn ended_shells(&self, task_id: &str) -> Answer<Vec<EndedShell>> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            terminals::api::ended_shells(&config, &task_id).await
         })
     }
 
@@ -213,6 +221,27 @@ impl Client {
         })
     }
 
+    pub fn create_workspace(&self, task_id: &str, base: Option<&str>) -> Answer<Task> {
+        let (task_id, base) = (task_id.to_string(), base.map(str::to_string));
+        self.with_config(move |config| async move {
+            workspaces::api::create_workspace(&config, &task_id, base.as_deref()).await
+        })
+    }
+
+    pub fn push(&self, task_id: &str) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { workspaces::api::push(&config, &task_id).await },
+        )
+    }
+
+    pub fn open_pull_request(&self, task_id: &str) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            workspaces::api::open_pull_request(&config, &task_id).await
+        })
+    }
+
     pub fn remove_workspace(
         &self,
         task_id: &str,
@@ -261,6 +290,13 @@ impl Client {
         self.with_config(move |config| async move {
             agents::api::start_agent(&config, &task_id, &input).await
         })
+    }
+
+    pub fn reopen_agent(&self, task_id: &str) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { agents::api::reopen_agent(&config, &task_id).await },
+        )
     }
 
     /// Runs a request with the config on the client's runtime.

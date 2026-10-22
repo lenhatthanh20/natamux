@@ -1,8 +1,9 @@
 //! The window and the root view, the app shell of docs/ui-spec.md 3.1 (`features/app/AppShell.tsx`):
 //! title bar, the sidebar (docked, or a drawer under 1024), main and the status bar, with the menu,
-//! dialog and toast layers on top. Main shows All tasks, the open task's terminal, or a tool of
-//! phase 1 (bench, IME check).
+//! dialog and toast layers on top. Main shows All tasks, the open task's workspace, the Agents
+//! grid, or a tool of phase 1 (bench, IME check).
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,14 +15,15 @@ use gpui::{
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
-use super::dashboard::{Dashboard, DashboardChange};
+use super::dashboard::{Dashboard, DashboardChange, TerminalReader};
 use super::layout_mode::{
     LayoutInput, LayoutMode, PANEL_WIDTH, SidebarMode, decide_layout, effective_sidebar_width,
 };
 use super::options::Options;
 use super::shell_rules::window_title;
 use super::shortcuts::{
-    Back, FocusFilter, NewTask, NewWorkspace, ShowAllTasks, ShowBoard, ShowTable, ToggleSidebar,
+    Back, FocusFilter, NewTask, NewWorkspace, ShowAgents, ShowAllTasks, ShowBoard, ShowTable,
+    ToggleSidebar,
 };
 use super::source::Source;
 use super::view_state::Layout;
@@ -34,8 +36,11 @@ use crate::perf::overlay;
 use crate::sidebar::sidebar::Sidebar;
 use crate::tasks::quick_add::StartTask;
 use crate::tasks::task_view::TaskView;
-use crate::terminals::terminal_pane::TerminalPane;
+use crate::terminals::agent_panes::AgentPanes;
+use crate::terminals::terminal_cache::{Owner, TerminalCache};
 use crate::workspaces::new_workspace_dialog::{self, Created};
+use crate::workspaces::workspace_view::WorkspaceView;
+use crate::workspaces::wrap_up_rules::is_finished_state;
 
 const DEFAULT_SIZE: (u32, u32) = (1280, 800);
 const MIN_SIZE: (f32, f32) = (800., 560.);
@@ -53,7 +58,8 @@ pub struct Root {
     dashboard: Entity<Dashboard>,
     sidebar: Entity<Sidebar>,
     tasks: Entity<TaskView>,
-    pane: Entity<TerminalPane>,
+    workspace: Entity<WorkspaceView>,
+    agents: Entity<AgentPanes>,
     tool: Tool,
     /// `--gate2`: a bench whose shells keep printing while main shows All tasks.
     parked_bench: Option<Entity<BenchView>>,
@@ -82,7 +88,8 @@ impl Root {
         let sidebar = cx.new(|cx| Sidebar::new(dashboard.clone(), window, cx));
         let tasks = cx.new(|cx| TaskView::new(dashboard.clone(), window, cx));
         let source = source.ok();
-        let pane = cx.new(|cx| TerminalPane::new(source.clone(), cx));
+        let workspace = cx.new(|cx| WorkspaceView::new(dashboard.clone(), cx));
+        let agents = cx.new(|cx| AgentPanes::new(dashboard.clone(), cx));
         cx.subscribe_in(&dashboard, window, Self::on_dashboard)
             .detach();
         // Start a task of the quick add and of the "No tasks yet" state.
@@ -101,7 +108,8 @@ impl Root {
             dashboard,
             sidebar,
             tasks,
-            pane,
+            workspace,
+            agents,
             tool: Tool::None,
             parked_bench: None,
             menus,
@@ -174,22 +182,29 @@ impl Root {
     ) {
         match change {
             DashboardChange::Tasks => {
-                let tasks = self.dashboard.read(cx).data.tasks.clone();
-                self.pane
-                    .update(cx, |pane, cx| pane.refresh(&tasks, window, cx));
+                // A task that is gone, finished or has no workspace keeps no hidden terminal.
+                let live: BTreeSet<String> = self
+                    .dashboard
+                    .read(cx)
+                    .data
+                    .tasks
+                    .iter()
+                    .filter(|task| task.workspace.is_some() && !is_finished_state(task.state))
+                    .map(|task| task.id.clone())
+                    .collect();
+                TerminalCache::set_live(live, cx);
             }
-            DashboardChange::Opened(task) => {
+            DashboardChange::Opened(_) | DashboardChange::AgentsOpened => {
                 self.close_tool(cx);
                 self.drawer_open = false;
                 self.sync_pane(cx);
-                self.pane
-                    .update(cx, |pane, cx| pane.show((**task).clone(), window, cx));
             }
             DashboardChange::BackToList => {
                 self.sync_pane(cx);
                 let focus = self.tasks.focus_handle(cx);
                 window.focus(&focus, cx);
             }
+            DashboardChange::WorkspaceChanged(_) | DashboardChange::ShellsChanged(_) => {}
         }
     }
 
@@ -222,6 +237,11 @@ impl Root {
     /// All tasks in main, for `--shot` and `--gate2`.
     pub(super) fn task_view(&self) -> &Entity<TaskView> {
         &self.tasks
+    }
+
+    /// The workspace in main, for `--gate2`.
+    pub(super) fn workspace_view(&self) -> &Entity<WorkspaceView> {
+        &self.workspace
     }
 
     pub(super) fn sidebar(&self) -> &Entity<Sidebar> {
@@ -259,12 +279,23 @@ impl Root {
         })
     }
 
-    /// The terminal gives up its size while something else fills main.
+    /// The terminals give up their size while something else fills main. The workspace and the
+    /// Agents grid claim theirs again when they draw.
     fn sync_pane(&mut self, cx: &mut Context<Self>) {
-        let visible =
-            matches!(self.tool, Tool::None) && self.dashboard.read(cx).open_task.is_some();
-        self.pane
-            .update(cx, |pane, cx| pane.set_visible(visible, cx));
+        let dashboard = self.dashboard.read(cx);
+        let tool = !matches!(self.tool, Tool::None);
+        let (workspace, agents) = (dashboard.open_task.is_some(), dashboard.agents_open);
+        if tool || !workspace {
+            TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
+        }
+        if tool || !agents {
+            TerminalCache::claim(Owner::Agents, BTreeSet::new(), cx);
+        }
+        if !agents {
+            self.dashboard
+                .read(cx)
+                .show_terminals(TerminalReader::Agents, Vec::new());
+        }
         cx.notify();
     }
 
@@ -328,6 +359,13 @@ impl Root {
 
     fn show_all(&mut self, _: &ShowAllTasks, _: &mut Window, cx: &mut Context<Self>) {
         self.show_list(None, cx);
+    }
+
+    fn show_agents(&mut self, _: &ShowAgents, _: &mut Window, cx: &mut Context<Self>) {
+        self.close_tool(cx);
+        self.drawer_open = false;
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.open_agents(cx));
     }
 
     fn show_table(&mut self, _: &ShowTable, _: &mut Window, cx: &mut Context<Self>) {
