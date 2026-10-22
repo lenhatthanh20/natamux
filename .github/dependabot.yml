@@ -20,3 +20,13 @@ updates:
     ignore:
       - dependency-name: node
         update-types: [version-update:semver-major]
+  # Rust crates live on dev until the cut over (docs/plan-rust-migration.md).
+  # Dependabot reads this file from main only, so the entry is here.
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
