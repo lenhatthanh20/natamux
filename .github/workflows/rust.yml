@@ -15,22 +15,192 @@ concurrency:
   group: rust-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_INCREMENTAL: "0"
+  # Debug info of the Zed graph fills the runner's disk.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
 jobs:
   # fmt, clippy, tests and the layer rule.
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Make room on the disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+      # The system libraries GPUI builds against on Linux, from Zed's script/linux.
+      - name: Install the GPUI libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev libfontconfig-dev \
+            libglib2.0-dev libssl-dev libva-dev libvulkan1 libwayland-dev libx11-xcb-dev \
+            libxkbcommon-x11-dev libzstd-dev libsqlite3-dev
       # Installs the version that rust-toolchain.toml pins.
       - run: rustup toolchain install
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
+            ~/.cargo/git
             target
           key: rust-check-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-check-${{ runner.os }}-
       - run: cargo xtask ci
+      - run: python3 scripts/check-shots.test.py
+
+  # The app for the owner to run (phase 1): built, checked, attested. Also answers whether GPUI
+  # draws on the macOS runner, from the screenshots.
+  app-macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-app-${{ runner.os }}-
+      - run: cargo build --release --locked -p natamux-app
+      - name: Smoke test
+        run: target/release/natamux-app --smoke
+      - name: Screenshots
+        run: |
+          mkdir -p shots
+          for size in 800x560 1000x680; do
+            for theme in dark light; do
+              target/release/natamux-app --fake-daemon --theme "$theme" --size "$size" --hold 15 &
+              sleep 10
+              screencapture -x "shots/window-$theme-$size.png"
+              wait
+              sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
+            done
+          done
+      - name: Did GPUI draw
+        run: |
+          for size in 800x560 1000x680; do
+            if python3 scripts/check-shots.py "shots/window-dark-$size.bmp" "shots/window-light-$size.bmp"; then
+              echo "GPUI drew the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "GPUI did not draw the window on the macOS runner ($size)." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shots-macos
+          path: shots/*.png
+          if-no-files-found: ignore
+      - run: scripts/bundle-rust-app.sh dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-app-macos-arm64.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-app-macos-arm64
+          path: dist/natamux-app-macos-arm64.zip
+          compression-level: 0
+
+  # Gate 4 of phase 1: a Windows build starts and types.
+  app-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-app-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-app-${{ runner.os }}-
+      - run: cargo build --release --locked -p natamux-app
+      - name: Smoke test
+        run: target/release/natamux-app.exe --smoke
+      - name: Screenshots
+        run: |
+          mkdir -p shots
+          for theme in dark light; do
+            target/release/natamux-app.exe --fake-daemon --theme "$theme" --size 1280x800 --hold 15 &
+            sleep 10
+            powershell -NoProfile -Command "
+              Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+              \$b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+              \$bmp = New-Object System.Drawing.Bitmap \$b.Width, \$b.Height
+              [System.Drawing.Graphics]::FromImage(\$bmp).CopyFromScreen(\$b.Location, [System.Drawing.Point]::Empty, \$b.Size)
+              \$bmp.Save('shots/window-$theme.bmp', [System.Drawing.Imaging.ImageFormat]::Bmp)"
+            wait
+          done
+          python scripts/check-shots.py shots/window-dark.bmp shots/window-light.bmp
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shots-windows
+          path: shots/*.bmp
+          if-no-files-found: ignore
+
+  # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
+  live-daemon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NATAMUX_URL: http://127.0.0.1:8080/api
+      NATAMUX_TOKEN: e2e-token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-live-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-live-${{ runner.os }}-
+      - run: cargo test --locked -p natamux-client --test live_daemon --no-run
+      - name: Start the daemon and the dashboard of main
+        run: scripts/e2e.sh up
+      # As makeShellTask in e2e/tests/terminal-helpers.ts: a task past its agent, with a workspace.
+      - name: Make a task with a workspace
+        id: task
+        run: |
+          api() { curl -fsS -H "authorization: Bearer $NATAMUX_TOKEN" -H 'content-type: application/json' "$@"; }
+          repo=$(api "$NATAMUX_URL/repos" | jq -r '.repos[0].id')
+          id=$(api -X POST "$NATAMUX_URL/tasks" -d "{\"title\":\"Rust client live test\",\"repo\":\"$repo\"}" | jq -r .task.id)
+          for _ in $(seq 60); do
+            state=$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.state)
+            [ "$state" = ready ] || [ "$state" = review ] && break
+            sleep 0.5
+          done
+          api -X POST "$NATAMUX_URL/tasks/$id/events" \
+            -d '{"source":"human","type":"state.overridden","payload":{"to":"review","stage":"context"}}' >/dev/null
+          api -X POST "$NATAMUX_URL/tasks/$id/workspace" -d '{}' >/dev/null
+          for _ in $(seq 60); do
+            [ "$(api "$NATAMUX_URL/tasks/$id" | jq -r .task.workspace)" != null ] && break
+            sleep 0.5
+          done
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - run: cargo test --locked -p natamux-client --test live_daemon -- --ignored
+        env:
+          NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
+      - if: failure()
+        run: scripts/e2e.sh logs
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:

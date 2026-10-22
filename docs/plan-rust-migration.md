@@ -170,6 +170,8 @@ Branches (owner, 2026-10-22):
 
 ### Phase 1: spike, go or no-go (2–3 weeks)
 
+How to get the build, what the spike found and how to run the gates: `rust-phase1.md`.
+
 - Build a GPUI app with a task list and one live agent terminal, against today's Node daemon, over the real WebSocket protocol (hello, snapshot, resume, ack).
 - CI builds the app (see "Safe local setup"):
   - A job builds the macOS arm64 app on every PR into `dev`, uploads it as an artifact and attests it with `actions/attest-build-provenance`. The owner runs this build; nothing is built on the owner's Mac.
@@ -284,7 +286,8 @@ common=(--rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-pri
   -v natamux-cargo-target:/target -e CARGO_TARGET_DIR=/target)
 # Downloads only: crates, and the rustfmt and clippy components. Nothing is built while the network is on.
 docker run "${common[@]}" "$img" cargo fetch --locked
-docker run "${common[@]}" --network none "$img" cargo test --workspace --locked --offline
+# natamux-app needs a GPU and the GUI libraries: it builds in CI only.
+docker run "${common[@]}" --network none "$img" cargo test --workspace --exclude natamux-app --locked --offline
 ```
 
 Pin the image of the same Rust version as `rust-toolchain.toml`, or rustup downloads a whole toolchain. The slim image has no rustfmt or clippy; the fetch step adds them to the `natamux-rustup` volume, so the test step needs no network. Create the three volumes once and give them to the same uid (`docker run --rm -v natamux-cargo-registry:/r -v natamux-cargo-target:/t -v natamux-rustup:/u alpine chown -R "$(id -u):$(id -g)" /r /t /u`). colima mounts the home folder into its VM by default; a container escape would reach it, so this is a lower layer of safety than CI.
