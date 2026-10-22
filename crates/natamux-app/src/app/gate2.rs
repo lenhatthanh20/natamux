@@ -1,7 +1,8 @@
-//! `--gate2 TASK`: gate 2 of phase 1 without a person at the keyboard (owner, 2026-10-22).
-//! The bench runs for 60 s while the task list and a bench terminal scroll, and its perf report
-//! is saved. Then 100 keys are typed into a quiet shell of the task, and a second report is saved.
-//! Both paths are printed.
+//! `--gate2 TASK`: gate 2 without a person at the keyboard (owner, 2026-10-22).
+//! The bench runs for 60 s while the sidebar tree and a bench terminal scroll, and its perf report
+//! is saved. Then main shows the task table while the bench's 10 shells keep printing, and the
+//! table scrolls for 20 s: a second report. Last, the bench closes, 100 keys are typed into a
+//! quiet shell of the task, and a third report is saved. Every path is printed.
 //! Keys and scrolls go through the window's own event dispatch, not the keyboard and mouse, so
 //! key to glyph starts where it does for real keys: at the app's key event.
 //! It never opens the task's Terminal 1, where its agent may work.
@@ -10,8 +11,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 use gpui::{
-    App, AppContext as _, AsyncApp, Keystroke, Modifiers, PlatformInput, ScrollDelta,
-    ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
+    App, AppContext as _, AsyncApp, Keystroke, Modifiers, Pixels, PlatformInput, Point,
+    ScrollDelta, ScrollWheelEvent, TouchPhase, Window, WindowHandle, point, px,
 };
 
 use super::window::Root;
@@ -21,6 +22,7 @@ use crate::perf::stats::PerfStats;
 
 const WAIT_FOR_TASK: Duration = Duration::from_secs(15);
 const BENCH: Duration = Duration::from_secs(60);
+const TABLE: Duration = Duration::from_secs(20);
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
 /// Scroll this many steps one way, then as many back.
 const SCROLL_TURN: u32 = 40;
@@ -60,6 +62,11 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
     if !in_window(handle, cx, |window, _| window.is_window_active())? {
         eprintln!("gate2: the window is not the active one; click it to make frames count");
     }
+    // Each scroll starts at the top, so runs compare.
+    handle.update(cx, |root, _, cx| {
+        let tree = root.sidebar().read(cx).tree().clone();
+        tree.read(cx).scroll_handle().scroll_to_item(0);
+    })?;
     println!("gate2: bench on {task_id} for {} s", BENCH.as_secs());
     let started = Instant::now();
     let mut step = 0;
@@ -69,6 +76,7 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
         in_window(handle, cx, |window, cx| scroll(step, window, cx))?;
     }
     save(handle, "bench", cx)?;
+    scroll_table(handle, cx).await?;
     stop_bench(handle, cx).await?;
 
     println!("gate2: typing {KEYS} keys into Terminal 912 of {task_id}");
@@ -103,6 +111,32 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
 
     save(handle, "typing", cx)?;
     stop_bench(handle, cx).await
+}
+
+/// Main shows the table while the bench's shells keep printing out of sight: the table scrolls by
+/// itself, then its report is saved.
+async fn scroll_table(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<()> {
+    cx.update(|cx| {
+        let perf = cx.global_mut::<overlay::Perf>();
+        perf.stats = PerfStats::default();
+    });
+    handle.update(cx, |root, _, cx| {
+        root.park_bench(cx);
+        root.task_view().read(cx).table().read(cx).scroll_to(0);
+    })?;
+    println!("gate2: scrolling the task table for {} s", TABLE.as_secs());
+    let started = Instant::now();
+    let mut step = 0;
+    while started.elapsed() < TABLE {
+        cx.background_executor().timer(SCROLL_EVERY).await;
+        step += 1;
+        in_window(handle, cx, |window, cx| {
+            let size = window.viewport_size();
+            let table = point(size.width * 0.6, size.height / 2.);
+            wheel(table, step, window, cx);
+        })?;
+    }
+    save(handle, "table", cx)
 }
 
 /// Saves the perf report of one part of the run and prints its path.
@@ -161,18 +195,24 @@ fn in_window<R>(
     cx.update_window(handle.into(), |_, window, cx| f(window, cx))
 }
 
-/// Scrolls the task list, then the first bench terminal, down for a while and up again. One
+/// Scrolls the sidebar tree, then the first bench terminal, down for a while and up again. One
 /// target at a time: a pointer that jumps between them on every event changes the cursor each
 /// time, which costs AppKit about 5 ms and no person's scrolling does (gate 2 review, 2026-10-22).
 fn scroll(step: u32, window: &mut Window, cx: &mut App) {
     let turn = step / SCROLL_TURN;
-    let down = turn.is_multiple_of(2);
     let size = window.viewport_size();
+    // The docked sidebar is 320 wide at the default 1280; the bench fills main to its right.
     let position = if (turn / 2).is_multiple_of(2) {
         point(px(170.), size.height / 2.)
     } else {
         point(px(460.), px(120.))
     };
+    wheel(position, step, window, cx);
+}
+
+/// One wheel step at `position`: down for `SCROLL_TURN` steps, then as many up.
+fn wheel(position: Point<Pixels>, step: u32, window: &mut Window, cx: &mut App) {
+    let down = (step / SCROLL_TURN).is_multiple_of(2);
     let lines = if down { -3. } else { 3. };
     window.dispatch_event(
         PlatformInput::ScrollWheel(ScrollWheelEvent {

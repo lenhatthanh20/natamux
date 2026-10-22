@@ -1,31 +1,44 @@
-//! The window and the root view: the task list on the left; on the right a terminal, or one of
-//! the gate tools of phase 1 (bench, IME check).
+//! The window and the root view, the app shell of docs/ui-spec.md 3.1 (`features/app/AppShell.tsx`):
+//! title bar, the sidebar (docked, or a drawer under 1024), main and the status bar, with the menu,
+//! dialog and toast layers on top. Main shows All tasks, the open task's terminal, or a tool of
+//! phase 1 (bench, IME check).
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use editor::Editor;
 use gpui::{
-    App, Bounds, Entity, FocusHandle, Focusable, StyleRefinement, TitlebarOptions, WindowBounds,
-    WindowOptions, point, px, size,
+    App, Bounds, Entity, FocusHandle, Focusable, TitlebarOptions, WindowBounds, WindowOptions,
+    point, px, size,
 };
-use natamux_proto::tasks::task::Task;
+use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
 
+use super::dashboard::{Dashboard, DashboardChange};
+use super::layout_mode::{
+    LayoutInput, LayoutMode, PANEL_WIDTH, SidebarMode, decide_layout, effective_sidebar_width,
+};
 use super::options::Options;
+use super::shell_rules::window_title;
 use super::shortcuts::{
-    CheckIme, CloseTool, SavePerfReport, StartBench, StopBench, TogglePerfOverlay,
+    Back, FocusFilter, NewTask, NewWorkspace, ShowAllTasks, ShowBoard, ShowTable, ToggleSidebar,
 };
 use super::source::Source;
+use super::view_state::Layout;
 use crate::bench::bench_view::BenchView;
+use crate::components::dialog::DialogLayer;
+use crate::components::menu::MenuLayer;
+use crate::components::toasts::{Toaster, push_toast};
 use crate::ime::ime_check::ImeCheck;
-use crate::perf::{overlay, report};
-use crate::tasks::task_list::{TaskList, TaskOpened, TasksChanged};
+use crate::perf::overlay;
+use crate::sidebar::sidebar::Sidebar;
+use crate::tasks::quick_add::StartTask;
+use crate::tasks::task_view::TaskView;
 use crate::terminals::terminal_pane::TerminalPane;
+use crate::workspaces::new_workspace_dialog::{self, Created};
 
 const DEFAULT_SIZE: (u32, u32) = (1280, 800);
-const LIST_WIDTH: f32 = 340.;
+const MIN_SIZE: (f32, f32) = (800., 560.);
 /// How often the perf overlay shows new numbers.
 const OVERLAY_REFRESH: Duration = Duration::from_millis(500);
 
@@ -37,11 +50,23 @@ enum Tool {
 
 pub struct Root {
     source: Option<Arc<Source>>,
-    list: Entity<TaskList>,
+    dashboard: Entity<Dashboard>,
+    sidebar: Entity<Sidebar>,
+    tasks: Entity<TaskView>,
     pane: Entity<TerminalPane>,
     tool: Tool,
-    /// One line at the bottom, such as where a perf report went.
-    notice: Option<String>,
+    /// `--gate2`: a bench whose shells keep printing while main shows All tasks.
+    parked_bench: Option<Entity<BenchView>>,
+    menus: Entity<MenuLayer>,
+    dialogs: Entity<DialogLayer>,
+    toaster: Entity<Toaster>,
+    focus: FocusHandle,
+    resize_focus: FocusHandle,
+    /// The sidebar drawer under 1024. The docked sidebar's open state is in the view state.
+    drawer_open: bool,
+    /// The id of the last dashboard toast shown, so each one shows once.
+    toasts_shown: u64,
+    title: String,
 }
 
 impl Root {
@@ -50,29 +75,48 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let events = source
-            .as_ref()
-            .map(|source| source.watch_tasks())
-            .map_err(Clone::clone);
-        let fake = matches!(source.as_deref(), Ok(Source::FakeDaemon));
-        let list = cx.new(|cx| {
-            let mut list = TaskList::new(events, window, cx);
-            list.open_first = fake;
-            list
-        });
+        let menus = MenuLayer::init(cx);
+        let dialogs = DialogLayer::init(cx);
+        let toaster = Toaster::init(cx);
+        let dashboard = cx.new(|cx| Dashboard::new(source.clone(), cx));
+        let sidebar = cx.new(|cx| Sidebar::new(dashboard.clone(), window, cx));
+        let tasks = cx.new(|cx| TaskView::new(dashboard.clone(), window, cx));
         let source = source.ok();
         let pane = cx.new(|cx| TerminalPane::new(source.clone(), cx));
-        cx.subscribe_in(&list, window, |root, _, TaskOpened(task), window, cx| {
-            root.close_tool(cx);
-            root.pane
-                .update(cx, |pane, cx| pane.show(task.clone(), window, cx));
+        cx.subscribe_in(&dashboard, window, Self::on_dashboard)
+            .detach();
+        // Start a task of the quick add and of the "No tasks yet" state.
+        cx.subscribe_in(&tasks, window, |root, _, event: &StartTask, window, cx| {
+            root.start_task(event.0.clone(), window, cx)
         })
         .detach();
-        cx.subscribe_in(&list, window, |root, _, TasksChanged(tasks), window, cx| {
-            root.pane
-                .update(cx, |pane, cx| pane.refresh(tasks, window, cx));
+        cx.observe(&dashboard, |root, _, cx| {
+            root.show_new_toasts(cx);
+            cx.notify();
         })
         .detach();
+        Self::watch_window(window, cx);
+        Root {
+            source,
+            dashboard,
+            sidebar,
+            tasks,
+            pane,
+            tool: Tool::None,
+            parked_bench: None,
+            menus,
+            dialogs,
+            toaster,
+            focus: cx.focus_handle(),
+            resize_focus: cx.focus_handle().tab_stop(true),
+            drawer_open: false,
+            toasts_shown: 0,
+            title: window_title(0),
+        }
+    }
+
+    /// The bench's quit handling, the system look and the perf overlay's refresh.
+    fn watch_window(window: &mut Window, cx: &mut Context<Self>) {
         // Closing the window drops Root before an app quit runs its handlers, so with a bench
         // running the window quits the app instead: the quit handler below then still finds Root.
         let weak_root = cx.weak_entity();
@@ -119,203 +163,244 @@ impl Root {
         if overlay::enabled(cx) {
             overlay::watch_frames(window);
         }
-        Root {
-            source,
-            list,
-            pane,
-            tool: Tool::None,
-            notice: None,
-        }
     }
 
-    /// The text box of the task list (the smoke test types into it).
-    pub fn filter(&self, cx: &App) -> Entity<Editor> {
-        self.list.read(cx).filter().clone()
-    }
-
-    fn close_tool(&mut self, cx: &mut Context<Self>) {
-        if let Some(stop) = self.take_bench_stop(cx) {
-            cx.spawn(async move |root, cx| {
-                let failed = stop.await;
-                if failed.is_empty() {
-                    return;
-                }
-                root.update(cx, |root, cx| {
-                    root.notice = Some(format!(
-                        "Could not end every bench shell: {}",
-                        failed.join("; ")
-                    ));
-                    cx.notify();
-                })
-                .ok();
-            })
-            .detach();
-        }
-        self.set_tool(Tool::None, cx);
-    }
-
-    /// Ends a running bench: the future ends its shells and gives the ones that failed.
-    pub(super) fn take_bench_stop(
+    fn on_dashboard(
         &mut self,
+        _: &Entity<Dashboard>,
+        change: &DashboardChange,
+        window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<impl Future<Output = Vec<String>> + use<>> {
-        let Tool::Bench(bench) = &self.tool else {
-            return None;
-        };
-        let bench = bench.clone();
-        self.set_tool(Tool::None, cx);
-        Some(bench.update(cx, |bench, cx| bench.stop(cx)))
+    ) {
+        match change {
+            DashboardChange::Tasks => {
+                let tasks = self.dashboard.read(cx).data.tasks.clone();
+                self.pane
+                    .update(cx, |pane, cx| pane.refresh(&tasks, window, cx));
+            }
+            DashboardChange::Opened(task) => {
+                self.close_tool(cx);
+                self.drawer_open = false;
+                self.sync_pane(cx);
+                self.pane
+                    .update(cx, |pane, cx| pane.show((**task).clone(), window, cx));
+            }
+            DashboardChange::BackToList => {
+                self.sync_pane(cx);
+                let focus = self.tasks.focus_handle(cx);
+                window.focus(&focus, cx);
+            }
+        }
     }
 
-    /// A tool covers the terminal pane; with none, the pane is back on screen.
-    fn set_tool(&mut self, tool: Tool, cx: &mut Context<Self>) {
-        let visible = matches!(tool, Tool::None);
-        self.tool = tool;
+    /// The dashboard keeps its own toast queue; each new one shows once in the window's stack.
+    fn show_new_toasts(&mut self, cx: &mut Context<Self>) {
+        let fresh: Vec<_> = self
+            .dashboard
+            .read(cx)
+            .toasts
+            .toasts
+            .iter()
+            .filter(|toast| toast.id > self.toasts_shown)
+            .cloned()
+            .collect();
+        for shown in fresh {
+            self.toasts_shown = shown.id;
+            push_toast(&shown.text, shown.tone, shown.detail, Vec::new(), cx);
+        }
+    }
+
+    /// The text box of the sidebar (the smoke test types into it).
+    pub fn filter(&self, cx: &App) -> Entity<Editor> {
+        self.sidebar.read(cx).filter().clone()
+    }
+
+    pub(super) fn dashboard(&self) -> &Entity<Dashboard> {
+        &self.dashboard
+    }
+
+    /// All tasks in main, for `--shot` and `--gate2`.
+    pub(super) fn task_view(&self) -> &Entity<TaskView> {
+        &self.tasks
+    }
+
+    pub(super) fn sidebar(&self) -> &Entity<Sidebar> {
+        &self.sidebar
+    }
+
+    /// A task of the daemon's list, once the list came.
+    pub(super) fn task(&self, id: &str, cx: &App) -> Option<Task> {
+        self.dashboard.read(cx).data.task(id).cloned()
+    }
+
+    /// The open task, else the selected one: what the bench and the IME check work on.
+    fn current_task(&self, cx: &App) -> Option<Task> {
+        let dashboard = self.dashboard.read(cx);
+        let id = dashboard
+            .open_task
+            .as_ref()
+            .or(dashboard.selected.as_ref())?;
+        dashboard.data.task(id).cloned()
+    }
+
+    fn layout(&self, window: &Window, cx: &App) -> LayoutMode {
+        let width = f32::from(window.viewport_size().width);
+        let view = self.dashboard.read(cx).view();
+        let sidebar_width = if view.sidebar_open {
+            effective_sidebar_width(view.sidebar_width, Some(width))
+        } else {
+            0.
+        };
+        decide_layout(LayoutInput {
+            width: Some(width),
+            sidebar_width,
+            details_width: PANEL_WIDTH,
+            coarse: false,
+        })
+    }
+
+    /// The terminal gives up its size while something else fills main.
+    fn sync_pane(&mut self, cx: &mut Context<Self>) {
+        let visible =
+            matches!(self.tool, Tool::None) && self.dashboard.read(cx).open_task.is_some();
         self.pane
             .update(cx, |pane, cx| pane.set_visible(visible, cx));
         cx.notify();
     }
 
-    fn toggle_perf(&mut self, _: &TogglePerfOverlay, window: &mut Window, cx: &mut Context<Self>) {
-        overlay::toggle(window, cx);
-        cx.notify();
+    // The shell's commands
+
+    fn toggle_sidebar(&mut self, _: &ToggleSidebar, window: &mut Window, cx: &mut Context<Self>) {
+        match self.layout(window, cx).sidebar {
+            SidebarMode::Drawer => self.set_drawer(!self.drawer_open, window, cx),
+            SidebarMode::Docked => self
+                .dashboard
+                .update(cx, |dashboard, cx| dashboard.toggle_sidebar(cx)),
+        }
     }
 
-    fn save_perf(&mut self, _: &SavePerfReport, _: &mut Window, cx: &mut Context<Self>) {
-        self.save_report(cx).ok();
-    }
-
-    /// Saves the perf report and says where it went.
-    pub(super) fn save_report(&mut self, cx: &mut Context<Self>) -> Result<PathBuf, String> {
-        let stats = &cx.global::<overlay::Perf>().stats;
-        let saved = report::save(stats).map_err(|error| error.to_string());
-        self.notice = Some(match &saved {
-            Ok(path) => format!("Saved the perf report to {}", path.display()),
-            Err(error) => format!("Could not save the perf report: {error}"),
-        });
-        cx.notify();
-        saved
-    }
-
-    fn start_bench(&mut self, _: &StartBench, window: &mut Window, cx: &mut Context<Self>) {
-        let task = self.pane.read(cx).task().cloned();
-        self.open_bench(task, BenchView::new, window, cx);
-    }
-
-    /// The bench, or another view of the task's shells, without its Terminal 1 (`--gate2`).
-    pub(super) fn open_bench(
-        &mut self,
-        task: Option<Task>,
-        view: impl FnOnce(Arc<Source>, Task, &mut Window, &mut Context<BenchView>) -> BenchView,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Entity<BenchView>> {
-        let (Some(source), Some(task)) = (self.source.clone(), task) else {
-            self.notice =
-                Some("Pick a running task first: the bench opens 10 of its shells.".into());
-            cx.notify();
-            return None;
+    /// Opening moves focus into the drawer; closing gives it to the list.
+    pub(super) fn set_drawer(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.drawer_open = open;
+        let focus = if open {
+            self.sidebar.focus_handle(cx)
+        } else {
+            self.tasks.focus_handle(cx)
         };
-        if !task.has_live_terminal() {
-            self.notice = Some(format!("{} has no running shells.", task.id));
-            cx.notify();
-            return None;
-        }
-        self.close_tool(cx);
-        if !overlay::enabled(cx) {
-            overlay::toggle(window, cx);
-        }
-        let bench = cx.new(|cx| view(source, task, window, cx));
-        self.set_tool(Tool::Bench(bench.clone()), cx);
-        Some(bench)
-    }
-
-    /// A task of the daemon's list, once the list came.
-    pub(super) fn task(&self, id: &str, cx: &App) -> Option<Task> {
-        self.list.read(cx).task(id).cloned()
-    }
-
-    fn stop_bench(&mut self, _: &StopBench, _: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.tool, Tool::Bench(_)) {
-            self.close_tool(cx);
-        }
-    }
-
-    fn check_ime(&mut self, _: &CheckIme, window: &mut Window, cx: &mut Context<Self>) {
-        self.close_tool(cx);
-        let task = self.pane.read(cx).task().cloned();
-        let source = self.source.clone();
-        let check = cx.new(|cx| ImeCheck::new(source, task, window, cx));
-        let focus = check.focus_handle(cx);
         window.focus(&focus, cx);
-        self.set_tool(Tool::Ime(check), cx);
+        cx.notify();
     }
 
-    fn close(&mut self, _: &CloseTool, _: &mut Window, cx: &mut Context<Self>) {
+    fn focus_filter(&mut self, _: &FocusFilter, window: &mut Window, cx: &mut Context<Self>) {
+        match self.layout(window, cx).sidebar {
+            SidebarMode::Drawer => self.drawer_open = true,
+            SidebarMode::Docked => self
+                .dashboard
+                .update(cx, |dashboard, cx| dashboard.set_sidebar_open(true, cx)),
+        }
+        let focus = self.filter(cx).focus_handle(cx);
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    /// Esc closes the top layer first: the drawer, then a tool, then the open task.
+    fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
+        if self.drawer_open {
+            self.set_drawer(false, window, cx);
+        } else if !matches!(self.tool, Tool::None) {
+            self.close_tool(cx);
+        } else {
+            self.dashboard
+                .update(cx, |dashboard, cx| dashboard.back(cx));
+        }
+    }
+
+    fn show_list(&mut self, layout: Option<Layout>, cx: &mut Context<Self>) {
         self.close_tool(cx);
+        self.drawer_open = false;
+        self.dashboard.update(cx, |dashboard, cx| {
+            if let Some(layout) = layout {
+                dashboard.set_layout(layout, cx);
+            }
+            dashboard.back(cx);
+        });
+    }
+
+    fn show_all(&mut self, _: &ShowAllTasks, _: &mut Window, cx: &mut Context<Self>) {
+        self.show_list(None, cx);
+    }
+
+    fn show_table(&mut self, _: &ShowTable, _: &mut Window, cx: &mut Context<Self>) {
+        self.show_list(Some(Layout::Table), cx);
+    }
+
+    fn show_board(&mut self, _: &ShowBoard, _: &mut Window, cx: &mut Context<Self>) {
+        self.show_list(Some(Layout::Board), cx);
+    }
+
+    /// The running item filters All tasks to a state.
+    fn show_state(&mut self, state: Option<TaskState>, cx: &mut Context<Self>) {
+        self.show_list(None, cx);
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.set_state_filter(state, cx));
+    }
+
+    /// The needs-you pill and "N need you" filter All tasks to every task that needs the user.
+    fn show_needs_you(&mut self, cx: &mut Context<Self>) {
+        self.show_list(None, cx);
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.set_needs_you(true, cx));
+    }
+
+    fn new_workspace(&mut self, _: &NewWorkspace, window: &mut Window, cx: &mut Context<Self>) {
+        new_workspace_dialog::open(&self.dashboard, None, window, cx);
+    }
+
+    /// The dialog starts with the typed title; once the task is made, the quick add gives the
+    /// title up unless something else was typed since.
+    fn start_task(&mut self, title: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
+        let dialog =
+            new_workspace_dialog::open_with(&self.dashboard, None, title.clone(), window, cx);
+        let (Some(dialog), Some(title)) = (dialog, title) else {
+            return;
+        };
+        let quick_add = self.tasks.read(cx).quick_add().clone();
+        cx.subscribe_in(&dialog, window, move |_, _, _: &Created, window, cx| {
+            if quick_add.read(cx).typed_title(cx).as_deref() == Some(title.as_str()) {
+                quick_add.update(cx, |quick_add, cx| quick_add.clear(window, cx));
+            }
+        })
+        .detach();
+    }
+
+    /// `n` from anywhere outside a text field: All tasks, then the backlog field once drawn.
+    fn new_task(&mut self, _: &NewTask, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_list(None, cx);
+        let quick_add = self.tasks.read(cx).quick_add().clone();
+        window.on_next_frame(move |window, cx| {
+            let field = quick_add.read(cx).focus_handle(cx);
+            window.focus(&field, cx);
+        });
+    }
+
+    /// The state action keys work from the list, the tree and an open task.
+    fn task_action(&mut self, event: &'static str, cx: &mut Context<Self>) {
+        self.dashboard
+            .update(cx, |dashboard, cx| dashboard.task_action(event, cx));
     }
 }
+
+#[path = "window_tools.rs"]
+mod tools;
 
 impl Focusable for Root {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.list.focus_handle(cx)
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
     }
 }
 
-impl Render for Root {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let font = theme_settings::setup_ui_font(window, cx);
-        let colors = cx.theme().colors();
-        let right = match &self.tool {
-            Tool::None => self.pane.clone().into_any_element(),
-            Tool::Bench(bench) => bench.clone().into_any_element(),
-            Tool::Ime(check) => check.clone().into_any_element(),
-        };
-        let notice = self.notice.clone().map(|notice| {
-            div()
-                .absolute()
-                .bottom_2()
-                .left_2()
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .bg(colors.elevated_surface_background)
-                .border_1()
-                .border_color(colors.border)
-                .child(Label::new(notice).size(LabelSize::Small))
-        });
-        h_flex()
-            .relative()
-            .size_full()
-            .font(font)
-            .bg(colors.background)
-            .text_color(colors.text)
-            .on_action(cx.listener(Self::toggle_perf))
-            .on_action(cx.listener(Self::save_perf))
-            .on_action(cx.listener(Self::start_bench))
-            .on_action(cx.listener(Self::stop_bench))
-            .on_action(cx.listener(Self::check_ime))
-            .on_action(cx.listener(Self::close))
-            .child(
-                div()
-                    .w(px(LIST_WIDTH))
-                    .h_full()
-                    .flex_none()
-                    .border_r_1()
-                    .border_color(colors.border)
-                    // Drawn again only when the list changes: it was 40% of each frame's draw
-                    // while terminals printed (gate 2 review, 2026-10-22).
-                    .child(
-                        self.list
-                            .clone()
-                            .cached(StyleRefinement::default().size_full()),
-                    ),
-            )
-            .child(div().flex_grow_1().min_w_0().h_full().child(right))
-            .children(overlay::render(cx))
-            .children(notice)
-    }
-}
+#[path = "window_render.rs"]
+mod render;
 
 pub fn open(
     options: &Options,
@@ -330,18 +415,30 @@ pub fn open(
     } else {
         Bounds::centered(None, window_size, cx)
     };
+    let mac = cfg!(target_os = "macos");
+    let smoke = options.smoke;
     let window = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(size(px(MIN_SIZE.0), px(MIN_SIZE.1))),
+            // macOS: the app draws the title bar under the traffic lights and moves the window
+            // itself (title_bar.rs). Elsewhere the system title bar stays.
             titlebar: Some(TitlebarOptions {
-                title: Some("Natamux".into()),
-                ..Default::default()
+                title: Some(window_title(0).into()),
+                appears_transparent: mac,
+                traffic_light_position: mac.then(|| point(px(12.), px(11.))),
             }),
+            app_owns_titlebar_drag: mac,
             ..Default::default()
         },
         |window, cx| {
             let root = cx.new(|cx| Root::new(source, window, cx));
-            let focus = root.read(cx).focus_handle(cx);
+            // The smoke test types into the sidebar filter; a user starts on the list.
+            let focus = if smoke {
+                root.read(cx).filter(cx).focus_handle(cx)
+            } else {
+                root.read(cx).tasks.focus_handle(cx)
+            };
             window.focus(&focus, cx);
             root
         },

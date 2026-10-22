@@ -2,7 +2,9 @@
 //! TypeScript schemas in `packages/core`, which stay the source of truth until phase 4.
 
 pub mod agents {
+    pub mod activity;
     pub mod claude_code;
+    pub mod start;
 }
 pub mod events {
     pub mod kind;
@@ -13,9 +15,15 @@ pub mod projects {
 }
 pub mod tasks {
     pub mod attachments;
+    pub mod job;
     pub mod task;
+    pub mod template;
 }
 pub mod terminals {
+    pub mod list;
     pub mod messages;
     pub mod query;
+}
+pub mod workspaces {
+    pub mod workspace;
 }

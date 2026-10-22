@@ -1,31 +1,83 @@
-//! The HTTP routes the app calls (`packages/daemon/src/http/routes`).
+//! The routes of `packages/daemon/src/http/routes/tasks.ts` that the app calls.
 
 use hyper::Method;
-use natamux_proto::tasks::task::{Task, TaskList, Ticket};
+use natamux_proto::events::task_event::{EventList, StoredEvent, TaskEventInput};
+use natamux_proto::tasks::job::{Job, JobList};
+use natamux_proto::tasks::task::{
+    DeleteTaskAnswer, NewTaskInput, Task, TaskAnswer, TaskList, TemplateTaskInput, TitlePatch,
+};
+use natamux_proto::tasks::template::{TaskTemplate, TemplateList};
 use natamux_proto::terminals::query::encode;
+use serde::Deserialize;
 
 use crate::config::Config;
 use crate::error::ClientError;
-use crate::http::{call, send};
+use crate::http::{call, call_with};
+
+/// The answer of `POST /tasks/:id/events`. `accepted`: the event changed the task.
+#[derive(Clone, Debug, Deserialize)]
+pub struct SendEventAnswer {
+    pub task: Task,
+    #[serde(default)]
+    pub accepted: bool,
+}
 
 pub async fn list_tasks(config: &Config) -> Result<Vec<Task>, ClientError> {
     let list: TaskList = call(config, Method::GET, "/tasks").await?;
     Ok(list.tasks)
 }
 
-/// A one-time ticket for the terminal socket of a task. It is good for 30 s.
-pub async fn terminal_ticket(config: &Config, task_id: &str) -> Result<String, ClientError> {
-    let path = format!("/tasks/{}/terminal/ticket", encode(task_id));
-    let ticket: Ticket = call(config, Method::POST, &path).await?;
-    Ok(ticket.ticket)
+pub async fn create_task(config: &Config, input: &NewTaskInput) -> Result<Task, ClientError> {
+    let answer: TaskAnswer = call_with(config, Method::POST, "/tasks", input).await?;
+    Ok(answer.task)
 }
 
-/// Ends one terminal of a task and its shell.
-pub async fn close_terminal(
+pub async fn list_templates(config: &Config) -> Result<Vec<TaskTemplate>, ClientError> {
+    let list: TemplateList = call(config, Method::GET, "/templates").await?;
+    Ok(list.templates)
+}
+
+pub async fn create_from_template(
+    config: &Config,
+    template_id: &str,
+    input: &TemplateTaskInput,
+) -> Result<Task, ClientError> {
+    let path = format!("/templates/{}/tasks", encode(template_id));
+    let answer: TaskAnswer = call_with(config, Method::POST, &path, input).await?;
+    Ok(answer.task)
+}
+
+pub async fn list_jobs(config: &Config) -> Result<Vec<Job>, ClientError> {
+    let list: JobList = call(config, Method::GET, "/jobs").await?;
+    Ok(list.jobs)
+}
+
+pub async fn list_events(config: &Config, task_id: &str) -> Result<Vec<StoredEvent>, ClientError> {
+    let path = format!("/tasks/{}/events", encode(task_id));
+    let list: EventList = call(config, Method::GET, &path).await?;
+    Ok(list.events)
+}
+
+pub async fn send_event(
     config: &Config,
     task_id: &str,
-    terminal: &str,
-) -> Result<(), ClientError> {
-    let path = format!("/tasks/{}/terminals/{}", encode(task_id), encode(terminal));
-    send(config, Method::DELETE, &path).await.map(|_| ())
+    input: &TaskEventInput,
+) -> Result<SendEventAnswer, ClientError> {
+    let path = format!("/tasks/{}/events", encode(task_id));
+    call_with(config, Method::POST, &path, input).await
+}
+
+pub async fn rename_task(config: &Config, task_id: &str, title: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}", encode(task_id));
+    let patch = TitlePatch {
+        title: title.to_string(),
+    };
+    let answer: TaskAnswer = call_with(config, Method::PATCH, &path, &patch).await?;
+    Ok(answer.task)
+}
+
+/// Deletes the task, and its workspace with its branch. Uncommitted changes refuse it.
+pub async fn delete_task(config: &Config, task_id: &str) -> Result<DeleteTaskAnswer, ClientError> {
+    let path = format!("/tasks/{}", encode(task_id));
+    call(config, Method::DELETE, &path).await
 }

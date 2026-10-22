@@ -19,7 +19,7 @@ use tokio::time::{Instant, sleep_until};
 use super::backoff::reconnect_delay;
 use super::protocol::{AfterClose, Protocol, Step, TerminalEvent, TerminalStatus};
 use crate::config::Config;
-use crate::tasks::api;
+use crate::terminals::api;
 
 /// What the app asks of a terminal.
 #[derive(Debug)]

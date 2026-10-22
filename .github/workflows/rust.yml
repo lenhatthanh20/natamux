@@ -22,7 +22,7 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
-  # fmt, clippy, tests and the layer rule.
+  # fmt, clippy, tests, the layer rule and the colour-literal rule.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -49,6 +49,7 @@ jobs:
           restore-keys: rust-check-${{ runner.os }}-
       - run: cargo xtask ci
       - run: python3 scripts/check-shots.test.py
+      - run: python3 scripts/compare-shots.test.py
 
   # The app for the owner to run (phase 1): built, checked, attested. Also answers whether GPUI
   # draws on the macOS runner, from the screenshots.
@@ -85,6 +86,79 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
+      # Screen 1 of phase 3: every state in both themes at two sizes (docs/rust-phase3.md). The
+      # shot is the app's window itself, found by its process id: macOS moves a window that asks
+      # for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
+      - name: Screen 1 shots
+        env:
+          STATES: >-
+            tasks-table tasks-board board-hover-card add-task-typed start-task remove-workspace
+            clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
+            no-projects load-error drawer
+        run: |
+          mkdir -p shots
+          window_of() {
+            osascript -l JavaScript -e "ObjC.import('CoreGraphics');
+              const all = ObjC.deepUnwrap(ObjC.castRefToObject(\$.CGWindowListCopyWindowInfo(1, 0)));
+              const own = all.filter(w => w.kCGWindowOwnerPID === $1 && w.kCGWindowLayer === 0);
+              own.length ? String(own[0].kCGWindowNumber) : ''"
+          }
+          for state in $STATES; do
+            for size in 1000x680 800x560; do
+              for theme in light dark; do
+                name="$state-$theme-$size"
+                target/release/natamux-app --shot "$state" --fake-daemon --theme "$theme" --size "$size" --hold 30 &
+                pid=$!
+                sleep 3
+                id=$(window_of "$pid")
+                if [ -z "$id" ]; then
+                  echo "::error::no window of the app for $name"
+                  exit 1
+                fi
+                screencapture -x -o -l "$id" "shots/$name.png"
+                # Done with this state: no need to sit out --hold.
+                kill "$pid"
+                wait "$pid" || true
+              done
+            done
+          done
+      # Report only until the owner has signed the baselines off (docs/rust-phase3.md). Then
+      # REPORT_ONLY is emptied and a differing shot fails the job.
+      - name: Compare shots with the baselines
+        env:
+          REPORT_ONLY: "1"
+        run: |
+          mkdir -p "$RUNNER_TEMP/baselines"
+          failed=0
+          printf '| shot | result |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+          for shot in shots/*-*-*x*.png; do
+            name=$(basename "$shot" .png)
+            case "$name" in window-*) continue ;; esac
+            baseline="crates/natamux-app/tests/shots/$name.png"
+            if [ ! -f "$baseline" ]; then
+              echo "| $name | no baseline yet |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            sips -s format bmp "$shot" --out "$RUNNER_TEMP/shot.bmp" >/dev/null
+            sips -s format bmp "$baseline" --out "$RUNNER_TEMP/baselines/$name.bmp" >/dev/null
+            # The script writes no diff when the sizes differ; an old one must not pass for this shot.
+            rm -f "$RUNNER_TEMP/diff.bmp"
+            if python3 scripts/compare-shots.py "$RUNNER_TEMP/shot.bmp" \
+              "$RUNNER_TEMP/baselines/$name.bmp" "$RUNNER_TEMP/diff.bmp"; then
+              result=matches
+            else
+              result=DIFFERS
+              failed=1
+            fi
+            if [ -f "$RUNNER_TEMP/diff.bmp" ]; then
+              sips -s format png "$RUNNER_TEMP/diff.bmp" --out "shots/diff-$name.png" >/dev/null
+            fi
+            echo "| $name | $result |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ -n "$REPORT_ONLY" ]; then
+            exit 0
+          fi
+          exit "$failed"
       - name: Did GPUI draw
         run: |
           for size in 800x560 1000x680; do
@@ -102,6 +176,11 @@ jobs:
           path: shots/*.png
           if-no-files-found: ignore
       - run: scripts/bundle-rust-app.sh dist
+      - name: The zipped app is at most 60 MB
+        run: |
+          size=$(stat -f %z dist/natamux-app-macos-arm64.zip)
+          echo "natamux-app-macos-arm64.zip: $size bytes" >> "$GITHUB_STEP_SUMMARY"
+          [ "$size" -le $((60 * 1024 * 1024)) ]
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/natamux-app-macos-arm64.zip
@@ -124,6 +203,8 @@ jobs:
 
   # Gate 4 of phase 1: a Windows build starts and types.
   app-windows:
+    # The slowest job: snapshot pushes skip it, PRs into dev and dev itself run it (gate 4).
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
     runs-on: windows-latest
     timeout-minutes: 120
     permissions:
@@ -183,6 +264,8 @@ jobs:
           compression-level: 0
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
+  # `--ignored` runs every ignored test of live_daemon.rs: the terminal test, the live list, and the
+  # screen-1 flow of phase 3 (create, rename, subtask, workspace, preparing, remove, delete).
   live-daemon:
     runs-on: ubuntu-latest
     timeout-minutes: 40

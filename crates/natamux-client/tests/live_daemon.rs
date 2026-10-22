@@ -1,7 +1,8 @@
 //! The client against a real Natamux daemon. Ignored by default; the `live-daemon` job of
 //! .github/workflows/rust.yml starts the daemon image and runs these with `--ignored`.
 //!
-//! Env: NATAMUX_URL, NATAMUX_TOKEN, and NATAMUX_LIVE_TASK, a task with a workspace.
+//! Env: NATAMUX_URL, NATAMUX_TOKEN, and NATAMUX_LIVE_TASK, a task with a workspace. The screen 1
+//! flow makes and deletes its own tasks.
 
 // Test code: a failed unwrap is a failed test. clippy.toml allows it only inside #[test] fns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -10,9 +11,11 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use natamux_client::{
-    Client, Config, LinkStatus, SessionOptions, TaskListEvent, TerminalEvent, TerminalHandle,
-    TerminalStatus,
+    Client, Config, DashboardEvent, DashboardFeed, LinkStatus, SessionOptions, TaskListEvent,
+    TerminalEvent, TerminalHandle, TerminalStatus,
 };
+use natamux_proto::tasks::task::NewTaskInput;
+use natamux_proto::workspaces::workspace::NewWorkspaceInput;
 
 const WAIT: Duration = Duration::from_secs(20);
 // Not Terminal 1, where the task's agent may run.
@@ -130,5 +133,112 @@ fn lists_tasks_live() {
                 other => panic!("unexpected {other:?}"),
             }
         }
+    });
+}
+
+/// The next event `pick` takes, within `wait`. A lost or refused link fails the test.
+async fn next_event<T>(
+    feed: &mut DashboardFeed,
+    wait: Duration,
+    pick: impl Fn(DashboardEvent) -> Option<T>,
+) -> T {
+    let deadline = tokio::time::Instant::now() + wait;
+    loop {
+        let event = tokio::time::timeout_at(deadline, feed.events.next())
+            .await
+            .expect("timed out")
+            .expect("the feed ended");
+        if let DashboardEvent::Status(
+            status @ (LinkStatus::Refused | LinkStatus::Reconnecting(_)),
+        ) = &event
+        {
+            panic!("the link failed: {status:?}");
+        }
+        if let Some(picked) = pick(event) {
+            return picked;
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a daemon: NATAMUX_URL, NATAMUX_TOKEN"]
+fn runs_the_reads_and_writes_of_screen_1() {
+    let config = Config::from_env().expect("NATAMUX_URL and NATAMUX_TOKEN");
+    let client = Client::new(config).unwrap();
+    runtime().block_on(async {
+        let repos = client.list_repos().await.unwrap();
+        let repo = repos.repos.first().map(|repo| repo.id.clone());
+        client.list_templates().await.unwrap();
+        client.list_jobs().await.unwrap();
+        client.activity().await.unwrap();
+        client.usage().await.unwrap();
+        client.diff_stats().await.unwrap();
+        client.list_preparing().await.unwrap();
+        client.list_branches(repo.as_deref()).await.unwrap();
+        if let Some(repo) = &repo {
+            client.load_settings(repo).await.unwrap();
+            client.list_skills(repo).await.unwrap();
+        }
+
+        let task = client
+            .create_task(NewTaskInput {
+                title: "Rust screen 1 test".into(),
+                parent_id: None,
+                repo: repo.clone(),
+            })
+            .await
+            .unwrap();
+        let renamed = client
+            .rename_task(&task.id, "Rust screen 1 test, renamed")
+            .await
+            .unwrap();
+        assert_eq!(renamed.title, "Rust screen 1 test, renamed");
+        let subtask = client
+            .create_task(NewTaskInput {
+                title: "Rust screen 1 subtask".into(),
+                parent_id: Some(task.id.clone()),
+                repo: repo.clone(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(subtask.parent_id.as_deref(), Some(task.id.as_str()));
+        client.list_events(&task.id).await.unwrap();
+
+        // Subscribed before the workspace starts, so its end is not missed.
+        let mut feed = client.watch_dashboard();
+        next_event(&mut feed, WAIT, |event| {
+            matches!(event, DashboardEvent::Tasks(_)).then_some(())
+        })
+        .await;
+        let made = client
+            .new_workspace(NewWorkspaceInput {
+                title: "Rust screen 1 workspace".into(),
+                repo: repo.clone(),
+                ..NewWorkspaceInput::default()
+            })
+            .await
+            .unwrap();
+        let end = next_event(&mut feed, Duration::from_secs(60), |event| match event {
+            DashboardEvent::WorkspaceStep(step)
+                if step.task_id == made.id && step.step.is_none() =>
+            {
+                Some(step)
+            }
+            _ => None,
+        })
+        .await;
+        assert!(!end.failed(), "the workspace failed: {:?}", end.error);
+        client.list_terminals(&made.id).await.unwrap();
+        client.list_changes(&made.id).await.unwrap();
+        client.graph(&made.id).await.unwrap();
+
+        let removed = client.remove_workspace(&made.id, true).await.unwrap();
+        assert_eq!(removed.task.workspace, None);
+        for id in [&made.id, &subtask.id, &task.id] {
+            let deleted = client.delete_task(id).await.unwrap();
+            assert_eq!(&deleted.id, id);
+        }
+        let tasks = client.list_tasks().await.unwrap();
+        assert!(!tasks.iter().any(|listed| listed.id == task.id));
     });
 }
