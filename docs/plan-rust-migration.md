@@ -63,8 +63,8 @@ The targets are absolute; the Electron app is not measured (owner, 2026-10-22). 
 
 | Measure | Target |
 |---|---|
-| Frame time while scrolling the task list or a terminal, 10 agents printing | p99 ≤ 9.2 ms (one 120 Hz refresh plus jitter, owner, 2026-10-22), p99.9 ≤ 16.7 ms. Proposed, waiting for the owner: count in refreshes (p99 ≤ 1 refresh, p99.9 ≤ 2), as the mean of at least 4 runs; see `rust-phase1.md`, gate 2 |
-| Key press to glyph on screen in a terminal | p95 ≤ 16 ms. Proposed, waiting for the owner: p95 ≤ 20 ms, of which the app's part p95 ≤ 17 ms. At 120 Hz this measure always holds 8.33 to 16.7 ms of display wait; see `rust-phase1.md`, gate 2 |
+| Frame time while scrolling the task list or a terminal, 10 agents printing | p99 ≤ 1 refresh (8.33 ms at 120 Hz, start jitter allowed), p99.9 ≤ 2 refreshes, as the mean of at least 4 runs (owner, 2026-10-22; see `rust-phase1.md`, gate 2) |
+| Key press to glyph on screen in a terminal | p95 ≤ 20 ms, of which the app's part p95 ≤ 17 ms (owner, 2026-10-22). At 120 Hz the measure always holds 8.33 to 16.7 ms of display wait, so 16 ms was below its floor; see `rust-phase1.md`, gate 2 |
 | Heavy output: 10 terminals at 1 MB/s each | UI frames stay in the first row |
 | Cold start to the first frame | ≤ 300 ms |
 | Cold start to the dashboard with data | ≤ 1 s |
@@ -170,6 +170,8 @@ Branches (owner, 2026-10-22):
 
 ### Phase 1: spike, go or no-go (2–3 weeks)
 
+Closed 2026-10-22 (owner): every gate passed (`rust-phase1.md`, "Gate results"). Left from it: update wasmtime 48.0.7, rustls-webpki and webpki-roots on or after 2026-10-28, past their cooldown.
+
 How to get the build, what the spike found and how to run the gates: `rust-phase1.md`.
 
 - Build a GPUI app with a task list and one live agent terminal, against today's Node daemon, over the real WebSocket protocol (hello, snapshot, resume, ack).
@@ -185,6 +187,8 @@ How to get the build, what the spike found and how to run the gates: `rust-phase
   5. The owner uses it side by side with Electron for one day and says it is clearly better.
 
 ### Phase 2: CLI in Rust (2 weeks)
+
+Closed 2026-10-22 (owner): the gate passed (`rust-phase2.md`, "Gate results").
 
 How to get the build, what CI checks, where it differs and the gate results: `rust-phase2.md`.
 
