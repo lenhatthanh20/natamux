@@ -26,6 +26,8 @@ use natamux_proto::tasks::task::Task;
 pub use config::Config;
 pub use error::ClientError;
 pub use events::live::{LinkStatus, TaskListEvent};
+pub use http::request;
+pub use hyper::Method;
 pub use terminals::protocol::{TerminalEvent, TerminalStatus};
 pub use terminals::session::{SessionOptions, TerminalHandle};
 

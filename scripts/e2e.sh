@@ -27,6 +27,7 @@ Usage: scripts/e2e.sh <command>
          E2E_RUN=<run-id> loads the images that an E2E run built (any branch, kept 7 days)
          and starts them. The run of a branch:
            gh run list -w e2e.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
+         E2E_EXTRA_COMPOSE=<file> adds a compose file on top, such as compose.rust-cli.yaml.
   build  Build the images (CI and codespaces only)
   seed   Add the demo data, unless it is there
   logs   Show the logs
@@ -37,7 +38,8 @@ TEXT
 }
 
 compose() {
-  docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml "$@"
+  docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml \
+    ${E2E_EXTRA_COMPOSE:+-f "$E2E_EXTRA_COMPOSE"} "$@"
 }
 
 build() {

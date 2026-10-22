@@ -69,6 +69,7 @@ pub fn tasks() -> UnboundedReceiver<TaskListEvent> {
             parent_id: None,
             repo: None,
             updated_at: updated_at.into(),
+            ..Task::default()
         })
         .collect();
     events([

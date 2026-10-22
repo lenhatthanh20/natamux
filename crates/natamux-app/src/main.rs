@@ -3,6 +3,7 @@
 
 mod app {
     pub mod fake_daemon;
+    pub mod gate2;
     pub mod options;
     pub mod shortcuts;
     pub mod smoke;
@@ -88,6 +89,9 @@ fn start(options: &Options, cx: &mut App) -> anyhow::Result<()> {
     let window = app::window::open(options, source(options), cx)?;
     if options.smoke {
         app::smoke::run(window, options.hold_seconds.is_none(), cx);
+    }
+    if let Some(task) = &options.gate2 {
+        app::gate2::run(window, task.clone(), cx);
     }
     if let Some(seconds) = options.hold_seconds {
         cx.spawn(async move |cx| {

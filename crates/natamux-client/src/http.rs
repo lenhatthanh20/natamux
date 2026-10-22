@@ -1,7 +1,7 @@
 //! One HTTP/1.1 request to the daemon, with its bearer token. The daemon listens on plain HTTP
 //! on this machine, so a connection per request is cheap and needs no pool.
 
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Method, Request, Uri};
 use hyper_util::rt::TokioIo;
@@ -21,6 +21,28 @@ pub async fn call<T: DeserializeOwned>(
 }
 
 pub async fn send(config: &Config, method: Method, path: &str) -> Result<Bytes, ClientError> {
+    let (status, body) = request(config, method, path, &[], None).await?;
+    if status == hyper::StatusCode::UNAUTHORIZED.as_u16() {
+        return Err(ClientError::Unauthorized);
+    }
+    if !(200..300).contains(&status) {
+        return Err(ClientError::Status {
+            status,
+            message: error_message(&body),
+        });
+    }
+    Ok(body)
+}
+
+/// One request with these extra headers and body, and the answer's status and body whatever the
+/// status is: the `natamux` command words the daemon's errors itself.
+pub async fn request(
+    config: &Config,
+    method: Method,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: Option<Vec<u8>>,
+) -> Result<(u16, Bytes), ClientError> {
     let url = format!("{}{path}", config.base_url);
     let unreachable = |reason: String| ClientError::Unreachable {
         url: config.base_url.clone(),
@@ -52,7 +74,8 @@ pub async fn send(config: &Config, method: Method, path: &str) -> Result<Bytes, 
         .path_and_query()
         .map(|target| target.as_str())
         .unwrap_or("/");
-    let request = Request::builder()
+    let body = body.unwrap_or_default();
+    let mut builder = Request::builder()
         .method(method)
         .uri(target)
         .header(hyper::header::HOST, authority)
@@ -60,30 +83,25 @@ pub async fn send(config: &Config, method: Method, path: &str) -> Result<Bytes, 
             hyper::header::AUTHORIZATION,
             format!("Bearer {}", config.token),
         )
-        .header(hyper::header::CONTENT_LENGTH, "0")
-        .body(Empty::<Bytes>::new())
+        .header(hyper::header::CONTENT_LENGTH, body.len());
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    let request = builder
+        .body(Full::new(Bytes::from(body)))
         .map_err(|error| ClientError::BadUrl(error.to_string()))?;
     let response = sender
         .send_request(request)
         .await
         .map_err(|error| unreachable(error.to_string()))?;
-    let status = response.status();
+    let status = response.status().as_u16();
     let body = response
         .into_body()
         .collect()
         .await
         .map_err(|error| unreachable(error.to_string()))?
         .to_bytes();
-    if status == hyper::StatusCode::UNAUTHORIZED {
-        return Err(ClientError::Unauthorized);
-    }
-    if !status.is_success() {
-        return Err(ClientError::Status {
-            status: status.as_u16(),
-            message: error_message(&body),
-        });
-    }
-    Ok(body)
+    Ok((status, body))
 }
 
 /// The daemon's errors are `{"message": ...}` (or `{"error": ...}` for a 401).

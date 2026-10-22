@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use gpui::Entity;
+use gpui::{App, Entity, FocusHandle, Focusable};
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -14,8 +14,10 @@ use crate::terminals::remote_terminal::{RemoteTerminal, Target};
 /// an agent.
 pub const FIRST_TERMINAL: u16 = 901;
 pub const TERMINALS: u16 = 10;
+/// A quiet shell for typing after the bench (`--gate2`); 911 is the IME check's.
+pub const TYPING_TERMINAL: u16 = 912;
 // The daemon names terminals 1 to 999.
-const _: () = assert!(FIRST_TERMINAL + TERMINALS - 1 <= 999);
+const _: () = assert!(FIRST_TERMINAL + TERMINALS - 1 < TYPING_TERMINAL && TYPING_TERMINAL <= 999);
 const COLUMNS: usize = 5;
 
 /// 1 MiB of coloured lines, then a second's rest: about 1 MB/s. POSIX sh, so any shell runs it.
@@ -38,7 +40,42 @@ impl BenchView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let terminals = (FIRST_TERMINAL..FIRST_TERMINAL + TERMINALS)
+        Self::with_terminals(
+            source,
+            task,
+            FIRST_TERMINAL..FIRST_TERMINAL + TERMINALS,
+            Some(FLOOD),
+            window,
+            cx,
+        )
+    }
+
+    /// One quiet shell of the task, to type into after the bench (`--gate2`).
+    pub fn typing(
+        source: Arc<Source>,
+        task: Task,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::with_terminals(
+            source,
+            task,
+            TYPING_TERMINAL..TYPING_TERMINAL + 1,
+            None,
+            window,
+            cx,
+        )
+    }
+
+    fn with_terminals(
+        source: Arc<Source>,
+        task: Task,
+        numbers: std::ops::Range<u16>,
+        typed: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let terminals = numbers
             .map(|number| {
                 let name = number.to_string();
                 let target = Target {
@@ -48,7 +85,9 @@ impl BenchView {
                 let source = source.clone();
                 let terminal = cx.new(|cx| {
                     let mut terminal = RemoteTerminal::new(source, target, window, cx);
-                    terminal.type_text(FLOOD);
+                    if let Some(text) = typed {
+                        terminal.type_text(text);
+                    }
                     terminal
                 });
                 (name, terminal)
@@ -59,6 +98,12 @@ impl BenchView {
             task,
             terminals,
         }
+    }
+
+    /// The focus of the first terminal, to give it the keys.
+    pub fn first_focus(&self, cx: &App) -> Option<FocusHandle> {
+        let (_, terminal) = self.terminals.first()?;
+        Some(terminal.read(cx).view.focus_handle(cx))
     }
 
     /// Stops every flood with Ctrl+C and ends the bench's shells. The future gives one line for

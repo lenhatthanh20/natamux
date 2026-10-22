@@ -1,14 +1,16 @@
 //! The window and the root view: the task list on the left; on the right a terminal, or one of
 //! the gate tools of phase 1 (bench, IME check).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use editor::Editor;
 use gpui::{
-    App, Bounds, Entity, FocusHandle, Focusable, TitlebarOptions, WindowBounds, WindowOptions,
-    point, px, size,
+    App, Bounds, Entity, FocusHandle, Focusable, StyleRefinement, TitlebarOptions, WindowBounds,
+    WindowOptions, point, px, size,
 };
+use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::options::Options;
@@ -153,7 +155,7 @@ impl Root {
     }
 
     /// Ends a running bench: the future ends its shells and gives the ones that failed.
-    fn take_bench_stop(
+    pub(super) fn take_bench_stop(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Option<impl Future<Output = Vec<String>> + use<>> {
@@ -180,33 +182,57 @@ impl Root {
     }
 
     fn save_perf(&mut self, _: &SavePerfReport, _: &mut Window, cx: &mut Context<Self>) {
+        self.save_report(cx).ok();
+    }
+
+    /// Saves the perf report and says where it went.
+    pub(super) fn save_report(&mut self, cx: &mut Context<Self>) -> Result<PathBuf, String> {
         let stats = &cx.global::<overlay::Perf>().stats;
-        self.notice = Some(match report::save(stats) {
+        let saved = report::save(stats).map_err(|error| error.to_string());
+        self.notice = Some(match &saved {
             Ok(path) => format!("Saved the perf report to {}", path.display()),
             Err(error) => format!("Could not save the perf report: {error}"),
         });
         cx.notify();
+        saved
     }
 
     fn start_bench(&mut self, _: &StartBench, window: &mut Window, cx: &mut Context<Self>) {
         let task = self.pane.read(cx).task().cloned();
+        self.open_bench(task, BenchView::new, window, cx);
+    }
+
+    /// The bench, or another view of the task's shells, without its Terminal 1 (`--gate2`).
+    pub(super) fn open_bench(
+        &mut self,
+        task: Option<Task>,
+        view: impl FnOnce(Arc<Source>, Task, &mut Window, &mut Context<BenchView>) -> BenchView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<BenchView>> {
         let (Some(source), Some(task)) = (self.source.clone(), task) else {
             self.notice =
                 Some("Pick a running task first: the bench opens 10 of its shells.".into());
             cx.notify();
-            return;
+            return None;
         };
         if !task.has_live_terminal() {
             self.notice = Some(format!("{} has no running shells.", task.id));
             cx.notify();
-            return;
+            return None;
         }
         self.close_tool(cx);
         if !overlay::enabled(cx) {
             overlay::toggle(window, cx);
         }
-        let bench = cx.new(|cx| BenchView::new(source, task, window, cx));
-        self.set_tool(Tool::Bench(bench), cx);
+        let bench = cx.new(|cx| view(source, task, window, cx));
+        self.set_tool(Tool::Bench(bench.clone()), cx);
+        Some(bench)
+    }
+
+    /// A task of the daemon's list, once the list came.
+    pub(super) fn task(&self, id: &str, cx: &App) -> Option<Task> {
+        self.list.read(cx).task(id).cloned()
     }
 
     fn stop_bench(&mut self, _: &StopBench, _: &mut Window, cx: &mut Context<Self>) {
@@ -277,7 +303,13 @@ impl Render for Root {
                     .flex_none()
                     .border_r_1()
                     .border_color(colors.border)
-                    .child(self.list.clone()),
+                    // Drawn again only when the list changes: it was 40% of each frame's draw
+                    // while terminals printed (gate 2 review, 2026-10-22).
+                    .child(
+                        self.list
+                            .clone()
+                            .cached(StyleRefinement::default().size_full()),
+                    ),
             )
             .child(div().flex_grow_1().min_w_0().h_full().child(right))
             .children(overlay::render(cx))

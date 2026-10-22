@@ -1,0 +1,8 @@
+# The Rust `natamux` command first on the agents' PATH, on top of compose.e2e.yaml, for the
+# rust.yml `cli` job (docs/rust-phase2.md). The images stay as they are.
+services:
+  daemon:
+    environment:
+      NATAMUX_BIN_DIR: /opt/natamux/bin
+    volumes:
+      - ./target/x86_64-unknown-linux-musl/release/natamux:/opt/natamux/bin/natamux:ro

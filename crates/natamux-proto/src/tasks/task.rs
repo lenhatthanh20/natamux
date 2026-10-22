@@ -1,11 +1,43 @@
-//! A task as `GET /tasks` sends it (`taskSchema` in `packages/core/src/tasks/task.ts`). Only the
-//! fields the app reads; the others are ignored, so a newer daemon still parses.
+//! A task as `GET /tasks` sends it (`taskSchema` in `packages/core/src/tasks/task.ts`): every
+//! field, in the schema's order, so the `natamux` command prints the JSON the TypeScript one
+//! prints. Fields this build does not know are dropped, as zod does, so a newer daemon still
+//! parses.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+/// `TASK_STATES` in `packages/core/src/tasks/task-state.ts`.
+pub const TASK_STATES: [&str; 9] = [
+    "draft",
+    "ready",
+    "running",
+    "needs-input",
+    "review",
+    "blocked",
+    "failed",
+    "done",
+    "cancelled",
+];
+
+/// `TASK_PRIORITIES` in `packages/core/src/tasks/task.ts`.
+pub const TASK_PRIORITIES: [&str; 4] = ["low", "normal", "high", "urgent"];
+
+/// `taskIdSchema`: `T-42` or `ABC-42`, at most 32 characters.
+pub fn is_task_id(value: &str) -> bool {
+    let Some((letters, digits)) = value.split_once('-') else {
+        return false;
+    };
+    value.len() <= 32
+        && !letters.is_empty()
+        && letters.bytes().all(|byte| byte.is_ascii_uppercase())
+        && !digits.is_empty()
+        && digits.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TaskState {
+    #[default]
     Draft,
     Ready,
     Running,
@@ -40,25 +72,111 @@ impl TaskState {
     pub fn is_finished(self) -> bool {
         matches!(self, TaskState::Done | TaskState::Cancelled)
     }
+
+    /// The state's name, as the daemon writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            TaskState::Draft => "draft",
+            TaskState::Ready => "ready",
+            TaskState::Running => "running",
+            TaskState::NeedsInput => "needs-input",
+            TaskState::Review => "review",
+            TaskState::Blocked => "blocked",
+            TaskState::Failed => "failed",
+            TaskState::Done => "done",
+            TaskState::Cancelled => "cancelled",
+            TaskState::Unknown => "unknown",
+        }
+    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+/// Defaults are zod's, for a field the daemon leaves out.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Task {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
     pub state: TaskState,
-    pub stage: String,
+    #[serde(default = "normal")]
+    pub priority: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
     #[serde(default)]
     pub workspace: Option<String>,
     #[serde(default)]
-    pub agent: Option<String>,
+    pub pr: Option<String>,
+    #[serde(default)]
+    pub pr_status: Option<Value>,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
     #[serde(default)]
     pub parent_id: Option<String>,
     #[serde(default)]
     pub repo: Option<String>,
+    #[serde(default = "implement")]
+    pub stage: String,
+    #[serde(default)]
+    pub stages: Vec<Value>,
+    /// Stage to state, in the daemon's order.
+    #[serde(default)]
+    pub lanes: Map<String, Value>,
+    #[serde(default)]
+    pub paths: Map<String, Value>,
+    #[serde(default)]
+    pub stage_since: Option<String>,
+    #[serde(default)]
+    pub background_since: Option<String>,
+    #[serde(default)]
+    pub workflow_stages: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ci_stages: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_stages: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub without_agent: Option<bool>,
+    #[serde(default)]
+    pub context: Option<TaskContext>,
+    #[serde(default)]
+    pub issue: Option<IssueLink>,
+    #[serde(default)]
+    pub created_at: String,
     /// ISO 8601 in UTC, so it sorts as text.
     pub updated_at: String,
+}
+
+fn normal() -> String {
+    "normal".into()
+}
+
+fn implement() -> String {
+    "implement".into()
+}
+
+/// Where the context of a task came from (`taskContextSchema`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TaskContext {
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<String>,
+    #[serde(default, rename = "ref")]
+    pub reference: String,
+}
+
+/// The issue or ticket of a task (`issueLinkSchema`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct IssueLink {
+    pub provider: String,
+    pub key: String,
+    pub url: String,
 }
 
 impl Task {
@@ -105,6 +223,66 @@ mod tests {
         assert_eq!(task.parent_id, None);
         assert_eq!(task.updated_at, "2026-10-22T00:59:38.510Z");
         assert!(task.has_live_terminal());
+    }
+
+    #[test]
+    fn writes_every_field_back_in_the_schemas_order_and_drops_unknown_ones() {
+        let task: Task = serde_json::from_str(TASK).unwrap();
+        let written = serde_json::to_string(&task).unwrap();
+        assert_eq!(
+            written,
+            concat!(
+                r#"{"id":"T-0143","title":"Rust migration phase 1","description":"","#,
+                r#""state":"needs-input","priority":"normal","labels":[],"agent":"claude-code","#,
+                r#""branch":"natamux/t-0143","workspace":"/w/T-0143","pr":null,"prStatus":null,"#,
+                r#""dependsOn":[],"parentId":null,"repo":"natamux","stage":"implement","#,
+                r#""stages":["spec","implement"],"lanes":{},"paths":{},"stageSince":null,"#,
+                r#""backgroundSince":null,"workflowStages":[],"context":null,"issue":null,"#,
+                r#""createdAt":"2026-10-22T00:53:31.924Z","updatedAt":"2026-10-22T00:59:38.510Z"}"#
+            )
+        );
+    }
+
+    #[test]
+    fn keeps_the_daemons_order_of_lanes_and_optional_fields_when_set() {
+        let text = TASK.replace(
+            r#""lanes": {}"#,
+            r#""lanes": {"tests": "running", "docs": "review"}, "ciStages": ["implement"]"#,
+        );
+        let task: Task = serde_json::from_str(&text).unwrap();
+        let written = serde_json::to_string(&task).unwrap();
+        assert!(written.contains(r#""lanes":{"tests":"running","docs":"review"}"#));
+        assert!(written.contains(r#""workflowStages":[],"ciStages":["implement"],"context""#));
+        assert!(!written.contains("skipStages"));
+    }
+
+    #[test]
+    fn fills_zods_defaults() {
+        let task: Task =
+            serde_json::from_str(r#"{"id":"T-1","title":"t","createdAt":"a","updatedAt":"b"}"#)
+                .unwrap();
+        assert_eq!(task.state, TaskState::Draft);
+        assert_eq!(task.priority, "normal");
+        assert_eq!(task.stage, "implement");
+    }
+
+    #[test]
+    fn task_ids_are_upper_case_letters_a_dash_and_digits() {
+        for id in ["T-42", "ABC-1", "T-0001"] {
+            assert!(is_task_id(id), "{id}");
+        }
+        for id in [
+            "t-42",
+            "T42",
+            "T-",
+            "-1",
+            "T-4a",
+            "TÉ-1",
+            "T-1-2",
+            &format!("T-{}", "1".repeat(31)),
+        ] {
+            assert!(!is_task_id(id), "{id}");
+        }
     }
 
     #[test]

@@ -20,6 +20,9 @@ pub struct Config {
 impl Config {
     /// `NATAMUX_URL` and `NATAMUX_TOKEN`. Without them: the default address and the token of the
     /// Electron app on this machine, so the app finds the daemon that the Electron app started.
+    /// In a task's terminal (`NATAMUX_TASK_ID` set), `NATAMUX_TOKEN` is that daemon run's agent
+    /// token: it may not pass gates and is new after each daemon restart. There the saved token
+    /// wins when there is one.
     pub fn from_env() -> Result<Config, ClientError> {
         resolve(
             |name| std::env::var(name).ok(),
@@ -55,14 +58,18 @@ fn resolve(
     if !base_url.starts_with("http://") {
         return Err(ClientError::BadUrl(base_url));
     }
-    let token = set("NATAMUX_TOKEN")
-        .or_else(|| {
-            token_file
-                .and_then(&read)
-                .map(|text| text.trim().to_string())
-        })
-        .filter(|token| !token.is_empty())
-        .ok_or(ClientError::NoToken)?;
+    let saved = || {
+        token_file
+            .and_then(&read)
+            .map(|text| text.trim().to_string())
+            .filter(|token| !token.is_empty())
+    };
+    let token = if set("NATAMUX_TASK_ID").is_some() {
+        saved().or_else(|| set("NATAMUX_TOKEN"))
+    } else {
+        set("NATAMUX_TOKEN").or_else(saved)
+    }
+    .ok_or(ClientError::NoToken)?;
     Ok(Config { base_url, token })
 }
 
@@ -119,6 +126,32 @@ mod tests {
         let config = resolve(env(&[]), Some(Path::new(FILE)), saved_token).unwrap();
         assert_eq!(config.base_url, DEFAULT_URL);
         assert_eq!(config.token, "from-the-file");
+    }
+
+    // Gate 3 run of 2026-10-22: the app started from a task's terminal took the agent token, and
+    // the daemon refused it after the Electron app restarted.
+    #[test]
+    fn in_a_task_terminal_the_saved_token_wins_over_the_agent_token() {
+        let config = resolve(
+            env(&[
+                ("NATAMUX_TASK_ID", "T-0145"),
+                ("NATAMUX_URL", "http://127.0.0.1:4317"),
+                ("NATAMUX_TOKEN", "agent-token"),
+            ]),
+            Some(Path::new(FILE)),
+            saved_token,
+        )
+        .unwrap();
+        assert_eq!(config.token, "from-the-file");
+        assert_eq!(config.base_url, "http://127.0.0.1:4317");
+        // No saved token, as against the Docker daemon: the env's token is all there is.
+        let config = resolve(
+            env(&[("NATAMUX_TASK_ID", "T-1"), ("NATAMUX_TOKEN", "agent-token")]),
+            None,
+            |_| None,
+        )
+        .unwrap();
+        assert_eq!(config.token, "agent-token");
     }
 
     #[test]

@@ -49,6 +49,7 @@ fn write_new(folder: &Path, stem: &str, text: &str) -> std::io::Result<PathBuf> 
 fn report(stats: &PerfStats, now: Instant) -> Value {
     let to_ms = |duration: &std::time::Duration| duration.as_secs_f64() * 1000.0;
     let summary = stats.summary(now, true);
+    let (span, totals) = stats.output_totals(now);
     json!({
         "app": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
@@ -59,17 +60,27 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
             "p50_ms": to_ms(&summary.p50),
             "p99_ms": to_ms(&summary.p99),
             "p999_ms": to_ms(&summary.p999),
-            "over_8_3_ms": summary.over_8ms,
+            "frames_over_1_refresh": summary.over_one_refresh,
+            "frames_over_2_refreshes": summary.over_two_refreshes,
+            "missed_refreshes": summary.missed_refreshes,
             "over_16_7_ms": summary.over_16ms,
             "key_to_glyph_p95_ms": summary.key_to_glyph_p95.as_ref().map(to_ms),
+            "key_to_echo_p95_ms": summary.key_to_echo_p95.as_ref().map(to_ms),
         },
         "output_bytes_per_second": stats
             .output_rates(now)
             .into_iter()
             .map(|(terminal, rate)| json!({ "terminal": terminal, "rate": rate }))
             .collect::<Vec<_>>(),
-        "frame_ms": stats.frame_samples().map(|(_, took)| to_ms(took)).collect::<Vec<_>>(),
+        "seconds": span.as_secs_f64(),
+        "output_bytes": totals
+            .into_iter()
+            .map(|(terminal, bytes)| json!({ "terminal": terminal, "bytes": bytes }))
+            .collect::<Vec<_>>(),
+        "frame_ms": stats.frame_samples().map(|(took, _)| to_ms(&took)).collect::<Vec<_>>(),
+        "frame_refreshes": stats.frame_samples().map(|(_, count)| count).collect::<Vec<_>>(),
         "key_to_glyph_ms": stats.key_samples().map(to_ms).collect::<Vec<_>>(),
+        "key_to_echo_ms": stats.echo_samples().map(to_ms).collect::<Vec<_>>(),
     })
 }
 
@@ -105,7 +116,11 @@ mod tests {
         let report = report(&stats, start + Duration::from_millis(30));
         assert_eq!(report["summary"]["frames"], 3);
         assert_eq!(report["frame_ms"].as_array().map(Vec::len), Some(3));
+        assert_eq!(report["frame_refreshes"], json!([1, 1, 1]));
+        assert_eq!(report["summary"]["missed_refreshes"], 0);
         assert_eq!(report["summary"]["key_to_glyph_p95_ms"], Value::Null);
+        assert_eq!(report["summary"]["key_to_echo_p95_ms"], Value::Null);
+        assert_eq!(report["key_to_echo_ms"].as_array().map(Vec::len), Some(0));
         assert_eq!(report["os"], std::env::consts::OS);
     }
 

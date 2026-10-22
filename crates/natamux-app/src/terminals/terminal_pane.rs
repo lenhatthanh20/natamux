@@ -211,6 +211,7 @@ mod tests {
             parent_id: None,
             repo: None,
             updated_at: "2026-10-22T00:00:00.000Z".into(),
+            ..Task::default()
         }
     }
 
