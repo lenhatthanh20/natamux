@@ -76,6 +76,8 @@ E2E_RUN=<run-id> scripts/e2e.sh up
 
 `E2E_TAG=sha-<commit>` picks the images of another commit of `main`. The tag `main` moves with every merge, so a `sha-` tag picks a known build. Images published before the workflow attested its builds fail the check. The images are built for x86 Linux; on a Mac with Apple silicon, Docker runs them with Rosetta (colima: `--vz-rosetta`).
 
+`E2E_EXTRA_COMPOSE=<file>` adds a compose file on top of `compose.prod.yaml` and `compose.e2e.yaml`. The Rust workflow's `cli` job uses `compose.rust-cli.yaml`, which mounts the Rust `natamux` and puts it first on the agents' PATH (`docs/rust-phase2.md`).
+
 Then try the dashboard by hand or with `playwright-cli`:
 
 ```sh

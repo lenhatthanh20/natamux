@@ -72,6 +72,22 @@ loaded=$(sed -n 's/^docker load -i //p' "$log")
 check "removes the downloaded file when the load fails" \
   '[ "$code" = 1 ] && grep -q "could not load" "$tmp/err" && [ -n "$loaded" ] && [ ! -e "$loaded" ]'
 
+# compose <extra file or empty>: the docker command line compose() builds.
+compose_line() {
+  : >"$log"
+  (
+    # shellcheck source=scripts/e2e.sh
+    source "$(dirname "$0")/e2e.sh"
+    E2E_EXTRA_COMPOSE=$1 compose ps
+  ) >/dev/null 2>&1
+  cat "$log"
+}
+
+check "adds the extra compose file on top" \
+  '[ "$(compose_line compose.rust-cli.yaml)" = "docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f compose.rust-cli.yaml ps" ]'
+check "adds no file without one" \
+  '[ "$(compose_line "")" = "docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml ps" ]'
+
 if [ "$fails" -gt 0 ]; then
   echo "$fails failed"
   exit 1

@@ -110,11 +110,26 @@ jobs:
           name: natamux-app-macos-arm64
           path: dist/natamux-app-macos-arm64.zip
           compression-level: 0
+      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
+      - run: cargo build --release --locked -p natamux-cli
+      - run: tar -czf dist/natamux-cli-macos-arm64.tar.gz -C target/release natamux nmx
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-cli-macos-arm64.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-cli-macos-arm64
+          path: dist/natamux-cli-macos-arm64.tar.gz
+          compression-level: 0
 
   # Gate 4 of phase 1: a Windows build starts and types.
   app-windows:
     runs-on: windows-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     defaults:
       run:
         shell: bash
@@ -153,6 +168,19 @@ jobs:
           name: shots-windows
           path: shots/*.bmp
           if-no-files-found: ignore
+      # Phase 2: the Rust `natamux` and `nmx` (docs/rust-phase2.md).
+      - run: cargo build --release --locked -p natamux-cli
+      - run: |
+          mkdir -p dist
+          powershell -NoProfile -Command "Compress-Archive -Path target/release/natamux.exe, target/release/nmx.exe -DestinationPath dist/natamux-cli-windows-x64.zip"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-cli-windows-x64.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-cli-windows-x64
+          path: dist/natamux-cli-windows-x64.zip
+          compression-level: 0
 
   # natamux-client against the real daemon: the checked images of main, as scripts/e2e.sh starts them.
   live-daemon:
@@ -201,6 +229,93 @@ jobs:
           NATAMUX_LIVE_TASK: ${{ steps.task.outputs.id }}
       - if: failure()
         run: scripts/e2e.sh logs
+
+  # Phase 2: the Rust `natamux` against the daemon of main. Its output must equal the TypeScript
+  # command's (scripts/cli-parity.sh), and the agent hook specs run with it first on the agents'
+  # PATH (compose.rust-cli.yaml). Then the Linux build, attested. See docs/rust-phase2.md.
+  cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NATAMUX_URL: http://127.0.0.1:8080/api
+      NATAMUX_TOKEN: e2e-token
+      E2E_EXTRA_COMPOSE: compose.rust-cli.yaml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A static build runs in the Debian image of the daemon, whatever its glibc.
+      - run: |
+          rustup toolchain install
+          rustup target add x86_64-unknown-linux-musl
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-cli-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-cli-${{ runner.os }}-
+      - run: cargo build --release --locked -p natamux-cli --target x86_64-unknown-linux-musl
+      - name: Start the daemon and the dashboard of main, with the Rust CLI on the agents' PATH
+        run: scripts/e2e.sh up
+      - name: The agents' PATH finds the Rust CLI
+        run: |
+          docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml -f "$E2E_EXTRA_COMPOSE" \
+            exec -T daemon sh -c 'PATH="$NATAMUX_BIN_DIR:$PATH"; command -v natamux; natamux help | head -n 1'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Build the TypeScript CLI
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: |
+          pnpm install --frozen-lockfile --filter "@natamux/cli..."
+          pnpm --filter @natamux/core --filter @natamux/cli build
+      - name: Same output as the TypeScript CLI
+        run: scripts/cli-parity.sh packages/cli/dist/main.js target/x86_64-unknown-linux-musl/release/natamux
+      # e2e/ is not part of the pnpm workspace; its only dependency is pinned to an exact version.
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: Agent hook specs with the Rust CLI
+        working-directory: e2e
+        run: pnpm e2e needs-input.spec.ts shell-agent.spec.ts ask-agent.spec.ts --project=desktop
+      - name: Report, pictures and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Logs on failure
+        if: failure()
+        run: scripts/e2e.sh logs
+      - name: Stop
+        if: always()
+        run: scripts/e2e.sh down
+      - run: |
+          mkdir -p dist
+          tar -czf dist/natamux-cli-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release natamux nmx
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/natamux-cli-linux-x64.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: natamux-cli-linux-x64
+          path: dist/natamux-cli-linux-x64.tar.gz
+          compression-level: 0
 
   # The tools come as prebuilt binaries at pinned versions; install-action checks their hashes.
   supply-chain:

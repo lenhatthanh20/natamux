@@ -99,6 +99,11 @@ impl TaskList {
         &self.filter
     }
 
+    /// A task of the daemon's list, once the list came.
+    pub fn task(&self, id: &str) -> Option<&Task> {
+        self.tasks.iter().find(|task| task.id == id)
+    }
+
     fn apply(&mut self, event: TaskListEvent, cx: &mut Context<Self>) {
         match event {
             TaskListEvent::Tasks(tasks) => {

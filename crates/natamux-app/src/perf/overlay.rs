@@ -79,12 +79,18 @@ fn lines(summary: &Summary, rates: &[(String, f64)]) -> Vec<String> {
             ms(summary.p999)
         ),
         format!(
-            "over 8.3 ms: {} · over 16.7 ms: {}",
-            summary.over_8ms, summary.over_16ms
+            "over 1 refresh: {} · over 2: {} · missed {}",
+            summary.over_one_refresh, summary.over_two_refreshes, summary.missed_refreshes
         ),
-        match summary.key_to_glyph_p95 {
-            Some(p95) => format!("key to glyph p95 {} ms", ms(p95)),
-            None => "key to glyph: type in a terminal".to_string(),
+        match (summary.key_to_glyph_p95, summary.key_to_echo_p95) {
+            (Some(glyph), Some(echo)) => {
+                format!(
+                    "key to glyph p95 {} ms · echo p95 {} ms",
+                    ms(glyph),
+                    ms(echo)
+                )
+            }
+            _ => "key to glyph: type in a terminal".to_string(),
         },
     ];
     for (terminal, rate) in rates.iter().take(10) {
@@ -134,13 +140,26 @@ mod tests {
             p50: Duration::from_micros(8300),
             p99: Duration::from_micros(9100),
             p999: Duration::from_millis(15),
-            over_8ms: 30,
+            over_one_refresh: 30,
+            over_two_refreshes: 2,
+            missed_refreshes: 35,
             over_16ms: 0,
             key_to_glyph_p95: None,
+            key_to_echo_p95: None,
         };
         let text = lines(&summary, &[("T-1/2".into(), 1_048_576.0)]);
         assert_eq!(text[0], "frames 1200 · p50 8.3 · p99 9.1 · p99.9 15.0 ms");
+        assert_eq!(text[1], "over 1 refresh: 30 · over 2: 2 · missed 35");
         assert_eq!(text[2], "key to glyph: type in a terminal");
         assert_eq!(text[3], "T-1/2: 1.05 MB/s");
+        let typed = Summary {
+            key_to_glyph_p95: Some(Duration::from_millis(20)),
+            key_to_echo_p95: Some(Duration::from_micros(4500)),
+            ..summary
+        };
+        assert_eq!(
+            lines(&typed, &[])[2],
+            "key to glyph p95 20.0 ms · echo p95 4.5 ms"
+        );
     }
 }

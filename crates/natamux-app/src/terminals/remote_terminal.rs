@@ -7,12 +7,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
-use futures::channel::mpsc::unbounded;
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui::{App, Entity, Focusable, Task, WeakEntity};
 use natamux_client::{SessionOptions, TerminalEvent, TerminalHandle, TerminalStatus};
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
-use terminal::{Terminal, TerminalBuilder};
+use terminal::{DisplayOnlyWriter, Terminal, TerminalBuilder};
 use terminal_view::TerminalView;
 use ui::prelude::*;
 use util::paths::PathStyle;
@@ -21,6 +21,17 @@ use crate::app::source::Source;
 
 /// How often a size change of the pane is looked for. Output and input never wait for it.
 const SIZE_CHECK: Duration = Duration::from_millis(100);
+
+/// Work for the parser thread of one terminal, in the order the socket gave it.
+enum Job {
+    /// Parse these bytes, then ack `ack` when it is set.
+    Write { bytes: Vec<u8>, ack: Option<u64> },
+    /// The catch-up's bytes are all parsed once the jobs before this one are done.
+    CaughtUp(u64),
+    /// A snapshot replaced the screen: write to the new one from here on. Boxed: a writer is
+    /// large and the other jobs are small.
+    Writer(Box<DisplayOnlyWriter>),
+}
 
 pub struct RemoteTerminal {
     pub view: Entity<TerminalView>,
@@ -36,6 +47,8 @@ pub struct RemoteTerminal {
     visible: bool,
     /// When the last key went to this terminal's view, for key to glyph.
     last_key: Option<Instant>,
+    /// The parser thread's work, once connected.
+    jobs: Option<UnboundedSender<Job>>,
     _tasks: Vec<Task<()>>,
 }
 
@@ -99,6 +112,7 @@ impl RemoteTerminal {
             pending: Vec::new(),
             visible: true,
             last_key: None,
+            jobs: None,
             _tasks: vec![watch],
         }
     }
@@ -176,6 +190,23 @@ impl RemoteTerminal {
             cx.notify();
             return;
         }
+        // Zed parses a PTY terminal's output on a background thread; this one does the same, so
+        // a flood does not hold up frames (gate 2 of phase 1).
+        let writer = match self.terminal.read(cx).display_only_writer() {
+            Ok(writer) => writer,
+            Err(error) => {
+                self.status = TerminalStatus::Failed(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let (jobs, queued) = unbounded();
+        self._tasks.push(
+            cx.background_executor()
+                .spawn(parse(writer, handle.clone(), queued)),
+        );
+        self.jobs = Some(jobs);
+
         let typed = handle.clone();
         self._tasks.push(cx.spawn(async move |this, cx| {
             while let Some(bytes) = input.next().await {
@@ -193,7 +224,6 @@ impl RemoteTerminal {
         }));
         self._tasks.push(cx.spawn(async move |this, cx| {
             while let Some(first) = events.next().await {
-                // All that is here already goes in one write, so a flood is one frame, not many.
                 let mut batch = vec![first];
                 while let Ok(event) = events.try_recv() {
                     batch.push(event);
@@ -207,29 +237,34 @@ impl RemoteTerminal {
     }
 
     fn apply(&mut self, batch: Vec<TerminalEvent>, cx: &mut Context<Self>) {
-        let Some(handle) = self.handle.clone() else {
+        let (Some(handle), Some(jobs)) = (self.handle.clone(), self.jobs.clone()) else {
             return;
         };
-        let mut bytes = Vec::new();
-        let mut parsed = None;
         for event in batch {
-            match event {
-                TerminalEvent::Output { bytes: chunk, end } => {
-                    bytes.extend_from_slice(&chunk);
-                    parsed = end.or(parsed);
+            let job = match event {
+                TerminalEvent::Output { bytes, end } => {
+                    if !bytes.is_empty() {
+                        crate::perf::overlay::output(&self.label, bytes.len(), cx);
+                    }
+                    Job::Write { bytes, ack: end }
                 }
                 TerminalEvent::Reset { .. } => {
-                    self.write(&mut bytes, cx);
                     // A snapshot draws the whole screen again on a clean one. It keeps the pane's
                     // size: the daemon replays at the shell's size, which this pane claimed.
-                    self.terminal.update(cx, |terminal, cx| {
-                        terminal.replace_display_output(&[], cx).ok();
+                    let writer = self.terminal.update(cx, |terminal, cx| {
+                        terminal.replace_display_output(&[], cx)?;
+                        terminal.display_only_writer()
                     });
+                    match writer {
+                        Ok(writer) => Job::Writer(Box::new(writer)),
+                        Err(error) => {
+                            self.status = TerminalStatus::Failed(error.to_string());
+                            cx.notify();
+                            return;
+                        }
+                    }
                 }
-                TerminalEvent::CaughtUp { offset } => {
-                    self.write(&mut bytes, cx);
-                    handle.caught_up(offset);
-                }
+                TerminalEvent::CaughtUp { offset } => Job::CaughtUp(offset),
                 TerminalEvent::Status(status) => {
                     if status == TerminalStatus::Open {
                         for text in self.pending.drain(..) {
@@ -238,23 +273,34 @@ impl RemoteTerminal {
                     }
                     self.status = status;
                     cx.notify();
+                    continue;
                 }
-            }
-        }
-        self.write(&mut bytes, cx);
-        if let Some(offset) = parsed {
-            handle.parsed(offset);
+            };
+            // Fails only when the parser thread is gone, with the terminal.
+            jobs.unbounded_send(job).ok();
         }
     }
+}
 
-    /// Writes the bytes as they are: they carry their own control sequences.
-    fn write(&self, bytes: &mut Vec<u8>, cx: &mut Context<Self>) {
-        if bytes.is_empty() {
-            return;
+/// The parser thread of one terminal. It acks only what it parsed, so a flood slows down to the
+/// speed it parses at.
+async fn parse(
+    mut writer: DisplayOnlyWriter,
+    handle: Arc<TerminalHandle>,
+    mut jobs: UnboundedReceiver<Job>,
+) {
+    while let Some(job) = jobs.next().await {
+        match job {
+            Job::Write { bytes, ack } => {
+                if !bytes.is_empty() {
+                    writer.write(&bytes);
+                }
+                if let Some(offset) = ack {
+                    handle.parsed(offset);
+                }
+            }
+            Job::CaughtUp(offset) => handle.caught_up(offset),
+            Job::Writer(new) => writer = *new,
         }
-        let bytes = std::mem::take(bytes);
-        crate::perf::overlay::output(&self.label, bytes.len(), cx);
-        self.terminal
-            .update(cx, |terminal, cx| terminal.write_raw_output(&bytes, cx));
     }
 }

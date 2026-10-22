@@ -2,11 +2,13 @@
 
 pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
+                   [--gate2 TASK]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
   --theme   use this theme instead of following the system
   --size    window size in points, placed at the top left of the screen
   --hold    quit after this many seconds (for screenshots)
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
+  --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
 
@@ -23,6 +25,7 @@ pub struct Options {
     pub size: Option<(u32, u32)>,
     pub hold_seconds: Option<u64>,
     pub fake_daemon: bool,
+    pub gate2: Option<String>,
 }
 
 impl Options {
@@ -33,6 +36,7 @@ impl Options {
             size: None,
             hold_seconds: None,
             fake_daemon: false,
+            gate2: None,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -41,6 +45,7 @@ impl Options {
                 "--fake-daemon" => options.fake_daemon = true,
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
+                "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
                 "--hold" => {
                     let seconds = value(&mut args, &arg)?;
                     let seconds = seconds
@@ -94,6 +99,7 @@ mod tests {
         assert_eq!(options.size, None);
         assert_eq!(options.hold_seconds, None);
         assert!(!options.fake_daemon);
+        assert_eq!(options.gate2, None);
     }
 
     #[test]
@@ -107,8 +113,11 @@ mod tests {
             "1600x1000",
             "--hold",
             "12",
+            "--gate2",
+            "T-0145",
         ])
         .unwrap();
+        assert_eq!(options.gate2.as_deref(), Some("T-0145"));
         assert!(options.smoke);
         assert_eq!(options.theme, Some(ThemeMode::Light));
         assert_eq!(options.size, Some((1600, 1000)));
@@ -123,6 +132,7 @@ mod tests {
         assert!(parse(&["--size", "10x10"]).is_err());
         assert!(parse(&["--hold", "soon"]).is_err());
         assert!(parse(&["--hold"]).is_err());
+        assert!(parse(&["--gate2"]).is_err());
         assert!(parse(&["--fast"]).is_err());
     }
 }

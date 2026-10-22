@@ -55,6 +55,7 @@ mod tests {
             parent_id: None,
             repo: None,
             updated_at: updated_at.into(),
+            ..Task::default()
         }
     }
 
