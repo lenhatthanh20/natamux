@@ -2,13 +2,14 @@
 
 pub const USAGE: &str =
     "usage: natamux-app [--smoke] [--theme light|dark] [--size WxH] [--hold SECONDS] [--fake-daemon]
-                   [--gate2 TASK]
+                   [--gate2 TASK] [--shot STATE]
   --smoke   draw a frame, type into the text box, check it, then quit (exit 1 on failure)
   --theme   use this theme instead of following the system
   --size    window size in points, placed at the top left of the screen
   --hold    quit after this many seconds (for screenshots)
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
   --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
+  --shot    open the window in one screen-1 state, for the CI screenshots (docs/rust-phase3.md)
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
 
@@ -16,6 +17,76 @@ The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Na
 pub enum ThemeMode {
     Light,
     Dark,
+}
+
+/// The screen-1 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shot {
+    TasksTable,
+    TasksBoard,
+    BoardHoverCard,
+    AddTaskTyped,
+    StartTask,
+    RemoveWorkspace,
+    ClearFinished,
+    AddSubtask,
+    TaskContextMenu,
+    Skeleton,
+    Toast,
+    Empty,
+    FilterMiss,
+    NoProjects,
+    LoadError,
+    Drawer,
+}
+
+impl Shot {
+    pub const ALL: [Shot; 16] = [
+        Shot::TasksTable,
+        Shot::TasksBoard,
+        Shot::BoardHoverCard,
+        Shot::AddTaskTyped,
+        Shot::StartTask,
+        Shot::RemoveWorkspace,
+        Shot::ClearFinished,
+        Shot::AddSubtask,
+        Shot::TaskContextMenu,
+        Shot::Skeleton,
+        Shot::Toast,
+        Shot::Empty,
+        Shot::FilterMiss,
+        Shot::NoProjects,
+        Shot::LoadError,
+        Shot::Drawer,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Shot::TasksTable => "tasks-table",
+            Shot::TasksBoard => "tasks-board",
+            Shot::BoardHoverCard => "board-hover-card",
+            Shot::AddTaskTyped => "add-task-typed",
+            Shot::StartTask => "start-task",
+            Shot::RemoveWorkspace => "remove-workspace",
+            Shot::ClearFinished => "clear-finished",
+            Shot::AddSubtask => "add-subtask",
+            Shot::TaskContextMenu => "task-context-menu",
+            Shot::Skeleton => "skeleton",
+            Shot::Toast => "toast",
+            Shot::Empty => "empty",
+            Shot::FilterMiss => "filter-miss",
+            Shot::NoProjects => "no-projects",
+            Shot::LoadError => "load-error",
+            Shot::Drawer => "drawer",
+        }
+    }
+
+    fn parse(text: &str) -> Result<Shot, String> {
+        Shot::ALL
+            .into_iter()
+            .find(|shot| shot.name() == text)
+            .ok_or_else(|| format!("--shot does not know the state {text:?}"))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +97,7 @@ pub struct Options {
     pub hold_seconds: Option<u64>,
     pub fake_daemon: bool,
     pub gate2: Option<String>,
+    pub shot: Option<Shot>,
 }
 
 impl Options {
@@ -37,6 +109,7 @@ impl Options {
             hold_seconds: None,
             fake_daemon: false,
             gate2: None,
+            shot: None,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
@@ -46,6 +119,7 @@ impl Options {
                 "--theme" => options.theme = Some(parse_theme(&value(&mut args, &arg)?)?),
                 "--size" => options.size = Some(parse_size(&value(&mut args, &arg)?)?),
                 "--gate2" => options.gate2 = Some(value(&mut args, &arg)?),
+                "--shot" => options.shot = Some(Shot::parse(&value(&mut args, &arg)?)?),
                 "--hold" => {
                     let seconds = value(&mut args, &arg)?;
                     let seconds = seconds
@@ -100,6 +174,7 @@ mod tests {
         assert_eq!(options.hold_seconds, None);
         assert!(!options.fake_daemon);
         assert_eq!(options.gate2, None);
+        assert_eq!(options.shot, None);
     }
 
     #[test]
@@ -115,8 +190,11 @@ mod tests {
             "12",
             "--gate2",
             "T-0145",
+            "--shot",
+            "task-context-menu",
         ])
         .unwrap();
+        assert_eq!(options.shot, Some(Shot::TaskContextMenu));
         assert_eq!(options.gate2.as_deref(), Some("T-0145"));
         assert!(options.smoke);
         assert_eq!(options.theme, Some(ThemeMode::Light));
@@ -134,5 +212,28 @@ mod tests {
         assert!(parse(&["--hold"]).is_err());
         assert!(parse(&["--gate2"]).is_err());
         assert!(parse(&["--fast"]).is_err());
+        assert!(parse(&["--shot", "tasks"]).is_err());
+        assert!(parse(&["--shot"]).is_err());
+    }
+
+    #[test]
+    fn every_shot_name_parses_back() {
+        for shot in Shot::ALL {
+            assert_eq!(parse(&["--shot", shot.name()]).unwrap().shot, Some(shot));
+        }
+    }
+
+    /// CI shoots the states its workflow lists: the same names, in the same order.
+    #[test]
+    fn the_ci_workflow_shoots_every_state() {
+        let workflow = include_str!("../../../../.github/workflows/rust.yml");
+        let listed = workflow
+            .split("STATES: >-")
+            .nth(1)
+            .and_then(|rest| rest.split("run:").next())
+            .unwrap();
+        let listed: Vec<&str> = listed.split_whitespace().collect();
+        let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
+        assert_eq!(listed, names);
     }
 }

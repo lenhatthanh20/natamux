@@ -1,8 +1,17 @@
 //! Limits of the files attached to a new task (`packages/core/src/tasks/attachments.ts`).
 
+use serde::Serialize;
+
 pub const MAX_ATTACHMENT_COUNT: usize = 20;
 pub const MAX_ATTACHMENT_SIZE: u64 = 20_000_000;
 pub const MAX_TASK_ATTACHMENT_SIZE: u64 = 50_000_000;
+
+/// A file sent with a new task, as base64 so it fits in the JSON body (`attachmentUploadSchema`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct AttachmentUpload {
+    pub name: String,
+    pub data: String,
+}
 
 const MB: u64 = 1_000_000;
 

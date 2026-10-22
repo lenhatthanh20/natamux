@@ -1,10 +1,13 @@
 //! One HTTP/1.1 request to the daemon, with its bearer token. The daemon listens on plain HTTP
 //! on this machine, so a connection per request is cheap and needs no pool.
 
+use std::time::Duration;
+
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Method, Request, Uri};
 use hyper_util::rt::TokioIo;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
 
@@ -16,12 +19,63 @@ pub async fn call<T: DeserializeOwned>(
     method: Method,
     path: &str,
 ) -> Result<T, ClientError> {
-    let body = send(config, method, path).await?;
-    serde_json::from_slice(&body).map_err(|error| ClientError::BadAnswer(error.to_string()))
+    read(&send(config, method, path, None).await?)
 }
 
-pub async fn send(config: &Config, method: Method, path: &str) -> Result<Bytes, ClientError> {
-    let (status, body) = request(config, method, path, &[], None).await?;
+/// A request with a JSON body, and its JSON answer.
+pub async fn call_with<T: DeserializeOwned>(
+    config: &Config,
+    method: Method,
+    path: &str,
+    body: &impl Serialize,
+) -> Result<T, ClientError> {
+    let body =
+        serde_json::to_vec(body).map_err(|error| ClientError::BadAnswer(error.to_string()))?;
+    read(&send(config, method, path, Some(body)).await?)
+}
+
+fn read<T: DeserializeOwned>(body: &[u8]) -> Result<T, ClientError> {
+    serde_json::from_slice(body).map_err(|error| ClientError::BadAnswer(error.to_string()))
+}
+
+/// A read that hangs (a slow `git` behind `/diffstats`) must not stop the live feed, which reads
+/// one route after the other. Writes have no limit: git work can take long and still succeed.
+const READ_LIMIT: Duration = Duration::from_secs(30);
+
+/// `json`: a JSON body. Without one there is no content type, as the daemon refuses an empty
+/// JSON body.
+pub async fn send(
+    config: &Config,
+    method: Method,
+    path: &str,
+    json: Option<Vec<u8>>,
+) -> Result<Bytes, ClientError> {
+    send_within(config, method, path, json, READ_LIMIT).await
+}
+
+async fn send_within(
+    config: &Config,
+    method: Method,
+    path: &str,
+    json: Option<Vec<u8>>,
+    read_limit: Duration,
+) -> Result<Bytes, ClientError> {
+    let headers: &[(&str, &str)] = match json {
+        Some(_) => &[("content-type", "application/json")],
+        None => &[],
+    };
+    let is_read = method == Method::GET;
+    let answer = request(config, method, path, headers, json);
+    let (status, body) = if is_read {
+        tokio::time::timeout(read_limit, answer)
+            .await
+            .map_err(|_| ClientError::Unreachable {
+                url: config.base_url.clone(),
+                reason: format!("the daemon did not answer in {} s", read_limit.as_secs()),
+            })??
+    } else {
+        answer.await?
+    };
     if status == hyper::StatusCode::UNAUTHORIZED.as_u16() {
         return Err(ClientError::Unauthorized);
     }
@@ -130,5 +184,33 @@ mod tests {
             "unauthorized"
         );
         assert_eq!(error_message(b"Bad Gateway"), "Bad Gateway");
+    }
+
+    #[test]
+    fn a_read_that_gets_no_answer_fails_after_the_limit() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let answer = rt.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            // Takes the connection and never answers.
+            tokio::spawn(async move {
+                let held = listener.accept().await;
+                std::future::pending::<()>().await;
+                drop(held);
+            });
+            let config = Config {
+                base_url: format!("http://127.0.0.1:{port}"),
+                token: "t".into(),
+            };
+            let limit = Duration::from_millis(200);
+            send_within(&config, Method::GET, "/diffstats", None, limit).await
+        });
+        assert!(
+            matches!(&answer, Err(ClientError::Unreachable { reason, .. }) if reason.contains("did not answer")),
+            "{answer:?}"
+        );
     }
 }

@@ -197,6 +197,15 @@ How to get the build, what CI checks, where it differs and the gate results: `ru
 
 ### Phase 3: desktop app on the Node daemon (8–12 weeks)
 
+Started 2026-10-22 (T-0146). Decisions, details, the beta and the gate results of screen 1: `rust-phase3.md`.
+
+Decisions (owner, 2026-10-22):
+
+- The first task is the shared foundation and screen 1 only. Screens 2 to 7 each get their own task and spec.
+- Beta channel: a GitHub pre-release `native-beta.N` made by hand from a green run of `dev` (`.github/workflows/native-beta.yml`), with the attested CI build. macOS arm64, unsigned until the Apple account exists. `scripts/release.sh` and the releases of `main` do not change.
+- Fonts (Inter, JetBrains Mono) and the Lucide icons that a screen uses live in `crates/natamux-app/assets`, with their licenses. No new crate.
+- A screen's screenshot baselines come from a CI run's artifact, after the owner signs the screen off. The compare step only reports until then.
+
 - Screens in this order. Each one ships when done, behind a "native app (beta)" download next to the Electron one:
   1. Shell, sidebar, task list and board.
   2. Workspace with agent terminals and shells.

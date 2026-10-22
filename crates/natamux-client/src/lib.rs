@@ -1,35 +1,63 @@
-//! Typed client of the Natamux daemon (L3): the live task list and terminal sockets. It runs on
+//! Typed client of the Natamux daemon (L3): its routes, the live dashboard data and terminal
+//! sockets. It runs on
 //! its own small tokio runtime, so the app's main thread only reads channels and never waits on
 //! the network.
 
 pub mod config;
 pub mod error;
 mod http;
+pub mod agents {
+    pub mod api;
+}
 pub mod events {
     pub mod live;
+    pub mod stale;
+}
+pub mod projects {
+    pub mod api;
 }
 pub mod tasks {
     pub mod api;
 }
 pub mod terminals {
+    pub mod api;
     pub mod backoff;
     pub mod protocol;
     pub mod session;
 }
+pub mod workspaces {
+    pub mod api;
+}
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 
 use futures::channel::mpsc::UnboundedReceiver;
-use natamux_proto::tasks::task::Task;
+use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
+use natamux_proto::agents::start::StartAgentInput;
+use natamux_proto::events::task_event::{StoredEvent, TaskEventInput};
+use natamux_proto::projects::repo::{BranchList, LoadedSettings, RepoList, SkillList};
+use natamux_proto::tasks::job::Job;
+use natamux_proto::tasks::task::{DeleteTaskAnswer, NewTaskInput, Task, TemplateTaskInput};
+use natamux_proto::tasks::template::TaskTemplate;
+use natamux_proto::terminals::list::TerminalList;
+use natamux_proto::workspaces::workspace::{
+    ChangeEntry, DiffStat, GitGraph, NewWorkspaceInput, PreparingStep, RemoveWorkspaceAnswer,
+};
 
 pub use config::Config;
 pub use error::ClientError;
-pub use events::live::{LinkStatus, TaskListEvent};
+pub use events::live::{DashboardFeed, FeedTimes, LinkStatus, TaskListEvent, TerminalRows};
+pub use events::stale::DashboardEvent;
 pub use http::request;
 pub use hyper::Method;
+pub use tasks::api::SendEventAnswer;
 pub use terminals::protocol::{TerminalEvent, TerminalStatus};
 pub use terminals::session::{SessionOptions, TerminalHandle};
+
+/// A request that runs on the client's runtime; any executor can await it.
+pub type Answer<T> = std::pin::Pin<Box<dyn Future<Output = Result<T, ClientError>> + Send>>;
 
 pub struct Client {
     runtime: tokio::runtime::Runtime,
@@ -62,25 +90,186 @@ impl Client {
         events::live::watch(self.runtime.handle(), self.config.clone())
     }
 
-    pub fn list_tasks(&self) -> impl Future<Output = Result<Vec<Task>, ClientError>> + use<> {
-        let config = self.config.clone();
-        self.on_runtime(async move { tasks::api::list_tasks(&config).await })
+    /// The dashboard data now and after every change, until the receiver is dropped.
+    pub fn watch_dashboard(&self) -> DashboardFeed {
+        self.watch_dashboard_every(FeedTimes::default())
+    }
+
+    /// `watch_dashboard` with other read times, for tests.
+    pub fn watch_dashboard_every(&self, times: FeedTimes) -> DashboardFeed {
+        events::live::watch_dashboard(self.runtime.handle(), self.config.clone(), times)
     }
 
     pub fn open_terminal(&self, options: SessionOptions) -> TerminalHandle {
         terminals::session::open(self.runtime.handle(), self.config.clone(), options)
     }
 
-    pub fn close_terminal(
+    pub fn close_terminal(&self, task_id: &str, terminal: &str) -> Answer<()> {
+        let (task_id, terminal) = (task_id.to_string(), terminal.to_string());
+        self.with_config(move |config| async move {
+            terminals::api::close_terminal(&config, &task_id, &terminal).await
+        })
+    }
+
+    pub fn list_terminals(&self, task_id: &str) -> Answer<TerminalList> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            terminals::api::list_terminals(&config, &task_id).await
+        })
+    }
+
+    pub fn list_tasks(&self) -> Answer<Vec<Task>> {
+        self.with_config(move |config| async move { tasks::api::list_tasks(&config).await })
+    }
+
+    pub fn create_task(&self, input: NewTaskInput) -> Answer<Task> {
+        self.with_config(
+            move |config| async move { tasks::api::create_task(&config, &input).await },
+        )
+    }
+
+    pub fn list_templates(&self) -> Answer<Vec<TaskTemplate>> {
+        self.with_config(move |config| async move { tasks::api::list_templates(&config).await })
+    }
+
+    pub fn create_from_template(
+        &self,
+        template_id: &str,
+        input: TemplateTaskInput,
+    ) -> Answer<Task> {
+        let template_id = template_id.to_string();
+        self.with_config(move |config| async move {
+            tasks::api::create_from_template(&config, &template_id, &input).await
+        })
+    }
+
+    pub fn list_jobs(&self) -> Answer<Vec<Job>> {
+        self.with_config(move |config| async move { tasks::api::list_jobs(&config).await })
+    }
+
+    pub fn list_events(&self, task_id: &str) -> Answer<Vec<StoredEvent>> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { tasks::api::list_events(&config, &task_id).await },
+        )
+    }
+
+    pub fn send_event(&self, task_id: &str, input: TaskEventInput) -> Answer<SendEventAnswer> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            tasks::api::send_event(&config, &task_id, &input).await
+        })
+    }
+
+    pub fn rename_task(&self, task_id: &str, title: &str) -> Answer<Task> {
+        let (task_id, title) = (task_id.to_string(), title.to_string());
+        self.with_config(move |config| async move {
+            tasks::api::rename_task(&config, &task_id, &title).await
+        })
+    }
+
+    pub fn delete_task(&self, task_id: &str) -> Answer<DeleteTaskAnswer> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { tasks::api::delete_task(&config, &task_id).await },
+        )
+    }
+
+    pub fn list_repos(&self) -> Answer<RepoList> {
+        self.with_config(move |config| async move { projects::api::list_repos(&config).await })
+    }
+
+    pub fn remove_repo(&self, repo_id: &str) -> Answer<()> {
+        let repo_id = repo_id.to_string();
+        self.with_config(move |config| async move {
+            projects::api::remove_repo(&config, &repo_id).await
+        })
+    }
+
+    pub fn list_branches(&self, repo: Option<&str>) -> Answer<BranchList> {
+        let repo = repo.map(str::to_string);
+        self.with_config(move |config| async move {
+            projects::api::list_branches(&config, repo.as_deref()).await
+        })
+    }
+
+    pub fn load_settings(&self, repo_id: &str) -> Answer<LoadedSettings> {
+        let repo_id = repo_id.to_string();
+        self.with_config(move |config| async move {
+            projects::api::load_settings(&config, &repo_id).await
+        })
+    }
+
+    pub fn list_skills(&self, repo_id: &str) -> Answer<SkillList> {
+        let repo_id = repo_id.to_string();
+        self.with_config(move |config| async move {
+            projects::api::list_skills(&config, &repo_id).await
+        })
+    }
+
+    pub fn new_workspace(&self, input: NewWorkspaceInput) -> Answer<Task> {
+        self.with_config(move |config| async move {
+            workspaces::api::new_workspace(&config, &input).await
+        })
+    }
+
+    pub fn remove_workspace(
         &self,
         task_id: &str,
-        terminal: &str,
-    ) -> impl Future<Output = Result<(), ClientError>> + use<> {
-        let config = self.config.clone();
-        let (task_id, terminal) = (task_id.to_string(), terminal.to_string());
-        self.on_runtime(
-            async move { tasks::api::close_terminal(&config, &task_id, &terminal).await },
+        delete_branch: bool,
+    ) -> Answer<RemoveWorkspaceAnswer> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            workspaces::api::remove_workspace(&config, &task_id, delete_branch).await
+        })
+    }
+
+    pub fn list_preparing(&self) -> Answer<BTreeMap<String, PreparingStep>> {
+        self.with_config(
+            move |config| async move { workspaces::api::list_preparing(&config).await },
         )
+    }
+
+    pub fn diff_stats(&self) -> Answer<BTreeMap<String, DiffStat>> {
+        self.with_config(move |config| async move { workspaces::api::diff_stats(&config).await })
+    }
+
+    pub fn list_changes(&self, task_id: &str) -> Answer<Vec<ChangeEntry>> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            workspaces::api::list_changes(&config, &task_id).await
+        })
+    }
+
+    pub fn graph(&self, task_id: &str) -> Answer<GitGraph> {
+        let task_id = task_id.to_string();
+        self.with_config(
+            move |config| async move { workspaces::api::graph(&config, &task_id).await },
+        )
+    }
+
+    pub fn activity(&self) -> Answer<BTreeMap<String, TaskActivity>> {
+        self.with_config(move |config| async move { agents::api::activity(&config).await })
+    }
+
+    pub fn usage(&self) -> Answer<BTreeMap<String, TaskUsage>> {
+        self.with_config(move |config| async move { agents::api::usage(&config).await })
+    }
+
+    pub fn start_agent(&self, task_id: &str, input: StartAgentInput) -> Answer<Task> {
+        let task_id = task_id.to_string();
+        self.with_config(move |config| async move {
+            agents::api::start_agent(&config, &task_id, &input).await
+        })
+    }
+
+    /// Runs a request with the config on the client's runtime.
+    fn with_config<T, F>(&self, request: impl FnOnce(Arc<Config>) -> F) -> Answer<T>
+    where
+        T: Send + 'static,
+        F: Future<Output = Result<T, ClientError>> + Send + 'static,
+    {
+        Box::pin(self.on_runtime(request(self.config.clone())))
     }
 
     /// Runs a future on the client's runtime and gives back one that any executor can await.

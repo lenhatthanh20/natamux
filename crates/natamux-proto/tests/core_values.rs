@@ -5,10 +5,16 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 
 use natamux_proto::agents::claude_code;
+use natamux_proto::agents::start::{LAUNCHABLE_AGENTS, MAX_START_PROMPT_LENGTH};
+use natamux_proto::events::kind::KNOWN_KINDS;
 use natamux_proto::events::task_event::{EVENT_SOURCES, EVENT_TYPES, RECORD_ONLY_EVENT_TYPES};
 use natamux_proto::projects::repo::CONTEXT_SOURCE_TYPES;
 use natamux_proto::tasks::attachments;
-use natamux_proto::tasks::task::{TASK_PRIORITIES, TASK_STATES};
+use natamux_proto::tasks::task::{
+    CHECK_STATES, MAX_TITLE_LENGTH, PULL_REQUEST_STATES, TASK_PRIORITIES, TASK_STATES,
+};
+use natamux_proto::terminals::list::SHELL_PROGRAMS;
+use natamux_proto::workspaces::workspace::{CHANGE_STATUSES, MAX_BASE_LENGTH, MAX_PROMPT_LENGTH};
 
 const TASK_STATE_TS: &str = include_str!("../../../packages/core/src/tasks/task-state.ts");
 const TASK_TS: &str = include_str!("../../../packages/core/src/tasks/task.ts");
@@ -17,6 +23,15 @@ const PROJECT_SETTINGS_TS: &str =
     include_str!("../../../packages/core/src/projects/project-settings.ts");
 const REPO_TS: &str = include_str!("../../../packages/core/src/projects/repo.ts");
 const ATTACHMENTS_TS: &str = include_str!("../../../packages/core/src/tasks/attachments.ts");
+const TERMINAL_TS: &str = include_str!("../../../packages/core/src/terminals/terminal.ts");
+const CHANGES_TS: &str = include_str!("../../../packages/core/src/git/changes.ts");
+const GIT_GRAPH_TS: &str = include_str!("../../../packages/core/src/git/git-graph.ts");
+const TERMINAL_LANE_TS: &str = include_str!("../../../packages/core/src/stages/terminal-lane.ts");
+const EVENT_BUS_TS: &str = include_str!("../../../packages/daemon/src/shared/event-bus.ts");
+const AGENT_LAUNCH_TS: &str = include_str!("../../../packages/daemon/src/agents/agent-launch.ts");
+const WORKSPACE_ROUTES_TS: &str =
+    include_str!("../../../packages/daemon/src/http/routes/workspaces.ts");
+const AGENT_ROUTES_TS: &str = include_str!("../../../packages/daemon/src/http/routes/agents.ts");
 const HOOKS_TS: &str = include_str!("../../../packages/core/src/agents/claude-code-hooks.ts");
 
 /// The quoted strings of `export const NAME ... = [ ... ]`.
@@ -78,6 +93,27 @@ fn lists_match_core() {
         "CONTEXT_SOURCE_TYPES",
     );
     same(
+        &PULL_REQUEST_STATES,
+        list(TASK_TS, "PULL_REQUEST_STATES"),
+        "PULL_REQUEST_STATES",
+    );
+    same(&CHECK_STATES, list(TASK_TS, "CHECK_STATES"), "CHECK_STATES");
+    same(
+        &CHANGE_STATUSES,
+        list(CHANGES_TS, "CHANGE_STATUSES"),
+        "CHANGE_STATUSES",
+    );
+    same(
+        &SHELL_PROGRAMS,
+        list(TERMINAL_TS, "SHELL_PROGRAMS"),
+        "SHELL_PROGRAMS",
+    );
+    same(
+        &LAUNCHABLE_AGENTS,
+        list(AGENT_LAUNCH_TS, "LAUNCHABLE_AGENTS"),
+        "LAUNCHABLE_AGENTS",
+    );
+    same(
         &claude_code::CLAUDE_CODE_HOOK_EVENTS,
         list(HOOKS_TS, "CLAUDE_CODE_HOOK_EVENTS"),
         "CLAUDE_CODE_HOOK_EVENTS",
@@ -137,4 +173,51 @@ fn id_rules_match_core() {
     assert!(TASK_TS.contains(".max(32)\n  .regex(/^[A-Z]+-\\d+$/"));
     assert!(REPO_TS.contains(".regex(/^[a-z0-9]+(-[a-z0-9]+)*$/"));
     assert!(REPO_TS.contains(".max(60)"));
+}
+
+#[test]
+fn input_limits_match_core() {
+    assert!(TASK_TS.contains(&format!(
+        "title: z.string().trim().min(1).max({MAX_TITLE_LENGTH})"
+    )));
+    assert!(
+        WORKSPACE_ROUTES_TS.contains(&format!("base: z.string().min(1).max({MAX_BASE_LENGTH})"))
+    );
+    // 20_000 is written with a separator in TypeScript.
+    let with_separator = MAX_PROMPT_LENGTH.to_string().replace("20000", "20_000");
+    assert!(
+        WORKSPACE_ROUTES_TS.contains(&format!("prompt: z.string().trim().max({with_separator})"))
+    );
+    let start = MAX_START_PROMPT_LENGTH
+        .to_string()
+        .replace("20000", "20_000");
+    assert!(AGENT_ROUTES_TS.contains(&format!("prompt: z.string().max({start}).optional()")));
+}
+
+// The kinds the app reads are all in DaemonMessage, with the names written here.
+#[test]
+fn event_kinds_match_the_daemon() {
+    for kind in KNOWN_KINDS {
+        assert!(
+            EVENT_BUS_TS.contains(&format!("kind: '{kind}'")),
+            "{kind} is not in DaemonMessage"
+        );
+    }
+}
+
+#[test]
+fn preparing_steps_and_push_kinds_match_core() {
+    assert!(EVENT_BUS_TS.contains("export type PreparingStep = 'fetch' | 'checkout'"));
+    for remote in ["none", "new", "tracked"] {
+        assert!(
+            GIT_GRAPH_TS.contains(&format!("remote: z.literal('{remote}')")),
+            "{remote}"
+        );
+    }
+}
+
+// A lane without `agent` counts as an agent, as in the dashboard (`isAgentShell`).
+#[test]
+fn lane_agent_is_null_or_missing_in_core() {
+    assert!(TERMINAL_LANE_TS.contains("agent: z.string().min(1).nullable().optional()"));
 }

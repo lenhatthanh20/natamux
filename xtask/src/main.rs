@@ -1,19 +1,22 @@
 //! Repo tasks, run as `cargo xtask <task>`.
 
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Output};
 
 /// The L4 crates of docs/plan-rust-migration.md. Only they may use the UI framework.
 const UI_CRATES: &[&str] = &["natamux-app", "natamux-cli", "natamux-update"];
 
 const USAGE: &str = "usage: cargo xtask <task>
-  ci      fmt, clippy, tests, layers
-  layers  fail when a crate below L4 uses gpui";
+  ci      fmt, clippy, tests, layers, colour literals
+  layers  fail when a crate below L4 uses gpui
+  colours fail on a colour literal in crates/natamux-app/src outside the theme files";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["ci"] => ci(),
         ["layers"] => layers(),
+        ["colours"] => colours(),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::FAILURE;
@@ -40,7 +43,103 @@ fn ci() -> Result<(), String> {
         "warnings",
     ])?;
     run(&["test", "--workspace", "--locked"])?;
-    layers()
+    layers()?;
+    colours()
+}
+
+/// Views read colours from the theme, never as literals (docs/ui-spec.md, 2.3).
+const COLOUR_ROOT: &str = "crates/natamux-app/src";
+
+fn colours() -> Result<(), String> {
+    let mut files = Vec::new();
+    rust_files(Path::new(COLOUR_ROOT), &mut files)?;
+    let mut bad = Vec::new();
+    for file in files.iter().filter(|file| !colour_literals_allowed(file)) {
+        let source = std::fs::read_to_string(file)
+            .map_err(|error| format!("cannot read {}: {error}", file.display()))?;
+        for line in colour_literal_lines(&source) {
+            bad.push(format!("{}:{line}", file.display()));
+        }
+    }
+    if bad.is_empty() {
+        println!("colours: ok");
+        return Ok(());
+    }
+    Err(format!(
+        "colour literals outside components/colors.rs and the contrast test data (read the theme instead):\n  {}",
+        bad.join("\n  ")
+    ))
+}
+
+fn rust_files(folder: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = std::fs::read_dir(folder)
+        .map_err(|error| format!("cannot read {}: {error}", folder.display()))?;
+    for entry in entries {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        if path.is_dir() {
+            rust_files(&path, out)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
+        }
+    }
+    out.sort();
+    Ok(())
+}
+
+/// `components/colors.rs`, and files of a `theme` folder or named `theme*.rs`.
+/// The only files of `COLOUR_ROOT` that may hold colour literals: the colour module, and the
+/// contrast test's hex data. The theme itself is JSON in `assets/`.
+const COLOUR_FILES: &[&str] = &["components/colors.rs", "components/theme_contrast.rs"];
+
+fn colour_literals_allowed(path: &Path) -> bool {
+    path.strip_prefix(COLOUR_ROOT)
+        .is_ok_and(|inner| COLOUR_FILES.iter().any(|file| inner == Path::new(file)))
+}
+
+/// 1-based numbers of the lines with `rgb(`, `rgba(`, `hsla(`, a hex integer of 6 or 8 digits
+/// such as `0x1b2a4aff`, or a quoted `#` hex colour. Comment lines are skipped.
+fn colour_literal_lines(source: &str) -> Vec<usize> {
+    source
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim_start().starts_with("//"))
+        .filter(|(_, line)| has_colour_literal(line))
+        .map(|(index, _)| index + 1)
+        .collect()
+}
+
+fn has_colour_literal(line: &str) -> bool {
+    ["rgb(", "rgba(", "hsla("]
+        .iter()
+        .any(|call| call_at_word_start(line, call))
+        || hex_literal(line, "0x", false)
+        || hex_literal(line, "\"#", true)
+}
+
+/// `rgb(` counts, `to_rgb(` and `srgb(` do not.
+fn call_at_word_start(line: &str, call: &str) -> bool {
+    line.match_indices(call).any(|(at, _)| {
+        !line[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+    })
+}
+
+/// A `0x` run of 6 or 8 hex digits, or a `"#` run of 3, 4, 6 or 8 closed by a quote.
+fn hex_literal(line: &str, start: &str, quoted: bool) -> bool {
+    line.match_indices(start).any(|(at, _)| {
+        let rest = &line[at + start.len()..];
+        let digits = rest.chars().take_while(char::is_ascii_hexdigit).count();
+        let after = rest[digits..].chars().next();
+        let ends_ok = if quoted {
+            after == Some('"')
+        } else {
+            !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+        };
+        let sizes: &[usize] = if quoted { &[3, 4, 6, 8] } else { &[6, 8] };
+        sizes.contains(&digits) && ends_ok
+    })
 }
 
 fn layers() -> Result<(), String> {
@@ -157,6 +256,46 @@ natamux-store v0.1.0 (/w/crates/natamux-store)
 
 xtask v0.0.0 (/w/xtask)
 ";
+
+    #[test]
+    fn finds_colour_literals_by_line() {
+        let source = "let a = 1;
+let b = rgb(0x1b2a4a);
+// rgb(0x1b2a4a) in a comment
+let c = gpui::rgba(5);
+let d = 0x1b2a4aff;
+let e = \"#1B2A4A\";
+let f = hsla(0.1, 0.2, 0.3, 1.0);
+";
+        assert_eq!(colour_literal_lines(source), [2, 4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn ignores_text_that_only_looks_like_a_colour() {
+        for line in [
+            "let id = \"#tasks\";",
+            "let n = 0x7fff;",
+            "let big = 0x1b2a4a5b6c;",
+            "let x = to_rgb(c);",
+            "let m = 0x10ffff_u32;",
+            "let s = \"#12345\";",
+        ] {
+            assert!(!has_colour_literal(line), "{line}");
+        }
+    }
+
+    #[test]
+    fn allows_literals_only_in_colors_rs_and_the_contrast_test() {
+        let allowed = |file: &str| colour_literals_allowed(&Path::new(COLOUR_ROOT).join(file));
+        assert!(allowed("components/colors.rs"));
+        assert!(allowed("components/theme_contrast.rs"));
+        // A view named after the theme gets no pass.
+        assert!(!allowed("theme/palette.rs"));
+        assert!(!allowed("app/theme_mode.rs"));
+        assert!(!allowed("components/theme_card.rs"));
+        assert!(!allowed("components/chips.rs"));
+        assert!(!allowed("sidebar/colors.rs"));
+    }
 
     #[test]
     fn passes_when_only_ui_crates_reach_gpui() {

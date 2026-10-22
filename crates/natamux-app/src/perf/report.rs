@@ -1,14 +1,46 @@
 //! Tools > Save Perf Report: every sample since the overlay came on, as JSON, for the gate 2
-//! write-up in docs/rust-phase1.md.
+//! write-up in docs/rust-phase1.md, and the start times of screen 1 (docs/rust-phase3.md).
 
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
 use super::stats::PerfStats;
+
+static STARTED: OnceLock<Instant> = OnceLock::new();
+static FIRST_FRAME: OnceLock<Duration> = OnceLock::new();
+static FIRST_DATA: OnceLock<Duration> = OnceLock::new();
+
+/// The start of the app: the first thing `main` does.
+pub fn mark_start() {
+    STARTED.get_or_init(Instant::now);
+}
+
+/// The window drew its first frame. Later calls change nothing.
+pub fn mark_first_frame() {
+    mark(&FIRST_FRAME);
+}
+
+/// The task list came for the first time. Later calls change nothing.
+pub fn mark_first_data() {
+    mark(&FIRST_DATA);
+}
+
+fn mark(cell: &OnceLock<Duration>) {
+    if let Some(started) = STARTED.get() {
+        cell.get_or_init(|| started.elapsed());
+    }
+}
+
+/// Start to first frame, and start to the list with data, in ms.
+fn start_times() -> (Option<f64>, Option<f64>) {
+    let to_ms = |duration: &Duration| duration.as_secs_f64() * 1000.0;
+    (FIRST_FRAME.get().map(to_ms), FIRST_DATA.get().map(to_ms))
+}
 
 /// Writes the report and returns its path.
 pub fn save(stats: &PerfStats) -> std::io::Result<PathBuf> {
@@ -50,11 +82,13 @@ fn report(stats: &PerfStats, now: Instant) -> Value {
     let to_ms = |duration: &std::time::Duration| duration.as_secs_f64() * 1000.0;
     let summary = stats.summary(now, true);
     let (span, totals) = stats.output_totals(now);
+    let (first_frame, first_data) = start_times();
     json!({
         "app": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
         "cpus": std::thread::available_parallelism().map(usize::from).unwrap_or(0),
+        "start": { "first_frame_ms": first_frame, "first_data_ms": first_data },
         "summary": {
             "frames": summary.frames,
             "p50_ms": to_ms(&summary.p50),
@@ -122,6 +156,20 @@ mod tests {
         assert_eq!(report["summary"]["key_to_echo_p95_ms"], Value::Null);
         assert_eq!(report["key_to_echo_ms"].as_array().map(Vec::len), Some(0));
         assert_eq!(report["os"], std::env::consts::OS);
+    }
+
+    #[test]
+    fn the_start_times_are_kept_from_the_first_mark() {
+        mark_first_data();
+        mark_start();
+        mark_first_frame();
+        let (frame, _) = start_times();
+        let frame = frame.unwrap();
+        std::thread::sleep(Duration::from_millis(5));
+        mark_first_frame();
+        assert_eq!(start_times().0, Some(frame));
+        let report = report(&PerfStats::default(), Instant::now());
+        assert_eq!(report["start"]["first_frame_ms"], json!(frame));
     }
 
     #[test]

@@ -1,0 +1,39 @@
+//! Starting an agent by hand (`POST /tasks/:id/agent`, `packages/daemon/src/http/routes/agents.ts`).
+
+use serde::Serialize;
+
+/// `LAUNCHABLE_AGENTS` in `packages/daemon/src/agents/agent-launch.ts`: the agents the daemon can
+/// start.
+pub const LAUNCHABLE_AGENTS: [&str; 5] = ["claude-code", "codex", "gemini", "copilot", "cursor"];
+
+/// `prompt` of a start: at most this many characters.
+pub const MAX_START_PROMPT_LENGTH: usize = 20_000;
+
+/// The body of `POST /tasks/:id/agent`. `base` is the branch a workspace is made from when the
+/// task has none yet. The answer is `{ task }` (`TaskAnswer`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct StartAgentInput {
+    pub agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sends_only_what_is_set() {
+        let input = StartAgentInput {
+            agent: "codex".into(),
+            base: Some("dev".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_string(&input).unwrap(),
+            r#"{"agent":"codex","base":"dev"}"#
+        );
+    }
+}

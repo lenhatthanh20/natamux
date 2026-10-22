@@ -22,6 +22,15 @@ pub const TASK_STATES: [&str; 9] = [
 /// `TASK_PRIORITIES` in `packages/core/src/tasks/task.ts`.
 pub const TASK_PRIORITIES: [&str; 4] = ["low", "normal", "high", "urgent"];
 
+/// `PULL_REQUEST_STATES` in `packages/core/src/tasks/task.ts`.
+pub const PULL_REQUEST_STATES: [&str; 4] = ["open", "draft", "merged", "closed"];
+
+/// `CHECK_STATES` in `packages/core/src/tasks/task.ts`.
+pub const CHECK_STATES: [&str; 4] = ["passing", "failing", "pending", "none"];
+
+/// `title` of a task: at most this many characters, after trimming.
+pub const MAX_TITLE_LENGTH: usize = 400;
+
 /// `taskIdSchema`: `T-42` or `ABC-42`, at most 32 characters.
 pub fn is_task_id(value: &str) -> bool {
     let Some((letters, digits)) = value.split_once('-') else {
@@ -186,6 +195,67 @@ impl Task {
     }
 }
 
+/// What GitHub last said about a task's pull request and its checks (`pullRequestStatusSchema`).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct PullRequestStatus {
+    pub state: String,
+    #[serde(default = "no_checks")]
+    pub checks: String,
+}
+
+fn no_checks() -> String {
+    "none".into()
+}
+
+impl Task {
+    /// None when GitHub was not asked yet, or the stored value is not a status.
+    pub fn pull_request_status(&self) -> Option<PullRequestStatus> {
+        serde_json::from_value(self.pr_status.clone()?).ok()
+    }
+}
+
+/// The body of `POST /tasks`: only what the dashboard sends. Every other field takes its default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewTaskInput {
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
+}
+
+/// The body of `POST /templates/:id/tasks`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct TemplateTaskInput {
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
+}
+
+/// The body of `PATCH /tasks/:id` that renames a task. The route takes any of title, description,
+/// priority, labels and dependsOn; screen 1 changes the title only.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TitlePatch {
+    pub title: String,
+}
+
+/// The answer of `POST /tasks`, `POST /templates/:id/tasks`, `PATCH /tasks/:id`,
+/// `POST /tasks/:id/agent` and `POST /workspaces`: `{ task }`.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TaskAnswer {
+    pub task: Task,
+}
+
+/// The answer of `DELETE /tasks/:id`: the id, and the tasks after the delete (its subtasks may
+/// have changed).
+#[derive(Clone, Debug, Deserialize)]
+pub struct DeleteTaskAnswer {
+    pub id: String,
+    #[serde(default)]
+    pub tasks: Vec<Task>,
+}
+
 /// The body of `GET /tasks`.
 #[derive(Clone, Debug, Deserialize)]
 pub struct TaskList {
@@ -307,5 +377,57 @@ mod tests {
         assert_eq!(list.tasks.len(), 1);
         let ticket: Ticket = serde_json::from_str(r#"{"ticket":"abc"}"#).unwrap();
         assert_eq!(ticket.ticket, "abc");
+    }
+
+    #[test]
+    fn inputs_send_only_what_is_set_in_the_routes_names() {
+        let task = NewTaskInput {
+            title: "Add subtask".into(),
+            parent_id: Some("T-1".into()),
+            repo: Some("natamux".into()),
+        };
+        assert_eq!(
+            serde_json::to_string(&task).unwrap(),
+            r#"{"title":"Add subtask","parentId":"T-1","repo":"natamux"}"#
+        );
+        let plain = NewTaskInput {
+            title: "x".into(),
+            ..Default::default()
+        };
+        assert_eq!(serde_json::to_string(&plain).unwrap(), r#"{"title":"x"}"#);
+        let template = TemplateTaskInput {
+            title: "x".into(),
+            repo: Some("a".into()),
+        };
+        assert_eq!(
+            serde_json::to_string(&template).unwrap(),
+            r#"{"title":"x","repo":"a"}"#
+        );
+        let patch = TitlePatch {
+            title: "New".into(),
+        };
+        assert_eq!(serde_json::to_string(&patch).unwrap(), r#"{"title":"New"}"#);
+    }
+
+    #[test]
+    fn reads_the_delete_answer_and_the_task_answer() {
+        let answer: DeleteTaskAnswer =
+            serde_json::from_str(&format!(r#"{{"id":"T-2","tasks":[{TASK}]}}"#)).unwrap();
+        assert_eq!(answer.id, "T-2");
+        assert_eq!(answer.tasks.len(), 1);
+        let made: TaskAnswer = serde_json::from_str(&format!(r#"{{"task":{TASK}}}"#)).unwrap();
+        assert_eq!(made.task.id, "T-0143");
+    }
+
+    #[test]
+    fn reads_the_pull_request_status_of_a_task() {
+        let mut task: Task = serde_json::from_str(TASK).unwrap();
+        assert_eq!(task.pull_request_status(), None);
+        task.pr_status = Some(serde_json::json!({"state":"merged","checks":"passing","x":1}));
+        let status = task.pull_request_status().unwrap();
+        assert_eq!(
+            (status.state.as_str(), status.checks.as_str()),
+            ("merged", "passing")
+        );
     }
 }

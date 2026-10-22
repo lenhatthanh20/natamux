@@ -4,6 +4,7 @@
 // Each test file uses a part of it.
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -73,7 +74,42 @@ pub struct State {
     pub tickets: u32,
     pub task_fetches: u32,
     pub closed_terminals: Vec<String>,
+    /// Answers by "METHOD /target": the status line and the body.
+    pub routes: HashMap<String, (String, String)>,
+    /// Every request in order: "METHOD /target" and its body.
+    pub requests: Vec<(String, String)>,
+    /// How long each answer waits, to keep a read running.
+    pub delay: Duration,
 }
+
+impl State {
+    pub fn answer(&mut self, route: &str, status: &str, body: &str) {
+        self.routes
+            .insert(route.to_string(), (status.to_string(), body.to_string()));
+    }
+
+    /// How many times the client asked for "METHOD /target".
+    pub fn count(&self, route: &str) -> usize {
+        self.requests
+            .iter()
+            .filter(|(seen, _)| seen == route)
+            .count()
+    }
+
+    pub fn last_request(&self) -> (String, String) {
+        self.requests.last().cloned().unwrap_or_default()
+    }
+}
+
+/// What the dashboard feed reads on every connect, with nothing in it.
+const EMPTY_READS: [(&str, &str); 6] = [
+    ("GET /repos", r#"{"repos":[],"worktreesDir":"/w"}"#),
+    ("GET /jobs", r#"{"jobs":[]}"#),
+    ("GET /activity", r#"{"activity":{}}"#),
+    ("GET /usage", r#"{"usage":{}}"#),
+    ("GET /diffstats", r#"{"stats":{}}"#),
+    ("GET /workspaces/preparing", r#"{"preparing":{}}"#),
+];
 
 pub struct FakeDaemon {
     pub address: String,
@@ -86,10 +122,14 @@ impl FakeDaemon {
     pub async fn start() -> FakeDaemon {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap().to_string();
-        let state = Arc::new(Mutex::new(State {
+        let mut state = State {
             tasks: tasks_json(&["T-1"]),
             ..State::default()
-        }));
+        };
+        for (route, body) in EMPTY_READS {
+            state.answer(route, "200 OK", body);
+        }
+        let state = Arc::new(Mutex::new(state));
         let (terminal_tx, terminals) = mpsc::unbounded_channel();
         let (events_tx, events) = mpsc::unbounded_channel();
         let shared = state.clone();
@@ -159,36 +199,62 @@ pub async fn serve(
         }
         return;
     }
-    let mut buffer = vec![0; head.len()];
+    let mut buffer = vec![0; head.len() + content_length(&lower)];
     stream.read_exact(&mut buffer).await.unwrap();
+    let body = String::from_utf8_lossy(&buffer[head.len()..]).to_string();
+    let route = format!("{method} {target}");
+    let delay = {
+        let mut state = state.lock().unwrap();
+        state.requests.push((route.clone(), body));
+        state.delay
+    };
+    tokio::time::sleep(delay).await;
     let authorized = lower.contains(&format!("authorization: bearer {TOKEN}"));
     let (status, body) = if !authorized {
         (
-            "401 Unauthorized",
+            "401 Unauthorized".to_string(),
             r#"{"error":"unauthorized"}"#.to_string(),
         )
-    } else if method == "GET" && target == "/tasks" {
-        let mut state = state.lock().unwrap();
-        state.task_fetches += 1;
-        ("200 OK", state.tasks.clone())
-    } else if method == "POST" && target.ends_with("/terminal/ticket") {
-        let mut state = state.lock().unwrap();
-        state.tickets += 1;
-        ("200 OK", format!(r#"{{"ticket":"t{}"}}"#, state.tickets))
-    } else if method == "DELETE" && target.contains("/terminals/") {
-        state.lock().unwrap().closed_terminals.push(target);
-        ("200 OK", r#"{"terminals":[]}"#.to_string())
     } else {
-        (
-            "404 Not Found",
-            r#"{"message":"Route not found"}"#.to_string(),
-        )
+        answer(&mut state.lock().unwrap(), &method, &target, &route)
     };
     let response = format!(
         "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
         body.len()
     );
     let _ = stream.write_all(response.as_bytes()).await;
+}
+
+fn answer(state: &mut State, method: &str, target: &str, route: &str) -> (String, String) {
+    let ok = |body: String| ("200 OK".to_string(), body);
+    if let Some(answer) = state.routes.get(route).cloned() {
+        if route == "GET /tasks" {
+            state.task_fetches += 1;
+        }
+        answer
+    } else if route == "GET /tasks" {
+        state.task_fetches += 1;
+        ok(state.tasks.clone())
+    } else if method == "POST" && target.ends_with("/terminal/ticket") {
+        state.tickets += 1;
+        ok(format!(r#"{{"ticket":"t{}"}}"#, state.tickets))
+    } else if method == "DELETE" && target.contains("/terminals/") {
+        state.closed_terminals.push(target.to_string());
+        ok(r#"{"terminals":[]}"#.to_string())
+    } else {
+        (
+            "404 Not Found".to_string(),
+            r#"{"message":"Route not found"}"#.to_string(),
+        )
+    }
+}
+
+fn content_length(lower_head: &str) -> usize {
+    lower_head
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length:"))
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 /// The request line and headers, read without taking them from the stream.
