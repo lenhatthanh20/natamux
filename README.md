@@ -27,7 +27,7 @@
 <p align="center">
   <a href="https://github.com/lenhatthanh20/natamux/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/lenhatthanh20/natamux?style=flat-square&label=release&color=3b6fd8"></a>
   <a href="https://github.com/lenhatthanh20/natamux/actions/workflows/ci.yml"><img alt="CI status of main" src="https://img.shields.io/github/actions/workflow/status/lenhatthanh20/natamux/ci.yml?branch=main&style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square&color=3b6fd8"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/lenhatthanh20/natamux?style=flat-square&color=3b6fd8"></a>
   <a href="https://natamux.github.io/docs/getting-started/install/"><img alt="Platforms: macOS, Windows, Linux" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-3b6fd8?style=flat-square"></a>
 </p>
 
@@ -221,4 +221,7 @@ Natamux is young and moves fast. Issues and pull requests are welcome.
 
 ## License
 
-[MIT](LICENSE)
+Natamux is free software under the [GNU General Public License, version 3 or later](LICENSE) (GPL-3.0-or-later).
+Copyright (c) 2026 lenhatthanh20 and the Natamux contributors.
+
+Releases before the move to Rust were published under the MIT License.

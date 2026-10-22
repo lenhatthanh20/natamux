@@ -56,6 +56,8 @@ Jobs:
 | CI | `os (<os>, 1..3, desktop)`, `node-24` | macOS and Windows tests in 3 parts plus the desktop start, Node 24. Only on pushes to `main`, not `natamux-ci/*` |
 | E2E | `build`, `test (<group>)`, `publish` | production images and Playwright, see the `e2e` skill |
 | Site | `build` | only when `site/**` changes |
+| Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers |
+| Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
 
 - A test that fails in one shard: the log names the file. `--shard` splits files the same way each run, so a rerun hits the same shard.
 

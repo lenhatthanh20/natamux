@@ -163,7 +163,10 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertIn("Natamux does not sandbox agents", self.readme)
         self.assertIn("Natamux does not sandbox agents", (ROOT / "SECURITY.md").read_text())
         self.assertIn("private vulnerability reporting", self.readme)
-        self.assertTrue((ROOT / "LICENSE").read_text().startswith("MIT License"))
+        license_text = (ROOT / "LICENSE").read_text()
+        self.assertTrue(license_text.lstrip().startswith("GNU GENERAL PUBLIC LICENSE"))
+        self.assertIn("Version 3, 29 June 2007", license_text)
+        self.assertIn("GPL-3.0-or-later", self.readme)
         for target in ("PRIVACY.md", "SECURITY.md", "LICENSE"):
             self.assertIn(target, [destination for _, _, destination in self.links])
         self.assertNotRegex(

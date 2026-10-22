@@ -34,6 +34,21 @@ Natamux: an Agent Development Environment (ADE). Run many coding agents in paral
 - Size guide: a file of 500 lines or less, a function of 80 lines or less. Split by concern before you pass it.
 - Moving a file: `git mv`, keep its name, and move its tests with it.
 
+## Rust
+
+The move to Rust: `docs/plan-rust-migration.md`. Rules from phase 0 on:
+
+- Every Rust PR targets `dev`.
+- `cargo` runs in CI only. Never on the owner's Mac, also not in a Natamux task terminal there. Optional: the hardened Docker command, or a `natamux-dev` user where the plan allows one (plan, "Safe local setup").
+- Before a PR, `cargo xtask ci` must pass: fmt, clippy, tests, layers. CI runs it (`.github/workflows/rust.yml`).
+- No `unwrap`, `expect` or `panic` outside tests. Clippy denies them.
+- Every bug fix gets a regression test.
+- Layers: only L4 crates (`natamux-app`, `natamux-cli`, `natamux-update`) may use `gpui`. `cargo xtask layers` checks it.
+- UI code reads theme tokens, never hard-coded colours.
+- A UI change: check screenshots in the light and the dark theme, at more than one window size.
+- Dependencies: ask first, as for npm packages. Commit `Cargo.lock`; build with `--locked`. A new source (registry or git) must be allowed in `deny.toml`.
+- Layout: crates in `crates/<name>/`, folder by feature inside `src/`. Unit tests in a `#[cfg(test)]` module, integration tests in `crates/<name>/tests/`. The `__tests__` rule is for TypeScript.
+
 ## Skills (.claude/skills)
 
 Each skill is `.claude/skills/<name>/SKILL.md`. Agents that do not load these skills: read the file before that kind of work.

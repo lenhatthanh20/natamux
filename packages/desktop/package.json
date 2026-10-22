@@ -30,5 +30,5 @@
   "description": "Run many coding agents in parallel, one dashboard for every task",
   "author": "lenhatthanh20",
   "homepage": "https://natamux.github.io/",
-  "license": "MIT"
+  "license": "GPL-3.0-or-later"
 }
