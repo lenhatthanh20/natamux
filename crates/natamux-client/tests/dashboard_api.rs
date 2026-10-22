@@ -11,42 +11,10 @@ use natamux_proto::events::task_event::TaskEventInput;
 use natamux_proto::tasks::task::{NewTaskInput, TemplateTaskInput};
 use natamux_proto::workspaces::workspace::{NewWorkspaceInput, PreparingStep, PushStatus};
 use serde_json::{Value, json};
-use support::{FakeDaemon, runtime, within};
+use support::{exchange, ok};
 
 const TASK: &str =
     r#"{"id":"T-0009","title":"Fix it","state":"draft","updatedAt":"2026-10-22T00:00:00.000Z"}"#;
-
-/// Runs one call against a daemon that answers `route` with `body`, and gives back the answer and
-/// the body the client sent (Null when it sent none).
-fn exchange<T: Send + 'static>(
-    route: &str,
-    status: &str,
-    body: &str,
-    call: impl FnOnce(&natamux_client::Client) -> natamux_client::Answer<T>,
-) -> (Result<T, ClientError>, Value) {
-    let rt = runtime();
-    let daemon = rt.block_on(FakeDaemon::start());
-    daemon.state(|state| state.answer(route, status, body));
-    let client = daemon.client();
-    let answer = rt.block_on(within(call(&client)));
-    let (seen, sent) = daemon.state(|state| state.last_request());
-    assert_eq!(seen, route);
-    let sent = if sent.is_empty() {
-        Value::Null
-    } else {
-        serde_json::from_str(&sent).unwrap()
-    };
-    (answer, sent)
-}
-
-fn ok<T: Send + 'static>(
-    route: &str,
-    body: &str,
-    call: impl FnOnce(&natamux_client::Client) -> natamux_client::Answer<T>,
-) -> (T, Value) {
-    let (answer, sent) = exchange(route, "200 OK", body, call);
-    (answer.unwrap(), sent)
-}
 
 #[test]
 fn reads_the_task_list() {

@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::stages::schema::Step;
+
 /// `CONTEXT_SOURCE_TYPES`: where a task's context can come from.
 pub const CONTEXT_SOURCE_TYPES: [&str; 4] = ["manual", "github-issue", "skill", "mcp"];
 
@@ -68,12 +70,51 @@ impl ContextSource {
     }
 }
 
-/// The part of a project's settings the Start a task dialog reads: its context sources. Stages,
-/// tracker and agent settings are left to the dashboard.
+/// The part of a project's settings the app reads: context sources, stages and the tracker. Agent
+/// settings are left to the dashboard. The daemon fills the default pipeline in `stages`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 pub struct ProjectSettings {
     #[serde(default)]
     pub context: ContextSettings,
+    #[serde(default)]
+    pub stages: Vec<Step>,
+    #[serde(default)]
+    pub tracker: TrackerSettings,
+}
+
+/// `trackerSettingsSchema`: `kind` is `github` or `none`; `create_issue` is one of `never`,
+/// `manual`, `on-spec-approved`, `on-pr`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackerSettings {
+    #[serde(rename = "type", default = "github")]
+    pub kind: String,
+    #[serde(default = "manual")]
+    pub create_issue: String,
+    #[serde(default = "yes")]
+    pub link_in_pr: bool,
+}
+
+fn github() -> String {
+    "github".into()
+}
+
+fn manual() -> String {
+    "manual".into()
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Default for TrackerSettings {
+    fn default() -> Self {
+        TrackerSettings {
+            kind: github(),
+            create_issue: manual(),
+            link_in_pr: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -181,6 +222,30 @@ mod tests {
         assert_eq!(list.repos[0].worktrees_dir.as_deref(), Some("/w"));
         let older: RepoList = serde_json::from_str(r#"{"repos":[]}"#).unwrap();
         assert_eq!(older.worktrees_dir, None);
+    }
+
+    #[test]
+    fn settings_read_the_stages_and_the_tracker_with_their_defaults() {
+        let loaded: LoadedSettings = serde_json::from_str(
+            r#"{"settings":{"stages":[{"id":"spec","kind":"agent","gate":"manual","prompt":"x"},
+                {"id":"build","parallel":[{"id":"a","kind":"agent","gate":"auto"}]}],
+                "tracker":{"createIssue":"on-pr"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(loaded.settings.stages.len(), 2);
+        let tracker = &loaded.settings.tracker;
+        assert_eq!(
+            (
+                tracker.kind.as_str(),
+                tracker.create_issue.as_str(),
+                tracker.link_in_pr
+            ),
+            ("github", "on-pr", true)
+        );
+        let plain: LoadedSettings = serde_json::from_str("{}").unwrap();
+        assert!(plain.settings.stages.is_empty());
+        assert_eq!(plain.settings.tracker, TrackerSettings::default());
+        assert_eq!(plain.settings.tracker.create_issue, "manual");
     }
 
     #[test]

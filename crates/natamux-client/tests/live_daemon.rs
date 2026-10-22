@@ -2,20 +2,25 @@
 //! .github/workflows/rust.yml starts the daemon image and runs these with `--ignored`.
 //!
 //! Env: NATAMUX_URL, NATAMUX_TOKEN, and NATAMUX_LIVE_TASK, a task with a workspace. The screen 1
-//! flow makes and deletes its own tasks.
+//! flows of screen 1, 2 and 3 make and delete their own tasks, and clean up when a step fails.
 
 // Test code: a failed unwrap is a failed test. clippy.toml allows it only inside #[test] fns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::any::Any;
+use std::panic::AssertUnwindSafe;
+use std::sync::Mutex;
 use std::time::Duration;
 
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use natamux_client::{
     Client, Config, DashboardEvent, DashboardFeed, LinkStatus, SessionOptions, TaskListEvent,
     TerminalEvent, TerminalHandle, TerminalStatus,
 };
-use natamux_proto::tasks::task::NewTaskInput;
-use natamux_proto::workspaces::workspace::NewWorkspaceInput;
+use natamux_proto::stages::actions::{StageAction, StageActionInput};
+use natamux_proto::tasks::task::{NewTaskInput, TaskChanges};
+use natamux_proto::tasks::template::TemplateInput;
+use natamux_proto::workspaces::workspace::{FanOutInput, NewWorkspaceInput};
 
 const WAIT: Duration = Duration::from_secs(20);
 // Not Terminal 1, where the task's agent may run.
@@ -260,42 +265,178 @@ async fn wait_for_terminals(client: &Client, task: &str, done: impl Fn(&[String]
     }
 }
 
+/// The tasks a flow made, so they go even when a step fails.
+#[derive(Default)]
+struct Made(Mutex<Vec<String>>);
+
+impl Made {
+    fn add(&self, id: &str) {
+        self.0.lock().unwrap().push(id.to_string());
+    }
+}
+
+/// Removes the workspaces and deletes the tasks of `made`, the newest first. A task that is gone
+/// already is no error here. Then the failure of the flow, if any, goes on.
+async fn finish(client: &Client, made: &Made, result: Result<(), Box<dyn Any + Send>>) {
+    let ids = made.0.lock().unwrap().clone();
+    for id in ids.iter().rev() {
+        let _ = client.remove_workspace(id, true).await;
+        let _ = client.delete_task(id).await;
+    }
+    if let Err(panic) = result {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 #[test]
 #[ignore = "needs a daemon: NATAMUX_URL, NATAMUX_TOKEN"]
 fn runs_the_reads_and_writes_of_screen_2() {
     let config = Config::from_env().expect("NATAMUX_URL and NATAMUX_TOKEN");
     let client = Client::new(config).unwrap();
     runtime().block_on(async {
-        let repos = client.list_repos().await.unwrap();
-        let repo = repos.repos.first().map(|repo| repo.id.clone());
-        let task = client
-            .create_task(NewTaskInput {
-                title: "Rust screen 2 test".into(),
-                parent_id: None,
-                repo,
-            })
-            .await
-            .unwrap();
-        let made = client.create_workspace(&task.id, None).await.unwrap();
-        assert!(made.workspace.is_some());
-
-        // Terminal 2 exists as long as a socket to it is open.
-        let _handle = client.open_terminal(SessionOptions::new(&task.id, "2", 100, 30, true));
-        wait_for_terminals(&client, &task.id, |names| names.iter().any(|n| n == "2")).await;
-        client.close_terminal(&task.id, "2").await.unwrap();
-        wait_for_terminals(&client, &task.id, |names| !names.iter().any(|n| n == "2")).await;
-
-        client.ended_shells(&task.id).await.unwrap();
-
-        // The test repo has no origin, so the push is refused with the daemon's message.
-        let refused = client.push(&task.id).await.unwrap_err();
-        assert!(
-            matches!(refused, natamux_client::ClientError::Status { .. }),
-            "{refused:?}"
-        );
-
-        client.remove_workspace(&task.id, true).await.unwrap();
-        let deleted = client.delete_task(&task.id).await.unwrap();
-        assert_eq!(deleted.id, task.id);
+        let made = Made::default();
+        let result = AssertUnwindSafe(screen_2(&client, &made))
+            .catch_unwind()
+            .await;
+        finish(&client, &made, result).await;
     });
+}
+
+async fn screen_2(client: &Client, made: &Made) {
+    let repos = client.list_repos().await.unwrap();
+    let repo = repos.repos.first().map(|repo| repo.id.clone());
+    let task = client
+        .create_task(NewTaskInput {
+            title: "Rust screen 2 test".into(),
+            parent_id: None,
+            repo,
+        })
+        .await
+        .unwrap();
+    made.add(&task.id);
+    let made_workspace = client.create_workspace(&task.id, None).await.unwrap();
+    assert!(made_workspace.workspace.is_some());
+
+    // Terminal 2 exists as long as a socket to it is open.
+    let _handle = client.open_terminal(SessionOptions::new(&task.id, "2", 100, 30, true));
+    wait_for_terminals(client, &task.id, |names| names.iter().any(|n| n == "2")).await;
+    client.close_terminal(&task.id, "2").await.unwrap();
+    wait_for_terminals(client, &task.id, |names| !names.iter().any(|n| n == "2")).await;
+
+    client.ended_shells(&task.id).await.unwrap();
+
+    // The test repo has no origin, so the push is refused with the daemon's message.
+    let refused = client.push(&task.id).await.unwrap_err();
+    assert!(
+        matches!(refused, natamux_client::ClientError::Status { .. }),
+        "{refused:?}"
+    );
+
+    client.remove_workspace(&task.id, true).await.unwrap();
+    let deleted = client.delete_task(&task.id).await.unwrap();
+    assert_eq!(deleted.id, task.id);
+}
+
+#[test]
+#[ignore = "needs a daemon: NATAMUX_URL, NATAMUX_TOKEN"]
+fn runs_the_reads_and_writes_of_screen_3() {
+    let config = Config::from_env().expect("NATAMUX_URL and NATAMUX_TOKEN");
+    let client = Client::new(config).unwrap();
+    runtime().block_on(async {
+        let made = Made::default();
+        let result = AssertUnwindSafe(screen_3(&client, &made))
+            .catch_unwind()
+            .await;
+        finish(&client, &made, result).await;
+    });
+}
+
+async fn screen_3(client: &Client, made: &Made) {
+    let repos = client.list_repos().await.unwrap();
+    let repo = repos.repos.first().map(|repo| repo.id.clone());
+    let task = client
+        .create_task(NewTaskInput {
+            title: "Rust screen 3 test".into(),
+            parent_id: None,
+            repo: repo.clone(),
+        })
+        .await
+        .unwrap();
+    made.add(&task.id);
+    client.create_workspace(&task.id, None).await.unwrap();
+
+    // The daemon fills the default pipeline when the project has none of its own.
+    let repo = repo.expect("the daemon has a project");
+    let settings = client.load_settings(&repo).await.unwrap().settings;
+    assert!(!settings.stages.is_empty());
+    let stages: Vec<String> = settings
+        .stages
+        .iter()
+        .flat_map(|step| step.stages().into_iter().map(|stage| stage.id.clone()))
+        .collect();
+    let (first, last) = (stages[0].clone(), stages[stages.len() - 1].clone());
+    client.list_stage_files(&task.id).await.unwrap();
+
+    let changes = TaskChanges {
+        description: Some("Written by the screen 3 test".into()),
+        priority: Some("high".into()),
+        ..TaskChanges::default()
+    };
+    let edited = client.update_task(&task.id, changes).await.unwrap();
+    assert_eq!(edited.description, "Written by the screen 3 test");
+    assert_eq!(edited.priority, "high");
+
+    // A mark on a stage that is not reached yet, then cleared.
+    let marked = client.set_skip(&task.id, &last, true).await.unwrap();
+    assert!(marked.skip_stages.unwrap_or_default().contains(&last));
+    let cleared = client.set_skip(&task.id, &last, false).await.unwrap();
+    assert!(!cleared.skip_stages.unwrap_or_default().contains(&last));
+
+    // Skip the current stage, then send the task back to the first one.
+    let skipped = client
+        .stage_action(&task.id, StageActionInput::new(StageAction::Skip))
+        .await
+        .unwrap();
+    assert_ne!(skipped.stage, first, "the skip moved the task on");
+    let back = StageActionInput {
+        to: Some(first.clone()),
+        reason: Some("Sent back by the screen 3 test".into()),
+        ..StageActionInput::new(StageAction::Reopen)
+    };
+    // The daemon takes the send back; where it lands depends on the stages that ran (a skipped
+    // context is not run again on a draft task), so only check it is a stage of the pipeline.
+    let reopened = client.stage_action(&task.id, back).await.unwrap();
+    assert!(stages.contains(&reopened.stage), "{}", reopened.stage);
+
+    let try_id = template_and_try(client, made, &task.id).await;
+    client.delete_task(&try_id).await.unwrap();
+    client.remove_workspace(&task.id, true).await.unwrap();
+    client.delete_task(&task.id).await.unwrap();
+}
+
+/// Saves a template, and runs one more try of the task without an agent. Gives the try's id.
+async fn template_and_try(client: &Client, made: &Made, task_id: &str) -> String {
+    let template = TemplateInput {
+        name: "Rust screen 3 test".into(),
+        title: "Screen 3: ".into(),
+        description: String::new(),
+        priority: "normal".into(),
+        labels: Vec::new(),
+    };
+    client.save_template(template).await.unwrap();
+
+    let tries = client
+        .fan_out(
+            task_id,
+            FanOutInput {
+                count: 1,
+                start: false,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(tries.len(), 1);
+    made.add(&tries[0].id);
+
+    tries[0].id.clone()
 }

@@ -13,6 +13,15 @@ pub mod events {
 pub mod projects {
     pub mod repo;
 }
+pub mod stages {
+    pub mod actions;
+    pub mod capabilities;
+    pub mod catalog;
+    pub mod position;
+    pub mod progress;
+    pub mod resolve;
+    pub mod schema;
+}
 pub mod tasks {
     pub mod attachments;
     pub mod job;

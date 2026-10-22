@@ -143,6 +143,8 @@ pub fn diff_size(stat: Option<&DiffStat>) -> Option<(String, String, String)> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RowItem {
     Open,
+    /// Opens the details panel on the task.
+    Details,
     /// Only a task with no parent.
     AddSubtask,
     Separator,
@@ -172,10 +174,9 @@ fn starts_agent(state: TaskState) -> bool {
     )
 }
 
-/// The row menu of the table (`menuFor` in `TaskTable.tsx`). Show details is left out until the
-/// details panel ships.
+/// The row menu of the table (`menuFor` in `TaskTable.tsx`).
 pub fn row_menu(task: &Task, tasks: &[Task]) -> Vec<RowItem> {
-    let mut items = vec![RowItem::Open];
+    let mut items = vec![RowItem::Open, RowItem::Details];
     if task.parent_id.is_none() {
         items.push(RowItem::AddSubtask);
     }
@@ -255,9 +256,9 @@ pub fn type_ahead_target(labels: &[&str], typed: &str, from: usize) -> Option<us
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
 
     use super::*;
+    use natamux_proto::tasks::task::PullRequestStatus;
 
     fn make(id: &str, state: TaskState) -> Task {
         Task {
@@ -310,7 +311,10 @@ mod tests {
         let mut task = make("T-1", TaskState::Review);
         assert_eq!(pull_request_summary(&task), None);
         assert_eq!(pull_request_cell(&task), None);
-        task.pr_status = Some(json!({ "state": "open", "checks": "failing" }));
+        task.pr_status = Some(PullRequestStatus {
+            state: "open".into(),
+            checks: "failing".into(),
+        });
         assert_eq!(
             pull_request_summary(&task).as_deref(),
             Some("open, checks fail")
@@ -319,7 +323,10 @@ mod tests {
             pull_request_cell(&task),
             Some(("open, checks fail".into(), ChecksTone::Failing))
         );
-        task.pr_status = Some(json!({ "state": "merged", "checks": "none" }));
+        task.pr_status = Some(PullRequestStatus {
+            state: "merged".into(),
+            checks: "none".into(),
+        });
         assert_eq!(pull_request_summary(&task).as_deref(), Some("merged"));
         assert_eq!(
             pull_request_cell(&task),
@@ -379,6 +386,7 @@ mod tests {
             labels(&row_menu(&task, std::slice::from_ref(&task))),
             vec![
                 "Open",
+                "Details",
                 "AddSubtask",
                 "Separator",
                 "Mark ready",
@@ -402,6 +410,7 @@ mod tests {
             labels(&row_menu(&task, &[])),
             vec![
                 "Open",
+                "Details",
                 "Separator",
                 "CopyId",
                 "CopyBranch { enabled: true }",

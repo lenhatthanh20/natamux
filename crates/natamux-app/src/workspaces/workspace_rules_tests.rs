@@ -337,3 +337,21 @@ fn names_the_stages_of_a_group_that_are_in_review_else_the_task_stage() {
     let running = json!({"a": "running", "b": "running"});
     assert_eq!(review_stages(&task("build", running)), vec!["build"]);
 }
+
+#[test]
+fn assumes_a_question_while_the_events_load() {
+    use natamux_proto::events::task_event::{WaitReason, wait_reason};
+    assert_eq!(wait_reason(None), WaitReason::Asked { question: None });
+}
+
+#[test]
+fn reads_the_question_of_the_newest_ask() {
+    use natamux_proto::events::task_event::{WaitReason, wait_reason};
+    let events = [asked(1, json!({"message": "Which runner?"}))];
+    assert_eq!(
+        wait_reason(Some(&events)),
+        WaitReason::Asked {
+            question: Some("Which runner?".into())
+        }
+    );
+}

@@ -1,4 +1,4 @@
-//! `--shot STATE`: opens the window in one screen-1 or screen-2 state of the fake daemon, for the CI
+//! `--shot STATE`: opens the window in one screen-1, 2 or 3 state of the fake daemon, for the CI
 //! screenshots (docs/rust-phase3.md). The clock stops at the fake's time and the view state is
 //! fixed and never saved, so a shot is the same on every run.
 
@@ -12,10 +12,11 @@ use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
+use super::view_rules::DetailsView;
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
-use crate::tasks::add_subtask_dialog;
 use crate::tasks::task_time::parse_iso_ms;
+use crate::tasks::{add_subtask_dialog, fan_out_dialog};
 use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
 use crate::workspaces::{new_workspace_dialog, remove_finished, remove_workspace_dialog};
 
@@ -41,6 +42,13 @@ const FINISHED: &str = "T-0139";
 const FOUND: &str = "src";
 /// The terminals draw their first screen within this.
 const PANES_DRAWN: Duration = Duration::from_millis(1200);
+/// Screen 3: a plan that waits for approval, a failed plan, and the second of three tries.
+const PLAN_GATE: &str = "T-0150";
+const PLAN_FAILED: &str = "T-0151";
+const A_TRY: &str = "T-0152";
+const SEND_BACK_REASON: &str = "Add the error cases for an empty list.";
+/// The Tries section is the sixth part of the Details tab of a try with an agent.
+const TRIES_PART: usize = 5;
 
 /// Sets the fake's data before the window watches it. Call it before `window::open`.
 pub fn prepare(shot: Shot) {
@@ -76,6 +84,15 @@ pub fn run(handle: WindowHandle<Root>, shot: Shot, cx: &mut App) {
         }
         if shot == Shot::Toast {
             keep_toast(handle, cx).await;
+        }
+        if matches!(
+            shot,
+            Shot::SendBack | Shot::DetailsMoreMenu | Shot::CompareTries
+        ) {
+            cx.background_executor().timer(SETTLE).await;
+            handle
+                .update(cx, |root, window, cx| panel_step(shot, root, window, cx))
+                .ok();
         }
         if shot == Shot::TerminalFind {
             cx.background_executor().timer(PANES_DRAWN).await;
@@ -162,12 +179,68 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         Shot::NoWorkspace | Shot::WorkspacePreparing => open(&dashboard, NO_WORKSPACE, cx),
         Shot::FinishedWrapUp => open(&dashboard, FINISHED, cx),
         Shot::AgentsGrid => dashboard.update(cx, |dashboard, cx| dashboard.open_agents(cx)),
+        Shot::TaskDetailsReview => choose(root, REVIEWED, window, cx),
+        Shot::TaskDetailsNeedsInput => choose(root, ASKING, window, cx),
+        Shot::AnswerBanner => progress(&dashboard, ASKING, cx),
+        Shot::WorkspaceTerminalPlanGate => progress(&dashboard, PLAN_GATE, cx),
+        Shot::WorkspaceProgress | Shot::SendBack => progress(&dashboard, REVIEWED, cx),
+        Shot::StageFailed => progress(&dashboard, PLAN_FAILED, cx),
+        Shot::DetailsDetails | Shot::DetailsMoreMenu => details(&dashboard, REVIEWED, cx),
+        Shot::CompareTries => details(&dashboard, A_TRY, cx),
+        Shot::FanOut => {
+            details(&dashboard, NO_WORKSPACE, cx);
+            if let Some(task) = task(NO_WORKSPACE, cx) {
+                fan_out_dialog::open(&dashboard, &task, window, cx);
+            }
+        }
         Shot::Toast | Shot::Skeleton | Shot::Empty | Shot::NoProjects | Shot::LoadError => {}
     }
 }
 
 fn open(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
     dashboard.update(cx, |dashboard, cx| dashboard.open(id, cx));
+}
+
+/// The task's workspace with its panel on Progress.
+fn progress(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open(id, cx);
+        dashboard.show_progress(id, cx);
+    });
+}
+
+/// The task's workspace with its panel on Details.
+fn details(dashboard: &gpui::Entity<Dashboard>, id: &str, cx: &mut App) {
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.open(id, cx);
+        dashboard.set_details_view(DetailsView::Details, cx);
+        dashboard.set_details_open(id, true, cx);
+    });
+}
+
+/// A table row clicked: selected, with its panel open on Details.
+fn choose(root: &mut Root, id: &str, window: &mut Window, cx: &mut gpui::Context<Root>) {
+    select(root, id, window, cx);
+    root.dashboard()
+        .update(cx, |dashboard, cx| dashboard.choose(id, cx));
+}
+
+/// What needs the panel drawn first: the Send back dialog, the "..." menu, the Tries section.
+fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Context<Root>) {
+    let panel = root.details_panel().clone();
+    match shot {
+        Shot::SendBack => {
+            let dialog = panel.update(cx, |panel, cx| panel.send_back_waiting(window, cx));
+            if let Some(dialog) = dialog {
+                dialog.update(cx, |dialog, cx| {
+                    dialog.set_reason(SEND_BACK_REASON, window, cx)
+                });
+            }
+        }
+        Shot::DetailsMoreMenu => panel.update(cx, |panel, cx| panel.open_more_menu(window, cx)),
+        Shot::CompareTries => panel.update(cx, |panel, cx| panel.center_on(TRIES_PART, cx)),
+        _ => {}
+    }
 }
 
 /// Mod+F in Terminal 1 of the task, and the term typed.
@@ -236,13 +309,19 @@ mod tests {
             assert!(fake.list_events(id).is_ok());
             assert!(fake.graph(id).is_ok());
         }
-        for id in [RUNNING, ASKING, REVIEWED] {
+        for id in [RUNNING, ASKING, REVIEWED, PLAN_GATE, PLAN_FAILED] {
             assert!(fake.list_terminals(id).is_ok(), "{id}");
             assert!(fake.graph(id).is_ok(), "{id}");
         }
         let tasks = fake.tasks();
         let task = |id: &str| tasks.iter().find(|task| task.id == id).cloned().unwrap();
         assert!(task(NO_WORKSPACE).workspace.is_none());
+        assert!(
+            task(A_TRY)
+                .labels
+                .iter()
+                .any(|label| label == "tries-t-0135")
+        );
         assert!(task(FINISHED).workspace.is_some());
         assert_eq!(fake.ended_shells(FINISHED).unwrap().len(), 5);
         assert!(fake.list_terminals(REMOVED).is_ok());

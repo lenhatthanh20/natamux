@@ -94,9 +94,13 @@ impl WorkspaceView {
         if is_finished_state(task.state) {
             let dashboard = self.dashboard.clone();
             let (repo, title) = (task.repo.clone(), follow_up_title(&task.id));
+            let (progress, id) = (self.dashboard.clone(), task.id.clone());
             return FinishedSummary {
                 task,
                 events: shown.events.clone(),
+                on_progress: Rc::new(move |_: &mut Window, cx: &mut App| {
+                    progress.update(cx, |dashboard, cx| dashboard.show_progress(&id, cx))
+                }),
                 on_follow_up: Rc::new(move |window: &mut Window, cx: &mut App| {
                     new_workspace_dialog::open_with(
                         &dashboard,
@@ -263,6 +267,10 @@ impl WorkspaceView {
         .on_pull_request(move |_, cx| {
             this.update(cx, |view, cx| view.git_step(GitStep::PullRequest, cx))
                 .ok();
+        })
+        .on_progress({
+            let (dashboard, id) = (self.dashboard.clone(), task.id.clone());
+            move |_, cx| dashboard.update(cx, |dashboard, cx| dashboard.show_progress(&id, cx))
         });
         let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
         let banner = finished.then(|| {

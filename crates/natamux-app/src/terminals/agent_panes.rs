@@ -22,6 +22,7 @@ use super::terminal_cache::{Owner, TerminalCache, terminal_key};
 use super::terminal_find::open_find;
 use super::terminal_pane::TerminalPane;
 use crate::app::dashboard::{Dashboard, TerminalReader};
+use crate::components::agent_badge::narrow_pane;
 use crate::components::chips::CountBadge;
 use crate::components::empty_state::EmptyState;
 use crate::components::menu::MenuLayer;
@@ -72,6 +73,8 @@ pub struct AgentPanes {
     dashboard: Entity<Dashboard>,
     maximized: Option<String>,
     width: Entity<Option<f32>>,
+    /// The panes are narrower than the agent badge's name needs.
+    narrow: bool,
     _width: Subscription,
 }
 
@@ -83,6 +86,7 @@ impl AgentPanes {
             dashboard,
             maximized: None,
             width,
+            narrow: false,
             _width: observe,
         }
     }
@@ -250,6 +254,7 @@ impl AgentPanes {
         };
         let text = pane_state_text(state, activity.as_deref());
         PaneHeader::new(terminal_key(&id, "1"), title)
+            .narrow(self.narrow)
             .agent_shell(Some(state), agent)
             .state_text(Some((text, state == TaskState::NeedsInput)))
             .hint(other_terminal_hint(task, &lanes))
@@ -348,15 +353,16 @@ impl Render for AgentPanes {
                 .child(empty)
                 .into_any_element()
         } else {
+            let columns = if self.maximized.is_some() {
+                1
+            } else {
+                columns_for(layout, visible.len(), width)
+            };
+            self.narrow = narrow_pane(width, columns);
             let panes: Vec<AnyElement> = visible
                 .iter()
                 .filter_map(|task| self.pane(task, window, cx))
                 .collect();
-            let columns = if self.maximized.is_some() {
-                1
-            } else {
-                columns_for(layout, panes.len(), width)
-            };
             v_flex()
                 .id("agent-panes")
                 .size_full()

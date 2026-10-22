@@ -9,8 +9,7 @@ pub const KEY_STEP_LARGE: f32 = 64.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edge {
     Right,
-    // The details panel of screen 3 resizes from its left edge.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// The details panel resizes from its left edge.
     Left,
 }
 

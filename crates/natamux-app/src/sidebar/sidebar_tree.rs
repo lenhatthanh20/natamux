@@ -4,6 +4,8 @@
 // Ported with their tests (spec D11); the stage rules serve the details panel of screen 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use natamux_proto::stages::capabilities::stage_name_of_id;
+pub use natamux_proto::stages::schema::{PathRef, StepRef};
 use natamux_proto::tasks::task::{Task, TaskState};
 use serde_json::Value;
 
@@ -106,54 +108,9 @@ pub fn agent_label(id: Option<&str>) -> String {
     }
 }
 
-// The stages of the catalog (`stage-catalog.ts`) that have a name of their own.
-const STAGE_NAMES: [(&str, &str); 17] = [
-    ("clarify", "Open questions"),
-    ("ux-design", "UX design"),
-    ("migration", "Data migration"),
-    ("docs", "Documentation"),
-    ("i18n", "Translations"),
-    ("lint", "Lint and types"),
-    ("self-review", "Agent self-review"),
-    ("security", "Security review"),
-    ("performance", "Performance check"),
-    ("accessibility", "Accessibility check"),
-    ("agent-review", "Review"),
-    ("review", "Manual review"),
-    ("testing", "Automated tests"),
-    ("e2e", "End-to-end tests"),
-    ("qa", "Manual testing"),
-    ("changelog", "Release notes"),
-    ("staging", "Staging check"),
-];
-
-/// `stageName` in core, for a stage with no name of its own: the catalog name, else the id with
-/// spaces and a capital ("test-spec" is "Test spec").
+/// `stageName` in core, for a stage with no name of its own (the rules are in `natamux_proto`).
 pub fn stage_name(id: &str) -> String {
-    if let Some((_, name)) = STAGE_NAMES.iter().find(|(known, _)| *known == id) {
-        return (*name).to_owned();
-    }
-    let words = id.replace('-', " ");
-    let mut chars = words.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
-}
-
-/// One path of a branch.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PathRef {
-    pub id: String,
-    pub stages: Vec<String>,
-}
-
-/// A step of a task's pipeline (`StepRef` in core): a stage, a group that runs at the same time,
-/// or a branch of exclusive paths.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum StepRef {
-    Stage(String),
-    Group { id: String, parallel: Vec<String> },
-    Branch { id: String, paths: Vec<PathRef> },
+    stage_name_of_id(id)
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {

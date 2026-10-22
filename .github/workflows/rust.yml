@@ -86,8 +86,9 @@ jobs:
               sips -s format bmp "shots/window-$theme-$size.png" --out "shots/window-$theme-$size.bmp" >/dev/null
             done
           done
-      # Screens 1 and 2 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
-      # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768 (docs/rust-phase3.md).
+      # Screens 1 to 3 of phase 3: every state in both themes at two sizes, and the DOCKED ones at
+      # 1024x720 too, where the sidebar docks; the runner's screen is 1024x768, so the details panel,
+      # which docks from 1280, is shot as a sheet (docs/rust-phase3.md).
       # The shot is the app's window itself, found by its process id: macOS moves a window that
       # asks for the top of the screen below the menu bar, so a fixed screen rectangle is wrong.
       - name: Screen shots
@@ -97,10 +98,15 @@ jobs:
             clear-finished add-subtask task-context-menu skeleton toast empty filter-miss
             no-projects load-error drawer workspace-terminal-running terminal-find
             workspace-terminal-needs-input workspace-terminal-review no-workspace
-            workspace-preparing finished-wrap-up agents-grid
+            workspace-preparing finished-wrap-up agents-grid task-details-review
+            task-details-needs-input answer-banner workspace-terminal-plan-gate workspace-progress
+            stage-failed send-back details-details compare-tries details-more-menu fan-out
           DOCKED: >-
             tasks-table workspace-terminal-running terminal-find workspace-terminal-needs-input
             workspace-terminal-review no-workspace workspace-preparing finished-wrap-up agents-grid
+            task-details-review task-details-needs-input answer-banner workspace-terminal-plan-gate
+            workspace-progress stage-failed send-back details-details compare-tries
+            details-more-menu fan-out
         run: |
           mkdir -p shots
           window_of() {

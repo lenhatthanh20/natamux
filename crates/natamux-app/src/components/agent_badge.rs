@@ -35,16 +35,41 @@ impl RenderOnce for AgentIcon {
     }
 }
 
-/// The agent of a terminal pane: its icon and name in a bordered chip.
+/// The agent of a terminal pane: its icon and name in a bordered chip. A pane narrower than 28rem
+/// shows only the icon, as a name cut to one letter says nothing; the name stays in the tooltip.
 #[derive(IntoElement)]
 pub struct AgentBadge {
     agent: String,
+    icon_only: bool,
 }
+
+/// `@min-[28rem]` of the web's badge.
+pub const NAME_FROM_PANE_WIDTH: f32 = 448.;
 
 impl AgentBadge {
     pub fn new(agent: String) -> Self {
-        AgentBadge { agent }
+        AgentBadge {
+            agent,
+            icon_only: false,
+        }
     }
+
+    pub fn icon_only(mut self, icon_only: bool) -> Self {
+        self.icon_only = icon_only;
+        self
+    }
+}
+
+/// The padding around a grid of panes and the gap between them (8 in both grids).
+const GRID_SPACE: f32 = 8.;
+
+/// A pane is narrow when its own width, without the grid's padding and gaps, is under 28rem.
+pub fn narrow_pane(width: Option<f32>, columns: usize) -> bool {
+    let columns = columns.max(1) as f32;
+    width.is_some_and(|width| {
+        let pane = (width - 2. * GRID_SPACE - (columns - 1.) * GRID_SPACE) / columns;
+        pane < NAME_FROM_PANE_WIDTH
+    })
 }
 
 impl RenderOnce for AgentBadge {
@@ -59,12 +84,14 @@ impl RenderOnce for AgentBadge {
             .border_1()
             .border_color(cx.theme().colors().border)
             .child(AgentIcon::new(Some(self.agent)))
-            .child(
-                Label::new(label.clone())
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .single_line(),
-            )
+            .when(!self.icon_only, |this| {
+                this.child(
+                    Label::new(label.clone())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .single_line(),
+                )
+            })
             .tooltip(Tooltip::text(label))
     }
 }
@@ -81,4 +108,19 @@ pub fn agent_name(agent: &str, size: LabelSize) -> impl IntoElement {
                 .color(Color::Muted)
                 .truncate(),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pane_narrower_than_28rem_shows_only_the_agent_icon() {
+        // 2 columns of 900: (900 - 16 - 8) / 2 = 438.
+        assert!(narrow_pane(Some(900.), 2));
+        assert!(!narrow_pane(Some(930.), 2));
+        assert!(!narrow_pane(Some(464.), 1));
+        assert!(narrow_pane(Some(463.), 1));
+        assert!(!narrow_pane(None, 3));
+    }
 }

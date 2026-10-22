@@ -41,6 +41,7 @@ struct Data {
     diff_stats: BTreeMap<String, DiffStat>,
     terminals: BTreeMap<String, TerminalList>,
     events: BTreeMap<String, Vec<StoredEvent>>,
+    stage_files: BTreeMap<String, Vec<natamux_proto::stages::actions::StageFile>>,
     templates: Vec<TaskTemplate>,
     branches: BranchList,
     skills: SkillList,
@@ -75,7 +76,7 @@ macro_rules! part {
 impl Data {
     fn seed() -> Data {
         let seed: Value = serde_json::from_str(SEED).unwrap_or(Value::Null);
-        Data {
+        let mut data = Data {
             tasks: part!(seed, "tasks"),
             repos: part!(seed, "repos"),
             worktrees_dir: part!(seed, "worktreesDir"),
@@ -85,6 +86,7 @@ impl Data {
             diff_stats: part!(seed, "diffStats"),
             terminals: part!(seed, "terminals"),
             events: part!(seed, "events"),
+            stage_files: BTreeMap::new(),
             templates: part!(seed, "templates"),
             branches: part!(seed, "branches"),
             skills: part!(seed, "skills"),
@@ -95,7 +97,9 @@ impl Data {
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
-        }
+        };
+        data.add_stage_seed();
+        data
     }
 
     fn everything(&self) -> Vec<DashboardEvent> {
@@ -263,7 +267,7 @@ impl FakeDaemon {
     }
 
     pub fn load_settings(&self, _repo_id: &str) -> Answer<LoadedSettings> {
-        Ok(LoadedSettings::default())
+        Ok(stages::reference_settings())
     }
 
     pub fn list_skills(&self, _repo_id: &str) -> Answer<SkillList> {
@@ -457,6 +461,9 @@ pub(super) fn events<T>(items: impl IntoIterator<Item = T>) -> UnboundedReceiver
 
 #[path = "fake_terminals.rs"]
 mod screens;
+
+#[path = "fake_stages.rs"]
+mod stages;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

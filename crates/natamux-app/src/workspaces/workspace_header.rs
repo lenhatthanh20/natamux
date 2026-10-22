@@ -1,13 +1,13 @@
 //! The 44 px header of a workspace (docs/ui-spec.md 4.29, `features/workspaces/WorkspaceHeader.tsx`):
 //! id, title, state chip, branch chip (click copies), then Push and Create PR with their reasons,
 //! or Open pull request. A done or cancelled task shows only Open pull request: its finished
-//! banner offers the next git step. Commit… (screen 4) and the chip's "Show in progress"
-//! (screen 3) are not here yet; where React shows Commit…, Push says why it waits.
+//! banner offers the next git step. The state chip of a task that waits for the user shows its
+//! progress. Commit… (screen 4) is not here yet; where React shows Commit…, Push says why it waits.
 
 use std::rc::Rc;
 
 use gpui::{ClickEvent, ClipboardItem, FontWeight};
-use natamux_proto::tasks::task::Task;
+use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::workspace::GitGraph;
 use ui::{ButtonLike, TintColor, Tooltip, prelude::*};
 
@@ -16,6 +16,7 @@ use super::wrap_up_rules::is_finished_state;
 use crate::components::chips::StateChip;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::toast;
+use crate::tasks::task_rules::lane_summary;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -43,6 +44,7 @@ pub struct WorkspaceHeader {
     width: Option<f32>,
     on_push: OnClick,
     on_pull_request: OnClick,
+    on_progress: OnClick,
 }
 
 impl WorkspaceHeader {
@@ -61,7 +63,14 @@ impl WorkspaceHeader {
             width,
             on_push: Rc::new(|_, _| {}),
             on_pull_request: Rc::new(|_, _| {}),
+            on_progress: Rc::new(|_, _| {}),
         }
+    }
+
+    /// The state chip's "Show in progress".
+    pub fn on_progress(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_progress = Rc::new(run);
+        self
     }
 
     pub fn on_push(mut self, run: impl Fn(&mut Window, &mut App) + 'static) -> Self {
@@ -109,6 +118,30 @@ fn git_button(
                 .child(Icon::from_path(format!("icons/lucide/{icon}.svg")).size(IconSize::Small))
                 .child(Label::new(button.label).size(LabelSize::Small)),
         )
+}
+
+/// A task that waits for the user: the chip is a button to its progress (tip "Show in progress",
+/// with the lanes of a group first).
+fn state_chip(task: &Task, run: OnClick) -> AnyElement {
+    let waits = matches!(
+        task.state,
+        TaskState::NeedsInput | TaskState::Failed | TaskState::Review
+    );
+    if !waits {
+        return StateChip::new(task.state).into_any_element();
+    }
+    let tip = match lane_summary(task) {
+        Some(lanes) => format!("{lanes} \u{b7} Show in progress"),
+        None => "Show in progress".to_owned(),
+    };
+    div()
+        .id("workspace-state")
+        .flex_none()
+        .cursor_pointer()
+        .tooltip(Tooltip::text(tip))
+        .on_click(move |_, window, cx| run(window, cx))
+        .child(StateChip::new(task.state))
+        .into_any_element()
 }
 
 /// The branch chip: middle-truncated, the full name in the tooltip, a click copies it.
@@ -250,7 +283,7 @@ impl RenderOnce for WorkspaceHeader {
                         .truncate(),
                 ),
             )
-            .child(StateChip::new(task.state))
+            .child(state_chip(task, self.on_progress.clone()))
             .children(branch)
             .child(div().flex_1())
             .children(buttons)

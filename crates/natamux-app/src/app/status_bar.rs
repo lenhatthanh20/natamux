@@ -1,7 +1,7 @@
 //! The status bar of docs/ui-spec.md 4.28 (`features/app/StatusBar.tsx`): Live or Reconnecting,
 //! "N running", "N need you" and the background jobs with their menu. Under 1024 the dot and the
-//! jobs lose their labels (`status_layout`). Projects, Import issues, Notifications, the keyboard
-//! and the account come with later screens.
+//! jobs lose their labels (`status_layout`). At the right, the switch of the needs-you
+//! notifications. Projects, Import issues, the keyboard and the account come with later screens.
 
 use std::rc::Rc;
 
@@ -31,6 +31,8 @@ pub struct StatusBar {
     on_running: OnClick,
     on_needs_you: OnClick,
     on_open_task: OnOpenTask,
+    notify: bool,
+    on_notify: OnClick,
 }
 
 impl StatusBar {
@@ -50,7 +52,20 @@ impl StatusBar {
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
             on_open_task: Rc::new(|_, _, _| {}),
+            notify: false,
+            on_notify: Rc::new(|_, _, _| {}),
         }
+    }
+
+    /// "Notify me" / "Notifications on": the app's own switch, kept in `view.json`.
+    pub fn notify(
+        mut self,
+        on: bool,
+        f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.notify = on;
+        self.on_notify = Rc::new(f);
+        self
     }
 
     pub fn on_running(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
@@ -120,6 +135,32 @@ fn open_jobs_menu(
         menu
     });
     MenuLayer::open(menu, event.position(), window, cx);
+}
+
+fn notify_item(on: bool, on_click: OnClick) -> ButtonLike {
+    let (icon, label, tip) = if on {
+        (
+            "bell-off",
+            "Notifications on",
+            "Stop the notifications of tasks that need you",
+        )
+    } else {
+        (
+            "bell",
+            "Notify me",
+            "Notify me when a task needs me while the app is in the background",
+        )
+    };
+    item_button("status-notify", tip, on_click).child(
+        h_flex()
+            .gap(px(6.))
+            .child(
+                Icon::from_path(format!("icons/lucide/{icon}.svg"))
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(item_label(label, Color::Muted)),
+    )
 }
 
 impl RenderOnce for StatusBar {
@@ -197,5 +238,7 @@ impl RenderOnce for StatusBar {
             .child(running)
             .children(needs)
             .children(jobs)
+            .child(div().flex_1())
+            .child(notify_item(self.notify, self.on_notify))
     }
 }

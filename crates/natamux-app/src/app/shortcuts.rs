@@ -49,7 +49,15 @@ actions!(
         NewTerminal,
         FindInTerminal,
         FindNext,
-        FindPrevious
+        FindPrevious,
+        ToggleDetails,
+        ToggleSelectedDetails,
+        EditTask,
+        ShowProgress,
+        ApproveStage,
+        ReportStage,
+        SkipStage,
+        SendBackStage
     ]
 );
 
@@ -113,6 +121,14 @@ command_actions! {
     "terminal.find" => FindInTerminal,
     "find.next" => FindNext,
     "find.previous" => FindPrevious,
+    "details.toggle" => ToggleDetails,
+    "task.details" => ToggleSelectedDetails,
+    "task.edit" => EditTask,
+    "progress.show" => ShowProgress,
+    "stage.approve" => ApproveStage,
+    "stage.report" => ReportStage,
+    "stage.skip" => SkipStage,
+    "stage.send-back" => SendBackStage,
 }
 
 fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Vec<KeyBinding>) {
@@ -259,7 +275,8 @@ mod tests {
     fn leaves_esc_and_the_shells_chords_to_the_terminal() {
         // On macOS only Esc: Cmd chords never reach a shell.
         assert_eq!(terminal_keeps(true).len(), 1);
-        // Esc, and Mod+Q, Mod+B, Mod+[ and the Mod+Alt tools: Ctrl chords without Shift elsewhere.
-        assert_eq!(terminal_keeps(false).len(), 10);
+        // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B and the Mod+Alt tools: Ctrl chords without
+        // Shift elsewhere.
+        assert_eq!(terminal_keeps(false).len(), 11);
     }
 }

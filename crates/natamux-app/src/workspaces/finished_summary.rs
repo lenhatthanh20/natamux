@@ -1,6 +1,5 @@
 //! A done or cancelled task whose workspace was removed (docs/ui-spec.md 4.29, `FinishedSummary`
-//! in `NoWorkspace.tsx`): what it ended with, and a follow-up task. Show progress comes with
-//! screen 3.
+//! in `NoWorkspace.tsx`): what it ended with, its progress, and a follow-up task.
 
 use std::rc::Rc;
 
@@ -38,6 +37,7 @@ pub struct FinishedSummary {
     pub task: Task,
     pub events: Option<Vec<StoredEvent>>,
     pub on_follow_up: OnClick,
+    pub on_progress: OnClick,
 }
 
 fn fact(name: &'static str, value: String) -> impl IntoElement {
@@ -51,6 +51,26 @@ fn fact(name: &'static str, value: String) -> impl IntoElement {
         .child(Label::new(value).size(LabelSize::Small))
 }
 
+fn button(id: &'static str, label: &'static str, run: OnClick) -> Button {
+    Button::new(id, label).on_click(move |_: &ClickEvent, window, cx| run(window, cx))
+}
+
+/// The Pull request and Branch rows.
+fn facts_of(task: &Task) -> (String, String) {
+    let pull_request = match &task.pr {
+        Some(url) => match pull_request_summary(task.pull_request_status().as_ref()) {
+            Some(summary) => format!("{}, {summary}", pull_request_number(url)),
+            None => pull_request_number(url),
+        },
+        None => "None".into(),
+    };
+    let branch = match &task.branch {
+        Some(branch) => format!("Kept: {branch}"),
+        None => "Deleted".into(),
+    };
+    (pull_request, branch)
+}
+
 impl RenderOnce for FinishedSummary {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let task = &self.task;
@@ -60,17 +80,7 @@ impl RenderOnce for FinishedSummary {
         } else {
             format!("{} was cancelled", task.id)
         };
-        let pull_request = match &task.pr {
-            Some(url) => match pull_request_summary(task.pull_request_status().as_ref()) {
-                Some(summary) => format!("{}, {summary}", pull_request_number(url)),
-                None => pull_request_number(url),
-            },
-            None => "None".into(),
-        };
-        let branch = match &task.branch {
-            Some(branch) => format!("Kept: {branch}"),
-            None => "Deleted".into(),
-        };
+        let (pull_request, branch) = facts_of(task);
         let finished = self
             .events
             .as_deref()
@@ -81,12 +91,18 @@ impl RenderOnce for FinishedSummary {
                 .style(ButtonStyle::Outlined)
                 .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
         });
-        let follow_up = {
-            let run = self.on_follow_up.clone();
-            Button::new("summary-follow-up", "Start a follow-up task")
-                .style(ButtonStyle::Outlined)
-                .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
-        };
+        let follow_up = button(
+            "summary-follow-up",
+            "Start a follow-up task",
+            self.on_follow_up.clone(),
+        )
+        .style(ButtonStyle::Outlined);
+        let progress = button(
+            "summary-progress",
+            "Show progress",
+            self.on_progress.clone(),
+        )
+        .style(ButtonStyle::Subtle);
         v_flex()
             .size_full()
             .child(bare_header(task, cx))
@@ -118,7 +134,13 @@ impl RenderOnce for FinishedSummary {
                         .child(fact("Pull request", pull_request))
                         .child(fact("Branch", branch))
                         .child(fact("Finished", finished))
-                        .child(h_flex().gap_2().children(open_pr).child(follow_up)),
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .children(open_pr)
+                                .child(follow_up)
+                                .child(progress),
+                        ),
                 ),
             )
     }

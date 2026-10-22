@@ -46,10 +46,21 @@ pub enum Shot {
     WorkspacePreparing,
     FinishedWrapUp,
     AgentsGrid,
+    TaskDetailsReview,
+    TaskDetailsNeedsInput,
+    AnswerBanner,
+    WorkspaceTerminalPlanGate,
+    WorkspaceProgress,
+    StageFailed,
+    SendBack,
+    DetailsDetails,
+    CompareTries,
+    DetailsMoreMenu,
+    FanOut,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 24] = [
+    pub const ALL: [Shot; 35] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -74,6 +85,17 @@ impl Shot {
         Shot::WorkspacePreparing,
         Shot::FinishedWrapUp,
         Shot::AgentsGrid,
+        Shot::TaskDetailsReview,
+        Shot::TaskDetailsNeedsInput,
+        Shot::AnswerBanner,
+        Shot::WorkspaceTerminalPlanGate,
+        Shot::WorkspaceProgress,
+        Shot::StageFailed,
+        Shot::SendBack,
+        Shot::DetailsDetails,
+        Shot::CompareTries,
+        Shot::DetailsMoreMenu,
+        Shot::FanOut,
     ];
 
     pub fn name(self) -> &'static str {
@@ -102,6 +124,17 @@ impl Shot {
             Shot::WorkspacePreparing => "workspace-preparing",
             Shot::FinishedWrapUp => "finished-wrap-up",
             Shot::AgentsGrid => "agents-grid",
+            Shot::TaskDetailsReview => "task-details-review",
+            Shot::TaskDetailsNeedsInput => "task-details-needs-input",
+            Shot::AnswerBanner => "answer-banner",
+            Shot::WorkspaceTerminalPlanGate => "workspace-terminal-plan-gate",
+            Shot::WorkspaceProgress => "workspace-progress",
+            Shot::StageFailed => "stage-failed",
+            Shot::SendBack => "send-back",
+            Shot::DetailsDetails => "details-details",
+            Shot::CompareTries => "compare-tries",
+            Shot::DetailsMoreMenu => "details-more-menu",
+            Shot::FanOut => "fan-out",
         }
     }
 
@@ -260,7 +293,7 @@ mod tests {
         };
         let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
         assert_eq!(part("STATES: >-", "DOCKED:"), names);
-        // The docked size: the table, and every screen-2 state.
+        // The docked size: the table, and every screen-2 and screen-3 state.
         let docked = part("DOCKED: >-", "run:");
         assert_eq!(docked.first(), Some(&"tasks-table"));
         assert_eq!(docked[1..], names[16..]);

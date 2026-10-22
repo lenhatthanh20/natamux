@@ -6,7 +6,9 @@ use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedSender;
 use natamux_proto::agents::activity::{TaskActivity, TaskUsage};
-use natamux_proto::events::kind::{EventKind, PreparingMessage, Resource, task_id_of};
+use natamux_proto::events::kind::{
+    EventKind, PreparingMessage, Resource, is_task_updated, task_id_of,
+};
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::Task;
@@ -50,6 +52,11 @@ pub enum DashboardEvent {
     },
     /// The shells of a task changed, whether the app shows its rows or not.
     ShellsChanged {
+        task_id: String,
+    },
+    /// A change added a line to the task's log. No read of its own: the app reads the events,
+    /// stage files and settings of the task it shows.
+    TaskLogged {
         task_id: String,
     },
 }
@@ -105,7 +112,14 @@ impl Stale {
     /// Marks what one message makes out of date. A workspace step comes back to pass on at once.
     pub fn note(&mut self, text: &str, shown: &BTreeSet<String>) -> Option<PreparingMessage> {
         match EventKind::parse(text).and_then(EventKind::resource)? {
-            Resource::Tasks => self.tasks = true,
+            Resource::Tasks => {
+                self.tasks = true;
+                if is_task_updated(text)
+                    && let Some(task_id) = task_id_of(text)
+                {
+                    self.passed.push(DashboardEvent::TaskLogged { task_id });
+                }
+            }
             Resource::Repos => self.repos = true,
             Resource::Jobs => self.jobs = true,
             Resource::Activity => self.activity = true,

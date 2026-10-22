@@ -1,6 +1,7 @@
 //! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): sidebar toggle, wordmark,
 //! breadcrumb, needs-you pill and Start a task. On macOS it is the window's drag area, with a gutter
-//! for the traffic lights. The command center and the details toggle come with their screens.
+//! for the traffic lights, and the details toggle at the right. The command center comes with
+//! screen 7.
 
 use std::rc::Rc;
 
@@ -11,7 +12,7 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::commands::shortcut_of;
 use super::shell_rules::{Crumb, needs_you_text};
-use super::shortcuts::{NewWorkspace, ToggleSidebar};
+use super::shortcuts::{NewWorkspace, ToggleDetails, ToggleSidebar};
 use crate::components::chips::tip_with_keys;
 use crate::components::colors::signal;
 
@@ -28,6 +29,8 @@ pub struct TitleBar {
     wide: bool,
     needs_you: usize,
     on_needs_you: OnClick,
+    /// Whether the details show; None while there is no task to show them of.
+    details: Option<bool>,
 }
 
 impl TitleBar {
@@ -44,7 +47,13 @@ impl TitleBar {
             wide,
             needs_you,
             on_needs_you: Rc::new(on_needs_you),
+            details: None,
         }
+    }
+
+    pub fn details(mut self, details: Option<bool>) -> Self {
+        self.details = details;
+        self
     }
 }
 
@@ -79,6 +88,24 @@ fn command_button(
                     .color(Color::Muted),
             ),
         )
+}
+
+/// The details toggle; off with its reason while there is nothing to show.
+fn details_button(details: Option<bool>) -> ButtonLike {
+    let tip = match details {
+        None => "Select a task to show its details",
+        Some(true) => "Hide details",
+        Some(false) => "Show details",
+    };
+    command_button(
+        "toggle-details",
+        "panel-right",
+        tip,
+        "details.toggle",
+        ToggleDetails,
+    )
+    .toggle_state(details == Some(true))
+    .disabled(details.is_none())
 }
 
 fn render_crumb(crumb: Crumb, cx: &App) -> AnyElement {
@@ -216,7 +243,8 @@ impl RenderOnce for TitleBar {
                         "Start a task",
                         "workspace.new",
                         NewWorkspace,
-                    )),
+                    ))
+                    .child(details_button(self.details)),
             )
     }
 }

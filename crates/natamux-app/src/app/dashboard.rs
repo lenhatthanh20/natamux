@@ -17,7 +17,9 @@ use ui::prelude::*;
 
 use super::dashboard_data::{BulkRuns, DashboardData, Link};
 use super::source::{Feed, Rows, Source};
-use super::view_rules::{ShellRequest, request_on_open, seen_after_list, toggle_pin, with_seen};
+use super::view_rules::{
+    Entries, ShellRequest, request_on_open, seen_after_list, toggle_pin, with_seen,
+};
 use super::view_state::{self, Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
 use crate::sidebar::sidebar_tree::with_fold;
@@ -39,6 +41,9 @@ pub enum DashboardChange {
     WorkspaceChanged(String),
     /// A task's terminals started or ended (`shells.changed`).
     ShellsChanged(String),
+    /// A line was added to a task's log (`task.updated`): its events, stage files and
+    /// settings may have changed.
+    TaskLogged(String),
 }
 
 /// The parts of the app that show terminals of tasks; the feed reads the union.
@@ -69,6 +74,9 @@ pub struct Dashboard {
     pub agents_open: bool,
     /// The terminal the open workspace shows and focuses once its terminals are read.
     pub shell_request: Option<ShellRequest>,
+    /// The details panel of each task the user opened or closed, this run only.
+    pub details_open: Entries<bool>,
+    pub panel_request: Option<(String, details::PanelRequest)>,
     terminal_readers: RefCell<BTreeMap<TerminalReader, BTreeSet<String>>>,
     /// The sidebar filter text.
     pub filter: String,
@@ -114,6 +122,8 @@ impl Dashboard {
             open_task: None,
             agents_open: false,
             shell_request: None,
+            details_open: Vec::new(),
+            panel_request: None,
             terminal_readers: RefCell::new(BTreeMap::new()),
             filter: String::new(),
             state_filter: None,
@@ -167,6 +177,9 @@ impl Dashboard {
             }
             DashboardEvent::ShellsChanged { task_id } => {
                 cx.emit(DashboardChange::ShellsChanged(task_id.clone()))
+            }
+            DashboardEvent::TaskLogged { task_id } => {
+                cx.emit(DashboardChange::TaskLogged(task_id.clone()))
             }
             _ => {}
         }
@@ -453,3 +466,9 @@ mod writes;
 
 #[path = "workspace_writes.rs"]
 mod workspace_writes;
+
+#[path = "details_state.rs"]
+pub mod details;
+
+#[path = "details_writes.rs"]
+mod details_writes;

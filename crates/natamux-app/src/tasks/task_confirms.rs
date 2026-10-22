@@ -86,3 +86,24 @@ pub fn confirm_delete_all(
     .rows(rows)
     .open(window, cx);
 }
+
+/// Keep this try (`CompareTries.tsx`): the other tries that are not finished are cancelled.
+pub fn confirm_keep_try(
+    dashboard: &Entity<Dashboard>,
+    kept: &Task,
+    others: Vec<String>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let dashboard = dashboard.clone();
+    Confirm::new(
+        format!("Keep {}?", kept.id),
+        "The other tries that are not finished are cancelled. Their workspaces and branches are kept.",
+        "Keep this try, cancel the others",
+        move |_, cx| {
+            let others = others.clone();
+            dashboard.update(cx, |dashboard, cx| dashboard.keep_try(others, cx));
+        },
+    )
+    .open(window, cx);
+}

@@ -6,8 +6,8 @@ use hyper::Method;
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
 use natamux_proto::workspaces::workspace::{
-    ChangeEntry, ChangeList, CreateWorkspaceInput, DiffStat, DiffStatList, GitGraph,
-    NewWorkspaceInput, PreparingList, PreparingStep, RemoveWorkspaceAnswer,
+    ChangeEntry, ChangeList, CreateWorkspaceInput, DiffStat, DiffStatList, FanOutAnswer,
+    FanOutInput, GitGraph, NewWorkspaceInput, PreparingList, PreparingStep, RemoveWorkspaceAnswer,
 };
 
 use crate::config::Config;
@@ -94,4 +94,22 @@ pub async fn list_changes(config: &Config, task_id: &str) -> Result<Vec<ChangeEn
 pub async fn graph(config: &Config, task_id: &str) -> Result<GitGraph, ClientError> {
     let path = format!("/tasks/{}/graph", encode(task_id));
     call(config, Method::GET, &path).await
+}
+
+/// Makes `input.count` copies of the task, to let several agents try the same work.
+pub async fn fan_out(
+    config: &Config,
+    task_id: &str,
+    input: &FanOutInput,
+) -> Result<Vec<Task>, ClientError> {
+    let path = format!("/tasks/{}/fan-out", encode(task_id));
+    let answer: FanOutAnswer = call_with(config, Method::POST, &path, input).await?;
+    Ok(answer.tasks)
+}
+
+/// Asks GitHub for the pull request's state and checks now.
+pub async fn refresh_pull_request(config: &Config, task_id: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/pull-request/refresh", encode(task_id));
+    let answer: TaskAnswer = call(config, Method::POST, &path).await?;
+    Ok(answer.task)
 }

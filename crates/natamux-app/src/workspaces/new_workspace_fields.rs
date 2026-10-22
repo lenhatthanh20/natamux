@@ -3,25 +3,13 @@
 
 use std::path::PathBuf;
 
-use editor::Editor;
-use gpui::{ClickEvent, Entity, FontWeight, PathPromptOptions};
+use gpui::{ClickEvent, FontWeight, PathPromptOptions};
 use ui::prelude::*;
 
 use super::super::new_workspace_rules::{PickedFile, SourceChoice, fit_attachments, format_bytes};
 use super::{NewWorkspaceDialog, Pick};
 use crate::agents::agent_choices::agent_label;
-
-fn field(label: &'static str, control: impl IntoElement) -> impl IntoElement {
-    v_flex()
-        .gap_1()
-        .child(
-            Label::new(label)
-                .size(LabelSize::Small)
-                .weight(FontWeight::MEDIUM)
-                .color(Color::Muted),
-        )
-        .child(control)
-}
+use crate::components::form::{field, input_box};
 
 fn hint(text: impl Into<SharedString>) -> impl IntoElement {
     Label::new(text).size(LabelSize::Small).color(Color::Muted)
@@ -29,18 +17,6 @@ fn hint(text: impl Into<SharedString>) -> impl IntoElement {
 
 fn section_title(text: &'static str) -> impl IntoElement {
     Label::new(text).weight(FontWeight::SEMIBOLD)
-}
-
-fn input_box(editor: &Entity<Editor>, cx: &App) -> impl IntoElement {
-    let colors = cx.theme().colors();
-    div()
-        .px_2p5()
-        .py_1p5()
-        .rounded_md()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.editor_background)
-        .child(editor.clone())
 }
 
 impl NewWorkspaceDialog {
