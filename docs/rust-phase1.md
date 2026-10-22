@@ -151,10 +151,9 @@ Or run all of it with `--gate2 <task>` from a shell, and keep the window in fron
 - This measure always holds one whole refresh (8.33 ms) plus the wait for the next one (0 to 8.33 ms). With an instant echo, its p95 is 16.25 ms. So no app paced by the display can show p95 ≤ 16 ms under it, Zed included.
 - Echo (key to the echo reaching the app) is the shell, the daemon and the network. Key to glyph minus echo is the app's part.
 
-**Pass rule, waiting for the owner.** The owner chose "one refresh plus jitter" for frames (2026-10-22). Counting in refreshes is how this page reads that. The key numbers were proposed by the gate 2 review. The owner asked for questions to be settled without them, but has not confirmed these numbers yet:
+**Pass rule** (accepted by the owner, who closed phase 1 with it on 2026-10-22). The owner chose "one refresh plus jitter" for frames. Counting in refreshes is how this page reads that. The key numbers were proposed by the gate 2 review:
 - During the bench, frame p99 ≤ 1 refresh and p99.9 ≤ 2 refreshes: at most 1% of frames over 1 refresh, and at most 0.1% over 2. The rule is the mean over at least 4 `--gate2` runs. A single run can be just over the limit: with about 7,200 frames, 0.1% is 7 frames.
 - Key to glyph p95 ≤ 20 ms, and the app's part (per key, minus echo) p95 ≤ 17 ms. Echo is a watch number: phase 4's Rust daemon works on it.
-- Until the owner confirms these, gate 2 is not passed. If the owner keeps a limit per run, gate 2 fails, because one run was at 1.07%.
 
 ### Compare with Zed (owner, 2026-10-22)
 
@@ -190,7 +189,7 @@ Use the native app next to Electron for one working day. Pass: the owner says it
 | Gate | Date | Result | Notes |
 |---|---|---|---|
 | 1 Vietnamese input | 2026-10-22 | Pass | 100% right (owner) |
-| 2 Frame time and latency | 2026-10-22 | Waiting for the owner | First run failed: p99 41.7 ms (see "Gate 2, first run"). After the fix, 4 runs gave these results. Frames over 1 refresh: 0.58–1.07%, mean 0.86% (limit 1%). One run, at 1.07%, is over the limit, so only the mean meets it. Over 2 refreshes: 0.014–0.056% (limit 0.1%). Key to glyph p95: 18.7–19.2 ms (limit 20). App's part p95: 16.2–16.4 ms (limit 17). See "Gate 2, after the fix". Not passed until the owner confirms two things: the pass rule below (the mean of the runs), and the key targets, which the gate 2 review set |
-| 3 Terminal view on a remote stream | 2026-10-22 | Met with a Zed fork (two patches) | CI: `live-daemon` green, `--fake-daemon` shots draw the terminal. Checked by hand 2026-10-22: pass, except "rejected the token" after the Electron app reopened. Fixed: the saved token wins in a task's terminal, with a regression test. The `--gate2` runs, started from a task's terminal, connect with it. The Electron restart was not repeated: the owner said gates that need them need not be checked again. No upstream PR (owner) |
+| 2 Frame time and latency | 2026-10-22 | Pass (the mean of the runs, owner) | First run failed: p99 41.7 ms (see "Gate 2, first run"). After the fix, 4 runs gave these results. Frames over 1 refresh: 0.58–1.07%, mean 0.86% (limit 1%). One run, at 1.07%, is over the limit, so only the mean meets it. Over 2 refreshes: 0.014–0.056% (limit 0.1%). Key to glyph p95: 18.7–19.2 ms (limit 20). App's part p95: 16.2–16.4 ms (limit 17). See "Gate 2, after the fix". The owner accepted the pass rule (the mean of the runs) and the key targets, and closed the phase (2026-10-22) |
+| 3 Terminal view on a remote stream | 2026-10-22 | Met with a Zed fork (two patches) | CI: `live-daemon` green, `--fake-daemon` shots draw the terminal. Checked by hand 2026-10-22: pass, except "rejected the token" after the Electron app reopened. Fixed: the saved token wins in a task's terminal, with a regression test. The `--gate2` runs, started from a task's terminal, connect with it. The Electron restart was not repeated: the owner said gates that need them need not be checked again, and closed the phase (2026-10-22). No upstream PR (owner) |
 | 4 Windows starts and types | 2026-10-22 | Pass | `app-windows` of Rust run 39714171449: release build, `--smoke` typed `abc`, both themes drawn |
-| 5 A day side by side | 2026-10-22 | Looks better (owner) | Not checked again after the gate 2 fix (owner: no need) |
+| 5 A day side by side | 2026-10-22 | Pass (owner) | "Looks better". Not checked again after the gate 2 fix (owner: no need); the owner closed the phase |
