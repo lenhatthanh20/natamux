@@ -1,6 +1,6 @@
 # Research: a native desktop app
 
-Status: research, 2026-10-13. It proposes; it does not change the decision in `plan-tech-stack.md` section 6. Every outside source was checked on 2026-10-13. Facts about Natamux cite the repo file.
+Status: research, 2026-10-13. The decision it informed is now `plan-rust-migration.md` (approved 2026-10-22), which reverses its "stay on Electron" advice. Every outside source was checked on 2026-10-13. Facts about Natamux cite the repo file.
 
 ## Question
 

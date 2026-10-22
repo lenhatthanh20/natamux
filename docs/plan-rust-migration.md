@@ -1,6 +1,6 @@
 # Plan: move Natamux to Rust
 
-Status: proposal, 2026-10-22. It reverses the "stay on Electron" advice in `research-native-app.md`. If the owner approves it, update `plan-tech-stack.md` section 6 in the first PR of phase 0.
+Status: approved by the owner, 2026-10-22, with the switch to GPL-3.0-or-later. It reverses the "stay on Electron" advice in `research-native-app.md`; `plan-tech-stack.md` section 6 points here.
 
 ## Goals
 
@@ -171,9 +171,13 @@ Branches (owner, 2026-10-22):
 ### Phase 1: spike, go or no-go (2–3 weeks)
 
 - Build a GPUI app with a task list and one live agent terminal, against today's Node daemon, over the real WebSocket protocol (hello, snapshot, resume, ack).
+- CI builds the app (see "Safe local setup"):
+  - A job builds the macOS arm64 app on every PR into `dev`, uploads it as an artifact and attests it with `actions/attest-build-provenance`. The owner runs this build; nothing is built on the owner's Mac.
+  - First job of the phase: check that GPUI draws on a GitHub macOS runner (Metal in the runner VM). If it does not, screenshot tests run on the Windows (DirectX through WARP) and Linux (wgpu on software Vulkan) runners, and macOS looks are checked by hand on the CI build.
+- Gates 1, 2 and 5 need a person and a real display, so they run on the owner's Mac with the CI build. CI covers gate 4 and the automated tests.
 - Gate, all must pass:
   1. Vietnamese Telex and VNI pass the word list in the terminal and in a text box on macOS. If not, fix it in a GPUI fork and upstream the fix; if that fails, stop the move.
-  2. 10 terminals at 1 MB/s each meet the frame and latency targets.
+  2. 10 terminals at 1 MB/s each meet the frame and latency targets, measured on the 14" MacBook Pro.
   3. The Zed `terminal_view` works on a remote byte stream.
   4. A Windows build starts and types.
   5. The owner uses it side by side with Electron for one day and says it is clearly better.
@@ -256,17 +260,42 @@ From `origin/main` (0.1.43). The Rust daemon and clients must keep all of these:
 
 Rule: **no `cargo` command ever runs in the macOS account that holds the signing keys.** Build scripts and proc macros run code at build time with the user's rights. In August 2026, `arrayref`, `internment` and `append-only-vec` shipped a build-time payload that stole browser credentials and installed a LaunchAgent on macOS ([JFrog](https://research.jfrog.com/post/arrayref-proc-macro1-crates-io/)).
 
+The owner's Mac is a company Mac (owner, 2026-10-22): MDM profiles, a VPN and endpoint security apply to every user on it. A second macOS user keeps files and keychains apart, but shares the device profiles and the VPN, so a bad crate in it could reach the company network. So on this Mac:
+
+- **Default: CI builds, the owner runs them.** CI builds, tests and attests; the owner downloads the artifact, runs `gh attestation verify`, then runs the app. No build script or proc macro runs on the Mac.
+- Running the app still runs the runtime code of every crate in it, as the Electron app does with npm packages today. `cargo vet`, `cargo deny` and the 7-day cooldown lower that risk; they do not remove it.
+- The app is unsigned until the Apple account exists. After `gh attestation verify`, clear the quarantine flag (`xattr -dr com.apple.quarantine Natamux.app`). If MDM blocks unsigned apps, ask IT before going further.
+- Optional: Docker for headless crates, with the hardened command below. The run step has no network, so the VPN is out of reach.
+- `natamux-dev` user: only on a personal Mac, or on the company Mac after IT says yes.
+
 | Where | What runs there | Keys |
 |---|---|---|
-| Owner account (today's login) | 1Password, `release.sh`, `sign-release.sh`, `gh attestation verify`, running verified builds | minisign key, SSH tag key, 1Password |
-| `natamux-dev` macOS user (standard, not admin) | Xcode, rustup, `cargo build` / `cargo run` of the app with full Metal, Claude Code sessions that write Rust | none: no 1Password, no iCloud, no SSH signing key, own GitHub token with repo scope only |
-| Docker, `rust:<pinned digest>` | `cargo test` of headless crates (L0–L3): `cargo fetch --locked` once, then `docker run --rm --network none -v "$PWD":/w -w /w rust@sha256:... cargo test --locked --offline` | none |
-| GitHub Actions | Release builds, all checks, `attest-build-provenance` | none of the owner's keys |
+| Owner account (today's login) | 1Password, `release.sh`, `sign-release.sh`, `gh attestation verify`, running verified CI builds | minisign key, SSH tag key, 1Password |
+| GitHub Actions | All builds and checks, the app artifact per PR (phase 1 on), release builds, `attest-build-provenance` | none of the owner's keys |
+| Docker, `rust@sha256:<pinned>` (optional) | `cargo test` of headless crates (L0–L3) and `xtask` | none |
+| `natamux-dev` macOS user, standard, not admin (personal Mac, or company Mac with IT's OK) | Xcode, rustup, `cargo build` / `cargo run` of the app with full Metal, Claude Code sessions that write Rust | none: no 1Password, no iCloud, no SSH signing key, own GitHub token with repo scope only |
+
+Docker command. The repo is mounted read only: a build script that can write to it could plant a git hook or script that later runs in the owner account. Build output and the crate cache live in Docker volumes.
+
+```sh
+img=rust@sha256:4cd829461bd5c4d511c32e269da9cb8929223b666519d8004e35fc8d1d771ab7 # rust:1.98.1-slim
+common=(--rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges
+  -v "$PWD":/w:ro -w /w -v natamux-cargo-registry:/usr/local/cargo/registry -v natamux-rustup:/usr/local/rustup
+  -v natamux-cargo-target:/target -e CARGO_TARGET_DIR=/target)
+# Downloads only: crates, and the rustfmt and clippy components. Nothing is built while the network is on.
+docker run "${common[@]}" "$img" cargo fetch --locked
+docker run "${common[@]}" --network none "$img" cargo test --workspace --locked --offline
+```
+
+Pin the image of the same Rust version as `rust-toolchain.toml`, or rustup downloads a whole toolchain. The slim image has no rustfmt or clippy; the fetch step adds them to the `natamux-rustup` volume, so the test step needs no network. Create the three volumes once and give them to the same uid (`docker run --rm -v natamux-cargo-registry:/r -v natamux-cargo-target:/t -v natamux-rustup:/u alpine chown -R "$(id -u):$(id -g)" /r /t /u`). colima mounts the home folder into its VM by default; a container escape would reach it, so this is a lower layer of safety than CI.
 
 Setup steps (each needs the owner's OK, because they install software):
 
-1. Create the `natamux-dev` user. Keep `chmod 700` on `~/.minisign` and `~/.ssh` in the owner account. Do not share folders between the two users.
-2. In `natamux-dev`: install Xcode (GPUI needs the Metal shader compiler from full Xcode, not only the Command Line Tools), then rustup. The repo's `rust-toolchain.toml` pins the version.
+1. On the company Mac: nothing to install for the default path. Check how far it is managed (`profiles status -type enrollment`, `sudo profiles show -type configuration`, `scutil --nc list`) before any optional step.
+2. Only where a `natamux-dev` user is allowed:
+   - Create it as a standard user. Keep `chmod 700` on the owner's home, `~/.minisign` and `~/.ssh`: every local user is in the `staff` group. Do not share folders between the two users.
+   - In `natamux-dev`: install Xcode (GPUI needs the Metal shader compiler from full Xcode, not only the Command Line Tools), then rustup. The repo's `rust-toolchain.toml` pins the version.
+   - Turn the VPN off while it builds, if the VPN allows it.
 3. Repo hygiene in CI:
    - commit `Cargo.lock`; build with `--locked`;
    - `deny.toml` with `unknown-registry = "deny"`, `unknown-git = "deny"`, and an allow list of crates.io and `github.com/zed-industries/zed`;
@@ -276,7 +305,7 @@ Setup steps (each needs the owner's OK, because they install software):
 5. Releases: the owner downloads CI artifacts only, runs `gh attestation verify`, then signs as today. `sign-release.sh` already re-checks every file against the run's artifacts.
 6. If a bad crate ever ran in the owner account: rotate the minisign key, the SSH tag key and 1Password items, and treat the Mac as compromised.
 
-A macOS VM (Tart, UTM) gives stronger isolation, but GPU access in guests is limited and GPUI rendering there is not confirmed. Use it only after a test.
+A macOS VM (Tart, UTM) gives stronger isolation, but GPU access in guests is limited and GPUI rendering there is not confirmed. Use it only after a test. A personal Mac without MDM and the company VPN is the clean long-term answer for UI work.
 
 ## Risks
 
@@ -290,6 +319,8 @@ A macOS VM (Tart, UTM) gives stronger isolation, but GPU access in guests is lim
 | Two UIs to keep (GPUI desktop, React web) | Same commands and API in both; new features land in the API first; the web stays the phone and browser UI |
 | Windows maturity (no screen reader in GPUI on Windows) | Windows build in every phase gate; keep Electron for Windows until parity |
 | GPL-3.0 switch | Owner decision in phase 0 |
+| Slow UI loop: push, wait for the CI build, download, run | Cache the cargo registry and `target/` in CI; build only macOS arm64 per PR. If it still slows phase 1 down, move UI work to a personal Mac with a `natamux-dev` user |
+| Unsigned app blocked by the company MDM | Ask IT before phase 1; signing comes with the Apple account |
 
 ## Sources
 

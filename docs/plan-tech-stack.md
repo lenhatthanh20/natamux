@@ -128,11 +128,13 @@ Look at this again when:
 
 Then first move more data into `index.sqlite`, before any new database engine.
 
-## 6. Desktop shell (Decided)
+## 6. Desktop shell
 
-Decision: **Electron + TypeScript**, for **macOS and Windows**. Linux is not a target for now.
+Decision (2026-10-22): move to **Rust + GPUI**, as `plan-rust-migration.md` describes. The `dev` branch holds that work. **Electron + TypeScript** stays the shipped app on `main`, with bug fixes only, until the phase 5 cut over.
 
-Why:
+The rest of this section is the Electron decision of 2026-10-08, kept for history and for the app that ships until then. Electron targets **macOS and Windows**.
+
+Why Electron was chosen:
 - The daemon is Node and uses `node-pty`. Electron runs it with no extra sidecar process.
 - Tauri would need a Rust toolchain and a per-OS sidecar for the daemon. Too much for one developer.
 - Swift is macOS only and would need a second codebase for Windows. Rejected.
@@ -184,6 +186,7 @@ Keep a small `native` area for things the web layer cannot do. Add only when nee
 - Disable install scripts by default; allow them only for packages that need them (such as `node-pty`).
 - Develop and run in a dev container or Codespaces. On the personal machine, edit files only.
 - Enable dependency and secret scanning in the GitHub repo.
+- Rust: no `cargo` on the owner's Mac; builds run in CI. `Cargo.lock` is committed and every build uses `--locked`. CI runs `cargo deny`, `cargo audit` and `cargo vet`; Dependabot updates crates after a 7-day cooldown. Details: `plan-rust-migration.md`, "Safe local setup".
 
 ## 9. Repository layout (draft)
 
@@ -198,7 +201,13 @@ natamux/
 │   ├── desktop/              Electron shell (after the MVP)
 │   ├── native/               per-OS code, only when needed
 │   └── claude-plugin/        Claude Code plugin (skills, hooks)
+├── xtask/                    `cargo xtask ci` and `cargo xtask layers`
+├── crates/                   Rust crates (from phase 1 of plan-rust-migration.md)
+├── supply-chain/             cargo vet audits and imports
 ├── .devcontainer/
+├── Cargo.toml                Cargo workspace
+├── rust-toolchain.toml       pinned Rust version
+├── deny.toml                 cargo deny rules
 ├── package.json
 └── pnpm-workspace.yaml
 ```

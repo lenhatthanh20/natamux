@@ -35,6 +35,14 @@ Run `build` first: packages import each other through their built `dist` folders
 
 Every action in `.github/workflows/` is pinned to a full commit SHA, with the version in a comment, for example `actions/checkout@<sha> # v7.0.1`. A moved tag then cannot change what a job runs. Dependabot updates the SHA and the comment together. When you add an action, pin it the same way.
 
+## Rust
+
+The Rust work (`docs/plan-rust-migration.md`) lives on the `dev` branch, and every Rust pull request targets `dev`.
+
+- Rust builds and tests run in CI (`.github/workflows/rust.yml`): `cargo xtask ci` (fmt, clippy, tests, layers), then `cargo deny`, `cargo audit` and `cargo vet`.
+- Never run `cargo` on the owner's Mac, not even in a Natamux task terminal. Build scripts and proc macros run code with the user's rights.
+- Optional: the hardened Docker command, and where a separate `natamux-dev` macOS user is allowed. Both are in `docs/plan-rust-migration.md`, "Safe local setup".
+
 ## Run the daemon and the dashboard
 
 With Docker. The codespace starts it for you each time it starts. By hand:

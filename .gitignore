@@ -14,3 +14,4 @@ release/
 .playwright-cli/
 playwright-report/
 test-results/
+target/
