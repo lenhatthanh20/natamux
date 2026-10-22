@@ -1,0 +1,12 @@
+# Same list and reasons as [advisories] in deny.toml; each one OK'd by the owner (T-0143).
+[advisories]
+ignore = [
+  "RUSTSEC-2023-0071",
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+  "RUSTSEC-2026-0378",
+  "RUSTSEC-2026-0379",
+  "RUSTSEC-2026-0381",
+  "RUSTSEC-2026-0382",
+  "RUSTSEC-2026-0383",
+]

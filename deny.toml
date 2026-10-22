@@ -1,16 +1,39 @@
 # Config for cargo-deny 0.20. Rules: docs/plan-rust-migration.md, "Safe local setup".
 
 [advisories]
-ignore = []
+# Each one OK'd by the owner (T-0143). All come through Zed's editor and terminal crates.
+# .cargo/audit.toml keeps the same vulnerability list for cargo audit.
+ignore = [
+  { id = "RUSTSEC-2023-0071", reason = "rsa timing attack, no fix exists; only Zed's sign-in RPC uses it, and the app never signs in to Zed" },
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml, fixed only in 0.41 (breaking); Zed's deps read local XML only" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml, fixed only in 0.41 (breaking); Zed's deps read local XML only" },
+  { id = "RUSTSEC-2026-0378", reason = "wasmtime, fix 48.0.7 is inside the 7-day cooldown; update after 2026-10-27. The app loads no Wasm" },
+  { id = "RUSTSEC-2026-0379", reason = "wasmtime, fix 48.0.7 is inside the 7-day cooldown; update after 2026-10-27. The app loads no Wasm" },
+  { id = "RUSTSEC-2026-0381", reason = "webpki-roots, fix 1.0.10 is inside the 7-day cooldown; update after 2026-10-27. The app talks plain HTTP to its daemon" },
+  { id = "RUSTSEC-2026-0382", reason = "rustls-webpki, fix 0.103.16 is inside the 7-day cooldown; update after 2026-10-27. The app talks plain HTTP to its daemon" },
+  { id = "RUSTSEC-2026-0383", reason = "webpki-root-certs, fix 1.0.10 is inside the 7-day cooldown; update after 2026-10-27. The app talks plain HTTP to its daemon" },
+  { id = "RUSTSEC-2025-0052", reason = "async-std unmaintained; a Zed dependency, no known hole" },
+  { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; a Zed dependency (macro only), no known hole" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; a Zed dependency, no known hole" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; a Zed dependency, no known hole" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; a Zed dependency (Linux only), no known hole" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; a Zed dependency (Linux only), no known hole" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; a Zed dependency (Linux only), no known hole" },
+]
 
 [licenses]
 allow = [
   "GPL-3.0-or-later",
   "MIT",
+  "MPL-2.0",
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "BSL-1.0",
+  "bzip2-1.0.6",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
   "ISC",
   "Unicode-3.0",
   "Zlib",
@@ -23,9 +46,28 @@ ignore = true
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Our own crates, by path; they are never published.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = ["https://github.com/zed-industries/zed"]
+# Zed (the owner's fork of it, docs/rust-phase1.md) and the forks that its manifest pins at our
+# Zed rev. Each one by its exact URL.
+allow-git = [
+  "https://github.com/lenhatthanh20/zed",
+  "https://github.com/smol-rs/async-task.git",
+  "https://github.com/tree-sitter/tree-sitter",
+  "https://github.com/zed-industries/alacritty",
+  "https://github.com/zed-industries/async-process.git",
+  "https://github.com/zed-industries/async-tar",
+  "https://github.com/zed-industries/calloop",
+  "https://github.com/zed-industries/dap-types",
+  "https://github.com/zed-industries/font-kit",
+  "https://github.com/zed-industries/lsp-types",
+  "https://github.com/zed-industries/notify",
+  "https://github.com/zed-industries/trash-rs",
+  "https://github.com/zed-industries/wasm_thread",
+  "https://github.com/zed-industries/xim-rs.git",
+]
