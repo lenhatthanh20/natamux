@@ -13,10 +13,10 @@ use super::task_table_cells::{RowData, diff_label, quiet_chip};
 use super::task_time::{AgeStyle, format_age, format_exact};
 use super::task_view::now_ms;
 use super::task_view_rules::{BoardFolds, board_states, task_count};
-use crate::agents::agent_choices::agent_label;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::BulkRun;
 use crate::app::shortcuts::{OpenSelected, SelectFirst, SelectLast, SelectNext, SelectPrevious};
+use crate::components::agent_badge::agent_name;
 use crate::components::chips::{CountBadge, StateChip};
 use crate::components::colors::state_colors;
 use crate::components::empty_state::EmptyState;
@@ -325,7 +325,7 @@ fn card_meta(row: &RowData) -> Vec<AnyElement> {
         stage_label(task).map(text),
         task.agent
             .as_deref()
-            .map(|agent| text(agent_label(Some(agent)))),
+            .map(|agent| agent_name(agent, LabelSize::Small).into_any_element()),
         diff_label(row.stat.as_ref()),
         task.pr.as_deref().map(|url| text(pull_request_number(url))),
         (!row.waits.is_empty()).then(|| text(format!("waits for {}", row.waits))),

@@ -23,7 +23,7 @@ pub type Written<T> = gpui::Task<Result<T, ClientError>>;
 
 impl Dashboard {
     /// Runs one daemon call. `done` takes the answer; an error is toasted unless `quiet`.
-    fn write<T: 'static>(
+    pub(super) fn write<T: 'static>(
         &mut self,
         answer: Answer<T>,
         quiet: bool,
@@ -45,11 +45,11 @@ impl Dashboard {
         })
     }
 
-    fn no_daemon<T: 'static>() -> Written<T> {
+    pub(super) fn no_daemon<T: 'static>() -> Written<T> {
         gpui::Task::ready(Err(ClientError::BadAnswer("the app has no daemon".into())))
     }
 
-    fn take_task(&mut self, task: &Task) {
+    pub(super) fn take_task(&mut self, task: &Task) {
         self.data.merge_task(task.clone());
     }
 

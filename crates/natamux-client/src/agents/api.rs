@@ -35,3 +35,10 @@ pub async fn start_agent(
     let answer: TaskAnswer = call_with(config, Method::POST, &path, input).await?;
     Ok(answer.task)
 }
+
+/// Starts the agent of a finished task again, on its session.
+pub async fn reopen_agent(config: &Config, task_id: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/agent/reopen", encode(task_id));
+    let answer: TaskAnswer = call(config, Method::POST, &path).await?;
+    Ok(answer.task)
+}

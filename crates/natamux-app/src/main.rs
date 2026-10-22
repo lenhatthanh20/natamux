@@ -1,6 +1,6 @@
 //! Natamux native app (docs/plan-rust-migration.md, phase 3): screen 1 (the app shell, the
-//! sidebar, the task table and board) and the phase 1 terminal, on the daemon's HTTP and
-//! WebSocket API.
+//! sidebar, the task table and board) and screen 2 (the workspace, its terminals and the Agents
+//! grid), on the daemon's HTTP and WebSocket API.
 
 mod agents {
     pub mod agent_choices;
@@ -18,6 +18,7 @@ mod app {
     pub mod layout_mode;
     pub mod options;
     pub mod shell_rules;
+    pub mod shortcut_text;
     pub mod shortcuts;
     pub mod shots;
     pub mod smoke;
@@ -33,6 +34,7 @@ mod bench {
     pub mod bench_view;
 }
 mod components {
+    pub mod agent_badge;
     pub mod chips;
     pub mod colors;
     pub mod confirm;
@@ -98,19 +100,35 @@ mod tasks {
     pub mod task_view_rules;
 }
 mod terminals {
+    pub mod agent_panes;
+    pub mod find_rules;
+    pub mod pane_facts;
+    pub mod pane_header;
+    pub mod pane_rules;
     pub mod remote_terminal;
+    pub mod shell_panes;
+    pub mod terminal_cache;
+    pub mod terminal_find;
     pub mod terminal_pane;
+    pub mod terminal_tabs;
 }
 mod workspaces {
     pub mod branches;
+    pub mod finished_banner;
     pub mod finished_rules;
+    pub mod finished_summary;
     pub mod new_workspace_dialog;
     pub mod new_workspace_rules;
+    pub mod no_workspace;
     pub mod remove_dialog_rules;
     pub mod remove_finished;
     pub mod remove_finished_rules;
     pub mod remove_workspace_dialog;
+    pub mod workspace_header;
     pub mod workspace_rules;
+    pub mod workspace_view;
+    pub mod wrap_up;
+    pub mod wrap_up_rules;
 }
 
 use std::process::ExitCode;

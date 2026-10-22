@@ -15,8 +15,8 @@ use super::table_rules::{
 use super::task_attention::is_quiet;
 use super::task_rules::{lane_summary, stage_state_label};
 use super::task_time::{AgeStyle, format_age, format_exact};
-use crate::agents::agent_choices::agent_label;
 use crate::app::dashboard_data::DashboardData;
+use crate::components::agent_badge::agent_name;
 use crate::components::chips::{StateChip, label_chip};
 use crate::components::colors::signal;
 use crate::sidebar::workspace_groups::short_branch;
@@ -196,7 +196,7 @@ pub fn cell(column: ColumnKey, row: &RowData, cx: &App) -> AnyElement {
         ColumnKey::Agent => match (&row.note, task.agent.as_deref()) {
             (Some(note), _) => tipped("note", note.clone(), muted(note.clone()).truncate()),
             (None, None) => dash(),
-            (None, agent) => muted(agent_label(agent)).truncate().into_any_element(),
+            (None, Some(agent)) => agent_name(agent, LabelSize::Small).into_any_element(),
         },
         ColumnKey::Branch => match &task.branch {
             None => dash(),

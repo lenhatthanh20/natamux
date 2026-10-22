@@ -44,6 +44,14 @@ pub enum DashboardEvent {
     /// One step of a new workspace, as it comes. `step` None: it ended, ready or failed.
     WorkspaceStep(PreparingMessage),
     Status(LinkStatus),
+    /// Files changed in a task's workspace. No read of its own: the app reads what it shows.
+    WorkspaceChanged {
+        task_id: String,
+    },
+    /// The shells of a task changed, whether the app shows its rows or not.
+    ShellsChanged {
+        task_id: String,
+    },
 }
 
 /// Why the feed stops following one socket.
@@ -66,6 +74,8 @@ pub(crate) struct Stale {
     diff_stats: bool,
     dirty: bool,
     dirty_read_at: Option<Instant>,
+    /// Task ids that go out as they are, with no read.
+    passed: Vec<DashboardEvent>,
     pub terminals: BTreeSet<String>,
 }
 
@@ -100,10 +110,21 @@ impl Stale {
             Resource::Jobs => self.jobs = true,
             Resource::Activity => self.activity = true,
             Resource::Usage => self.usage = true,
-            Resource::DiffStats => self.dirty = true,
+            Resource::DiffStats => {
+                self.dirty = true;
+                if let Some(task_id) = task_id_of(text) {
+                    self.passed
+                        .push(DashboardEvent::WorkspaceChanged { task_id });
+                }
+            }
             Resource::Shells => {
-                if let Some(id) = task_id_of(text).filter(|id| shown.contains(id)) {
-                    self.terminals.insert(id);
+                if let Some(id) = task_id_of(text) {
+                    self.passed.push(DashboardEvent::ShellsChanged {
+                        task_id: id.clone(),
+                    });
+                    if shown.contains(&id) {
+                        self.terminals.insert(id);
+                    }
                 }
             }
             Resource::Preparing => return PreparingMessage::parse(text),
@@ -132,6 +153,9 @@ impl Stale {
         live: &mut bool,
         events: &UnboundedSender<DashboardEvent>,
     ) -> Result<(), Halt> {
+        for event in std::mem::take(&mut self.passed) {
+            send(events, event)?;
+        }
         if std::mem::take(&mut self.tasks) {
             match tasks::api::list_tasks(config).await {
                 Ok(list) => {
@@ -246,6 +270,27 @@ mod tests {
         assert!(stale.terminals.is_empty());
         stale.note(r#"{"kind":"shells.changed","taskId":"T-1"}"#, &shown);
         assert_eq!(stale.terminals, shown);
+    }
+
+    #[test]
+    fn shells_and_workspace_changes_pass_every_task_id_on() {
+        let mut stale = Stale::default();
+        stale.note(
+            r#"{"kind":"shells.changed","taskId":"T-2"}"#,
+            &shown(&["T-1"]),
+        );
+        stale.note(r#"{"kind":"workspace.dirty","taskId":"T-3"}"#, &shown(&[]));
+        assert_eq!(
+            stale.passed,
+            [
+                DashboardEvent::ShellsChanged {
+                    task_id: "T-2".into()
+                },
+                DashboardEvent::WorkspaceChanged {
+                    task_id: "T-3".into()
+                },
+            ]
+        );
     }
 
     #[test]

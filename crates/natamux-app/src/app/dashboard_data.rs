@@ -158,6 +158,8 @@ impl DashboardData {
             DashboardEvent::Preparing(preparing) => self.preparing = preparing,
             DashboardEvent::WorkspaceStep(message) => return self.step(message),
             DashboardEvent::Status(status) => self.link_status(status),
+            // The open workspace reads what it shows (`app/dashboard.rs`).
+            DashboardEvent::WorkspaceChanged { .. } | DashboardEvent::ShellsChanged { .. } => {}
         }
         None
     }

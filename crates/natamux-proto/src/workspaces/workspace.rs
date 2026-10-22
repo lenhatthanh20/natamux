@@ -36,6 +36,13 @@ pub struct NewWorkspaceInput {
     pub attachments: Vec<AttachmentUpload>,
 }
 
+/// The body of `POST /tasks/:id/workspace`. The body may be left out when `base` is None.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct CreateWorkspaceInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+}
+
 /// The step a new workspace is at, while the daemon makes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -148,6 +155,16 @@ mod tests {
     use crate::tasks::task::TaskContext;
 
     const TASK: &str = r#"{"id":"T-1","title":"t","createdAt":"a","updatedAt":"b"}"#;
+
+    #[test]
+    fn a_workspace_for_a_task_sends_base_only_when_set() {
+        let none = serde_json::to_string(&CreateWorkspaceInput::default()).unwrap();
+        assert_eq!(none, "{}");
+        let some = CreateWorkspaceInput {
+            base: Some("dev".into()),
+        };
+        assert_eq!(serde_json::to_string(&some).unwrap(), r#"{"base":"dev"}"#);
+    }
 
     #[test]
     fn a_new_workspace_sends_only_what_is_set() {

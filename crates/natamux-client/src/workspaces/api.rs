@@ -6,8 +6,8 @@ use hyper::Method;
 use natamux_proto::tasks::task::{Task, TaskAnswer};
 use natamux_proto::terminals::query::encode;
 use natamux_proto::workspaces::workspace::{
-    ChangeEntry, ChangeList, DiffStat, DiffStatList, GitGraph, NewWorkspaceInput, PreparingList,
-    PreparingStep, RemoveWorkspaceAnswer,
+    ChangeEntry, ChangeList, CreateWorkspaceInput, DiffStat, DiffStatList, GitGraph,
+    NewWorkspaceInput, PreparingList, PreparingStep, RemoveWorkspaceAnswer,
 };
 
 use crate::config::Config;
@@ -21,6 +21,40 @@ pub async fn new_workspace(
     input: &NewWorkspaceInput,
 ) -> Result<Task, ClientError> {
     let answer: TaskAnswer = call_with(config, Method::POST, "/workspaces", input).await?;
+    Ok(answer.task)
+}
+
+/// The worktree of a task that has none, from `base` or the repo's default branch.
+pub async fn create_workspace(
+    config: &Config,
+    task_id: &str,
+    base: Option<&str>,
+) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/workspace", encode(task_id));
+    let answer: TaskAnswer = match base {
+        Some(base) => {
+            let input = CreateWorkspaceInput {
+                base: Some(base.to_string()),
+            };
+            call_with(config, Method::POST, &path, &input).await?
+        }
+        // The daemon accepts no body, and refuses an empty JSON one.
+        None => call(config, Method::POST, &path).await?,
+    };
+    Ok(answer.task)
+}
+
+/// Pushes the task's branch. Git work can take long: this call has no time limit.
+pub async fn push(config: &Config, task_id: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/push", encode(task_id));
+    let answer: TaskAnswer = call(config, Method::POST, &path).await?;
+    Ok(answer.task)
+}
+
+/// Opens a pull request for the task's branch.
+pub async fn open_pull_request(config: &Config, task_id: &str) -> Result<Task, ClientError> {
+    let path = format!("/tasks/{}/pull-request", encode(task_id));
+    let answer: TaskAnswer = call(config, Method::POST, &path).await?;
     Ok(answer.task)
 }
 

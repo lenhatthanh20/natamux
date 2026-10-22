@@ -10,6 +10,7 @@ use serde_json::{Map, Value, json};
 use crate::app::layout_mode::PANEL_WIDTH;
 use crate::app::view_rules::{Entries, parse_pinned, with_seen};
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
+use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
 pub const FILE_NAME: &str = "view.json";
 /// `useStoredWidth('natamux.sidebar-width', PANEL_WIDTH, 220, 440)`.
@@ -46,6 +47,9 @@ pub struct ViewState {
     pub seen: Entries<TaskState>,
     /// Repo id to the branch its last workspace started from.
     pub last_base: Vec<(String, String)>,
+    /// The tasks of the Agents grid, in order. None: the default list (`agentPanes`).
+    pub agent_panes: Option<Vec<String>>,
+    pub pane_layout: PaneLayout,
 }
 
 impl Default for ViewState {
@@ -60,6 +64,8 @@ impl Default for ViewState {
             show_finished: false,
             seen: Vec::new(),
             last_base: Vec::new(),
+            agent_panes: None,
+            pane_layout: PaneLayout::default(),
         }
     }
 }
@@ -112,6 +118,11 @@ impl ViewState {
                 .into_iter()
                 .filter_map(|(repo, base)| Some((repo, base.as_str()?.to_owned())))
                 .collect(),
+            agent_panes: match map.get("agentPanes") {
+                Some(Value::Array(_)) => Some(strings(map.get("agentPanes"))),
+                _ => None,
+            },
+            pane_layout: parse_pane_layout(map.get("paneLayout").and_then(Value::as_str)),
         }
     }
 
@@ -141,6 +152,8 @@ impl ViewState {
             "showFinished": self.show_finished,
             "seen": seen,
             "lastBase": last_base,
+            "agentPanes": self.agent_panes,
+            "paneLayout": self.pane_layout.as_str(),
         });
         format!("{value:#}\n")
     }
@@ -246,6 +259,8 @@ mod tests {
                 ("T-2".into(), TaskState::NeedsInput),
             ],
             last_base: Vec::new(),
+            agent_panes: Some(vec!["T-2".into(), "T-1".into()]),
+            pane_layout: PaneLayout::Two,
         };
         state.remember_base("r1", "main");
         let folder = temp_folder("round");
@@ -287,6 +302,16 @@ mod tests {
         assert_eq!(state.sidebar_width, SIDEBAR_MAX);
         assert_eq!(state.seen, vec![("T-1".into(), TaskState::Running)]);
         assert_eq!(state.last_base, vec![("r1".into(), "dev".into())]);
+    }
+
+    #[test]
+    fn the_agents_grid_keeps_the_users_list_and_columns() {
+        let chosen = ViewState::parse(r#"{"agentPanes": ["T-2", 3, "T-1"], "paneLayout": "4"}"#);
+        assert_eq!(chosen.agent_panes, Some(vec!["T-2".into(), "T-1".into()]));
+        assert_eq!(chosen.pane_layout, PaneLayout::Four);
+        let default = ViewState::parse(r#"{"agentPanes": null, "paneLayout": "9"}"#);
+        assert_eq!(default.agent_panes, None);
+        assert_eq!(default.pane_layout, PaneLayout::Auto);
     }
 
     #[test]

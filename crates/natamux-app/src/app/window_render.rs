@@ -102,7 +102,10 @@ impl Root {
             Tool::Bench(bench) => bench.clone().into_any_element(),
             Tool::Ime(check) => check.clone().into_any_element(),
             Tool::None if self.dashboard.read(cx).open_task.is_some() => {
-                self.pane.clone().into_any_element()
+                self.workspace.clone().into_any_element()
+            }
+            Tool::None if self.dashboard.read(cx).agents_open => {
+                self.agents.clone().into_any_element()
             }
             Tool::None => self
                 .tasks
@@ -129,7 +132,7 @@ impl Root {
             .open_task
             .as_deref()
             .and_then(|id| dashboard.data.task(id));
-        let crumb = crumb(open, &dashboard.data.repos, width);
+        let crumb = crumb(open, dashboard.agents_open, &dashboard.data.repos, width);
         let live = live_item(&dashboard.data.link);
         let jobs = dashboard.data.jobs.clone();
         let title = window_title(needs_you);
@@ -246,6 +249,7 @@ impl Render for Root {
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::back))
             .on_action(cx.listener(Self::show_all))
+            .on_action(cx.listener(Self::show_agents))
             .on_action(cx.listener(Self::show_table))
             .on_action(cx.listener(Self::show_board))
             .on_action(cx.listener(Self::toggle_sidebar))

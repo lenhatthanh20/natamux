@@ -9,7 +9,7 @@ pub const USAGE: &str =
   --hold    quit after this many seconds (for screenshots)
   --fake-daemon  show fixed tasks and a fixed terminal instead of the daemon's (for screenshots)
   --gate2   run gate 2 on TASK's shells 901-912, save the perf report, print its path, then quit
-  --shot    open the window in one screen-1 state, for the CI screenshots (docs/rust-phase3.md)
+  --shot    open the window in one screen-1 or screen-2 state, for the CI screenshots (docs/rust-phase3.md)
 
 The daemon: NATAMUX_URL and NATAMUX_TOKEN, else http://127.0.0.1:4317 and the Natamux app's token.";
 
@@ -19,7 +19,7 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// The screen-1 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
+/// The screen-1 and screen-2 states CI shoots (`--shot`). `app/shots.rs` puts the window in each one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shot {
     TasksTable,
@@ -38,10 +38,18 @@ pub enum Shot {
     NoProjects,
     LoadError,
     Drawer,
+    WorkspaceTerminalRunning,
+    TerminalFind,
+    WorkspaceTerminalNeedsInput,
+    WorkspaceTerminalReview,
+    NoWorkspace,
+    WorkspacePreparing,
+    FinishedWrapUp,
+    AgentsGrid,
 }
 
 impl Shot {
-    pub const ALL: [Shot; 16] = [
+    pub const ALL: [Shot; 24] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -58,6 +66,14 @@ impl Shot {
         Shot::NoProjects,
         Shot::LoadError,
         Shot::Drawer,
+        Shot::WorkspaceTerminalRunning,
+        Shot::TerminalFind,
+        Shot::WorkspaceTerminalNeedsInput,
+        Shot::WorkspaceTerminalReview,
+        Shot::NoWorkspace,
+        Shot::WorkspacePreparing,
+        Shot::FinishedWrapUp,
+        Shot::AgentsGrid,
     ];
 
     pub fn name(self) -> &'static str {
@@ -78,6 +94,14 @@ impl Shot {
             Shot::NoProjects => "no-projects",
             Shot::LoadError => "load-error",
             Shot::Drawer => "drawer",
+            Shot::WorkspaceTerminalRunning => "workspace-terminal-running",
+            Shot::TerminalFind => "terminal-find",
+            Shot::WorkspaceTerminalNeedsInput => "workspace-terminal-needs-input",
+            Shot::WorkspaceTerminalReview => "workspace-terminal-review",
+            Shot::NoWorkspace => "no-workspace",
+            Shot::WorkspacePreparing => "workspace-preparing",
+            Shot::FinishedWrapUp => "finished-wrap-up",
+            Shot::AgentsGrid => "agents-grid",
         }
     }
 
@@ -227,13 +251,18 @@ mod tests {
     #[test]
     fn the_ci_workflow_shoots_every_state() {
         let workflow = include_str!("../../../../.github/workflows/rust.yml");
-        let listed = workflow
-            .split("STATES: >-")
-            .nth(1)
-            .and_then(|rest| rest.split("run:").next())
-            .unwrap();
-        let listed: Vec<&str> = listed.split_whitespace().collect();
+        let part = |start: &str, end: &str| -> Vec<&str> {
+            let text = workflow
+                .split(start)
+                .nth(1)
+                .and_then(|rest| rest.split(end).next());
+            text.unwrap().split_whitespace().collect()
+        };
         let names: Vec<&str> = Shot::ALL.iter().map(|shot| shot.name()).collect();
-        assert_eq!(listed, names);
+        assert_eq!(part("STATES: >-", "DOCKED:"), names);
+        // The docked size: the table, and every screen-2 state.
+        let docked = part("DOCKED: >-", "run:");
+        assert_eq!(docked.first(), Some(&"tasks-table"));
+        assert_eq!(docked[1..], names[16..]);
     }
 }

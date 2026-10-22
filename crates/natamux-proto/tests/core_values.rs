@@ -221,3 +221,19 @@ fn preparing_steps_and_push_kinds_match_core() {
 fn lane_agent_is_null_or_missing_in_core() {
     assert!(TERMINAL_LANE_TS.contains("agent: z.string().min(1).nullable().optional()"));
 }
+
+// The ended shell fields of `EndedShell`, in the order of the daemon's schema.
+#[test]
+fn ended_shell_fields_match_core() {
+    let start = TERMINAL_TS.find("export const endedShellSchema").unwrap();
+    let schema = &TERMINAL_TS[start..start + TERMINAL_TS[start..].find("})").unwrap()];
+    let fields: Vec<&str> = schema
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.trim().split(':').next())
+        .collect();
+    assert_eq!(
+        fields,
+        ["name", "agent", "stage", "session", "endedAt", "text"]
+    );
+}

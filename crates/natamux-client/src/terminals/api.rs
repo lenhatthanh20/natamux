@@ -2,6 +2,7 @@
 
 use hyper::Method;
 use natamux_proto::tasks::task::Ticket;
+use natamux_proto::terminals::ended::{EndedShell, EndedShellList};
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::terminals::query::encode;
 
@@ -30,4 +31,11 @@ pub async fn close_terminal(
 ) -> Result<(), ClientError> {
     let path = format!("/tasks/{}/terminals/{}", encode(task_id), encode(terminal));
     send(config, Method::DELETE, &path, None).await.map(|_| ())
+}
+
+/// The last screens of the shells of a done or cancelled task.
+pub async fn ended_shells(config: &Config, task_id: &str) -> Result<Vec<EndedShell>, ClientError> {
+    let path = format!("/tasks/{}/ended-shells", encode(task_id));
+    let list: EndedShellList = call(config, Method::GET, &path).await?;
+    Ok(list.shells)
 }

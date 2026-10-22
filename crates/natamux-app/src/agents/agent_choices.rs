@@ -62,6 +62,17 @@ pub fn agent_icon(id: Option<&str>) -> Option<&'static str> {
     find(id).map(|choice| choice.icon)
 }
 
+/// The asset of an agent's icon. Some icons are dark on dark; the theme has a lighter one, made
+/// for light editors, used in the light theme (`iconUrl`).
+pub fn agent_icon_path(id: Option<&str>, light: bool) -> Option<String> {
+    let icon = agent_icon(id)?;
+    let light_one = format!("icons/agents/{icon}_light.svg");
+    if light && crate::app::asset_table::find(&light_one).is_some() {
+        return Some(light_one);
+    }
+    Some(format!("icons/agents/{icon}.svg"))
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn agent_icon_names() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = Vec::new();
@@ -76,6 +87,25 @@ pub fn agent_icon_names() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_agent_icon_is_an_asset_in_both_themes() {
+        for choice in &AGENT_CHOICES {
+            for light in [false, true] {
+                let path = agent_icon_path(Some(choice.id), light).unwrap();
+                assert!(crate::app::asset_table::find(&path).is_some(), "{path}");
+            }
+        }
+        assert_eq!(
+            agent_icon_path(Some("copilot"), true).as_deref(),
+            Some("icons/agents/copilot_light.svg")
+        );
+        assert_eq!(
+            agent_icon_path(Some("claude-code"), true).as_deref(),
+            Some("icons/agents/claude.svg")
+        );
+        assert_eq!(agent_icon_path(Some("aider"), false), None);
+    }
 
     #[test]
     fn agent_icon_gets_its_icon() {

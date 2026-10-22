@@ -20,6 +20,7 @@ pub mod tasks {
     pub mod template;
 }
 pub mod terminals {
+    pub mod ended;
     pub mod list;
     pub mod messages;
     pub mod query;

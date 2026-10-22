@@ -1,8 +1,10 @@
 //! `--gate2 TASK`: gate 2 without a person at the keyboard (owner, 2026-10-22).
 //! The bench runs for 60 s while the sidebar tree and a bench terminal scroll, and its perf report
 //! is saved. Then main shows the task table while the bench's 10 shells keep printing, and the
-//! table scrolls for 20 s: a second report. Last, the bench closes, 100 keys are typed into a
-//! quiet shell of the task, and a third report is saved. Every path is printed.
+//! table scrolls for 20 s: a second report. Then main shows the task's workspace with 4 of the
+//! bench's shells as panes, printing, and the first pane scrolls for 20 s: a third report. Last,
+//! the bench closes, 100 keys are typed into a quiet shell of the task, and a fourth report is
+//! saved. Every path is printed.
 //! Keys and scrolls go through the window's own event dispatch, not the keyboard and mouse, so
 //! key to glyph starts where it does for real keys: at the app's key event.
 //! It never opens the task's Terminal 1, where its agent may work.
@@ -16,13 +18,18 @@ use gpui::{
 };
 
 use super::window::Root;
-use crate::bench::bench_view::BenchView;
+use crate::bench::bench_view::{BenchView, FIRST_TERMINAL};
 use crate::perf::overlay;
 use crate::perf::stats::PerfStats;
 
 const WAIT_FOR_TASK: Duration = Duration::from_secs(15);
 const BENCH: Duration = Duration::from_secs(60);
 const TABLE: Duration = Duration::from_secs(20);
+const PANES: Duration = Duration::from_secs(20);
+/// The screen-2 target: frames hold with 4 panes of printing shells on screen.
+const PANE_COUNT: u16 = 4;
+/// The panes connect and draw their history within this.
+const PANES_OPEN: Duration = Duration::from_secs(3);
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
 /// Scroll this many steps one way, then as many back.
 const SCROLL_TURN: u32 = 40;
@@ -77,6 +84,7 @@ async fn steps(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> 
     }
     save(handle, "bench", cx)?;
     scroll_table(handle, cx).await?;
+    scroll_panes(handle, task_id, cx).await?;
     stop_bench(handle, cx).await?;
 
     println!("gate2: typing {KEYS} keys into Terminal 912 of {task_id}");
@@ -137,6 +145,49 @@ async fn scroll_table(handle: WindowHandle<Root>, cx: &mut AsyncApp) -> Result<(
         })?;
     }
     save(handle, "table", cx)
+}
+
+/// Main shows the task's workspace with only the first bench shells as panes: they keep printing
+/// while the first pane scrolls, then the report is saved and All tasks shows again.
+async fn scroll_panes(handle: WindowHandle<Root>, task_id: &str, cx: &mut AsyncApp) -> Result<()> {
+    let names: Vec<String> = (FIRST_TERMINAL..FIRST_TERMINAL + PANE_COUNT)
+        .map(|name| name.to_string())
+        .collect();
+    handle.update(cx, |root, _, cx| {
+        let panes = root.workspace_view().read(cx).panes().clone();
+        panes.update(cx, |panes, cx| panes.show_only(Some(names), cx));
+        root.dashboard()
+            .update(cx, |dashboard, cx| dashboard.open(task_id, cx));
+    })?;
+    cx.background_executor().timer(PANES_OPEN).await;
+    cx.update(|cx| {
+        let perf = cx.global_mut::<overlay::Perf>();
+        perf.stats = PerfStats::default();
+    });
+    println!(
+        "gate2: scrolling a grid of {PANE_COUNT} printing panes for {} s",
+        PANES.as_secs()
+    );
+    let started = Instant::now();
+    let mut step = 0;
+    while started.elapsed() < PANES {
+        cx.background_executor().timer(SCROLL_EVERY).await;
+        step += 1;
+        in_window(handle, cx, |window, cx| {
+            // The first pane of the 2 by 2 grid, right of the docked sidebar.
+            let size = window.viewport_size();
+            let pane = point(size.width * 0.45, size.height * 0.3);
+            wheel(pane, step, window, cx);
+        })?;
+    }
+    save(handle, "panes", cx)?;
+    handle.update(cx, |root, _, cx| {
+        root.dashboard()
+            .update(cx, |dashboard, cx| dashboard.back(cx));
+        let panes = root.workspace_view().read(cx).panes().clone();
+        panes.update(cx, |panes, cx| panes.show_only(None, cx));
+    })?;
+    Ok(())
 }
 
 /// Saves the perf report of one part of the run and prints its path.

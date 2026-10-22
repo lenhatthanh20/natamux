@@ -86,7 +86,6 @@ fn rust_files(folder: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
-/// `components/colors.rs`, and files of a `theme` folder or named `theme*.rs`.
 /// The only files of `COLOUR_ROOT` that may hold colour literals: the colour module, and the
 /// contrast test's hex data. The theme itself is JSON in `assets/`.
 const COLOUR_FILES: &[&str] = &["components/colors.rs", "components/theme_contrast.rs"];

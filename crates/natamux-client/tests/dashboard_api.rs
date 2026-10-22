@@ -304,3 +304,66 @@ fn a_refused_write_gives_the_daemons_message() {
         }
     );
 }
+
+#[test]
+fn creates_a_workspace_with_no_body_or_with_a_base() {
+    let answer = format!(r#"{{"task":{TASK}}}"#);
+    let (task, sent) = exchange(
+        "POST /tasks/T-0009/workspace",
+        "201 Created",
+        &answer,
+        |c| c.create_workspace("T-0009", None),
+    );
+    assert_eq!(task.unwrap().id, "T-0009");
+    assert_eq!(sent, Value::Null);
+    let (_, sent) = exchange(
+        "POST /tasks/T-0009/workspace",
+        "201 Created",
+        &answer,
+        |c| c.create_workspace("T-0009", Some("dev")),
+    );
+    assert_eq!(sent, json!({"base": "dev"}));
+}
+
+#[test]
+fn pushes_opens_a_pull_request_and_reopens_an_agent_with_no_body() {
+    let answer = format!(r#"{{"task":{TASK}}}"#);
+    let (task, sent) = ok("POST /tasks/T-0009/push", &answer, |c| c.push("T-0009"));
+    assert_eq!((task.id.as_str(), sent), ("T-0009", Value::Null));
+    let (task, sent) = ok("POST /tasks/T-0009/pull-request", &answer, |c| {
+        c.open_pull_request("T-0009")
+    });
+    assert_eq!((task.id.as_str(), sent), ("T-0009", Value::Null));
+    let (task, sent) = ok("POST /tasks/T-0009/agent/reopen", &answer, |c| {
+        c.reopen_agent("T-0009")
+    });
+    assert_eq!((task.id.as_str(), sent), ("T-0009", Value::Null));
+}
+
+#[test]
+fn a_refused_push_gives_the_daemons_message() {
+    let (answer, _) = exchange(
+        "POST /tasks/T-0009/push",
+        "409 Conflict",
+        r#"{"error":"conflict","message":"no remote"}"#,
+        |c| c.push("T-0009"),
+    );
+    assert_eq!(
+        answer.unwrap_err(),
+        ClientError::Status {
+            status: 409,
+            message: "no remote".into()
+        }
+    );
+}
+
+#[test]
+fn reads_the_ended_shells_of_a_task() {
+    let body = r#"{"shells":[{"name":"1","agent":"claude-code","stage":"spec","session":null,"endedAt":"2026-10-22T00:00:00.000Z","text":"done"}]}"#;
+    let (shells, sent) = ok("GET /tasks/T-0009/ended-shells", body, |c| {
+        c.ended_shells("T-0009")
+    });
+    assert_eq!(shells[0].text, "done");
+    assert_eq!(shells[0].session, None);
+    assert_eq!(sent, Value::Null);
+}

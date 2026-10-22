@@ -36,13 +36,26 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         DashboardEvent::Terminals { task_id, .. } => {
             return Some(format!("GET /tasks/{task_id}/terminals"));
         }
-        DashboardEvent::WorkspaceStep(_) | DashboardEvent::Status(_) => return None,
+        DashboardEvent::WorkspaceStep(_)
+        | DashboardEvent::Status(_)
+        | DashboardEvent::WorkspaceChanged { .. }
+        | DashboardEvent::ShellsChanged { .. } => return None,
     };
     Some(route.to_string())
 }
 
-/// The next event that is not a status; a reconnect fails the test.
+/// The next event that is not a status or a task id passed on; a reconnect fails the test.
 async fn next_data(feed: &mut DashboardFeed) -> DashboardEvent {
+    loop {
+        match next_any(feed).await {
+            DashboardEvent::WorkspaceChanged { .. } | DashboardEvent::ShellsChanged { .. } => {}
+            event => return event,
+        }
+    }
+}
+
+/// The next event that is not a status, task ids passed on included.
+async fn next_any(feed: &mut DashboardFeed) -> DashboardEvent {
     loop {
         match within(feed.events.next()).await.unwrap() {
             DashboardEvent::Status(LinkStatus::Connecting | LinkStatus::Live) => {}
@@ -176,6 +189,64 @@ fn terminal_rows_follow_the_tasks_the_app_shows() {
         daemon.state(|state| {
             assert_eq!(state.count("GET /tasks/T-1/terminals"), 2);
             assert_eq!(state.count("GET /tasks/T-2/terminals"), 0);
+        });
+    });
+}
+
+#[test]
+fn shell_and_workspace_changes_pass_their_task_id_on_and_still_read() {
+    let rt = runtime();
+    let mut daemon = rt.block_on(FakeDaemon::start());
+    daemon.state(|state| state.answer("GET /tasks/T-1/terminals", "200 OK", r#"{"terminals":[]}"#));
+    let client = daemon.client();
+    rt.block_on(async {
+        let mut feed = client.watch_dashboard();
+        let mut conn = daemon.next_events().await;
+        base_reads(&mut feed).await;
+        feed.terminals.show(["T-1".to_string()]);
+        assert!(matches!(
+            next_any(&mut feed).await,
+            DashboardEvent::Terminals { .. }
+        ));
+
+        // T-2 is not shown: its id still comes, and no terminals read happens.
+        conn.text(r#"{"kind":"shells.changed","taskId":"T-2"}"#)
+            .await;
+        assert_eq!(
+            next_any(&mut feed).await,
+            DashboardEvent::ShellsChanged {
+                task_id: "T-2".into()
+            }
+        );
+        conn.text(r#"{"kind":"shells.changed","taskId":"T-1"}"#)
+            .await;
+        assert_eq!(
+            next_any(&mut feed).await,
+            DashboardEvent::ShellsChanged {
+                task_id: "T-1".into()
+            }
+        );
+        assert!(matches!(
+            next_any(&mut feed).await,
+            DashboardEvent::Terminals { .. }
+        ));
+
+        conn.text(r#"{"kind":"workspace.dirty","taskId":"T-3"}"#)
+            .await;
+        assert_eq!(
+            next_any(&mut feed).await,
+            DashboardEvent::WorkspaceChanged {
+                task_id: "T-3".into()
+            }
+        );
+        assert!(matches!(
+            next_any(&mut feed).await,
+            DashboardEvent::DiffStats(_)
+        ));
+        daemon.state(|state| {
+            assert_eq!(state.count("GET /tasks/T-1/terminals"), 2);
+            assert_eq!(state.count("GET /tasks/T-2/terminals"), 0);
+            assert_eq!(state.count("GET /diffstats"), 2);
         });
     });
 }
