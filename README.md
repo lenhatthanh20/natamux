@@ -142,6 +142,7 @@ Download the file for your system from the [latest release](https://github.com/l
 | Linux, any distribution | [`Natamux-linux-x86_64.AppImage`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x86_64.AppImage) |
 | Debian and Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
+| Native app (beta), macOS Apple silicon | [Native app releases](https://github.com/lenhatthanh20/natamux/releases?q=native-beta) |
 
 > [!NOTE]
 > The apps are not signed with an Apple or Windows certificate yet, so the system asks once. macOS: **System Settings → Privacy & Security → Open Anyway**. Windows: SmartScreen **More info → Run anyway**. Linux: `chmod +x` the AppImage first. Check any file against the signed `SHA256SUMS.txt` of the release.
