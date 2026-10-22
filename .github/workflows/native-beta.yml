@@ -1,0 +1,100 @@
+name: Native beta
+
+# Makes the pre-release native-beta.N from a green Rust run of dev (docs/rust-phase3.md).
+# Run by hand. A pre-release never counts as /releases/latest, and release.yml runs on v* tags only.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Id of a finished, green Rust run of dev
+        required: true
+        type: string
+      beta:
+        description: Beta number N, for the tag native-beta.N
+        required: true
+        type: string
+
+# actions: read lets gh download the artifacts of the run; attestations: read lets it verify them.
+permissions:
+  contents: write
+  actions: read
+  attestations: read
+
+concurrency:
+  group: native-beta
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  RUN_ID: ${{ inputs.run_id }}
+  BETA: ${{ inputs.beta }}
+
+jobs:
+  beta:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check the inputs
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "run_id must be a number"; exit 1; }
+          [[ "$BETA" =~ ^[0-9]+$ ]] || { echo "beta must be a number"; exit 1; }
+      - name: Check the run is a green run of dev
+        id: run
+        run: |
+          gh api "repos/$REPO/actions/runs/$RUN_ID" > run.json
+          jq -r '"workflow=\(.name) branch=\(.head_branch) status=\(.status) conclusion=\(.conclusion) sha=\(.head_sha)"' run.json
+          [ "$(jq -r .path run.json)" = .github/workflows/rust.yml ] || { echo "not a Rust run"; exit 1; }
+          [ "$(jq -r .head_branch run.json)" = dev ] || { echo "not a run of dev"; exit 1; }
+          [ "$(jq -r .event run.json)" = push ] || { echo "not a push run"; exit 1; }
+          [ "$(jq -r .status run.json)" = completed ] || { echo "run is not finished"; exit 1; }
+          [ "$(jq -r .conclusion run.json)" = success ] || { echo "run is not green"; exit 1; }
+          echo "sha=$(jq -r .head_sha run.json)" >> "$GITHUB_OUTPUT"
+      - name: Check the tag is free
+        run: |
+          if gh release view "native-beta.$BETA" -R "$REPO" >/dev/null 2>&1; then
+            echo "native-beta.$BETA exists"; exit 1
+          fi
+      - name: Download the builds
+        run: |
+          mkdir dist
+          gh run download "$RUN_ID" -R "$REPO" -n natamux-app-macos-arm64 -D dist
+          gh run download "$RUN_ID" -R "$REPO" -n natamux-cli-macos-arm64 -D dist
+          ls -l dist
+      # Only an attestation of rust.yml on dev, for the commit of that run, counts.
+      - name: Verify the attestations
+        env:
+          SHA: ${{ steps.run.outputs.sha }}
+        run: |
+          for file in dist/natamux-app-macos-arm64.zip dist/natamux-cli-macos-arm64.tar.gz; do
+            gh attestation verify "$file" -R "$REPO" \
+              --signer-workflow "$REPO/.github/workflows/rust.yml" \
+              --source-ref refs/heads/dev --source-digest "$SHA"
+          done
+      - name: Make the pre-release
+        env:
+          SHA: ${{ steps.run.outputs.sha }}
+        run: |
+          cat > notes.md <<NOTES
+          Beta $BETA of the native app, screen 1: the shell, the sidebar, the task table and the task board. It runs on the Node daemon of Natamux and makes the same API calls as the dashboard. macOS Apple silicon only. The Electron app stays the app to use.
+
+          The app is **not signed** yet. Built from \`$SHA\` by Rust run $RUN_ID, with a build attestation.
+
+          Verify and open it:
+
+          \`\`\`sh
+          gh attestation verify natamux-app-macos-arm64.zip -R $REPO
+          ditto -x -k natamux-app-macos-arm64.zip .
+          xattr -dr com.apple.quarantine "Natamux Native.app"
+          open "Natamux Native.app"
+          \`\`\`
+
+          It finds the daemon as the \`natamux\` command does. See docs/rust-phase1.md ("Point it at a daemon") and docs/rust-phase3.md. If MDM blocks the app, ask IT first.
+
+          \`natamux-cli-macos-arm64.tar.gz\` is the Rust \`natamux\` and \`nmx\` commands (phase 2), built in the same run.
+          NOTES
+          gh release create "native-beta.$BETA" -R "$REPO" \
+            --prerelease --latest=false --target "$SHA" \
+            --title "Native app beta $BETA" --notes-file notes.md \
+            dist/natamux-app-macos-arm64.zip dist/natamux-cli-macos-arm64.tar.gz
